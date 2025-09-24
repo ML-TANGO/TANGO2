@@ -1,4 +1,4 @@
-file_name,Timestamp,my_ship,ship_id,ship_type,Length,Width,Draft,Latitude,Longitude,Knot,heading,bbox_x,bbox_y,bbox_width,bbox_height
+file_name,timestamp,my_ship,ship_id,ship_type,length,width,draft,latitude,longitude,knot,heading,bbox_x,bbox_y,bbox_width,bbox_height
 frame_1,2025-09-23 17:01,0,0,Fishing,169,36,4,36.35,127.3844229,97.38437,154,373.0139,328.7104,273.136,146.071
 frame_1,2025-09-23 17:01,1,4,Boat,288,34,1,36.35,127.3806901,7.32E-10,44,0,0,0,0
 frame_1,2025-09-23 17:01,0,5,Cruise,26,10,4,36.36,127.3813123,94.98213,294,0,225.5429,236.8235,303.1856
