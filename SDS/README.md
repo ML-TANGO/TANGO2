@@ -1,74 +1,128 @@
-# 자율운항선박을 위한 해상상황인식 기술
+# Report Generation Evaluation Docker
 
-전 세계 해운 산업은 지금 디지털 전환과 자동화라는 거대한 패러다임의 변화를 맞이하고 있으며, 그 정점에는 자율운항선박(Autonomous Ship)이 자리하고 있습니다. 자율운항선박이란 인간의 개입을 최소화하고, 인공지능(AI), 사물인터넷(IoT), 첨단 센서 기술 등을 활용하여 선박 스스로 항로를 계획하고 장애물을 회피하며 운항하는 차세대 선박을 의미합니다. 이는 단순히 기술의 발전을 넘어, 운항 효율성을 극대화하고 고질적인 인적 과실(Human Error) 문제를 해결하며, 만성적인 선원 부족 문제에 대한 현실적인 대안을 제시하는 해운 산업의 미래입니다.
+This Docker container evaluates radiology report generation by running inference, classification scoring, clinically-weighted relevance (CRG), and natural language generation (NLG) metrics, then merges all results into a single JSON file.
 
-하지만 이러한 자율운항선박이 현실화되기 위해서는 반드시 해결해야 할 핵심적인 기술적 과제가 있습니다. 바로 인간 항해사의 경험과 직관을 뛰어넘는 수준의 정밀한 '해상상황인식(Maritime Situational Awareness)' 기술을 확보하는 것입니다. 선박이 스스로 안전하게 운항하기 위해서는 주변의 다른 선박, 기상 상태, 암초나 부표와 같은 잠재적 위험 요소를 실시간으로 정확하게 인지하고, 그 관계와 맥락을 종합적으로 이해하는 능력이 필수적입니다. 이 기술 없이는 진정한 의미의 자율 운항은 불가능합니다.
+## Metrics
 
-이러한 시대적 요구에 부응하여, 본 발표에서는 'Software-defined Ship (SDS)'이라는 혁신적인 개념을 제안하고자 합니다. SDS는 전방을 바라보는 카메라와 선박에 설치된 다양한 센서 데이터를 인공지능으로 통합 분석하여, 기계가 이해하고 판단할 수 있는 '항해 맥락적 상황인식' 정보를 텍스트로 제공하는 것을 목표로 합니다. 이는 자율운항선박의 '눈과 뇌' 역할을 수행하는 핵심 기술이 될 것입니다.
+* **NLG** – natural language generation metrics (e.g., BLEU, ROUGE, METEOR).
+* **Classification** – multi-label classification metrics on inferred labels (macro F1, AUROC, recall, accuracy, precision).
+* **CRG-Score** – clinically-weighted relevance score (see challenge guidelines for weight definitions).
 
-본 발표에서는 AI 기반 해상 상황인식 기술의 구체적인 접근법과 실제 적용 사례, '상황인식'에서 '행동권고'로 발전하는 단계별 개발 로드맵, 시뮬레이터 기반의 학습 데이터 생성 과정과 TANGO2팀과의 협업 결과, 그리고 자율운항선박을 위한 SDS의 최종 비전까지를 포괄적으로 다룰 예정입니다.
+## Input Specification
 
-## 정의: Software-defined Ship (SDS)란?
+Mount your predictions JSON to `/input`. The container expects a single `.json` file:
 
-Software-defined Ship (SDS)은 선박의 전방을 주시하는 카메라와 AIS, RADAR, GPS 등 각종 항해 센서로부터 수집된 데이터를 인공지능(AI) 기술을 통해 실시간으로 융합하고 분석하는 시스템을 의미합니다.
+```json
+[  
+  {
+    "input_image_name": "<filename_without_extension>",
+    "report": "<generated_report_text>",
+    "labels": {
+      "abnormality_label_1": <0_or_1>,
+      "abnormality_label_2": <0_or_1>,
+      ...
+    }
+  },
+  ...
+]
+```
 
-SDS의 최종 목표는 복잡한 센서 데이터의 나열을 넘어, 항해사가 즉각적으로 이해할 수 있는 '항해 맥락적 상황인식(Navigational Context Awareness)' 정보를 자연어 텍스트 형태로 제공함으로써, 궁극적으로 해상 안전을 획기적으로 향상시키는 데 있습니다.
+**Notes:**
 
-## 시스템 아키텍처
-본 SDS 시스템은 크게 입력, 처리, 출력의 세 단계로 구성된 아키텍처를 가집니다.
+* `input_image_name` must match ground-truth identifiers (filenames without `.mha`).
+* `report` must be the generated radiology report text.
+* `labels` must be binary (0 or 1) for each pathology label.
 
-### 입력 (Input)
-- 전방 카메라: 시시각각 변하는 해상 환경, 기상 상태, 그리고 AIS가 장착되지 않은 소형 선박이나 장애물 등 시각적인 정보를 실시간으로 수집합니다.
-- 선박 센서: AIS, RADAR, GPS 등 표준 항해 장비로부터 선박들의 ID, 크기, 속도, 침로, 위치 등 정형화된 데이터를 수집합니다.
+## Ground-Truth Data
 
-### 핵심 AI 엔진 (Core AI Engine)
+Ground-truth files are baked into the container at:
 
-카메라의 이미지 데이터와 선박 센서의 정형 데이터를 융합하는 다중 센서 퓨전(Multi-sensor Fusion) 기술을 사용합니다. AI 엔진은 이 통합된 데이터를 바탕으로 주변 상황을 종합적으로 분석하고, 잠재적인 위험 요소를 포함한 항해 맥락을 생성합니다.
+```
+/opt/app/ground-truth/ground_truth.json
+/opt/app/ground-truth/ground_truth.csv
+```
 
-### 출력 (Output)
+* `ground_truth.json` is an array of objects with keys:
 
-AI 엔진이 분석한 결과를 바탕으로, 항해사가 즉시 이해하고 대응할 수 있도록 자연스러운 문장 형태의 **'항해 맥락적 상황인식 텍스트'**를 생성하여 제공합니다.
+  * `input_image_name`: string
+  * `report`: reference report text
+* `ground_truth.csv` is a CSV with columns:
 
-## 임팩트
-본 시스템은 단계적인 기능 확장을 통해 다양한 해상 상황에 대응할 수 있는 잠재력을 가지고 있습니다.
+  ```
+  input_image_name,abnormality_label_1,abnormality_label_2,...
+  ```
 
-- 1단계: 선박에 대한 실시간 인식
+  containing binary labels (0 or 1).
 
-현재 개발의 핵심 단계로, 주변 선박의 위치, 종류, 이동 상태 등을 실시간으로 탐지하고 식별하는 데 중점을 둡니다. 이를 통해 선박 간의 조우 상황을 명확하게 인지할 수 있습니다.
+## Output Specification
 
-- 추후 확장: 다양한 해양 위험요소 인식
+After evaluation, the container writes metrics to `/output/metrics.json`. The JSON has three top-level sections:
 
-향후 모델 고도화를 통해 선박뿐만 아니라 항해에 위협이 될 수 있는 다양한 요소를 인식하는 기능을 추가할 계획입니다. 여기에는 저수심 지역의 암초, 조업 중인 어망, 항로를 표시하는 부표, 그리고 미확인 부유물 등이 포함됩니다.
+1. **`generation`** – NLG metrics object, e.g.:
 
-## 개발 로드맵
-프로젝트는 명확한 두 단계의 로드맵에 따라 진행됩니다.
+   ```json
+   "generation": {
+     "BLEU": <float>,
+     "ROUGE_L": <float>,
+     "METEOR": <float>,
+     ...
+   }
+   ```
 
-### 1단계 (현재): 상황인식 (탐지 및 서술)
+2. **`classification`** – classification metrics object:
 
-주변 해상 환경과 객체를 정확하게 탐지하고, 그 상황을 항해사가 이해하기 쉬운 텍스트로 서술하는 기술을 개발하는 단계입니다.
+   ```json
+   "classification": {
+     "macro": {
+       "f1": <float>,
+       "auroc": <float>,
+       "recall": <float>,
+       "accuracy": <float>,
+       "precision": <float>
+     }
+   }
+   ```
 
-- 상황인식 서술 예시: 본선 전방 1해리 내에 저속 항행 중인 어선 두 척이 있으며, 우현 20도 방향으로 접근 중입니다.
+3. **`crg`** – clinically-weighted relevance metrics:
 
-### 2단계 (계획): 행동권고 제공
+   ```json
+   "crg": {
+     "A": <float>,
+     "U": <float>,
+     "X": <float>,
+     "r": <float>,
+     "FN": <int>,
+     "FP": <int>,
+     "TP": <int>,
+     "CRG": <float>,
+     "score_s": <float>
+   }
+   ```
 
-단순한 상황 서술을 넘어, 분석된 상황을 기반으로 항해사에게 안전을 위한 구체적인 행동을 권고하는 기능을 추가하는 단계입니다.
+All floats are rounded to four decimal places. The final merged JSON will have exactly these three sections.
 
-- 행동권고 예시: 현재 항로 유지 시 15분 후 근접 통과가 예상되므로, 충돌 위험을 줄이기 위해 속력 조정이나 침로 변경을 검토해야 합니다.
+## Testing
 
-## 현재 진행 상황 (에이브노틱스)
-학습 데이터 스펙 협의, 초기 데이터 확보 및 기반 마련 단계가 성공적으로 수행중입니다.
+To verify functionality, run:
 
-- 시뮬레이터를 활용한 데이터 생성: 실제 선박 운항 시 발생할 수 있는 다양한 시나리오(조우 상황, 기상 변화 등)를 구현하기 위해 선박 시뮬레이터를 적극적으로 활용하여 해상 환경을 구성하였습니다.
+```bash
+./test.sh
+```
 
-- 학습 데이터 생성 완료: 구성된 시뮬레이션 환경 내에서 전방 카메라 영상과 선박 센서(AIS, RADAR 등) 데이터를 동기화하여 수집하였으며, 이를 기반으로 AI 모델 학습에 필요한 초기 데이터셋 생성을 완료하였습니다.
+Ensure the script is executable:
 
-## TANGO2팀과의 협업 결과 (예정)
+```bash
+chmod +x test.sh
+```
 
-<<향후 이 섹션에서는 TANGO2팀과의 기술 협력을 통해 달성한 구체적인 성과를 공유할 예정입니다. 협업을 통해 구현된 핵심 기능, 성능 평가 결과, 그리고 공동 시연 내용 등이 상세히 기술될 것입니다.>>
+## Exporting
 
-## 향후 발전 계획
-본 프로젝트의 산출물을 이용한 향후 발전 계획은 다음과 같습니다.
+Use the `export.sh` script to set environment variables and package the results:
 
-- 완전한 SDS 아키텍처 구축: AI 기반 상황인식 및 행동권고 기능을 완벽하게 통합하여, 실제 선박에 적용 가능한 Software-defined Ship의 표준 아키텍처와 운용 지침을 제공하고자 합니다.
+```bash
+./export.sh
+```
 
-- 지능형 항해 보조 시스템 구현: 항해사의 '두 번째 눈과 뇌' 역할을 수행하는 지능형 항해 보조 시스템을 완성하여, 인적 과실을 최소화하고 전 세계 해상 안전에 기여하는 것을 최종 비전으로 삼고 있습니다.
+This generates a `.tar.gz` for submission to the challenge platform.
+
+*For questions or issues, please contact the challenge organizers.*
