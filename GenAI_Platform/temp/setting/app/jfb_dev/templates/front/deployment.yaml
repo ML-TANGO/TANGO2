@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jfb-{{ .Values.global.developer }}-front
+  namespace: {{ .Values.global.developer }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jfb-{{ .Values.global.developer }}-front
+  template:
+    metadata:
+      labels:
+        app: jfb-{{ .Values.global.developer }}-front
+    spec:
+      containers:
+        - name: jfb-{{ .Values.global.developer }}-front
+          image: {{ .Values.image.registry }}/{{ .Values.image.front }}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: {{ .Values.front.podPort }}
+
+# Dir 구조
+# 폴더: /front-data (빌드, 실행), /front-share (initContainer 와 Container 연결되는 지점)
+# init: /front-data에서 빌드 -> /front-share로 옮김 
+# container: /front-share를 /front-data로 복사 -> /front-data을 사용하여 app 실행 
+
+# Build Volumes
+# 개발 : hostPath
+# 배포 : emptyDir

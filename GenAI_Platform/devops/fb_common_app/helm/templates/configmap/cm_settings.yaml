@@ -1,0 +1,66 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jfb-settings
+  namespace: {{ .Values.global.jfb.namespace }}
+data:
+  JF_DB_HOST: {{ printf "%s.%s.svc.cluster.local" .Values.global.jfb.settings.db.svc ( .Values.global.jfb.settings.db.namespace | default .Values.global.jfb.namespace ) | quote }}
+  JF_DB_PORT: {{ .Values.global.jfb.settings.db.port | quote }}
+  JF_DB_UNIX_SOCKET: '/jf-src/master/conf/db/mysqld.sock'
+  JF_DB_USER: 'root'
+  JF_DB_PW: 'acryl4958@'
+  JF_DB_NAME: 'msa_jfb'
+  JF_DB_CHARSET: 'utf8'
+  JF_DB_DOCKER: 'JF-mariadb'
+  JF_DB_ATTEMP_TO_CREATE: "true" # 소문자
+  JF_DB_MAX_CONNECTIONS: '500'
+  JF_DB_COLLATION: "utf8_general_ci"
+  REGISTRY_SVC_DNS: "jfb-registry-svc.jfb.svc.cluster.local"
+  REGISTRY_SVC_PORT: "5000"
+  DOCKER_REGISTRY_URL: {{ .Values.global.jfb.image.registry }}/  # Should be an empty string or finished with slash(`/')
+  DOCKER_REGISTRY_PROTOCOL: "http://"
+  EXTERNAL_HOST: {{ .Values.global.jfb.settings.external.host }}
+  EXTERNAL_HOST_REDIRECT: "true" # 소문자
+  INGRESS_PROTOCOL: {{ .Values.global.jfb.settings.external.protocol }}
+  INGRESS_CLASS_NAME: {{ .Values.global.jfb.settings.external.ingressClassName }}
+  JF_INIT_ROOT_PW: {{ .Values.global.jfb.settings.initRootPassword }}
+  KUBER_CONFIG_PATH: "/jf-bin/.kube/config"
+  JF_HOST_PATH: '' # TODO
+  JF_DATA_HOST_PATH:  {{ .Values.global.jfb.volume.jfData.path }}     # TODO
+  JF_BIN_HOST_PATH: {{ .Values.global.jfb.volume.jfBin.path }}       # TODO
+  JF_VOLUME_DATA_TYPE: {{ .Values.global.jfb.volume.jfData.type }}
+  JF_VOLUME_DATA_PATH: {{ .Values.global.jfb.volume.jfData.path }}
+  JF_VOLUME_DATA_SERVER: {{ .Values.global.jfb.volume.jfData.server }}
+  JF_VOLUME_BIN_TYPE: {{ .Values.global.jfb.volume.jfBin.type }}
+  JF_VOLUME_BIN_PATH: {{ .Values.global.jfb.volume.jfBin.path }}
+  JF_VOLUME_BIN_SERVER: {{ .Values.global.jfb.volume.jfBin.server }}
+  JF_VOLUME_WORKSPACE_STORAGE_CLASS_NAME: ""
+  JF_SYSTEM_NAMESPACE: {{ .Values.global.jfb.namespace }}
+  JF_KAFKA_DNS: {{ printf "%s.%s.svc.cluster.local" .Values.global.jfb.settings.kafka.dns ( .Values.global.jfb.settings.kafka.namespace | default .Values.global.jfb.namespace ) | quote }}
+  JF_REDIS_PROT: "6379"
+  JF_REDIS_PASSWORD: "acryl4958@"
+  JF_REDIS_CLUSTER_ENABLED: {{ .Values.global.jfb.settings.redis.clusterEnabled | quote }}
+  JF_REDIS_CLUSTER_HEADLESS_DNS: {{ printf "%s.%s.svc.cluster.local" .Values.global.jfb.settings.redis.clusterHeadlessDns ( .Values.global.jfb.settings.redis.namespace | default .Values.global.jfb.namespace ) | quote }}
+  JF_REDIS_CLUSTER_DNS: {{ printf "%s.%s.svc.cluster.local" .Values.global.jfb.settings.redis.clusterDns ( .Values.global.jfb.settings.redis.namespace | default .Values.global.jfb.namespace ) | quote }}
+  JF_REDIS_MASTER_DNS: {{ printf "%s.%s.svc.cluster.local" .Values.global.jfb.settings.redis.masterDns ( .Values.global.jfb.settings.redis.namespace | default .Values.global.jfb.namespace ) | quote }}
+  JF_REDIS_SLAVES_DNS: {{ printf "%s.%s.svc.cluster.local" .Values.global.jfb.settings.redis.slaveDns ( .Values.global.jfb.settings.redis.namespace | default .Values.global.jfb.namespace ) | quote }}
+  JF_MONITORING_URL: {{ printf "%s.%s.svc.cluster.local:9090" .Values.global.jfb.settings.monitoring.url ( .Values.global.jfb.settings.monitoring.namespace | default .Values.global.jfb.namespace ) | quote }}
+  MONITORING_PROMETHEUS_NODE_EXPORTER_SERVICE_PORT: {{ printf "%s.%s.svc.cluster.local:9090" .Values.global.jfb.settings.monitoring.url ( .Values.global.jfb.settings.monitoring.namespace | default .Values.global.jfb.namespace ) | quote }}
+  MONITORING_PROMETHEUS_NODE_EXPORTER_SERVICE_PORT_HTTP_METRICS: {{ printf "%s.%s.svc.cluster.local:9090" .Values.global.jfb.settings.monitoring.url ( .Values.global.jfb.settings.monitoring.namespace | default .Values.global.jfb.namespace ) | quote }}
+  JF_MONGODB_USER: {{ .Values.global.jfb.settings.mongoDb.user }}
+  JF_MONGODB_PORT: {{ .Values.global.jfb.settings.mongoDb.port | quote }}
+  JF_MONGODB_PASSWORD: {{ .Values.global.jfb.settings.mongoDb.password | quote }}
+  JF_MONGODB_DNS: {{ printf "%s.%s.svc.cluster.local" .Values.global.jfb.settings.mongoDb.dns ( .Values.global.jfb.settings.mongoDb.namespace | default .Values.global.jfb.namespace ) | quote }}
+  JF_COMPUTING_NODE_CPU_PERCENT: {{ .Values.global.jfb.settings.computing.cpu | quote }}
+  JF_COMPUTING_NODE_RAM_PERCENT: {{ .Values.global.jfb.settings.computing.ram | quote }}
+  JF_IMAGE_APP_IMAGE: {{ .Values.global.jfb.image.image | quote }}
+  JF_CONTAINER_RUNTIME: {{ .Values.global.jfb.image.runtime | quote }}
+  JF_CONTAINER_DATA_ROOT: {{ .Values.global.jfb.image.dataRoot | quote}}
+  NODE_EXPORTER_PORT: {{ .Values.global.jfb.settings.monitoring.node_exporter | quote }}
+  LOG_MIDDLEWARE_DNS: {{ printf "%s://%s.%s.svc.cluster.local:%s" .Values.global.jfb.settings.log.protocol .Values.global.jfb.settings.log.name ( .Values.global.jfb.settings.log.namespace | default .Values.global.jfb.namespace ) .Values.global.jfb.settings.log.port | quote }}
+  JONATHAN_IMAGE_PULL_SECRETS_EABLED: {{ .Values.global.jfb.image.pullSecrets.enabled | quote }}
+  {{- if .Values.global.jfb.image.pullSecrets.enabled }}
+  JONATHAN_IMAGE_PULL_SECRETS_NAME: {{ .Values.global.jfb.image.pullSecrets.name | quote }}
+  {{- else }}
+  JONATHAN_IMAGE_PULL_SECRETS_NAME: ""
+  {{- end }}

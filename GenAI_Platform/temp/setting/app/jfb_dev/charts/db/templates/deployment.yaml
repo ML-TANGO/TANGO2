@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jfb-{{ .Values.global.developer }}-db
+  namespace: {{ .Values.global.developer }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jfb-{{ .Values.global.developer }}-db
+  template:
+    metadata:
+      labels:
+        app: jfb-{{ .Values.global.developer }}-db
+    spec:
+      {{- if .Values.nodeName.enabled }}
+      {{- include "nodeName" . | nindent 6 }}
+      {{- end }}
+      containers:
+      - name: jfb-{{ .Values.global.developer }}-db
+        image: {{ .Values.image.container }}
+        ports:
+        - containerPort: 3306
+        env:
+        - name: MARIADB_ROOT_PASSWORD  # TODO 시크릿 사용
+          valueFrom:
+            configMapKeyRef:
+              name: jfb-{{ .Values.global.developer }}-settings-cm
+              key: JF_DB_PW
+        volumeMounts:
+          - name: jfb-db-data
+            mountPath: /var/lib/mysql
+      volumes:
+      - name: jfb-db-data
+        persistentVolumeClaim:
+          claimName: jfb-{{ .Values.global.developer }}-data-db-pvc
+      # - name: jfb-utils
+      #   persistentVolumeClaim:
+      #     claimName: jfb-{{ .Values.global.developer }}-utils-pvc

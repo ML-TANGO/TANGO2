@@ -1,0 +1,102 @@
+variables:
+  DAST_AUTO_DEPLOY_IMAGE_VERSION: 'v2.76.1'
+
+.dast-auto-deploy:
+  image: "${CI_TEMPLATE_REGISTRY_HOST}/gitlab-org/cluster-integration/auto-deploy-image:${DAST_AUTO_DEPLOY_IMAGE_VERSION}"
+
+.common_rules: &common_rules
+  - if: $CI_DEFAULT_BRANCH != $CI_COMMIT_REF_NAME
+    when: never
+  - if: $DAST_DISABLED || $DAST_DISABLED_FOR_DEFAULT_BRANCH
+    when: never
+  - if: $DAST_WEBSITE  # we don't need to create a review app if a URL is already given
+    when: never
+
+dast_environment_deploy:
+  extends: .dast-auto-deploy
+  stage: review
+  script:
+    - auto-deploy check_kube_domain
+    - auto-deploy download_chart
+    - auto-deploy use_kube_context || true
+    - auto-deploy ensure_namespace
+    - auto-deploy initialize_tiller
+    - auto-deploy create_secret
+    - auto-deploy deploy
+    - auto-deploy persist_environment_url
+  environment:
+    name: dast-default
+    url: http://dast-$CI_PROJECT_ID-$CI_ENVIRONMENT_SLUG.$KUBE_INGRESS_BASE_DOMAIN
+    on_stop: stop_dast_environment
+  artifacts:
+    paths: [environment_url.txt]
+  rules:
+    - *common_rules
+    - if: $CI_COMMIT_BRANCH &&
+          ($CI_KUBERNETES_ACTIVE || $KUBECONFIG) &&
+          $GITLAB_FEATURES =~ /\bdast\b/
+
+stop_dast_environment:
+  extends: .dast-auto-deploy
+  stage: cleanup
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - auto-deploy use_kube_context || true
+    - auto-deploy initialize_tiller
+    - auto-deploy delete
+  environment:
+    name: dast-default
+    action: stop
+  needs: ["dast"]
+  rules:
+    - *common_rules
+    - if: $CI_COMMIT_BRANCH &&
+          ($CI_KUBERNETES_ACTIVE || $KUBECONFIG) &&
+          $GITLAB_FEATURES =~ /\bdast\b/
+      when: always
+
+.ecs_image:
+  image: '${CI_TEMPLATE_REGISTRY_HOST}/gitlab-org/cloud-deploy/aws-ecs:latest'
+
+.ecs_rules: &ecs_rules
+  - if: $AUTO_DEVOPS_PLATFORM_TARGET != "ECS"
+    when: never
+  - if: $CI_KUBERNETES_ACTIVE || $KUBECONFIG
+    when: never
+
+dast_ecs_environment_deploy:
+  extends: .ecs_image
+  stage: review
+  script:
+    - ecs update-task-definition
+    - echo "http://$(ecs get-task-hostname)" > environment_url.txt
+  environment:
+    name: dast-default
+    on_stop: stop_dast_ecs_environment
+  artifacts:
+    paths:
+      - environment_url.txt
+  rules:
+    - *common_rules
+    - *ecs_rules
+    - if: $CI_COMMIT_BRANCH && $GITLAB_FEATURES =~ /\bdast\b/
+
+stop_dast_ecs_environment:
+  extends: .ecs_image
+  stage: cleanup
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - ecs stop-task
+  allow_failure: true
+  environment:
+    name: dast-default
+    action: stop
+  needs:
+    - dast
+  rules:
+    - *common_rules
+    - *ecs_rules
+    - if: $CI_COMMIT_BRANCH && $GITLAB_FEATURES =~ /\bdast\b/
+      when: always

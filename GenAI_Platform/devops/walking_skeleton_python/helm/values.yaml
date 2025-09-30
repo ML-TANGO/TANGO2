@@ -1,0 +1,3 @@
+# Default values 
+
+ci-image: jonathanplatform.azurecr.io/ws-python-image

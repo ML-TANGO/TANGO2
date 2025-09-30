@@ -1,0 +1,31 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: elasticsearch-config-job
+  namespace: jonathan-efk
+spec:
+  template:
+    metadata:
+      name: elasticsearch-config-pod
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: elasticsearch-config
+        image: arwineap/docker-alpine-toolbox:latest
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          bash /scripts/elasticsearch_config.sh
+        env:
+        - name: ELASTICSEARCH_USERNAME
+          value: elastic
+        - name: ELASTICSEARCH_PASSWORD
+          value: "acryl4958!"
+        volumeMounts:
+        - name: config-script
+          mountPath: /scripts
+      volumes:
+      - name: config-script
+        configMap:
+          name: elasticsearch-config-script
+          defaultMode: 0755

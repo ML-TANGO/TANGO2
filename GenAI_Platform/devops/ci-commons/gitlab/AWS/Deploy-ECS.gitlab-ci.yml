@@ -1,0 +1,20 @@
+# To contribute improvements to CI/CD templates, please follow the Development guide at:
+# https://docs.gitlab.com/ee/development/cicd/templates.html
+# This specific template is located at:
+# https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/AWS/Deploy-ECS.gitlab-ci.yml
+
+stages:
+  - build
+  - test
+  - review
+  - dast
+  - deploy
+  - production
+  - cleanup
+
+variables:
+  AUTO_DEVOPS_PLATFORM_TARGET: ECS
+
+include:
+  - template: Jobs/Build.gitlab-ci.yml
+  - template: Jobs/Deploy/ECS.gitlab-ci.yml

@@ -1,0 +1,108 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  generation: 1
+  name: jfb-{{ .Values.global.developer }}-api-ing
+  namespace: {{ .Values.global.developer }}
+spec:
+  ingressClassName: {{ .Values.global.developer }}
+  rules:
+  - http:
+      paths:
+      ################# BACKEND ##################
+      - backend:
+          service:
+            name: jfb-{{ .Values.global.developer }}-user-svc
+            port:
+              number: 80
+        path: /api/(users|login|logout)(.*)
+        pathType: Prefix
+      - backend:
+          service:
+            name: jfb-{{ .Values.global.developer }}-workspace-svc
+            port:
+              number: 80
+        path: /api/(workspaces)(.*)
+        pathType: Prefix
+      - backend:
+          service:
+            name: jfb-{{ .Values.global.developer }}-dashboard-svc
+            port:
+              number: 80
+        path: /api/(dashboard)(.*)
+        pathType: Prefix
+      - backend:
+          service:
+            name: jfb-{{ .Values.global.developer }}-image-svc
+            port:
+              number: 80
+        path: /api/(images)(.*)
+        pathType: Prefix
+      - backend:
+          service:
+            name: jfb-{{ .Values.global.developer }}-resource-svc
+            port:
+              number: 80
+        path: /api/(storage|gpu|options|networks)(.*)
+        pathType: Prefix
+      - backend:
+          service:
+            name: jfb-{{ .Values.global.developer }}-resource-kube-svc
+            port:
+              number: 80
+        path: /api/(nodes|pod)(.*)
+        pathType: Prefix
+      - backend:
+          service:
+            name: jfb-{{ .Values.global.developer }}-dataset-svc
+            port:
+              number: 80
+        path: /api/(datasets|download|upload)(.*)
+        pathType: Prefix
+      - backend:
+          service:
+            name: jfb-{{ .Values.global.developer }}-training-svc
+            port:
+              number: 80
+        path: /api/(trainings)(.*)
+        pathType: Prefix
+      - backend:
+          service:
+            name: jfb-{{ .Values.global.developer }}-deployment-svc
+            port:
+              number: 80
+        path: /api/(deployments|services)(.*)
+        pathType: Prefix
+      - backend:
+          service:
+            name: jfb-{{ .Values.global.developer }}-built-in-models-svc
+            port:
+              number: 80
+        path: /api/(built_in_models)(.*)
+        pathType: Prefix
+      ################# FRONTEND ##################
+
+      - backend:
+          service:
+            name: monitoring-kube-prometheus-prometheus
+            port:
+              number: 9090
+        path: /prometheus/(.*)
+        pathType: Prefix
+
+      - backend:
+          service:
+            name: monitoring-grafana
+            port:
+              number: 80
+        path: /grafana/(.*)
+        pathType: Prefix
+
+      - backend:
+          service:
+            name: jfb-{{ .Values.global.developer }}-front-svc
+            port:
+              number: 8001
+        path: /
+        pathType: Prefix
+

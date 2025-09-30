@@ -1,0 +1,23 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: default
+  name: role-for-nad
+rules:
+- apiGroups: ["k8s.cni.cncf.io","apps",""]
+  resources: ["pods","pod","network-attachment-definitions","net-attach-def", "network-attachment-definition"]
+  verbs: ["get","list","create","patch","delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: rolebinding-for-nad
+  namespace: default
+subjects:
+- kind: ServiceAccount
+  name: default
+  apiGroup: ""
+roleRef:
+  kind: Role
+  name: role-for-nad
+  apiGroup: rbac.authorization.k8s.io

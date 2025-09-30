@@ -1,0 +1,22 @@
+# To contribute improvements to CI/CD templates, please follow the Development guide at:
+# https://docs.gitlab.com/ee/development/cicd/templates.html
+# This specific template is located at:
+# https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Pages/Octopress.gitlab-ci.yml
+
+default:
+  # Full project: https://gitlab.com/pages/octopress
+  image: ruby:2.6
+
+pages:
+  script:
+    - apt-get update -qq && apt-get install -qq nodejs
+    - bundle install -j4
+    - bundle exec rake generate
+    - mv public .public
+    - mv .public/octopress public
+  artifacts:
+    paths:
+      - public
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  environment: production

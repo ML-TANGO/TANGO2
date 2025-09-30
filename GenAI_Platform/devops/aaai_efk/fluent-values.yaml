@@ -1,0 +1,302 @@
+luaScripts:
+  jfb.lua: |
+    function category_major_minor(tag, timestamp, record)
+        local annotations = record["kubernetes"]["annotations"] -- k8s annotation
+        if not record["stream"] then
+            return -1, timestamp, record
+        end
+        local stream = record["stream"]  -- stdout/stderr
+        if annotations and annotations["acryl.ai/appType"] then
+            record["_cat_major"] = "jonathan"
+            if annotations["acryl.ai/appType"] == "user" then
+                record["_cat_minor"] = "user"
+            elseif annotations["acryl.ai/appType"] == "system" then
+                if stream == "stdout" then
+                    record["_cat_minor"] = "usage"
+                elseif stream == "stderr" then
+                    record["_cat_minor"] = "control"
+                end
+            end
+        else 
+            record["_cat_major"] = "thirdparty"
+        end
+        return 2, timestamp, record
+    end
+
+    function level_confirm(tag, timestamp, record)
+        local lvl = "unmarked"
+        if record["_cat_level"] then
+            lvl = string.lower(record["_cat_level"])
+            if lvl ~= "usage" and lvl ~= "debug" and lvl ~= "info" and lvl ~= "error" then
+                lvl = "unmarked"
+            end
+        end
+        record["_cat_level"] = lvl
+        if record["_cat_minor"] == "usage" and lvl ~= "usage" then
+            record["_cat_minor"] = "control"
+            record["_cat_level"] = "unmarked"
+        end
+        
+        return 2, timestamp, record
+    end
+
+    function congregate_index(tag, timestamp, record)
+        local _jfb_index = "congregate_failed"
+        if record["_cat_major"] then
+            local major = record["_cat_major"]
+            if record["_cat_minor"] then
+                local minor = record["_cat_minor"]
+                if minor == "control" then
+                    local level = record["_cat_level"]
+                    _jfb_index = string.format("%s-%s-%s", major, minor, level)
+                else
+                    _jfb_index = string.format("%s-%s", major, minor)
+                end
+            else
+                _jfb_index = major
+            end
+        end
+        record["_jfb_index"] = _jfb_index
+        return 2, timestamp, record
+    end
+                
+
+rbac:
+    create: true
+    eventsAccess: true
+
+config: 
+  # https://stackoverflow.com/questions/2930182/regex-to-not-match-any-characters
+  # "/$ something/" will not match
+  # and some annoying reason, regex escape letter \ sometimes must be \\
+  customParsers: |
+    [MULTILINE_PARSER]
+        name          multiline-python-trace
+        type          regex
+        flush_timeout 3000
+        rule      "start_state" "/Traceback /"   "type"
+        rule      "traceback"   "/Traceback /"   "type"
+        rule      "type"        "/^[ \\t]+File/"     "code"
+        rule      "type"        "/^(?:[^\\s.():]+\\.)*[^\\s.():]+:/" "traceback"
+        rule      "type"        "/^[ \\t]+[\\~\\^]+/"   "type"
+        rule      "code"        "/^[ \\t]+/"     "type"
+
+    [MULTILINE_PARSER]
+        name          multiline-custom
+        type          regex
+        flush_timeout 3000
+        rule    "start_state"   "/(Multiline|Multi?Ln?)(S|Start|Begin)/i"         "cont"
+        rule    "cont"          "/^-.*(Multiline|Multi?Ln?)(E|End|Stop|Finish)/i" "finish"
+        rule    "cont"          "/^\| /"               "cont" 
+        rule    "finish"        "/$ never match/"       "finish"
+
+    [PARSER]
+        name    jfb-extract-level
+        format  regex
+        regex   /^\[JFB\/(?<_cat_level>[^\] \/]*)[^\]]*\]\s*(?<jfb_log>.*)$/mi
+
+    [PARSER]
+        name    jfb-extract-user-json-body
+        format  regex
+        regex   /^\[FLIGHTBASE\]\s*(?<jfb_user_json>.*)$/mi
+
+  service: |
+    [SERVICE]
+        Daemon Off
+        Flush {{ .Values.flush }}
+        Log_Level {{ .Values.logLevel }}
+        Parsers_File /fluent-bit/etc/parsers.conf
+        Parsers_File /fluent-bit/etc/conf/custom_parsers.conf
+        HTTP_Server On
+        HTTP_Listen 0.0.0.0
+        HTTP_Port {{ .Values.metricsPort }}
+        Health_Check On
+
+  ## https://docs.fluentbit.io/manual/pipeline/inputs
+  inputs: |
+    [INPUT]
+        Name tail
+        Path /var/log/containers/*.log
+        multiline.parser cri, docker
+        Tag kube.*
+        Buffer_Max_Size 4MB
+        Skip_Long_Lines Off
+        Refresh_Interval 10
+
+    [INPUT]
+        Name kubernetes_events
+        Tag k8s_event
+
+    [INPUT]
+        Name systemd
+        Tag host.*
+        Systemd_Filter _SYSTEMD_UNIT=kubelet.service
+        Systemd_Filter _SYSTEMD_UNIT=containerd.service
+        Read_From_Tail On
+
+    [INPUT]
+        Name  tail
+        Tag   kubecomp.*
+        Path  /var/log/containers/*kube-system*
+        multiline.parser docker, cri    
+        Refresh_Interval 10
+
+
+  ## https://docs.fluentbit.io/manual/pipeline/filters
+  filters: |
+    [FILTER]
+        Name  multiline
+        Match *kube.* 
+        multiline.key_content log
+        multiline.parser      multiline-custom, multiline-python-trace
+
+    [FILTER]
+        Name kubernetes
+        Match kube.*
+        Merge_Log Off
+        Keep_Log On
+        K8S-Logging.Parser On
+        K8S-Logging.Exclude On
+        Labels On
+        Annotations On
+
+    [FILTER]
+        Name    lua
+        Match   kube.*
+        Script  /fluent-bit/scripts/jfb.lua
+        Call    category_major_minor
+
+    [FILTER]
+        Name            rewrite_tag
+        Match           kube.*
+        Rule            $_cat_minor  ^(?!user$)  nonuser.$TAG  false
+
+    [FILTER]
+        Name            parser
+        Match           nonuser.kube.*
+        Key_Name        log
+        Parser          jfb-extract-level
+        Preserve_Key    On
+        Reserve_Data    On
+
+    [FILTER]
+        Name        lua
+        Match_Regex nonuser.kube.*
+        Script      /fluent-bit/scripts/jfb.lua
+        Call        level_confirm
+
+    [FILTER]
+        Name            rewrite_tag
+        Match           nonuser.kube.*
+        Rule            $_cat_minor  ^usage$  json.$TAG  false
+
+    [FILTER]
+        Name            parser
+        Match           json.nonuser.kube.*
+        Key_Name        jfb_log
+        Parser          json
+        Preserve_Key    On
+        Reserve_Data    On
+    
+    [FILTER]
+        Name    lua
+        Match   *kube.*
+        Script  /fluent-bit/scripts/jfb.lua
+        Call    congregate_index
+
+    [FILTER]
+        Name modify
+        Match k8s_event
+        Rename message log
+
+    [FILTER]
+        Name        parser 
+        Match       kube.*
+        Key_Name    log
+        Parser      jfb-extract-user-json-body
+        Preserve_Key On
+        Reserve_Data On
+
+  ## https://docs.fluentbit.io/manual/pipeline/outputs
+  outputs: |
+    [OUTPUT]
+        Name es
+        Match *kube.*
+        Host elasticsearch
+        Port 9200
+        HTTP_User elastic
+        HTTP_Passwd acryl4958!
+        tls On
+        tls.verify Off
+        Logstash_Format On
+        Logstash_Prefix idx_failed
+        Logstash_Prefix_Key $_jfb_index
+        Logstash_DateFormat all
+        Retry_Limit 5
+        Suppress_Type_Name On
+        Trace_Error On
+        Replace_Dots On
+        Include_Tag_Key On
+        Tag_Key _fluentbit_tag
+        Time_Key_Nanos On
+
+    [OUTPUT]
+        Name es
+        Match host.*
+        Host elasticsearch
+        Port 9200
+        HTTP_User elastic
+        HTTP_Passwd acryl4958!
+        tls On
+        tls.verify Off
+        Logstash_Format On
+        Logstash_Prefix system-kubelet
+        Logstash_DateFormat all
+        Retry_Limit 5
+        Suppress_Type_Name On
+        Trace_Error On
+        Replace_Dots On
+        Include_Tag_Key On
+        Tag_Key _fluentbit_tag
+        Time_Key_Nanos On
+
+    [OUTPUT]
+        Name es
+        Match kubecomp.*
+        Host elasticsearch
+        Port 9200
+        HTTP_User elastic
+        HTTP_Passwd acryl4958!
+        tls On
+        tls.verify Off
+        Logstash_Format On
+        Logstash_Prefix system-kubecomp
+        Logstash_DateFormat all
+        Retry_Limit 5
+        Suppress_Type_Name On
+        Trace_Error On
+        Replace_Dots On
+        Include_Tag_Key On
+        Tag_Key _fluentbit_tag
+        Time_Key_Nanos On
+
+    [OUTPUT]
+        Name es
+        Match k8s_event
+        Host elasticsearch
+        Port 9200
+        HTTP_User elastic
+        HTTP_Passwd acryl4958!
+        tls On
+        tls.verify Off
+        Logstash_Format On
+        Logstash_Prefix system-event
+        Logstash_DateFormat all
+        Retry_Limit 5
+        Suppress_Type_Name On
+        Trace_Error On
+        Replace_Dots On
+        Include_Tag_Key On
+        Tag_Key _fluentbit_tag
+        Pipeline deduplicate_logs
+        Time_Key_Nanos On

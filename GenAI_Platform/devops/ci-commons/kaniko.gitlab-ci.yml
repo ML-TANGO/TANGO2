@@ -1,0 +1,22 @@
+# CI/CD 시 카니코 템플릿
+
+.kaniko_push:
+  image:
+    name: gcr.io/kaniko-project/executor:v1.23.2-debug # 디버그를 써야 콘솔이 있다고 함
+    entrypoint: [""]
+  script:
+    - echo "Try to login $CONTAINER_REGISTRY_ADDRESS with $CONTAINER_REGISTRY_USERNAME"
+    - mkdir -p /kaniko/.docker # 접속 정보 저장 경로 설정
+    - echo "{\"auths\":{\"$CONTAINER_REGISTRY_ADDRESS\":{\"username\":\"$CONTAINER_REGISTRY_USERNAME\",\"password\":\"$CONTAINER_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
+    # 설정 파일에 값 쓰기
+    - echo "Try to build project $PROJECT_NAME..."
+    - echo "Dir ${BUILD_CONTEXT_DIR}, dockerfile ${DOCKERFILE_DIR}, dest ${CONTAINER_REGISTRY_ADDRESS}/${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}"
+    - /kaniko/executor 
+      --context "${BUILD_CONTEXT_DIR}"
+      --dockerfile "${DOCKERFILE_DIR}"
+      --destination "${CONTAINER_REGISTRY_ADDRESS}/${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}" 
+      --destination "${CONTAINER_REGISTRY_ADDRESS}/${IMAGE_NAME}:${DEPLOY_TARGET}"
+      --cache=true 
+      --cache-repo ${CONTAINER_REGISTRY_ADDRESS}/${IMAGE_NAME}
+      --cache-ttl ${IMAGE_CACHE_TTL}
+      --single-snapshot #  kaniko로 도커파일 빌드 후 업로드

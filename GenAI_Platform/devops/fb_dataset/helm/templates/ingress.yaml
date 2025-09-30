@@ -1,0 +1,18 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  generation: 1
+  name: {{ .Values.global.jfb.name.dataset }}-api
+  namespace: {{ .Values.global.jfb.namespace }}
+spec:
+  ingressClassName: {{ .Values.global.jfb.settings.external.ingressClassName }}
+  rules:
+  - http:
+      paths:
+      - backend:
+          service:
+            name: {{ .Values.global.jfb.name.dataset }}-svc
+            port:
+              number: 80
+        path: /api/(datasets|download|upload)(.*)
+        pathType: Prefix

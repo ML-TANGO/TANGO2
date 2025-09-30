@@ -1,0 +1,27 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: {{ .Values.global.developer }}
+  name: jfb-{{ .Values.global.developer }}-role
+rules:
+- apiGroups: ["batch"]
+  resources: ["jobs"]
+  verbs: ["get", "watch", "list"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "watch", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: job-{{ .Values.global.developer }}-role-binding
+  namespace: {{ .Values.global.developer }}
+subjects:
+- kind: ServiceAccount
+  name: default
+  namespace: {{ .Values.global.developer }}
+roleRef:
+  kind: Role
+  name: jfb-{{ .Values.global.developer }}-role
+  apiGroup: rbac.authorization.k8s.io

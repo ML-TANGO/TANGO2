@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: rdma-shared-dp-ds
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      name: rdma-shared-dp-ds
+  template:
+    metadata:
+      labels:
+        name: rdma-shared-dp-ds
+    spec:
+      hostNetwork: true
+      priorityClassName: system-node-critical
+      containers:
+      - image: mellanox/k8s-rdma-shared-dev-plugin
+        name: k8s-rdma-shared-dp-ds
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          privileged: true
+        volumeMounts:
+          - name: device-plugin
+            mountPath: /var/lib/kubelet/
+          - name: config
+            mountPath: /k8s-rdma-shared-dev-plugin
+          - name: devs
+            mountPath: /dev/
+      volumes:
+        - name: device-plugin
+          hostPath:
+            path: /var/lib/kubelet/
+        - name: config
+          configMap:
+            name: rdma-devices
+            items:
+            - key: config.json
+              path: config.json
+        - name: devs
+          hostPath:
+            path: /dev/

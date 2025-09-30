@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.global.jfb.name.front }}
+  namespace: {{ .Values.global.jfb.namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.global.jfb.name.front }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.global.jfb.name.front }}
+    spec:
+      nodeSelector:
+        {{- if and ( .Values.global.jfb.volume.front.enabled ) ( eq .Values.global.jfb.volume.front.type "hostPath")}}
+        kubernetes.io/hostname: {{ .Values.global.jfb.volume.front.hostname }}
+        {{- else }}
+        {{- include "lib.nodeSelector.manage" . | nindent 8 }}
+        {{- end }}
+      {{- if .Values.global.jfb.image.pullSecrets.enabled }}
+      imagePullSecrets:
+      - name: {{ .Values.global.jfb.image.pullSecrets.name }}
+      {{- end }}
+      containers:
+      - name: {{ .Values.global.jfb.name.front }}
+        image: {{ .Values.global.jfb.image.registry }}/{{ .Values.global.jfb.image.front }}
+        imagePullPolicy: {{ .Values.global.jfb.image.pullPolicy }}
+        ports:
+          - containerPort: 8001
+        {{- if .Values.global.jfb.volume.front.enabled }}
+        volumeMounts:
+        - name: jf-src
+          mountPath: /front-data
+      volumes:
+      - name: jf-src
+        persistentVolumeClaim:
+          claimName: jf-src-front-pvc
+      {{- end }}
+
+{{/*
+# Dir 구조
+# 폴더: /front-data (빌드, 실행), /front-share (initContainer 와 Container 연결되는 지점)
+# init: /front-data에서 빌드 -> /front-share로 옮김 
+# container: /front-share를 /front-data로 복사 -> /front-data을 사용하여 app 실행 
+
+# Build Volumes
+# 개발 : hostPath
+# 배포 : emptyDir
+*/}}

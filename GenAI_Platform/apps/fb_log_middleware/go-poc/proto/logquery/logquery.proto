@@ -1,0 +1,117 @@
+syntax = "proto3";
+
+package logquery;
+option go_package = "acryl.ai/go-poc";
+
+import "google/api/annotations.proto";
+
+service LogQueryService {
+  rpc QueryWorkspaceDashboardLogs (WorkspaceDashboardRequest) returns (SummaryLogsResponse) {
+    option (google.api.http) = {
+      post: "/v1/dashboard/workspace/{workspace}"
+      body: "*"
+    };
+  }
+  rpc QueryAdminDashboardLogs (AdminDashboardRequest) returns (SummaryLogsResponse) {
+    option (google.api.http) = {
+      post: "/v1/dashboard/admin"
+      body: "*"
+    };
+  }
+  rpc QueryAdminDetailLogs (AdminDetailRequest) returns (SummaryLogsResponse) {
+    option (google.api.http) = {
+      post: "/v1/dashboard/admin/detail"
+      body: "*"
+    };
+  }
+
+  rpc QueryTrainingFigureLogs (TrainingFigureRequest) returns (SummaryLogsResponse) {
+    option (google.api.http) = {
+      post: "/v1/training/figure"
+      body: "*"
+    };
+  }
+  rpc QueryTrainingAllLogs (TrainingAllRequest) returns (SummaryLogsResponse) {
+    option (google.api.http) = {
+      post: "/v1/training/all"
+      body: "*"
+    };
+  }
+
+  rpc QueryDeploymentAllLogs (DeploymentAllRequest) returns (SummaryLogsResponse) {
+    option (google.api.http) = {
+      post: "/v1/deployment/all"
+      body: "*"
+    };
+  }
+
+  rpc QueryImageAllLogs (ImageAllRequest) returns (SummaryLogsResponse) {
+    option (google.api.http) = {
+      post: "/v1/image/all"
+      body: "*"
+    };
+  }
+}
+
+message WorkspaceDashboardRequest {
+  string workspace = 1;
+  string timespan = 2;
+  string startTime = 3;
+  int32 count = 4;
+  int64 offset = 5;
+  bool ascending = 6;
+}
+
+message AdminDashboardRequest {
+  string timespan = 1;
+  string startTime = 2;
+  int32 count = 3;
+  int64 offset = 4;
+  bool ascending = 5;
+}
+
+message AdminDetailRequest {
+  string timespan = 1;
+  string startTime = 2;
+  int32 count = 3;
+  int64 offset = 4;
+  bool ascending = 5;
+  string action = 6;
+  string task = 7;
+}
+
+message TrainingFigureRequest {
+  string trainingTool = 1;
+  int64 trainingItemId = 2;
+  int32 count = 3;
+  int64 offset = 4;
+}
+
+message TrainingAllRequest {
+  string trainingTool = 1;
+  int64 trainingItemId = 2;
+  int32 count = 3;
+  int64 offset = 4;
+}
+
+message DeploymentAllRequest{
+  int64 deploymentWorkerId = 1;
+  int32 count = 2;
+  int64 offset = 3;
+}
+
+message ImageAllRequest{
+  string imageJobName = 1;
+  int32 count = 2;
+  int64 offset = 3;
+}
+
+message SummaryLogsResponse {
+  repeated LogEntry logs = 1;
+  int64 totalCount = 2;
+  int32 currentCount = 3;
+}
+
+message LogEntry {
+  map<string, string> fields = 1;
+}

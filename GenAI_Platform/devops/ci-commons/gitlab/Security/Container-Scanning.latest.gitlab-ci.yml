@@ -1,0 +1,5 @@
+# This template moved to Jobs/Container-Scanning.latest.gitlab-ci.yml in GitLab 15.6
+# Issue: https://gitlab.com/gitlab-org/gitlab/-/issues/381665
+
+include:
+  - template: Jobs/Container-Scanning.latest.gitlab-ci.yml

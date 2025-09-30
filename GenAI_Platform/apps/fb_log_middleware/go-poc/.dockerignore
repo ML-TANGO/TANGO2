@@ -1,0 +1,9 @@
+.dockerignore
+.gitignore
+
+Dockerfile
+README.md
+
+build_proto.sh
+
+go-poc

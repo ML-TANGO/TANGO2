@@ -1,0 +1,14 @@
+{{- $fileContent := .Files.Get "file/kube/config" | default "" -}}
+{{- if eq $fileContent "" -}}
+{{- fail (printf "Error: %s 파일을 넣어주세요" "commonapp/file/kube/config" ) -}}
+{{- end -}}
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jf-kube
+  namespace: {{ .Values.global.jfb.namespace }}
+data:
+  config: |-
+{{ .Files.Get "file/kube/config" | indent 4 }}
+

@@ -1,0 +1,40 @@
+- name: HAPROXY CONFIG SETTING
+  hosts: all
+  gather_facts: no
+  vars_files:
+    - conf/env.yaml
+
+  tasks:
+    - name: check /etc/haproxy/haproxy.cfg
+      stat:
+        path: /etc/haproxy/haproxy.cfg
+      register: file
+
+    - name: back existed config
+      command: mv /etc/haproxy/haproxy.cfg /etc/haproxy/haproxy.cfg_b
+      when: file.stat.exists
+
+    - name: setting config
+      blockinfile:
+        path: /home/klod/jfbcore_msa/ops/setting/ansible/conf/test.conf
+        block: |
+          #JF-SETTING-START
+          frontend kubernetes-master-lb
+                  bind 0.0.0.0:{{ KUBER_MASTER_LB_PORT }}
+                  option tcplog
+                  mode tcp
+                  default_backend kubernetes-master-nodes
+
+          backend kubernetes-master-nodes
+                  mode tcp
+                  balance roundrobin
+                  option tcp-check
+                  option tcp
+              {% for host in HAPROXY_SERVER_LIST %}
+              server node{{ loop.index }} {{ host }}:6443 check
+              {% endfor %}
+        insertafter: EOF  # 파일 끝에 추가
+        create: yes       # 파일이 없다면 생성
+
+    - name: containerd restart -> "systemctl restart haproxy"
+      command: systemctl restart haproxy

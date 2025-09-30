@@ -1,0 +1,10 @@
+- name: KUBERNETES MASTER
+  hosts: control
+  gather_facts: no
+  vars_files:
+    - conf/env.yaml
+  tasks:
+    - name: kubernetes master node - init
+
+    - name: kubernetes master node - join
+

@@ -1,0 +1,9 @@
+# Default values for node-init.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+node:
+name:
+namespace:
+env:
+registry_url:

@@ -1,0 +1,34 @@
+# setting/utils/sriovdp-config
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sriovdp-config
+  namespace: kube-system
+data:
+  config.json: |
+    {
+        "resourceList": [
+          {
+            "resourcePrefix": "jf.network.ib",
+            "resourceName": "ibs9",
+            "selectors": {
+                "pfNames": ["ibs9"]
+            }
+          },
+          {
+            "resourcePrefix": "jf.network.ib",
+            "resourceName": "ib0",
+            "selectors": {
+                "pfNames": ["ib0"]
+            }
+          },
+          {
+            "resourcePrefix": "jf.network.ib",
+            "resourceName": "ib1",
+            "selectors": {
+                "pfNames": ["ib1"]
+            }
+          }
+        ]
+    }
