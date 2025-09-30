@@ -1,0 +1,66 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: jfb-{{ .Values.global.developer }}-db-init-job
+  namespace: {{ .Values.global.developer }}
+spec:
+  backoffLimit: 3 # 재시도 횟수
+  template:
+    spec:
+      restartPolicy: Never
+      initContainers:
+      # - name: wait
+      #   image: busybox:1.28
+      #   command: ['sh', '-c', "until nslookup jfb-{{ .Values.global.developer }}-db-svc.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for jfb-{{ .Values.global.developer }}-db-svc; sleep 5; done"]
+      - name: wait
+        image: bitnami/kubectl
+        command:
+          - kubectl
+        args:
+          - wait
+          - --for=condition=available
+          - --namespace={{ .Values.global.developer }}
+          - deployment/jfb-{{ .Values.global.developer }}-db
+          - --timeout=120s
+      containers:
+      - name: jfb-{{ .Values.global.developer }}-db-init-job
+        image: {{ .Values.image.init }}
+        imagePullPolicy: Always
+        command: [ "/bin/bash", "-c"]
+        args: ["cd /app/src; python3 init.py;"]
+        env:
+        - name: MARIADB_ROOT_PASSWORD  # TODO 시크릿 사용
+          valueFrom:
+            configMapKeyRef:
+              name: jfb-{{ .Values.global.developer }}-settings-cm
+              key: JF_DB_PW
+        envFrom:
+        - configMapRef:
+            name: jfb-{{ .Values.global.developer }}-settings-cm
+        volumeMounts:
+          # - name: jfb-src
+          #   mountPath: /app
+          # - name: jfb-utils
+          #   mountPath: /app/src/utils
+          - name: jfb-db-data
+            mountPath: /var/lib/mysql
+          - name: jfb-kube
+            mountPath: /jf-bin/.kube
+          - name: jfb-built-in-models
+            mountPath: /jf-bin/built_in_models
+      volumes:
+      - name: jfb-db-data
+        persistentVolumeClaim:
+          claimName: jfb-{{ .Values.global.developer }}-data-db-pvc
+      # - name: jfb-src
+      #   persistentVolumeClaim:
+      #     claimName: jfb-{{ .Values.global.developer }}-src-db-pvc
+      # - name: jfb-utils
+      #   persistentVolumeClaim:
+      #     claimName: jfb-{{ .Values.global.developer }}-utils-pvc
+      - name: jfb-kube
+        persistentVolumeClaim:
+          claimName: jfb-{{ .Values.global.developer }}-kube-pvc
+      - name: jfb-built-in-models
+        persistentVolumeClaim:
+          claimName: jfb-{{ .Values.global.developer }}-built-in-model-pvc

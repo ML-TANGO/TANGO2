@@ -1,0 +1,45 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Values.name }}
+  labels: 
+    role: jfb-api
+spec:
+  backoffLimit: 0  # 실패 시 재시도하지 않음
+  template:
+    metadata:
+      labels: 
+        role: jfb-api
+    spec:
+      containers:
+      - name: scp-container
+        image: {{ .Values.image }}
+        securityContext:
+          runAsUser: 0
+        env:
+        {{- range $key, $val := .Values.env }}
+        - name: {{ $key }}
+          value: {{ $val | quote }}
+        {{- end}}
+        envFrom:
+        - configMapRef:
+            name: jfb-settings
+        command: ["sh", "-c", "python3 /app/src/upload/scp_upload.py;"] #while true; do sleep 30; done; "python3 /app/src/upload/scp_upload.py"
+        volumeMounts:
+        - name: jf-src
+          mountPath: /app
+        - name: jf-utils
+          mountPath: /utils
+        - name: storage
+          mountPath: /jf-data/{{ .Values.storage_name }}
+      volumes:
+      - name: jf-src
+        persistentVolumeClaim:
+          claimName: jf-src-dataset-pvc
+      - name: jf-utils
+        persistentVolumeClaim:
+          claimName: jf-src-utils-pvc
+      - name: storage
+        persistentVolumeClaim:
+          claimName: {{ .Values.storage_name }}
+      restartPolicy: Never

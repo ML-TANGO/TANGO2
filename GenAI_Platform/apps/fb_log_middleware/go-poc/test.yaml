@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: log-middleware
+  namespace: efk
+  labels:
+    app: log-middleware
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: log-middleware
+  template:
+    metadata:
+      labels:
+        app: log-middleware
+      annotations:
+        acryl.ai/appType: system
+    spec:
+      containers:
+        - name: test
+          image: 192.168.1.14:30500/jfb/fb_log_middleware:0.1.0
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+            - containerPort: 50051
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: log-middleware-rest
+  namespace: efk
+spec:
+  type: NodePort
+  selector:
+    app: log-middleware
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: log-middleware-grpc
+  namespace: efk
+spec:
+  type: ClusterIP
+  selector:
+    app: log-middleware
+  ports:
+    - name: grpc
+      port: 50051
+      targetPort: 50051
+

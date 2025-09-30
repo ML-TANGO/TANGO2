@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: jfb-{{ .Values.global.developer }}-resource-svc
+  namespace: {{ .Values.global.developer }}
+spec:
+  selector:
+    app: jfb-{{ .Values.global.developer }}-resource
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000

@@ -1,0 +1,34 @@
+# To contribute improvements to CI/CD templates, please follow the Development guide at:
+# https://docs.gitlab.com/ee/development/cicd/templates.html
+# This specific template is located at:
+# https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Security/DAST-On-Demand-API-Scan.gitlab-ci.yml
+# NOTE: This template is intended for internal GitLab use only and likely will not work properly
+# in any other project. Do not include it in your pipeline configuration.
+# For information on how to set up and use DAST, visit https://docs.gitlab.com/ee/user/application_security/dast/
+
+stages:
+  - build
+  - test
+  - deploy
+  - dast
+
+variables:
+  SECURE_ANALYZERS_PREFIX: "$CI_TEMPLATE_REGISTRY_HOST/security-products"
+  DAST_API_VERSION: "3"
+  DAST_API_IMAGE_SUFFIX: ""
+  DAST_API_IMAGE: api-security
+
+dast:
+  stage: dast
+  image: $SECURE_ANALYZERS_PREFIX/$DAST_API_IMAGE:$DAST_API_VERSION$DAST_API_IMAGE_SUFFIX
+  allow_failure: true
+  script:
+    - /peach/analyzer-dast-api
+  artifacts:
+    when: always
+    paths:
+      - gl-assets
+      - gl-dast-api-report.json
+      - gl-*.log
+    reports:
+      dast: gl-dast-api-report.json

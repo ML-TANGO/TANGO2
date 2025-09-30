@@ -1,0 +1,13 @@
+
+{{- if .Values.nexus.hostname }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pip-config-{{ $.Values.pod_name }}
+  namespace: {{ .Values.system.namespace }}-{{ .Values.labels.workspace_id }}
+data:
+  pip.conf: |
+    [global]
+    index-url = http://{{ .Values.nexus.hostname }}:{{ .Values.nexus.port }}{{ .Values.nexus.pip.path }}
+    trusted-host = {{ .Values.nexus.hostname }}
+{{- end }}

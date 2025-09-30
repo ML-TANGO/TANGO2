@@ -1,0 +1,29 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: jfb-bin-volume-init
+  namespace: {{ .Values.global.jfb.namespace }}
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      {{- if .Values.global.jfb.image.pullSecrets.enabled }}
+      imagePullSecrets:
+      - name: {{ .Values.global.jfb.image.pullSecrets.name }}
+      {{- end }}
+      containers:
+      - name: copy
+        image: {{ .Values.global.jfb.image.registry }}/{{ .Values.global.jfb.image.bin }}
+        imagePullPolicy: {{ .Values.global.jfb.image.pullPolicy }}
+        command: [ "/bin/sh", "-c"]
+        args: ["cp -rf /jf-bin-origin/* /jf-bin; mkdir /jf-bin/.kube; cp /jf-bin-origin/.kube/config /jf-bin/.kube/config;"]
+        volumeMounts:
+        {{- include "lib.volume.volumeMounts" (dict "name" "jf-bin" ) | nindent 8 }}
+        {{/* 여기에서는 library 경로 달라서 쓰면 안됨*/}}
+        - name: jf-kube
+          mountPath: /jf-bin-origin/.kube/config
+          subPath: config
+      volumes:
+      {{- include "lib.volume.claim"  (dict "name" "jf-bin")  | nindent 6 }}
+      {{- include "lib.volume.claim"  (dict "name" "jf-kube")  | nindent 6 }}
+  ttlSecondsAfterFinished: 1800 # 완료후 job 자동 삭제 / 1800초

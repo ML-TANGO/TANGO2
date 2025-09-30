@@ -1,0 +1,1 @@
+./build.sh && ./p_install.sh && python3 ../example/test.py

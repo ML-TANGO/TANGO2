@@ -1,0 +1,38 @@
+{{- range $index, $volume := .Values.global.jfb.volume.jfStorage }}
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-storage-{{ .name }}-{{ $.Values.global.jfb.namespace }}
+  labels:
+    jfb: storage
+    role: app-storage
+spec:
+  capacity:
+    storage: 1M
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ""
+  nfs:
+    path: {{ .path }}
+    server: {{ .server }}
+
+---
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: storage-{{ .name }}
+  labels:
+    jfb: storage
+    role: app-storage
+  namespace: {{ $.Values.global.jfb.namespace }}
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1M
+  volumeName: pv-storage-{{ .name }}-{{ $.Values.global.jfb.namespace }}
+  storageClassName: ""
+---
+{{- end }}

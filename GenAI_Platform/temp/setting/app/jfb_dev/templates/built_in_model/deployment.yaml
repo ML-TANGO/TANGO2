@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jfb-{{ .Values.global.developer }}-built-in-models
+  namespace: {{ .Values.global.developer }}
+  annotations:
+    "helm.sh/hook": post-install
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jfb-{{ .Values.global.developer }}-built-in-models
+  template:
+    metadata:
+      labels:
+        app: jfb-{{ .Values.global.developer }}-built-in-models
+    spec:
+      {{- if .Values.nodeName.enabled }}
+      {{- include "nodeName" . | nindent 6 }}
+      {{- end }}   
+      initContainers:
+      - name: jfb-{{ .Values.global.developer }}-built-in-models-init
+        image: {{ .Values.image.registry }}/{{ .Values.image.built_in_model }}
+        imagePullPolicy: Always
+        command: [ "/bin/bash", "-c"]
+        args: ["cd /app/src; python3 init.py"]
+        envFrom:
+        - configMapRef:
+            name: jfb-{{ .Values.global.developer }}-settings-cm
+        {{- $volumeValue := dict -}}
+        {{- $_ := set $volumeValue "dir" (list "built_in_model") }}
+        {{- $_ := set $volumeValue "developer" .Values.global.developer }}
+        {{- $_ := set $volumeValue "app" "built-in-model" }}
+        {{- $_ := set $volumeValue "src" .Values.volume.src.enabled }}
+        {{- include "appVolumeMounts" $volumeValue | nindent 8 }}
+      containers:
+      - name: jfb-{{ .Values.global.developer }}-built-in-models
+        image: {{ .Values.image.registry }}/{{ .Values.image.built_in_model }}
+        command: [ "/bin/bash", "-c"]
+        args: ["cd /app; ./run.sh; while true; do sleep 30; done;"]
+        ports:
+        - containerPort: 8000
+        envFrom:
+        - configMapRef:
+            name: jfb-{{ .Values.global.developer }}-settings-cm
+          {{- $_ := set $volumeValue "dir" (list "kube" "built_in_model") }}
+        {{- include "appVolumeMounts" $volumeValue | nindent 8 }}
+      {{- include "appVolumes" $volumeValue | nindent 6 }}

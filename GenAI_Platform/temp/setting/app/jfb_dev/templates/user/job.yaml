@@ -1,0 +1,47 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: jfb-{{ .Values.global.developer }}-user-init-job
+  namespace: {{ .Values.global.developer }}
+  annotations:
+    "helm.sh/hook": post-install
+    "helm.sh/hook-weight": "-1"
+spec:
+  # backoffLimit: 3 # 재시도 횟수
+  template:
+    spec:
+      restartPolicy: OnFailure
+      {{- if .Values.nodeName.enabled }}
+      {{- include "nodeName" . | nindent 6 }}
+      {{- end }}
+      initContainers:
+        - name: wait
+          image: bitnami/kubectl
+          command:
+            - kubectl
+          args:
+            - wait
+            - --for=condition=complete
+            - --namespace={{ .Values.global.developer }}
+            - job/jfb-{{ .Values.global.developer }}-db-init-job
+            - --timeout=120s
+      containers:
+      - name: jfb-{{ .Values.global.developer }}-user-init
+        image: {{ .Values.image.registry }}/{{ .Values.image.user }}
+        command: [ "/bin/bash", "-c"]
+        args: ["cd /app/src; python3 init.py;"]
+        envFrom:
+        - configMapRef:
+            name: jfb-{{ .Values.global.developer }}-settings-cm
+        volumeMounts:
+          - name: jfb-etc
+            mountPath: /etc_host
+          - name: jfb-kube
+            mountPath: /jf-bin/.kube
+      volumes:
+      - name: jfb-etc
+        persistentVolumeClaim:
+          claimName: jfb-{{ .Values.global.developer }}-etc-pvc
+      - name: jfb-kube
+        persistentVolumeClaim:
+          claimName: jfb-{{ .Values.global.developer }}-kube-pvc

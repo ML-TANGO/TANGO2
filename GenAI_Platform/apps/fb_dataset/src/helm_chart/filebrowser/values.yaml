@@ -1,0 +1,7 @@
+name:
+dataset_path:
+dataset_pvc_name:
+ingress_path:
+ingress_class:
+dataset_id:
+registry:

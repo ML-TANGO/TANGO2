@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jfb-{{ .Values.global.developer }}-dashboard
+  namespace: {{ .Values.global.developer }}
+  annotations:
+    "helm.sh/hook": post-install
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jfb-{{ .Values.global.developer }}-dashboard
+  template:
+    metadata:
+      labels:
+        app: jfb-{{ .Values.global.developer }}-dashboard
+    spec:
+      {{- if .Values.nodeName.enabled }}
+      {{- include "nodeName" . | nindent 6 }}
+      {{- end }}
+      containers:
+      - name: jfb-{{ .Values.global.developer }}-dashboard
+        image: {{ .Values.image.registry }}/{{ .Values.image.dashboard }}
+        imagePullPolicy: Always
+        command: [ "/bin/bash", "-c"]
+        args: ["cd /app; ./run.sh; while true; do sleep 30; done;"]
+        ports:
+        - containerPort: 8000
+        envFrom:
+        - configMapRef:
+            name: jfb-{{ .Values.global.developer }}-settings-cm
+        {{- $volumeValue := dict -}}
+        {{- $_ := set $volumeValue "dir" (list "kube") }}
+        {{- $_ := set $volumeValue "developer" .Values.global.developer }}
+        {{- $_ := set $volumeValue "app" "dashboard" }}
+        {{- $_ := set $volumeValue "src" .Values.volume.src.enabled }}
+        {{- include "appVolumeMounts" $volumeValue | nindent 8 }}
+      {{- include "appVolumes" $volumeValue | nindent 6 }}

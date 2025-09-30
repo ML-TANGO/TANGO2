@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: {{ include "namespace" . }}-quota
+  namespace: {{ include "namespace" . }}
+spec:
+  hard:
+    # https://kubernetes.io/ko/docs/concepts/policy/resource-quotas/
+    # pods: "10"
+    limits.cpu: "{{ .Values.quota.cpu }}m"
+    limits.memory: "{{ .Values.quota.memory }}Gi"
+    requests.nvidia.com/gpu: {{ .Values.quota.gpu }}

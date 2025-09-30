@@ -1,0 +1,36 @@
+{{- if .Values.global.jfb.volume.src.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jf-src-image-pvc
+  namespace: {{ .Values.global.jfb.namespace  }}
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1G
+  storageClassName: ""
+---
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: jf-{{ .Values.global.jfb.namespace }}-src-image-pv
+spec:
+  capacity:
+    storage: 1G
+  accessModes:
+    - ReadWriteMany
+  claimRef:
+    namespace: {{ .Values.global.jfb.namespace }}
+    name: jf-src-image-pvc
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  {{- $variables := dict -}}
+  {{- $_ := set $variables "src" .Values.global.jfb.volume.src }}
+  {{- $path := printf "%s/image_app" .Values.global.jfb.volume.src.path }}
+  {{- $_ := set $variables.src "path" $path }}
+  {{- include "lib.volume.type" $variables.src | nindent 2 }}
+---
+{{- end }}

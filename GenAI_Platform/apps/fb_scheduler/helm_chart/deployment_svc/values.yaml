@@ -1,0 +1,28 @@
+metadata:
+  deployment:
+    id:
+    name:
+  worksapce:
+    id:
+    name:
+  system:
+    namespace:
+  pod:
+    podBaseName:
+
+ingress:
+  ingressClassName: 
+
+labels:
+  deployment_id: None
+  deployment_worker_id: None 
+  deployment_name: None
+  workspace_id: None
+  workspace_name: None
+  executor_id: None
+  executor_name: None
+  instance_id: None
+  deployment_type: None
+  deployment_total_gpu: None 
+  pod_name: None
+  user: None

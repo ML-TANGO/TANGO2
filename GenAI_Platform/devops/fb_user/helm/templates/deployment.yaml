@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.global.jfb.name.user }}
+  namespace: {{ .Values.global.jfb.namespace }}
+  labels:
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.global.jfb.name.user }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.global.jfb.name.user }}
+        {{- include "lib.label.jfb" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ include "lib.lookup.settings" . }}
+        acryl.ai/appType: system
+    spec:
+      nodeSelector:
+      {{- include "lib.nodeSelector.manage" . | nindent 8 }}
+      {{- if .Values.global.jfb.image.pullSecrets.enabled }}
+      imagePullSecrets:
+      - name: {{ .Values.global.jfb.image.pullSecrets.name }}
+      {{- end }}
+      initContainers:
+      {{- include "lib.initContainer.db" . | nindent 6}}
+      - name: jfb-user-init
+        image: {{ .Values.global.jfb.image.registry }}/{{ .Values.global.jfb.image.user }}
+        imagePullPolicy: {{ .Values.global.jfb.image.pullPolicy }}
+        command: [ "/bin/bash", "-c"]
+        args: ["cd /app/src; python3 init.py;"]
+        envFrom:
+        - configMapRef:
+            name: jfb-settings
+        volumeMounts:
+        {{- include "lib.volume.volumeMounts"  (dict "name" "jf-src" "enabled" .Values.global.jfb.volume.src.enabled )  | nindent 8 }}
+      containers:
+      - name: {{ .Values.global.jfb.name.user }}
+        image:  {{ .Values.global.jfb.image.registry }}/{{ .Values.global.jfb.image.user }}
+        imagePullPolicy: {{ .Values.global.jfb.image.pullPolicy }}
+        command: [ "/bin/bash", "-c"]
+        args: ["cd /app; ./run.sh; sleep infinity;"]
+        {{- include "lib.probe.readiness" (dict "app" "user" )  | nindent 8 }}
+        {{- include "lib.probe.liveness" (dict "app" "user" )  | nindent 8 }}
+        ports:
+        - containerPort: 8000
+        envFrom:
+        - configMapRef:
+            name: jfb-settings
+        volumeMounts:
+        {{- include "lib.volume.volumeMounts" (dict "name" "jf-src" "enabled" .Values.global.jfb.volume.src.enabled )  | nindent 8 }}
+      volumes:
+      {{- include "lib.volume.claim" (dict "name" "jf-src" "app" "user" "enabled" .Values.global.jfb.volume.src.enabled )  | nindent 6 }}

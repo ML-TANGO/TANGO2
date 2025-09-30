@@ -1,0 +1,1 @@
+/opt/fluent-bit/bin/fluent-bit -c dummy.conf

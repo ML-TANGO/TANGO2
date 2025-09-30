@@ -1,0 +1,39 @@
+
+common:
+  imageType:
+  imageId:
+  imageName:
+  systemRegistryUrl:
+  systemNamespace:
+  systemAppImage:
+  systemContainerRuntime:
+  systemContainerDataRoot:
+  systemImagePullSecrets:
+    Enabled:
+
+commit:
+  nodeName:
+  trainingPodName:
+  commitMessage: 
+  # trainingToolId: ?
+
+
+pull:
+  pullImageUrl:
+
+ngc:
+  pullImageUrl:
+
+copy:
+  pullImageUrl:
+
+
+build:
+  filePath:
+
+tar:
+  filePath:
+
+tag:
+  nodeName:
+  tagImageUrl:

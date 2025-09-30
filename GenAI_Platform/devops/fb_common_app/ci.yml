@@ -1,0 +1,65 @@
+spec:
+  inputs:
+    appName: 
+      description: Job 이름의 접두사로 사용할 앱 이름으로 고유하게 default 값을 지정해 주세요.
+      default: "FB 공용 앱"
+    dirName:
+      description: 현재 디렉토리로 devops 폴더 안의 폴더 이름을 default 값으로 지정해 주세요.
+      default: "fb_common_app"
+
+
+---
+
+stages:
+  - preflight
+  - test
+  - push
+
+include:
+  - local: devops/ci-commons/general.gitlab-ci.yml # 일반 템플릿 로드
+  - local: devops/ci-commons/helm.gitlab-ci.yml # 헬름 템플릿 로드
+
+".$[[ inputs.appName ]].when_devops_changed": # rules:changes가 extends된 변수를 인식하지 못하는 버그가 있어서 추가로 작성 필요
+  rules:
+    - changes:
+      - devops/$[[ inputs.dirName ]]/**/* 
+      - "$COMMONLIB_CHART_DIR"
+
+".$[[ inputs.appName ]].skip_devops_changed": # rules:changes가 extends된 변수를 인식하지 못하는 버그가 있어서 추가로 작성 필요
+  rules:
+    - changes:
+        - devops/$[[ inputs.dirName ]]/**/* 
+        - "$COMMONLIB_CHART_DIR"
+      when: never
+
+
+##################################################################
+# 아래 variables에서 변수 값을 적절히 수정해 주세요.
+
+".$[[ inputs.appName ]].variables": 
+  variables:
+    HELM_CHART_NAME: "jfb-commonapp" # 헬름 차트 이름, 실제 헬름 차트의 name에 맞게 수정 필요
+    HELM_CHART_VERSION: "0.1.0" # 헬름 차트 버전, 수정 필요
+    DIR_NAME: $[[ inputs.dirName ]]
+    
+    DEVOPS_DIR_REL: "devops/${DIR_NAME}" # 데브옵스 경로, 필요 시 수정
+
+    DEVOPS_DIR: "${CI_PROJECT_DIR}/${DEVOPS_DIR_REL}" 
+    HELM_CHART_DIR: "${DEVOPS_DIR}/helm" # 헬름 차트 경로, 필요 시 수정
+  extends:
+    - ".flightbase.variables"
+
+##################################################################
+
+
+"$[[ inputs.appName ]], CI 로드 확인":  # 해당 CI 파일 로드 확인용
+  stage: preflight
+  script:
+    - echo "$[[ inputs.appName ]] CI 확인 완료"    
+
+"$[[ inputs.appName ]], 헬름 차트 배포":
+  extends: 
+    - ".$[[ inputs.appName ]].variables"
+    - .helm_push_recursive
+    - ".$[[ inputs.appName ]].when_devops_changed"
+  stage: push

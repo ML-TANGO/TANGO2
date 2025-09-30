@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: "{{ .Release.Name }}-pv"
+  labels:
+    app: "{{ .Release.Name }}"
+spec:
+  capacity:
+    storage: "{{ .Values.Capacity }}Gi" 
+  persistentVolumeReclaimPolicy: Delete
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+    path: "{{ .Values.Path }}" 
+

@@ -1,0 +1,42 @@
+system:
+  namespace:
+owner_name:
+pullSecrets:
+pod_name:
+ingress_class_name:
+labels:
+  project_item_id :
+  workspace_name:
+  workspace_id: 
+  project_name: 
+  project_id: 
+  work_func_type: 
+  work_type: 
+  owner_id: 
+  pod_type:
+  instance_id:
+domain:
+tool_password:
+total_gpu_count:
+spec:
+  hostname:
+  restartPolicy:
+  cpu_instance: 
+  containers:
+    command:
+    env:
+    image:
+    resource:
+      limits:
+cluster:
+nexus: # 오프라인용
+  hostname:
+  port:
+  apt:
+    path:
+  pip:
+    path:
+
+
+
+

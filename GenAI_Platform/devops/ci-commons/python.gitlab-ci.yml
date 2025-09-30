@@ -1,0 +1,33 @@
+# CI/CD 시 파이썬 템플릿
+# APPS_DIR: 파이썬 코드가 있는 위치
+
+variables:
+  PIP_CACHE_DIR_REL: ".cache/pip" # pip 캐시 경로
+
+.pip_push: # pip 캐싱 후 push, 초기 설정에 사용
+  cache:
+    key: pip
+    paths:
+      - ${APPS_DIR}/${PIP_CACHE_DIR_REL}
+      - ${APPS_DIR}/venv/
+    policy: push
+  before_script:
+    - cd "${APPS_DIR}"
+    - pip install virtualenv
+    - virtualenv venv
+    - source venv/bin/activate
+    - pip install -r ${REQUIREMENT_DIR}
+
+.pip_pull: # pip 캐싱 후 pull, 빌드/테스트에 사용
+  cache:
+    key: pip
+    paths:
+      - ${APPS_DIR}/${PIP_CACHE_DIR_REL}
+      - ${APPS_DIR}/venv/
+    policy: pull
+  before_script:
+    - cd "${APPS_DIR}"
+    - pip install virtualenv
+    - virtualenv venv
+    - source venv/bin/activate
+    - pip install -r ${REQUIREMENT_DIR}

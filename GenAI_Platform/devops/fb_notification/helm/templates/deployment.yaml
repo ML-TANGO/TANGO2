@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.global.jfb.name.notification }}
+  namespace: {{ .Values.global.jfb.namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.global.jfb.name.notification }}
+  template:
+    metadata:
+      annotations:
+        "acryl.ai/appType": system
+      labels:
+        app: {{ .Values.global.jfb.name.notification }}
+        role: jfb-api
+      annotations:
+        checksum/config: {{ include "lib.lookup.settings" . }}
+    spec:
+      nodeSelector:
+      {{- include "lib.nodeSelector.manage" . | nindent 8 }}
+      {{- if .Values.global.jfb.image.pullSecrets.enabled }}
+      imagePullSecrets:
+      - name: {{ .Values.global.jfb.image.pullSecrets.name }}
+      {{- end }}
+      containers:
+      - name: {{ .Values.global.jfb.name.notification }}
+        image: {{ .Values.global.jfb.image.registry }}/{{ .Values.global.jfb.image.notification }}
+        imagePullPolicy: {{ .Values.global.jfb.image.pullPolicy }}
+        command: [ "/bin/bash", "-c"]
+        args: ["cd /app; ./run.sh; sleep infinity;"]
+        {{- include "lib.probe.readiness" (dict "app" "notification" )  | nindent 8 }}
+        {{- include "lib.probe.liveness" (dict "app" "notification" )  | nindent 8 }}
+        resources:
+          limits:
+            cpu : 0.2
+            memory : "200M"
+          requests:
+            cpu : 0.2
+            memory : "100M"
+        ports:
+        - containerPort: 8000
+        envFrom:
+        - configMapRef:
+            name: jfb-settings
+        volumeMounts:
+        {{- include "lib.volume.volumeMounts" (dict "name" "jf-src" "enabled" .Values.global.jfb.volume.src.enabled ) | nindent 8 }}
+      volumes:
+      {{- include "lib.volume.claim" (dict "name" "jf-src" "app" "notification" "enabled" .Values.global.jfb.volume.src.enabled ) | nindent 6 }}

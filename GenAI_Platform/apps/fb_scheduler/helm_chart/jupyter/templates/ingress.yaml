@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  labels:
+    {{- range $key, $val := .Values.labels }}
+    {{ $key }}: {{ $val | quote }}
+    {{- end}}
+  name: "{{ .Values.pod_name }}---system-1"
+  namespace: {{ include "namespace" . }}
+spec:
+  ingressClassName: {{ .Values.ingress_class_name }}
+  rules:
+  - http:
+      paths:
+      - path: "/jupyter/{{ trimSuffix "/" .Values.pod_name }}-0/"
+        pathType: "Prefix"
+        backend:
+          service:
+            name: "{{ .Values.pod_name }}---system-1"
+            port:
+              number: 8888

@@ -1,0 +1,16 @@
+- name: CREATE REGISTRY CRT,KEY
+  hosts: registry
+  gather_facts: no
+  vars_files:
+    - conf/env.yaml
+  tasks:
+    - name: create registry crt, key - openssl
+      command: >
+        openssl req
+        -newkey rsa:4096 -nodes -sha256
+        -addext "subjectAltName = DNS:{{ JFB_REGISTRY_DNS }}"
+        -keyout "{{ JFB_REGISTRY_KEY }}"
+        -x509 -days 36500 -out "{{ JFB_REGISTRY_CRT }}"
+        -subj "/C=KR/ST=Seoul/L=Seoul/O=Acryl/OU=Flightbase"
+      args:
+        creates: "{{ JFB_REGISTRY_CRT }}"

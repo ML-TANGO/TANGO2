@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.global.jfb.name.resource }}
+  namespace: {{ .Values.global.jfb.namespace }}
+  labels:
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.global.jfb.name.resource }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.global.jfb.name.resource }}
+        {{- include "lib.label.jfb" . | nindent 8 }}
+      annotations:
+        "acryl.ai/appType": system
+        checksum/config: {{ include "lib.lookup.settings" . }}
+    spec:
+      nodeSelector:
+      {{- include "lib.nodeSelector.manage" . | nindent 8 }}
+      serviceAccountName: {{ .Values.global.jfb.namespace }}-clusteradmin-resource
+      {{- if .Values.global.jfb.image.pullSecrets.enabled }}
+      imagePullSecrets:
+      - name: {{ .Values.global.jfb.image.pullSecrets.name }}
+      {{- end }}
+      containers:
+      - name: {{ .Values.global.jfb.name.resource }}
+        image:  {{ .Values.global.jfb.image.registry }}/{{ .Values.global.jfb.image.resource }}
+        imagePullPolicy: {{ .Values.global.jfb.image.pullPolicy }}
+        command: [ "/bin/bash", "-c"]
+        args: ["cd /app; ./run.sh; sleep infinity;"]
+        ports:
+        - containerPort: 8000
+        env:
+        - name: JFB_RESOURCE_IMAGE
+          value: {{ .Values.global.jfb.image.registry }}/{{ .Values.global.jfb.image.resource }}
+        envFrom:
+        - configMapRef:
+            name: jfb-settings
+        volumeMounts:
+        {{- include "lib.volume.volumeMounts" (dict "name" "jf-kube" )  | nindent 8 }}
+        {{- include "lib.volume.volumeMounts" (dict "name" "jf-src" "enabled" .Values.global.jfb.volume.src.enabled )  | nindent 8 }}
+        {{- include "lib.volume.volumeMounts.storage" . | nindent 8 }}
+      volumes:
+      {{- include "lib.volume.claim" (dict "name" "jf-kube")  | nindent 6 }}
+      {{- include "lib.volume.claim" (dict "name" "jf-src" "app" "resource" "enabled" .Values.global.jfb.volume.src.enabled )  | nindent 6 }}
+      {{- include "lib.volume.claim.storage" . | nindent 6  }}

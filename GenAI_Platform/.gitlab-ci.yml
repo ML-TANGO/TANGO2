@@ -1,0 +1,75 @@
+stages:
+  - preflight # CI 가동 전 예열(의존성 캐싱, 로드 확인 등)
+  - build # 이미지 빌드 단계
+  - test # 정상 빌드 확인 이후 유닛 테스트 및 린트 등 처리
+  - push # 헬름 차트 갱신
+  - deploy # CD 단계, 배포
+
+variables:
+  IMAGE_CACHE_TTL: 336h0m0s # 캐시 기간 2주
+  GIT_DEPTH: "5" # Git 지난 커밋  N개만 클론
+  TRANSFER_METER_FREQUENCY: "2s" # 진행 현황 업/다운 주기 설정
+  ARTIFACT_COMPRESSION_LEVEL: "fast" # 아티팩트(현재 미사용) 압축 레벨 설정
+  CACHE_COMPRESSION_LEVEL: "fastest" # 캐시 압축 레벨 설정, fastest=압축없음
+  CACHE_REQUEST_TIMEOUT: 5 # 캐시 응답 제한 시간 설정
+  DEPLOY_TARGET: "none" # "dev": 개발 환경(사내 클러스터), "prod": (배포 환경), "none": (무배포)
+  JOB_TYPE: "none" # "check": 검사까지만 수행(PR), "deploy": 배포까지 수행(커밋)
+  FB_IMAGE_CATEGORY: "jfb-system" # 이미지 경로로 지정될 문자열
+
+default:
+  tags:
+    - any
+
+
+파이프라인 시작:
+  stage: preflight
+  script:
+    - |
+      echo "CI/CD 파이프라인 시작" &&
+      echo ".gitlab-ci.yml 파일 및 devops 폴더를 확인하세요." &&
+      echo "현재 브랜치: ${CI_COMMIT_REF_NAME}" &&
+      echo "현재 파이프라인 유형: ${CI_PIPELINE_SOURCE}" &&
+      echo "현재 커밋: ${CI_COMMIT_SHORT_SHA}" &&
+      echo "현재 커밋 메시지: ${CI_COMMIT_MESSAGE}" &&
+      echo "현재 배포 대상: ${DEPLOY_TARGET}" 
+
+workflow:
+  name: "${CI_COMMIT_SHORT_SHA} | ${CI_COMMIT_MESSAGE}, ${DEPLOY_TARGET}"
+  rules:
+    - if: $CI_COMMIT_REF_NAME == "dev" || 
+          $CI_COMMIT_REF_NAME == "prepare" || 
+          ($CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "dev") ||
+          ($CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "prepare")
+      variables:
+        DEPLOY_TARGET: "dev"
+        ARGOCD_ADDRESS: "argo-argocd-server.jonathan-argocd"
+        ARGOCD_ID: "admin"
+        ARGOCD_PASSWORD: "acryl4958!"
+        # CONTAINER_REGISTRY_ADDRESS: "..."
+        # CONTAINER_REGISTRY_USERNAME: "..."
+        # CONTAINER_REGISTRY_PASSWORD: "..."
+        # HELM_REPO_ACTUAL_ADDRESS: "oci://..."
+        # HELM_REPO_LOGIN_ADDRESS: "..."
+        # HELM_REPO_USERNAME: "..."
+        # HELM_REPO_PASSWORD: "..."
+        # HELM_CHART_REL_LOCATION: "..."
+    - if: $CI_COMMIT_REF_NAME == "main" ||
+          ($CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main")
+      variables:
+        DEPLOY_TARGET: "prod"
+        ARGOCD_ADDRESS: "?"
+        ARGOCD_ID: "?"
+        ARGOCD_PASSWORD: "?"
+        # CONTAINER_REGISTRY_ADDRESS: "..."
+        # CONTAINER_REGISTRY_USERNAME: "..."
+        # CONTAINER_REGISTRY_PASSWORD: "..."
+        # HELM_REPO_ACTUAL_ADDRESS: "oci://..."
+        # HELM_REPO_LOGIN_ADDRESS: "..."
+        # HELM_REPO_USERNAME: "..."
+        # HELM_REPO_PASSWORD: "..."
+        # HELM_CHART_REL_LOCATION: "..."
+  
+
+include:
+  - local: devops/*/ci.yml
+  - local: bundles/*/ci.yml
