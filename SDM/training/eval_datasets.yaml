@@ -1,0 +1,25 @@
+
+- name: ret_flickr
+  json_file: eval_data/flickr30k/annotations/test.json
+  img_root: eval_data/flickr30k/
+  text_feature_path: eval_data/flickr30k/flickr30k_llm2vec_0923_features.dpt
+
+- name: ret_coco
+  json_file: eval_data/coco/annotations/coco_karpathy_test.json
+  img_root: eval_data/coco/images/
+  text_feature_path: eval_data/coco/coco_llm2vec_0923_features.dpt
+
+- name: sharegpt4v
+  json_file: eval_data/sharegpt4v/annotations/validation_1k.json
+  img_root: eval_data/sharegpt4v/
+  text_feature_path:  eval_data/sharegpt4v/sv_llm2vec_0923_features.dpt
+ 
+- name: Urban1k
+  json_file: eval_data/Urban1k/annotations/test.json
+  img_root:  eval_data/Urban1k/
+  text_feature_path:  eval_data/Urban1k/urban1k_llm2vec_0923_features.dpt
+
+- name: DOCCI
+  json_file: eval_data/docci/test.json
+  img_root:  eval_data/docci/images/
+  text_feature_path:  eval_data/docci/docci_llm2vec_0923_features.dpt
