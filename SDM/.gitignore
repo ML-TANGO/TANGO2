@@ -1,0 +1,22 @@
+# Jupyter Notebook files
+*.ipynb
+
+# Binary files
+*.bin
+
+# PyTorch model files
+*.pth
+*.pt
+
+# JSON files
+*.json
+
+# CSV files
+*.csv
+
+# Cache files
+*.cache
+cache/
+__pycache__/
+*.pyc
+*.pyo
