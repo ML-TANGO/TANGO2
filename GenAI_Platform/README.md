@@ -1,99 +1,153 @@
-# Jonathan Platform
+# GenAI Platform
 
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Kubernetes](https://img.shields.io/badge/Kubernetes-1.24+-blue.svg)](https://kubernetes.io/)
+[![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
 
+GenAI Platform은 기업용 대규모 언어 모델 개발을 위한 완전한 LLMOps 플랫폼입니다. 현재 초기 버전으로 핵심 서비스들이 포함되어 있으며, 향후 추가 기능들이 개발될 예정입니다.
 
-## Getting started
+## 🎯 현재 포함된 구성요소
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+### ✅ 쿠버네티스 인프라 계층 (`devops/`)
+완전한 MLOps 인프라 스택을 위한 핵심 구성요소들:
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+- **Storage & Database**
+  - 분산 스토리지 및 데이터베이스 솔루션
+  - 고가용성 클러스터 구성
 
-## Add your files
+- **Monitoring & Observability**
+  - 메트릭 수집 및 모니터링 시스템
+  - 중앙화된 로그 관리
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
+- **DevOps & CI/CD**
+  - GitOps 기반 배포 자동화
+  - 소스 코드 관리 및 파이프라인
+
+- **GPU & ML Infrastructure**
+  - NVIDIA GPU 오퍼레이터
+  - 분산 컴퓨팅 지원
+
+### ✅ 핵심 마이크로서비스 (`apps/`)
+현재 15개의 핵심 서비스가 포함되어 있습니다:
+
+#### 데이터 관리 서비스
+- **`fb_dashboard`** - 웹 기반 관리 인터페이스
+- **`fb_dataset`** - 데이터셋 생명주기 관리
+- **`fb_db`** - 데이터베이스 관리 서비스
+- **`fb_image`** - 이미지 처리 및 관리
+
+#### 모니터링 및 운영 서비스
+- **`fb_log_middleware`** - 로그 수집 미들웨어
+- **`fb_logger`** - 중앙화 로깅 시스템
+- **`fb_monitoring`** - 시스템 헬스 모니터링
+- **`fb_notification`** - 알림 시스템
+- **`fb_resource_kube`** - 쿠버네티스 리소스 관리
+
+#### 사용자 및 작업 관리 서비스
+- **`fb_scheduler`** - 작업 스케줄링 및 리소스 할당
+- **`fb_user`** - 사용자 인증 및 권한 관리
+- **`fb_utils`** - 공통 유틸리티 라이브러리
+- **`fb_workspace`** - 멀티테넌트 워크스페이스
+
+#### 개발 지원 서비스
+- **`walking_skeleton_python`** - Python 서비스 템플릿
+
+### ✅ 공유 라이브러리 (`libs/`)
+- **공통 ML 프레임워크**
+  - 분산 훈련 지원
+  - 모델 관리 유틸리티
+  - 데이터 처리 라이브러리
+
+## 🚧 향후 개발 예정
+
+다음 서비스들이 현재 개발 중이며 향후 릴리스에 포함될 예정입니다:
+
+### LLM 특화 서비스
+- **`llm_model`** - LLM 모델 관리 및 서빙 서비스
+- **`llm_playground`** - 대화형 LLM 실험 환경 (RAG, 프롬프트 엔지니어링, 테스트 배포 기능 포함)
+
+## 🔧 빠른 시작
+
+### 전제 조건
+- **Kubernetes 클러스터**: v1.24+ (최소 3노드)
+- **리소스 요구사항**:
+  - CPU: 노드당 8+ 코어 권장
+  - 메모리: 노드당 16GB+ 권장
+
+### 설치 및 배포
+
+```bash
+# 1. 인프라 구성요소 배포
+kubectl apply -k devops/
+
+# 2. 마이크로서비스 배포
+kubectl apply -k apps/
+
+# 3. 서비스 확인
+kubectl get pods -A
+```
+
+## 📁 디렉토리 구조
 
 ```
-cd existing_repo
-git remote add origin https://rtl.acryl.ai/aaai/jp/jp.git
-git branch -M main
-git push -uf origin main
+GenAI_Platform/
+├── devops/                        # 쿠버네티스 인프라 구성요소
+│   ├── aaai_efk/                  # 로그 수집 및 분석
+│   ├── aaai_prometheus/           # 모니터링 스택
+│   ├── aaai_argo/                 # GitOps 배포 자동화
+│   └── ...                        # 기타 인프라 구성요소
+│
+├── apps/                          # 마이크로서비스
+│   ├── fb_dashboard/              # 웹 관리 인터페이스
+│   ├── fb_dataset/                # 데이터셋 관리
+│   ├── fb_db/                     # 데이터베이스 관리
+│   ├── fb_image/                  # 이미지 처리
+│   ├── fb_log_middleware/         # 로그 미들웨어
+│   ├── fb_logger/                 # 중앙 로깅
+│   ├── fb_monitoring/             # 시스템 모니터링
+│   ├── fb_notification/           # 알림 시스템
+│   ├── fb_resource_kube/          # 리소스 관리
+│   ├── fb_scheduler/              # 작업 스케줄링
+│   ├── fb_user/                   # 사용자 관리
+│   ├── fb_utils/                  # 공통 유틸리티
+│   ├── fb_workspace/              # 워크스페이스
+│   └── walking_skeleton_python/   # 서비스 템플릿
+│
+├── libs/                          # 공유 라이브러리
+│   └── fb_bin/                    # ML 프레임워크
+│
+└── tools/                         # 개발 도구
 ```
 
-## Integrate with your tools
+## 💻 개발 가이드
 
-- [ ] [Set up project integrations](https://rtl.acryl.ai/aaai/jp/jp/-/settings/integrations)
+### 로컬 개발 환경
 
-## Collaborate with your team
+```bash
+# 서비스 개발
+cd apps/fb_dashboard
+pip install -r requirements.txt
+./run.sh
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
+# 또는 다른 서비스들
+cd apps/fb_user
+pip install -r requirements.txt
+./run.sh
+```
 
-## Test and Deploy
+## 🤝 기여하기
 
-Use the built-in continuous integration in GitLab.
+현재 초기 버전으로, 플랫폼 완성을 위한 기여를 환영합니다:
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing(SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+1. **서비스 개선**: 기존 마이크로서비스 기능 강화
+2. **새 서비스 추가**: 새로운 기능의 마이크로서비스 구현
+3. **인프라 최적화**: 쿠버네티스 매니페스트 개선
+4. **문서화**: 설치 가이드 및 API 문서 작성
 
-***
+## 📄 라이선스
 
-# Editing this README
+이 프로젝트는 Apache License 2.0 하에 배포됩니다.
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thank you to [makeareadme.com](https://www.makeareadme.com/) for this template.
+---
 
-## Suggestions for a good README
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
-
-## Name
-Choose a self-explaining name for your project.
-
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
-
-## Changelog
-
-### 2025-09-30
-- Light modernization: format/lint touch-up
-- Minor documentation improvements
-- Code quality enhancements
+**참고**: 향후 `llm_model`과 `llm_playground` 서비스 추가를 통해 LLM 특화 기능을 강화할 예정입니다.
