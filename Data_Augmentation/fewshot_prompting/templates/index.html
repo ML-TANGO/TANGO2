@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Web UI</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; display: flex; flex-direction: column; height: 100vh; }
+        .container { max-width: 800px; flex-grow: 1; display: flex; flex-direction: column; padding-bottom: 1rem; }
+        #chat-window {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 1rem;
+            background-color: white;
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+            margin-top: 1rem;
+        }
+        .message {
+            padding: 0.5rem 1rem;
+            border-radius: 1rem;
+            margin-bottom: 0.5rem;
+            max-width: 75%;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+        }
+        .message.user {
+            background-color: #0d6efd;
+            color: white;
+            margin-left: auto;
+            border-bottom-right-radius: 0;
+        }
+        .message.model {
+            background-color: #e9ecef;
+            color: #212529;
+            margin-right: auto;
+            border-bottom-left-radius: 0;
+        }
+        #input-area {
+            margin-top: 1rem;
+        }
+        .spinner-border { vertical-align: middle; }
+    </style>
+</head>
+<body>
+    <div class="container my-3">
+        <div class="text-center">
+            <h1 class="display-6">Conversational LLM</h1>
+            <h6 class="text-muted">Mode: {{ mode }}</h6>
+        </div>
+        <div id="chat-window">
+            <!-- Chat messages will be appended here -->
+        </div>
+        <div id="input-area" class="d-flex">
+            <textarea id="query" class="form-control me-2" rows="2" placeholder="Enter your query here..."></textarea>
+            <button class="btn btn-primary" onclick="sendQuery()">
+                <span id="button-text">Send</span>
+                <div id="loading-spinner" class="spinner-border spinner-border-sm d-none" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </button>
+        </div>
+    </div>
+    <script>
+        const mode = "{{ mode }}";
+        const chatWindow = document.getElementById('chat-window');
+        const queryInput = document.getElementById('query');
+
+        function setUIState(isLoading) {
+            document.getElementById('button-text').classList.toggle('d-none', isLoading);
+            document.getElementById('loading-spinner').classList.toggle('d-none', !isLoading);
+            document.querySelector('button').disabled = isLoading;
+            queryInput.disabled = isLoading;
+            if (!isLoading) {
+                queryInput.focus();
+            }
+        }
+
+        function appendMessage(text, type) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            messageDiv.textContent = text;
+            chatWindow.appendChild(messageDiv);
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+            return messageDiv;
+        }
+
+        async function sendQuerySingleShot(query) {
+            setUIState(true);
+            appendMessage(query, 'user');
+            const modelMessageDiv = appendMessage('Thinking...', 'model');
+            try {
+                // Use the new single_shot endpoint
+                const result = await fetch('/query_single_shot', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: query })
+                });
+                const data = await result.json();
+                modelMessageDiv.textContent = data.error ? `Error: ${data.error}` : data.response;
+            } catch (error) {
+                modelMessageDiv.textContent = `An unexpected error occurred: ${error}`;
+            } finally {
+                chatWindow.scrollTop = chatWindow.scrollHeight;
+                setUIState(false);
+            }
+        }
+
+        function sendQueryConversational(query) {
+            setUIState(true);
+            appendMessage(query, 'user');
+            const modelMessageDiv = appendMessage('', 'model');
+            // Use the robust, standard EventSource API
+            const evtSource = new EventSource(`/query_stream?query=${encodeURIComponent(query)}`);
+            evtSource.onmessage = function(event) {
+                // The browser's EventSource reconstructs the message, joining data fields with newlines.
+                modelMessageDiv.textContent = event.data;
+                chatWindow.scrollTop = chatWindow.scrollHeight;
+            };
+            evtSource.onerror = function(err) {
+                // The 'error' event fires when the connection is closed by the server,
+                // or if a real error occurs.
+                console.error("EventSource failed or connection closed.", err);
+                evtSource.close();
+                setUIState(false); // Re-enable UI when the stream is finished or fails.
+            };
+        }
+
+        function sendQuery() {
+            const query = queryInput.value;
+            if (!query.trim()) return;
+            if (mode === 'conversational') {
+                sendQueryConversational(query);
+            } else {
+                sendQuerySingleShot(query);
+            }
+            queryInput.value = ''; // Clear input after sending
+        }
+
+        queryInput.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendQuery();
+            }
+        });
+    </script>
+</body>
+</html>

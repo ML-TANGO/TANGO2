@@ -1,0 +1,6 @@
+langchain
+langchain_community
+langchain_ollama
+pandas
+flask
+prompt_toolkit
