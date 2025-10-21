@@ -1,6 +1,6 @@
-langchain
-langchain_community
-langchain_ollama
-pandas
-flask
-prompt_toolkit
+langchain==0.3.19
+langchain_community==0.3.18
+langchain_ollama==0.2.3
+pandas==2.3.3
+flask==3.1.2
+prompt_toolkit==3.0.52
