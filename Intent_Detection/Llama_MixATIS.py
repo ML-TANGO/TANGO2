@@ -305,7 +305,7 @@ def main():
     parser.add_argument('--eval_path', type=str, default=os.path.expanduser('./data/MixATIS_clean/dev'), help='eval ATIS dir')
     parser.add_argument('--output_dir', type=str, default='./ckpt_llama31_mixatis', help='where to save finetuned model/tokenizer')
     parser.add_argument('--eval_only', action='store_true', help='skip training and only evaluate from output_dir')
-    parser.add_argument('--save_path', type=str, default='../data/revised_data/train_revised.json', help='output path (.json)')
+    parser.add_argument('--save_path', type=str, default='./result.json', help='output path (.json)')
     parser.add_argument('--no_flash', action='store_true', help='disable flash_attention_2 if env not supported')
     args = parser.parse_args()
 
