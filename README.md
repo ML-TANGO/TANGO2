@@ -6,7 +6,8 @@ This is the official repository contains the sources of the project **TANGO 2** 
 
 ## [**2025 4th TANGO Community Conference**](http://tangoai.or.kr) ##
 * [**STCenter** (과학기술컨벤션센터 / 한국과학기술회관)](https://www.stcenter.or.kr/)
-* [**B1F, 22, Teheran-ro 7-gil, Gangnam-gu, Seoul, Republic of Korea** (서울시 강남구 테헤란로 7길 22, 과학기술회관 대회의실1)](https://www.google.com/maps/place/%ED%95%9C%EA%B5%AD%EA%B3%BC%ED%95%99%EA%B8%B0%EC%88%A0%ED%9A%8C%EA%B4%80/data=!4m15!1m8!3m7!1s0x357ca157ddbed32f:0x29432bdf4b90af3d!2z7ISc7Jq47Yq567OE7IucIOqwleuCqOq1rCDthYztl6TrnoDroZw36ri4IDIy!3b1!8m2!3d37.500961!4d127.0306229!16s%2Fg%2F11bzn06m8v!3m5!1s0x357ca157de00cbb3:0xe5266ee55f1d179e!8m2!3d37.5007029!4d127.0307453!16s%2Fg%2F1tf8508h?entry=ttu&g_ep=EgoyMDI1MTAxNC4wIKXMDSoASAFQAw%3D%3D)
+* [**B1F, 22, Teheran-ro 7-gil, Gangnam-gu, Seoul, Republic of Korea** \
+(서울시 강남구 테헤란로 7길 22, 과학기술회관 대회의실1)](https://www.google.com/maps/place/%ED%95%9C%EA%B5%AD%EA%B3%BC%ED%95%99%EA%B8%B0%EC%88%A0%ED%9A%8C%EA%B4%80/data=!4m15!1m8!3m7!1s0x357ca157ddbed32f:0x29432bdf4b90af3d!2z7ISc7Jq47Yq567OE7IucIOqwleuCqOq1rCDthYztl6TrnoDroZw36ri4IDIy!3b1!8m2!3d37.500961!4d127.0306229!16s%2Fg%2F11bzn06m8v!3m5!1s0x357ca157de00cbb3:0xe5266ee55f1d179e!8m2!3d37.5007029!4d127.0307453!16s%2Fg%2F1tf8508h?entry=ttu&g_ep=EgoyMDI1MTAxNC4wIKXMDSoASAFQAw%3D%3D)
 * **2025-11-06 / 13:30~17:30**
 
 ---
@@ -27,8 +28,12 @@ TANGO2
    ├── Deployment
    │   ├── Optimization
    │   └── Runtime_Engine
+   │       ├── kernel_source
+   │       └── monitoring
    │
    ├── GenAI_Platform
+   │
+   ├── Intent_Detection
    │
    ├── Learning
    │
@@ -41,45 +46,80 @@ TANGO2
        └── simulator
 ```
 
-<img width="640" alt="framework" src="docs/framework.png" />
+<img width="1280" alt="flow" src="docs/workflow.png" />
+
+---
+
+## How to use it ##
+
+* coming soon...
 
 ---
 
 ## └─ Data_Augmentation ##
-<img width="480" alt="augment" src="docs/augment.png" />
+
+* fewshot_prompting \
+[[View Details]](Data_Augmentation/fewshot_prompting/README.md)
 
 ---
 
 ## └─ Deployment ##
-<img width="480" alt="deploy" src="docs/deploy.png" />
+
+* Optimization \
+[[View Details]](Deployment/Optimization/README.md)
+
+* Runtime_Engine
+  * kernel_source \
+  [[View Details]]()
+  * monitoring \
+  [[View Details]](Deployment/Runtime_Engine/README.md)
 
 ---
 
 ## └─ GenAI_Platform ##
-<img width="480" alt="work" src="docs/work.png" />
+
+* This is a complete LLMOps platform for developing large-scale language models for enterprises. \
+[[View Details]](GenAI_Platform/README.md)
+
+---
+
+## └─ Intent_Detection ##
+* [[View Details]]()
 
 ---
 
 ## └─ Learning ##
-<img width="480" alt="gen" src="docs/gen.png" />
+* [[View Details]]()
 
 ---
 
 ## └─ SDF ##
-* Software Defined Farming
+* Software Defined Farming \
+[[View Details]](SDF/README.md)
+
 <img width="1280" alt="SDF" src="docs/sdf.png" />
+
+* The goal is to comprehensively monitor plant growth environments and conditions and demonstrate technologies for improving agricultural productivity and sustainable agriculture using large-scale AI models.
 
 ---
 
 ## └─ SDM ##
-* Software Defined Medicine
+* Software Defined Medicine \
+[[View Details]](SDM/README.md)
+
 <img width="1280" alt="SDM" src="docs/sdm.png" />
+
+* The goal is to develop a VLM based on chest CT interpretation and a cardiopulmonary disease prediction model technology and to validate it in a multi-institutional hospital.
 
 ---
 
 ## └─ SDS ##
-* Software Defined Ship
+* Software Defined Ship \
+[[View Details]](SDS/README.md)
+
 <img width="1280" alt="SDS" src="docs/sds.png" />
+
+* The goal is to develop a navigation situation description agent for autonomous navigation based on VLM and a decision-making and navigation assistance agent for autonomous navigation based on sLLM using a self-built dataset, and to demonstrate their performance in real sea areas.
 
 ---
 
