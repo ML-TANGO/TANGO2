@@ -1,0 +1,48 @@
+version: "3.8"
+
+networks:
+  default:
+    name: ${COMPOSE_PROJECT_NAME:-sdl}
+    external: true
+
+services:
+  collects-proxy:
+    image: envoyproxy/envoy-alpine:v1.21-latest
+    restart: always
+    expose:
+      - "5000"
+      - "9011"
+    volumes:
+      - ./envoy-proxy:/etc/envoy:ro
+
+  collects:
+    image: registry.suredatalab.kr/beymons/collects:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - collects-proxy
+    restart: always
+    environment:
+      - SECURE_MODE=${SECURE_MODE:-enforce}
+      - TSDB_URL=postgres://${DB_USER:-postgres}:${DB_PASSWD:-password}@${DB_HOST:-db}/${DB_NAME:-postgres}?sslmode=disable
+      - ZIPKIN_ENDPOINT=${ZIPKIN_ENDPOINT:-http://zipkin:9411/api/v2/spans}
+      - NATS_ENDPOINT=${NATS_ENDPOINT}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+  mqtt_client:
+    image: registry.suredatalab.kr/beymons/collects/mqtt:latest
+    build:
+      context: .
+      dockerfile: mqtt_client/Dockerfile
+    environment:
+      - NATS_ENDPOINT=${NATS_ENDPOINT}
+      - MQTT_ENDPOINT=${MQTT_ENDPOINT}
+      - MQTT_TOPIC=${MQTT_TOPIC}
+      - MQTT_CLIENT_ID=${MQTT_CLIENT_ID}
+      - MQTT_CERT_FILE=${MQTT_CERT_FILE:-/certs/server.cert.pem}
+      - MQTT_PRIVATE_KEY_FILE=${MQTT_PRIVATE_KEY_FILE:-/certs/server.private.key}
+      - MQTT_ROOT_CA_FILE=${MQTT_ROOT_CA_FILE:-/certs/root-CA.crt}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ./certs:/certs
