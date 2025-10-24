@@ -1,0 +1,9 @@
+{
+  "play music": 0,
+  "rate book": 1,
+  "search creative work": 2,
+  "search screening event": 3,
+  "add to playlist": 4,
+  "book restaurant": 5,
+  "get weather": 6
+}
