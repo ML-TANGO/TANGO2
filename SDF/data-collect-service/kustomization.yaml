@@ -1,0 +1,17 @@
+resources:
+- deployment.yaml
+- service.yaml
+- virtualservice.yaml
+- deployment-mqtt.yaml
+- cronjob.yaml
+
+configMapGenerator:
+- name: collects-proxy
+  files:
+    - envoy-proxy/envoy.yaml
+    - envoy-proxy/proto.pb
+- name: collects-swagger
+  files:
+    - swagger.json
+- name: collects-config
+  literals:

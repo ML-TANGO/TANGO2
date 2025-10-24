@@ -1,0 +1,318 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "Collects",
+    "description": "데이터 수집을 위한 서비스로 MQTT를 통해 데이터를 수신받는다.",
+    "version": "20250822-1719998"
+  },
+  "tags": [
+    {
+      "name": "Collects",
+      "description": "데이터 수집 서비스"
+    }
+  ],
+  "host": "devel.beymons.kr",
+  "basePath": "/api",
+  "schemes": [
+    "https"
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/collects": {
+      "post": {
+        "summary": "데이터 전송",
+        "operationId": "Collects_Send",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/rpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "description": "ReceiveData 모델은 NATS 브로커를 통해 데이터를 푸시하기 위한 구조이다.",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/collectsReceiveData"}
+              ]
+            }
+          }
+        ],
+        "tags": [
+          "Collects"
+        ]
+      }
+    },
+    "/statistics/collects": {
+      "get": {
+        "summary": "수신 통계",
+        "operationId": "Collects_Statistics",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/collectsStatisticsResponse"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/rpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "interval",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "hours",
+              "days",
+              "weeks",
+              "months",
+              "years"
+            ],
+            "default": "hours"
+          },
+          {
+            "name": "timezone",
+            "description": "interval을 설정했을 때 기준이 되는 타임존 [Default: Asia/Seoul]",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "siteId",
+            "description": "고객 ID",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "Collects"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "StatisticsRequestInterval": {
+      "type": "string",
+      "enum": [
+        "hours",
+        "days",
+        "weeks",
+        "months",
+        "years"
+      ],
+      "default": "hours"
+    },
+    "collectsReceiveData": {
+      "type": "object",
+      "properties": {
+        "siteId": {
+          "type": "string",
+          "title": "고객 ID"
+        },
+        "gatewayId": {
+          "type": "string",
+          "title": "Gateway ID"
+        },
+        "size": {
+          "type": "integer",
+          "format": "int64",
+          "title": "원본 크기 (bytes)"
+        },
+        "receivedAt": {
+          "type": "string",
+          "format": "date-time",
+          "title": "데이터 수신 일시"
+        },
+        "data": {
+          "type": "object",
+          "example": {
+            "data": []
+          },
+          "title": "수신 데이터"
+        }
+      },
+      "description": "ReceiveData 모델은 NATS 브로커를 통해 데이터를 푸시하기 위한 구조이다."
+    },
+    "collectsStatisticsResponse": {
+      "type": "object",
+      "properties": {
+        "entities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "allOf": [
+              {"$ref": "#/definitions/collectsStatisticsResponseStatistics"}
+            ]
+          }
+        }
+      }
+    },
+    "collectsStatisticsResponseStatistics": {
+      "type": "object",
+      "properties": {
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "title": "통계 기준 일시"
+        },
+        "received": {
+          "type": "string",
+          "format": "uint64",
+          "title": "수신 건수 (probe)"
+        },
+        "recorded": {
+          "type": "string",
+          "format": "uint64",
+          "title": "기록된 데이터 수 (probe)"
+        },
+        "size": {
+          "type": "string",
+          "format": "uint64",
+          "title": "데이터 총량"
+        },
+        "error": {
+          "type": "string",
+          "format": "uint64",
+          "title": "에러 발생 건수"
+        },
+        "workTime": {
+          "type": "string",
+          "format": "uint64",
+          "title": "작업 시간 합계 (sec)"
+        },
+        "gateway": {
+          "type": "integer",
+          "format": "int64",
+          "title": "게이트웨이 수"
+        },
+        "nodes": {
+          "type": "string",
+          "format": "uint64",
+          "title": "노드 수"
+        },
+        "sensors": {
+          "type": "string",
+          "format": "uint64",
+          "title": "센서 수"
+        }
+      }
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "protobufNullValue": {
+      "type": "string",
+      "enum": [
+        "NULL_VALUE"
+      ],
+      "default": "NULL_VALUE",
+      "description": "`NullValue` is a singleton enumeration to represent the null value for the\n`Value` type union.\n\nThe JSON representation for `NullValue` is JSON `null`.\n\n - NULL_VALUE: Null value."
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "allOf": [
+              {"$ref": "#/definitions/protobufAny"}
+            ]
+          }
+        }
+      }
+    }
+  },
+  "securityDefinitions": {
+    "Keycloak": {
+      "type": "oauth2",
+      "flow": "accessCode",
+      "authorizationUrl": "https://keycloak.suredatalab.kr/realms/beymons/protocol/openid-connect/auth",
+      "tokenUrl": "https://keycloak.suredatalab.kr/realms/beymons/protocol/openid-connect/token"
+    }
+  },
+  "security": [
+    {
+      "Keycloak": []
+    }
+  ]
+}

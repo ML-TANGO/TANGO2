@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: collects
+  labels:
+    framework: sdlmicro
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: collects
+      framework: sdlmicro
+  template:
+    metadata:
+      labels:
+        app: collects
+        framework: sdlmicro
+    spec:
+      imagePullSecrets:
+        - name: regcred
+      containers:
+      - name: collects
+        image: registry.suredatalab.kr/beymons/collects:latest
+        resources:
+          limits:
+            cpu: 200m
+            memory: 200Mi
+        ports:
+          - containerPort: 50251
+          - containerPort: 9011
+        envFrom:
+          - secretRef:
+              name: openid-connect
+        env:
+        - name: ZIPKIN_ENDPOINT
+          value: http://zipkin.istio-system:9411/api/v2/spans
+      - name: proxy
+        image: envoyproxy/envoy-alpine:v1.21-latest
+        resources:
+          limits:
+            cpu: 100m
+            memory: 100Mi
+        ports:
+          - containerPort: 5000
+          - containerPort: 9901
+        volumeMounts:
+        - name: envoy-config
+          mountPath: "/etc/envoy"
+          readOnly: true
+      volumes:
+      - name: envoy-config
+        configMap:
+          name: collects-proxy

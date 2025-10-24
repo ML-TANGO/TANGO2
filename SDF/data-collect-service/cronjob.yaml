@@ -1,0 +1,21 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: collects-check
+  labels:
+    framework: sdlmicro
+spec:
+  schedule: "* * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          imagePullSecrets:
+            - name: regcred
+          containers:
+          - name: collects-check
+            image: registry.suredatalab.kr/beymons/collects:latest
+            args:
+              - check
+            envFrom: []

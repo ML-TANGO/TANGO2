@@ -1,0 +1,12 @@
+version: v2
+plugins:
+  - local: protoc-gen-sdlmicro
+    out: .
+    opt: "ignore=info.proto"
+  - local: protoc-gen-go-rbac
+    out: .
+  - local: protoc-gen-go-pg
+    out: .
+inputs:
+  - proto_file: collects.proto
+    include_package_files: true

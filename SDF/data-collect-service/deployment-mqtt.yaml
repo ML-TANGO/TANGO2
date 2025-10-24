@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: collects-mqtt
+  labels:
+    framework: sdlmicro
+    mqtt: mosquitto
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: collects-mqtt
+      framework: sdlmicro
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: collects-mqtt
+        framework: sdlmicro
+    spec:
+      imagePullSecrets:
+        - name: regcred
+      containers:
+      - name: collects-mqtt
+        image: registry.suredatalab.kr/beymons/collects/mqtt:latest
+        resources:
+          limits:
+            cpu: 100m
+            memory: 200Mi
+        envFrom:
+          - configMapRef:
+              name: collects-config
+        env: []
+        volumeMounts: []
+      volumes: []
