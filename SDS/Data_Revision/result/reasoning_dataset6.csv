@@ -1,0 +1,173 @@
+file_name,input,reasoning
+frame_1,"------
+
+센서 데이터:
+- ship_id: 1, my_ship: 0, ship_type: Fishing, length: 122, width: 40, draft: 2, latitude: 36.35, longitude: 127.3883919, knot: 6.9, heading: 351, bbox_x: 580.7892, bbox_y: 322.1705, bbox_width: 74.15948, bbox_height: 147.2058
+- ship_id: 2, my_ship: 0, ship_type: Cruise, length: 103, width: 18, draft: 3, latitude: 36.35, longitude: 127.3827204, knot: 3.3, heading: 283, bbox_x: 0.0, bbox_y: 332.1533, bbox_width: 405.718, bbox_height: 93.65649
+- ship_id: 3, my_ship: 1, ship_type: Boat, length: 240, width: 10, draft: 3, latitude: 36.34, longitude: 127.3871857, knot: 4.3, heading: 236, bbox_x: 0.0, bbox_y: 0.0, bbox_width: 0.0, bbox_height: 0.0
+- ship_id: 4, my_ship: 0, ship_type: Fishing, length: 221, width: 45, draft: 2, latitude: 36.35, longitude: 127.3823115, knot: 7.4, heading: 37, bbox_x: 0.0, bbox_y: 349.2911, bbox_width: 174.0397, bbox_height: 82.63611
+- ship_id: 5, my_ship: 0, ship_type: Fishing, length: 55, width: 34, draft: 4, latitude: 36.35, longitude: 127.3895188, knot: 7.1, heading: 39, bbox_x: 588.074, bbox_y: 339.9436, bbox_width: 202.0017, bbox_height: 104.8911
+
+수정 전 항해 상황 묘사:
+황혼, 시계 제한. 좌현에 크루즈선(ID:2)과 어선(ID:4), 우현에 어선(ID:1,5) 등 4척 밀집. 야간 항해 대비 등화 식별 준비.
+
+------
+
+","- 기존 묘사문 : 황혼, 시계 제한. 좌현에 크루즈선(ID:2)과 어선(ID:4), 우현에 어선(ID:1,5) 등 4척 밀집. 야간 항해 대비 등화 식별 준비.
+- 검토 요약 : A1: yes, A2: no, A3: no, A4: no, A5: no, A6: no, A7: yes, A8: no, A9: no  
+  - A1: 주변 선박 4척 모두 감지됨.  
+  - A2: 자신의 선박이 아닌 선박들의 속도, 종류 등은 일부 일치하지만, 위치 및 방향 오류 존재.  
+  - A3: 거리 및 상대적 속도 기반 상황 묘사 부족.  
+  - A4: 충돌 위험성에 대한 언급 없음.  
+  - A5: Clock position 오류. 좌/우현 기준이 잘못됨.  
+  - A6: 자신의 선박을 다른 선박으로 인식하지 않음.  
+  - A7: 황혼 및 야간 조건 반영.  
+  - A8: 선박 식별 어려움 반영되지 않음.  
+  - A9: 위의 오류를 종합적으로 반영하지 않음.
+- 수정된 묘사문 : 황혼, 시야 제한. 11시 방향에 어선(ID:5) 1척, 10시 방향에 어선(ID:1) 1척, 9시 방향에 크루즈선(ID:2) 1척, 8시 방향에 어선(ID:4) 1척이 정박 중. 12시 방향에 어선(ID:1,5) 2척이 접근 중. 11시 방향에 어선(ID:5) 1척, 10시 방향에 어선(ID:1) 1척, 9시 방향에 크루즈선(ID:2) 1척, 8시 방향에 어선(ID:4) 1척이 정박 중. 12시 방향에 어선(ID:1,5) 2척이 접근 중. 역광으로 인해 선박 식별이 어렵다.
+- 신뢰도 점수 : 0.65"
+frame_2,"------
+
+센서 데이터:
+- ship_id: 1, my_ship: 0, ship_type: Fishing, length: 122, width: 40, draft: 2, latitude: 36.36, longitude: 127.3892346, knot: 5.1, heading: 351, bbox_x: 377.8409, bbox_y: 339.6516, bbox_width: 103.5889, bbox_height: 105.5863
+- ship_id: 3, my_ship: 1, ship_type: Boat, length: 240, width: 10, draft: 3, latitude: 36.35, longitude: 127.3885631, knot: 1.2, heading: 236, bbox_x: 0.0, bbox_y: 0.0, bbox_width: 0.0, bbox_height: 0.0
+- ship_id: 4, my_ship: 0, ship_type: Fishing, length: 221, width: 45, draft: 2, latitude: 36.36, longitude: 127.3857575, knot: 5.5, heading: 37, bbox_x: 0.0, bbox_y: 346.6334, bbox_width: 203.6857, bbox_height: 88.96378
+- ship_id: 5, my_ship: 0, ship_type: Fishing, length: 55, width: 34, draft: 4, latitude: 36.35, longitude: 127.3940898, knot: 4.3, heading: 39, bbox_x: 756.2916, bbox_y: 343.2224, bbox_width: 202.2212, bbox_height: 97.08472
+
+수정 전 항해 상황 묘사:
+좌현 어선(ID:4)과 우현 어선(ID:5)이 원거리로 이동. 중앙의 어선(ID:1)은 침로 유지. 점차 어두워져 거리 판단 어려움.
+
+------
+
+","- 기존 묘사문 : 좌현 어선(ID:4)과 우현 어선(ID:5)이 원거리로 이동. 중앙의 어선(ID:1)은 침로 유지. 점차 어두워져 거리 판단 어려움.
+- 검토 요약 : A1: yes, A2: yes, A3: yes, A4: yes, A5: yes, A6: no, A7: yes, A8: no, A9: yes  
+  - A1: 주변 선박(ID:1, 4, 5)이 모두 이미지 및 센서 데이터에서 식별됨.  
+  - A2: 선박 위치, 속도, 방향 등 센서 데이터와 묘사문 내용 일치.  
+  - A3: 거리와 속도에 대한 묘사가 상대적 위치와 속력 기반으로 정확히 반영됨.  
+  - A4: 선박 간 상대적 위치 및 속도를 고려해 근접 위험 상황이 명확히 묘사됨.  
+  - A5: Clock position 기반 상대적 위치 묘사가 정확함.  
+  - A6: 자신의 선박(ID:3)은 센서 데이터에서 my_ship: 1로 확인되며, 묘사문에서 다른 선박으로 인식되지 않음.  
+  - A7: 이미지 상 하늘의 조명 변화로 인해 점차 어두워지는 상황이 반영됨.  
+  - A8: 원본 이미지에서 선박 식별이 가능하나, 시야 조건으로 인해 식별 어려움에 대한 경고는 묘사문에 포함되지 않음.  
+  - A9: 위 질문들을 종합하여 실제 데이터와 일치하는 수정이 이루어짐.
+- 수정된 묘사문 : 11시 방향에 어선(ID:4) 한 척이 5.5 knot로 접근 중이다. 1시 방향에 어선(ID:5) 한 척이 4.3 knot로 이동 중이다. 12시 방향에 어선(ID:1) 한 척이 5.1 knot로 침로 유지 중이다. 하늘은 점차 어두워져 시야 확보가 어려워지고 있다.
+- 신뢰도 점수 : 0.92"
+frame_3,"------
+
+센서 데이터:
+- ship_id: 1, my_ship: 0, ship_type: Fishing, length: 122, width: 40, draft: 2, latitude: 36.37, longitude: 127.3891007, knot: 3.8, heading: 351, bbox_x: 414.3103, bbox_y: 342.153, bbox_width: 194.0821, bbox_height: 99.63074
+- ship_id: 3, my_ship: 1, ship_type: Boat, length: 240, width: 10, draft: 3, latitude: 36.36, longitude: 127.3897412, knot: 4.7, heading: 236, bbox_x: 0.0, bbox_y: 0.0, bbox_width: 0.0, bbox_height: 0.0
+
+수정 전 항해 상황 묘사:
+선수 정면에 어선(ID:1) 위치. 주변은 어두워지고 배경과 선박의 구분이 모호해짐. 충돌 위험 대비 피항 준비.
+
+------
+
+","- 기존 묘사문 : 선수 정면에 어선(ID:1) 위치. 주변은 어두워지고 배경과 선박의 구분이 모호해짐. 충돌 위험 대비 피항 준비.
+- 검토 요약 : A1: yes (주변 선박 식별됨), A2: yes (선박 정보 일치), A3: yes (속도 및 위치 기반 상황 파악), A4: no (충돌 위험성 언급 없음), A5: no (Clock position 정확하지 않음), A6: no (자신의 선박 오인 없음), A7: yes (어두운 상황 반영), A8: no (식별 어려움 언급 부족), A9: no (전체적으로 수정 필요)
+- 수정된 묘사문 : 9시 방향에 어선 한 척이 3.8 knot로 접근 중이다. 주변이 어두워지며 역광으로 인해 선박 식별이 어려움. 충돌 위험 대비 피항 준비.
+- 신뢰도 점수 : 0.65"
+frame_4,"------
+
+센서 데이터:
+- ship_id: 1, my_ship: 0, ship_type: Fishing, length: 122, width: 40, draft: 2, latitude: 36.38, longitude: 127.384559, knot: 6.2, heading: 351, bbox_x: 351.7004, bbox_y: 250.3142, bbox_width: 515.2704, bbox_height: 318.2838
+- ship_id: 3, my_ship: 1, ship_type: Boat, length: 240, width: 10, draft: 3, latitude: 36.37, longitude: 127.3859251, knot: 4.2, heading: 236, bbox_x: 0.0, bbox_y: 0.0, bbox_width: 0.0, bbox_height: 0.0
+
+수정 전 항해 상황 묘사:
+선수 좌현에 있던 어선(ID:1)이 매우 근접. 황혼의 어두운 시야 속 선박 실루엣만 보여 위험. 즉시 감속 및 상대선 의도 파악.
+
+------
+
+","- 기존 묘사문 : 선수 좌현에 있던 어선(ID:1)이 매우 근접. 황혼의 어두운 시야 속 선박 실루엣만 보여 위험. 즉시 감속 및 상대선 의도 파악.
+- 검토 요약 : Q1: yes (주변 선박 식별됨), Q2: yes (선박 정보 일치), Q3: yes (속도 및 위치 정보 반영), Q4: yes (근접 위험 파악), Q5: no (Clock position 오류), Q6: no (자신의 선박을 오인하지 않음), Q7: yes (황혼 시야 조건 반영), Q8: yes (시야 어려움 반영), Q9: no (Q5 오류로 수정 필요)
+- 수정된 묘사문 : 10시 방향에 어선 한 척이 6.2 knot로 접근 중이다. 황혼으로 인해 시야 확보가 어렵고, 선박 실루엣만 보임. 근접 위험 있으므로 감속 및 상대선 의도 파악 필요.
+- 신뢰도 점수 : 0.75"
+frame_5,"------
+
+센서 데이터:
+- ship_id: 1, my_ship: 0, ship_type: Fishing, length: 122, width: 40, draft: 2, latitude: 36.38, longitude: 127.3769599, knot: 6.3, heading: 351, bbox_x: 498.8622, bbox_y: 83.28827, bbox_width: 525.1378, bbox_height: 684.7117
+- ship_id: 3, my_ship: 1, ship_type: Boat, length: 240, width: 10, draft: 3, latitude: 36.38, longitude: 127.3783325, knot: 5.6, heading: 236, bbox_x: 0.0, bbox_y: 0.0, bbox_width: 0.0, bbox_height: 0.0
+
+수정 전 항해 상황 묘사:
+근접했던 어선(ID:1)이 좌현으로 통과하며 시야 차단. 긴급 상황. 타 선박 부재 확인 후 신속히 침로 복귀.
+
+------
+
+","- 기존 묘사문 : 근접했던 어선(ID:1)이 좌현으로 통과하며 시야 차단. 긴급 상황. 타 선박 부재 확인 후 신속히 침로 복귀.
+- 검토 요약 : Q1: yes (주변 선박 식별됨), Q2: no (어선이 12시 방향에 있음에도 불구하고 '좌현으로 통과'라는 표현 사용), Q3: no (속도 및 거리 정보가 충분하지 않음), Q4: yes (긴급 상황 언급), Q5: no (12시 방향이 아닌 11시 방향으로 위치 기술), Q6: no (자신의 선박을 다른 선박으로 인식하지 않음), Q7: no (역광으로 인한 시야 조건 묘사 없음), Q8: yes (선박 식별 어려움 경고 없음), Q9: no (모든 항목에서 수정 필요)
+- 수정된 묘사문 : 12시 방향에 어선 한 척이 6.3 knot로 접근 중이며, 좌현으로 통과할 것으로 예상됨. 시야 확보가 어려운 상황으로, 근접 상황 주의 필요. 타 선박은 감지되지 않음.
+- 신뢰도 점수 : 0.65"
+frame_6,"------
+
+센서 데이터:
+- ship_id: 3, my_ship: 1, ship_type: Boat, length: 240, width: 10, draft: 3, latitude: 36.38, longitude: 127.3784454, knot: 3.9, heading: 236, bbox_x: 0.0, bbox_y: 0.0, bbox_width: 0.0, bbox_height: 0.0
+- ship_id: 5, my_ship: 0, ship_type: Fishing, length: 55, width: 34, draft: 4, latitude: 36.38, longitude: 127.3790487, knot: 2.5, heading: 39, bbox_x: 0.0, bbox_y: 0.0, bbox_width: 1024.0, bbox_height: 768.0
+
+수정 전 항해 상황 묘사:
+시야를 가리던 어선(ID:5) 통과. 전방 시야 확보되었으나, 완전한 야간 상태. 야간 항해 체제로 전환 및 등화 점검.
+
+------
+
+","- 기존 묘사문 : 시야를 가리던 어선(ID:5) 통과. 전방 시야 확보되었으나, 완전한 야간 상태. 야간 항해 체제로 전환 및 등화 점검.
+- 검토 요약 : Q1: yes (주변 선박인 어선 ID:5 식별됨), Q2: yes (선박 정보 일치), Q3: no (속도, 방향 등 상대적 운동 상태 묘사 부족), Q4: no (근접 위험 상황 묘사 부족), Q5: no (Clock position 정확하지 않음), Q6: no (자신의 선박을 다른 선박으로 인식하지 않음), Q7: yes (야간 상태 반영됨), Q8: yes (시야 확보 어려움 반영됨), Q9: no (전체적으로 수정 필요)
+- 수정된 묘사문 : 10시 방향에 어선(ID:5) 한 척이 2.5 knot로 접근 중이다. 어선은 정박 상태로 보이며, 자신의 선박과의 거리가 점점 좁아지고 있다. 야간 상태로 시야 확보가 어려우며, 역광으로 인해 선박 식별이 어려움. 전방 시야 확보를 위해 주의 깊게 관측 필요.
+- 신뢰도 점수 : 0.75"
+frame_7,"------
+
+센서 데이터:
+- ship_id: 3, my_ship: 1, ship_type: Boat, length: 240, width: 10, draft: 3, latitude: 36.38, longitude: 127.3897105, knot: 3.5, heading: 236, bbox_x: 0.0, bbox_y: 0.0, bbox_width: 0.0, bbox_height: 0.0
+
+수정 전 항해 상황 묘사:
+전방 타선박 없음. 완전한 야간 항해 상태. 주기적인 RADAR 스캐닝과 육안 감시 병행.
+
+------
+
+","- 기존 묘사문 : 전방 타선박 없음. 완전한 야간 항해 상태. 주기적인 RADAR 스캐닝과 육안 감시 병행.
+- 검토 요약 : Q1: yes (자신의 선박 외에 주변 선박 감지되지 않음), Q2: yes (센서 데이터와 묘사문 일치), Q3: yes (거리 및 속도 정보는 묘사되지 않음), Q4: yes (충돌 위험 묘사 없음), Q5: yes (Clock position은 필요 없음), Q6: yes (자신의 선박을 타선박으로 인식하지 않음), Q7: yes (야간 항해 상태는 정확히 묘사됨), Q8: yes (선박 식별 어려움은 묘사되지 않음), Q9: yes (모든 항목이 일치하고 수정 필요 없음)
+- 수정된 묘사문 : 전방 타선박 없음. 완전한 야간 항해 상태. 주기적인 RADAR 스캐닝과 육안 감시 병행.
+- 신뢰도 점수 : 0.95"
+frame_8,"------
+
+센서 데이터:
+- ship_id: 3, my_ship: 1, ship_type: Boat, length: 240, width: 10, draft: 3, latitude: 36.38, longitude: 127.3986087, knot: 3.2, heading: 236, bbox_x: 0.0, bbox_y: 0.0, bbox_width: 0.0, bbox_height: 0.0
+
+수정 전 항해 상황 묘사:
+주변 타선박 없음. 고요한 야간 항해 지속. 선교 조명 어둡게 유지하여 외부 시야 확보.
+
+------
+
+","- 기존 묘사문 : 주변 타선박 없음. 고요한 야간 항해 지속. 선교 조명 어둡게 유지하여 외부 시야 확보.
+- 검토 요약 : Q1: no (센서 데이터에 자신의 선박이 존재하나, 묘사문에서 주변 선박 및 객체에 대한 언급이 없음. 실제 이미지 상에서도 왼쪽에 선박이 존재함.); Q2: no (센서 데이터 상 자신의 선박이 존재하며, 이는 이미지에서 확인 가능한 선박과 일치하나, 묘사문은 주변 선박이 없다고 언급함.); Q3: no (주변 선박 및 객체에 대한 정보를 바탕으로 상황 묘사를 수행하지 않음.); Q4: no (근접 상황에서 위험 상황 묘사 정확성 부족. 실제 선박이 존재함.); Q5: no (Clock position을 통해 상대적 위치 묘사가 없음.); Q6: no (자신의 선박을 다른 선박으로 인식하지는 않았으나, 주변 선박이 존재함을 인식하지 못함.); Q7: no (이미지에서 야간 시야 조건이 확인되나, 묘사문은 '고요한 야간 항해'라고 언급하되, 역광 또는 시야 확보 어려움에 대한 경고는 포함하지 않음.); Q8: no (원본 이미지 상 선박이 명확히 식별 가능하나, 선박 식별 어려움에 대한 경고가 묘사문에 반영되지 않음.); Q9: no (위의 질문들에 대한 답변을 종합하면, 기존 묘사문은 이미지 및 센서 데이터에 기반하여 수정되지 않음.).
+- 수정된 묘사문 : 9시 방향에 어선 1척이 3.2 knot로 접근 중이다. 야간으로 시야 확보가 어려우나, 선박 조명으로 인해 식별 가능. 역광으로 인해 선박 식별이 다소 어려움.
+- 신뢰도 점수 : 0.75"
+frame_9,"------
+
+센서 데이터:
+- ship_id: 3, my_ship: 1, ship_type: Boat, length: 240, width: 10, draft: 3, latitude: 36.38, longitude: 127.3951129, knot: 4.9, heading: 236, bbox_x: 0.0, bbox_y: 0.0, bbox_width: 0.0, bbox_height: 0.0
+- ship_id: 5, my_ship: 0, ship_type: Fishing, length: 55, width: 34, draft: 4, latitude: 36.37, longitude: 127.3996304, knot: 6.7, heading: 39, bbox_x: 0.0, bbox_y: 340.0269, bbox_width: 43.20087, bbox_height: 104.6926
+
+수정 전 항해 상황 묘사:
+선수 좌현 원거리에 어선(ID:5) 등화 식별. 야간에는 작은 불빛도 대형 선박일 수 있으므로 RADAR로 확인.
+
+------
+
+","- 기존 묘사문 : 선수 좌현 원거리에 어선(ID:5) 등화 식별. 야간에는 작은 불빛도 대형 선박일 수 있으므로 RADAR로 확인.
+- 검토 요약 : Q1: yes (주변 선박 식별됨), Q2: yes (선박 정보 일치), Q3: yes (위치 및 속도 정보 반영), Q4: no (충돌 위험 묘사 누락), Q5: yes (Clock position 정확), Q6: no (자신 선박 오인 없음), Q7: yes (야간 시야 조건 반영), Q8: no (식별 어려움 반영 누락), Q9: no (전체적으로 수정 필요)
+- 수정된 묘사문 : 10시 방향에 어선(ID:5) 한 척이 6.7 knot로 접근 중이다. 야간 및 저조도 조건으로 인해 시야 확보가 어려우며, 선박 식별이 불확실하므로 RADAR로 추가 확인 필요.
+- 신뢰도 점수 : 0.75"
+frame_10,"------
+
+센서 데이터:
+- ship_id: 1, my_ship: 0, ship_type: Fishing, length: 122, width: 40, draft: 2, latitude: 36.35, longitude: 127.3767242, knot: 7.0, heading: 351, bbox_x: 325.7246, bbox_y: 369.4228, bbox_width: 71.56247, bbox_height: 34.70593
+- ship_id: 2, my_ship: 0, ship_type: Cruise, length: 103, width: 18, draft: 3, latitude: 36.35, longitude: 127.3857366, knot: 6.6, heading: 283, bbox_x: 0.0, bbox_y: 354.5339, bbox_width: 70.72223, bbox_height: 53.22784
+- ship_id: 3, my_ship: 1, ship_type: Boat, length: 240, width: 10, draft: 3, latitude: 36.37, longitude: 127.3869384, knot: 3.5, heading: 236, bbox_x: 0.0, bbox_y: 0.0, bbox_width: 0.0, bbox_height: 0.0
+
+수정 전 항해 상황 묘사:
+선수 좌현에 크루즈선(ID:2), 우현에 어선(ID:1) 출현. 야간 조우 상황. COLREGs에 따른 피항 조치 수행.
+
+------
+
+","- 기존 묘사문 : 선수 좌현에 크루즈선(ID:2), 우현에 어선(ID:1) 출현. 야간 조우 상황. COLREGs에 따른 피항 조치 수행.
+- 검토 요약 : Q1: yes (주변 선박 2척 식별됨), Q2: yes (선박 정보 일치), Q3: no (속도 및 거리 정보 미반영), Q4: yes (충돌 위험성 인식), Q5: no (Clock position 정확하지 않음), Q6: no (자신의 선박 인식하지 않음), Q7: yes (야간 상황 반영), Q8: no (시야 어려움 반영되지 않음), Q9: no (전체적으로 수정 필요)
+- 수정된 묘사문 : 11시 방향에 크루즈선 1척(속도 6.6 knot, heading 283°)이 접근 중이며, 1시 방향에 어선 1척(속도 7.0 knot, heading 351°)이 정박해 있다. 야간 조우 상황이며, 시야 확보가 어려움. 선박 간 상대적 위치 및 속도를 고려하여 충돌 위험성 존재. COLREGs에 따라 피항 조치 필요.
+- 신뢰도 점수 : 0.75"
