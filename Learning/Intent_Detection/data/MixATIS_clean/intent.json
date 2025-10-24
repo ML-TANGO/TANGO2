@@ -1,0 +1,20 @@
+{
+  "atis_abbreviation": "abbreviation",
+  "atis_airport": "airport",
+  "atis_city": "city",
+  "atis_capacity": "capacity",
+  "atis_aircraft": "aircraft",
+  "atis_ground_service": "ground service",
+  "atis_meal": "meal",
+  "atis_quantity": "quantity",
+  "atis_flight_no": "flight no",
+  "atis_flight_time": "flight time",
+  "atis_ground_fare": "ground fare",
+  "atis_cheapest": "cheapest",
+  "atis_flight": "flight",
+  "atis_distance": "distance",
+  "atis_restriction": "restriction",
+  "atis_airfare": "airfare",
+  "atis_airline": "airline",
+  "atis_day_name": "day name"
+}
