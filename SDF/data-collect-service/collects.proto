@@ -1,0 +1,284 @@
+syntax = "proto3";
+package collects;
+option go_package = "gitlab.suredatalab.kr/beymons/collects";
+
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+import "buf/validate/validate.proto";
+import "sdlmicro/middleware/annotations.proto";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+service Collects {
+	option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_tag) = {
+		description: "데이터 수집 서비스"
+	};
+	option (sdlmicro.options.authorization) = {
+		admin_role: "collect-admin"
+		roles: {
+			key: "query-collect"
+			value: "통계 조회 권한"
+		}
+		roles: {
+			key: "collect-admin"
+			value: "수집 서비스 관리 권한"
+		}
+	};
+
+	// 데이터 전송
+	rpc Send(ReceiveData) returns (google.protobuf.Empty) {
+		option (google.api.http) = {
+			post: "/collects"
+			body: "*"
+		};
+	}
+
+	// 수신 통계
+	rpc Statistics(StatisticsRequest) returns (StatisticsResponse) {
+		option (google.api.http) = {get: "/statistics/collects"};
+		option (sdlmicro.options.method) = {authorization: "query-collect"};
+	}
+}
+
+message StatisticsRequest {
+	enum Interval {
+		hours = 0;
+		days = 1;
+		weeks = 2;
+		months = 3;
+		years = 4;
+	}
+	Interval interval = 1 [(google.api.field_behavior) = OPTIONAL];
+
+	// interval을 설정했을 때 기준이 되는 타임존 [Default: Asia/Seoul]
+	string timezone = 2 [(google.api.field_behavior) = OPTIONAL];
+
+	// 고객 ID
+	string site_id = 3 [(google.api.field_behavior) = OPTIONAL];
+}
+
+message StatisticsResponse {
+	message Statistics {
+		// 통계 기준 일시
+		google.protobuf.Timestamp created_at = 1;
+
+		// 수신 건수 (probe)
+		uint64 received = 2;
+
+		// 기록된 데이터 수 (probe)
+		uint64 recorded = 3;
+
+		// 데이터 총량
+		uint64 size = 4;
+
+		// 에러 발생 건수
+		uint64 error = 5;
+
+		// 작업 시간 합계 (sec)
+		uint64 work_time = 6;
+
+		// 게이트웨이 수
+		uint32 gateway = 7;
+
+		// 노드 수
+		uint64 nodes = 8;
+
+		// 센서 수
+		uint64 sensors = 9;
+
+	}
+	repeated Statistics entities = 1;
+}
+
+
+// ReceiveData 모델은 NATS 브로커를 통해 데이터를 푸시하기 위한 구조이다.
+message ReceiveData {
+	// 고객 ID
+	string site_id = 1;
+
+	// Gateway ID
+	string gateway_id = 2;
+
+	// 원본 크기 (bytes)
+	uint32 size = 3;
+
+	// 데이터 수신 일시
+	google.protobuf.Timestamp received_at = 4;
+
+	// 수신 데이터
+	google.protobuf.Struct data = 5 [
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			example: '{"data": []}'
+		}
+	];
+}
+
+// ReceiveHistory 모델은 수신 이력을 관리한다.
+message ReceiveHistory {
+	option (sdlmicro.options.model).hypertable = {
+		time_column_name: "received_at"
+	};
+
+	// 데이터 수신 일시
+	google.protobuf.Timestamp received_at = 1 [
+		(sdlmicro.options.orm).pg = ",type:timestamptz,pk,notnull"
+	];
+
+	// 데이터를 전송한 사이트
+	string site_id = 2 [
+		(sdlmicro.options.orm).pg = ",type:varchar(50),pk,notnull"
+	];
+
+	// 수신된 Gateway ID
+	string gateway_id = 3 [
+		(sdlmicro.options.orm).pg = ",type:varchar(14),pk,notnull"
+	];
+
+	// 수신된 데이터 크기 (bytes)
+	uint32 size = 4;
+
+	// 데이터 원본
+	bytes origin = 5;
+
+	// 발생된 에러 내용
+	string error = 6;
+
+	// 처리 완료 일시
+	google.protobuf.Timestamp processed_at = 7 [
+		(sdlmicro.options.orm).pg = ",type:timestamptz"
+	];
+
+	// 데이터 내 노드 수
+	uint32 nodes = 8;
+
+	// 데이터 내 센서 수
+	uint32 sensors = 9;
+
+	// 기록된 데이터 수
+	uint32 recorded = 10;
+}
+
+// ReceiveStatistics 모델은 수신 통계를 관리한다.
+message ReceiveStatistics {
+	option (sdlmicro.options.model).hypertable = {
+		time_column_name: "created_at"
+		partitioning: {
+			partitioning_column: "site_id"
+			number_partitions: 10
+		}
+	};
+
+	// 통계 기준 일시
+	google.protobuf.Timestamp created_at = 1 [
+		(sdlmicro.options.orm).pg = ",type:timestamptz,pk,notnull,default:now()"
+	];
+
+	// 데이터를 전송한 사이트
+	string site_id = 2 [
+		(sdlmicro.options.orm).pg = ",type:varchar(50),pk,notnull"
+	];
+
+	// 수신 건수 (probe)
+	uint64 received = 3 [
+		(sdlmicro.options.orm).pg = ",notnull,use_zero"
+	];
+
+	// 기록된 데이터 수 (probe)
+	uint64 recorded = 4 [
+		(sdlmicro.options.orm).pg = ",notnull,use_zero"
+	];
+
+	// 데이터 총량
+	uint64 size = 5 [
+		(sdlmicro.options.orm).pg = ",notnull,use_zero"
+	];
+
+	// 에러 발생 건수
+	uint64 error = 6 [
+		(sdlmicro.options.orm).pg = ",notnull,use_zero"
+	];
+
+	// 작업 시간 합계 (sec)
+	double work_time = 7 [
+		(sdlmicro.options.orm).pg = ",notnull,use_zero"
+	];
+
+	// 게이트웨이 수
+	uint32 gateway = 8 [
+		(sdlmicro.options.orm).pg = ",notnull,use_zero"
+	];
+
+	// 노드 수
+	uint64 nodes = 9 [
+		(sdlmicro.options.orm).pg = ",notnull,use_zero"
+	];
+
+	// 센서 수
+	uint64 sensors = 10 [
+		(sdlmicro.options.orm).pg = ",notnull,use_zero"
+	];
+}
+
+// ReceiveRssiHistory 모델은 수신된 데이터에 대한 RSSI 이력을 관리한다.
+message ReceiveRssiHistory {
+	option (sdlmicro.options.model).hypertable = {
+		time_column_name: "received_at"
+	};
+
+	// 데이터 수신 일시
+	google.protobuf.Timestamp received_at = 1 [
+		(sdlmicro.options.orm).pg = ",type:timestamptz,pk,notnull,default:now()"
+	];
+
+	// 송신한 장치 ID
+	string node_id = 2 [
+		(sdlmicro.options.orm).pg = ",type:varchar(14),pk,notnull"
+	];
+
+	// Index
+	int32 index = 3 [
+		(sdlmicro.options.orm).pg = ",notnull"
+	];
+
+	// 수신된 장치 ID
+	string device_id = 4 [
+		(sdlmicro.options.orm).pg = ",type:varchar(14),pk,notnull"
+	];
+
+	// 수신 강도
+	int32 rssi = 5 [
+		(sdlmicro.options.orm).pg = ",notnull"
+	];
+}
+
+// LastReceivedHistory 모델은 장치 및 채널별로 마지막으로 수신된 기록을 관리한다.
+message LastReceivedHistory {
+	option (sdlmicro.options.model).references = {
+		id: "last_received_histories_device_id_fk"
+		model_name: "Device"
+		fields: "device_id"
+		on_delete: CASCADE
+	};
+
+	// 수신된 장치 ID
+	string device_id = 1 [
+		(sdlmicro.options.orm).pg = ",type:varchar(14),pk,notnull",
+		(sdlmicro.options.orm).reference_id = "last_received_histories_device_id_fk"
+	];
+
+	// 수신 채널
+	uint32 channel = 2 [(sdlmicro.options.orm).pg = ",pk,notnull"];
+
+	// 데이터 수신 일시
+	google.protobuf.Timestamp received_at = 3 [
+		(sdlmicro.options.orm).pg = ",type:timestamptz,notnull,default:now()"
+	];
+
+	// 마지막으로 수신한 GW
+	string gateway_id = 4 [
+		(sdlmicro.options.orm).pg = ",type:varchar(14),notnull"
+	];
+}
