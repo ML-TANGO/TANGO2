@@ -5,6 +5,7 @@ def load_examples(input_csv_paths: List[str], output_csv_paths: List[str]) -> Li
     """
     여러 쌍의 CSV 파일에서 Few-Shot 예시를 불러옵니다.
     'file_name'을 기준으로 input.csv의 여러 라인을 합치고 output.csv의 단일 라인과 매칭합니다.
+    컬럼명을 포함하여 프롬프트를 구성합니다.
     """
     all_examples = []
     for input_path, output_path in zip(input_csv_paths, output_csv_paths):
@@ -18,10 +19,13 @@ def load_examples(input_csv_paths: List[str], output_csv_paths: List[str]) -> Li
                 continue
 
             def aggregate_rows(group):
-                other_cols = group.drop(columns='file_name')
-                return '\n'.join(other_cols.apply(lambda row: ' '.join(row.astype(str)), axis=1))
+                other_cols_df = group.drop(columns='file_name')
+                # 컬럼명과 데이터를 포함
+                col_names = ' '.join(other_cols_df.columns)
+                rows_as_str = '\n'.join(other_cols_df.apply(lambda row: ' '.join(row.astype(str)), axis=1))
+                return f"{col_names}\n{rows_as_str}"
 
-            aggregated_inputs = input_df.groupby('file_name').apply(aggregate_rows).reset_index(name='query')
+            aggregated_inputs = input_df.groupby('file_name', sort=False).apply(aggregate_rows).reset_index(name='query')
 
             # 2. 출력 데이터 준비
             if 'file_name' not in output_df.columns:

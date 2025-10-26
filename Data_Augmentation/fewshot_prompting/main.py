@@ -1,9 +1,10 @@
 import sys
 from langchain_community.llms import Ollama
-from langchain.prompts import PromptTemplate, FewShotPromptTemplate, ChatPromptTemplate, MessagesPlaceholder
-from langchain.chains import LLMChain
-from langchain.memory import ConversationBufferMemory
+from langchain_core.prompts import PromptTemplate, FewShotPromptTemplate, ChatPromptTemplate, MessagesPlaceholder
+from langchain_classic.chains import LLMChain
+from langchain_classic.memory import ConversationBufferMemory
 
+# 모듈화된 함수들 임포트
 from src.config import read_config
 from src.ollama_manager import start_ollama, stop_ollama, pull_model_if_needed
 from src.data_loader import load_examples
@@ -12,6 +13,7 @@ from src.app_ui import run_cli, run_web
 def main():
     """Main function to run the application."""
     ollama_status = None
+    ollama_process = None
     model_name = None
     try:
         # 1. 설정 읽기
@@ -25,7 +27,7 @@ def main():
         print(f"--- Mode: {ui_mode.upper()} | Interaction: {interaction_mode.upper()} ---")
 
         # 2. Ollama 서버 및 모델 준비
-        ollama_status = start_ollama()
+        ollama_status, ollama_process = start_ollama()
         if ollama_status is None:
             # start_ollama now prints a detailed error message
             return
@@ -50,7 +52,7 @@ def main():
                 path = input(f"출력(Output) CSV 파일 경로 #{len(output_csv_paths) + 1}: ")
                 if not path: break
                 output_csv_paths.append(path)
-        
+
         if input_csv_paths and output_csv_paths:
             examples = load_examples(input_csv_paths, output_csv_paths)
             if examples: print(f"✅ 총 {len(examples)}개의 Few-Shot 예시를 성공적으로 불러왔습니다.")
@@ -66,7 +68,7 @@ def main():
             system_message = "You are a helpful assistant. Based on the following examples, have a conversation.\n\n"
             for ex in examples:
                 system_message += f"Query: {ex['query']}\nResponse: {ex['response']}\n\n"
-            
+
             memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
             prompt = ChatPromptTemplate.from_messages([
                 ("system", system_message),
@@ -79,7 +81,7 @@ def main():
             prompt = FewShotPromptTemplate(
                 examples=examples,
                 example_prompt=example_prompt,
-                prefix="Here are some examples. Please follow this format.",
+                prefix="The following are examples of a user query and the desired response. Analyze the pattern in these examples carefully. Your task is to generate a response for the final user query in the same style and format.",
                 suffix="Now, answer the following query:\nQuery: {user_query}",
                 input_variables=["user_query"],
                 example_separator="\n\n"
@@ -97,9 +99,9 @@ def main():
     except KeyboardInterrupt:
         print("\n사용자에 의해 프로그램이 중단되었습니다.")
     finally:
-        # Unload the model from memory via API
+        # Unload the model and/or stop the server
         if ollama_status:
-            stop_ollama(model_name)
+            stop_ollama(ollama_status, ollama_process, model_name)
         print("Application shut down.")
 
 if __name__ == "__main__":
