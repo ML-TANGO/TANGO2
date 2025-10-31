@@ -8,8 +8,8 @@
 
 # **TANGO 2**
 
-This is the official repository for the TANGO 2 project. 
-TANGO (**T**arget **A**ware **N**o-code neural network **G**eneration and **O**peration framework) is code name of project for Integrated Machine Learning Framework.
+This is the official repository for the **TANGO 2** project. 
+**TANGO** (**T**arget **A**ware **N**o-code neural network **G**eneration and **O**peration framework) is code name of project for Integrated Machine Learning Framework.
 
 <p align="center">
     <img width="1280" align="right" alt="Arch" src="docs/arch.png" />
@@ -17,7 +17,7 @@ TANGO (**T**arget **A**ware **N**o-code neural network **G**eneration and **O**p
 
 It aims to develop automatic neural network generation and deployment framework that helps novice users to easily develop neural network applications with less or ideally no code efforts and deploy the neural network application onto the target device.
 
-TANGO 2 is a follow-up project to [**TANGO**](https://github.com/ML-TANGO/TANGO), an automatic neural network generation and deployment framework, and aims to provide a proof-of-concept for the SDx industry.
+**TANGO 2** is a follow-up project to [**TANGO**](https://github.com/ML-TANGO/TANGO), an automatic neural network generation and deployment framework, and aims to provide a proof-of-concept for the SDx industry.
 
 ---
 
@@ -38,10 +38,11 @@ TANGO2
    │
    ├── Deployment
    │   ├── Optimization
-   │   └── Runtime_Engine
-   │       ├── Timestamp
-   │       ├── kernel_source
-   │       └── monitoring
+   │   ├── Runtime_Engine
+   │   │   ├── Timestamp
+   │   │   ├── kernel_source
+   │   │   └── monitoring
+   │   └── remoteManager
    │
    ├── GenAI_Platform
    │
@@ -49,6 +50,9 @@ TANGO2
    │   └── Intent_Detection
    │
    ├── SDF
+   │   ├── data-collect-service
+   │   ├── data
+   │   └── model/fine_tuned_xlm_lora
    │
    ├── SDM
    │
@@ -69,13 +73,15 @@ TANGO2
 
 ├── Optimization [[View Details]](Deployment/Optimization/README.md)
 
-└── Runtime_Engine [[View Details]](Deployment/Runtime_Engine/README.md)
+├── Runtime_Engine [[View Details]](Deployment/Runtime_Engine/README.md)
 
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── Timestamp [[View Details]](Deployment/Runtime_Engine/Timestamp/README.md)
+│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── Timestamp [[View Details]](Deployment/Runtime_Engine/Timestamp/README.md)
 
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── kernel_source [[View Details]](Deployment/Runtime_Engine/kernel_source/README.md)
+│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── kernel_source [[View Details]](Deployment/Runtime_Engine/kernel_source/README.md)
 
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── monitoring [[View Details]](Deployment/Runtime_Engine/monitoring/README.md)
+│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── monitoring [[View Details]](Deployment/Runtime_Engine/monitoring/README.md)
+
+└── remoteManager [[View Details]](Deployment/remoteManager/README.md)
 
 
 ### GenAI_Platform 
@@ -90,6 +96,12 @@ TANGO2
 
 ### SDF 
 [[View Details]](SDF/README.md)
+
+├── data-collect-service [[View Details]](SDF/data-collect-service/README.md)
+
+├── data [View Details]
+
+└── model/fine_tuned_xlm_lora [[View Details]](SDF/model/fine_tuned_xlm_lora/README.md)
 
 <p align="center">
 <img width="1280" align="center" alt="SDF" src="docs/sdf.png" /></p>
@@ -135,19 +147,19 @@ This proejct was supported by [_Institute of Information & Communications Techno
 
 <p align="center">
     <a href="https://www.rtst.co.kr/">
-        <img src="docs/logo/logo_rtst.png" align="center" hspace=5 width="12%"></a>
+        <img src="docs/logo/logo_rtst.png" align="center" width="12%"></a>
     <a href="https://www.keti.re.kr/main/main.php">
         <img src="docs/logo/logo_keti.png" align="center" hspace=5 width="12%"></a>
     <a href="https://www.acryl.ai/kr/">
-        <img src="docs/logo/logo_acryl.png" align="center" hspace=5 width="9%"></a>
+        <img src="docs/logo/logo_acryl.png" align="center" width="9%"></a>
     <a href="https://slpl.korea.ac.kr/">
         <img src="docs/logo/logo_slpl.png" align="center" hspace=5 width="12%"></a>
     <a href="https://aivenautics.com/">
-        <img src="docs/logo/logo_aivn.png" align="center" hspace=5 width="12%"></a>
+        <img src="docs/logo/logo_aivn.png" align="center" width="12%"></a>
     <a href="https://suredatalab.com/site/">
         <img src="docs/logo/logo_suredata.png" align="center" hspace=5 width="15%"></a>
     <a href="https://www.snuh.org/intro.do">
-        <img src="docs/logo/logo_snuh.png" align="center" hspace=5 width="12%"></a>
+        <img src="docs/logo/logo_snuh.png" align="center" width="12%"></a>
 </p> 
 
 ---
