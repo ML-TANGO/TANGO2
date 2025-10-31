@@ -1,0 +1,50 @@
+{{/*
+필요한 앱에서 rbac 세팅
+default serviceaccount : namespace default로 작업하려 할때 사용됨
+db waiting job 
+*/}}
+{{/*
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: jfb-{{ .Values.global.jfb.namespace }}-default-clusterrole
+rules:
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["*"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["*"]
+- apiGroups: ["extensions", "networking.k8s.io"]
+  resources: ["ingresses"]
+  verbs: ["*"]
+- apiGroups: [""]
+  resources: ["namespaces"]
+  verbs: ["*"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["*"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["*"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["*"]
+- apiGroups: ["batch"]
+  resources: ["jobs"]
+  verbs: ["*"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: jfb-{{ .Values.global.jfb.namespace }}-default-clusterrolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: jfb-{{ .Values.global.jfb.namespace }}-default-clusterrole
+subjects:
+- kind: ServiceAccount
+  name: default
+  namespace: {{ .Values.global.jfb.namespace  }}
+*/}}

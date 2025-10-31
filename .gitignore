@@ -1,27 +1,6 @@
 .DS_Store
 
-# Jupyter notebooks
-*.ipynb
-
-# Image files
-*.png
-
-# CSV files
-*.csv
-
-# Cache files
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-*.so
-.cache/
-*.cache
-
-# PyTorch model files
-*.pth
-*.pt
-
-# Binary files
-*.bin
+# Log files
+*.out
+*.log
+nohup.out

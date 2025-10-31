@@ -1,0 +1,69 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: image-library-{{ .Values.common.imageId }}
+  namespace: {{ .Values.common.systemNamespace }}-image
+data:
+  library.py: |
+    import subprocess
+    import os
+    import json
+    import traceback
+
+    pymysql = subprocess.check_output(["pip3 install pymysql 2>/dev/null || echo ''"], shell=True, stderr=subprocess.PIPE).decode('utf-8').strip()
+    import pymysql
+    from contextlib import contextmanager
+
+    @contextmanager
+    def get_db():
+        try:
+            conn = pymysql.connect(
+                      host={{ .Values.db.JF_DB_HOST | quote }},
+                      port=int({{ .Values.db.JF_DB_PORT }}),
+                      user={{ .Values.db.JF_DB_USER | quote }},
+                      password={{ .Values.db.JF_DB_PW | quote }},
+                      db={{ .Values.db.JF_DB_NAME | quote }},
+                      charset={{ .Values.db.JF_DB_CHARSET | quote }},
+                      cursorclass=pymysql.cursors.DictCursor)
+            yield conn
+        finally:
+            conn.close()
+            pass
+
+    def update_image_data(image_id, data):
+        try:
+            with get_db() as conn:
+                cur = conn.cursor()
+                sql = "UPDATE image SET "
+                for col, row in data.items():
+                    if row == None:              # Null case
+                        sql += f"{col}=Null, "                    
+                    elif col in ["status"]:      # status: int
+                        sql += f"{col}={row}, "
+                    elif col in ["libs_digest"]: # libs_digest: list
+                        row = json.dumps(row)
+                        sql += f"{col}='{row}', "
+                    else:
+                        sql += f"{col}='{row}', "
+                sql += f"""update_datetime=CURRENT_TIMESTAMP()
+                        WHERE id={image_id} AND status!=4"""
+
+                cur.execute(sql, ())
+                conn.commit()
+            return True, ""
+        except Exception as e:
+            traceback.print_exc()
+            return False, e
+
+    pytorch = subprocess.check_output(["python -c 'import torch; print(torch.__version__)' 2>/dev/null || echo ''"], shell=True, stderr=subprocess.PIPE).decode('utf-8').strip()
+    tensorflow = subprocess.check_output(["python -c 'import tensorflow as tf; print(tf.__version__)' 2>/dev/null || echo ''"], shell=True, stderr=subprocess.PIPE).decode('utf-8').strip()
+    nvcc = subprocess.check_output(["nvcc --version 2>/dev/null | grep release | awk '{print $6}' || echo ''"], shell=True, stderr=subprocess.PIPE).decode('utf-8').strip()
+    mpi = subprocess.check_output(["mpirun -version 2>/dev/null |grep mpirun | awk '{print $4}' || echo ''"], shell=True, stderr=subprocess.PIPE).decode('utf-8').strip()
+
+    library_list = [
+        {"name" : 'tensorflow', "version" : tensorflow if tensorflow != '' else None},
+        {"name" : 'torch',"version" : pytorch if pytorch != '' else None},
+        {"name" : 'cuda', "version" : nvcc if nvcc != '' else None},
+        {"name" : 'mpi', "version" : mpi if mpi != '' else None}]
+
+    update_image_data(int({{ .Values.common.imageId }}), data={"libs_digest" : library_list})

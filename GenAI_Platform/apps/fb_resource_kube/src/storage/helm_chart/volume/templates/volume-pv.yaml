@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-{{ .Values.name }}
+  labels:
+    role: app-storage
+spec:
+  capacity:
+    storage: 1M
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ""
+  nfs:
+    path: {{ .Values.path }}
+    server: {{ .Values.server }}
+  mountOptions:
+    - noatime
+    - nodiratime
+

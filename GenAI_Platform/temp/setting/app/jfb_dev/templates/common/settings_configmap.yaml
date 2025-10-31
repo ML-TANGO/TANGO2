@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jfb-{{ .Values.global.developer }}-settings-cm
+  namespace: {{ .Values.global.developer }}
+data:
+  JF_DB_HOST: 'jfb-{{ .Values.global.developer }}-db-svc'
+  JF_DB_PORT: '3306'
+  JF_DB_UNIX_SOCKET: '/jf-src/master/conf/db/mysqld.sock'
+  JF_DB_USER: 'root'
+  JF_DB_PW: 'acryl4958@'
+  JF_DB_NAME: 'jfb'
+  JF_DB_CHARSET: 'utf8'
+  JF_DB_DOCKER: 'JF-mariadb'
+  JF_DB_ATTEMP_TO_CREATE: "true" # 소문자
+  JF_DB_MAX_CONNECTIONS: '500'
+  JF_DB_COLLATION: "utf8_general_ci"
+  DAEMONSET_MAIN_HOST: {{ .Values.daemonset.main.ip }}
+  DAEMONSET_MAIN_PORT: "{{ include "launcher.hostPort" . }}"
+  REGISTRY_SVC_DNS: "jfb-registry-svc.default.svc.cluster.local"
+  REGISTRY_SVC_PORT: "5000"
+  DOCKER_REGISTRY_URL: "registry.jfb.io:30500/"  # Should be an empty string or finished with slash(`/')
+  DOCKER_REGISTRY_PROTOCOL: "https://"
+  JF_INIT_ROOT_PW: "acryl1234!"
+  EXTERNAL_HOST: '192.168.1.248'
+  EXTERNAL_HOST_REDIRECT: "true" # 소문자
+  INGRESS_PROTOCOL: 'http'
+  JF_HOST_PATH: {{ include "src.baseDir" . }}
+  JF_DATA_HOST_PATH: {{ include "dir.data" . }}
+  JF_BIN_HOST_PATH: {{ include "dir.bin" . }}
+  KUBER_CONFIG_PATH: "/jf-bin/.kube/config"

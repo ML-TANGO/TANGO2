@@ -1,0 +1,17 @@
+# To contribute improvements to CI/CD templates, please follow the Development guide at:
+# https://docs.gitlab.com/ee/development/cicd/templates.html
+# This specific template is located at:
+# https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Pages/Pelican.gitlab-ci.yml
+
+default:
+  # Full project: https://gitlab.com/pages/pelican
+  image: python:2.7-alpine
+
+pages:
+  script:
+    - pip install -r requirements.txt
+    - pelican -s publishconf.py
+  artifacts:
+    paths:
+      - public/
+  environment: production

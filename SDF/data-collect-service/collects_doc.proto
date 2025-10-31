@@ -1,0 +1,101 @@
+syntax = "proto3";
+package collects;
+option go_package = "gitlab.suredatalab.kr/beymons/collects;collects";
+
+import "protoc-gen-openapiv2/options/annotations.proto";
+
+option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
+	info: {
+		title: "Collects"
+		description: "데이터 수집을 위한 서비스로 MQTT를 통해 데이터를 수신받는다."
+	}
+	schemes: HTTPS
+	host: "devel.beymons.kr"
+	base_path: "/api"
+	consumes: "application/json"
+	produces: "application/json"
+	security_definitions: {
+		security: {
+			key: "Keycloak"
+			value: {
+				type: TYPE_OAUTH2
+				flow: FLOW_ACCESS_CODE
+				authorization_url: "https://keycloak.suredatalab.kr/realms/beymons/protocol/openid-connect/auth"
+				token_url: "https://keycloak.suredatalab.kr/realms/beymons/protocol/openid-connect/token"
+			}
+		}
+	}
+	security: [
+		{
+			security_requirement: {
+				key: "Keycloak"
+				value: {
+					scope: []
+				}
+			}
+		}
+	]
+	responses: {
+		key: "401"
+		value: {
+			description: "Returned when the user does not sign-in."
+			schema: {
+				example: "null"
+			}
+			headers: {
+				key: "grpc-status"
+				value: {
+					description: "gRPC error code"
+				}
+			}
+			headers: {
+				key: "grpc-message"
+				value: {
+					description: "gRPC error message"
+				}
+			}
+		}
+	}
+	responses: {
+		key: "403"
+		value: {
+			description: "Returned when the user does not have permission to access the resource."
+			schema: {
+				example: "null"
+			}
+			headers: {
+				key: "grpc-status"
+				value: {
+					description: "gRPC error code"
+				}
+			}
+			headers: {
+				key: "grpc-message"
+				value: {
+					description: "gRPC error message"
+				}
+			}
+		}
+	}
+	responses: {
+		key: "404"
+		value: {
+			description: "Returned when the resource does not exist."
+			schema: {
+				example: "null"
+			}
+			headers: {
+				key: "grpc-status"
+				value: {
+					description: "gRPC error code"
+				}
+			}
+			headers: {
+				key: "grpc-message"
+				value: {
+					description: "gRPC error message"
+				}
+			}
+		}
+	}
+};

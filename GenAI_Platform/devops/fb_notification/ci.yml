@@ -1,0 +1,149 @@
+spec:
+  inputs:
+    appName: 
+      description: Job 이름의 접두사로 사용할 앱 이름으로 고유하게 default 값을 지정해 주세요.
+      default: "FB 알림"
+    dirName:
+      description: 현재 디렉토리로 devops 폴더 안의 폴더 이름을 default 값으로 지정해 주세요.
+      default: "fb_notification"
+
+
+---
+
+stages:
+  - preflight
+  - build
+  - test
+  - push
+
+include:
+  - local: devops/ci-commons/general.gitlab-ci.yml # 일반 템플릿 로드
+  - local: devops/ci-commons/python.gitlab-ci.yml # 파이썬 템플릿 로드
+  - local: devops/ci-commons/helm.gitlab-ci.yml # 헬름 템플릿 로드
+  - local: devops/ci-commons/kaniko.gitlab-ci.yml # kaniko 템플릿 로드
+  - local: bundles/flightbase/cicd/flightbase.gitlab-ci.yml # flightbase 템플릿 로드
+
+".$[[ inputs.appName ]].when_apps_changed": # rules:changes가 extends된 변수를 인식하지 못하는 버그가 있어서 추가로 작성 필요
+  rules:
+    - changes:
+      - "apps/$[[ inputs.dirName ]]/**/*"
+      - "$COMMON_PACKAGE_DIR"
+
+".$[[ inputs.appName ]].skip_apps_changed": # rules:changes가 extends된 변수를 인식하지 못하는 버그가 있어서 추가로 작성 필요
+  rules:
+    - changes:
+         - "apps/$[[ inputs.dirName ]]/**/*"
+         - "$COMMON_PACKAGE_DIR"
+      when: never
+
+".$[[ inputs.appName ]].when_devops_changed": # rules:changes가 extends된 변수를 인식하지 못하는 버그가 있어서 추가로 작성 필요
+  rules:
+    - changes:
+      - devops/$[[ inputs.dirName ]]/**/* 
+      - "$COMMONLIB_CHART_DIR"
+
+".$[[ inputs.appName ]].skip_devops_changed": # rules:changes가 extends된 변수를 인식하지 못하는 버그가 있어서 추가로 작성 필요
+  rules:
+    - changes:
+        - devops/$[[ inputs.dirName ]]/**/* 
+        - "$COMMONLIB_CHART_DIR"
+      when: never
+
+".$[[ inputs.appName ]].when_any_changed": # rules:changes가 extends된 변수를 인식하지 못하는 버그가 있어서 추가로 작성 필요
+  rules:
+    - changes:
+      - "apps/$[[ inputs.dirName ]]/**/*"
+      - "$COMMON_PACKAGE_DIR" 
+      - "devops/$[[ inputs.dirName ]]/**/*" 
+      - "$COMMONLIB_CHART_DIR"
+
+".check_pass": # 임시로 lint 및 test 패스용
+  rules:
+    - if: $CI_PIPELINE_SOURCE 
+      when: never
+
+##################################################################
+# 아래 variables에서 변수 값을 적절히 수정해 주세요.
+
+".$[[ inputs.appName ]].variables": 
+  variables:
+    HELM_CHART_NAME: "jfb-notification" # 헬름 차트 이름, 실제 헬름 차트의 name에 맞게 수정 필요
+    HELM_CHART_VERSION: "0.1.0" # 헬름 차트 버전, 수정 필요
+    IMAGE_NAME: "${FB_IMAGE_CATEGORY}/notification_app" # 도커 이미지 이름, 수정 필요
+    DIR_NAME: $[[ inputs.dirName ]]
+    
+    APPS_DIR_REL: "apps/${DIR_NAME}" # 코드 경로, 필요 시 수정
+    DEVOPS_DIR_REL: "devops/${DIR_NAME}" # 데브옵스 경로, 필요 시 수정
+
+    APPS_DIR: "${CI_PROJECT_DIR}/${APPS_DIR_REL}" 
+    BUILD_CONTEXT_DIR: "${CI_PROJECT_DIR}/apps" # APPS 상위 경로에서 실행 필요
+    DEVOPS_DIR: "${CI_PROJECT_DIR}/${DEVOPS_DIR_REL}" 
+    DOCKERFILE_DIR: "${APPS_DIR}/Dockerfile" # 도커파일 경로, 필요 시 수정
+    HELM_CHART_DIR: "${DEVOPS_DIR}/helm" # 헬름 차트 경로, 필요 시 수정
+    
+    REQUIREMENT_DIR: "${APPS_DIR}/requirements.txt" # requirements.txt 파일 경로, 필요 시 수정
+    
+    # PYLINT_FAIL_UNDER: 3 # 린트 실패 기준선   
+    PYTHON_IMAGE: "python:3.11.4-slim" # 파이썬 이미지, 필요 시 수정
+  extends:
+    - ".flightbase.variables"
+
+##################################################################
+
+
+"$[[ inputs.appName ]], CI 로드 확인":  # 해당 CI 파일 로드 확인용
+  stage: preflight
+  script:
+    - echo "$[[ inputs.appName ]] CI 확인 완료"    
+
+"$[[ inputs.appName ]], pip 로드":
+  extends: 
+    - ".$[[ inputs.appName ]].variables"
+    - .pip_push    
+    - ".$[[ inputs.appName ]].when_apps_changed"
+  image: ${PYTHON_IMAGE}
+  stage: preflight
+  script:
+    - echo "pip fetch done!"
+
+"$[[ inputs.appName ]], 린트":
+  extends: 
+    - ".$[[ inputs.appName ]].variables"
+    - .pip_pull
+    - .check_pass # ".$[[ inputs.appName ]].when_apps_changed"
+  image: ${PYTHON_IMAGE}
+  stage: preflight
+  script:
+    - cd "${APPS_DIR}"
+    - pip install -r "$DEVOPS_DIR/lint-requirements.txt"
+    - pylint *.py --ignore-patterns=test* 
+      --fail-under="${PYLINT_FAIL_UNDER}" 
+      --disable C0114,C0115,C0116 # docstring 관련 린트 비활성화
+
+"$[[ inputs.appName ]], 빌드":
+  extends: 
+    - ".$[[ inputs.appName ]].variables"
+    - .kaniko_push
+    - ".$[[ inputs.appName ]].when_apps_changed"
+  stage: build
+  after_script:
+    - echo "Done building and uploading image!"
+
+"$[[ inputs.appName ]], 유닛 테스트":
+  extends: 
+    - ".$[[ inputs.appName ]].variables"
+    - .pip_pull
+    - .check_pass # ".$[[ inputs.appName ]].when_apps_changed"
+  image: ${PYTHON_IMAGE}
+  stage: test
+  script:
+    - cd "${APPS_DIR}"
+    - pip install -r "$DEVOPS_DIR/test-requirements.txt"
+    - pytest
+
+"$[[ inputs.appName ]], 헬름 차트 배포":
+  extends: 
+    - ".$[[ inputs.appName ]].variables"
+    - .helm_push_recursive
+    - ".$[[ inputs.appName ]].when_devops_changed" 
+  stage: push

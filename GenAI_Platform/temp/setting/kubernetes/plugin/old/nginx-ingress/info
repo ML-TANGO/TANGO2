@@ -1,0 +1,3 @@
+kubectl apply -f mandatory.yaml # nginx
+kubectl apply -f ingress-svc.yaml # Default Port 30000
+kubectl create secret tls https-ingress --key ../jf-bin/https-ssl.key --cert ../jf-bin/https-ssl.crt

@@ -1,0 +1,73 @@
+# To contribute improvements to CI/CD templates, please follow the Development guide at:
+# https://docs.gitlab.com/ee/development/cicd/templates.html
+# This specific template is located at:
+# https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Security/API-Fuzzing.latest.gitlab-ci.yml
+
+# To use this template, add the following to your .gitlab-ci.yml file:
+#
+# include:
+#   template: API-Fuzzing.latest.gitlab-ci.yml
+#
+# You also need to add a `fuzz` stage to your `stages:` configuration. A sample configuration for API Fuzzing:
+#
+# stages:
+#   - build
+#   - test
+#   - deploy
+#   - fuzz
+
+# Read more about this feature here: https://docs.gitlab.com/ee/user/application_security/api_fuzzing/
+#
+# Configure API Fuzzing with CI/CD variables (https://docs.gitlab.com/ee/ci/variables/index.html).
+# List of available variables: https://docs.gitlab.com/ee/user/application_security/api_fuzzing/#available-cicd-variables
+
+variables:
+    # Setting this variable affects all Security templates
+    # (SAST, Dependency Scanning, ...)
+    SECURE_ANALYZERS_PREFIX: "$CI_TEMPLATE_REGISTRY_HOST/security-products"
+    #
+    FUZZAPI_VERSION: "3"
+    FUZZAPI_IMAGE_SUFFIX: ""
+    FUZZAPI_IMAGE: api-security
+
+apifuzzer_fuzz:
+    stage: fuzz
+    image: $SECURE_ANALYZERS_PREFIX/$FUZZAPI_IMAGE:$FUZZAPI_VERSION$FUZZAPI_IMAGE_SUFFIX
+    allow_failure: true
+    rules:
+        - if: $API_FUZZING_DISABLED == 'true' || $API_FUZZING_DISABLED == '1'
+          when: never
+        - if: $API_FUZZING_DISABLED_FOR_DEFAULT_BRANCH == 'true'  &&
+                $CI_DEFAULT_BRANCH == $CI_COMMIT_REF_NAME
+          when: never
+        - if: $API_FUZZING_DISABLED_FOR_DEFAULT_BRANCH == '1'  &&
+                $CI_DEFAULT_BRANCH == $CI_COMMIT_REF_NAME
+          when: never
+
+        # Add the job to merge request pipelines if there's an open merge request.
+        - if: $CI_PIPELINE_SOURCE == "merge_request_event" &&
+              $CI_GITLAB_FIPS_MODE == "true"
+          variables:
+              DAST_API_IMAGE_SUFFIX: "-fips"
+        - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+        # Don't add it to a *branch* pipeline if it's already in a merge request pipeline.
+        - if: $CI_OPEN_MERGE_REQUESTS
+          when: never
+
+        # Add the job to branch pipelines.
+        - if: $CI_COMMIT_BRANCH &&
+              $CI_GITLAB_FIPS_MODE == "true"
+          variables:
+              FUZZAPI_IMAGE_SUFFIX: "-fips"
+        - if: $CI_COMMIT_BRANCH
+    script:
+        - /peach/analyzer-fuzz-api
+    artifacts:
+        when: always
+        paths:
+            - gl-assets
+            - gl-api-fuzzing-report.json
+            - gl-*.log
+        reports:
+            api_fuzzing: gl-api-fuzzing-report.json

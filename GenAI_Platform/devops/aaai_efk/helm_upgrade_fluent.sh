@@ -1,0 +1,1 @@
+helm upgrade -n jonathan-efk fluent-bit fluent/fluent-bit --values fluent-values.yaml --install

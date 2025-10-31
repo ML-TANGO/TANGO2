@@ -1,0 +1,6 @@
+apiVersion: v1
+name: storage
+description: A Helm chart for Kubernetes
+version: 0.1.0
+appVersion: "1.16.0"
+accessmodes: ReadWriteMany

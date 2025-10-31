@@ -1,0 +1,129 @@
+# WARNING (post-GitLab 13.0):
+#
+# This CI template should NOT be included in your own CI configuration files:
+# 'review_ecs' and 'production_ecs' are two temporary names given to the jobs below.
+#
+# Should this template be included in your CI configuration, the upcoming name changes could
+# then result in potentially breaking your future pipelines.
+#
+# More about including CI templates: https://docs.gitlab.com/ee/ci/yaml/#includetemplate
+.ecs_image:
+  image: '${CI_TEMPLATE_REGISTRY_HOST}/gitlab-org/cloud-deploy/aws-ecs:latest'
+
+.deploy_to_ecs:
+  extends: .ecs_image
+  dependencies: []
+  script:
+    - ecs update-task-definition
+
+.review_ecs_base:
+  stage: review
+  extends: .deploy_to_ecs
+  after_script:
+    - echo "http://$(ecs get-task-hostname)" > environment_url.txt
+  artifacts:
+    paths:
+      - environment_url.txt
+
+.production_ecs_base:
+  stage: production
+  extends: .deploy_to_ecs
+  environment:
+    name: production
+
+.stop_review_ecs_base:
+  extends: .ecs_image
+  stage: cleanup
+  allow_failure: true
+  script:
+    - ecs stop-task
+
+review_ecs:
+  extends: .review_ecs_base
+  environment:
+    name: review/$CI_COMMIT_REF_NAME
+    on_stop: stop_review_ecs
+  rules:
+    - if: '$AUTO_DEVOPS_PLATFORM_TARGET != "ECS"'
+      when: never
+    - if: '$CI_KUBERNETES_ACTIVE || $KUBECONFIG'
+      when: never
+    - if: '$REVIEW_DISABLED'
+      when: never
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      when: never
+    - if: '$CI_COMMIT_TAG || $CI_COMMIT_BRANCH'
+
+stop_review_ecs:
+  extends: .stop_review_ecs_base
+  environment:
+    name: review/$CI_COMMIT_REF_NAME
+    action: stop
+  rules:
+    - if: '$AUTO_DEVOPS_PLATFORM_TARGET != "ECS"'
+      when: never
+    - if: '$CI_KUBERNETES_ACTIVE || $KUBECONFIG'
+      when: never
+    - if: '$REVIEW_DISABLED'
+      when: never
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      when: never
+    - if: '$CI_COMMIT_TAG || $CI_COMMIT_BRANCH'
+      when: manual
+
+review_fargate:
+  extends: .review_ecs_base
+  environment:
+    name: review/$CI_COMMIT_REF_NAME
+    on_stop: stop_review_fargate
+  script:
+    - ecs update-task-definition
+  rules:
+    - if: '$AUTO_DEVOPS_PLATFORM_TARGET != "FARGATE"'
+      when: never
+    - if: '$CI_KUBERNETES_ACTIVE || $KUBECONFIG'
+      when: never
+    - if: '$REVIEW_DISABLED'
+      when: never
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      when: never
+    - if: '$CI_COMMIT_TAG || $CI_COMMIT_BRANCH'
+
+stop_review_fargate:
+  extends: .stop_review_ecs_base
+  environment:
+    name: review/$CI_COMMIT_REF_NAME
+    action: stop
+  rules:
+    - if: '$AUTO_DEVOPS_PLATFORM_TARGET != "FARGATE"'
+      when: never
+    - if: '$CI_KUBERNETES_ACTIVE || $KUBECONFIG'
+      when: never
+    - if: '$REVIEW_DISABLED'
+      when: never
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      when: never
+    - if: '$CI_COMMIT_TAG || $CI_COMMIT_BRANCH'
+      when: manual
+
+production_ecs:
+  extends: .production_ecs_base
+  rules:
+    - if: '$AUTO_DEVOPS_PLATFORM_TARGET != "ECS"'
+      when: never
+    - if: '$CI_KUBERNETES_ACTIVE || $KUBECONFIG'
+      when: never
+    - if: '$CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH'
+      when: never
+    - if: '$CI_COMMIT_TAG || $CI_COMMIT_BRANCH'
+
+production_fargate:
+  extends: .production_ecs_base
+  rules:
+    - if: '$AUTO_DEVOPS_PLATFORM_TARGET != "FARGATE"'
+      when: never
+    - if: '$CI_KUBERNETES_ACTIVE || $KUBECONFIG'
+      when: never
+    - if: '$CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH'
+      when: never
+    - if: '$CI_COMMIT_TAG || $CI_COMMIT_BRANCH'

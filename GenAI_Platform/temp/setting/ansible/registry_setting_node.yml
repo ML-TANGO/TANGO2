@@ -1,0 +1,23 @@
+- name: SETTING CRT ON NODE
+  hosts: all
+  gather_facts: no
+  vars_files:
+    - conf/env.yaml
+  tasks:
+    - name: copy registry crt -> /usr/share/ca-certificates
+      copy:
+        src: "{{ JFB_REGISTRY_CRT }}"
+        dest: /usr/share/ca-certificates/registry.crt
+
+    - name: update ca -> "update-ca-certificates"
+      command: update-ca-certificates
+
+    - name: add registry DNS -> "/etc/hosts registry.jfb.io"
+      lineinfile:
+        path: /etc/hosts
+        line: "{{ JFB_REGISTRY_IP }} {{ JFB_REGISTRY_DNS }}"
+        state: present
+        create: no
+
+    - name: containerd restart -> "systemctl restart containerd"
+      command: systemctl restart containerd

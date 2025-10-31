@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: jfb-{{ .Values.global.developer }}-db-svc
+  namespace: {{ .Values.global.developer }}
+spec:
+  selector:
+    app: jfb-{{ .Values.global.developer }}-db
+  type: NodePort
+  ports:
+    - port: 3306
+      targetPort: 3306
+      nodePort: {{ include "db.nodePort" . | int }}
+
+# 개발 디버깅 위해 nodePort 열어둠

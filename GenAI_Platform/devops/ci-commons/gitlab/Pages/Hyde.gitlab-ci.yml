@@ -1,0 +1,34 @@
+# To contribute improvements to CI/CD templates, please follow the Development guide at:
+# https://docs.gitlab.com/ee/development/cicd/templates.html
+# This specific template is located at:
+# https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Pages/Hyde.gitlab-ci.yml
+
+default:
+  # Full project: https://gitlab.com/pages/hyde
+  image: python:2.7
+
+  cache:
+    paths:
+      - vendor/
+
+test:
+  stage: test
+  script:
+    - pip install hyde
+    - hyde gen
+  except:
+    variables:
+      - $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+pages:
+  stage: deploy
+  environment: production
+  script:
+    - pip install hyde
+    - hyde gen -d public
+  artifacts:
+    paths:
+      - public
+  only:
+    variables:
+      - $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

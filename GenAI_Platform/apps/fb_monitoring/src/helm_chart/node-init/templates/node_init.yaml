@@ -1,0 +1,42 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Values.name }}
+spec:
+  backoffLimit: 0  # 실패 시 재시도하지 않음
+  template:
+    spec:
+      containers:
+      - name: node-init-container
+        image: {{ .Values.registry_url}}jfb-system/cuda-12.2.0:0.1.1
+        securityContext:
+          privileged: true
+        env:
+        {{- range $key, $val := .Values.env }}
+        - name: {{ $key }}
+          value: {{ $val | quote }}
+        {{- end}}
+        envFrom:
+        - configMapRef:
+            name: jfb-settings
+        command: ["sh", "-c","python3 /app/src/node_init.py"] #while true; do sleep 30; done;python3 /app/src/node_init.py
+        volumeMounts:
+        - name: jf-src
+          mountPath: /app
+        - name: jf-utils
+          mountPath: /utils
+        - name: local-data
+          mountPath: /dev/mem
+      nodeName: {{ .Values.node }}
+      volumes:
+      - name: jf-src
+        persistentVolumeClaim:
+          claimName: jf-src-monitoring-pvc
+      - name: jf-utils
+        persistentVolumeClaim:
+          claimName: jf-src-utils-pvc
+      - name: local-data
+        hostPath:
+          path: /dev/mem
+
+      restartPolicy: Never

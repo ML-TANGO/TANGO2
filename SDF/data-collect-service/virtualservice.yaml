@@ -1,0 +1,25 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: collects-service
+  labels:
+    framework: sdlmicro
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - default
+  http:
+  - name: collects
+    match:
+    - uri:
+        exact: /api/collects
+    - uri:
+        prefix: /api/collects/
+    rewrite:
+      uri: /collects/
+    route:
+    - destination:
+        host: collects
+        port:
+          number: 80

@@ -1,0 +1,17 @@
+- name: KUBERNETES PLUGIN
+  hosts: control
+  gather_facts: no
+  vars_files:
+    - conf/env.yaml
+  tasks:
+    - name: find YAML files
+      find:
+        paths: "{{ playbook_dir }}/../kubernetes/plugin/kube_yaml/"
+        patterns: "*.yaml"
+        recurse: yes # kube_yaml 바로 하위의 디렉토리까지만 찾음
+        excludes: "old/*"
+      register: yaml_files
+
+    - name: apply YAML files
+      command: "kubectl apply -f {{ item.path }}"
+      loop: "{{ yaml_files.files }}"

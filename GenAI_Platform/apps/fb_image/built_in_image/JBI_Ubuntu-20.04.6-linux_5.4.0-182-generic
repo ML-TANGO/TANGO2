@@ -1,0 +1,43 @@
+# 베이스 이미지로 Ubuntu 20.04를 사용
+FROM ubuntu:20.04
+
+# 비상호작용 모드 설정
+ENV DEBIAN_FRONTEND=noninteractive \
+    TZ=Etc/UTC
+
+# 패키지 목록 업데이트 및 필수 패키지 설치
+RUN  apt-get update && apt-get install -y --no-install-recommends \
+    vim git curl wget ethtool sudo openssh-client openssh-server \
+    net-tools iproute2 python3-pip tzdata nginx \
+    python3 python3-pip openssh-client openssh-server net-tools iputils-ping iproute2 traceroute pdsh sshpass
+    
+
+RUN  curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
+    && curl -sL https://dl.yarnpkg.com/debian/pubkey.gpg | gpg --dearmor | tee /usr/share/keyrings/yarnkey.gpg >/dev/null \
+    && echo "deb [signed-by=/usr/share/keyrings/yarnkey.gpg] https://dl.yarnpkg.com/debian stable main" | tee /etc/apt/sources.list.d/yarn.list
+
+RUN ln -fs /usr/share/zoneinfo/$TZ /etc/localtime \
+    && dpkg-reconfigure --frontend noninteractive tzdata \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - 
+     
+RUN apt-get update && apt-get install -y nodejs gcc g++ make curl git yarn
+
+RUN  pip3 install jupyter-core jupyterlab jupyterlab-git ipympl --no-warn-script-location 
+
+# jupyter
+RUN  jupyter labextension install @jupyter-widgets/jupyterlab-manager jupyter-matplotlib @jupyterlab/git
+ 
+# vscode
+RUN curl -fsSL https://code-server.dev/install.sh | sh \
+    && code-server --install-extension ms-python.python
+
+# FastAPI 및 Uvicorn 설치
+RUN pip3 install --no-cache-dir fastapi uvicorn[standard]
+
+# shell
+RUN VER=$(curl --silent "https://api.github.com/repos/tsl0922/ttyd/releases/latest" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/') \
+    && curl -LO https://github.com/tsl0922/ttyd/releases/download/$VER/ttyd.x86_64 \
+    && mv ttyd.* /usr/local/bin/ttyd \
+    && chmod +x /usr/local/bin/ttyd

@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+service StorageService {
+  rpc GetDiskUsage (DiskUsageRequest) returns (DiskUsageReply) {}
+}
+
+message DiskUsageRequest {
+  string path = 1;
+}
+
+message DiskUsageReply {
+  string usage = 1;
+}

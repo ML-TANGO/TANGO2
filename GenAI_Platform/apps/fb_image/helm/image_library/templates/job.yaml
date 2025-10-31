@@ -1,0 +1,68 @@
+apiVersion: batch/v1
+kind: Job
+metadata: 
+  name: image-library-{{ .Values.common.imageId }}
+  namespace: {{ .Values.common.systemNamespace }}-image
+  labels:
+    imageId: {{ .Values.common.imageId | quote }}
+spec:
+  ttlSecondsAfterFinished: 60
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: OnFailure
+      terminationGracePeriodSeconds: 0
+      securityContext:
+        fsGroup: 0 # fsGroup은 spec 하위에서 설정
+      containers:
+      - name: library
+        image: {{ .Values.common.imageName }}
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          privileged: true
+          capabilities:
+            add: ["ALL"]  # 필요한 capabilities 추가
+          runAsUser: 0
+          runAsGroup: 0
+        command: ['python3', '/src/library.py']
+        volumeMounts:
+        - name: src
+          mountPath: /src
+      volumes:
+      - name: src
+        configMap:
+          name: image-library-{{ .Values.common.imageId }}
+          namespace: {{ .Values.common.systemNamespace }}-image
+---
+{{/*
+apiVersion: v1
+kind: Pod
+metadata: 
+  name:  image-library-{{ .Values.common.imageId }}
+  namespace: {{ .Values.common.systemNamespace }}-image
+  labels:
+    imageId: {{ .Values.common.imageId | quote }}
+spec:
+  securityContext:
+    fsGroup: 0 # fsGroup은 spec 하위에서 설정
+  containers:
+  - name: image-library-{{ .Values.common.imageId }}
+    image: {{ .Values.common.imageName }}
+    imagePullPolicy: IfNotPresent
+    securityContext:
+      privileged: true
+      capabilities:
+        add: ["ALL"]  # 필요한 capabilities 추가
+      runAsUser: 0
+      runAsGroup: 0
+    command: ['/bin/bash', '-c', 'python3 /src/library.py; sleep infinity']
+    volumeMounts:
+    - name: src
+      mountPath: /src
+  volumes:
+  - name: src
+    configMap:
+      name: image-library-{{ .Values.common.imageId }}
+      namespace: {{ .Values.common.systemNamespace }}-image
+*/}}
+    

@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jf-data-pvc
+  namespace: {{ .Values.global.jfb.namespace }}
+  labels:
+  annotations:
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 100G
+  storageClassName: ""
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: jf-{{ .Values.global.jfb.namespace }}-data-pv
+  labels:
+spec:
+  capacity:
+    storage: 100G
+  accessModes:
+    - ReadWriteMany
+  claimRef:
+    namespace: {{ .Values.global.jfb.namespace }}
+    name: jf-data-pvc
+  persistentVolumeReclaimPolicy: Retain
+  {{- include "lib.volume.type" .Values.global.jfb.volume.jfData | nindent 2 }}

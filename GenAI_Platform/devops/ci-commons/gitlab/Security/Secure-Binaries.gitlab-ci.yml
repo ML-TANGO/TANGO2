@@ -1,0 +1,262 @@
+# To contribute improvements to CI/CD templates, please follow the Development guide at:
+# https://docs.gitlab.com/ee/development/cicd/templates.html
+# This specific template is located at:
+# https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Security/Secure-Binaries.gitlab-ci.yml
+
+# This template should be used when Security Products (https://about.gitlab.com/handbook/engineering/development/secure/#security-products)
+# have to be downloaded and stored locally.
+#
+# Usage:
+#
+# include:
+#   - template: Security/Secure-Binaries.gitlab-ci.yml
+#
+# Docs: https://docs.gitlab.com/ee/user/application_security/offline_deployments/
+
+variables:
+  # Setting this variable will affect all Security templates
+  # (SAST, Dependency Scanning, ...)
+  SECURE_ANALYZERS_PREFIX: "$CI_TEMPLATE_REGISTRY_HOST/security-products"
+  SECURE_BINARIES_ANALYZERS: >-
+    bandit, brakeman, gosec, spotbugs, flawfinder, phpcs-security-audit, security-code-scan, nodejs-scan, eslint, secrets, sobelow, pmd-apex, kics, kubesec, semgrep, gemnasium, gemnasium-maven, gemnasium-python,
+    license-finder,
+    dast, dast-runner-validation, api-security
+
+  SECURE_BINARIES_DOWNLOAD_IMAGES: "true"
+  SECURE_BINARIES_PUSH_IMAGES: "true"
+  SECURE_BINARIES_SAVE_ARTIFACTS: "false"
+
+  SECURE_BINARIES_ANALYZER_VERSION: "2"
+
+.download_images:
+  allow_failure: true
+  image: docker:stable
+  only:
+    refs:
+      - branches
+  variables:
+    DOCKER_DRIVER: overlay2
+    DOCKER_TLS_CERTDIR: ""
+  services:
+    - docker:dind
+  script:
+    - docker info
+    - env
+    - if [ -z "$SECURE_BINARIES_IMAGE" ]; then export SECURE_BINARIES_IMAGE=${SECURE_BINARIES_IMAGE:-"${SECURE_ANALYZERS_PREFIX}/${CI_JOB_NAME}:${SECURE_BINARIES_ANALYZER_VERSION}"}; fi
+    - docker pull --quiet ${SECURE_BINARIES_IMAGE}
+    - mkdir -p output/$(dirname ${CI_JOB_NAME})
+    - |
+      if [ "$SECURE_BINARIES_SAVE_ARTIFACTS" = "true" ]; then
+        docker save ${SECURE_BINARIES_IMAGE} | gzip > output/${CI_JOB_NAME}_${SECURE_BINARIES_ANALYZER_VERSION}.tar.gz
+        sha256sum output/${CI_JOB_NAME}_${SECURE_BINARIES_ANALYZER_VERSION}.tar.gz > output/${CI_JOB_NAME}_${SECURE_BINARIES_ANALYZER_VERSION}.tar.gz.sha256sum
+      fi
+    - |
+      if [ "$SECURE_BINARIES_PUSH_IMAGES" = "true" ]; then
+        docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
+        docker tag ${SECURE_BINARIES_IMAGE} ${CI_REGISTRY_IMAGE}/${CI_JOB_NAME}:${SECURE_BINARIES_ANALYZER_VERSION}
+        docker push ${CI_REGISTRY_IMAGE}/${CI_JOB_NAME}:${SECURE_BINARIES_ANALYZER_VERSION}
+      fi
+
+  artifacts:
+    paths:
+      - output/
+
+#
+# SAST jobs
+#
+
+bandit:
+  extends: .download_images
+  variables:
+    SECURE_BINARIES_ANALYZER_VERSION: "2"
+  only:
+    variables:
+      - $SECURE_BINARIES_DOWNLOAD_IMAGES == "true" &&
+          $SECURE_BINARIES_ANALYZERS =~ /\bbandit\b/
+
+brakeman:
+  extends: .download_images
+  variables:
+    SECURE_BINARIES_ANALYZER_VERSION: "3"
+  only:
+    variables:
+      - $SECURE_BINARIES_DOWNLOAD_IMAGES == "true" &&
+          $SECURE_BINARIES_ANALYZERS =~ /\bbrakeman\b/
+
+gosec:
+  extends: .download_images
+  variables:
+    SECURE_BINARIES_ANALYZER_VERSION: "3"
+  only:
+    variables:
+      - $SECURE_BINARIES_DOWNLOAD_IMAGES == "true" &&
+          $SECURE_BINARIES_ANALYZERS =~ /\bgosec\b/
+
+spotbugs:
+  extends: .download_images
+  variables:
+    SECURE_BINARIES_ANALYZER_VERSION: "3"
+  only:
+    variables:
+      - $SECURE_BINARIES_DOWNLOAD_IMAGES == "true" &&
+          $SECURE_BINARIES_ANALYZERS =~ /\bspotbugs\b/
+
+flawfinder:
+  extends: .download_images
+  variables:
+    SECURE_BINARIES_ANALYZER_VERSION: "3"
+  only:
+    variables:
+      - $SECURE_BINARIES_DOWNLOAD_IMAGES == "true" &&
+          $SECURE_BINARIES_ANALYZERS =~ /\bflawfinder\b/
+
+phpcs-security-audit:
+  extends: .download_images
+  variables:
+    SECURE_BINARIES_ANALYZER_VERSION: "3"
+  only:
+    variables:
+      - $SECURE_BINARIES_DOWNLOAD_IMAGES == "true" &&
+          $SECURE_BINARIES_ANALYZERS =~ /\bphpcs-security-audit\b/
+
+security-code-scan:
+  extends: .download_images
+  variables:
+    SECURE_BINARIES_ANALYZER_VERSION: "3"
+  only:
+    variables:
+      - $SECURE_BINARIES_DOWNLOAD_IMAGES == "true" &&
+          $SECURE_BINARIES_ANALYZERS =~ /\bsecurity-code-scan\b/
+
+nodejs-scan:
+  extends: .download_images
+  variables:
+    SECURE_BINARIES_ANALYZER_VERSION: "3"
+  only:
+    variables:
+      - $SECURE_BINARIES_DOWNLOAD_IMAGES == "true" &&
+          $SECURE_BINARIES_ANALYZERS =~ /\bnodejs-scan\b/
+
+eslint:
+  extends: .download_images
+  variables:
+    SECURE_BINARIES_ANALYZER_VERSION: "2"
+  only:
+    variables:
+      - $SECURE_BINARIES_DOWNLOAD_IMAGES == "true" &&
+          $SECURE_BINARIES_ANALYZERS =~ /\beslint\b/
+
+secrets:
+  extends: .download_images
+  only:
+    variables:
+      - $SECURE_BINARIES_DOWNLOAD_IMAGES == "true" &&
+          $SECURE_BINARIES_ANALYZERS =~ /\bsecrets\b/
+  variables:
+    SECURE_BINARIES_ANALYZER_VERSION: "4"
+
+semgrep:
+  extends: .download_images
+  variables:
+    SECURE_BINARIES_ANALYZER_VERSION: "3"
+  only:
+    variables:
+      - $SECURE_BINARIES_DOWNLOAD_IMAGES == "true" &&
+          $SECURE_BINARIES_ANALYZERS =~ /\bsemgrep\b/
+
+sobelow:
+  extends: .download_images
+  variables:
+    SECURE_BINARIES_ANALYZER_VERSION: "3"
+  only:
+    variables:
+      - $SECURE_BINARIES_DOWNLOAD_IMAGES == "true" &&
+          $SECURE_BINARIES_ANALYZERS =~ /\bsobelow\b/
+
+pmd-apex:
+  extends: .download_images
+  variables:
+    SECURE_BINARIES_ANALYZER_VERSION: "3"
+  only:
+    variables:
+      - $SECURE_BINARIES_DOWNLOAD_IMAGES == "true" &&
+          $SECURE_BINARIES_ANALYZERS =~ /\bsecrets\b/
+
+kubesec:
+  extends: .download_images
+  variables:
+    SECURE_BINARIES_ANALYZER_VERSION: "3"
+  only:
+    variables:
+      - $SECURE_BINARIES_DOWNLOAD_IMAGES == "true" &&
+          $SECURE_BINARIES_ANALYZERS =~ /\bkubesec\b/
+
+#
+# Dependency Scanning jobs
+#
+
+gemnasium:
+  extends: .download_images
+  only:
+    variables:
+      - $SECURE_BINARIES_DOWNLOAD_IMAGES == "true" &&
+          $SECURE_BINARIES_ANALYZERS =~ /\bgemnasium\b/
+
+gemnasium-maven:
+  extends: .download_images
+  only:
+    variables:
+      - $SECURE_BINARIES_DOWNLOAD_IMAGES == "true" &&
+          $SECURE_BINARIES_ANALYZERS =~ /\bgemnasium-maven\b/
+
+gemnasium-python:
+  extends: .download_images
+  only:
+    variables:
+      - $SECURE_BINARIES_DOWNLOAD_IMAGES == "true" &&
+          $SECURE_BINARIES_ANALYZERS =~ /\bgemnasium-python\b/
+
+#
+# License Scanning
+#
+
+license-finder:
+  extends: .download_images
+  variables:
+    SECURE_BINARIES_ANALYZER_VERSION: "3"
+  only:
+    variables:
+      - $SECURE_BINARIES_DOWNLOAD_IMAGES == "true" &&
+          $SECURE_BINARIES_ANALYZERS =~ /\blicense-finder\b/
+
+#
+# DAST
+#
+
+dast:
+  extends: .download_images
+  variables:
+    SECURE_BINARIES_ANALYZER_VERSION: "2"
+  only:
+    variables:
+      - $SECURE_BINARIES_DOWNLOAD_IMAGES == "true" &&
+          $SECURE_BINARIES_ANALYZERS =~ /\bdast\b/
+
+dast-runner-validation:
+  extends: .download_images
+  variables:
+    SECURE_BINARIES_ANALYZER_VERSION: "1"
+    SECURE_BINARIES_IMAGE: "${CI_TEMPLATE_REGISTRY_HOST}/security-products/${CI_JOB_NAME}:${SECURE_BINARIES_ANALYZER_VERSION}"
+  only:
+    variables:
+      - $SECURE_BINARIES_DOWNLOAD_IMAGES == "true" &&
+          $SECURE_BINARIES_ANALYZERS =~ /\bdast-runner-validation\b/
+
+api-security:
+  extends: .download_images
+  variables:
+    SECURE_BINARIES_ANALYZER_VERSION: "3"
+  only:
+    variables:
+      - $SECURE_BINARIES_DOWNLOAD_IMAGES == "true" &&
+          $SECURE_BINARIES_ANALYZERS =~ /\bapi-security\b/

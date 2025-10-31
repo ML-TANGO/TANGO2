@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rdma-devices
+  namespace: kube-system
+data:
+  config.json: |
+    {
+        "periodicUpdateInterval": 300,
+        "configList": [
+          {
+             "resourcePrefix": "jf.device.rdma.ib",
+             "resourceName": "ib0",
+             "rdmaHcaMax": 1000,
+             "selectors": {
+                "ifNames": ["ib0"]
+             }
+          },
+          {
+             "resourcePrefix": "jf.device.rdma.ib",
+             "resourceName": "ib1",
+             "rdmaHcaMax": 1000,
+             "selectors": {
+                "ifNames": ["ib1"]
+             }
+          },
+          {
+             "resourcePrefix": "jf.device.rdma.ib",
+             "resourceName": "ibs9",
+             "rdmaHcaMax": 1000,
+             "selectors": {
+                "ifNames": ["ibs9"]
+             }
+          }
+        ]
+    }

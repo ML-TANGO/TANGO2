@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.global.jfb.name.workspace }}
+  namespace: {{ .Values.global.jfb.namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.global.jfb.name.workspace }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.global.jfb.name.workspace }}
+        {{- include "lib.label.jfb" . | nindent 8 }}
+      annotations:
+        "acryl.ai/appType": system
+        checksum/config: {{ include "lib.lookup.settings" . }}
+    spec:
+      nodeSelector:
+      {{- include "lib.nodeSelector.manage" . | nindent 8 }}
+      {{- if .Values.global.jfb.image.pullSecrets.enabled }}
+      imagePullSecrets:
+      - name: {{ .Values.global.jfb.image.pullSecrets.name }}
+      {{- end }}
+      serviceAccountName: jfb-ws-sa
+      initContainers:
+      {{- include "lib.initContainer.db" . | nindent 6}}
+      containers:
+      - name: {{ .Values.global.jfb.name.workspace }}
+        image:  {{ .Values.global.jfb.image.registry }}/{{ .Values.global.jfb.image.workspace }}
+        imagePullPolicy: {{ .Values.global.jfb.image.pullPolicy }}
+        command: [ "/bin/bash", "-c",]
+        args: ["cd /app; ./run.sh; sleep infinity;"]
+        {{- include "lib.probe.readiness" (dict "app" "workspace" )  | nindent 8 }}
+        {{- include "lib.probe.liveness" (dict "app" "workspace" )  | nindent 8 }}
+        ports:
+        - containerPort: 8000
+        envFrom:
+        - configMapRef:
+            name: jfb-settings
+        livenessProbe:
+          httpGet:
+            path: api/workspaces
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 180
+        volumeMounts:
+        {{- include "lib.volume.volumeMounts"  (dict "name" "jf-kube" )  | nindent 8 }}
+        {{- include "lib.volume.volumeMounts"  (dict "name" "jf-src" "enabled" .Values.global.jfb.volume.src.enabled )  | nindent 8 }}
+      volumes:
+      {{- include "lib.volume.claim"  (dict "name" "jf-kube")  | nindent 6 }}
+      {{- include "lib.volume.claim"  (dict "name" "jf-src" "app" "workspace" "enabled" .Values.global.jfb.volume.src.enabled )  | nindent 6 }}
+
+{{/*
+  {{- include "lib.volume.volumeMounts" (dict "name" "workspaces" ) | nindent 8 }}
+{{- include "lib.volume.claim"  (dict "name" "jf-data" )  | nindent 6 }}
+*/}}

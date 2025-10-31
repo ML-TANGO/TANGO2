@@ -1,0 +1,17 @@
+apiVersion: v2
+name: aaai-efk
+description: A Helm chart for Kubernetes
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+
+dependencies:
+  - name: elasticsearch
+    version: "8.5.1"
+    repository: "https://helm.elastic.co"
+  - name: fluent-bit
+    version: "0.46.7"
+    repository: "https://fluent.github.io/helm-charts"
+  - name: kibana
+    version: "8.5.1"
+    repository: "https://helm.elastic.co"

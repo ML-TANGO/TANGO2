@@ -1,0 +1,33 @@
+{{- range $index, $cluster := .Values.cluster }}
+apiVersion: v1
+kind: Pod
+metadata: 
+  name: {{ $.Values.pod.metadata.name }}-{{ $index }}
+  namespace: {{ include "namespace" $ }}
+  labels: 
+    {{- include "labels" (dict "Values" $.Values "cluster" $cluster "index" $index) | indent 4}}
+  annotations:
+    acryl.ai/appType: user
+spec:
+  {{- include "specSetting" . | indent 2}}
+  {{- if ne $cluster.node_name "" }}
+  nodeName: {{ $cluster.node_name }}
+  {{- end }}
+  {{- if ne $.Values.pod.spec.nodeSelector.cpuInstance "" }}
+  nodeSelector:
+    jfb/cpu-instance.name: {{ $.Values.pod.spec.nodeSelector.cpuInstance }}
+  {{- end }}
+  hostname: {{ $.Values.pod.spec.hostname }} # pod안에서 hostname
+  containers:
+  - name: {{ $.Values.pod.spec.container.name }}
+    image: {{ $.Values.pod.spec.container.image }}
+    imagePullPolicy: IfNotPresent
+    {{- include "containerSetting" . | indent 4}}
+    env:
+    {{- include "env" (dict "Values" $.Values "cluster" $cluster) | indent 4}}
+    resources:
+    {{- include "resources" (dict "Values" $.Values "cluster" $cluster) | indent 6}}
+    command: ['/bin/bash', '-c', {{ include "command" $ }}]     # | quote }}]
+    {{ include "volume" $ }}
+---
+{{- end }}

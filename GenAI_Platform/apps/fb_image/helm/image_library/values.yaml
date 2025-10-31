@@ -1,0 +1,13 @@
+common:
+  imageId: 
+  imageName: 
+  systemRegistryUrl: 
+  systemNamespace: 
+
+db:
+  JF_DB_HOST:
+  JF_DB_PORT:
+  JF_DB_USER:
+  JF_DB_PW:
+  JF_DB_NAME:
+  JF_DB_CHARSET:

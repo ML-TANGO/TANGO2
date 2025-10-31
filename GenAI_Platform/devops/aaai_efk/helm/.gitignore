@@ -1,0 +1,9 @@
+# 의존성 빌드 결과
+Chart.lock 
+/charts/*.tgz
+
+# 빌드(패키지) 결과
+/*.tgz 
+
+# 실제 .kube 파일
+/file/kube/*
