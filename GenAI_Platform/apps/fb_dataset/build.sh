@@ -1,5 +1,5 @@
 #!/bin/bash
-IMAGE_REGI="192.168.1.14:30500"
+IMAGE_REGI="registry.jonathan.acryl.ai"
 IMAGE_REPO="jfb-system"
 DOCKERFILE="Dockerfile"
 
@@ -16,15 +16,15 @@ IMAGE_INFO=$(sudo crictl images | sort -k 2 | grep "$IMAGE_REGISTRY/$APP_NAME" |
 
 if [[ -z "$IMAGE_INFO" ]]; then
     echo "No image found with this App [$APP_NAME]!"
-    echo "Build the first version of image. ($IMAGE_REGISTRY/$APP_NAME:0.1.7)"
+    echo "Build the first version of image. ($IMAGE_REGISTRY/$APP_NAME:0.2.2)"
     read -p "continue? (y/n)" user_input
 
     if ! [[ "$user_input" == "y" || "$user_input" == "yes" ]]; then
         exit 2
     fi
 
-    sudo docker build --no-cache --tag $IMAGE_REGISTRY/$APP_NAME:0.1.7 -f $DOCKERFILE ..
-    sudo docker push $IMAGE_REGISTRY/$APP_NAME:0.1.7
+    sudo nerdctl build --no-cache --tag $IMAGE_REGISTRY/$APP_NAME:0.2.2 -f $DOCKERFILE ..
+    sudo nerdctl push $IMAGE_REGISTRY/$APP_NAME:0.2.2
 
     echo "Image build & push completed"
     exit 0
@@ -61,5 +61,5 @@ fi
 IMAGE_FULL_NAME="$IMAGE_NAME:$TAG"
 
 
-sudo docker build --no-cache --tag $IMAGE_FULL_NAME -f $DOCKERFILE ..
-sudo docker push $IMAGE_FULL_NAME
+sudo nerdctl build --no-cache --tag $IMAGE_FULL_NAME -f $DOCKERFILE ..
+sudo nerdctl push $IMAGE_FULL_NAME

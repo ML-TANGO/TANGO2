@@ -1,8 +1,8 @@
 import traceback
 import subprocess
 import sys, os, re, json
-from utils import settings
-from utils.exceptions import *
+from utils import settings, TYPE
+from utils.exception.exceptions import *
 from utils.msa_db import db_project, db_image, db_node
 from utils.common import generate_alphanum, ensure_path, writable_path
 from utils.resource import response
@@ -56,9 +56,7 @@ IMAGE_UPLOAD_TYPE_NGC = 5
 IMAGE_UPLOAD_TYPE_COMMIT = 6
 IMAGE_UPLOAD_TYPE_COPY = 7
 
-IMAGE_UPLOAD_TYPE_TO_INT = {
-    "pull" : 1, "tar" : 2, "build" : 3, "tag" : 4, "ngc" : 5, "commit" : 6, "copy" : 7
-}
+
 
 def check_if_name_is_valid(name):
     """도커 이미지 업로드 -> 이름 중복 체크"""
@@ -78,7 +76,7 @@ def check_image_workspace(access, user_id, workspace_id_list):
             workspace_id_list = []
         else:
             workspace_id_list = [workspace_id_list]
-
+            
         # Permission checking of workspace
         if user_id in db_image.get_admin_user_id_list():
             effective_user_id = None
@@ -107,7 +105,7 @@ def generate_image_tag_name(image_name=None, type_=None, random_str=None):
     except Exception as e:
         traceback.print_exc()
         raise e
-
+    
 # =======================================================================================
 
 def helm_install_image(command, image_id):
@@ -138,24 +136,25 @@ def create_image(image_name, access, workspace_id_list, user_id, image_type, ite
         # CHECK
         check_if_name_is_valid(image_name)
         workspace_id_list = check_image_workspace(access=access, user_id=user_id, workspace_id_list=workspace_id_list)
-
+        
         # info - create image name
         create_image_name = generate_image_tag_name(image_name=image_name, type_=image_type)
 
         # DB
         image_id = db_image.insert_create_image(user_id=user_id, image_name=image_name, real_name=create_image_name, description=description,
-                                                upload_type=IMAGE_UPLOAD_TYPE_TO_INT.get(image_type), status=IMAGE_STATUS_INSTALLING,
+                                                upload_type=TYPE.IMAGE_UPLOAD_TYPE_TO_INT.get(image_type), status=IMAGE_STATUS_INSTALLING,
                                                 access=access, file_path=None, upload_filename=json.dumps(item), iid=None)
         if len(workspace_id_list) > 0:
             db_image.insert_image_workspace(image_id, workspace_id_list)
-
-
+        
+        helm_name = TYPE.IMAGE_TYPE_HELM.format(image_type, image_id)
         # HELM command
-        command = f"helm install {image_type}-{image_id} \
+        command = f"helm install {helm_name} \
                 -n {settings.JF_SYSTEM_NAMESPACE}-image --create-namespace \
                 --set common.imageId='{image_id}' \
                 --set common.imageName='{create_image_name}' \
-                --set common.systemRegistryUrl='{settings.DOCKER_REGISTRY_URL}' \
+                --set common.systemRegistryUrl='{settings.SYSTEM_DOCKER_REGISTRY_URL}' \
+                --set common.userRegistryUrl='{settings.DOCKER_REGISTRY_URL}' \
                 --set common.systemAppImage='{JF_IMAGE_APP_IMAGE}' \
                 --set common.systemNamespace='{settings.JF_SYSTEM_NAMESPACE}' \
                 --set common.systemContainerRuntime='{JF_CONTAINER_RUNTIME}' \
@@ -169,7 +168,7 @@ def create_image(image_name, access, workspace_id_list, user_id, image_type, ite
                 raise Exception("Not existed pod")
             pod_name = pod.items[0].metadata.name
             pod_node_name = pod.items[0].spec.node_name
-
+            
             command += f"--set common.imageType=commit \
                 --set commit.nodeName='{pod_node_name}' \
                 --set commit.trainingPodName='{pod_name}' \
@@ -196,18 +195,18 @@ def create_image(image_name, access, workspace_id_list, user_id, image_type, ite
                 --set tag.nodeName='{node_name}' \
                 --set tag.pullImageUrl='{item.get('selected_image_name')}' \
                 ./image"
-
+                
         # HELM install
         res, message = helm_install_image(command=command, image_id=image_id)
         if res == True:
             pass # DB 상태 성공 종료
         else:
-            db_image.update_image_data(image_id=image_id, data={"status": IMAGE_STATUS_FAILED})
+            db_image.delete_image(image_id=image_id)
             raise Exception(message)
         pass
     except Exception as e:
         if image_id is not None:
-            db_image.update_image_data(image_id=image_id, data={"status": IMAGE_STATUS_FAILED})
+            db_image.delete_image(image_id=image_id)
         raise Exception(e)
 
 def create_image_file(image_name, access, workspace_id_list, user_id, image_type, item=None, description=None,):
@@ -220,7 +219,7 @@ def create_image_file(image_name, access, workspace_id_list, user_id, image_type
         # CHECK
         check_if_name_is_valid(image_name)
         workspace_id_list = check_image_workspace(access=access, user_id=user_id, workspace_id_list=workspace_id_list)
-
+        
         # file check
         if image_type == "build" or image_type == "tar":
             file_ = item["file_"]
@@ -240,14 +239,14 @@ def create_image_file(image_name, access, workspace_id_list, user_id, image_type
                 item["save"] = "Dockerfile"
             else:
                 raise Exception("Invalid file Error")
-
+        
         # 파일 save
         if item["save"] == "Dockerfile":
             res, message, result = save_file_for_installing_image(type_="build", item=item)
             # parameter = file_parameter_by_build(result)
             parameter = {
                 'file_path' : result["file_path"],
-                'upload_filename' : result["upload_filename"],
+                'upload_filename' : result["upload_filename"], 
                 'random_str' : result["random_string"]
             }
         # elif type_ == 'tar':
@@ -257,7 +256,7 @@ def create_image_file(image_name, access, workspace_id_list, user_id, image_type
                 # 대용량 파일 전송시 필요
                 # 아직 파일이 완전히 전송되지 않은 경우 message==testing 을 리턴, 완전히 전송 된 경우 message == "OK"
                 # print("not end of file")
-                return response(status=1, message=message, result=result)
+                return response(status=1, message=message, result=result)            
             # parameter = file_parameter_by_tar(result)
             parameter = {
                 'file_path' : result['file_path'],
@@ -268,23 +267,25 @@ def create_image_file(image_name, access, workspace_id_list, user_id, image_type
         file_path = parameter['file_path']
         upload_filename = parameter['upload_filename']
         random_str = parameter['random_str']
-
+        
         # info - create image name
         create_image_name = generate_image_tag_name(image_name=image_name, type_=image_type)
 
         # DB
         image_id = db_image.insert_create_image(user_id=user_id, image_name=image_name, real_name=create_image_name, description=description,
-                                                upload_type=IMAGE_UPLOAD_TYPE_TO_INT.get(image_type), status=IMAGE_STATUS_INSTALLING,
+                                                upload_type=TYPE.IMAGE_UPLOAD_TYPE_TO_INT.get(image_type), status=IMAGE_STATUS_INSTALLING,
                                                 access=access, file_path=None, upload_filename=None, iid=None)
         if len(workspace_id_list) > 0:
             db_image.insert_image_workspace(image_id, workspace_id_list)
-
+        
+        helm_name = TYPE.IMAGE_TYPE_HELM.format(image_type, image_id)
         # HELM command
-        command = f"helm install {image_type}-{image_id} \
+        command = f"helm install {helm_name} \
                 -n {settings.JF_SYSTEM_NAMESPACE}-image --create-namespace \
                 --set common.imageId='{image_id}' \
                 --set common.imageName='{create_image_name}' \
-                --set common.systemRegistryUrl='{settings.DOCKER_REGISTRY_URL}' \
+                --set common.systemRegistryUrl='{settings.SYSTEM_DOCKER_REGISTRY_URL}' \
+                --set common.userRegistryUrl='{settings.DOCKER_REGISTRY_URL}' \
                 --set common.systemAppImage='{JF_IMAGE_APP_IMAGE}' \
                 --set common.systemNamespace='{settings.JF_SYSTEM_NAMESPACE}' \
                 --set common.systemContainerRuntime='{JF_CONTAINER_RUNTIME}' \
@@ -305,12 +306,12 @@ def create_image_file(image_name, access, workspace_id_list, user_id, image_type
         if res == True:
             pass # DB 상태 성공 종료
         else:
-            db_image.update_image_data(image_id=image_id, data={"status": IMAGE_STATUS_FAILED})
+            db_image.delete_image(image_id=image_id)
             raise Exception(message)
 
-        return response(status=1, message="OK", result=result)
+        return response(status=1, message="OK", result=result)    
     except Exception as e:
-        db_image.update_image_data(image_id=image_id, data={"status": IMAGE_STATUS_FAILED})
+        db_image.delete_image(image_id=image_id)
         raise Exception(e)
 
 def save_file_for_installing_image(type_, item):
@@ -334,7 +335,7 @@ def save_file_for_installing_image(type_, item):
         # elif type_ == "build":
         elif item["save"] == "Dockerfile":
             chunk_file_name = None
-
+        
         file_ = item['file_']
         upload_filename = file_.filename
         file_name = file_.filename.split('/')[-1]
@@ -349,12 +350,14 @@ def save_file_for_installing_image(type_, item):
         while문 : 임의의 문자를 넣어 파일 저장
         경로 : 파일 저장(도커) /jf-data/images, 이미지 빌드(호스트) /jfbcore/jf-data/images
         '''
-        upload_dir = '/jf-data/images/tmp' # settings.JF_UPLOAD_DIR # '/jf-data/tmp'
-        # TODO MSA -> jf-data/images/tmp로 변경
+        upload_dir = '/jf-data/images' # settings.JF_UPLOAD_DIR
+        upload_dir += '/dockerfile' if item['save'] =='Dockerfile' else '/tar'
+        
+        # TODO MSA
         ensure_path(upload_dir)
-        if not writable_path(upload_dir) and settings.FLASK_DEBUG:
+        if not writable_path(upload_dir):
             raise WritablePathError(path=upload_dir)
-
+        
         if item["save"] == "Dockerfile":
             while True:
                 random_str_temp = generate_alphanum(6)
@@ -423,10 +426,10 @@ def save_file_for_installing_image(type_, item):
         DOCKERFILE_FULL_PATH_SKEL = BASE_DOCKERFILE_PATH + '/' + DOCKERFILE_PATH_SKEL
         -> file_path + '/' + file_fullpath = '/jf-data/images' + '/' + 'dockerfile/RblLnf/Dockerfile'
         -> path : file_path에서 Dockerfile 빠진 것
-
+        
         # MSA 전환 후 host 가 아닌 pod 안에서 처리
         '''
-
+        
         print(type_)
         random_string = generate_alphanum(6)
         if type_ == "build":
@@ -435,7 +438,7 @@ def save_file_for_installing_image(type_, item):
                 DOCKERFILE_PATH_SKEL = 'dockerfile/{random_str}.tar'
             file_path = DOCKERFILE_PATH_SKEL.format(random_str=random_string)
             file_fullpath = BASE_DOCKERFILE_PATH + '/' + file_path
-            print("*****************8")
+            print("*****************")
             print(file_fullpath)
         elif type_ == "tar":
             file_path = IMAGE_PATH_SKEL.format(random_str=random_string)

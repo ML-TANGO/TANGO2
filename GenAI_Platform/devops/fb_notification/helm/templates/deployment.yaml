@@ -26,7 +26,7 @@ spec:
       {{- end }}
       containers:
       - name: {{ .Values.global.jfb.name.notification }}
-        image: {{ .Values.global.jfb.image.registry }}/{{ .Values.global.jfb.image.notification }}
+        image: {{ .Values.global.jfb.image.system.registry }}/{{ .Values.global.jfb.image.notification }}
         imagePullPolicy: {{ .Values.global.jfb.image.pullPolicy }}
         command: [ "/bin/bash", "-c"]
         args: ["cd /app; ./run.sh; sleep infinity;"]
@@ -34,11 +34,11 @@ spec:
         {{- include "lib.probe.liveness" (dict "app" "notification" )  | nindent 8 }}
         resources:
           limits:
-            cpu : 0.2
-            memory : "200M"
+            cpu : 0.5
+            memory : "256M"
           requests:
-            cpu : 0.2
-            memory : "100M"
+            cpu : 0.1
+            memory : "128M"
         ports:
         - containerPort: 8000
         envFrom:

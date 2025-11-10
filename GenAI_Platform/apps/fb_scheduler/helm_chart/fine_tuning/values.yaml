@@ -1,0 +1,32 @@
+namespace:
+labels:
+pod_name:
+pullSecrets:
+offlineMode:
+privateRepo:
+privatePip:
+nexusPrefix:
+nexus: # 오프라인용
+  hostname: "nexus-nexus-repository-manager.jonathan-nexus.svc.cluster.local"
+  port: 8081
+total_device_count:
+spec:
+  hostname:
+cpu_instance_name:
+command:
+image:
+resource:
+dataset:
+  access:
+  name:
+cluster:
+env:
+rdma:
+  enabled:
+  mp:
+    enabled:
+    seed_num:
+    seed_list:
+  perf:
+    enabled:
+  p2p:

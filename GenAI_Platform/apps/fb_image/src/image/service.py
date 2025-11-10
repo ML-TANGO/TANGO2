@@ -1,7 +1,7 @@
 import re
 import json
 import time
-from utils import settings
+from utils import settings, TYPE
 # import workspace
 import traceback
 import queue
@@ -13,13 +13,13 @@ import requests
 # import utils.kube as kube
 # import utils.db as db
 import utils.msa_db.db_image as db_image_msa
-import utils.registry as registry
+# import utils.registry as registry
 
 import utils.common as common
 from utils.common import generate_alphanum, ensure_path, writable_path
 
 from utils.resource import response
-from utils.exceptions import *
+from utils.exception.exceptions import *
 from utils.log import logging_history, LogParam
 
 # 파일 관련 임포트
@@ -39,10 +39,6 @@ IMAGE_STATUS_INSTALLING = 1
 IMAGE_STATUS_READY = 2
 IMAGE_STATUS_FAILED = 3
 IMAGE_STATUS_DELETING = 4
-
-IMAGE_UPLOAD_TYPE_STR = {
-    0 : "built-in", 1 : "pull", 2 : "tar", 3 : "build", 4 : "tag", 5 : "ngc", 6 : "commit", 7 : "copy",
-}
 
 # PATH 변수
 DOCKER_REGISTRY_URL = settings.DOCKER_REGISTRY_URL  # 192.168.X.XX:5000/
@@ -72,7 +68,7 @@ elif JF_CONTAINER_RUNTIME == "containerd":
 # ##############################################################################################################
 # ##############################################################################################################
 # ##############################################################################################################
-import os
+import os    
 import traceback
 import subprocess
 import asyncio
@@ -97,7 +93,7 @@ def save_log_install_image(std_out=None, std_err=None, image_id=None, message=No
             '''
             Description
                 pull(pull, ngc), push 설치 로그
-                ! progressbar - pull, pushing은 안되고, ngc는 됨
+                ! progressbar - pull, pushing은 안되고, ngc는 됨 
             # layer
                 pull case
                     Already exists / Pulling fs layer, Waiting, Downloading
@@ -125,7 +121,7 @@ def save_log_install_image(std_out=None, std_err=None, image_id=None, message=No
                 if len(_hash) == 12: # layer 인경우
                     _status = ''.join(tmp[1:])
                     if '/' in _status:
-                        _status = _status.replace('/', '\/') # sed에서 '/'포함시 에러 (ex. Mounted from)
+                        _status = _status.replace('/', '\/') # sed에서 '/'포함시 에러 (ex. Mounted from) 
                     layer[_hash] = _status
                     cmd = """sed -i "{}s/.*/layer: {}/g" {}""".format(line, layer, file_path)
                     os.system(cmd)
@@ -161,6 +157,27 @@ def save_log_install_image(std_out=None, std_err=None, image_id=None, message=No
 #         traceback.print_exc()
 #         return error
 
+def delete_image_helm_chart(helm_name):
+    try:
+   
+        command=f"""helm uninstall {helm_name} -n {settings.IMAGE_NAMESPACE} """
+
+        result = subprocess.run(
+            command,
+            shell=True,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        return result.stdout 
+    except subprocess.CalledProcessError as e:
+        traceback.print_exc()
+        return f"Error executing Helm command: {e.stderr}"
+    except:
+        traceback.print_exc()
+        return False
+    
 # ##############################################################################################################
 # ############################################### CRUD #########################################################
 # ##############################################################################################################
@@ -180,7 +197,7 @@ def get_image_list(workspace_id, user_id):
                 'fail_reason': row['fail_reason'], # 추가
                 'type': row['type'],
                 'access': row['access'],
-
+                
                 'size': row['size'] if row['size'] else None,
                 'workspace': row['workspace'],
                 'user_name': row['user_name'],
@@ -198,8 +215,8 @@ def get_image_list(workspace_id, user_id):
                 'has_permission': check_has_permission(user_id=user_id, build_type=row['type'], image_id=row['id'],
                                                        owner=row['uploader_id'], access=row['access'],
                                                        workspace_id=workspace_id),
-
-                # 기타
+                
+                # 기타 
                 'real_name' : row['real_name'],
                 'docker_digest' : row['docker_digest'] if row['docker_digest'] else None,
                 'upload_filename' : row['upload_filename'] if row['upload_filename'] else None
@@ -234,7 +251,7 @@ def update_image(image_id, image_name, workspace_id_list, access, description, u
     try:
         if access == ACCESS_ALL:
             workspace_id_list = []
-
+            
         # update: name, access, description
         db_image_msa.update_image_data(image_id=image_id, data={
             "name": image_name, "access": access, "description": description
@@ -245,14 +262,14 @@ def update_image(image_id, image_name, workspace_id_list, access, description, u
             image_id=image_id, access=access, workspace_id_list=workspace_id_list)
 
         # 로그
-        logging_history(user=user, task='image', action='update',
+        logging_history(user_name=user, task='image', action='update',
                         task_name=image_name, workspace_id=workspace_id_list)
 
         return response(status=1, message="OK", result=None)
     except Exception as e:
         traceback.print_exc()
         raise UpdateImageError
-
+    
 def delete_image(delete_all_list, delete_ws_list, workspace_id, delete_user):
     """
     이미지 삭제
@@ -263,21 +280,21 @@ def delete_image(delete_all_list, delete_ws_list, workspace_id, delete_user):
     try:
         status = 1
         message = {"success" : list(), "fail" : list(), "installing(try again)" : list()}
-
+        
         delete_image_list = delete_all_list + delete_ws_list
         for delete_image in delete_image_list:
             try:
                 image_info = db_image_msa.get_image_single(delete_image)
             except:
                 pass
-
+            
             # access 확인
             res, delete_type = check_delete_access(delete_image, delete_all_list, delete_ws_list, workspace_id, delete_user)
-            if not res:
+            if not res:           
                 status *= 0
                 message["fail"].append(image_info["image_name"] + ' (permission error)')
                 continue
-
+            
             # 대기중, 설치중
             if image_info["status"] == 0 or image_info["status"] == 1:
                 status *= 0
@@ -289,17 +306,26 @@ def delete_image(delete_all_list, delete_ws_list, workspace_id, delete_user):
                 db_image_msa.delete_image_workspace(delete_image, workspace_id)
                 message["success"].append(image_info["image_name"] + f' (in {workspace_id} workspace)')
 
+            install_helm_chart = TYPE.IMAGE_TYPE_HELM.format(TYPE.IMAGE_UPLOAD_INT_TO_TYPE[image_info["type"]], delete_image)
+            library_helm_chart = TYPE.IMAGE_LIBRATY_HELM.format(delete_image)
             # 전체 삭제 or (워크스페이스 삭제 & 이미지가 속해있는 워크스페이스가 없는 경우)
             if delete_type == ACCESS_ALL or (delete_type == ACCESS_WORKSPACE and not db_image_msa.get_workspace_image_id(delete_image)):
                 # 상태가 실패함이면 db 바로 삭제
                 if image_info["status"] == 3:
                     db_image_msa.delete_image(delete_image)
+                    
+                    delete_image_helm_chart(install_helm_chart)
+                    
+                    delete_image_helm_chart(library_helm_chart)
                     message["success"].append(image_info["image_name"] + ' (all)')
                     continue
-
+                
                 # 레지스트리, 로컬, DB 삭제
                 db_image_msa.update_image_data(image_id=delete_image, data={"status" : IMAGE_STATUS_DELETING})
                 message["success"].append(image_info["image_name"] + ' (all)')
+
+            # helm chart 삭제 
+            delete_image_helm_chart(library_helm_chart)
 
             logging_history(task=LogParam.Task.IMAGE, action=LogParam.Action.DELETE, user_id=delete_user, task_name=image_info["real_name"])
         return response(status=status, message=str(message), result=None)
@@ -350,24 +376,24 @@ def check_has_permission(image_id, user_id, workspace_id, owner, access, build_t
     except :
         traceback.print_exc()
         raise ImagePermissionError
-
+    
 def check_delete_access(image_id, delete_all_list, delete_ws_list, workspace_id, delete_user):
     """유저의 삭제 이미지 권한 확인"""
     try:
         uploader_id = db_image_msa.get_image_single(image_id)["uploader_id"]
-
+        
         # 전체 삭제 체크
         if image_id in delete_all_list:
             if delete_user == uploader_id or delete_user == ROOT_USRE:
                 return True, ACCESS_ALL
         # WS 삭제 체크
-        elif image_id in delete_ws_list:
+        elif image_id in delete_ws_list: 
             manager_list = [manager['manager_id'] for manager in db_image_msa.get_image_manager_list(image_id)]
             image_workspace_list = [workspace_id['workspace_id'] for workspace_id in db_image_msa.get_image_workspace_list(image_id)]
-
+                
             if delete_user == uploader_id or delete_user == ROOT_USRE or \
                 (delete_user in manager_list and workspace_id in image_workspace_list):
-                return True, ACCESS_WORKSPACE
+                return True, ACCESS_WORKSPACE 
         else:
             return False, None
     except :
@@ -411,14 +437,14 @@ def get_ngc_image_list():
                 images.append(image)
 
         if not images :
-            raise GetNgcImageError
+            return response(status=1, message="OK", result=[])
         return response(status=1, message="OK", result=images)
     except CustomErrorList as ce:
         traceback.print_exc()
-        raise GetNgcImageError
+        return response(status=1, message="OK", result=[])
     except Exception as e:
         traceback.print_exc()
-        raise GetNgcImageError
+        return response(status=1, message="OK", result=[])
 
 def get_ngc_image_tag_list(ngc_image_name):
     """
@@ -427,7 +453,7 @@ def get_ngc_image_tag_list(ngc_image_name):
     """
     try:
         result = subprocess.check_output([f"ngc registry image info {ngc_image_name} --format_type 'json' || echo ''"], shell=True, stderr=subprocess.PIPE).decode('utf-8').strip()
-
+        
         # if error: raise GetNgcImageTagError
         ngc_image = json.loads(result)
         if ngc_image["canGuestPull"]:
@@ -448,13 +474,13 @@ def get_ngc_image_tag_list(ngc_image_name):
 # tag
 def get_tag_list(registry=False):
     """tag_list is system images of host machine"""
-    try:
+    try:       
         docker_image_list = dict()
 
         # TODO cluster True를 대체할 방법이 필요함
         cmd = IMAGE_CLI + """ images --digests --format "'{{json .}}'" || echo ''"""
         image_list = subprocess.check_output([cmd], shell=True, stderr=subprocess.PIPE).decode('utf-8').strip()
-
+        
         data = {"NODE" : image_list}
         for ip, value in data.items():
             docker_image_list[ip] = list()
@@ -493,7 +519,7 @@ def get_image_history(image_id):
         image_info = db_image_msa.get_image_single(image_id)
         image_status = image_info['status']
         real_name = image_info["real_name"]
-
+        
         # error : 설치되지 않은 이미지
         if image_status != IMAGE_STATUS_READY:
             raise NotExistImageError(image_name=real_name)
@@ -512,24 +538,24 @@ def get_image_history(image_id):
         # if response.status_code == 200:
         #     response_json = response.json()
         #     config_digest = response_json.get('config').get('digest')
-
-
+            
+            
         #     # GET METADATA
         #     url = f"http://{registry}/v2/{repository}/blobs/{config_digest}"
         #     response = requests.get(url, headers=headers)
-
+            
         #     if response.status_code == 200:
         #         response_json = response.json()
         #         history_list = response_json.get('history')
-
+                
         # # image pull
         INSECURE_REGISTRY=""
         if IMAGE_CLI == "nerdctl" and settings.DOCKER_REGISTRY_PROTOCOL == "http://":
             INSECURE_REGISTRY = "--insecure-registry"
-
-        cmd = f"""{IMAGE_CLI} pull {INSECURE_REGISTRY} {real_name}""" # nerdctl 일 경우, insecure-registry 관련 에러인데 pull은 됨
+        
+        cmd = f"""{IMAGE_CLI} pull {INSECURE_REGISTRY} {real_name}""" # nerdctl 일 경우, insecure-registry 관련 에러인데 pull은 됨 
         result = subprocess.check_output([cmd], shell=True, stderr=subprocess.PIPE).decode('utf-8').strip()
-
+            
         # image history
         cmd = IMAGE_CLI + """ history {} --format='{{{{json .}}}}'""".format(real_name)
         result = subprocess.check_output([cmd], shell=True, stderr=subprocess.PIPE).decode('utf-8').strip()
@@ -546,7 +572,7 @@ def get_image_history(image_id):
             elif IMAGE_CLI == "nerdctl":
                 IMAGE_ID = "Snapshot"
 
-            if '<missing>' not in history[IMAGE_ID]: # docker history에서 <missing> 다음 히스토리만 가져옴 (missing은 commit 부분 아님)
+            if '<missing>' not in history[IMAGE_ID]: # docker history에서 <missing> 다음 히스토리만 가져옴 (missing은 commit 부분 아님) 
                 res.append(
                     {
                         'Image ID': history[IMAGE_ID] ,
@@ -559,10 +585,10 @@ def get_image_history(image_id):
         return response(status=1, message="OK", result=res)
     except CustomErrorList as ce:
         traceback.print_exc()
-        return response(status=0, result=[])
+        return response(status=1, result=[])
     except Exception as e:
         traceback.print_exc()
-        return response(status=0, result=[])
+        return response(status=1, result=[])
 
 # ################################################# 기타 #######################################################
 
@@ -579,7 +605,7 @@ async def get_image_install_log(image_id):
 
         data = {
             "count" : 100,
-            "imageJobName" : f'{IMAGE_UPLOAD_TYPE_STR[info.get("type")]}-{str(info.get("id"))}'
+            "imageJobName" : f'{TYPE.IMAGE_UPLOAD_INT_TO_TYPE[info.get("type")]}-{str(info.get("id"))}'
         }
         rquest_logs = await common.post_request(url=settings.LOG_MIDDLEWARE_DNS+"/v1/image/all", data=data)
         logs = rquest_logs.get("logs")
@@ -635,5 +661,5 @@ def get_commit_image_installing_status(tool_id):
     except Exception as e:
         traceback.print_exc()
         return None
-
-
+    
+    

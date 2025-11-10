@@ -1,0 +1,5 @@
+StorageClassName:
+path:
+nodeAffinity:
+  key:
+  values:

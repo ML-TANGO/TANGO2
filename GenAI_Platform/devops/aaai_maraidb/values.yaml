@@ -1,0 +1,11 @@
+global:
+  jfb:
+    namespace: jonathan-mariadb
+    settings:
+      db:
+        host: 'mariadb-galera'
+        port: '3306'
+    image:
+      registry: registry.jonathan.acryl.ai
+      db: mariadb:10.11
+      pymysql: jfb-system/user_app:dev

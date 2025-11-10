@@ -1,0 +1,8 @@
+apiVersion: configuration.konghq.com/v1
+kind: KongConsumer
+metadata:
+  name: anonymous-user
+  namespace: jonathan-kong
+  annotations:
+    kubernetes.io/ingress.class: {{ template "kong.namespace" . }}
+username: anonymous-user

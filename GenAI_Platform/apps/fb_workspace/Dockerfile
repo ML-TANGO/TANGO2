@@ -1,7 +1,7 @@
-FROM python:3.11.5
+FROM python:3.13.0-slim
 
 RUN apt-get update && apt-get install -y --allow-downgrades --allow-change-held-packages --no-install-recommends \
-    vim git curl wget net-tools ethtool librdkafka-dev
+    vim git curl wget net-tools ethtool librdkafka-dev iputils-ping gnupg
 
 RUN mkdir -p /app/src /utils
 

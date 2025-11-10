@@ -12,9 +12,9 @@ spec:
     namespace: {{ .Values.global.jfb.namespace }}
     name: jf-src-front-pvc
   persistentVolumeReclaimPolicy: Retain
-  {{- $variables := dict -}}
-  {{- $_ := set $variables "src" .Values.global.jfb.volume.front }}
-  {{- include "lib.volume.type" $variables.src | nindent 2 }}
+  {{- $srcFront := dict -}}
+  {{- $_ := set $srcFront "src" .Values.global.jfb.volume.front }}
+  {{- include "lib.volume.type" $srcFront.src | nindent 2 }}
 
 ---
 apiVersion: v1

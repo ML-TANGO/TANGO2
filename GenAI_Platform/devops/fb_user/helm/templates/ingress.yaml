@@ -1,6 +1,9 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
+  # public-api를 Generic /api/users/(.*)보다 먼저 매칭시키기 위해
+  annotations:
+    konghq.com/regex-priority: "10"   # 숫자가 클수록 우선순위 높음
   generation: 1
   name: {{ .Values.global.jfb.name.user }}-api
   namespace: {{ .Values.global.jfb.namespace }}
@@ -14,5 +17,53 @@ spec:
             name: {{ .Values.global.jfb.name.user }}-svc
             port:
               number: 80
-        path: /api/(users|login|logout)(.*)
+        path: /api/users
+        pathType: Prefix
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jfb-app-user-public-api
+  namespace: {{ .Values.global.jfb.namespace }}
+  annotations:
+    konghq.com/regex-priority: "20"   # 숫자가 클수록 우선순위 높음
+spec:
+  ingressClassName: {{ .Values.global.jfb.settings.external.ingressClassName }}
+  rules:
+  - http:
+      paths:
+      # 1) /api/users/check/** 요청
+      - backend:
+          service:
+            name: {{ .Values.global.jfb.name.user }}-svc
+            port:
+              number: 80
+        path: /api/users/check
+        pathType: Prefix
+      # 2) /api/users/register/** 요청
+      - backend:
+          service:
+            name: {{ .Values.global.jfb.name.user }}-svc
+            port:
+              number: 80
+        path: /api/users/register
+        pathType: Prefix
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  generation: 1
+  name: jfb-app-login-logout-api
+  namespace: {{ .Values.global.jfb.namespace }}
+spec:
+  ingressClassName: {{ .Values.global.jfb.settings.external.ingressClassName }}
+  rules:
+  - http:
+      paths:
+      - backend:
+          service:
+            name: {{ .Values.global.jfb.name.user }}-svc
+            port:
+              number: 80
+        path: /api/(login|logout)(.*)
         pathType: Prefix

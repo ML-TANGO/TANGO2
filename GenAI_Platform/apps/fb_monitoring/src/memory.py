@@ -13,7 +13,7 @@ def run_dmidecode():
                 value = value.strip()
                 memory_info[key] = value
         memory_list.append(memory_info)
-
+        
     return memory_list
 
 def get_memory_info(memory_list):

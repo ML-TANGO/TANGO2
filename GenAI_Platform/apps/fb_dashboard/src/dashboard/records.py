@@ -167,24 +167,24 @@ timeformat_ymd_regex = re.compile(r'(\d{4})-(\d{2})-(\d{2})')
 # 			for month in months.split(','):
 # 				dates.append(datetime(
 # 					*map(int, timeformat_ymd_regex.match(year + '-' + "{:02d}".format(int(month)) + "-01").groups())))
-
+				
 # 		else:
 # 			dates = []
 # 			for i in range(12):
 # 				dates.append(datetime(
-# 					*map(int, timeformat_ymd_regex.match(year + '-' + "{:02d}".format(i + 1) + "-01").groups())))
+# 					*map(int, timeformat_ymd_regex.match(year + '-' + "{:02d}".format(i + 1) + "-01").groups())))		
 # 	else:
 # 		if months is not None:
 # 			dates = []
 # 			for month in months.split(','):
 # 				dates.append(datetime(
 # 					*map(int, timeformat_ymd_regex.match('2013' + '-' + "{:02d}".format(int(month)) + "-01").groups())))
-
+				
 # 		else:
 # 			dates = []
 # 			for i in range(12):
 # 				dates.append(datetime(
-# 					*map(int, timeformat_ymd_regex.match('2013' + '-' + "{:02d}".format(i + 1) + "-01").groups())))
+# 					*map(int, timeformat_ymd_regex.match('2013' + '-' + "{:02d}".format(i + 1) + "-01").groups())))		
 # 	return dates
 
 # '''
@@ -1941,7 +1941,7 @@ def date_str_to_timestamp(date_str, date_format="%Y-%m-%d %H:%M"):
 #         for i in db.get_record_unified_end_datetime():
 #             subtype = i["subtype"]
 #             subtype_id = i["subtype_id"]
-
+            
 #             if subtype == "tool":
 #                 option={"training_tool_id" : subtype_id}
 #             elif subtype == "job":
@@ -1950,10 +1950,10 @@ def date_str_to_timestamp(date_str, date_format="%Y-%m-%d %H:%M"):
 #                 option={"hps_id" : subtype_id}
 #             elif subtype == "deployment":
 #                 option={"deployment_worker_id" : subtype_id}
-
+            
 #             if not kube.find_kuber_item_name_and_item(item_list=kube_data.get_pod_list(), **option):
 #                 update_subtype_id.append(subtype_id)
-
+            
 #         if update_subtype_id:
 #             db.update_record_unified_end_datetime(update_subtype_id)
 

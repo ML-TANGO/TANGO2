@@ -1,0 +1,74 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.name }}-cm
+  namespace: {{ .Values.namespace }}
+data:
+  mount_check.sh: |
+    #!/bin/sh
+
+    # 마운트 성공 여부 확인
+    if mountpoint -q /storage; then
+      echo "NFS mount successful"
+      # Python 스크립트를 실행
+      python3 /app/src/storage/storage_size_check.py
+
+      # Python 스크립트의 종료 코드를 가져옴
+      python_exit_code=$?
+
+      # 종료 코드가 0인지 확인
+      if [ $python_exit_code -eq 0 ]; then
+       mkdir -p /storage/data
+       mkdir -p /storage/main
+       echo "Python script executed successfully."
+       exit 0  # 쉘 스크립트도 성공적으로 종료
+      else
+       echo "Python script failed with exit code $python_exit_code."
+       exit $python_exit_code  # 쉘 스크립트도 동일한 종료 코드로 종료
+      fi
+    else
+      echo "NFS mount failed"
+      exit 1
+    fi
+---
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-{{ .Values.name }}
+  namespace: {{ .Values.namespace }}
+labels:
+  app: storage-check
+  helm_name: {{ .Values.name }}
+spec:
+  backoffLimit: 0  # 실패 시 재시도하지 않음
+  template:
+    spec:
+      containers:
+      - name: nfs-mount-container
+        image: {{ .Values.image }}
+        securityContext:
+          runAsUser: 0
+        env:
+        {{- range $key, $val := .Values.env }}
+        - name: {{ $key }}
+          value: {{ $val | quote }}
+        {{- end}}
+        envFrom:
+        - configMapRef:
+            name: jfb-settings
+        command: ["sh", "-c", "sh /scripts/mount_check.sh"] #while true; do sleep 30; done; sh /scripts/mount_check.sh
+        volumeMounts:
+        - name: script-volume
+          mountPath: /scripts
+          readOnly: false
+        - name: storage
+          mountPath: /storage
+      volumes:
+      - name: script-volume
+        configMap:
+          name: {{ .Values.name }}-cm
+      - name: storage
+        persistentVolumeClaim:
+          claimName: {{ .Values.name }}
+      restartPolicy: Never

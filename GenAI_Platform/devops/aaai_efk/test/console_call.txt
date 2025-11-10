@@ -1,0 +1,96 @@
+PUT _ingest/pipeline/deduplicate_logs
+{
+  "description": "Deduplicate logs",
+  "processors": [
+    {
+      "fingerprint": {
+        "fields": [
+          "log",
+          "lastTimestamp",
+          "metadata.uid"
+        ],
+        "target_field": "_dedupe_hash",
+        "method": "SHA-256"
+      }
+    },
+    {
+      "set": {
+        "field": "_id",
+        "value": "{{_dedupe_hash}}"
+      }
+    }
+  ]
+}
+
+
+PUT _index_template/aaai_tmp
+{
+  "priority": 999,
+  "template": {
+    "settings": {
+      "index": {
+        "lifecycle": {
+          "name": "tmp_ilp"
+        }
+      }
+    }
+  },
+  "index_patterns": [
+    "*-all"
+  ],
+  "data_stream": {
+    "hidden": false,
+    "allow_custom_routing": false
+  },
+  "composed_of": []
+}
+
+
+PUT _ilm/policy/tmp_ilp
+{
+  "policy": {
+    "phases": {
+      "hot": {
+        "min_age": "0ms",
+        "actions": {
+          "rollover": {
+            "max_age": "7d",
+            "max_primary_shard_size": "10gb"
+          },
+          "set_priority": {
+            "priority": 100
+          }
+        }
+      },
+      "warm": {
+        "min_age": "1d",
+        "actions": {
+          "set_priority": {
+            "priority": 50
+          }
+        }
+      },
+      "cold": {
+        "min_age": "7d",
+        "actions": {
+          "downsample": {
+            "fixed_interval": "1m",
+            "wait_timeout": "1d"
+          },
+          "set_priority": {
+            "priority": 0
+          }
+        }
+      },
+      "delete": {
+        "min_age": "14d",
+        "actions": {
+          "delete": {
+            "delete_searchable_snapshot": true
+          }
+        }
+      }
+    }
+  }
+}
+

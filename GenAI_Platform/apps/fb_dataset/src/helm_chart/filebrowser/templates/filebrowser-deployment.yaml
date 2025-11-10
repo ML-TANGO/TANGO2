@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.name }}-deployment
+  labels:
+    app: {{ .Values.name }}
+    pod_type: "filebrowser"
+    dataset_id: "{{ .Values.dataset_id }}"
+    ingress_path: "{{ .Values.ingress_path }}"
+    work_func_type: "tool"
+    work_type: dataset
+    workspace_id: "{{ .Values.workspace_id }}"
+    helm_name: {{ .Values.name }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.name }}
+      pod_type: "filebrowser"
+      dataset_id: "{{ .Values.dataset_id }}"
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.name }}
+        pod_type: "filebrowser"
+        dataset_id: "{{ .Values.dataset_id }}"
+        ingress_path: "{{ .Values.ingress_path }}"
+        work_func_type: "tool"
+        work_type: dataset
+        workspace_id: "{{ .Values.workspace_id }}"
+        helm_name: {{ .Values.name }}
+    spec:
+      containers:
+      - name: filebrowser
+        image: {{ .Values.registry }}jfb-system/filebrowser:0.1.0
+        ports:
+        - containerPort: 80
+        env:
+          - name: FB_NOAUTH
+            value: "noauth"
+          - name: FB_BASEURL
+            value: /{{ .Values.ingress_path }}
+        securityContext:
+          runAsUser: 0
+          allowPrivilegeEscalation: false
+        resources:
+          limits:
+            cpu: "200m"
+            memory: "256Mi"
+        readinessProbe:
+          httpGet:
+            path: /{{ .Values.ingress_path }}
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /{{ .Values.ingress_path }}
+            port: 80
+          initialDelaySeconds: 15
+          periodSeconds: 20
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3
+        volumeMounts:
+        - name: data-pvc
+          mountPath: "/srv"
+          subPath: "{{ .Values.dataset_path }}"
+      volumes:
+      - name: config-volume
+        configMap:
+          name: {{ .Values.name }}-config
+      - name: data-pvc
+        persistentVolumeClaim:
+          claimName: {{ .Values.dataset_pvc_name }} 

@@ -13,7 +13,7 @@ spec:
       {{- end }}
       containers:
       - name: copy
-        image: {{ .Values.global.jfb.image.registry }}/{{ .Values.global.jfb.image.bin }}
+        image: {{ .Values.global.jfb.image.system.registry }}/{{ .Values.global.jfb.image.bin }}
         imagePullPolicy: {{ .Values.global.jfb.image.pullPolicy }}
         command: [ "/bin/sh", "-c"]
         args: ["cp -rf /jf-bin-origin/* /jf-bin; mkdir /jf-bin/.kube; cp /jf-bin-origin/.kube/config /jf-bin/.kube/config;"]

@@ -3,68 +3,70 @@ system:
   namespace:
 
 metadata:
+  id:
+    workspaceId:
   name:
+    podName: "deployment-pod"
+    podhHostname: "deployment-pod"
+    podBaseName:
     workspaceName:
     trainingName:
     deploymentName:
   namespace:
     systemNamespace:
-    workspaceId:
+
+privateRepo: false
+privatePip: false
+nexusPrefix: "nexus"
+offlineMode: false
+nexus:
+  hostname: "nexus-nexus-repository-manager.jonathan-nexus.svc.cluster.local"
+  port: 8081
 
 pod:
-  metadata:
-    name:
-    annotations:
-  spec:
-    nodeName:
-    nodeSelector:
-      cpuInstance:
-    hostname:
-    container:
-      name:
-      image:
-      env:
-      resources:
-        limits:
-          gpu: 
-      command:
-        runCode:
-        deploymentWorkerId:
+  cpuInstance:
+  image:
+  imgaeRegistry:
+
+command:
+  runCode:
+  deploymentWorkerId:
 
 resources:
   limits:
     cpu:
     memory:
     gpu:
+    npu:
   requests:
     cpu:
     memory:
     gpu:
+    npu:
     
-
 labels:
-  deployment_id: ""
-  deployment_name: ""
-  deployment_total_gpu: "" 
-  deployment_type: ""
-  deployment_worker_id: "" 
-  executor_id: ""
-  executor_name: ""
-  pod_name: ""
-  node_name: ""
-  user: ""
-  workspace_id: ""
-  pod_base_name: ""
-  instance_id: ""
-  gpu_uuids: ""
+  deployment_type: 
+  deployment_name: 
+  deployment_id: 
+  deployment_worker_id:  
+  workspace_id: 
+  workspace_name: 
+  instance_id: 
+  pod_name: 
+  helm_name: 
+  user: 
+
+annotations:
 
 env:
-  JF_HOME:
-  JF_HOST:
-  JF_ITEM_ID:
-  JF_TEMPORARY_STORAGE: 
-  JF_CPU: 
-  JF_GPU: 
-  JF_MEMORY: 
 
 cluster:
+
+
+deployment:
+  model_type:
+  huggingface_model_id:
+  huggingface_token:
+  training_id:
+
+

@@ -1,0 +1,103 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: model-commit-pod-{{ .Values.labels.model_id }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- range $key, $val := .Values.labels }}
+    {{ $key }}: {{ $val | quote }}
+    {{- end}}
+  annotations:
+spec:
+  restartPolicy: Never
+  containers:
+  - name: {{ .Values.namespace }}-{{ .Values.labels.model_id }}-pod
+    image: {{ .Values.image }}
+    resources:
+      limits:
+        cpu: 1
+        memory: "6Gi"
+      requests:
+        cpu: 1
+        memory: "3Gi"
+    command:
+      - /bin/bash
+      - -c
+      - |
+        python3 /fine_tuning/llm_model_download.py {{ .Values.command.mode }} \
+        --latest_checkpoint_path="{{ .Values.command.latest_checkpoint_path }}" \
+        {{- if eq .Values.command.mode "download_model" }}
+          --dst_model_path="{{ .Values.command.dst_model_path }}" \
+          --model_id={{ .Values.command.model_id }} \
+          --token={{ .Values.command.token }} \
+        {{- else if eq .Values.command.mode "copy_commit_model" }}
+          --dst_model_path="{{ .Values.command.dst_model_path }}" \
+          --dst_log_dir="{{ .Values.command.dst_log_dir }}" \
+          --src_model_path="{{ .Values.command.src_model_path }}" \
+          --src_model_log_path="{{ .Values.command.src_model_log_path }}" \
+          --is_commit={{ .Values.command.is_commit }} \
+        {{- else if eq .Values.command.mode "stop_fine_tuning" }}
+          --tmp_model_path="{{ .Values.command.tmp_model_path }}" \
+        {{- else if eq .Values.command.mode "load_commit_model" }}
+          --load_commit_model_path="{{ .Values.command.load_commit_model_path }}" \
+        {{- end }}
+    volumeMounts:
+    - name: jf-main
+      mountPath: /models
+      subPath: models/
+    - name: jf-bin
+      mountPath: /fine_tuning
+      subPath: fine_tuning
+      readOnly: true
+  volumes:
+  - name: jf-main
+    persistentVolumeClaim:
+      claimName: {{ .Values.namespace }}-main-pvc
+  - name: jf-bin
+    persistentVolumeClaim:
+      claimName: {{ .Values.namespace }}-bin-pvc
+
+
+{{/*
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: model-commit-job-{{ .Values.labels.model_id }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- range $key, $val := .Values.labels }}
+    {{ $key }}: {{ $val | quote }}
+    {{- end}}
+  annotations:
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: {{ .Values.namespace }}-{{ .Values.labels.model_id }}-job
+        image: {{ .Values.image }}
+        resources:
+          limits:
+            cpu : 1
+            memory : "1Gi"
+        command:
+          - /bin/bash
+          - -c
+          - |
+            python3 /support/llm_model_download.py --huggingface_model_id={{ .Values.command.huggingface_model_id }} --huggingface_token={{ .Values.command.huggingface_token }} --commit_model="{{ .Values.command.commit_model }}" --commit_name="{{ .Values.command.commit_name }}" --save_directory="{{ .Values.command.save_directory }}"
+        volumeMounts:
+        - name: jf-main
+          mountPath: /models
+          subPath: models/
+        - name: jf-bin
+          mountPath: /support # 오프라인 pod에서 설치할 수 있도록 바이너리 파일 모음 폴더
+          subPath: support
+          readOnly: true
+      volumes:
+      - name: jf-main
+        persistentVolumeClaim:
+          claimName: {{ .Values.namespace }}-main-pvc
+      - name: jf-bin
+        persistentVolumeClaim:
+          claimName: {{ .Values.namespace }}-bin-pvc
+*/}}

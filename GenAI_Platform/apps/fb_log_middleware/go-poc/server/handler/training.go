@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -115,28 +116,44 @@ func (s *TrainingServer) QueryTrainingFigureLogs(ctx context.Context, req *pb.Tr
 	count := req.Count
 	offset := req.Offset
 
-	query := fmt.Sprintf(`{
-		"from": %d,
-		"size": %d,
-		"query": {
-			"bool": {
-				"filter": [
-					{"term": { "kubernetes.labels.work_func_type.keyword": "%s" }},
-					{"term": { "kubernetes.labels.project_item_id.keyword": "%d" }},
-					{"exists": { "field": "jfb_user_json" }}
-				]
-			}
+	query := map[string]interface{}{
+		"from": offset,
+		"size": count,
+		"query": map[string]interface{}{
+			"bool": map[string]interface{}{
+				"filter": []map[string]interface{}{
+					{"term": map[string]interface{}{"kubernetes.labels.work_func_type.keyword": trainingTool}},
+					{"term": map[string]interface{}{
+						"kubernetes.labels.project_item_id.keyword": trainingItemId,
+					}},
+					{"exists": map[string]interface{}{"field": "jfb_user_json"}},
+				},
+			},
 		},
-		"sort": [ { "@timestamp": {"order": "desc"} } ],
-		"fields": [ { "field": "@timestamp", "format": "strict_date_optional_time_nanos"} ],
-		"_source": {
-			"includes": [
-				"@timestamp", "jfb_user_json", "log"
-			]
-		}
-	}`, offset, count, trainingTool, trainingItemId)
+		"sort": []map[string]interface{}{
+			{"@timestamp": map[string]interface{}{"order": "desc"}},
+		},
+		"_source": map[string]interface{}{
+			"includes": []string{
+				"@timestamp", "jfb_user_json", "log",
+			},
+		},
+	}
+	
+	// 쿼리 JSON으로 변환
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(query); err != nil {
+		log.Fatalf("Error encoding query: %s", err)
+	}
 
-	return s.UserLogsQuery(ctx, query)
+	queryBytes, err := json.Marshal(query)
+	if err != nil {
+		log.Fatalf("Error marshaling query to string: %s", err)
+	}
+
+	queryString := string(queryBytes)
+
+	return s.UserLogsQuery(ctx, queryString)
 }
 
 func (s *TrainingServer) QueryTrainingAllLogs(ctx context.Context, req *pb.TrainingAllRequest) (*pb.SummaryLogsResponse, error) {
@@ -149,27 +166,58 @@ func (s *TrainingServer) QueryTrainingAllLogs(ctx context.Context, req *pb.Train
 	*/
 	trainingTool := req.TrainingTool
 	trainingItemId := req.TrainingItemId
+	trainingCategory := req.TrainingCategory
 	count := req.Count
 	offset := req.Offset
 
-	query := fmt.Sprintf(`{
-		"from": %d,
-		"size": %d,
-		"query": {
-			"bool": {
-				"filter": [
-					{"term": { "kubernetes.labels.work_func_type.keyword": "%s" }},
-					{"term": { "kubernetes.labels.project_item_id.keyword": "%d" }}
-				]
-			}
-		},
-		"sort": [ { "@timestamp": "desc" } ],
-		"_source": {
-			"includes": [
-				"@timestamp", "log"
-			]
-		}
-	}`, offset, count, trainingTool, trainingItemId)
+	if count == 0 {
+		count = 10
+	}	
 
-	return s.UserLogsQuery(ctx, query)
+	// if category is "preprocessing", then use "preprocessing_item_id" label.
+	// else if category is "project", use "project_item_id" label.
+	// set default to project_item_id explicitly
+	keyLabel := "kubernetes.labels.project_item_id.keyword"
+	switch strings.ToLower(trainingCategory) {
+	case "preprocessing":
+		keyLabel = "kubernetes.labels.preprocessing_item_id.keyword"
+	case "project":
+		keyLabel = "kubernetes.labels.project_item_id.keyword"
+	}
+
+	query := map[string]interface{}{
+		"from": offset,
+		"size": count,
+		"query": map[string]interface{}{
+			"bool": map[string]interface{}{
+				"filter": []map[string]interface{}{
+					{"term": map[string]interface{}{"kubernetes.labels.work_func_type.keyword": trainingTool}},
+					{"term": map[string]interface{}{keyLabel: trainingItemId}},
+				},
+			},
+		},
+		"sort": []map[string]interface{}{
+			{"@timestamp": map[string]interface{}{"order": "desc"}},
+		},
+		"_source": map[string]interface{}{
+			"includes": []string{
+				"@timestamp", "log",
+			},
+		},
+	}
+
+	// 쿼리 JSON으로 변환
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(query); err != nil {
+		log.Fatalf("Error encoding query: %s", err)
+	}
+
+	queryBytes, err := json.Marshal(query)
+	if err != nil {
+		log.Fatalf("Error marshaling query to string: %s", err)
+	}
+
+	queryString := string(queryBytes)
+
+	return s.UserLogsQuery(ctx, queryString)
 }

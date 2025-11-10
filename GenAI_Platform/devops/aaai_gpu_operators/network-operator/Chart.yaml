@@ -1,0 +1,22 @@
+apiVersion: v2
+appVersion: v1.4.0
+dependencies:
+- condition: nfd.enabled
+  name: node-feature-discovery
+  repository: http://kubernetes-sigs.github.io/node-feature-discovery/charts
+  version: 0.10.1
+- condition: sriovNetworkOperator.enabled
+  name: sriov-network-operator
+  repository: ""
+  version: 0.1.0
+description: Nvidia network operator
+home: https://mellanox.github.io/network-operator
+keywords:
+- gpu-direct
+- rdma
+kubeVersion: '>= 1.17.0'
+name: network-operator
+sources:
+- https://github.com/Mellanox/network-operator
+type: application
+version: 1.4.0

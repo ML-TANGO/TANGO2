@@ -1,0 +1,43 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "name.network" . }}--ingress
+  namespace: {{ include "namespace" . }}
+  labels:
+    {{- include "labels.base" . | indent 4}}
+  annotations:
+    konghq.com/ingress.class: "kong"
+    konghq.com/strip-path: 'true'
+spec:
+  ingressClassName: {{ .Values.ingress.ingressClassName }}
+  # tls:
+  #   - secretName: "jfb-https-ingress"
+  rules:
+  - http:
+      paths:
+      - path: "/deployment/{{ .Values.metadata.name.podBaseName }}" # strip-path true, (/|$){.*} 사용 x
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ include "name.network" . }}--service
+            port: 
+              number: 18555
+
+
+
+{{/* Monolithic flightbase nginx ingress
+"kubernetes.io/ingress.class": "nginx",
+"nginx.ingress.kubernetes.io/proxy-body-size": "50m", # 없으면 1Mb 이상은 안올라감
+"nginx.ingress.kubernetes.io/rewrite-target": rewrite_target_path, #/$2
+"nginx.ingress.kubernetes.io/ssl-passthrough": "true",
+"nginx.ingress.kubernetes.io/backend-protocol": "HTTP",
+"nginx.ingress.kubernetes.io/secure-backends": "true",
+"nginx.ingress.kubernetes.io/proxy-connect-timeout": str(DEPLOYMENT_RESPONSE_TIMEOUT),
+"nginx.ingress.kubernetes.io/proxy-send-timeout": str(DEPLOYMENT_RESPONSE_TIMEOUT),
+"nginx.ingress.kubernetes.io/proxy-read-timeout": str(DEPLOYMENT_RESPONSE_TIMEOUT)
+# "nginx.ingress.kubernetes.io/proxy-max-temp-file-size": "1024m" # Not Working
+# "nginx.ingress.kubernetes.io/enable-cors": "true",
+# "nginx.ingress.kubernetes.io/cors-allow-methods": "PUT, GET, POST, OPTIONS",
+# "nginx.ingress.kubernetes.io/cors-allow-origin": "*",
+# "nginx.ingress.kubernetes.io/cors-allow-credentials": "true"
+*/}}

@@ -6,20 +6,26 @@ system:
   namespace:
   registry:
   imagePullSecrets:
-    enabled: true
+    enabled: 
+  privateRepo:
+    enabled: 
+  privatePip:
+    enabled: 
+  storage:
+    accessMode:
 
 workspace:
   id:
   name:
   namespace:
-  data_storage:
-    storageClassName:
-    requests:
-      storage:
-  main_storage:
-    storageClassName:
-    requests:
-      storage:
+  # data_storage:
+  #   storageClassName:
+  #   requests:
+  #     storage:
+  # main_storage:
+  #   storageClassName:
+  #   requests:
+  #     storage:
   pathPattern:
    
 quota:
@@ -28,10 +34,10 @@ quota:
   gpu:
 
 volume:
-  jfData:
-    type:
-    path:
-    server:
+  # jfData:
+  #   type:
+  #   path:
+  #   server:
 
   jfBin:
     type: 

@@ -4,10 +4,9 @@ import utils.msa_db.db_dataset as dataset_db
 import utils.msa_db.db_workspace as ws_db
 import utils.msa_db.db_storage as storage_db
 import utils.msa_db.db_user as user_db
-from utils.PATH_NEW import JF_DATA_DATASET_PATH
+from utils.PATH import JF_DATA_DATASET_PATH
 import utils.crypt as cryptUtil
-from utils.exceptions import *
-from utils.resource import CustomResource
+from utils.exception.exceptions import *
 from utils.access_check import *
 from utils.settings import *
 import tarfile
@@ -45,7 +44,7 @@ def download(body, headers_user = None):
                 for data in body.download_files:
                     tar.add(dataset_dir.joinpath(data), arcname=dataset_dir.joinpath(data).relative_to(dataset_dir))
             download_path=tar_path
-
+        
         else:
             download_path = dataset_dir.joinpath(body.download_files[0])
             if download_path.is_dir():
@@ -54,13 +53,13 @@ def download(body, headers_user = None):
                     tar.add(download_path, arcname=tar_path.relative_to(dataset_dir))
                 download_path=tar_path
                 print(111111111111111111111111111111111111111111111)
-
+        
         print(download_path.name)
         print(download_path)
         if not download_path.exists():
             return response(status = 0 , message = f"{body.download_files} not found.")
         return FileResponse(download_path, media_type=mimetypes.guess_type(download_path.name)[0], filename=download_path.name)
-
+       
     except:
         traceback.print_exc()
         # raise DownloadError

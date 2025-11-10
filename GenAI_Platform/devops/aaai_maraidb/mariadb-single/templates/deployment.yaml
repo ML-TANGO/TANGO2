@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.global.jfb.name.db }}
+  namespace: {{ .Values.global.jfb.namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.global.jfb.name.db }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.global.jfb.name.db }}
+    spec:
+      nodeSelector:
+        node-role.kubernetes.io/db: ""
+      containers:
+      - name: {{ .Values.global.jfb.name.db }}
+        image: mariadb:10.11
+        ports:
+        - containerPort: 3306
+        env:
+        - name: MARIADB_ROOT_PASSWORD  # TODO 시크릿 사용, 초기 세팅시 필요
+          value: {{ .Values.global.jfb.settings.db.password }}
+        volumeMounts:
+          - name: jfb-mysql-db-data
+            mountPath: /var/lib/mysql
+      volumes:
+      - name: jfb-mysql-db-data
+        persistentVolumeClaim:
+          claimName: jfb-mysql-db-pvc

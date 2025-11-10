@@ -1,0 +1,38 @@
+{{- if .Values.system.privatePip.enabled -}}
+{{- $existingConfigMap := lookup "v1" "ConfigMap" .Values.system.namespace "jonathan-pip-cm" -}}
+{{- if $existingConfigMap -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jonathan-pip-cm
+  namespace: {{ include "namespace" . }}
+data:
+  {{- toYaml $existingConfigMap.data | nindent 2 }}
+---
+{{- end }}
+
+{{- /* 
+# 기존 Job 방식의 코드 (참고용)
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: "job-pip-cm-setting-{{ .Values.workspace.id }}"
+  namespace: {{ .Values.system.namespace }}
+spec:
+  ttlSecondsAfterFinished: 10
+  template:
+    spec:
+      serviceAccountName: jonathan-system-clusteradmin-resource
+      restartPolicy: OnFailure
+      containers:
+      - name: "job-pip-cm-setting"
+        image: {{ printf "%s/bitnami/kubectl:latest" ( .Values.system.registry | trimSuffix "/") }}
+        command: [ "/bin/bash", "-c"]
+        args:
+          - > 
+            kubectl get configmap -n {{ .Values.system.namespace }} jonathan-pip-cm -o yaml |
+            sed "s/namespace: {{ .Values.system.namespace }}/namespace: {{ include "namespace" . }}/" |
+            kubectl apply -n  {{ include "namespace" . }} -f - 
+---
+*/ -}}
+{{- end }}

@@ -1,0 +1,25 @@
+tensorboard
+fastapi==0.115.4
+fastapi-restful==0.6.0
+fastapi-restful-extension==0.4.2
+starlette==0.41.2 # 0.41.3 일 경우 fastapi middleware 오류 발생
+kubernetes
+paramiko
+PyMySQL
+redis
+starlette_context
+uvicorn
+confluent-kafka
+pymongo
+aiomysql
+aiohttp
+motor
+hypercorn
+uvloop
+aiofiles
+aiokafka
+aiopath
+pytest
+huggingface-hub
+pycryptodome
+python-multipart

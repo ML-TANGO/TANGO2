@@ -8,13 +8,13 @@ from pathlib import Path
 import inspect
 
 
-class Logger:
+class Logger:        
     def __init__(self, level = os.getenv('LOG_LEVEL', INFO)):
         """
         Initializes the Logger instance with a default log level.
         """
         self.LOG_LEVEL = level
-
+        
     def set_level(self, level):
         """
         Sets the logging level.
@@ -144,7 +144,7 @@ logger = Logger()
 def load_dynamic_functions(logger_instance, package_name):
     """
     Dynamically loads all functions from the specified package and attaches them to the logger instance.
-
+    
     Args:
         logger_instance (Logger): The logger instance to which functions will be attached.
         package_name (str): The name of the package to load functions from.
@@ -159,5 +159,5 @@ def load_dynamic_functions(logger_instance, package_name):
             if not name.startswith('_'):
                 logger.debug(f"(fb_logging) Attaching {name} function on {path} to logger instance")
                 setattr(logger_instance, name, obj.__get__(logger_instance))
-
-load_dynamic_functions(logger, 'fb_logging.usage') # import all ./usage/*.py functions to logger instance
+                
+load_dynamic_functions(logger, 'fb_logging.usage') # import all ./usage/*.py functions to logger instance 

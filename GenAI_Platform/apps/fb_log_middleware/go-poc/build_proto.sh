@@ -3,3 +3,6 @@ protoc -I ./proto \
   --go-grpc_out ./proto --go-grpc_opt paths=source_relative \
   --grpc-gateway_out ./proto --grpc-gateway_opt paths=source_relative \
   ./proto/logquery/logquery.proto
+
+
+  # --python_out ./proto --grpc_python_out . \

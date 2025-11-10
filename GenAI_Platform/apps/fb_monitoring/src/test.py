@@ -204,7 +204,7 @@ def set_storage_usage_info():
     except:
         traceback.print_exc()
         pass
-from utils import PATH_NEW
+from utils import PATH
 def get_storage_usage_info():
     # while(True):
     try:
@@ -215,8 +215,8 @@ def get_storage_usage_info():
         workspace_list = ws_db.get_workspace_list()
         # print(workspace_list)
         for workspace in workspace_list :
-            main_storage_path = PATH_NEW.JF_MAIN_STORAGE_PATH.format(STORAGE_NAME=storage_list[workspace['main_storage_id']] , WORKSPACE_NAME=workspace['name'])
-            data_storage_path = PATH_NEW.JF_DATA_STORAGE_PATH.format(STORAGE_NAME=storage_list[workspace['data_storage_id']] , WORKSPACE_NAME=workspace['name'])
+            main_storage_path = PATH.JF_MAIN_STORAGE_PATH.format(STORAGE_NAME=storage_list[workspace['main_storage_id']] , WORKSPACE_NAME=workspace['name'])
+            data_storage_path = PATH.JF_DATA_STORAGE_PATH.format(STORAGE_NAME=storage_list[workspace['data_storage_id']] , WORKSPACE_NAME=workspace['name'])
             workspace_path = [main_storage_path, data_storage_path]
             storage_usage={}
             redis=get_redis_client()

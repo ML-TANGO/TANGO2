@@ -1,0 +1,19 @@
+# 핵심 Python 라이브러리 (Python 3.12.4 기본 포함)
+# - os, sys, subprocess, time, logging, signal, threading
+# - typing, dataclasses, datetime, enum, traceback, pathlib
+
+# Prometheus 클라이언트
+prometheus_client==0.20.0
+
+# HTTP 요청 (utils 모듈에서 사용)
+requests==2.31.0
+
+# MySQL 데이터베이스 연결 (utils 모듈에서 사용)
+PyMySQL==1.1.0
+aiomysql==0.2.0
+
+# 기타 유틸리티
+certifi==2024.2.2
+charset-normalizer==3.3.2
+idna==3.6
+urllib3==2.2.0

@@ -1,0 +1,59 @@
+# selectors, labels, limits는 dict format 
+system:
+  namespace:
+
+metadata:
+  id:
+    instanceId:
+    workspaceId:
+  name:
+    podName:
+    podHostName:
+    podBaseName:
+    workspaceName:
+    helmName:
+    userName:
+  namespace:
+    systemNamespace:
+    workspaceNamespace:
+
+resources:
+  limits:
+    cpu:
+    memory:
+    gpu:
+    npu:
+  requests:
+    cpu:
+    memory:
+    gpu:
+    npu:
+
+pod:
+  cpuInstance:
+  image:
+  imageRegistry:
+
+labels:
+  work_func_type: 
+  
+annotations:
+
+env:
+
+
+db:
+  host:
+  port:
+  user:
+  pw:
+  name:
+  charset:
+  collation:
+
+analyzer:
+  analyzer_id:
+  graph_id:
+  graph_type:
+  data_path:
+  column:

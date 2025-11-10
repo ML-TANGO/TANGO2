@@ -1,0 +1,123 @@
+prometheus:
+  prometheusSpec:
+    podMonitorSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    serviceMonitorSelectorNilUsesHelmValues: false
+    routePrefix: "/prometheus"
+    scrapeInterval: "1s"
+    securityContext:
+      runAsGroup: 2000
+      runAsNonRoot: true
+      runAsUser: 1000
+      fsGroup: 2000
+      seccompProfile:
+        type: RuntimeDefault
+    retention: 10d
+    retentionSize: "130GB"
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-storage
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 130Gi
+    #volumes:
+    #  - name: prometheus-data
+    #    hostPath:
+    #      path: /data/prometheus
+    #      type: DirectoryOrCreate
+    #volumeMounts:
+    #  - name: prometheus-data
+    #    mountPath: /prometheus
+    #    subPath: prometheus-db
+        
+    nodeSelector:
+        #      kubernetes.io/hostname: mou-bigdev03
+      node-role.kubernetes.io/control-plane: ""  # TODO JAKE
+    additionalServiceMonitors:
+      - name: storage-metric
+        selector:
+          matchLabels:
+            app: storage-exporter
+        endpoints:
+          - port: metrics
+            path: /metric
+      - name: dcgm-metric
+        selector:                
+          matchLabels:
+            app.kubernetes.io/name: dcgm-exporter
+        endpoints:
+          - port: metrics
+            path: /metric
+      - name: cis-http-metrics
+        selector:
+          matchLabels:
+            team: rook
+        endpoints:
+          - port: 
+            path: /metrics
+      - name: rook-ceph-metric
+        selector:
+          matchLabels:
+            team: rook
+        endpoints:
+          - port: 
+            path: /metrics
+            #atchLabels:
+            #eam: rook
+
+kubeControllerManager:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
+
+prometheus-node-exporter:
+  extraArgs:
+    - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+|var/lib/kubelet/.+)($|/)
+    - --collector.filesystem.fs-types-exclude=^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$
+    - --collector.cpu.info
+
+kube-state-metrics:
+  metricLabelsAllowlist:
+    - pods=[*]
+    - persistentvolumeclaims=[jfb,workspaceName]
+
+
+grafana:
+  securityContext:
+    runAsNonRoot: false
+    runAsUser: 0
+    runAsGroup: 0
+    fsGroup: 0
+    #service:
+      #type: NodePort
+      #nodePort: 31000
+      #portName: http-web
+  grafana.ini:
+    server:
+      root_url: "/grafana"
+      serve_from_sub_path: true
+  persistence:
+    enabled: true
+    size: 20Gi
+    storageClassName: local-storage
+  adminUser: "acryl"
+  adminPassword: "acryl1234"
+
+alertmanager:
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-storage
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 30Gi
+

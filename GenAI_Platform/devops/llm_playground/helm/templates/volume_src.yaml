@@ -1,0 +1,35 @@
+{{- if .Values.global.jfb.volume.src.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jf-src-playground-pvc
+  namespace: {{ .Values.global.jfb.namespace  }}
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1G
+  storageClassName: ""
+---
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: jf-{{ .Values.global.jfb.namespace }}-src-playground-pv
+spec:
+  capacity:
+    storage: 1G
+  accessModes:
+    - ReadWriteMany
+  claimRef:
+    namespace: {{ .Values.global.jfb.namespace }}
+    name: jf-src-playground-pvc
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  {{- $srcPlayground := dict -}}
+  {{- $_ := set $srcPlayground "src" (deepCopy .Values.global.jfb.volume.src) }}
+  {{- $_ := set $srcPlayground.src "path" (printf "%s/%s" .Values.global.jfb.volume.src.path .Values.global.jfb.dir.playground) }}
+  {{- include "lib.volume.type" $srcPlayground.src | nindent 2 }}
+---
+{{- end }}

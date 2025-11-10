@@ -1,18 +1,18 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, APIRouter, Request
 # from fastapi.responses import HTMLResponse
 
-from utils.redis import get_redis_client
+from utils.redis import get_redis_client_async
 from utils import settings, TYPE, PATH
 from utils.resource import CustomResponse, CustomMiddleWare
 
-from notification.route import notification, collection_init
+from notification.route import notification# , collection_init
 from progress.route import progress
 import uvicorn
 
 def main():
     app = FastAPI()
     api = FastAPI(
-        title="JFB API",
+        title="JFB NOTIFICATION API",
         version='0.1',
         default_response_class=CustomResponse,
         middleware=CustomMiddleWare,
@@ -22,24 +22,27 @@ def main():
     )
     api.include_router(progress)
     api.include_router(notification)
-
+    
     app.mount('/api', api)
-    collection_init()
+    # collection_init()
 
     import logging
     # 필터 적용
     class HealthCheckFilter(logging.Filter):
         def filter(self, record):
             return "GET /notification/healthz" not in record.getMessage()
-
+    
     # 로깅 설정
     uvicorn_logger = logging.getLogger("uvicorn.access")
     uvicorn_logger.addFilter(HealthCheckFilter())
-
+    # 앱의 startup 이벤트 설정
+    @app.on_event("startup")
+    async def startup_event():
+        # await initialize_redis()
+        await get_redis_client_async()
     return app
+ 
 
-
-if __name__ == "__main__":
+if __name__=="__main__":
     app = main()
-
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, port=8000, host='0.0.0.0', reload=True)

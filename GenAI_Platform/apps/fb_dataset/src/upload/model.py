@@ -8,7 +8,7 @@ class UploadModel(BaseModel):
     dataset_id : Annotated[int, Form()]
     files : Annotated[List[UploadFile], File()]
     path : Annotated[str, Form()] = None
-
+    
 class UploadModelByte(BaseModel):
     workspace_id : int
     dataset_id : int

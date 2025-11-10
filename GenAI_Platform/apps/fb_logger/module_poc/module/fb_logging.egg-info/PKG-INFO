@@ -1,0 +1,12 @@
+Metadata-Version: 2.1
+Name: fb_logging
+Version: 0.1
+Summary: A custom logging module for jonathan flightbase or other products
+Home-page: https://acryl.ai
+Author: min
+Author-email: min@acryl.ai
+Classifier: Programming Language :: Python :: 3
+Description-Content-Type: text/markdown
+
+Nothing here.
+but Maybe, ./run_once.sh to test.

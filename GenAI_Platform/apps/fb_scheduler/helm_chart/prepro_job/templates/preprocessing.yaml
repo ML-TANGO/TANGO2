@@ -1,0 +1,157 @@
+{{- range $index, $node := .Values.cluster }}
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    acryl.ai/appType: user
+  labels:
+    {{- range $key, $val := $.Values.labels }}
+    {{ $key }}: {{ $val | quote }}
+    {{- end}}
+    role: "jfb-user-function"
+    index: "{{ $index }}"
+    device_type: {{ $node.device.type | quote }}
+    device_model: {{ $node.device.model | quote }}
+    device_count: {{ $node.device.count | quote }}
+    device_ids: {{ $node.device.ids | quote }}
+    node_name: {{ $node.node_name | default "" | quote }}
+  name: {{ $.Values.pod_name }}-{{ $index }}
+  namespace: {{ $.Values.namespace }}
+spec:
+  hostname: {{ $.Values.spec.hostname }}
+  {{- if $node.node_name }}
+  nodeName: {{ $node.node_name }}
+  {{- end }}
+  {{- if $.Values.spec.cpu_instance_name }}
+  nodeSelector:
+    jfb/cpu-instance.name: {{ $.Values.spec.cpu_instance_name }}
+  {{- end }}
+  {{- if $.Values.pullSecrets }}
+  imagePullSecrets:
+  - name: {{ $.Values.pullSecrets }}
+  {{- end }}
+  containers:
+  - command:
+    - /bin/bash
+    - -c
+    - |
+      {{- include "command" (dict "Values" $.Values "node" $node "index" $index) | indent 4 }}
+
+    env:
+    {{- range $key, $val := $.Values.spec.containers.env }}
+    - name: {{ $key }}
+      value: {{ $val | quote }}
+    {{- end}}
+    {{- if and (eq $node.device.type "GPU") $node.device.uuids }}
+    - name: "NVIDIA_VISIBLE_DEVICES"
+      value: {{ $node.device.uuids }}
+    {{- end }}
+    - name: JF_NUM_GPUS
+      value: {{ $node.gpu_count | quote }}
+    - name: JF_NUM_PODS
+      value: {{ len $.Values.cluster | quote }}
+    - name: JF_POD_INDEX
+      value: {{ $index | quote }}
+    - name: JF_DIST_HOSTFILE
+      value: {{ $.Values.distributed_config_path }}
+    image: {{ $.Values.spec.containers.image }}
+    imagePullPolicy: IfNotPresent
+    lifecycle:
+      postStart:
+        exec:
+          command:
+          - /bin/sh
+          - -c
+          - echo START
+      preStop:
+        exec:
+          command:
+          - /bin/sh
+          - -c
+          - echo END
+    name: {{ $.Values.labels.work_func_type }}
+    resources:
+      limits:
+        cpu : {{ $.Values.spec.containers.resource.limits.cpu }}
+        memory : {{ $.Values.spec.containers.resource.limits.memory }}
+      requests:
+        cpu : 0
+        memory : {{ $.Values.spec.containers.resource.limits.memory }}
+    securityContext:
+      capabilities:
+        add:
+        - IPC_LOCK
+      privileged: false # TODO 기존과 같게 할건지 확인 필요
+      runAsGroup: 0
+      runAsUser: 0
+    volumeMounts:
+    {{- if $.Values.offlineMode }}
+    {{- if $.Values.privateRepo }}
+    - name: apt-gpg-key
+      mountPath: /root/.apt
+    {{- end }}
+    {{- if $.Values.privatePip }}
+    - name: pip-conf
+      mountPath: /root/.config/pip
+    {{- end }}
+    {{- end }}
+    {{- if eq $.Values.labels.preprocessing_type "advanced" }}
+    - name: jf-data
+      mountPath: {{ $.Values.spec.containers.env.JF_HOME}}/dataset
+      subPath: {{ $.Values.dataset.access }}/{{ $.Values.dataset.name }}
+    - name: jf-main
+      mountPath: {{ $.Values.spec.containers.env.JF_HOME}}
+      subPath: {{ $.Values.labels.pod_type }}s/{{ $.Values.labels.preprocessing_name }}
+    {{- else }}
+    - name: jf-data
+      mountPath: /dataset
+      subPath: {{ $.Values.dataset.access }}/{{ $.Values.dataset.name }}
+    {{- end }}
+    - name: jf-bin
+      mountPath: /support
+      subPath: support
+      readOnly: true
+    {{- if ne $.Values.labels.preprocessing_type "advanced" }}
+    - name: jf-bin
+      mountPath: /built_in
+      subPath: preprocessing
+      readOnly: true
+    {{- end }}
+    {{- if gt (int $.Values.spec.containers.env.JF_TOTAL_GPU) 1 }}
+      # 분산학습 프레임워크 적용 
+    - name: jf-bin
+      mountPath: /distributed
+      subPath: distributed
+      readOnly: true
+    {{- end }}
+
+  dnsPolicy: ClusterFirst
+  enableServiceLinks: true
+  hostIPC: true
+  restartPolicy: {{ $.Values.spec.restartPolicy }}
+  terminationGracePeriodSeconds: 0
+  volumes:
+  {{- if $.Values.offlineMode }}
+  {{- if $.Values.privateRepo }}
+  - name: apt-gpg-key
+    configMap:
+      name: jonathan-private-repo-cm
+  {{- end }}
+  {{- if $.Values.privatePip }}
+  - name: pip-conf
+    configMap:
+      name: jonathan-pip-cm
+  {{- end }}
+  {{- end }}
+  - name: jf-main
+    persistentVolumeClaim:
+      claimName: {{ $.Values.namespace }}-main-pvc
+  - name: jf-data
+    persistentVolumeClaim:
+      claimName: {{ $.Values.namespace }}-data-pvc
+  - name: jf-bin
+    persistentVolumeClaim:
+      claimName: {{ $.Values.namespace }}-bin-pvc
+---
+{{- end }}
+

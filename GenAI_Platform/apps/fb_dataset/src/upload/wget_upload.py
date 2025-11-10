@@ -39,14 +39,14 @@ upload_info=None
 
 def get_redis():
     max_attempts = 5
-
+        
         # 연결 시도
     attempt = 0
     while attempt < max_attempts:
         try:
             # Redis 클라이언트 초기화
             redis = get_redis_client()
-
+            
             # 연결 성공 시, 함수를 종료하고 Redis 객체 반환
             return redis
         except Exception as e:
@@ -54,7 +54,7 @@ def get_redis():
             # 연결 실패 시, 일정 시간 대기 후 다시 시도
             time.sleep(2)
             attempt += 1
-
+        
         # 모든 시도가 실패한 경우, 예외를 발생시키기
         raise Exception("Failed to connect to Redis after several attempts")
 
@@ -74,7 +74,7 @@ upload_start_time = datetime.now().strftime('%y:%m:%d %H:%M:%S')
 def download_file_streaming(url, destination):
     """
     스트리밍 형식으로 파일을 다운로드합니다.
-
+    
     :param url: 다운로드할 파일의 URL
     :param filename: 다운로드 받은 파일의 이름
     """

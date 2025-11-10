@@ -18,7 +18,7 @@ def get_users():
             cur = conn.cursor()
             sql = f"""
             SELECT *
-            FROM user
+            FROM user 
             """
             cur.execute(sql)
             res = cur.fetchall()
@@ -27,17 +27,23 @@ def get_users():
         traceback.print_exc()
     return res
 
-def get_user(user_id):
+def get_user(user_id : int = None, user_name: str = None):
+    res = None
     try:
-        res = None
         with get_db() as conn:
             cur = conn.cursor()
             sql = """
             SELECT *
-            FROM user
-            WHERE id = '{}'""".format(user_id)
+            FROM user """
 
-            cur.execute(sql)
+            params = None
+            if user_id:
+                sql += " WHERE id = %s"
+                params = (user_id, )
+            elif user_name:
+                sql += " WHERE name = %s"
+                params = (user_name, )
+            cur.execute(sql, params)
             res = cur.fetchone()
         return res
     except Exception as e:
@@ -69,7 +75,7 @@ def get_usergroups(search_key=None, size=None, page=None, search_value=None):
             cur = conn.cursor()
 
             sql = """
-                SELECT ug.*,
+                SELECT ug.*, 
                     (SELECT GROUP_concat(uug.user_id) FROM user_usergroup uug WHERE uug.usergroup_id = ug.id) AS user_id_list,
                     (SELECT GROUP_concat(u.name) FROM user_usergroup uug JOIN user u ON uug.user_id = u.id WHERE uug.usergroup_id = ug.id) AS user_name_list
                 FROM usergroup ug
@@ -88,7 +94,7 @@ def get_usergroups(search_key=None, size=None, page=None, search_value=None):
     except Exception as e:
         traceback.print_exc()
         raise
-
+    
 def get_user_id(user_name):
     res = None
     try:
@@ -287,7 +293,7 @@ def get_usergroup(usergroup_id=None, usergroup_name=None):
 
             if usergroup_id is not None:
                 sql = """
-                    SELECT ug.*,
+                    SELECT ug.*, 
                         (SELECT GROUP_concat(uug.user_id) FROM user_usergroup uug WHERE uug.usergroup_id = ug.id) AS user_id_list,
                         (SELECT GROUP_concat(u.name) FROM user_usergroup uug JOIN user u ON uug.user_id = u.id WHERE uug.usergroup_id = ug.id) AS user_name_list
                     FROM usergroup ug
@@ -298,7 +304,7 @@ def get_usergroup(usergroup_id=None, usergroup_name=None):
                     SELECT ug.*, (SELECT GROUP_concat(uug.user_id) FROM user_usergroup uug WHERE uug.usergroup_id = ug.id) AS user_id_list,
                     (SELECT GROUP_concat(u.name) FROM user_usergroup uug JOIN user u ON uug.user_id = u.id WHERE uug.usergroup_id = ug.id) AS user_name_list
                     FROM usergroup ug
-                    WHERE name = "{name}"
+                    WHERE BINARY name = "{name}"
                 """.format(name=usergroup_name)
             cur.execute(sql)
             res = cur.fetchone()
@@ -309,8 +315,8 @@ def get_usergroup(usergroup_id=None, usergroup_name=None):
     except Exception as e:
         traceback.print_exc()
         return res, e
-
-
+    
+    
 def get_usergroup_list(search_key=None, size=None, page=None, search_value=None):
     res = None
     try:
@@ -318,7 +324,7 @@ def get_usergroup_list(search_key=None, size=None, page=None, search_value=None)
             cur = conn.cursor()
 
             sql = """
-                SELECT ug.*,
+                SELECT ug.*, 
                     (SELECT GROUP_concat(uug.user_id) FROM user_usergroup uug WHERE uug.usergroup_id = ug.id) AS user_id_list,
                     (SELECT GROUP_concat(u.name) FROM user_usergroup uug JOIN user u ON uug.user_id = u.id WHERE uug.usergroup_id = ug.id) AS user_name_list
                 FROM usergroup ug
@@ -337,9 +343,9 @@ def get_usergroup_list(search_key=None, size=None, page=None, search_value=None)
     except Exception as e:
         traceback.print_exc()
         raise
-
-
-
+    
+    
+    
 def insert_usergroup(usergroup_name, description):
     try:
         with get_db() as conn:
@@ -357,9 +363,9 @@ def insert_usergroup(usergroup_name, description):
     except Exception as e:
         traceback.print_exc()
         return False, e
-
-
-
+    
+    
+    
 def insert_user_usergroup_list(usergroup_id_list: [], user_id_list: []):
     if len(user_id_list) == 0:
         return True, ""
@@ -377,8 +383,8 @@ def insert_user_usergroup_list(usergroup_id_list: [], user_id_list: []):
     except Exception as e:
         traceback.print_exc()
         return False, e
-
-
+    
+    
 def delete_usergroup_list(usergroup_id_list):
     try:
         with get_db() as conn:
@@ -397,8 +403,8 @@ def delete_usergroup_list(usergroup_id_list):
     except Exception as e:
         traceback.print_exc()
         return False, e
-
-
+    
+    
 def update_usergroup(usergroup_id, usergroup_name, description):
     try:
         with get_db() as conn:
@@ -407,10 +413,10 @@ def update_usergroup(usergroup_id, usergroup_name, description):
 
             sql = """
             UPDATE usergroup
-            SET name = %s, description = %s, update_datetime = %s
+            SET name = %s, description = %s, update_datetime = %s 
             WHERE id = %s
             """
-            cur.execute(sql, (usergroup_name, description, datetime.today().strftime("%Y-%m-%d %H:%M:%S"), usergroup_id))
+            cur.execute(sql, (usergroup_name, description, datetime.today().strftime(TYPE.TIME_DATE_FORMAT), usergroup_id))
             conn.commit()
         return True, ""
     except Exception as e:
@@ -425,7 +431,7 @@ def update_user_usergroup(user_id, usergroup_id):
 
             sql = """
             UPDATE user_usergroup
-            SET usergroup_id= %s
+            SET usergroup_id= %s 
             WHERE user_id = %s
             """
             cur.execute(sql, (usergroup_id, user_id))
@@ -434,7 +440,7 @@ def update_user_usergroup(user_id, usergroup_id):
     except Exception as e:
         traceback.print_exc()
         return False, e
-
+    
 def delete_user_usergroup_list(usergroup_id_list: [], user_id_list: []):
     if len(user_id_list) == 0:
         return True, ""
@@ -455,8 +461,8 @@ def delete_user_usergroup_list(usergroup_id_list: [], user_id_list: []):
     except Exception as e:
         traceback.print_exc()
         return False, e
-
-
+    
+    
 def get_user_docker_image(user_id):
     res = None
     try:
@@ -520,7 +526,7 @@ def get_user_training(user_id, only_owner=None, only_users=None):
                 FROM project p
                 LEFT OUTER JOIN user_project up ON up.project_id = p.id
                 """
-
+                
             if only_owner == True:
                 sql += " WHERE p.create_user_id = {} ".format(user_id)
             elif only_users == True:
@@ -611,7 +617,7 @@ def update_user_info(user_id : int, email: str = None, job: str = None, nickname
     try:
         with get_db() as conn:
             cur = conn.cursor()
-
+            
             sql = "UPDATE user "
             set_query = []
             if email is not None:
@@ -789,8 +795,8 @@ def delete_user_usergroup(user_id):
     except Exception as e:
         traceback.print_exc()
         raise
-
-
+    
+    
 def update_user_login_counting_set(user_id, value=None):
     """
     Description: 유저의 login_counting column 값을 특정 값으로 수정하는 기능
@@ -810,8 +816,8 @@ def update_user_login_counting_set(user_id, value=None):
     except Exception as e:
         traceback.print_exc()
         return False, e
-
-
+    
+    
 def get_user_workspace(user_id):
     res = None
     try:
@@ -859,7 +865,7 @@ def get_login_session(token=None, user_id=None, session_id=None):
     except Exception as e:
         traceback.print_exc()
         return False, e
-
+    
 def delete_login_session(token=None, user_id=None):
     try:
         with get_db() as conn:
@@ -888,8 +894,8 @@ def delete_login_session(token=None, user_id=None):
     except Exception as e:
         traceback.print_exc()
         return False, e
-
-
+    
+    
 def update_login_session_token(old_token, new_token):
     try:
         with get_db() as conn:
@@ -898,7 +904,7 @@ def update_login_session_token(old_token, new_token):
                 UPDATE login_session
                 SET token = "{}", last_call_datetime = "{}"
                 WHERE token = "{}"
-            """.format(new_token, datetime.today().strftime("%Y-%m-%d %H:%M:%S"), old_token)
+            """.format(new_token, datetime.today().strftime(TYPE.TIME_DATE_FORMAT), old_token)
             num_of_item = cur.execute(sql)
             if num_of_item == 0:
                 print("Already Updated")
@@ -908,9 +914,9 @@ def update_login_session_token(old_token, new_token):
     except Exception as e:
         traceback.print_exc()
         return False, e
-
-
-def update_login_session_last_call_datetime(token, datetime=datetime.today().strftime("%Y-%m-%d %H:%M:%S")):
+    
+    
+def update_login_session_last_call_datetime(token, datetime=datetime.today().strftime(TYPE.TIME_DATE_FORMAT)):
     try:
         with get_db() as conn:
             cur = conn.cursor()
@@ -926,7 +932,7 @@ def update_login_session_last_call_datetime(token, datetime=datetime.today().str
         traceback.print_exc()
         return False, e
 
-def update_login_session_user_id_last_call_datetime(user_id, datetime=datetime.today().strftime("%Y-%m-%d %H:%M:%S")):
+def update_login_session_user_id_last_call_datetime(user_id, datetime=datetime.today().strftime(TYPE.TIME_DATE_FORMAT)):
     try:
         with get_db() as conn:
             cur = conn.cursor()
@@ -941,9 +947,9 @@ def update_login_session_user_id_last_call_datetime(user_id, datetime=datetime.t
     except Exception as e:
         traceback.print_exc()
         return False, e
-
-
-
+    
+    
+    
 def get_workspace_list(page : int=None, size: int=None, search_key: str=None, search_value: str=None, user_id: int=None, sort: int=None):
     try:
         res = []
@@ -954,7 +960,7 @@ def get_workspace_list(page : int=None, size: int=None, search_key: str=None, se
             FROM workspace w
             INNER JOIN user as u ON w.manager_id = u.id
             INNER JOIN user_workspace uw ON uw.workspace_id = w.id"""
-
+            
             if search_key != None and search_value != None:
                 sql += " and " if "where" in sql else " where "
                 if search_key == "name":
@@ -963,14 +969,14 @@ def get_workspace_list(page : int=None, size: int=None, search_key: str=None, se
                     sql += " w.manager_id = {} or uw.user_id = {} ".format(search_value, search_value)
                 else:
                     sql += " {} = {} ".format(search_key, search_value)
-
+            
             if user_id is not None:
                 if not "where" in sql:
                     sql += " where "
                 else:
                     sql += "and "
-                sql += " w.id in (select workspace_id from user_workspace WHERE user_id={}) ".format(user_id,user_id)
-
+                sql += " w.id in (select workspace_id from user_workspace WHERE user_id={}) ".format(user_id,user_id)        
+            
             if sort is not None:
                 if sort == "created_datetime":
                     sql += " ORDER BY w.create_datetime desc "
@@ -981,7 +987,7 @@ def get_workspace_list(page : int=None, size: int=None, search_key: str=None, se
 
             if page is not None and size is not None:
                 sql += " limit {}, {} ".format((page-1)*size, size)
-
+            
             cur.execute(sql)
             res = cur.fetchall()
         return res
@@ -1036,8 +1042,8 @@ def update_user_login_counting_set(user_id, value=None):
     except Exception as e:
         traceback.print_exc()
         return False, e
-
-
+    
+    
 def login(name):
     res = None
     try:
@@ -1099,7 +1105,7 @@ def insert_login_session(user_id, token):
         traceback.print_exc()
         return False, e
 
-def update_login_session_last_call_datetime(token, datetime=datetime.today().strftime("%Y-%m-%d %H:%M:%S")):
+def update_login_session_last_call_datetime(token, datetime=datetime.today().strftime(TYPE.TIME_DATE_FORMAT)):
     try:
         with get_db() as conn:
             cur = conn.cursor()
@@ -1115,7 +1121,7 @@ def update_login_session_last_call_datetime(token, datetime=datetime.today().str
         traceback.print_exc()
         return False, e
 
-def update_login_session_user_id_last_call_datetime(user_id, datetime=datetime.today().strftime("%Y-%m-%d %H:%M:%S")):
+def update_login_session_user_id_last_call_datetime(user_id, datetime=datetime.today().strftime(TYPE.TIME_DATE_FORMAT)):
     try:
         with get_db() as conn:
             cur = conn.cursor()
@@ -1140,7 +1146,7 @@ def update_login_session_token(old_token, new_token):
                 UPDATE login_session
                 SET token = "{}", last_call_datetime = "{}"
                 WHERE token = "{}"
-            """.format(new_token, datetime.today().strftime("%Y-%m-%d %H:%M:%S"), old_token)
+            """.format(new_token, datetime.today().strftime(TYPE.TIME_DATE_FORMAT), old_token)
             num_of_item = cur.execute(sql)
             if num_of_item == 0:
                 print("Already Updated")
@@ -1194,7 +1200,23 @@ def delete_expired_login_sessions(session_interval = settings.TOKEN_EXPIRED_TIME
         traceback.print_exc()
         return False
 
-
+def get_user_list_in_workspace(workspace_id):
+    res = []
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            sql = """
+            SELECT u.id, u.name
+            FROM user u
+            LEFT JOIN user_workspace uw ON uw.user_id = u.id
+            WHERE uw.workspace_id=%s
+            """
+            cur.execute(sql, (workspace_id))
+            res = cur.fetchall()
+    except Exception as e:
+        traceback.print_exc()
+    return res
+    
 # =======================================
 # 회원가입
 def insert_user_register(name, password, nickname=None, job=None, team=None, email=None):
@@ -1258,6 +1280,51 @@ def delete_user_register(register_id):
                 WHERE id=%s
             """
             cur.execute(sql,(register_id))
+            conn.commit()
+        return True
+    except:
+        traceback.print_exc()
+        return False
+    
+
+def insert_login_history(user_id, session):
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            sql = """
+                INSERT INTO login_history (user_id, session) values (%s,%s)
+            """
+            cur.execute(sql,(user_id, session))
+            conn.commit()
+        return True
+    except:
+        traceback.print_exc()
+        return False
+    
+def update_login_history_logout_datetime(user_id, session):
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            sql = """
+                UPDATE login_history
+                SET logout_datetime = NOW()
+                WHERE user_id = %s and session = %s
+            """
+            cur.execute(sql,(user_id, session))
+            conn.commit()
+        return True 
+    except:
+        traceback.print_exc()
+        return False
+    
+def insert_login_session(user_id, session):
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            sql = """
+                INSERT INTO login_session (user_id, token, last_call_datetime) values (%s,%s, NOW())
+            """
+            cur.execute(sql,(user_id, session))
             conn.commit()
         return True
     except:

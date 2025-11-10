@@ -58,22 +58,22 @@ def create_decompress_job(target, destination, extention, redis_key, redis_sub_k
         )
         print(result.stdout )
         redis.hset(JOB_LIST,helm_name,namespace)
-        return True, result.stdout
+        return True, result.stdout 
     except subprocess.CalledProcessError as e:
         traceback.print_exc()
         return False, f"Error executing Helm command: {e.stderr}"
     except:
         traceback.print_exc()
         return False, result.stdout
-
+    
 def delete_helm(helm_name, namespace='jfb'):
     try:
         # helm_name=redis_key.replace(':',"-")
         # helm_name=helm_name.replace('_','-')
         # helm_name=helm_name.replace('/','.')
         # namespace = os.getenv("JF_SYSTEM_NAMESPACE")
-
-
+        
+        
         command=f"""helm uninstall {helm_name} -n {namespace} """
 
         result = subprocess.run(
@@ -84,7 +84,7 @@ def delete_helm(helm_name, namespace='jfb'):
             stderr=subprocess.PIPE,
             text=True,
         )
-        return result.stdout
+        return result.stdout 
     except subprocess.CalledProcessError as e:
         traceback.print_exc()
         return f"Error executing Helm command: {e.stderr}"
@@ -138,14 +138,14 @@ def scp_upload_job(ip, username, password, target, destination, path, redis_key,
         )
         print(result.stdout )
         redis.hset(JOB_LIST,helm_name,namespace)
-        return True, result.stdout
+        return True, result.stdout 
     except subprocess.CalledProcessError as e:
         traceback.print_exc()
         return False, f"Error executing Helm command: {e.stderr}"
     except:
         traceback.print_exc()
         return False, result.stdout
-
+    
 def wget_upload_job(upload_url, destination, redis_key, path, helm_name, image, storage_name, header_user,
                     dataset_id,dataset_name, workspace_id,workspace_name, user_id):
     try:
@@ -166,7 +166,7 @@ def wget_upload_job(upload_url, destination, redis_key, path, helm_name, image, 
             "UPLOAD_USER" : user_id
         }
         #TODO 네임스페이스를 어디로 지정?
-        namespace = os.getenv("JF_SYSTEM_NAMESPACE")
+        namespace = settings.JF_SYSTEM_NAMESPACE
         env_command=""
         for key, val in env.items():
             if val:
@@ -189,7 +189,7 @@ def wget_upload_job(upload_url, destination, redis_key, path, helm_name, image, 
         )
         print(result.stdout )
         redis.hset(JOB_LIST,helm_name,namespace)
-        return True, result.stdout
+        return True, result.stdout 
     except subprocess.CalledProcessError as e:
         traceback.print_exc()
         return False, f"Error executing Helm command: {e.stderr}"
@@ -197,7 +197,7 @@ def wget_upload_job(upload_url, destination, redis_key, path, helm_name, image, 
         traceback.print_exc()
         return False, result.stdout
 
-def git_upload_job(git_repo_url, destination, path, git_access, git_cmd, redis_key, helm_name, image, storage_name, header_user,
+def git_upload_job(git_repo_url, destination, path, git_access, git_cmd, redis_key, helm_name, image, storage_name, header_user, 
                    dataset_id,dataset_name, workspace_id,workspace_name, user_id, git_id=None, git_access_token=None,):
     try:
         # helm_name=redis_sub_key.replace(':',"-")
@@ -221,7 +221,7 @@ def git_upload_job(git_repo_url, destination, path, git_access, git_cmd, redis_k
             "UPLOAD_USER" : user_id
         }
         #TODO 네임스페이스를 어디로 지정?
-        namespace = os.getenv("JF_SYSTEM_NAMESPACE")
+        namespace = settings.JF_SYSTEM_NAMESPACE 
         env_command=""
         for key, val in env.items():
             if val:
@@ -244,15 +244,15 @@ def git_upload_job(git_repo_url, destination, path, git_access, git_cmd, redis_k
         )
         print(result.stdout )
         redis.hset(JOB_LIST,helm_name,namespace)
-        return True, result.stdout
+        return True, result.stdout 
     except subprocess.CalledProcessError as e:
         traceback.print_exc()
         return False, f"Error executing Helm command: {e.stderr}"
     except:
         traceback.print_exc()
         return False, result.stdout
-
-def filebrowser_run(filebrowser_name, dataset_path, dataset_pvc_name, ingress_path, namespace, dataset_id):
+    
+def filebrowser_run(filebrowser_name, dataset_path, dataset_pvc_name, ingress_path, namespace, dataset_id, workspace_id):
     try:
         # helm_name=redis_sub_key.replace(':',"-")
         # helm_name=helm_name.replace('_','-')
@@ -264,8 +264,8 @@ def filebrowser_run(filebrowser_name, dataset_path, dataset_pvc_name, ingress_pa
         #     "HEADER_USER" : header_user
         # }
         #TODO 네임스페이스를 어디로 지정?
-        ingress_class = os.getenv("INGRESS_CLASS_NAME")
-        registry_url=os.getenv("DOCKER_REGISTRY_URL")
+        ingress_class = settings.INGRESS_CLASS_NAME 
+        registry_url= settings.SYSTEM_DOCKER_REGISTRY_URL
         # env_command=""
         # for key, val in env.items():
         #     if val:
@@ -279,6 +279,7 @@ def filebrowser_run(filebrowser_name, dataset_path, dataset_pvc_name, ingress_pa
             --set ingress_class="{ingress_class}" \
             --set dataset_id="{dataset_id}" \
             --set registry="{registry_url}" \
+            --set workspace_id="{workspace_id}"
             """
         result = subprocess.run(
             command,
@@ -294,14 +295,14 @@ def filebrowser_run(filebrowser_name, dataset_path, dataset_pvc_name, ingress_pa
             'pod_status' : "pending"
         }
         redis.hset(DATASET_FILEBROWSER_POD_STATUS, dataset_id, json.dumps(pod_info))
-        return True, result.stdout
+        return True, result.stdout 
     except subprocess.CalledProcessError as e:
         traceback.print_exc()
         return False, f"Error executing Helm command: {e.stderr}"
     except:
         traceback.print_exc()
         return False, result.stdout
-
+    
 # def git_pull_job(git_repo_url, destination, git_access, redis_key, helm_name, image, storage_name, header_user, git_id=None, git_access_token=None):
 #     try:
 #         # helm_name=redis_sub_key.replace(':',"-")
@@ -340,7 +341,7 @@ def filebrowser_run(filebrowser_name, dataset_path, dataset_pvc_name, ingress_pa
 #         )
 #         print(result.stdout )
 #         redis.hset(JOB_LIST,helm_name,namespace)
-#         return True, result.stdout
+#         return True, result.stdout 
 #     except subprocess.CalledProcessError as e:
 #         traceback.print_exc()
 #         return False, f"Error executing Helm command: {e.stderr}"

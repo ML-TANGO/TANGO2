@@ -2,7 +2,7 @@ from utils.resource import response
 # from utils.common import JfLock, global_lock, generate_alphanum
 # import utils.db as db
 import utils.crypt as cryptUtil
-from utils.exceptions import *
+from utils.exception.exceptions import *
 from shutil import *
 from pathlib import Path, PurePath
 import os
@@ -14,7 +14,7 @@ from utils.msa_db import db_dataset as dataset_db
 from utils.msa_db import db_workspace as ws_db
 from utils.msa_db import db_user as user_db
 from utils.msa_db import db_storage as storage_db
-from utils.PATH_NEW import JF_DATA_DATASET_PATH
+from utils.PATH import JF_DATA_DATASET_PATH
 from utils.redis import get_redis_client
 import datetime
 from utils.common import change_own, format_size
@@ -32,7 +32,7 @@ def get_dataset_path(dataset_id):
         storage_info = storage_db.get_storage(storage_id=workspace_info['data_storage_id'])
         return Path(JF_DATA_DATASET_PATH.format(STORAGE_NAME=storage_info['name'], WORKSPACE_NAME=workspace_info['name'], ACCESS= dataset_info['access'], DATASET_NAME=dataset_info['name']))
     except:
-        traceback.print_exc()
+        return None
 
 def get_disk_usage(path):
     result = subprocess.run(['du', '-sb', path], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True).stdout
@@ -47,7 +47,7 @@ def name_filter(name):
 def duplicate_check(target : Path, destination : Path, name):
     target_path=target.joinpath(name)
     if target_path.is_file():
-        destination_path = destination.joinpath(name)
+        destination_path = destination.joinpath(name)            
         if destination_path.exists():
             file_name,file_Extension = os.path.splitext(name)
             num_file = len(list(destination.glob(f"{file_name}*{file_Extension}")))
@@ -57,7 +57,7 @@ def duplicate_check(target : Path, destination : Path, name):
                     break
                 num_file += 1
                 destination_path = destination.joinpath(file_name+'_'+str(num_file)+file_Extension)
-
+            
         return destination_path
     #folder
     else:
@@ -92,7 +92,7 @@ def duplicate(upload_path:Path,redis_sub_key, name, type_, dataset_id, user_id )
         duplicate_name = duplicate_path.name
         result[name]=duplicate_name
         redis.hset(duplicate_key,redis_sub_key,json.dumps(result))
-
+        
     else:
         duplicate_dict=json.loads(duplicate_list)
         duplicate_name = duplicate_dict.get(name,None)
@@ -103,14 +103,14 @@ def duplicate(upload_path:Path,redis_sub_key, name, type_, dataset_id, user_id )
             redis.hset(duplicate_key,redis_sub_key,json.dumps(duplicate_dict))
         else:
             duplicate_path=upload_path.joinpath(duplicate_name)
-
-
+        
+        
     if type_=='dir':
         return duplicate_path.joinpath(dir_file_name), redis_sub_key
     else:
         return duplicate_path, redis_sub_key
 
-
+    
 
 
 
@@ -145,7 +145,7 @@ async def upload_name_check(dataset_id, data_list , path=None):
     except:
         traceback.print_exc()
         return response(status=0, message="upload check error")
-
+    
 #아직 사용중이지 않음.
 # def upload_dummy_create(dataset_id, data_list , type_, path=None):
 #     try:
@@ -196,51 +196,54 @@ def upload_progress_check():
                 continue
             else:
                 # upload_list=json.loads(upload_list)
-
                 for sub_key,key in upload_list.items():
                     upload_info = redis.hget(key,sub_key)
-
                     if upload_info is not None:
                         upload_info=json.loads(upload_info)
-                        if upload_info['complete']:
-                            user_info = user_db.get_user(user_id=upload_info['upload_user'])
-                            change_own(path=get_dataset_path(upload_info['dataset_id']).joinpath(sub_key), headers_user=user_info['name'])
+                        dataset_path = get_dataset_path(upload_info['dataset_id'])
+                        if dataset_path is None:
                             redis.hdel(key,sub_key)
                             redis.hdel(DATASET_UPLOAD_LIST,sub_key)
-                            if upload_info['delete_sub_key'] is not None:
-                                # print(redis.hget(DATASET_DUPLICATE.format(dataset_id=dataset_id, user_id=upload_info['upload_user']),upload_info['delete_sub_key']))
-                                redis.hdel(DATASET_DUPLICATE.format(dataset_id=dataset_id, user_id=upload_info['upload_user']),upload_info['delete_sub_key'])
-                                # print(redis.hget(DATASET_DUPLICATE.format(dataset_id=dataset_id, user_id=upload_info['upload_user']),upload_info['delete_sub_key']))
-                            continue
                         else:
-                            dataset_id = upload_info['dataset_id']
-                            dataset_path = get_dataset_path(dataset_id).joinpath(upload_info['path'])
-                            if not dataset_path.exists():
+                            if upload_info['complete']:
+                                user_info = user_db.get_user(user_id=upload_info['upload_user'])
+                                change_own(path=dataset_path.joinpath(sub_key), headers_user=user_info['name'])
                                 redis.hdel(key,sub_key)
                                 redis.hdel(DATASET_UPLOAD_LIST,sub_key)
+                                if upload_info['delete_sub_key'] is not None:
+                                    # print(redis.hget(DATASET_DUPLICATE.format(dataset_id=dataset_id, user_id=upload_info['upload_user']),upload_info['delete_sub_key']))
+                                    redis.hdel(DATASET_DUPLICATE.format(dataset_id=dataset_id, user_id=upload_info['upload_user']),upload_info['delete_sub_key'])
+                                    # print(redis.hget(DATASET_DUPLICATE.format(dataset_id=dataset_id, user_id=upload_info['upload_user']),upload_info['delete_sub_key']))
                                 continue
-                            if upload_info.get('job',False):
-                                upload_size=upload_info['upload_size']
                             else:
-                                if upload_info['upload_type']=="file":
-                                    upload_size = dataset_path.stat().st_size
+                                dataset_id = upload_info['dataset_id']
+                                dataset_path = dataset_path.joinpath(upload_info['path'])
+                                if not dataset_path.exists():
+                                    redis.hdel(key,sub_key)
+                                    redis.hdel(DATASET_UPLOAD_LIST,sub_key)
+                                    continue
+                                if upload_info.get('job',False):
+                                    upload_size=upload_info['upload_size']
                                 else:
-                                    upload_size = int(get_disk_usage(dataset_path))
-                            upload_info['upload_size']=upload_size
-                            current_time = datetime.datetime.now().replace(microsecond=0)
-                            #datetime.strftime(,'%Y:%M:%d %H:%M:%S')
-                            upload_start_time = datetime.datetime.strptime(upload_info['datetime'],'%y:%m:%d %H:%M:%S')
-                            upload_info['progress'] = int(upload_size/upload_info['total_size']*100)
-                            total_second=(current_time-upload_start_time).total_seconds()
-                            if total_second==0:
-                                total_second=1
-                            speed = upload_size/total_second
+                                    if upload_info['upload_type']=="file":
+                                        upload_size = dataset_path.stat().st_size
+                                    else:
+                                        upload_size = int(get_disk_usage(dataset_path))
+                                upload_info['upload_size']=upload_size
+                                current_time = datetime.datetime.now().replace(microsecond=0)
+                                #datetime.strftime(,'%Y:%M:%d %H:%M:%S')
+                                upload_start_time = datetime.datetime.strptime(upload_info['datetime'],'%y:%m:%d %H:%M:%S')
+                                upload_info['progress'] = int(upload_size/upload_info['total_size']*100)
+                                total_second=(current_time-upload_start_time).total_seconds()
+                                if total_second==0:
+                                    total_second=1
+                                speed = upload_size/total_second
 
-                            if int(speed) == 0 :
-                                upload_info['remain_time'] = None
-                            else:
-                                upload_info['remain_time'] = round((upload_info['total_size']-upload_size)/speed) if upload_info['total_size']-upload_size != 0 or speed !=0 else 0
-                            redis.hset(key,sub_key,json.dumps(upload_info))
+                                if int(speed) == 0 :
+                                    upload_info['remain_time'] = None
+                                else:
+                                    upload_info['remain_time'] = round((upload_info['total_size']-upload_size)/speed) if upload_info['total_size']-upload_size != 0 or speed !=0 else 0
+                                redis.hset(key,sub_key,json.dumps(upload_info))            
         except:
             traceback.print_exc()
 
@@ -297,7 +300,7 @@ async def upload_data(files, dataset_id, path, headers_user, type_, chunk_id, si
                 end_time = time.time()
                 print(f"chunk_id = {chunk_id}, create redis subkey {end_time-start_time}")
 
-
+                
                 if not upload_path.parent.exists():
                     upload_path.parent.mkdir(parents=True, exist_ok=True)
                     change_own(path=upload_path.parent, headers_user=headers_user)
@@ -329,7 +332,7 @@ async def upload_data(files, dataset_id, path, headers_user, type_, chunk_id, si
                 print(f"chunk_id = {chunk_id}, redis set {end_time-start_time}")
                 start_time = time.time()
                 async with aiofiles.open(upload_path, mode=write_mode) as f:
-                    await f.write(file.file.read())
+                    await f.write(file.file.read())            
                     # change_own(path=upload_path, headers_user=headers_user)
                 end_time = time.time()
                 print(f"chunk_id = {chunk_id}, chunk write {end_time-start_time}")
@@ -344,7 +347,7 @@ async def upload_data(files, dataset_id, path, headers_user, type_, chunk_id, si
                 else:
                     upload_info=json.loads(upload_info)
                     upload_info['status']="error"
-
+                    
                     redis.hset(redis_key, redis_sub_key, json.dumps(upload_info))
                 traceback.print_exc()
                 raise e
@@ -377,7 +380,7 @@ async def upload_data_back(files, dataset_id, path, headers_user, type_, size=No
             raise Exception(f"not exist upload path {path}")
             # dataset_dir.mkdir(parents=True, exist_ok=True)
             # change_own(path=dataset_dir, headers_user=headers_user)
-
+        
         for file in files:
             try:
                 # unicode normalization because MAC OS
@@ -407,16 +410,16 @@ async def upload_data_back(files, dataset_id, path, headers_user, type_, size=No
                 # return 0
                 # redis_sub_key=unicodedata.normalize('NFC',redis_sub_key)
                 upload_key=DATASET_UPLOADSIZE.format(dataset_id=dataset_id)
-
+                
                 pre_upload_size=redis.hget(upload_key,redis_sub_key)
-
+                
                 if pre_upload_size is None:
                     redis.hset(upload_key,redis_sub_key,0)
 
                 if not upload_path.parent.exists():
                     upload_path.parent.mkdir(parents=True, exist_ok=True)
                     change_own(path=upload_path.parent, headers_user=headers_user)
-
+                
                 upload_start_time = datetime.datetime.now().strftime('%y:%m:%d %H:%M:%S')
                 with open(upload_path, mode=write_mode) as f:
                     f.write(file.file.read()) # file.file.read() #file['content']
@@ -466,14 +469,14 @@ async def upload_data_back(files, dataset_id, path, headers_user, type_, size=No
                 else:
                     upload_info=json.loads(upload_info)
                     upload_info['status']="error"
-
+                    
                 redis.hset(redis_key, redis_sub_key, json.dumps(upload_info))
                 redis.delete(   )
                 # print("")
                 traceback.print_exc()
                 raise e
 
-
+        
         # background_tasks.add_task(upload_file_thread, files, dataset_dir, redis_key, path, type, size, headers_user, upload_key, start, overwrite)
 
         return response(status=1, message="success upload request")
@@ -521,7 +524,7 @@ def scp_upload(body, headers_user):
         delete_helm(helm_name=helm_name)
         traceback.print_exc()
         return response(status=0, message = "scp upload fail")
-
+    
 def wget_upload(body, headers_user):
     try:
         dataset_info = dataset_db.get_dataset(body.dataset_id)
@@ -537,16 +540,16 @@ def wget_upload(body, headers_user):
 
         if not destination_path.exists():
             return response(status=0, message = f"Not exist {body.path}")
-
+        
         image=os.getenv("JFB_DATASET_IMAGE")
-
+        
         redis_key=DATASET_PROGRESS.format(dataset_id=body.dataset_id)
         download_time = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         helm_name= f"upload-wget-{headers_user}-{download_time}"
         res,message=wget_upload_job(upload_url=body.upload_url, path=body.path,
-                                destination=destination_path, redis_key=redis_key,
-                                helm_name=helm_name, image=image,
-                                storage_name=storage_info['name'],
+                                destination=destination_path, redis_key=redis_key, 
+                                helm_name=helm_name, image=image, 
+                                storage_name=storage_info['name'], 
                                 header_user=headers_user, dataset_id=body.dataset_id,
                                 dataset_name=dataset_info['name'], workspace_id=workspace_info['id'],
                                 workspace_name=workspace_info['name'], user_id=user_id)
@@ -559,7 +562,7 @@ def wget_upload(body, headers_user):
         delete_helm(helm_name=helm_name)
         traceback.print_exc()
         return response(status=0, message = "wget upload fail")
-
+    
 def git_upload(body, headers_user):
     try:
         dataset_info = dataset_db.get_dataset(body.dataset_id)
@@ -568,33 +571,33 @@ def git_upload(body, headers_user):
         dataset_dir = Path(JF_DATA_DATASET_PATH.format(STORAGE_NAME=storage_info['name'], WORKSPACE_NAME=workspace_info['name'], ACCESS= dataset_info['access'], DATASET_NAME=dataset_info['name']))
         user_id = user_db.get_user_id(headers_user)
         user_id = user_id['id']
-
+        
 
         if  body.path is not None:
             dataset_dir=dataset_dir.joinpath(body.path)
 
         if not dataset_dir.exists():
             return response(status=0, message = f"Not exist {body.path}")
-
+        
         if body.git_cmd == "pull":
             if not dataset_dir.joinpath('.git').exists():
                 raise Exception("Directory is not a Git repository.")
-
+            
         image=os.getenv("JFB_DATASET_IMAGE")
-
+        
         redis_key=DATASET_PROGRESS.format(dataset_id=body.dataset_id)
         # redis_sub_key=body.git_repo_url.split('/')[-1]
         # redis.hset(redis_key,redis_sub_key,)
         download_time = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         helm_name= f"upload-git-{headers_user}-{download_time}"
-        res,message=git_upload_job(git_repo_url=body.git_repo_url, git_access=body.git_access,
+        res,message=git_upload_job(git_repo_url=body.git_repo_url, git_access=body.git_access, 
                                    git_id=body.git_id, git_access_token=body.git_access_token,
-                                   git_cmd=body.git_cmd,destination=dataset_dir,
-                                   path=body.path, redis_key=redis_key,
-                                   helm_name=helm_name, image=image,
+                                   git_cmd=body.git_cmd,destination=dataset_dir, 
+                                   path=body.path, redis_key=redis_key, 
+                                   helm_name=helm_name, image=image, 
                                    storage_name=storage_info['name'], header_user=headers_user,
-                                   dataset_id=body.dataset_id,dataset_name=dataset_info['name'],
-                                   workspace_id=workspace_info['id'],workspace_name=workspace_info['name'],
+                                   dataset_id=body.dataset_id,dataset_name=dataset_info['name'], 
+                                   workspace_id=workspace_info['id'],workspace_name=workspace_info['name'], 
                                    user_id=user_id)
         if not res:
             delete_helm(helm_name=helm_name)
@@ -605,7 +608,7 @@ def git_upload(body, headers_user):
         delete_helm(helm_name=helm_name)
         traceback.print_exc()
         return response(status=0, message = f"git upload fail '{e}'")
-
+    
 # def git_pull(body, headers_user):
 #     try:
 #         dataset_info = dataset_db.get_dataset(body.dataset_id)
@@ -620,9 +623,9 @@ def git_upload(body, headers_user):
 
 #         if not dataset_dir.exists():
 #             return response(status=0, message = f"Not exist {body.path}")
-
+        
 #         image=os.getenv("JFB_DATASET_IMAGE")
-
+        
 #         redis_key=DATASET_PROGRESS.format(dataset_id=body.dataset_id)
 #         download_time = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
 #         helm_name= f"git-pull-{headers_user}-{download_time}"

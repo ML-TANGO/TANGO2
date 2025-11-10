@@ -9,9 +9,15 @@ luaScripts:
         if annotations and annotations["acryl.ai/appType"] then
             record["_cat_major"] = "jonathan"
             if annotations["acryl.ai/appType"] == "user" then
-                record["_cat_minor"] = "user"
+                if string.sub(string.lower(record["log"]), 1, 8) == "[worker/" then -- worker system log
+                    record["_cat_minor"] = "worker"
+                else 
+                    record["_cat_minor"] = "user"
+                end                
             elseif annotations["acryl.ai/appType"] == "system" then
-                if stream == "stdout" then
+                if string.sub(string.lower(record["log"]), 1, 9) == "[resource" then
+                    record["_cat_minor"] = "resource"
+                elseif stream == "stdout" then
                     record["_cat_minor"] = "usage"
                 elseif stream == "stderr" then
                     record["_cat_minor"] = "control"
@@ -23,15 +29,31 @@ luaScripts:
         return 2, timestamp, record
     end
 
+    function table_contains(levels, element)
+        for _, value in pairs(levels) do
+            if value == element then
+                return true
+            end
+        end
+        return false
+    end
+
     function level_confirm(tag, timestamp, record)
         local lvl = "unmarked"
+        local ordinary_allowed_levels = {"usage", "debug", "info", "error"}
+        local resource_allowed_levels = {"jonathan_usage", "workspace_usage", "deployment_worker", "gpu_usage", "worker_usage", "workspace_cost"}
+        local worker_allowed_levels = {"nginx_count", "dashboard_history", "dashboard_live_history", "nginx_access_per_hour"}
         if record["_cat_level"] then
             lvl = string.lower(record["_cat_level"])
-            if lvl ~= "usage" and lvl ~= "debug" and lvl ~= "info" and lvl ~= "error" then
+            if not table_contains(ordinary_allowed_levels, lvl) and 
+                not table_contains(resource_allowed_levels, lvl) and 
+                not table_contains(worker_allowed_levels, lvl) then
+
                 lvl = "unmarked"
             end
         end
         record["_cat_level"] = lvl
+
         if record["_cat_minor"] == "usage" and lvl ~= "usage" then
             record["_cat_minor"] = "control"
             record["_cat_level"] = "unmarked"
@@ -42,11 +64,12 @@ luaScripts:
 
     function congregate_index(tag, timestamp, record)
         local _jfb_index = "congregate_failed"
+        local leveled_minors = {"control", "resource"}
         if record["_cat_major"] then
             local major = record["_cat_major"]
             if record["_cat_minor"] then
                 local minor = record["_cat_minor"]
-                if minor == "control" then
+                if table_contains(leveled_minors, minor) and record["_cat_level"] then
                     local level = record["_cat_level"]
                     _jfb_index = string.format("%s-%s-%s", major, minor, level)
                 else
@@ -65,6 +88,14 @@ rbac:
     create: true
     eventsAccess: true
 
+image:
+  repository: cr.fluentbit.io/fluent/fluent-bit
+  # Overrides the image tag whose default is {{ .Chart.AppVersion }}
+  # Set to "-" to not use the default value
+  tag:
+  digest:
+  pullPolicy: IfNotPresent
+
 config: 
   # https://stackoverflow.com/questions/2930182/regex-to-not-match-any-characters
   # "/$ something/" will not match
@@ -73,7 +104,8 @@ config:
     [MULTILINE_PARSER]
         name          multiline-python-trace
         type          regex
-        flush_timeout 3000
+        flush_timeout 100
+        buffer        off
         rule      "start_state" "/Traceback /"   "type"
         rule      "traceback"   "/Traceback /"   "type"
         rule      "type"        "/^[ \\t]+File/"     "code"
@@ -84,7 +116,8 @@ config:
     [MULTILINE_PARSER]
         name          multiline-custom
         type          regex
-        flush_timeout 3000
+        flush_timeout 100
+        buffer        off
         rule    "start_state"   "/(Multiline|Multi?Ln?)(S|Start|Begin)/i"         "cont"
         rule    "cont"          "/^-.*(Multiline|Multi?Ln?)(E|End|Stop|Finish)/i" "finish"
         rule    "cont"          "/^\| /"               "cont" 
@@ -94,6 +127,16 @@ config:
         name    jfb-extract-level
         format  regex
         regex   /^\[JFB\/(?<_cat_level>[^\] \/]*)[^\]]*\]\s*(?<jfb_log>.*)$/mi
+
+    [PARSER]
+        name    worker-extract-level
+        format  regex
+        regex   /^\[WORKER\/(?<_cat_level>[^\] \/]*)[^\]]*\]\s*(?<jfb_log>.*)$/mi
+
+    [PARSER]
+        name    resource-extract-level
+        format  regex
+        regex   /^\[RESOURCE\/(?<_cat_level>[^\] \/]*)[^\]]*\]\s*(?<jfb_log>.*)$/mi
 
     [PARSER]
         name    jfb-extract-user-json-body
@@ -117,9 +160,9 @@ config:
     [INPUT]
         Name tail
         Path /var/log/containers/*.log
-        multiline.parser cri, docker
+        multiline.parser cri, docker, multiline-custom, multiline-python-trace
         Tag kube.*
-        Buffer_Max_Size 4MB
+        Buffer_Max_Size 10MB
         Skip_Long_Lines Off
         Refresh_Interval 10
 
@@ -143,22 +186,21 @@ config:
 
 
   ## https://docs.fluentbit.io/manual/pipeline/filters
+#   [FILTER]
+#         Name  multiline
+#         Match kube_raw.*
+#         multiline.key_content log
+#         multiline.parser      multiline-custom, multiline-python-trace
   filters: |
-    [FILTER]
-        Name  multiline
-        Match *kube.* 
-        multiline.key_content log
-        multiline.parser      multiline-custom, multiline-python-trace
-
     [FILTER]
         Name kubernetes
         Match kube.*
         Merge_Log Off
-        Keep_Log On
         K8S-Logging.Parser On
         K8S-Logging.Exclude On
         Labels On
         Annotations On
+        Buffer_Size 0
 
     [FILTER]
         Name    lua
@@ -180,6 +222,22 @@ config:
         Reserve_Data    On
 
     [FILTER]
+        Name            parser
+        Match           nonuser.kube.*
+        Key_Name        log
+        Parser          resource-extract-level
+        Preserve_Key    On
+        Reserve_Data    On
+
+    [FILTER]
+        Name            parser
+        Match           nonuser.kube.*
+        Key_Name        log
+        Parser          worker-extract-level
+        Preserve_Key    On
+        Reserve_Data    On
+
+    [FILTER]
         Name        lua
         Match_Regex nonuser.kube.*
         Script      /fluent-bit/scripts/jfb.lua
@@ -188,7 +246,7 @@ config:
     [FILTER]
         Name            rewrite_tag
         Match           nonuser.kube.*
-        Rule            $_cat_minor  ^usage$  json.$TAG  false
+        Rule            $_cat_minor  ^(usage|resource)$  json.$TAG  false
 
     [FILTER]
         Name            parser
@@ -217,6 +275,8 @@ config:
         Preserve_Key On
         Reserve_Data On
 
+
+
   ## https://docs.fluentbit.io/manual/pipeline/outputs
   outputs: |
     [OUTPUT]
@@ -224,6 +284,7 @@ config:
         Match *kube.*
         Host elasticsearch
         Port 9200
+        Buffer_Size False
         HTTP_User elastic
         HTTP_Passwd acryl4958!
         tls On
@@ -245,6 +306,7 @@ config:
         Match host.*
         Host elasticsearch
         Port 9200
+        Buffer_Size False
         HTTP_User elastic
         HTTP_Passwd acryl4958!
         tls On
@@ -265,6 +327,7 @@ config:
         Match kubecomp.*
         Host elasticsearch
         Port 9200
+        Buffer_Size False
         HTTP_User elastic
         HTTP_Passwd acryl4958!
         tls On
@@ -285,6 +348,7 @@ config:
         Match k8s_event
         Host elasticsearch
         Port 9200
+        Buffer_Size False
         HTTP_User elastic
         HTTP_Passwd acryl4958!
         tls On

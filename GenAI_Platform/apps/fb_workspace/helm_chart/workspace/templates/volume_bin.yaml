@@ -5,10 +5,10 @@ metadata:
   namespace: {{ include "namespace" . }}
 spec:
   accessModes:
-    - ReadWriteMany
+    - {{ .Values.system.storage.accessMode }}
   resources:
     requests:
-      storage: 100Gi
+      storage: 10G
   storageClassName: ""
 
 ---
@@ -18,9 +18,9 @@ metadata:
   name: "{{ include "name" . }}-bin-pv"
 spec:
   accessModes:
-    - ReadWriteMany
+    - {{ .Values.system.storage.accessMode }}
   capacity:
-    storage: 100Gi
+    storage: 10G
   storageClassName: ""
   persistentVolumeReclaimPolicy: Retain
   claimRef:

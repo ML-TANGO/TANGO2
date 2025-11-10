@@ -14,5 +14,5 @@ spec:
             name: {{ .Values.global.jfb.name.resource }}-svc
             port:
               number: 80
-        path: /api/(storage|gpu|options|networks|nodes|pod|resources|records)(.*)
+        path: /api/(storage|gpu|networks|nodes|pod|resources|records)(.*)
         pathType: Prefix

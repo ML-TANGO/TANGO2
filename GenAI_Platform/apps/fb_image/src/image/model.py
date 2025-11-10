@@ -6,7 +6,7 @@ class UpdateModel(BaseModel):
     description: str
     access: int
     workspace_id_list: list = []
-
+    
 class DeleteModel(BaseModel):
     delete_all_list: list = []
     delete_ws_list: list = []

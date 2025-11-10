@@ -5,3 +5,4 @@ ingress_path:
 ingress_class:
 dataset_id:
 registry:
+workspace_id:

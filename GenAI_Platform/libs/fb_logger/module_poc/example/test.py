@@ -56,8 +56,8 @@ def div_zero():
 try:
     a = div_zero()
 except ZeroDivisionError as e:
-    logger.stacktrace(e)
-    logger.stacktrace(e, end_message=None)
+    logger.stacktrace(e) 
+    logger.stacktrace(e, end_message=None)  
 
 logger.usage(data={"action": "test", "status": "success"})
 logger.usage(data_string='{"nested": {"json": "test", "and": ["a", "r", "ray"]}, "hello": "world"}')

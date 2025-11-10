@@ -47,6 +47,6 @@ RUN wget --no-check-certificate https://github.com/containerd/nerdctl/releases/d
     tar -xvf nerdctl-1.7.6-linux-amd64.tar.gz && \
     cp /nerdctl /bin
 
-# buildkit
-RUN wget https://github.com/moby/buildkit/releases/download/v0.15.0/buildkit-v0.15.0.linux-amd64.tar.gz && \
-    tar -xvf buildkit-v0.15.0.linux-amd64.tar.gz
+# # buildkit : nerdctl build 시 사용
+# RUN wget https://github.com/moby/buildkit/releases/download/v0.15.0/buildkit-v0.15.0.linux-amd64.tar.gz && \
+#     tar -xvf buildkit-v0.15.0.linux-amd64.tar.gz

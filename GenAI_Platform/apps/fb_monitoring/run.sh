@@ -5,4 +5,6 @@
 #--app-dir /app/src 
 # --workers 1
 #--log-config uvicorn.ini 
+
+cd /app
 python3 src/main.py

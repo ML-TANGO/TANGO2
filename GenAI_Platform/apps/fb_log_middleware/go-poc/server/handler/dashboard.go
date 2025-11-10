@@ -89,14 +89,14 @@ func (s *DashboardServer) SummaryLogsQuery(ctx context.Context, query string) (*
 
 func (s *DashboardServer) QueryWorkspaceDashboardLogs(ctx context.Context, req *pb.WorkspaceDashboardRequest) (*pb.SummaryLogsResponse, error) {
 	/*   string workspace = 1;
-	string timespan = 2; // default 1w
+	string timeSpan = 2; // default 1w
 	string startTime = 3;
 	int32 count = 4; // default 10
 	int64 offset = 5;
 	bool ascending = 6;
 	*/
 	workspace := req.Workspace
-	timespan := req.Timespan
+	timeSpan := req.Timespan
 	startTime := req.StartTime
 	count := req.Count
 	offset := req.Offset
@@ -112,16 +112,16 @@ func (s *DashboardServer) QueryWorkspaceDashboardLogs(ctx context.Context, req *
 
 	// Calculate the time range if startTime is empty
 	if startTime == "" {
-		if timespan == "" {
-			timespan = "1w"
+		if timeSpan == "" {
+			timeSpan = "1w"
 		}
-		parsedTime, err := utils.CalculateTimeAgo(timespan)
+		parsedTime, err := utils.CalculateTimeAgo(timeSpan)
 		if err != nil {
-			fmt.Printf("Error parsing timespan %s: %v\n", timespan, err)
+			fmt.Printf("Error parsing timeSpan %s: %v\n", timeSpan, err)
 			return nil, err
 		}
-		timeformat := time.RFC3339
-		startTime = parsedTime.Format(timeformat)
+		timeFormat := time.RFC3339
+		startTime = parsedTime.Format(timeFormat)
 	}
 
 	//log.Printf("Querying logs from %s to now", startTime)
@@ -132,7 +132,8 @@ func (s *DashboardServer) QueryWorkspaceDashboardLogs(ctx context.Context, req *
 			"bool": {
 				"filter": [
 					{"range": { "@timestamp": { "gte": "%s" } }},
-					{"term": { "workspace.keyword": "%s" }}
+					{"term": { "workspace.keyword": "%s" }},
+					{"exists": { "field": "action" }}
 				]
 			}
 		},
@@ -148,7 +149,7 @@ func (s *DashboardServer) QueryWorkspaceDashboardLogs(ctx context.Context, req *
 }
 
 func (s *DashboardServer) QueryAdminDashboardLogs(ctx context.Context, req *pb.AdminDashboardRequest) (*pb.SummaryLogsResponse, error) {
-	timespan := req.Timespan
+	timeSpan := req.Timespan
 	startTime := req.StartTime
 	count := req.Count
 	offset := req.Offset
@@ -164,16 +165,16 @@ func (s *DashboardServer) QueryAdminDashboardLogs(ctx context.Context, req *pb.A
 
 	// Calculate the time range if startTime is empty
 	if startTime == "" {
-		if timespan == "" {
-			timespan = "1w"
+		if timeSpan == "" {
+			timeSpan = "1w"
 		}
-		parsedTime, err := utils.CalculateTimeAgo(timespan)
+		parsedTime, err := utils.CalculateTimeAgo(timeSpan)
 		if err != nil {
-			fmt.Printf("Error parsing timespan %s: %v\n", timespan, err)
+			fmt.Printf("Error parsing timeSpan %s: %v\n", timeSpan, err)
 			return nil, err
 		}
-		timeformat := time.RFC3339
-		startTime = parsedTime.Format(timeformat)
+		timeFormat := time.RFC3339
+		startTime = parsedTime.Format(timeFormat)
 	}
 
 	//log.Printf("Querying logs from %s to now", startTime)
@@ -183,7 +184,8 @@ func (s *DashboardServer) QueryAdminDashboardLogs(ctx context.Context, req *pb.A
 		"query": {
 			"bool": {
 				"filter": [
-					{"range": { "@timestamp": { "gte": "%s" } }}
+					{"range": { "@timestamp": { "gte": "%s" } }},
+					{"exists": { "field": "action" }}
 				]
 			}
 		},
@@ -199,13 +201,15 @@ func (s *DashboardServer) QueryAdminDashboardLogs(ctx context.Context, req *pb.A
 }
 
 func (s *DashboardServer) QueryAdminDetailLogs(ctx context.Context, req *pb.AdminDetailRequest) (*pb.SummaryLogsResponse, error) {
-	timespan := req.Timespan
+	timeSpan := req.TimeSpan
 	startTime := req.StartTime
 	count := req.Count
 	offset := req.Offset
 	ascending := req.Ascending
 	action := req.Action
 	task := req.Task
+	searchKey := req.SearchKey
+	searchTerm := req.SearchTerm
 
 	if count == 0 {
 		count = 10
@@ -217,21 +221,17 @@ func (s *DashboardServer) QueryAdminDetailLogs(ctx context.Context, req *pb.Admi
 
 	// Calculate the time range if startTime is empty
 	if startTime == "" {
-		if timespan == "" {
-			timespan = "1w"
+		if timeSpan == "" {
+			timeSpan = "1w"
 		}
-		parsedTime, err := utils.CalculateTimeAgo(timespan)
-		if err != nil {
-			fmt.Printf("Error parsing timespan %s: %v\n", timespan, err)
-			return nil, err
-		}
-		timeformat := time.RFC3339
-		startTime = parsedTime.Format(timeformat)
+		startTime = fmt.Sprintf("now-%s", timeSpan)
 	}
 
 	filterTerm := ""
 	if action != "" {
 		filterTerm = fmt.Sprintf(` {"term": {"action.keyword": "%s"}} `, action)
+	} else {
+		filterTerm = fmt.Sprintf(` {"exists": { "field": "action" }} `)
 	}
 	if task != "" {
 		if filterTerm != "" {
@@ -239,6 +239,22 @@ func (s *DashboardServer) QueryAdminDetailLogs(ctx context.Context, req *pb.Admi
 		}
 		filterTerm += fmt.Sprintf(` {"term": {"task.keyword": "%s"}} `, task)
 	}
+	if searchKey != "" && searchTerm != "" {
+		if filterTerm != "" {
+			filterTerm += ", "
+		}
+		searchMap := map[string]string{
+			"workspace": "workspace.keyword",
+			"task_name": "task_name.keyword",
+			"user":      "user.keyword",
+		}
+		if _, ok := searchMap[searchKey]; !ok {
+			return nil, fmt.Errorf("Invalid search key: %s", searchKey)
+		} else {
+			filterTerm += fmt.Sprintf(` {"wildcard": {"%s": "*%s*"}} `, searchMap[searchKey], searchTerm)
+		}
+	}
+
 
 	if filterTerm != "" {
 		filterTerm = fmt.Sprintf(`, %s`, filterTerm)

@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: log-middleware
-  namespace: efk
+  namespace: jonathan-efk
   labels:
     app: log-middleware
 spec:
@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
         - name: test
-          image: 192.168.1.14:30500/jfb/fb_log_middleware:0.1.0
+          image: registry.jonathan.acryl.ai/jfb-system/fb_log_middleware:sena
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
@@ -29,7 +29,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: log-middleware-rest
-  namespace: efk
+  namespace: jonathan-efk
 spec:
   type: NodePort
   selector:
@@ -43,7 +43,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: log-middleware-grpc
-  namespace: efk
+  namespace: jonathan-efk
 spec:
   type: ClusterIP
   selector:

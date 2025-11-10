@@ -5,7 +5,7 @@ spec:
       default: "FB 자원"
     dirName:
       description: 현재 디렉토리로 devops 폴더 안의 폴더 이름을 default 값으로 지정해 주세요.
-      default: "fb_resource_kube"
+      default: "fb_resource"
 
 
 ---

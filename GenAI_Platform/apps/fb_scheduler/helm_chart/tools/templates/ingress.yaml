@@ -1,0 +1,48 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  labels:
+    {{- range $key, $val := .Values.labels }}
+    {{ $key }}: {{ $val | quote }}
+    {{- end}}
+  name: {{ .Values.service.svc_name }}
+  namespace: {{ .Values.namespace }}
+  {{- if eq .Values.labels.tool_type "vscode" }}
+  annotations:
+    konghq.com/strip-path: 'true'
+  {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress_class_name }}
+  rules:
+  - http:
+      paths:
+      - path: {{ include "ingress_path" . }}
+        pathType: "Prefix"
+        backend:
+          service:
+            name: {{ .Values.service.svc_name }}
+            port:
+              number: {{ .Values.service.port }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  labels:
+    {{- range $key, $val := .Values.labels }}
+    {{ $key }}: {{ $val | quote }}
+    {{- end}}
+  name: {{ .Values.service.svc_name }}-additional
+  namespace: {{ .Values.namespace }}
+spec:
+  ingressClassName: {{ .Values.ingress_class_name }}
+  rules:
+  - http:
+      paths: 
+      # 더미 path - kubeapi에서 실제 포트 포워딩 path로 교체됨
+      - path: /dummy/path/not/used
+        pathType: "Prefix"
+        backend:
+          service:
+            name: {{ .Values.service.svc_name }}
+            port:
+              number: {{ .Values.service.port }}

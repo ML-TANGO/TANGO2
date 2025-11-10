@@ -1,7 +1,7 @@
 {{- define "lib.nodeSelector.manage" -}}
-acryl.ai/jonathan.manage: "true"
+node-role.kubernetes.io/manage: ""
 {{- end -}}
 
 {{- define "lib.nodeSelector.db" -}}
-acryl.ai/jonathan.db: "true"
+node-role.kubernetes.io/db: ""
 {{- end -}}

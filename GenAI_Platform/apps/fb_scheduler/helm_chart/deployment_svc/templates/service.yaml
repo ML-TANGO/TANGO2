@@ -1,17 +1,17 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ .Values.metadata.pod.podBaseName }}---deployment
+  name: {{ .Values.metadata.name.podBaseName }}---deployment
   namespace: {{ include "namespace" . }}
   # Kong Timeout Setting (in ms)
-  #annotations:
-    #konghq.com/read-timeout: "1800000"
+  annotations:
+    konghq.com/read-timeout: "1800000"
   labels:
     {{- include "labels" . | indent 4}}
 spec:
   type: ClusterIP
   selector:
-    deployment_id: {{ toString .Values.metadata.deployment.id | quote }}
+    deployment_id: {{ toString .Values.metadata.id.deploymentId | quote }}
   ports: 
     - name: deployment-api
       port: 18555

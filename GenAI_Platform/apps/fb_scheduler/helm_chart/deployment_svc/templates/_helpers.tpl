@@ -1,7 +1,7 @@
 {{- define "name" -}}
-{{ .Values.metadata.system.namespace }}-{{ .Values.metadata.workspace.id }}
+{{ .Values.metadata.namespace.systemNamespace }}-{{ .Values.metadata.id.workspaceId }}
 {{- end }}
 
 {{- define "namespace" -}}
-{{ .Values.metadata.system.namespace }}-{{ .Values.metadata.workspace.id }}
+{{ .Values.metadata.namespace.systemNamespace }}-{{ .Values.metadata.id.workspaceId }}
 {{- end }}

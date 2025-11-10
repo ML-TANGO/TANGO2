@@ -8,12 +8,12 @@ def create_job(self, username, workspace, job_name, training_name):
         job_name (str): The name of the job created.
         training_name (str): The name of the parent training.
     """
-    self.usage(data={"user": username,
-                     "workspace": workspace,
+    self.usage(data={"user": username, 
+                     "workspace": workspace, 
                      "task": "job",
-                     "task_name": f"{training_name} / {job_name}",
+                     "task_name": f"{training_name} / {job_name}", 
                      "action": "create"})
-
+    
 def delete_job(self, username, workspace, job_name, training_name):
     """
     Logs a job deletion event.
@@ -24,8 +24,8 @@ def delete_job(self, username, workspace, job_name, training_name):
         job_name (str): The name of the job deleted.
         training_name (str): The name of the parent training.
     """
-    self.usage(data={"user": username,
-                     "workspace": workspace,
+    self.usage(data={"user": username, 
+                     "workspace": workspace, 
                      "task": "job",
-                     "task_name": f"{training_name} / {job_name}",
+                     "task_name": f"{training_name} / {job_name}", 
                      "action": "delete"})

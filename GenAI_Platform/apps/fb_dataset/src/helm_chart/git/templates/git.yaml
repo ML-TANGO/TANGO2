@@ -29,7 +29,7 @@ spec:
         - name: jf-src
           mountPath: /app
         - name: jf-utils
-          mountPath: /utils
+          mountPath: /fb_utils
         - name: storage
           mountPath: /jf-data/{{ .Values.storage_name }}
       volumes:

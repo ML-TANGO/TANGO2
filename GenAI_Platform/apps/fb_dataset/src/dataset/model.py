@@ -8,13 +8,13 @@ from typing import List, Annotated, Optional
 #     dataset_name : str = Form(...)
 #     access : int = Form(...)
 #     doc : UploadFile = Form(...)
-#     path : str = Form(...) #TODO 고도화시 삭제 고려
+#     path : str = Form(...) #TODO 고도화시 삭제 고려 
 #     filepath : str = Form(...)#TODO 고도화시 삭제 고려
 #     description : str = Form(...)
 #     google_info : str  = Form(...) #TODO 구글 업로드 유지하지 않을 경우 삭제
 #     built_in_model_id : int = Form(...)
 #     upload_method : int = Form(...) #TODO 고도화시 삭제 고려
-
+    
 # class CreateDatasetModel(BaseModel):
 #     workspace_id : int
 #     dataset_name : str
@@ -25,7 +25,7 @@ from typing import List, Annotated, Optional
 #     google_info : str
 #     built_in_model_id : str
 #     upload_method : str
-
+    
 #     @classmethod
 #     def as_form(
 #         cls,
@@ -33,13 +33,13 @@ from typing import List, Annotated, Optional
 #         dataset_name : str = Form(...),
 #         access : int = Form(...),
 #         doc : UploadFile = Form(...),
-#         path : str = Form(...), #TODO 고도화시 삭제 고려
+#         path : str = Form(...), #TODO 고도화시 삭제 고려 
 #         filepath : str = Form(...), #TODO 고도화시 삭제 고려
 #         description : str = Form(...),
 #         google_info : str  = Form(...), #TODO 구글 업로드 유지하지 않을 경우 삭제
 #         built_in_model_id : int = Form(...),
-#         upload_method : int = Form(...)
-#         ): #TODO 고도화시 삭제 고려
+#         upload_method : int = Form(...) 
+#         ): #TODO 고도화시 삭제 고려 
 #         return cls(workspace_id=workspace_id,
 #                    dataset_name=dataset_name,
 #                    access=access,
@@ -50,11 +50,11 @@ from typing import List, Annotated, Optional
 #                    google_inf=google_info,
 #                    built_in_model_id=built_in_model_id,
 #                    upload_method=upload_method)
-
+        
 class GetDataTrainingFormModel(BaseModel):
     dataset_id: int
     data_training_form: list
-
+        
 class ReadDatasetsModel(BaseModel):
     workspace_id : Optional[int] =None
     page : Optional[str] = "1"
@@ -76,7 +76,7 @@ class ReadDatasetsModel(BaseModel):
 #     remove_files : str
 #     description : str
 #     upload_list : str #TODO 고도화시 삭제고려
-
+    
 class DataSearchModel(BaseModel):
     search_path : Optional[str] = None
     search_page : Optional[str] = None
@@ -93,12 +93,12 @@ class DeleteDatasetModel(BaseModel):
 class DeleteDataModel(BaseModel):
     data_list : List[str] = None,
     path : str= None
-
+    
 class GoogleDriveModel(BaseModel):
     google_info : str
     dataset_id : int
     path : str
-
+    
 class UpdateInfoModel(BaseModel):
     dataset_id : int
     dataset_name : str
@@ -111,14 +111,14 @@ class DecompressModel(BaseModel):
     dataset_id : Optional[str]
     file : Optional[str]
     path : Optional[str] = None
-
+    
 #args
 class PreviewModel(BaseModel):
     dataset_id :  Optional[str]
     file_name :  Optional[str]
     path :  Optional[str] = None
-
-
+    
+    
 class GithubModel(BaseModel):
     url : str
     username : Optional[str] = None
@@ -126,7 +126,7 @@ class GithubModel(BaseModel):
     dataset_id : int
     dir : str
     current_path : str
-
+    
 class CopyModel(BaseModel):
     dataset_id : int
     target_path : str = None

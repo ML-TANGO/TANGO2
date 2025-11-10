@@ -26,9 +26,8 @@ spec:
     namespace: {{ .Values.global.jfb.namespace }}
     name: jf-src-utils-pvc
   persistentVolumeReclaimPolicy: Retain
-  {{- $variables := dict -}}
-  {{- $_ := set $variables "src" .Values.global.jfb.volume.src }}
-  {{- $path := printf "%s/utils" .Values.global.jfb.volume.src.path }}
-  {{- $_ := set $variables.src "path" $path }}
-  {{- include "lib.volume.type" $variables.src | nindent 2 }}
+  {{- $srcUtils := dict -}}
+  {{- $_ := set $srcUtils "src" (deepCopy .Values.global.jfb.volume.src) }}
+  {{- $_ := set $srcUtils.src "path" (printf "%s/%s" .Values.global.jfb.volume.src.path .Values.global.jfb.dir.utils) }}
+  {{- include "lib.volume.type" $srcUtils.src | nindent 2 }}
 {{- end }}

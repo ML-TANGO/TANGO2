@@ -1,0 +1,18 @@
+namespace:
+image:
+labels:
+command:
+  mode: ""  # "download_model" 또는 "copy_commit_model" 중 하나를 선택
+  model_id: ""  # Hugging Face 모델 ID
+  token: ""  # Hugging Face API 토큰
+  dst_model_path: ""  # 저장할 모델 디렉토리
+  tokenizer_dir: ""  # 저장할 토크나이저 디렉토리
+  latest_checkpoint_path: ""  # 최신 모델 디렉토리
+  dst_log_dir: ""  # 로그 저장 디렉토리 (copy_commit_model 전용)
+  dst_tokenizer_dir: ""
+  src_model_path: ""  # 소스 모델 디렉토리 (copy_commit_model에서 사용)
+  src_tokenizer_path: ""  # 소스 토크나이저 디렉토리 (copy_commit_model에서 사용)
+  src_model_log_path: ""  # 소스 로그 디렉토리 (copy_commit_model에서 사용)
+  is_commit: 0  # 1이면 commit, 0이면 commit 아님
+  tmp_model_path: ""
+  load_commit_model_path: ""

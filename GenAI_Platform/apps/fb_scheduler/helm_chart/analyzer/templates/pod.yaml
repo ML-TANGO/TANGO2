@@ -1,0 +1,48 @@
+{{- range $index, $node := .Values.cluster }}
+apiVersion: batch/v1
+kind: Job
+metadata: 
+  name: {{ $.Values.metadata.name.podName }}
+  namespace: {{ $.Values.metadata.namespace.workspaceNamespace }}
+  labels:
+    api_mode: prefix
+    pod_type: analyzer
+    work_func_type: analyzer
+    role: jfb-user-functions
+    {{- include "labels.base" (dict "Values" $.Values) | indent 4}}
+    {{- include "labels.node" (dict "node" $node "index" $index) | indent 4}}
+    {{- include "labels.analyzer" (dict "Values" $.Values) | indent 4}}
+  annotations:
+    acryl.ai/appType: user
+spec:
+  template:
+    metadata:
+      labels:
+    spec:
+      restartPolicy: OnFailure
+      {{- if ne $node.node_name "" }}
+      nodeName: {{ $node.node_name }}
+      {{- end }}
+      {{- if ne $.Values.pod.cpuInstance "" }}
+      nodeSelector:
+        jfb/cpu-instance.name: {{ $.Values.pod.cpuInstance }}
+      {{- end }}
+      hostname: {{ $.Values.metadata.name.podName }}
+      containers:
+      - name: analyzer
+        image: {{ $.Values.pod.imageRegistry }}{{ $.Values.pod.image }}
+        imagePullPolicy: Always # IfNotPresent
+        env: # pod일경우 indent 4, job은 6 (template 추가)
+        {{- include "env.base" (dict "Values" $.Values) |  indent 10}}
+        {{- include "env.gpu" (dict "node" $node) | indent 10}}
+        {{- include "env.db" (dict "Values" $.Values ) | indent 10}}
+        {{- include "env.analyzer" (dict "Values" $.Values ) | indent 10}}
+        resources:
+        {{- include "resources" (dict "Values" $.Values "node" $node) | indent 10}}
+        command: ['/bin/bash', '-c', 'echo start;  python3 /analyzer/analyzer.py;']     # | quote }}]
+        volumeMounts:
+        {{- include "volumeMounts" $ | nindent 8}}
+      volumes:
+      {{- include "volumes" $ | nindent 6 }}
+---
+{{- end }}

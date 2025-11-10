@@ -33,13 +33,14 @@ import multiprocessing
 import dateutil.parser
 import re
 import aiohttp
-from utils.exceptions import *
+from utils.exception.exceptions import *
 import utils.settings as settings
 
 import hashlib
 import re
 sys.path.insert(0, os.path.abspath('..'))
 from utils.TYPE import *
+from utils import TYPE
 # from utils.common_data import *
 import inspect
 
@@ -47,7 +48,7 @@ from collections import defaultdict
 from typing import List
 from functools import reduce, lru_cache, cache, wraps
 
-global_lock = threading.Lock()  # lock for job_queue
+# global_lock = threading.Lock()  # lock for job_queue
 rand_lock = threading.Lock() # lock for random
 
 
@@ -81,6 +82,17 @@ class JfLock:
             traceback.print_exception(t, v, tb)
         return True
 
+def get_storage_status(storage_type,workspace_info):
+    if storage_type=="main":
+        if workspace_info['main_storage_lock'] > 1:
+            return False
+        return True
+    elif storage_type=="data":
+        if workspace_info['data_storage_lock'] > 1:
+            return False
+        return True
+    else:
+        return False
 
 def make_nested_dict():
     return defaultdict(make_nested_dict)
@@ -88,25 +100,6 @@ def make_nested_dict():
 def dec_round(x,y):
     return float(round(Decimal(x),y))
 
-# def log_function_call(function):
-#     @functools.wraps(function)
-#     def wrapped(*args, **kwargs):
-#         try:
-#             enabled = settings.ENABLE_LOG_FUNCTION_CALL
-#         except:
-#             enabled = False
-#         if enabled:
-#             temp_list = [ temp_element for temp_element in args] + ["{}={}".format(temp_key, kwargs[temp_key]) for temp_key in kwargs.keys()]
-#             print ('CALLED: ', function.__name__ + '(' + ', '.join([repr(temp_element) for temp_element in temp_list])+')')
-#             print (function.__name__, '(', *args, *["{}={}".format(temp_key, kwargs[temp_key]) for temp_key in kwargs.keys()], ')')
-#             temp_time = time.time()
-#             res = function(*args, **kwargs)
-#             elapsed = time.time() - temp_time
-#             print ('ELAPSED of '+ function.__name__ + ':', elapsed)
-#             return res
-#         else:
-#             return function(*args, **kwargs)
-#     return wrapped
 
 def format_size(size_in_bytes):
     # Define unit conversion constants
@@ -140,9 +133,9 @@ def change_own(path,headers_user):
     os.system('chown {}:{} "{}"'.format(uuid, uuid, path))
     if os.path.isfile(path):
         return
-
+        
     tmp_file_list = os.listdir(path)
-
+    
     for file_ in tmp_file_list:
         if not file_[0]=='.':
             if os.path.isfile(os.path.join(path,file_)) :
@@ -160,7 +153,7 @@ def get_own_user(uuid):
     if user_info is None:
         return "unknown"
     return user_info['name']
-
+    
 
 def is_num(name):
     try:
@@ -191,7 +184,7 @@ def is_good_user_name(name):
 def is_good_name(name):
     """
         Description : Workspace, Training, Deployment + docker image 이름 생성 시 규칙
-                      - 소문자, 숫자 구성에 "-" 만 허용.
+                      - 소문자, 숫자 구성에 "-" 만 허용. 
                       - 첫글자와 마지막 글자는 "-" 사용 X
                       - "-" 는 중복하여 사용 불가 ex) a-b O / a--b X
 
@@ -206,8 +199,8 @@ def is_good_name(name):
         if name is not None:
             # front에서는 /([a-z0-9]+-?)*[a-z0-9]$/
             # match_res = re.match(
-            #     r'([a-z0-9]+-?)*[a-z0-9]', name)
-
+            #     r'([a-z0-9]+-?)*[a-z0-9]', name)  
+            
             # MSA 변경 (다른 정규식이 더 정확하면 수정)
             match_res = re.match(r'^[\w\-.]+$', name)
             if match_res is not None and match_res.group() == name:
@@ -265,7 +258,7 @@ def rm_r(path):
         os.remove(path)
     else:
         raise FileNotFoundError("No such file or directory: '{}'".format(path))
-
+    
 async def async_rmtree(path):
     if os.path.isdir(path) and not os.path.islink(path):
         loop = asyncio.get_running_loop()
@@ -275,6 +268,107 @@ async def async_rmtree(path):
         print(f"Dir {path} deleted")
     else:
         print(f"Dir {path} not exist")
+
+
+async def async_clear_directory(path):
+    if os.path.isdir(path) and not os.path.islink(path):
+        # subprocess를 사용하여 디렉토리 내의 모든 파일 및 디렉터리 삭제
+        process = await asyncio.create_subprocess_shell(
+            f'rm -rf {os.path.join(path, "*")}',
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        stdout, stderr = await process.communicate()
+
+        if process.returncode == 0:
+            print(f"Contents of {path} deleted")
+            return True
+        else:
+            print(f"Error deleting contents of {path}: {stderr.decode().strip()}")
+            return False
+    else:
+        print(f"Dir {path} not exist or is not a directory")
+        return False
+
+async def async_copy_directory_contents(src, dest):
+    if os.path.isdir(src) and not os.path.islink(src):
+        if not os.path.exists(dest):
+            os.makedirs(dest)
+        # subprocess를 사용하여 src 내의 모든 파일 및 디렉터리를 dest로 복사
+        process = await asyncio.create_subprocess_shell(
+            f'cp -r {os.path.join(src, "*")} {dest}',
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        stdout, stderr = await process.communicate()
+
+        if process.returncode == 0:
+            print(f"Contents of {src} copied to {dest}")
+            return True
+        else:
+            print(f"Error copying contents of {src} to {dest}: {stderr.decode().strip()}")
+            return False
+    else:
+        print(f"Dir {src} not exist or is not a directory")
+        return False
+
+
+async def move_all_to_directory(source_dir, destination_dir):
+    """
+    Asynchronously moves all files and directories from the specified source directory to the specified destination directory.
+
+    Args:
+        source_dir (str): Path to the source directory containing items to move.
+        destination_dir (str): Path to the destination directory where items will be moved.
+
+    Returns:
+        list: A list of new paths for each moved item if successful, or an empty list if an error occurs.
+    """
+    # Check if source directory exists and is a directory
+    if not os.path.isdir(source_dir):
+        print(f"Error: The specified source directory '{source_dir}' does not exist or is not a directory.")
+        return []
+
+    # Ensure destination directory exists
+    if not os.path.exists(destination_dir):
+        os.makedirs(destination_dir)
+        print(f"Created destination directory '{destination_dir}'.")
+
+    moved_items = []
+
+    # Iterate over all items in the source directory
+    for item in os.listdir(source_dir):
+        item_path = os.path.join(source_dir, item)
+        destination_path = os.path.join(destination_dir, item)
+
+        try:
+            # Move each file or directory asynchronously
+            await asyncio.to_thread(shutil.move, item_path, destination_path)
+            print(f"Moved '{item_path}' to '{destination_path}'.")
+            moved_items.append(destination_path)
+        except Exception as e:
+            print(f"Error while moving '{item_path}': {e}")
+
+    return moved_items
+
+async def async_delete_file(file_path : str) -> bool:
+    """
+    비동기적으로 파일을 삭제하는 함수
+
+    :param file_path: 삭제할 파일의 경로
+    """
+    try:
+        # 파일이 존재하는지 확인 후 삭제 작업을 별도의 스레드로 실행
+        if os.path.exists(file_path):
+            await asyncio.to_thread(os.remove, file_path)
+            print(f"{file_path} 삭제 완료")
+            return True
+        else:
+            print(f"{file_path} 경로에 파일이 존재하지 않습니다.")
+            return False
+    except Exception as e:
+        print(f"파일 삭제 중 오류 발생: {e}")
+    return False
 
 def rm_rf(path, ignore_errors=False):
     """ Do rm -rf `path'. Ignores nonexistent files.
@@ -305,138 +399,6 @@ def rm_rf(path, ignore_errors=False):
             if not ignore_errors:
                 raise
 
-
-# def execute_command_ssh(address, username, password, key_file_name, command, error_raise=False, key_login=settings.LAUNCHER_KEY_LOGIN, std_callback=(None, {})):
-#     """ Throws IOError when host down or something.
-#     ssh key login 주석 추가 & def execute_command_ssh(address, username, *password, command): 함수 파라미터 설정 - 패스워드를 사용 안할 경우
-
-#     std_callback
-#         1. tuple(function, **kwargs) : kwargs 가 없는 경우라도, tuple 형식이어야 함. (function,)
-#         2. function(std_out, std_err, **kwargs) : callback 할 함수 - input으로 std_out, std_err 2개의 arguments를 받는 함수이어야 함. 2개의 key가 없을 시, TypeError
-#         3. kwargs : callback 함수에서 사용하는 key, value (std_out, std_err 외의 추가적인 keyword arguments)
-#         example - launch_on_host(..., std_callback=(function,)) or launch_on_host(..., std_callback=(function, {key : value, ...}))
-#     """
-#     address = address.split(':')
-#     if len(address) == 1:
-#         hostname = address[0]
-#         port = settings.LAUNCHER_SSH_PORT
-#     elif len(address) == 2:
-#         hostname = address[0]
-#         port = address[1]
-#     else: #IPv6 case or typo or something
-#         raise ValueError('Unsuppoted address {}'.format(':'.join(address)))
-
-#     client = paramiko.SSHClient()
-#     client.load_system_host_keys()
-#     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-#     try:
-#         if key_login:
-#             client.connect(hostname, port=port, username=username, key_filename=key_file_name)
-#         else:
-#             client.connect(hostname, port=port, username=username, password=password)
-#         '''
-#         if pwd:
-#             client.connect(hostname, port=port, username=username, password=password)
-#         else:
-#             client.connect(hostname, port=port, username=username, key_filename='/jfbcore/jf-bin/launcher_bins/{private 키 파일명}')
-#         '''
-#     except paramiko.ssh_exception.SSHException as sshe: # tcp timeout
-#         if error_raise:
-#             raise sshe
-#         traceback.print_exc()
-#         return None, None
-#     _, stdout, stderr = client.exec_command(command)
-
-#     if std_callback[0]:
-#         # kwargs 없는 경우
-#         if len(std_callback) < 2:
-#             std_callback += (dict(),)
-
-#         # check arguments
-#         if not any(i in inspect.getfullargspec(std_callback[0]).args for i in ["std_out", "std_err"]):
-#             raise TypeError("{} missing 2 required argument function: 'std_out', 'std_err'".format(std_callback[0].__name__))
-#         elif "std_out" not in inspect.getfullargspec(std_callback[0]).args:
-#             raise TypeError("{} missing 1 required argument: 'std_out'".format(std_callback[0].__name__))
-#         elif "std_err" not in inspect.getfullargspec(std_callback[0]).args:
-#             raise TypeError("{} missing 1 required argument: 'std_err'".format(std_callback[0].__name__))
-
-#         tmp_stdout, tmp_stderr = list(), list()
-#         while True:
-#             # stdout
-#             if stdout.channel.recv_ready():
-#                 line_out = stdout.readline().strip()
-#                 tmp_stdout.append(line_out)
-#             else:
-#                 line_out = None
-
-#             # stderr
-#             if stderr.channel.recv_stderr_ready():
-#                 line_err = stderr.readline().strip()
-#                 tmp_stderr.append(line_err)
-#             else:
-#                 line_err = None
-
-#             # callback
-#             std_callback[0](std_out=line_out, std_err=line_err, **std_callback[1])
-
-#             # break
-#             if stdout.channel.exit_status_ready() == True and stdout.channel.recv_ready() == False and stderr.channel.recv_stderr_ready() == False:
-#                 # flush
-#                 line_out = stdout.read().decode('utf-8')
-#                 line_err = stderr.read().decode('utf-8')
-#                 std_callback[0](std_out=line_out, std_err=line_err, **std_callback[1])
-#                 tmp_stdout.append(line_out)
-#                 tmp_stderr.append(line_err)
-#                 break
-#         result_stdout, result_stderr = '\n'.join(tmp_stdout).encode('utf-8'), '\n'.join(tmp_stderr).encode('utf-8')
-#     else:
-#         result_stdout, result_stderr = stdout.read(), stderr.read()
-
-#     client.close()
-#     return result_stdout, result_stderr
-
-# #@log_function_call
-# def launch_on_host(cmd, ignore_stderr=False, host=None, std_callback=(None, {})):
-#     """Launch a command on host using launcher system.
-
-#     Launcher system runs the command with a root privillage.
-#     But it could excute only a few limited programs which
-#     are in LAUNCHER_BINS_DIR. Also launcher is not a sudoer.
-#     So it is safe from attacks atempting to run other
-#     dangerous commands.
-
-#     The ip of the host should be given by command line argument --jf-ip
-#     or passed by param host.
-
-#     std_callback
-#         1. tuple(function, **kwargs) : kwargs 가 없는 경우라도, tuple 형식이어야 함. (function,)
-#         2. function(std_out, std_err, **kwargs) : callback 할 함수 - input으로 std_out, std_err 2개의 arguments를 받는 함수이어야 함. 2개의 key가 없을 시, TypeError
-#         3. kwargs : callback 함수에서 사용하는 key, value (std_out, std_err 외의 추가적인 keyword arguments)
-#         example - launch_on_host(..., std_callback=(function,)) or launch_on_host(..., std_callback=(function, {key : value, ...}))
-#     """
-#     if host is None:
-#         host = get_args().jf_ip
-#         if host is None:
-#             raise KeyError('CLI argument --jf-ip not given.')
-
-#     result_stdout, result_stderr = execute_command_ssh(
-#                                         address=host,
-#                                         username=settings.LAUNCHER_ID,
-#                                         password=settings.LAUNCHER_PW,
-#                                         key_file_name=settings.LAUNCHER_PRIVATE_KEY,
-#                                         command=cmd,
-#                                         std_callback=std_callback
-#                                     )
-
-#     if result_stdout is None:
-#         return None
-#     else:
-#         result_stdout = result_stdout.decode('utf-8')
-#     if result_stderr is not None:
-#         result_stderr = result_stderr.decode('utf-8')
-#     if not ignore_stderr and result_stderr is not None and len(result_stderr) > 0:
-#         raise RemoteError(result_stderr)
-#     return result_stdout, result_stderr
 
 def get_args():
     """Get parsed command-line arguments.
@@ -469,48 +431,6 @@ def generate_alphanum(n=16):
         random_str = ''.join(random.choice(ALPHANUM) for _ in range(n))
     return random_str
 
-# def get_pod_gpu_list(pod_name):
-#     arr = []
-#     try:
-#         nvidia_info, *_ = launch_on_host("kubectl exec {} -- nvidia-smi -q -x".format(pod_name),ignore_stderr=True) # 0.5 ~ 0.6 초 소요
-#         if 'NotFound' in nvidia_info:
-#             return {"num_gpus": len(arr), "list": arr}
-
-#         nvidia_info = ET.fromstring(nvidia_info)
-#         for r in nvidia_info:
-#             # if e1.tag == 'attached_gpus':
-#             # print(e1.text);
-#             if r.tag == 'gpu':
-#                 info = {
-#                     "num": int(r.find('minor_number').text),
-#                     "model": r.find('product_name').text,
-#                     "mem_total": r.find('fb_memory_usage').find('total').text,
-#                     "mem_used": r.find('fb_memory_usage').find('used').text,
-#                     "mem_free": r.find('fb_memory_usage').find('free').text,
-#                     "gpu_util": r.find('utilization').find('gpu_util').text,
-#                     "mem_util": r.find('utilization').find('memory_util').text,
-#                     "temperature": r.find('temperature').find('gpu_temp').text,
-#                 }
-#                 arr.append(info)
-#     except Exception as e:
-#         print('Error:',e)
-#         #traceback.print_exc()
-#     arr.sort(key=lambda a: a["num"], reverse=False)
-#     return {"num_gpus": len(arr), "list": arr}
-
-# def get_pod_cpu_model_name(pod_name):
-#     cpu_model_name = None
-#     try:
-#         cpu_model_name, *_ = launch_on_host("kubectl exec {} -- cat /proc/cpuinfo".format(pod_name), ignore_stderr=True)
-#         for line in cpu_model_name.split("\n"):
-#             if "model name" in line:
-#                 cpu_model_name = re.sub( ".*model name.*:", "", line,1)
-#                 while (cpu_model_name[0] == " "):
-#                     cpu_model_name = cpu_model_name[1:]
-#                 return cpu_model_name
-#     except Exception as e:
-#         traceback.print_exc()
-#     return cpu_model_name
 
 def ensure_path(path):
     return pathlib.Path(path).mkdir(parents=True, exist_ok=True) # ensure path exist
@@ -531,7 +451,7 @@ def writable_path(path):
             pass
     return True
 
-def get_date_time(timestamp=None, date_format="%Y-%m-%d %H:%M:%S"):
+def get_date_time(timestamp=None, date_format=TYPE.TIME_DATE_FORMAT):
     if timestamp is None:
         unixEpochStartTime = 2208988800 # January 1, 1970
         client = socket.socket( socket.AF_INET, socket.SOCK_DGRAM )
@@ -550,7 +470,7 @@ def get_date_time(timestamp=None, date_format="%Y-%m-%d %H:%M:%S"):
     return datetime.fromtimestamp(t).strftime(date_format) # return system time if the ntp server is unreachable
 
 
-def date_str_to_timestamp(date_str, date_format="%Y-%m-%d %H:%M"):
+def date_str_to_timestamp(date_str, date_format="%Y-%m-%d %H:%M"):   
     """
     Description: date string to timestamp
 
@@ -598,7 +518,7 @@ def date_str_to_timestamp(date_str, date_format="%Y-%m-%d %H:%M"):
         "%Y-%m-%d",
         "%Y-%m-%d %H",
         "%Y-%m-%d %H:%M",
-        "%Y-%m-%d %H:%M:%S"
+        TYPE.TIME_DATE_FORMAT
     ]
     if date_str is None:
         return 0
@@ -654,32 +574,6 @@ def size_cvt(size, to):
 
     return '%.2f%s' % (converted_number, to)
 
-def write_user_info(base, target, users=[]):
-    os.system('mkdir -p {target}'.format(target=target))
-    for i, user in enumerate(users):
-        if i == 0:
-            os.system('cat {base}/passwd | grep ^{user}: >  {target}/passwd'.format(base=base, user=user, target=target))
-            os.system('cat {base}/shadow | grep ^{user}: >  {target}/shadow'.format(base=base, user=user, target=target))
-            os.system('cat {base}/gshadow | grep ^{user}: >  {target}/gshadow'.format(base=base, user=user, target=target))
-            os.system('cat {base}/group | grep ^{user}: >  {target}/group'.format(base=base, user=user, target=target))
-        else :
-            os.system('cat {base}/passwd | grep ^{user}: >>  {target}/passwd'.format(base=base, user=user, target=target))
-            os.system('cat {base}/shadow | grep ^{user}: >>  {target}/shadow'.format(base=base, user=user, target=target))
-            os.system('cat {base}/gshadow | grep ^{user}: >>  {target}/gshadow'.format(base=base, user=user, target=target))
-            os.system('cat {base}/group | grep ^{user}: >>  {target}/group'.format(base=base, user=user, target=target))
-
-def apply_user_info(base, target):
-    # ALL COPY
-    #TODO 정리 필요
-    if os.system("ls {target}/  > /dev/null 2>&1".format(target=target)) == 0:
-        os.system('cat {base}/passwd > {target}/passwd'.format(base=base, target=target))
-        os.system('cat {base}/shadow > {target}/shadow'.format(base=base, target=target))
-        os.system('cat {base}/gshadow > {target}/gshadow'.format(base=base, target=target))
-        os.system('cat {base}/group > {target}/group'.format(base=base, target=target))
-        return True
-    else:
-        return False
-
 
 
 def gen_hash(text):
@@ -693,18 +587,6 @@ def gen_pod_name_hash(text):
     text = text
     hash_ = hashlib.md5(text.encode())
     return "h"+hash_.hexdigest()
-
-
-def log_access(contents):
-    try:
-        cur_time = time.gmtime()
-        contents['time']=cur_time
-        log_filename='{}/{}.log'.format(settings.JF_LOG_DIR, time.strftime('%Y%m%d', cur_time))
-
-        with open(log_filename, 'a') as fout:
-            fout.write(json.dumps(contents)+'\n')
-    except:
-        traceback.print_exc()
 
 
 def dict_comp(base_dict, target_dict, ignore_key_list=[]):
@@ -730,7 +612,7 @@ def get_workspace_status(workspace, start_datetime=None, end_datetime=None):
     start_datetime_ts = date_str_to_timestamp(workspace["start_datetime"])
     end_datetime_ts = date_str_to_timestamp(workspace["end_datetime"])
 
-    status = "unknwon"
+    status = "unknown"
     if cur_time_ts < start_datetime_ts or cur_time_ts > end_datetime_ts:
         # Reserved or Expired
         status = "reserved" if cur_time_ts < start_datetime_ts else "expired"
@@ -739,16 +621,16 @@ def get_workspace_status(workspace, start_datetime=None, end_datetime=None):
 
     return status
 
-# TODO 개선 필요
-# param의 구분자를 -- 외에 - 를 사용하는 경우, 구분자가 단순 띄워쓰기인 경우 a=1 b=3
+# TODO 개선 필요 
+# param의 구분자를 -- 외에 - 를 사용하는 경우, 구분자가 단순 띄워쓰기인 경우 a=1 b=3 
 # param과 value를 구분하는 방법의 다양함 "=", " "
 # value 값의 표현 방법 - 단순 str이 아닌 띄워쓰기가 있거나 (이 경우 "aa vv" 로 묶어주는건 규칙)
-# CASE 예시
-# CASE 1 --param=1
-# CASE 2 --param="aa bb cc"
-# CASE 3 --param 1
-# CASE 4 --param "qq ww ee"
-# CASE 5 --param "--aaa"
+# CASE 예시 
+# CASE 1 --param=1 
+# CASE 2 --param="aa bb cc" 
+# CASE 3 --param 1 
+# CASE 4 --param "qq ww ee" 
+# CASE 5 --param "--aaa" 
 # CASE 6 -p b
 # CASE 7 param=3
 
@@ -767,13 +649,13 @@ def parameter_str_to_dict(parameter: str, without_first_hyphen=True, **kwargs) -
     Examples:
         parameter = "  -param --param1   /jfbcore -param1 \"/jfbcore/\" -key -param    --data_root /user_dataset/  --img_dir '/user_dataset/image'  --ann_dir /user_dataset/mask  --resume-from /jf-training-home/job-checkpoints/coco-path-suffix2/0/latest.pth  --batch_size 32  --img_suffix .jpg  --iters 350  --lr 0.01  --save_interval 5000  --seg_map_suffix .png -param "
         parameter_str_to_dict(parameter)  # {'-param': ['', '', ''], '--param1': '/jfbcore', '-param1': '"/jfbcore/"', '-key': '', '--data_root': '/user_dataset/', '--img_dir': "'/user_dataset/image'", '--ann_dir': '/user_dataset/mask', '--resume-from': '/jf-training-home/job-checkpoints/coco-path-suffix2/0/latest.pth', '--batch_size': '32', '--img_suffix': '.jpg', '--iters': '350', '--lr': '0.01', '--save_interval': '5000', '--seg_map_suffix': '.png'}
-    """
+    """    
     result = dict()
     if without_first_hyphen:
         matches = re.findall("([^-=\s]+[^=\s]*)([=\s]*)([\"].*?[\"]|['].*?[']|[^-\s]+\S*|)", parameter)
     else :
         matches = re.findall("(-{1,2}[^=\s]*)([=\s]*)([\"].*?[\"]|['].*?[']|[^-\s]+\S*|)", parameter)
-
+    
     for parameter in matches:
         key, _, value = parameter
         if key in result:
@@ -799,26 +681,6 @@ def parameter_dict_to_list(parameter: dict):
 
     return parameter_list
 
-# def parameter_str_to_dict(parameter, flag=" "):
-#     def cut_space(str_):
-#         if len(str_) == 0:
-#             # --param --param2 a --param3 b
-#             return str_
-#         if str_[-1] == " ":
-#             return cut_space(str_[:-1])
-#         else:
-#             return str_
-
-#     parameter_dict = {}
-#     for item in parameter.split("--"):
-#         item = item.split(flag)
-#         if len(item) < 2:
-#             continue
-#         param, value = item[:2]
-#         if param == "":
-#             continue
-#         parameter_dict[param] = cut_space(value)
-#     return parameter_dict
 
 def parameter_dict_to_str(parameter, flag=" "):
     parameter_str = ""
@@ -837,158 +699,6 @@ def run_func_with_print_line(func, line_message, prefix="==============", *args,
     print(line_start)
     func(*args, **kwargs)
     print(line_end)
-
-# def get_worker_requests(ip, path="", timeout=settings.JF_WORKER_CONNECT_TIMEOUT, headers:dict={}, params:dict={}):
-#     from utils.settings import JF_WORKER_PORT
-#     import requests
-#     get_status = False
-#     message = ""
-#     try:
-#         res = requests.get('http://{}:{}/worker/{}'.format(ip, JF_WORKER_PORT, path), timeout=timeout, headers=headers, params=params)
-#         get_status = True
-#     except requests.exceptions.ConnectionError as rece:
-#         res = None
-#         message = str(rece)
-#         # print("WORKER ", ip , "Connection error")
-#     except ConnectionRefusedError as cre:
-#         res = None
-#         message = str(cre)
-#         # print("WORKER ", ip , "Connection error")
-#         # traceback.print_exc()
-#     except requests.exceptions.ReadTimeout as rert:
-#         res = None
-#         message = str(rert)
-#         print("WORKER ", ip , "Connection timeout")
-#     except Exception as e:
-#         res = None
-#         message = str(e)
-#         traceback.print_exc()
-
-#     return {
-#         "get_status": get_status,
-#         "result": res,
-#         "message": message
-#     }
-
-# def post_worker_requests(ip, path="", timeout=settings.JF_WORKER_CONNECT_TIMEOUT, headers:dict={}, params:dict={}):
-#     from settings import JF_WORKER_PORT, JF_WORKER_CONNECT_TIMEOUT
-#     import requests
-#     get_status = False
-#     message = ""
-#     try:
-#         res = requests.post('http://{}:{}/worker/{}'.format(ip, JF_WORKER_PORT, path), timeout=timeout, headers=headers, json=params)
-#         get_status = True
-#     except requests.exceptions.ConnectionError as rece:
-#         res = None
-#         message = str(rece)
-#         # print("WORKER ", ip , "Connection error")
-#     except ConnectionRefusedError as cre:
-#         res = None
-#         message = str(cre)
-#         # print("WORKER ", ip , "Connection error")
-#         # traceback.print_exc()
-#     except requests.exceptions.ReadTimeout as rert:
-#         res = None
-#         message = str(rert)
-#         print("WORKER ", ip , "Connection timeout")
-#     except Exception as e:
-#         res = None
-#         message = str(e)
-#         traceback.print_exc()
-
-#     return {
-#         "get_status": get_status,
-#         "result": res,
-#         "message": message
-#     }
-
-def get_worker_device_info(ip):
-
-    # Worker router.py /device_info 참조
-    worker_response = get_worker_requests(ip=ip, path="device_info")
-    get_status = worker_response["get_status"]
-    res = worker_response["result"]
-
-    device_info = None
-    if res is None:
-        pass
-    elif res.status_code == 200:
-        get_status = True
-        device_info = json.loads(res.text)['result']
-
-    return get_status, device_info
-
-def get_worker_network_interfaces(ip):
-    # res = requests.get('http://{}:{}/worker/network_interfaces'.format(ip, JF_WORKER_PORT))
-    worker_response = get_worker_requests(ip=ip, path="network_interfaces")
-    get_status = worker_response["get_status"]
-    res = worker_response["result"]
-
-    interfaces = None
-    if res is None:
-        pass
-    elif res.status_code == 200:
-        get_status = True
-        interfaces = json.loads(res.text)['result']
-
-    return get_status, interfaces
-
-def new_get_worker_network_interfaces(ip):
-    worker_response = get_worker_requests(ip=ip, path="network-interfaces-new", timeout=10)
-    get_status = worker_response["get_status"]
-    res = worker_response["result"]
-
-    interfaces = None
-    if res is None:
-        pass
-    elif res.status_code == 200:
-        get_status = True
-        interfaces = json.loads(res.text)['result']
-
-    return get_status, interfaces
-
-def get_worker_mem_usage(ip):
-    # from settings import JF_WORKER_PORT
-    # import requests
-    # res = requests.get('http://{}:{}/worker/mem_usage'.format(ip, JF_WORKER_PORT))
-    worker_response = get_worker_requests(ip=ip, path="mem_usage")
-    get_status = worker_response["get_status"]
-    res = worker_response["result"]
-
-    mem_usage = None
-    if res is None:
-        pass
-    elif res.status_code == 200:
-        get_status = True
-        if json.loads(res.text).get('result') is not None:
-            mem_usage = json.loads(res.text).get('result')
-        else :
-            #FOR OLD VERSION WORKER
-            mem_usage = json.loads(res.text)
-
-    return get_status, mem_usage
-
-def get_worker_cpu_usage(ip):
-    # from settings import JF_WORKER_PORT
-    # import requests
-    # res = requests.get('http://{}:{}/worker/mem_usage'.format(ip, JF_WORKER_PORT))
-    worker_response = get_worker_requests(ip=ip, path="cpu_usage")
-    get_status = worker_response["get_status"]
-    res = worker_response["result"]
-
-    mem_usage = None
-    if res is None:
-        pass
-    elif res.status_code == 200:
-        get_status = True
-        if json.loads(res.text).get('result') is not None:
-            mem_usage = json.loads(res.text).get('result')
-        else :
-            #FOR OLD VERSION WORKER
-            mem_usage = json.loads(res.text)
-
-    return get_status, mem_usage
-
 
 def gen_dict_from_list_by_key(target_list, id_key, del_keys=[], lower=False):
     temp_dict = {}
@@ -1051,7 +761,17 @@ def str_simple_converter(value):
     return new_string
 
 def byte_to_gigabyte(byte_size):
-    return round(byte_size/float(1024*1024*1024), 2)
+    """
+    바이트를 기가바이트(GB)로 변환합니다.
+    SI 단위계를 사용하여 1000으로 나눕니다.
+    
+    Args:
+        byte_size (int): 바이트 단위의 크기
+        
+    Returns:
+        float: 기가바이트(GB) 단위로 변환된 크기 (소수점 2자리까지 반올림)
+    """
+    return round(byte_size/float(1000*1000*1000), 2)
 
 
 def get_checkpoint_store_path(workspace_id, checkpoint_dir_path):
@@ -1089,7 +809,7 @@ def resource_str_column_to_dict(res, key_list=None):
     return res
 
 def convert_gpu_model(gpu_model):
-    # TODO 용어 개선 (2022-09-07 Yeobie)
+    # TODO 용어 개선 (2022-09-07 Yeobie) 
     # {
     #     "GTX-1080":["node1","node2"],
     #     "GTX-2080":["node3","node4"]
@@ -1119,9 +839,9 @@ def convert_mig_model_to_gpu_model_form(gpu_model, mig_model):
         Return :
             (str) : NVIDIA-A100-PCIE-40GB|mig-2g.10gb
     """
-
+    
     gpu_model = gpu_model + "|" + mig_model.replace(NVIDIA_GPU_BASE_LABEL_KEY,"")
-
+    
     return gpu_model
 
 def convert_gpu_model_to_resource_key_form(gpu_model):
@@ -1144,7 +864,7 @@ def convert_gpu_model_to_resource_key_form(gpu_model):
         resource_key = NVIDIA_GPU_RESOURCE_LABEL_KEY
 
     return resource_key
-
+    
 
 def update_dict_key_count(dict_item, key, add_count=1, default=0, exist_only=False):
     # exist_only(True|False) = dict key have to exist. if not skip.
@@ -1189,7 +909,7 @@ def db_configurations_to_list(configurations):
     return item_list
 
 def configuration_list_to_db_configuration_form(configuration_list):
-
+    
     configuration_items = list(set(configuration_list))
     for i in range(len(configuration_items)):
         count = configuration_list.count(configuration_items[i])
@@ -1199,29 +919,14 @@ def configuration_list_to_db_configuration_form(configuration_list):
     config = ",".join(configuration_items)
     return config
 
-def log_critical_error(message):
-    """
-    message (str) : 사용자 선언 error message or traceback.format_exc()
-    """
-    import datetime
-    import json
-    # 치명적 오류를 LOG에 남기기 위해..
-    # save date-time, custom-message, error
-    print("Saved CRITIAL ERROR LOG")
-    log_info = {
-        "datetime": str(datetime.datetime.now()),
-        "message": message
-    }
-    with open(CRITIAL_ERROR_LOG, "w") as fw:
-        fw.write(json.dumps(log_info))
 
 from fastapi import FastAPI, Response
 from typing import List, Optional
 
 def csv_response_generator(
-    data_list: Optional[List[List[str]]] = None,
-    separator: str = ",",
-    data_str: Optional[str] = None,
+    data_list: Optional[List[List[str]]] = None, 
+    separator: str = ",", 
+    data_str: Optional[str] = None, 
     filename: str = "mycsv"
 ) -> Response:
     """
@@ -1232,7 +937,7 @@ def csv_response_generator(
         [data_1_b, "", data_3_b],
         ...
     ]
-    separator(str): default (",") csv separator
+    separator(str): default (",") csv separator 
     data_str(str): csv data string data form (if this var exist. ignore data_list and separator)
 
     -->
@@ -1262,61 +967,15 @@ def csv_response_generator(
 
     return Response(content=csv_data, headers=headers)
 
-
-def csv_response_generator_old(data_list=None, separator=",", data_str=None, filename="mycsv"):
-    """
-    data_list(list): csv data list data form
-    ex) [
-        [header_1, header_2, header_3],
-        [data_1_a, data_2_a, data_3_a],
-        [data_1_b, "", data_3_b],
-        ...
-    ]
-    separator(str): default (",") csv separator
-    data_str(str): csv data string data form (if this var exist. ignore data_list and seprator)
-
-    -->
-    seprator = ","
-    ex)
-    header_1,header_2,header_3\n
-    data_1_a,data_2_a,data_3_a\n
-
-    seprator = "-"
-    header_1-header_2-header_3\n
-    data_1_a-data_2_a-data_3_a\n
-    """
-    from flask import make_response
-
-    csv_data = None
-
-    if data_str is None:
-        for i, data in enumerate(data_list):
-            if type(data) == type([]):
-                data_list[i] = separator.join(str(d) for d in data)
-            else :
-                continue
-
-        csv_data= "\n".join(str(data) for data in data_list)
-
-    else:
-        csv_data = data_str
-
-
-
-    download_response = make_response(csv_data)
-    download_response.headers['Content-Disposition'] = 'attachment; filename={}.csv'.format(filename)
-    download_response.mimetype='text/csv'
-    return download_response
-
 async def text_response_generator_async(data_str, filename="default.txt"):
     """
-    Description : txt file response
+    Description : txt file response 
 
-    Args :
+    Args : 
         data_str (str) : text에 담기는 데이터
 
     Returns :
-        (response) : text 다운로드용 response
+        (response) : text 다운로드용 response 
     """
     #from flask import make_response
     #download_response = make_response(data_str)
@@ -1326,19 +985,19 @@ async def text_response_generator_async(data_str, filename="default.txt"):
     headers = {
         'Content-Disposition': f"attachment; filename={filename}",
     }
-    from fastapi import Response as FastResponse
+    from fastapi import Response as FastResponse 
     response = FastResponse(data_str, headers=headers)
-    return response
+    return response  
 
 def text_response_generator(data_str, filename="default.txt"):
     """
-    Description : txt file response
+    Description : txt file response 
 
-    Args :
+    Args : 
         data_str (str) : text에 담기는 데이터
 
     Returns :
-        (response) : text 다운로드용 response
+        (response) : text 다운로드용 response 
     """
     #from flask import make_response
     #download_response = make_response(data_str)
@@ -1348,76 +1007,12 @@ def text_response_generator(data_str, filename="default.txt"):
     headers = {
         'Content-Disposition': f"attachment; filename={filename}",
     }
-    from fastapi import Response as FastResponse
+    from fastapi import Response as FastResponse 
     response = FastResponse(data_str, headers=headers)
-    return response
+    return response    
+    
 
-
-def path_convert(full_path, old_path, new_path):
-    """
-    Description : HOST PATH -> POD PATH | POD PATH -> HOST PATH 변환을 위한
-
-    Args :
-        full_path (str) : 변경 하려고 하는 경로 (run_code로 저장되어있는 값) /jf-training-home/src/training-deployment-example/deployment.sh
-        old_path (str) : 변경 되려는 값 - /jf-training-home  = JF_TRAINING_POD_PATH
-        new_path (str) : 변경 하려는 값 - /jf-data/workspaces/robert-ws/trainings/custom-d-test/ = JF_TRAINING_PATH
-    """
-    if full_path[0:len(old_path)] == old_path:
-        full_path = full_path.replace(old_path, new_path, 1)
-
-    return full_path
-
-def gpu_model_to_dumps(gpu_model):
-    """
-        Description : Training / Deployment 생성 전 GPU Model 선택 하는 부분에서 전달 받은 GPU Model 정보 값을 DB에 저장할 수 있도록 dumps 변환 하는 부분
-                     None 은 dumps 로 넣을 경우 'null' 이나 DB 에는 NULL 값으로 저장할 수 있도록 함
-    """
-    try:
-        if gpu_model is not None:
-            gpu_model = json.dumps(gpu_model)
-    except Exception as e:
-        traceback.print_exc()
-        return gpu_model
-    return gpu_model
-
-def dict_to_db_insert_form(dict_data):
-    rows = tuple(dict_data.values())
-    keys = ",".join([ str(k) for k in dict_data.keys() ])
-    values = ",".join(["%s"] * len(rows))
-    return rows, keys, values
-
-from multiprocessing import Process, Queue
-
-class Multiprocessor():
-
-    def __init__(self):
-        self.processes = []
-        self.queue = Queue()
-
-    @staticmethod
-    def _wrapper(func, queue, args, kwargs):
-        ret = func(*args, **kwargs)
-        queue.put(ret)
-
-    def run(self, func, *args, **kwargs):
-        args2 = [func, self.queue, args, kwargs]
-        p = Process(target=self._wrapper, args=args2)
-        self.processes.append(p)
-        p.start()
-
-    def wait(self):
-        rets = []
-        for p in self.processes:
-            ret = self.queue.get()
-            rets.append(ret)
-            print("append done")
-        for p in self.processes:
-            p.join()
-            print("join done")
-            p.terminate()
-            print("terminate done")
-        return rets
-
+    
 def load_json_file(file_path, retry_count=100, sleep=0.01, return_default=None,  *args, **kwargs):
     for i in range(retry_count):
         try:
@@ -1437,7 +1032,7 @@ def load_json_file(file_path, retry_count=100, sleep=0.01, return_default=None, 
 
 
 def load_json_file_to_list(file_path, retry_count=100, sleep=0.01, return_default=None):
-
+    
     for i in range(retry_count):
         json_list = []
         try:
@@ -1457,186 +1052,6 @@ def load_json_file_to_list(file_path, retry_count=100, sleep=0.01, return_defaul
     return json_list
 
 
-def parsing_node_name(node_name):
-    """
-        Description : 자원 선택 시 정보를 저장하는 node_name 영역의 정보를 parsing해서 CPU/GPU 선택별 제한 정보, ALL 옵션에 대한 정보 내려주는 함수
-
-        Return :
-            {
-                "node_name_cpu": {...},
-                "node_name_cpu_all": {...} or None,
-                "node_name_gpu": {...},
-                "node_name_gpu_all": {...} or None
-            }
-            ex)
-            {
-                'node_name_cpu':
-                {
-                    'jf-node-02-all': {
-                        'cpu_cores_limit_per_pod': 5,
-                        'ram_limit_per_pod': 2,
-                        'cpu_cores_limit_per_gpu': 5,
-                        'ram_limit_per_gpu': 2
-                    },
-                    {
-                    'jf-node-02-cpu': {
-                        'cpu_cores_limit_per_pod': 5,
-                        'ram_limit_per_pod': 2
-                    }
-                },
-                'node_name_cpu_all': {
-                    'cpu_cores_limit_per_pod': 5,
-                    'ram_limit_per_pod': 2,
-                    'cpu_cores_limit_per_gpu': 5,
-                    'ram_limit_per_gpu': 2
-                },
-                'node_name_gpu': {
-                    'jf-node-02-all': {
-                        'cpu_cores_limit_per_pod': 5,
-                        'ram_limit_per_pod': 2,
-                        'cpu_cores_limit_per_gpu': 5,
-                        'ram_limit_per_gpu': 2
-                    },
-                    'jf-node-02-gpu': {
-                        'cpu_cores_limit_per_gpu': 5,
-                        'ram_limit_per_gpu': 2
-                    }
-                },
-                'node_name_gpu_all': {
-                    'cpu_cores_limit_per_pod': 5,
-                    'ram_limit_per_pod': 2,
-                    'cpu_cores_limit_per_gpu': 5,
-                    'ram_limit_per_gpu': 2
-                }
-            }
-    """
-    # CPU NODE - RES
-    # GPU NODE - RES
-    # CPU ALL - RES
-    # GPU ALL - RES
-    if node_name == None:
-        node_name = {}
-    NODE_LIMIT_ALL_KEY = "@all"
-
-    node_name_cpu = {}
-    node_name_gpu = {}
-    node_cpu_all = None
-    node_gpu_all = None
-
-    for key, value in node_name.items():
-
-        if NODE_CPU_LIMIT_PER_POD_DB_KEY in value and NODE_MEMORY_LIMIT_PER_POD_DB_KEY in value:
-            if key == NODE_LIMIT_ALL_KEY:
-                node_cpu_all = value
-            else:
-                node_name_cpu[key] = value
-
-        if NODE_CPU_LIMIT_PER_GPU_DB_KEY in value and NODE_MEMORY_LIMIT_PER_GPU_DB_KEY in value:
-            if key == NODE_LIMIT_ALL_KEY:
-                node_gpu_all = value
-            else:
-                node_name_gpu[key] = value
-
-
-
-    return {
-        "node_name_cpu": node_name_cpu,
-        "node_name_cpu_all": node_cpu_all,
-        "node_name_gpu": node_name_gpu,
-        "node_name_gpu_all": node_gpu_all
-    }
-
-def combine_node_name(node_name_cpu, node_name_gpu, node_name=None):
-    if node_name_cpu is None:
-        node_name_cpu = {}
-
-    if node_name_gpu is None:
-        node_name_gpu = {}
-
-    if node_name is None:
-        node_name = {}
-
-    for key, value in node_name_cpu.items():
-        if node_name.get(key) is None:
-            node_name[key] = value
-        else:
-            node_name[key].update(value)
-
-    for key, value in node_name_gpu.items():
-        if node_name.get(key) is None:
-            node_name[key] = value
-        else:
-            node_name[key].update(value)
-
-    return node_name
-
-
-PROTOCOL_IPV4 = "ipv4"
-PROTOCOL_IPV6 = "ipv6"
-
-def get_worker_ip_check_by_interface(node_ip: dict, interface: str, headers: dict = {}) -> str:
-    """
-    Description: 해당 node의 network interface가 가지거 있는 ip 가져오기
-
-    Args:
-        node_ip (dict):
-        interface (str):
-        headers (_type_):
-
-    Returns:
-        str: ip
-    """
-
-    result = get_worker_requests(ip=node_ip, path="ip-check?interface={}".format(interface), headers=headers)
-    if result["get_status"]:
-        res_data = json.loads(result["result"].text)
-        if res_data["status"] == 1:
-            return res_data["result"]
-    return ""
-
-
-def get_worker_ping_check_by_interface(client_ip: str, server_interface_ip: str, interface : str, headers:dict={}) -> bool:
-    """
-    Description: interface에 해당하는 다른 node의 대역폭 check
-
-    Args:
-        client_ip (str): interface 대역폭을 확인하는 client node
-        server_ip (str): 같은 대역폭인지 확인하려는 server node의 interface ip
-        interface (str): client node의 interface
-        headers (_type_):
-
-    Returns:
-        bool: 같은 대역폭이면 true
-    """
-    params = {
-        "node_ip" : server_interface_ip,
-        "interface" : interface
-    }
-    result = get_worker_requests(ip=client_ip, path="node-ping-check", timeout=0.2, headers=headers, params=params)
-    if result["get_status"]:
-        res_data = json.loads(result["result"].text)
-        if res_data["status"] == 1:
-            return res_data["result"]
-    return False
-
-
-def get_worker_ubuntu_package_check(node_ip : str, package_name : str) -> int:
-    """
-    Description: 해당 node의 ubuntu 패키지 check(없으면 download)
-
-    Args:
-        node_ip (str): check해볼 node의 ip
-
-    Returns:
-        int: 성공하면 0, 실패하면 1이상의 값
-    """
-    result = get_worker_requests(ip=node_ip, path="ubuntu-package-download?package_name={}".format(package_name), timeout=30)
-    if result["get_status"]:
-        res_data = json.loads(result["result"].text)
-        if res_data["status"] == 1:
-            return res_data["result"]
-    return 1
-
 def gib_to_bytes(gib):
     """
     Convert Gibibytes (GiB) to Bytes.
@@ -1650,6 +1065,125 @@ def gib_to_bytes(gib):
     bytes_in_gib = 2 ** 30
     return gib * bytes_in_gib
 
+def gb_to_bytes(gb):
+    """
+    Convert Gigabytes (GB) to Bytes.
+    GB는 10^9 (1,000,000,000) 바이트를 사용합니다.
+    예: 1 GB = 1,000,000,000 bytes
+
+    Parameters:
+    gb (float): Size in Gigabytes.
+
+    Returns:
+    int: Size in Bytes.
+    """
+    bytes_in_gb = 10 ** 9
+    return gb * bytes_in_gb
+
+def convert_to_bytes(size, unit):
+    """
+    Convert a size and unit (e.g., 1, "GB") to bytes.
+
+    Args:
+        size (float or int): The numeric size.
+        unit (str): The unit of the size (e.g., "B", "KB", "MB", "GB", "TB").
+
+    Returns:
+        int: The size in bytes.
+
+    Raises:
+        ValueError: If the unit is not recognized.
+    """
+    # Define the conversion factors
+    units = {
+        "B": 1,
+        "KB": 1024,
+        "MB": 1024**2,
+        "GB": 1024**3,
+        "TB": 1024**4
+    }
+
+    unit = unit.upper()  # Ensure the unit is case-insensitive
+
+    if unit in units:
+        return int(size * units[unit])
+    else:
+        raise ValueError(f"Invalid unit: {unit}")
+
+def helm_parameter_encoding(params:str):
+    #TODO 암호화 하는것도 가능
+    """
+        # 암호화 키 (16, 24, 32 바이트 길이) 해당 길이를 무조건 지켜야함함
+        from Crypto.Cipher import AES
+        key = b'jonathanjonathan' #
+        iv = b'jonathanjonathan'  # 16바이트 길이
+        cipher = AES.new(key, AES.MODE_CFB, iv=iv)
+        collect_info_tmp = cipher.encrypt(json.dumps(nested_dict).encode('utf-8').encode('base64'))
+    """
+    #helm 을 통해서 전달 받은 pod내부에서 디코딩하는 Code
+    """
+    Origin data Convert Code
+
+    try:
+        res = base64.b64decode(params).decode("utf-8")
+        ~~~~~
+    except:
+        ~~~~
+
+    """
+    try:
+        result=""
+        result = base64.b64encode(params.encode('utf-8')).decode('utf-8')
+        return result
+    except:
+        return False
+
+def get_flightbase_db_env():
+    try:
+        res={
+            "JF_DB_CHARSET" : settings.JF_DB_CHARSET,
+            "JF_DUMMY_DB_NAME" : settings.JF_DUMMY_DB_NAME,
+            "JF_DB_NAME" : settings.JF_DB_NAME,
+            "JF_DB_PW" : settings.JF_DB_PW,
+            "JF_DB_USER" : settings.JF_DB_USER,
+            "JF_DB_UNIX_SOCKET" : settings.JF_DB_UNIX_SOCKET,
+            "JF_DB_PORT" : settings.JF_DB_PORT,
+            "JF_DB_HOST" : settings.JF_DB_HOST
+        }
+        return res
+    except:
+        return False
+
+
+def convert_to_seconds(num : int, unit : str):
+    """
+    Convert a size and unit (e.g., 1, "hour") to seconds.
+
+    Args:
+        size (float or int): The numeric size.
+        unit (str): The unit of the time (e.g., "second", "minute", "hour", "day", "month").
+
+    Returns:
+        int: The size in seconds.
+
+    Raises:
+        ValueError: If the unit is not recognized.
+    """
+    # Define the conversion factors
+    units = {
+        "SECOND": 1,
+        "MINUTE": 60,
+        "HOUR": 3600,
+        "DAY": 86400,
+        "MONTH": 2592000  # Assuming 30 days in a month
+    }
+
+    unit = unit.upper()  # Ensure the unit is case-insensitive
+
+    if unit in units:
+        return int(num * units[unit])
+    else:
+        raise ValueError(f"Invalid unit: {unit}")
 
 def convert_unit_num(value : str, target_unit : str=None, return_num : bool=False):
     """
@@ -1673,7 +1207,7 @@ def convert_unit_num(value : str, target_unit : str=None, return_num : bool=Fals
         unit = re.sub(r'[0-9.]+', '', str(value))
         num = str(value).replace(unit, "")
 
-        # byte
+        # byte  
         if unit in dec_units.keys():
             byte = float(num) * (1000 ** dec_units[unit])
         else:
@@ -1716,7 +1250,7 @@ def convert_unit_list(value : list, target_unit : str=None, _sum : bool=False, _
 # def check_ngc_version():
 #     """
 #     Description: ngc launcher binary 현재 사용중인 버전이 최신버전인지 체크
-
+    
 #     Returns:
 #         dict:
 #             최신 버전인 경우, {"result" : True, "version" : current_version}
@@ -1762,10 +1296,10 @@ def execute_command_terminmal(command, std_callback=None, **kwargs):
 
     cmd = command.split()[0]
     option = command.split()[1:]
-
+    
     def _process_output(line):
         std_callback(std_out=line.strip(), **kwargs)
-
+        
     def _process_error(line):
         std_callback(std_err=line.strip(), **kwargs)
 
@@ -1775,7 +1309,7 @@ def check_func_running_time(f):
     @functools.wraps(f)
     def wrap(*args, **kwargs):
         start_r = time.perf_counter()
-        start_p = time.process_time()
+        start_p = time.process_time()   
         # 함수 실행
         ret = f(*args, **kwargs)
         end_r = time.perf_counter()
@@ -1786,8 +1320,6 @@ def check_func_running_time(f):
         print(f'{f.__name__} elapsed: {elapsed_r:.6f}sec (real) / {elapsed_p:.6f}sec (cpu)')
         return ret
     return wrap
-
-
 
 async def get_gpu_cluster_info(instance_id : int, redis_client = None) -> dict:
     from utils.msa_db import db_node
@@ -1845,7 +1377,7 @@ def get_gpu_cluster_info_sync(instance_id : int, redis_client = None) -> dict:
 
 
 async def get_auto_gpu_cluster(redis_client, instance_id : int, gpu_count: int, gpu_cluster_info : dict = {}):
-
+    
     if gpu_cluster_info:
         data = gpu_cluster_info
     else:
@@ -1863,35 +1395,35 @@ async def get_auto_gpu_cluster(redis_client, instance_id : int, gpu_count: int, 
         gpus_per_node[node] =  len(gpus)
         available_gpus_per_node[node] = sum(1 for gpu in gpus if gpu['used'] == 0)
         max_gpu = max(len(gpus),max_gpu)
-
+    
     real_divisors = [] # 실제 요청될 수 있는 pod별 gpu개수의 경우의 수
     for divisor in divisors:
-        if max_gpu < divisor: # 가용할 수 있는 gpu
+        if max_gpu < divisor: # 가용할 수 있는 gpu 
             continue
-        pod_count = global_gpu_count // divisor # 가상의 개수
-        real_pod_count = 0 # 실제로 뜰 수 있는 pod 개수
+        pod_count = global_gpu_count // divisor # 가상의 개수 
+        real_pod_count = 0 # 실제로 뜰 수 있는 pod 개수 
         for node, gpu_count in gpus_per_node.items():
             if gpu_count < divisor:
                 continue
             real_pod_count += gpu_count // divisor
-
+            
         if real_pod_count < pod_count:
             continue
         real_divisors.append(divisor)
     result = []
     for real_divisor in real_divisors:
-        pod_count = global_gpu_count // real_divisor # 가상의 개수
-        real_pod_count = 0 # 실제로 뜰 수 있는 pod 개수
+        pod_count = global_gpu_count // real_divisor # 가상의 개수 
+        real_pod_count = 0 # 실제로 뜰 수 있는 pod 개수 
         for node, gpu_count in available_gpus_per_node.items():
             if gpu_count < real_divisor:
                 continue
             real_pod_count += gpu_count // real_divisor
-
+            
         if real_pod_count < pod_count:
             result.append({"gpu_count" : real_divisor, "server" : pod_count, "status" : False})
         else:
             result.append({"gpu_count" : real_divisor, "server" : pod_count, "status" : True})
-
+    
     return result
 
 def make_nested_dict():
@@ -1902,223 +1434,6 @@ def defaultdict_to_dict(d):
         return {k: defaultdict_to_dict(v) for k, v in d.items()}
     else:
         return d
-
-def get_optimal_gpus(data, num_gpus):
-    nodes = defaultdict(list)
-    for item in data:
-        nodes[item["node_name"]].append(item["gpu_uuid"])
-
-    # 노드를 내림차순으로 정렬하는 GPU 수를 기준으로 노드 정렬
-    sorted_nodes = sorted(nodes.items(), key=lambda x: len(x[1]), reverse=True)
-
-    result = []
-    remaining_gpus = num_gpus
-
-    for node, gpus in sorted_nodes:
-        if remaining_gpus <= 0:
-            break
-
-        # 노드에 요청을 수행할 수 있는 충분한 GPU가 있으면 필요한 것만 가져갑니다
-        if len(gpus) >= remaining_gpus:
-            result.extend([{"node_name": node, "gpu_uuid": gpu} for gpu in gpus[:remaining_gpus]])
-            remaining_gpus = 0
-        else:
-            # 그렇지 않으면 이 노드에서 모든 GPU를 가져가고 다음 노드로 계속 이동합니다
-            result.extend([{"node_name": node, "gpu_uuid": gpu} for gpu in gpus])
-            remaining_gpus -= len(gpus)
-
-    return result
-
-
-def gpu_clustering(gpus : List[dict]):
-    """
-    요청된 node 별 gpu 개수에 따라 최대공약수로 pod 별 할당 gpu 계산
-    """
-    # 노드를 기준으로 데이터를 그룹화
-    grouped_data = defaultdict(list)
-    for item in gpus:
-        grouped_data[item["node_name"]].append(item["gpu_uuid"])
-
-    # 노드별 GPU UUID 개수를 셈
-    node_counts = {node: len(uuids) for node, uuids in grouped_data.items()}
-
-    # 최대 공약수를 계산하는 함수
-    def gcd(a, b):
-        while b:
-            a, b = b, a % b
-        return a
-
-    # 여러 숫자의 최대 공약수를 계산하는 함수
-    def gcd_multiple(numbers):
-        return reduce(gcd, numbers)
-
-    # 노드별 GPU UUID 개수 리스트
-    counts = list(node_counts.values())
-
-    # 최대 공약수 계산
-    max_gcd = gcd_multiple(counts)
-
-    # 최대 공약수에 맞춰 GPU UUID를 분리
-    result = []
-    for node, uuids in grouped_data.items():
-        chunks = [uuids[i:i + max_gcd] for i in range(0, len(uuids), max_gcd)]
-        for chunk in chunks:
-            result.append({"node_name": node, "gpu_uuids": chunk})
-    return result
-
-def list_files_in_directory(directory_path):
-    """
-    Given a directory path, this function returns a list of all the files in the directory.
-    :param directory_path: The path to the directory
-    :return: A list of file names in the directory
-    """
-    try:
-        # List all files and directories in the specified path
-        file_list = []
-        with os.scandir(directory_path) as entries:
-            for entry in entries:
-                if entry.is_file():
-                    file_list.append(entry.name)
-        return file_list
-    except FileNotFoundError:
-        print(f"The directory {directory_path} does not exist.")
-        return []
-    except PermissionError:
-        print(f"Permission denied to access the directory {directory_path}.")
-        return []
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        return []
-
-def get_gpu_auto_select(redis_client, gpu_count : int, pod_count : int, instance_id : int):
-    data = get_gpu_cluster_info_sync(instance_id=instance_id, redis_client=redis_client)
-    # print(data, file=sys.stderr)
-    # 결과를 저장할 리스트
-    result = []
-
-    # 가능한 GPU 목록을 만들기
-    available_gpus = {}
-    for node, gpus in data.items():
-        available_gpus[node] = [gpu for gpu in gpus if gpu["used"]==0]
-
-    # 필요한 GPU의 총 수
-    total_required_gpus = pod_count * gpu_count
-
-    # 사용할 수 있는 GPU가 충분한지 확인
-    allocated_gpus = 0
-    for node, gpus in available_gpus.items():
-        while len(gpus) >= gpu_count and allocated_gpus < total_required_gpus:
-            for i in range(gpu_count):
-                result.append({
-                    "node_name": node,
-                    "gpu_uuid": gpus[i]['gpu_uuid']
-                })
-            gpus = gpus[gpu_count:]
-            allocated_gpus += gpu_count
-
-        if allocated_gpus >= total_required_gpus:
-            break
-
-    if allocated_gpus < total_required_gpus:
-        raise ValueError("사용 가능한 GPU가 충분하지 않습니다.")
-
-    return result
-
-def get_gpu_auto_select_new(gpu_count: int, pod_count: int, gpu_data: list):
-    # 결과를 저장할 리스트
-    result = []
-
-    # GPU를 노드 이름별로 그룹화
-    available_gpus = {}
-    for gpu_info in gpu_data:
-        node_name = gpu_info['node_name']
-        gpu_uuid = gpu_info['gpu_uuid']
-        if node_name not in available_gpus:
-            available_gpus[node_name] = []
-        available_gpus[node_name].append(gpu_uuid)
-
-    # 필요한 GPU의 총 수
-    total_required_gpus = pod_count * gpu_count
-
-    # 사용할 수 있는 GPU를 할당
-    allocated_gpus = 0
-    for node_name, gpus in available_gpus.items():
-        if len(gpus) < gpu_count: # 해당 노드에 pod에 같이 할당 할 수 있는 gpu 개수가 부족할 경우 pass
-            continue
-        while allocated_gpus < total_required_gpus and gpus:
-            for _ in range(gpu_count):
-                if gpus and allocated_gpus < total_required_gpus:
-                    result.append({'node_name': node_name, 'gpu_uuid': gpus.pop(0)})
-                    allocated_gpus += 1
-
-        # 필요한 GPU의 수에 도달하면 루프 종료
-        if allocated_gpus >= total_required_gpus:
-            break
-
-    # 필요한 GPU가 충분하지 않은 경우 예외 발생
-    if allocated_gpus < total_required_gpus:
-        return []
-
-    return result
-
-
-def get_ttl_hash(seconds=3600):
-    """Calculate hash value for TTL caching.
-    Args:        seconds (int, optional): Expiration time in seconds. Defaults to 3600.
-    Returns:
-        int: Hash value.
-    """
-    utime = datetime.now().timestamp()
-    return round(utime / (seconds + 1))
-
-def ttl_cache(ttl_seconds=3600, use_cache=True):
-
-    """A decorator for TTL cache functionality.
-
-    Adds `use_cache` argument to functions, enabling toggle of caching.
-
-    Args:
-        ttl_seconds (int, optional): Expiration time in seconds. Defaults to 3600.
-
-        use_cache (bool, optional): Whether caching is enabled by default. Defaults to True.
-
-    """
-    def ttl_cache_deco(func):
-        """Accepts a function and returns a version of it with TTL cache functionality."""
-        # Create a function with cache functionality and add dummy argument
-        @lru_cache(maxsize=None)
-        def cached_dummy_func(*args, ttl_dummy, **kwargs):
-            del ttl_dummy
-            return func(*args, **kwargs)
-
-        # Create a function that automatically calculates hash value and inputs it to the dummy argument
-        @wraps(func)
-
-        def ttl_cached_func(*args, use_cache=use_cache, **kwargs):
-
-            if not use_cache:
-
-                ttl_cached_func.cache_offset += 1
-
-            hash = get_ttl_hash(ttl_seconds) + ttl_cached_func.cache_offset
-
-            return cached_dummy_func(*args, ttl_dummy=hash, **kwargs)
-
-
-        ttl_cached_func.cache_offset = 0
-
-
-        return ttl_cached_func
-    return ttl_cache_deco
-
-
-# async def post_request(url, data):
-#     async with aiohttp.ClientSession() as session:
-#         async with session.post(url, json=data) as response:
-#             # 응답을 JSON으로 파싱합니다.
-#             response_data = await response.json()
-#             # print(response_data)
-#             return response_data
 
 async def post_request(url, data):
     try:
@@ -2164,3 +1479,122 @@ def post_request_sync(url, data):
         # 그 외 다른 예외들
         print(f"An unexpected error occurred: {e}")
         return None
+
+
+def sanitize_filename(filename: str) -> str:
+    """
+    정규 표현식을 사용하여 ?*<>#$%&()/"|\ 및 공백을 _ 로 대체
+    """
+    sanitized = re.sub(r'[?*<>#$%&()/"|\s]', '_', filename)
+    return sanitized
+
+
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from utils import PATH
+from itertools import islice
+
+async def get_files_streaming(
+    base_path: str,
+    file_extension: list = [],
+    ignore_folders: list = [],
+    search_index: int = 1,
+    search_count: int = 100,
+    replace_file_path: str = TYPE.PROJECT_TYPE
+):
+    loop = asyncio.get_running_loop()
+
+    def filter_files(search_index):
+        count = 0
+        for index, path in islice(enumerate(Path(base_path).rglob('*')), search_index, None):
+            search_index -= 1
+            if index != 0 and index == search_index:  # search_index보다 작은 경우 건너뜀
+                continue
+            if any(ignored in str(path) for ignored in ignore_folders):
+                continue
+            if path.is_file():
+                if file_extension and path.suffix.lstrip('.') not in file_extension:
+                    continue
+                if count >= search_count:  # search_count만큼만 반환
+                    break
+                count += 1
+                yield index, path  # 인덱스와 파일 경로 반환
+
+    with ThreadPoolExecutor() as pool:
+        for index, path in await loop.run_in_executor(pool, lambda: filter_files(search_index)):
+            if replace_file_path == TYPE.PROJECT_TYPE:
+                file_path = str(path).replace(base_path, PATH.JF_PROJECT_BASE_HOME_POD_PATH)
+            elif replace_file_path == TYPE.PREPROCESSING_TYPE:
+                file_path = str(path).replace(base_path, PATH.JF_PREPROCESSING_BASE_HOME_POD_PATH)
+            else:
+                file_path = str(path)
+
+            data = {
+                "file_path": file_path,
+                "index": index + 1
+            }
+
+            yield f"data: {json.dumps(data)}\n\n"  # 스트리밍 즉시 반환
+
+
+# TODO
+# 해당 함수 삭제 예정
+async def get_files(base_path, file_extension, ignore_folders, is_full_path=False, replace_file_path = TYPE.PROJECT_TYPE):
+    run_code_list = []
+    file_list = []
+    loop = asyncio.get_running_loop()
+
+    def filter_files():
+        files = []
+        for path in Path(base_path).rglob('*'):
+            if any(ignored in str(path) for ignored in ignore_folders):
+                continue
+            if path.is_file():
+                files.append(path)
+        return files
+
+    with ThreadPoolExecutor() as pool:
+        files = await loop.run_in_executor(pool, filter_files)
+        
+        for path in files:
+            # if not is_full_path:
+            if replace_file_path == TYPE.PROJECT_TYPE:
+                file_path = str(path).replace(base_path, PATH.JF_PROJECT_BASE_HOME_POD_PATH)
+            elif replace_file_path == TYPE.PREPROCESSING_TYPE:
+                file_path = str(path).replace(base_path, PATH.JF_PREPROCESSING_BASE_HOME_POD_PATH)
+                
+            if path.suffix.lstrip('.') in file_extension:
+                run_code_list.append(file_path)
+            else:
+                file_list.append(file_path)
+    
+    return run_code_list, file_list
+
+
+
+def escape_special_chars(command):
+    # 특수 기호 목록
+    special_chars = ['(', ')', '"', '\'', '&', '|', ';', '<', '>', '$', '`', '\\', ","]
+
+    # 특수 기호 앞에 \를 붙여주는 함수
+    def escape_char(match):
+        return '\\' + match.group(0)
+
+    # 정규식을 사용하여 특수 기호를 찾아 이스케이프 처리
+    escaped_command = re.sub(r'([{}])'.format(''.join(re.escape(c) for c in special_chars)), escape_char, command)
+    return escaped_command
+
+
+def calculate_elapsed_time(start_time: str, end_time: str, time_format: str = TYPE.TIME_DATE_FORMAT) -> int:
+    """
+    주어진 시작 시간과 종료 시간의 차이를 초 단위로 반환하는 함수.
+
+    :param start_time: 시작 시간 (예: "2025-02-02 23:07:08")
+    :param end_time: 종료 시간 (예: "2025-02-02 23:26:08")
+    :param time_format: 시간 형식 (기본값: "%Y-%m-%d %H:%M:%S")
+    :return: 경과 시간 (초)
+    """
+    start = datetime.strptime(start_time, time_format)
+    end = datetime.strptime(end_time, time_format)
+    elapsed_time = (end - start).total_seconds()
+    return int(elapsed_time)

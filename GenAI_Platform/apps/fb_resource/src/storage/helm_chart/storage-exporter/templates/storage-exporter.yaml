@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.name }}-storage-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: storage-exporter
+  template:
+    metadata:
+      labels:
+        app: storage-exporter
+    spec:
+      nodeSelector:
+        node-role.kubernetes.io/manage: ""
+      containers:
+      - name: storage-exporter
+        image: {{ .Values.registry }}jfb-system/storage-exporter:0.3.1
+        command: ["sh", "-c", "python3 /storage/storage-metric.py"]
+        # args: [] # while true; do sleep 30; done; python3 /storage/storage-metric.py
+        env:
+        {{- range $key, $val := .Values.env }}
+        - name: {{ $key }}
+          value: {{ $val | quote }}
+        {{- end}}
+        ports:
+        - containerPort: 8000
+        envFrom:
+        - configMapRef:
+            name: jfb-settings
+        volumeMounts:
+        {{- if eq .Values.type "nfs" }}
+        - name: nfs-data
+          mountPath: /jf-data
+        {{- end }}
+        {{- if eq .Values.type "local" }}
+        - name: hostpath-data
+          mountPath: /jf-data
+        {{- end }}
+      volumes:
+      {{- if eq .Values.type "nfs" }}
+      - name: nfs-data
+        nfs:
+          server: {{ .Values.server }}
+          path: {{ .Values.mountpoint }}
+      {{- end }}
+      {{- if eq .Values.type "local" }}
+      - name: hostpath-data
+        hostPath:
+          path: {{ .Values.mountpoint }}
+      {{- end }}

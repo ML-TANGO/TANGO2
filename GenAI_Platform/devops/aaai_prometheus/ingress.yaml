@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  generation: 1
+  name: monitoring-ingress
+spec:
+  ingressClassName: jonathan-kong
+  rules:
+  - http:
+      paths: 
+      ################# MONITORING ##################
+      - backend:
+          service:
+            name: monitoring-kube-prometheus-prometheus
+            port:
+              number: 9090
+        path: /prometheus/(.*)
+        pathType: Prefix
+
+      - backend:
+          service:
+            name: monitoring-grafana
+            port:
+              number: 80
+        path: /grafana/(.*)
+        pathType: Prefix
