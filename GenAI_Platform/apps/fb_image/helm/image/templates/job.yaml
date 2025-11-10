@@ -32,7 +32,11 @@ spec:
             add: ["ALL"]  # 필요한 capabilities 추가
           runAsUser: 0
           runAsGroup: 0
-        command: ['/bin/bash', '-c', {{ include "command" . }}]
+        command: 
+          - /bin/sh
+          - -c
+          - |
+            {{- include "command" . | nindent 14 }}
         volumeMounts:
         {{- include "volumeMounts.containerRuntime" . | nindent 8}}
         {{- include "volumeMounts.imageData" . | nindent 8}}

@@ -1,0 +1,18 @@
+{{- if .Values.global.jfb.cert.enabled }}
+apiVersion: configuration.konghq.com/v1
+kind: KongClusterPlugin
+metadata:
+  name: acme-kong-plugin
+  annotations:
+    kubernetes.io/ingress.class: {{ template "kong.namespace" . }}
+  labels:
+    global: "true"
+config:
+  account_email: aaai@acryl.ai
+  tos_accepted: true
+  api_uri: "https://acme-v02.api.letsencrypt.org/directory"
+  storage: kong
+  domains:
+  - {{ .Values.global.jfb.cert.domain | quote }}
+plugin: acme
+{{- end }}

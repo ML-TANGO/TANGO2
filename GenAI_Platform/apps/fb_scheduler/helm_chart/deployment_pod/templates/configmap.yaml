@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.metadata.name.podName }}-nginx-cm
+  namespace: {{ include "namespace" . }}
+data:
+  nginx.conf: |-
+  {{ .Files.Get "nginx/nginx.conf" | nindent 4 }}
+  api.conf: |-
+  {{ .Files.Get "nginx/api.conf" | nindent 4 }}
+
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.metadata.name.podName }}-log-cm
+  namespace: {{ include "namespace" . }}
+data:
+  deployment_api_deco.py: |-
+  {{ .Files.Get "deployment_log/deployment_api_deco.py" | nindent 4 }}
+  history.py: |-
+  {{ .Files.Get "deployment_log/history.py" | nindent 4 }}
+  built_in_model_download.py: |-
+  {{ .Files.Get "deployment_log/built_in_model_download.py" | nindent 4 }}
+  collect.py: |-
+  {{ .Files.Get "deployment_log/collect.py" | nindent 4 }}

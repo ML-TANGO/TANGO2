@@ -571,7 +571,7 @@ dummy_user_history = [
                     "workspace": "acryl-workspace"
                 },
             ]
-
+                
 dummy_user_training_items =  [{
                 "count" : {
                     "done": 1, "pending": 0, "running": 0, "total": 1
@@ -1220,7 +1220,7 @@ resource_dummy_dict={
         "used_storage_data" : 0,
         "total_storage_data" : 0,
     }
-
+    
 }
 
 dummy_user_resource_timeline = {
@@ -1238,13 +1238,16 @@ dummy_user_storage = {
                 "used": 0,
                 "avail" : 0,
                 "usage" : 0,
-                "project_list" : []
+                "project_list" : [],
+                "allm_list" : [],
+                "allm_usage" : 0,
+                "fb_usage" : 0
                 },
             "data_storage" : {
                 "total": 0,
                 "used": 0,
                 "avail" : 0,
-                "usage" : 0,
+                "usage" : 0, 
                 "dataset_list" :[]
                 }
 }

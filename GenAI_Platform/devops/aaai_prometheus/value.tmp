@@ -1,0 +1,99 @@
+prometheus:
+  prometheusSpec:
+    podMonitorSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    serviceMonitorSelectorNilUsesHelmValues: false
+    routePrefix: "/prometheus"
+    scrapeInterval: "1s"
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: <storageclass-name>
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 100Gi
+        #additionalScrapeConfigs:
+    additionalServiceMonitors:
+      - name: storage-metric
+        selector:
+          matchLabels:
+            app: storage-exporter
+        endpoints:
+          - port: metrics
+            path: /metric
+      - name: dcgm-metric
+        selector:                
+          matchLabels:
+            app.kubernetes.io/name: dcgm-exporter
+        endpoints:
+          - port: <dcgm-metric-port>
+            path: /metric
+      - name: cis-http-metrics
+        selector:
+          matchLabels:
+            team: rook
+        endpoints:
+          - port: <cis-metric-port>
+            path: /metrics
+      - name: rook-ceph-metric
+        selector:
+          matchLabels:
+            team: rook
+        endpoints:
+          - port: <rook-ceph-metric-port>
+            path: /metrics
+            #atchLabels:
+            #eam: rook
+
+kubeControllerManager:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
+
+prometheus-node-exporter:
+  extraArgs:
+    - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+|var/lib/kubelet/.+)($|/)
+    - --collector.filesystem.fs-types-exclude=^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$
+    - --collector.cpu.info
+
+kube-state-metrics:
+  metricLabelsAllowlist:
+    - pods=[*]
+    - persistentvolumeclaims=[jfb,workspaceName]
+
+
+grafana:
+    #service:
+      #type: NodePort
+      #nodePort: 31000
+      #portName: http-web
+  grafana.ini:
+    server:
+      root_url: "/grafana"
+      serve_from_sub_path: true
+  persistence:
+    enabled: true
+    size: 100Gi
+    storageClassName: <storageclass-name>
+  adminUser: "acryl"
+  adminPassword: "acryl1234"
+
+  altermanager:
+  altermanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: <storageclass-name>
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 100Gi
+        selector: {}
+
+

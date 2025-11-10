@@ -7,7 +7,7 @@ def create_workspace(self, username, workspace):
         workspace (str): The workspace created.
     """
     self.usage(data={"user": username, "workspace": workspace, "task": "workspace", "action": "create"})
-
+    
 # def delete_workspace(self, username, workspace):
 #     """
 #     Logs a workspace deletion event.

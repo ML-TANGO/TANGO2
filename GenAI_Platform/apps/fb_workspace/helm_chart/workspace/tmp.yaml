@@ -1,0 +1,23 @@
+USER-SUPPLIED VALUES:
+quota:
+  cpu: "16000.0"
+  gpu: "0.0"
+  memory: "40.0"
+system:
+  imagePullSecrets:
+    enabled: false
+  namespace: jonathan-system
+  registry: registry.jonathan.acryl.ai/
+volume:
+  jfBin:
+    path: /storage/jonathan-storage/jf-bin
+    server: 192.168.0.35
+    type: nfs
+  jfData:
+    path: /storage/jonathan-storage/jf-data
+    server: 192.168.0.35
+    type: nfs
+workspace:
+  id: 9
+  name: ACRYL-Workspace
+  namespace: ACRYL-Workspace

@@ -13,15 +13,15 @@ GPU_MODEL="""GPU MODEL DEFINE
 
 NODE_MODE="""Node Mode ((0) Single, (1) Multiple)"""
 
-NODE_NAME="""
-    gpu_model_status/cpu_model_status 에서 선택 한 아이템들의 node_name을 cpu/ram 제한 값과 함께 담음
-    ex) {{"jf-node-02": {{ "{CPU_CORES_PER_GPU}": 1, "{MEMORY_PER_GPU}" : 1, "{CPU_CORES_PER_POD}" : 1, "{MEMORY_PER_POD}" : 1}} }}
-""".format(
-    CPU_CORES_PER_GPU=NODE_CPU_LIMIT_PER_GPU_DB_KEY,
-    MEMORY_PER_GPU=NODE_MEMORY_LIMIT_PER_GPU_DB_KEY,
-    CPU_CORES_PER_POD=NODE_CPU_LIMIT_PER_POD_DB_KEY,
-    MEMORY_PER_POD=NODE_MEMORY_LIMIT_PER_POD_DB_KEY
-)
+# NODE_NAME="""
+#     gpu_model_status/cpu_model_status 에서 선택 한 아이템들의 node_name을 cpu/ram 제한 값과 함께 담음
+#     ex) {{"jf-node-02": {{ "{CPU_CORES_PER_GPU}": 1, "{MEMORY_PER_GPU}" : 1, "{CPU_CORES_PER_POD}" : 1, "{MEMORY_PER_POD}" : 1}} }}
+# """.format(
+#     CPU_CORES_PER_GPU=NODE_CPU_LIMIT_PER_GPU_DB_KEY,
+#     MEMORY_PER_GPU=NODE_MEMORY_LIMIT_PER_GPU_DB_KEY,
+#     CPU_CORES_PER_POD=NODE_CPU_LIMIT_PER_POD_DB_KEY,
+#     MEMORY_PER_POD=NODE_MEMORY_LIMIT_PER_POD_DB_KEY
+# )
 
 
 JOBS="""JOBS
@@ -40,7 +40,7 @@ JOBS="""JOBS
     }
 """.replace("@GPU_MODEL_EX", GPU_MODEL_EX)
 
-HPS_OPTION="""HPS OPTION
+HPS_OPTION="""HPS OPTION 
 {
     gpu_acceleration : 0, (True | False)
     unified_memory: 0,

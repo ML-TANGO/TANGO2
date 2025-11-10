@@ -4,6 +4,7 @@ common:
   imageId:
   imageName:
   systemRegistryUrl:
+  userRegistryUrl:
   systemNamespace:
   systemAppImage:
   systemContainerRuntime:

@@ -1,0 +1,72 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: prometheus-local-pv
+spec:
+  capacity:
+    storage: 130Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: {{ .Values.StorageClassName }}
+  local:
+    path: {{ .Values.path }}/prometheus  # 노드의 로컬 디렉토리 경로
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: {{ .Values.nodeAffinity.key }}
+              operator: In
+              values:
+                - {{ .Values.nodeAffinity.values }}  # PV가 속할 노드 이름
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: alertmanager-local-pv
+spec:
+  capacity:
+    storage: 30Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: {{ .Values.StorageClassName }}
+  local:
+    path: {{ .Values.path }}/alertmanager  # 노드의 로컬 디렉토리 경로
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: {{ .Values.nodeAffinity.key }}
+              operator: In
+              values:
+                - {{ .Values.nodeAffinity.values }}  # PV가 속할 노드 이름
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: grafana-local-pv
+spec:
+  capacity:
+    storage: 20Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: {{ .Values.StorageClassName }}
+  local:
+    path: {{ .Values.path }}/grafana  # 노드의 로컬 디렉토리 경로
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: {{ .Values.nodeAffinity.key }}
+              operator: In
+              values:
+                - {{ .Values.nodeAffinity.values }}  # PV가 속할 노드 이름
+
+

@@ -1,36 +1,41 @@
 from fastapi import APIRouter, Depends, Request, Path
 from user import service as svc
 from user import service_group as svc_group
-from user import service_limit as svc_limit
+# from user import service_limit as svc_limit
 
 from user import model
-from utils.resource import CustomResource, token_checker, response
+from utils.resource import response, get_auth, get_user_id
 
 users = APIRouter(
     prefix = "/users"
 )
 
-from fastapi.responses import JSONResponse
 @users.get("/healthz")
 async def healthz():
-    return JSONResponse(status_code=200, content={"status": "healthy"})
+    return response(status_code=200, result={"status": "healthy"})
+
+
+@users.get("/login-check")
+async def login_check():
+    user_id = get_user_id()
+    if user_id is None:
+        return response(status=0, message="User Not Found")
+    else:
+        return response(status=1, message="User Found", result={"user_id": user_id})
 
 @users.get("/option")
-@token_checker
-async def get_user_option():
-    cr = CustomResource()
-    res = svc.user_option(headers_user=cr.check_user())
+async def get_user_option():  
+    user_name, _ = get_auth()
+    res = svc.user_option(headers_user=user_name)
     return res
 
 @users.get("/group/option", tags=["users/group"])
-@token_checker
 async def get_usergroup_option():
-    cr = CustomResource()
-    res = svc_group.usergroup_option(headers_user=cr.check_user())
+    user_name, _ = get_auth()
+    res = svc_group.usergroup_option(headers_user=user_name)
     return res
 
 @users.get("")
-@token_checker
 async def get_users():
 # async def get_users(args: model.UserGetModel = Depends()):
     # search_key = args.search_key
@@ -42,7 +47,6 @@ async def get_users():
     return res
 
 @users.post("")
-@token_checker
 async def create_users(args: model.UserCreateModel):
 
     # workspaces_id = args.workspaces_id
@@ -57,20 +61,18 @@ async def create_users(args: model.UserCreateModel):
 
     # create_user_list = [{"new_user_name": new_user_name, "password": password, "workspaces_id": workspaces_id, "user_type": user_type, "usergroup_id": usergroup_id}]
 
-    cr = CustomResource()
-    flag, check_response = cr.is_root()
-    if flag == False:
+    user_name, _ = get_auth()
+    if user_name != "admin":
         return {"status": 0, "message":"Permission Error"}
-
+    
     res = svc.create_user_new(new_user_name=new_user_name, password=password, user_type=user_type,
                               email=email, job=job, nickname=nickname, team=team,
-                              usergroup_id=usergroup_id, headers_user=cr.check_user())
+                              usergroup_id=usergroup_id, headers_user=user_name)
     # usergroup_id ???
     # db.request_logging(self.check_user(), 'users', 'post', str(args), res['status'])
     return res
 
 @users.put("")
-@token_checker
 async def update_user(body: model.UserUpdateModel):
     select_user_id = body.select_user_id
     new_password = body.new_password
@@ -82,19 +84,18 @@ async def update_user(body: model.UserUpdateModel):
     nickname = body.nickname
     team = body.team
 
-    cr = CustomResource()
+    user_name, _ = get_auth()
     res = svc.update_user_new(select_user_id=select_user_id, new_password=new_password,
-                             usergroup_id=usergroup_id, headers_user=cr.check_user(),
+                             usergroup_id=usergroup_id, headers_user=user_name,
                              email=email, job=job, nickname=nickname, team=team)
 
     # db.request_logging(self.check_user(), 'users', 'put', str(args), res['status'])
     # update_user_list = [{"select_user_id": select_user_id, "new_password": new_password, "user_type": user_type, "workspaces_id": workspaces_id}]
     # response = update_user(update_user_list)
     return res
-
+    
 
 # @users.get("/workspaces", description="유저 Workspace List")
-# @token_checker
 # async def get_workspaces(user_id: int):
 #     res = svc.get_user_workspaces(user_id=user_id)
 #     # db.request_logging(self.check_user(), 'users/workspaces', 'get', str(args), res['status'])
@@ -102,19 +103,17 @@ async def update_user(body: model.UserUpdateModel):
 
 
 @users.put("/password", description="admin Password Update")
-@token_checker
 async def update_password(body: model.UserPasswordUpdateMode):
     password = body.password
     new_password = body.new_password
 
-    cr = CustomResource()
-    res = svc.update_user_password(password=password, new_password=new_password, headers_user=cr.check_user())
+    user_name, _ = get_auth()
+    res = svc.update_user_password(password=password, new_password=new_password, headers_user=user_name)
     return res
 
 # MSA 전환 주석 -> home ssh key 관련 사용 안하는 것으로 보임
 
 # @users.post("/recover-linux-user")
-# @token_checker
 # async def recoever_linux_user(body: model.UserRecoverLinuxModel):
 #     user_ids = body.user_ids.split(',')
 #     password = body.password
@@ -129,10 +128,10 @@ async def update_password(body: model.UserPasswordUpdateMode):
 # )
 
 @users.get("/group", tags=["users/group"])
-@token_checker
 async def get_usergroups():
-    cr = CustomResource()
-    if cr.is_admin_user():
+    
+    user_name, _ = get_auth()
+    if user_name == "admin":
         # res = svc_group.get_usergroup_list(page=page, size=size, search_key=search_key, search_value=search_value)
         res = svc_group.get_usergroup_list(page=None, size=None, search_key=None, search_value=None)
     else:
@@ -141,29 +140,27 @@ async def get_usergroups():
 
 
 @users.post("/group", tags=["users/group"])
-@token_checker
 async def create_usergroup(body: model.UserGroupCreateModel):
     usergroup_name = body.usergroup_name
     user_id_list = body.user_id_list
     description = body.description
 
-    cr = CustomResource()
-    if cr.is_admin_user():
+    user_name, _ = get_auth()
+    if user_name == "admin":
         res = svc_group.create_usergroup(usergroup_name=usergroup_name, user_id_list=user_id_list, description=description)
     else:
         res = response(status=0, message="Permisson Error")
     return res
 
 @users.put("/group", tags=["users/group"])
-@token_checker
 async def update_usergropus(body: model.UserGroupUpdateModel):
     usergroup_id = body.usergroup_id
     usergroup_name = body.usergroup_name
     user_id_list = body.user_id_list
     description = body.description
 
-    cr = CustomResource()
-    if cr.is_admin_user():
+    user_name, _ = get_auth()
+    if user_name == "admin":
         res = svc_group.update_usergroup(usergroup_id=usergroup_id, usergroup_name=usergroup_name, user_id_list=user_id_list, description=description)
     else:
         res = response(status=0, message="Permisson Error")
@@ -188,9 +185,8 @@ def put_user_register(body: model.UserRegisterConfirmModel):
         status: bool (승인 True, 거절 False)
         register_id: GET /api/users에서 register_id가 내려옴
     """
-    res = svc.approve_user_register(register_id=body.register_id, approve=body.approve)
+    res = svc.approve_user_register(register_id=body.register_id, approve=body.approve, usergroup_id=body.usergroup_id)
     return res
-
 
 # =============================================================================
 # users/limit
@@ -199,36 +195,32 @@ def put_user_register(body: model.UserRegisterConfirmModel):
 #     prefix = "/users/limit",
 # )
 
-@users.get("/limit/dataset", tags=["users/limit"])
-@token_checker
-async def check_user_dataset(workspace_id: int = None):
-    cr = CustomResource()
-    res = svc_limit._user_dataset_limit_check(user_id=cr.check_user_id(), workspace_id=workspace_id)
-    return res
+# @users.get("/limit/dataset", tags=["users/limit"])
+# async def check_user_dataset(workspace_id: int = None):
+#     cr = CustomResource()
+#     res = svc_limit._user_dataset_limit_check(user_id=user_id, workspace_id=workspace_id)
+#     return res
 
 
 # @users.get("/limit/deployment", tags=["users/limit"])
-# @token_checker
 # async def check_user_deployment(workspace_id: int = None):
 #     cr = CustomResource()
-#     res = svc_limit._user_deployment_limit_check(user_id=cr.check_user_id(), workspace_id=workspace_id)
+#     res = svc_limit._user_deployment_limit_check(user_id=user_id, workspace_id=workspace_id)
 #     return res
 
 
 # @users.get("/limit/training", tags=["users/limit"])
-# @token_checker
 # async def check_user_training(workspace_id: int = None):
 #     cr = CustomResource()
-#     res = svc_limit._user_training_limit_check(user_id=cr.check_user_id(), workspace_id=workspace_id)
+#     res = svc_limit._user_training_limit_check(user_id=user_id, workspace_id=workspace_id)
 #     return res
 
 
-@users.get("/limit/docker_image", tags=["users/limit"])
-@token_checker
-async def check_user_dockerimage(workspace_id: int = None):
-    cr = CustomResource()
-    res = svc_limit._user_docker_image_limit_check(user_id=cr.check_user_id())
-    return res
+# @users.get("/limit/docker_image", tags=["users/limit"])
+# async def check_user_dockerimage(workspace_id: int = None):
+#     cr = CustomResource()
+#     res = svc_limit._user_docker_image_limit_check(user_id=user_id)
+#     return res
 
 
 
@@ -238,10 +230,9 @@ async def check_user_dockerimage(workspace_id: int = None):
 # =============================================================================
 
 @users.get("/check/{user_name}")
-# @token_checker
 async def check_user_name(user_name):
     # cr = CustomResource()
-    # res = svc.check_user_name(user_name=user_name, headers_user=cr.check_user())
+    # res = svc.check_user_name(user_name=user_name, headers_user=user_name)
     res = svc.check_user_name(user_name=user_name)
     # db.request_logging(self.check_user(), 'users/check/'+str(user_name), 'get', None, res['status'])
     return res
@@ -249,16 +240,14 @@ async def check_user_name(user_name):
 
 # MSA user private key
 # @users.get("/getpk/{user_name}")
-# @token_checker
 # async def get_private_key_user(user_name):
 #   return send_file('/home/' + user_name +'/.ssh/' + user_name)
 
 
 @users.get("/group/{usergroup_id}", tags=["users/group"])
-@token_checker
 async def get_usergroup(usergroup_id: int):
-    cr = CustomResource()
-    if cr.is_admin_user():
+    user_name, _ = get_auth()
+    if user_name == "admin":
         res = svc_group.get_usergroup(usergroup_id=usergroup_id)
     else:
         res = response(status=0, message="Permisson Error")
@@ -266,20 +255,29 @@ async def get_usergroup(usergroup_id: int):
 
 
 @users.delete("/group/{id_list}", tags=["users/group"])
-@token_checker
 async def delete_usergroups(id_list: str):
     id_list = id_list.split(',')
-
-    cr = CustomResource()
-    if cr.is_admin_user():
+    
+    user_name, _ = get_auth()
+    if user_name == "admin":
         res = svc_group.delete_usergroup(usergroup_id_list=id_list)
     else:
         res = response(status=0, message="Permisson Error")
     return res
 
 
+@users.get('/register/{register_id}', tags=['user/register'])
+def get_user_register(register_id: int):
+    """
+    # Input
+        status: bool (승인 True, 거절 False)
+        register_id: GET /api/users에서 register_id가 내려옴
+    """
+    res = svc.get_user_register(register_id=register_id)
+    return res
+
+
 @users.get("/{user_id}", description="유저 ID 단순 조회")
-@token_checker
 async def get_user(user_id):
     res = svc.get_user(user_id=user_id)
     # db.request_logging(self.check_user(), 'users/'+str(user_id), 'get', None, res['status'])
@@ -287,15 +285,13 @@ async def get_user(user_id):
 
 
 @users.delete("/{id_list}")
-@token_checker
 async def delete_users(id_list):
     id_list = id_list.split(',')
 
-    cr = CustomResource()
-    flag, check_response = cr.is_root()
-    if flag == False:
+    user_name, _ = get_auth()
+    if user_name != "admin":
         return {"status": 0, "message":"Permission Error"}
-
-    res = svc.delete_users(id_list=id_list, headers_user=cr.check_user())
+    
+    res = svc.delete_users(id_list=id_list, headers_user=user_name)
     # db.request_logging(self.check_user(), 'users/'+str(id_list), 'delete', None, res['status'])
     return res

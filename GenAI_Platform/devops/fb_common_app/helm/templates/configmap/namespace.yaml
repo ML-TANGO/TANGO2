@@ -1,0 +1,7 @@
+{{- $namespace := printf "%s-image" .Values.global.jfb.namespace }}
+{{- if not (lookup "v1" "Namespace" "" $namespace) }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.global.jfb.namespace }}-image
+{{- end }}

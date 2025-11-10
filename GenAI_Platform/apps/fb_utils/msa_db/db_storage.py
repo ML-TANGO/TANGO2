@@ -1,4 +1,5 @@
 from utils.msa_db.db_base import get_db
+from utils.msa_db.db_base_async import select_query, commit_query, FetchType
 from typing import List
 from datetime import datetime
 import traceback
@@ -23,6 +24,25 @@ def get_storage(storage_id=None, name=None):
 
             cur.execute(sql)
             res = cur.fetchall()
+
+        return res
+    except Exception as e:
+        raise e
+    return res
+
+async def get_storage_async(storage_id=None, name=None):
+    res = None
+    try:
+        sql = """
+            SELECT s.*
+            FROM storage s
+            """
+        if storage_id is not None:
+            sql += f"WHERE s.id = {storage_id}"
+            res = await select_query(query=sql, fetch_type=FetchType.ONE)
+        if name is not None:
+            sql += f"where s.name = '{name}'"
+            res = await select_query(query=sql, fetch_type=FetchType.ONE)
 
         return res
     except Exception as e:

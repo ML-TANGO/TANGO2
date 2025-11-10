@@ -1,0 +1,15 @@
+system:
+  namespace:
+workspace:
+  name:
+  id:
+  namespace:
+  data_storage:
+    storageClassName:
+    requests:
+      storage:
+  main_storage:
+    storageClassName:
+    requests:
+      storage:
+  # pathPattern:

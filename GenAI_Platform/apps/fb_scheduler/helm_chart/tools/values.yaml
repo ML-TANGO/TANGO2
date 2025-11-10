@@ -1,0 +1,43 @@
+namespace:
+owner_name:
+ingress_class_name:
+pod_name:
+service:
+  svc_name:
+  port:
+  # 추가 서비스 포트 (vscode와 함께 사용할 때)
+  additional_port:
+pullSecrets:
+offlineMode:
+privateRepo:
+privatePip:
+nexusPrefix:
+labels:
+domain:
+tool_password:
+total_device_count:
+spec:
+  hostname:
+  restartPolicy:
+  cpu_instance_name: 
+  containers:
+    command:
+    env:
+    image:
+    resource:
+      limits:
+cluster:
+nexus: # 오프라인용
+  hostname: "nexus-nexus-repository-manager.jonathan-nexus.svc.cluster.local"
+  port: 8081
+dataset:
+  access: 1
+  name: ""
+rdma:
+  enabled:
+  mp:
+    enabled:
+    seed_num:
+    seed_list:
+  perf:
+    enabled:

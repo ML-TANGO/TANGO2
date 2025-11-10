@@ -1,5 +1,0 @@
-apiVersion: v1
-appVersion: "1.0"
-description: A Helm chart for Flightbase Backend
-name: flightBaseApp # setting/helm 폴더 run 실행시 name 파라미터로 입력 
-version: 0.1.0

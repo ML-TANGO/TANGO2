@@ -1,8 +1,0 @@
----
-- import_playbook: containerd.yml
-- import_playbook: haproxy.yml
-# - import_playbook: k8s_node.yaml
-- import_playbook: k8s_plugin.yaml
-- import_playbook: registry_create_ssl.yml
-- import_playbook: registry_setting_node.yml
-- import_playbook: registry_pod_start.yml

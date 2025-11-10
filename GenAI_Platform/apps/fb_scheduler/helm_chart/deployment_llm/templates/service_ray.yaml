@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "name.network" . }}--service-ray
+  namespace: {{ .Values.metadata.namespace.workspaceNamespace }}
+  # Kong Timeout Setting (in ms)
+  annotations:
+    konghq.com/connect-timeout: "1800000"
+    konghq.com/read-timeout: "1800000"
+    konghq.com/write-timeout: "1800000"
+  labels:
+    {{- include "labels.base" . | indent 4}}
+spec:
+  type: ClusterIP
+  selector:
+    ray: header # 첫번째 팟을 ray header로 설정
+    deployment_id: {{ toString .Values.deployment.deploymentId | quote }}
+  publishNotReadyAddresses: true # startupProbe 성공되기전에 probe 쓸수있도록
+  ports: 
+    - name: ray-port
+      port: 6379
+      targetPort: 6379

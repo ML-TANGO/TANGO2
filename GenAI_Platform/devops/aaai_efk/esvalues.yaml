@@ -1,13 +1,42 @@
 global:
   kibanaEnabled: true
   defaultStorageClass: "jonathan-efk-sc"
+#   imageRegistry: ""
+#   imagePullSecrets: []
+
+# image:
+#   registry: docker.io
+#   repository: bitnami/elasticsearch
+#   tag: 8.17.0-debian-12-r0
 
 extraEnvs:
   - name: "xpack.security.http.ssl.client_authentication"
     value: "none"
 
+#initScripts:
+#  create_damaged_translog.sh: |
+#    #!/bin/sh
+#    #sleep 1h
+#    #/opt/bitnami/elasticsearch/bin/elasticsearch-shard remove-corrupted-data
+
 volumePermissions:
   enabled: true
+  # image:
+  #   registry: docker.io
+  #   repository: bitnami/os-shell
+  #   tag: 12-debian-12-r34
+
+# sysctlImage:
+#   enabled: true
+#   registry: docker.io
+#   repository: bitnami/os-shell
+#   tag: 12-debian-12-r34
+
+# copyTlsCerts:
+#   image:
+#     registry: docker.io
+#     repository: bitnami/os-shell
+#     tag: 12-debian-12-r34
 
 security:
   enabled: true
@@ -27,62 +56,90 @@ kibana:
         enabled: true
         existingSecret: elasticsearch-coordinating-crt
         usePemCerts: true
-  nodeSelector:
-    acryl.ai/jonathan.manage: "true"
-  service:
-    type: NodePort
-
-master:
-  replicaCount: 2
+  #nodeSelector:
+  #  node-role.kubernetes.io/manage: ""
   resources: 
     limits:
       cpu: 3000m
-      memory: 4Gi
+      memory: 8Gi
     requests:
       cpu: 500m
       memory: 2Gi
-  nodeSelector:
-    acryl.ai/jonathan.manage: "true"
+  service:
+    type: NodePort
+  # ingress:
+  #   enabled: true
+  #   ingressClassName: "jonathan-kong"
+  #   hostname: "*"
+  #   pathType: "Prefix"
+  #   path: "/kibana(.*)"
+  # configuration:
+  #   server:
+  #     basePath: "/kibana"
+  #     rewriteBasePath: true
+  #     publicBaseUrl: "http://222.103.110.148:20443/kibana"
+
+master:
+  replicaCount: 1
+  resources: 
+    limits:
+      cpu: 4000m
+      memory: 5Gi
+    requests:
+      cpu: 3000m
+      memory: 4Gi
+  heapSize: 2048m
+  #nodeSelector:
+  #  node-role.kubernetes.io/manage: ""
   persistence:
     size: 50Gi
 
 data:
-  replicaCount: 2
+  replicaCount: 1
   resources: 
     limits:
-      cpu: 3000m
-      memory: 4Gi
+      cpu: 4000m
+      memory: 10Gi
     requests:
-      cpu: 1000m
-      memory: 2Gi
-  nodeSelector:
-    acryl.ai/jonathan.db: "true"
+      cpu: 3000m
+      memory: 8Gi
+  heapSize: 4096m
+  # nodeSelector:
+  #   node-role.kubernetes.io/db: ""
   persistence:
     size: 50Gi
 
 coordinating:
-  replicaCount: 2
+  replicaCount: 1
+  # autoscaling:
+  #   enabled: true
+  #   minReplicas: 2
+  #   maxReplicas: 7
+  #   targetMemory: "90"
   resources: 
     limits:
-      cpu: 1000m
-      memory: 1Gi
+      cpu: 2000m
+      memory: 3Gi
     requests:
-      cpu: 500m
-      memory: 500Mi
-  nodeSelector:
-    acryl.ai/jonathan.manage: "true"
+      cpu: 1000m
+      memory: 2Gi
+  ## Note: The recommended heapSize is half of the container's memory.
+  heapSize: 1024m
+  #nodeSelector:
+  #  node-role.kubernetes.io/manage: ""
 
 ingest:
-  replicaCount: 2
+  replicaCount: 1
   resources: 
     limits:
       cpu: 1000m
       memory: 1Gi
     requests:
       cpu: 500m
-      memory: 500Mi
-  nodeSelector:
-    acryl.ai/jonathan.manage: "true"
+      memory: 1Gi
+  heapSize: 512m
+  #nodeSelector:
+  #  node-role.kubernetes.io/manage: ""
 
 
         

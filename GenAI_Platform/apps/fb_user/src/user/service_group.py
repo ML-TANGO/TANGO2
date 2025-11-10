@@ -34,14 +34,14 @@ def usergroup_option(headers_user):
     try:
         if headers_user != settings.ADMIN_NAME:
             return response(status=0, message="permission denied")
-        group_user_id_list =  [ info["user_id"] for info in db_user.get_user_list_has_group()]
+        group_user_id_list =  [ info["user_id"] for info in db_user.get_user_list_has_group()] 
 
         user_list = [ { "name": user["name"] , "id" : user["id"] } for user in db_user.get_user_list() if user["name"] != settings.ADMIN_NAME and user["id"] not in group_user_id_list ]
 
         result = {
             "user_list" : user_list
         }
-
+        
         return response(status=1, result=result)
     except Exception as e:
         traceback.print_exc()
@@ -56,7 +56,7 @@ def check_if_non_existing_user_is_included(user_id_list):
     user_id_set = set(user_id_list)
     db_user_id_set = set(db_user_id_list)
 
-    non_existing_user_str_id_list = [str(id_) for id_ in sorted(user_id_set - db_user_id_set)]
+    non_existing_user_str_id_list = [str(id_) for id_ in sorted(user_id_set - db_user_id_set)]    
 
     return non_existing_user_str_id_list
 
@@ -65,7 +65,7 @@ def get_usergroup(usergroup_id):
         usergroup_info, message = db_user.get_usergroup(usergroup_id=usergroup_id)
         if usergroup_info is None:
             return response(status=0, message="Not found usergroup : {}".format(message))
-
+        
         group_user_list = []
         for i in range(len(usergroup_info["user_id_list"])):
             group_user_list.append({
@@ -78,7 +78,7 @@ def get_usergroup(usergroup_id):
             "description": usergroup_info["description"],
             "group_user_list": group_user_list
         }
-
+        
         return response(status=1, result=result)
     except:
         traceback.print_exc()
@@ -118,7 +118,7 @@ def create_usergroup(usergroup_name, user_id_list, description):
         insert_usergroup_result, message = db_user.insert_usergroup(usergroup_name=usergroup_name, description=description)
         if insert_usergroup_result == False:
             if "Duplicate entry" in str(message):
-                return response(status=0, message="Create usergroup Name [{}] Already Exists ".format(usergroup_name))
+                return response(status=0, message="Create usergroup Name [{}] Already Exists ".format(usergroup_name))    
             return response(status=0, message="Insert usergroup Error : {}".format(message))
 
         usergroup_info, message = db_user.get_usergroup(usergroup_name=usergroup_name)
@@ -136,7 +136,7 @@ def delete_usergroup(usergroup_id_list):
         delete_result, message = db_user.delete_usergroup_list(usergroup_id_list=usergroup_id_list)
         if delete_result == False:
             return response(status=0, message="Delete usergroup Error : {}".format(message))
-
+        
         return response(status=1, message="Deleted usergroup")
     except:
         traceback.print_exc()
@@ -156,7 +156,7 @@ def update_usergroup(usergroup_id, usergroup_name, user_id_list, description):
             duple_check, message = db_user.get_usergroup(usergroup_name=usergroup_name)
             if duple_check is not None:
                 return response(status=0, message="Usergroup Name [{}] already exists".format(usergroup_name)) # OK
-
+            
         update_result, message = db_user.update_usergroup(usergroup_id=usergroup_id, usergroup_name=usergroup_name, description=description)
         if update_result == False:
             return response(status=0, message="Update usergroup name Error : {}".format(message))
@@ -191,7 +191,7 @@ def update_usergroup(usergroup_id, usergroup_name, user_id_list, description):
 #         size = args["size"]
 #         search_key = args["search_key"]
 #         search_value = args["search_value"]
-
+        
 #         if self.is_admin_user():
 #             res = get_usergroup_list(page=page, size=size, search_key=search_key, search_value=search_value)
 #         else:
@@ -207,7 +207,7 @@ def update_usergroup(usergroup_id, usergroup_name, user_id_list, description):
 #         usergroup_name = args["usergroup_name"]
 #         user_id_list = args['user_id_list']
 #         description = args['description']
-
+    
 #         if self.is_admin_user():
 #             res = create_usergroup(usergroup_name=usergroup_name, user_id_list=user_id_list, description=description)
 #         else:
@@ -217,10 +217,10 @@ def update_usergroup(usergroup_id, usergroup_name, user_id_list, description):
 #     @token_checker
 #     @ns.param('id_list', 'id list')
 #     def delete(self, id_list):
-#         """USERGROUP DELETE"""
+#         """USERGROUP DELETE"""        
 
 #         id_list = id_list.split(',')
-
+        
 #         if self.is_admin_user():
 #             res = delete_usergroup(usergroup_id_list=id_list)
 #         else:
@@ -253,12 +253,12 @@ def update_usergroup(usergroup_id, usergroup_name, user_id_list, description):
 #     def __init__(self, workspace_id):
 #         self.workspace_id = workspace_id
 
-#     @token_checker
+#     @token_checker   
 #     def get(self, usergroup_id):
 #         """usergroup id 조회"""
-
+        
 #         if self.is_admin_user():
-#             res = get_usergroup(usergroup_id=usergroup_id)
+#             res = get_usergroup(usergroup_id=usergroup_id)        
 #         else:
 #             res = response(status=0, message="Permisson Error")
 

@@ -1,0 +1,43 @@
+namespace: jonathan-system
+
+service:
+  type: LoadBalancer          # NodePort, LoadBalancer
+  port: 30500
+  loadBalancerIP:         # type이 LoadBalancer일때만
+
+volume: # data volume
+  type: nfs
+  path: /storage/jf-storage/registry
+  server: 192.168.0.40
+
+auth:
+  enabled: false
+  env:
+    # auth: htpasswd, token, basic, none
+    registryAuth: htpasswd
+    registryAuthHtpasswdRealm: "Registry Authentication"
+    registryAuthHtpasswdPath: /auth/htpasswd
+    registryAuthTokenRealm:
+    registryAuthTokenService:
+    registryAuthTokenIssuer:
+    registryAuthBasicRealm:
+    registryAuthHtpasswdPathSubPath: htpasswd
+  configMap:
+    htpasswd:
+      name:
+
+tls:
+  enabled: false
+  env:
+    registryHttpAddr:
+    registryHttpTlsCertificate: /tls/registry.crt
+    registryHttpTlsKey: /tls/registry.key
+  volume:
+    registryHttpTlsCertificateSubPath: registry.crt
+    registryHttpTlsKeySubPath: registry.key
+  configMap:
+    cert:
+      name: tls-cert
+    key:
+      name: tls-key
+

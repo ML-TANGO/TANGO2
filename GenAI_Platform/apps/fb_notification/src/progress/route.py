@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 
-from utils.resource import CustomResource, token_checker, response
+from utils.resource import response, get_auth, get_user_id
 from utils.TYPE import *
 
 from fastapi.responses import StreamingResponse, JSONResponse
@@ -10,7 +10,7 @@ from typing import List, Dict
 from collections import deque
 from bson.objectid import ObjectId
 from utils.redis_key import SSE_PROGRESS
-from utils.redis import get_redis_client
+from utils.redis import get_redis_client_async
 from utils.common import format_size
 
 # from utils.mongodb import mongodb_conn, get_mongodb_conn
@@ -38,7 +38,7 @@ progress = APIRouter(
 
 # class NotificationDelete(BaseModel):
 #     notification_id : str
-
+    
 # bs = "kafka.kafka.svc.cluster.local:9092"
 # # Consumer 설정
 # conf = {
@@ -49,7 +49,7 @@ progress = APIRouter(
 
 # def collection_init():
 #     client = get_mongodb_conn()
-#     # KDN
+#     # KDN 
 #     msa_jfb = client[DATABASE]
 #     # kdn_db.create_collection(NOTIFICATION_COLLECTION, capped=True, max=10000)
 #     msa_jfb[NOTIFICATION_COLLECTION].create_index([("create_datetime", 1)], expireAfterSeconds=604800 ) # 86400 하루
@@ -61,7 +61,6 @@ progress = APIRouter(
 #         item["create_datetime"] = item["create_datetime"].isoformat()
 #     return item
 
-redis_client = get_redis_client()
 
 # async def get_healthz_chek( ):
 #     with mongodb_conn(database_name=DATABASE, collection_name=NOTIFICATION_COLLECTION) as collection:
@@ -77,14 +76,13 @@ redis_client = get_redis_client()
 @progress.get("/sse/{workspace_id}")
 async def sse_endpoint( request : Request,workspace_id):
     try:
-        cr = CustomResource()
-        user_id = cr.check_user_id()
-        user_name = cr.check_user()
+        user_name, _ = get_auth()
+        user_id = get_user_id()
         async def event_generator():
             # old_history = None
             # first_flag = True
             try:
-                global redis_client
+                redis_client = await get_redis_client_async()
                 # 연결 시점에 초기 데이터를 보냅니다.
                 # initial_history = await get_notification_history(user_id=user_info["id"])
                 # yield f"data: connection \n\n"
@@ -95,13 +93,13 @@ async def sse_endpoint( request : Request,workspace_id):
                     await asyncio.sleep(1)
                     if await request.is_disconnected():
                         break
-                    sse_info = redis_client.hgetall(SSE_PROGRESS.format(user_id=user_id))
+                    sse_info = await redis_client.hgetall(SSE_PROGRESS.format(user_id=user_id))
                     # print(sse_info)
                     if sse_info is not None:
                         # sse_info=json.loads(sse_info)
                         for sub_key, key in sse_info.items():
-                            upload_info = redis_client.hget(key, sub_key)
-
+                            upload_info = await redis_client.hget(key, sub_key)
+                            
                             if upload_info is not None:
                                 upload_info=json.loads(upload_info)
                                 print(type(upload_info['workspace_id']))
@@ -114,7 +112,7 @@ async def sse_endpoint( request : Request,workspace_id):
                                         upload_info['total_size'] = format_size(upload_info['total_size'])
                                     progress_info[upload_info['dataset_name']].append(upload_info)
 
-                    yield f"data: {progress_info}\n\n"
+                    yield f"data: {json.dumps(progress_info)}\n\n"
             except Exception as e:
                 # 예외 처리 및 로그 남기기
                 traceback.print_exc()
@@ -125,7 +123,7 @@ async def sse_endpoint( request : Request,workspace_id):
         return StreamingResponse(event_generator(), media_type="text/event-stream")
     except:
         traceback.print_exc()
-
+        
 
 
 # @notification.post("read")

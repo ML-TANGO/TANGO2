@@ -1,3 +1,4 @@
+{{/* 반드시 quote 사용!!!! value - string type만 가능!!!  bool, int 에러 */}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -15,15 +16,28 @@ data:
   JF_DB_ATTEMP_TO_CREATE: "true" # 소문자
   JF_DB_MAX_CONNECTIONS: '500'
   JF_DB_COLLATION: "utf8_general_ci"
-  REGISTRY_SVC_DNS: "jfb-registry-svc.jfb.svc.cluster.local"
-  REGISTRY_SVC_PORT: "5000"
-  DOCKER_REGISTRY_URL: {{ .Values.global.jfb.image.registry }}/  # Should be an empty string or finished with slash(`/')
-  DOCKER_REGISTRY_PROTOCOL: "http://"
+  JS_DB_HOST: {{ printf "%s.%s.svc.cluster.local" .Values.global.jfb.settings.db.svc ( .Values.global.jfb.settings.db.namespace | default .Values.global.jfb.namespace ) | quote }}
+  JS_DB_PORT: {{ .Values.global.jfb.settings.db.port | quote }}
+  JS_DB_UNIX_SOCKET: '/jf-src/master/conf/db/mysqld.sock'
+  JS_DB_USER: 'root'
+  JS_DB_PW: 'acryl4958@'
+  JS_DB_NAME: 'msa_jsb'
+  JS_DB_CHARSET: 'utf8'
+  JS_DB_DOCKER: 'JF-mariadb'
+  JS_DB_ATTEMP_TO_CREATE: "true" # 소문자
+  JS_DB_MAX_CONNECTIONS: '500'
+  JS_DB_COLLATION: "utf8_general_ci"
+  DOCKER_REGISTRY_URL: {{ .Values.global.jfb.image.users.registry }}/  # Should be an empty string or finished with slash(`/')
+  DOCKER_REGISTRY_PROTOCOL: {{ .Values.global.jfb.image.users.protocol | quote }}
+  SYSTEM_DOCKER_REGISTRY_URL: {{ .Values.global.jfb.image.system.registry }}/  # Should be an empty string or finished with slash(`/')
+  SYSTEM_DOCKER_REGISTRY_PROTOCOL: {{ .Values.global.jfb.image.system.protocol | quote }}
   EXTERNAL_HOST: {{ .Values.global.jfb.settings.external.host }}
-  EXTERNAL_HOST_REDIRECT: "true" # 소문자
+  EXTERNAL_HOST_PORT: {{ .Values.global.jfb.settings.external.port | quote }}
+  EXTERNAL_HOST_REDIRECT: {{ .Values.global.jfb.settings.external.redirect | quote }} # 소문자
+  JF_SSH_PORT: {{ .Values.global.jfb.settings.external.sshPort | quote }}
   INGRESS_PROTOCOL: {{ .Values.global.jfb.settings.external.protocol }}
   INGRESS_CLASS_NAME: {{ .Values.global.jfb.settings.external.ingressClassName }}
-  JF_INIT_ROOT_PW: {{ .Values.global.jfb.settings.initRootPassword }}
+  JF_INIT_ROOT_PW: {{ .Values.global.jfb.settings.initRootPassword | quote }}
   KUBER_CONFIG_PATH: "/jf-bin/.kube/config"
   JF_HOST_PATH: '' # TODO
   JF_DATA_HOST_PATH:  {{ .Values.global.jfb.volume.jfData.path }}     # TODO
@@ -34,6 +48,7 @@ data:
   JF_VOLUME_BIN_TYPE: {{ .Values.global.jfb.volume.jfBin.type }}
   JF_VOLUME_BIN_PATH: {{ .Values.global.jfb.volume.jfBin.path }}
   JF_VOLUME_BIN_SERVER: {{ .Values.global.jfb.volume.jfBin.server }}
+  JF_FILEBROWSER_MAX_COUNT : {{ .Values.global.jfb.settings.filebrowser.max | quote }}
   JF_VOLUME_WORKSPACE_STORAGE_CLASS_NAME: ""
   JF_SYSTEM_NAMESPACE: {{ .Values.global.jfb.namespace }}
   JF_KAFKA_DNS: {{ printf "%s.%s.svc.cluster.local" .Values.global.jfb.settings.kafka.dns ( .Values.global.jfb.settings.kafka.namespace | default .Values.global.jfb.namespace ) | quote }}
@@ -47,7 +62,7 @@ data:
   JF_MONITORING_URL: {{ printf "%s.%s.svc.cluster.local:9090" .Values.global.jfb.settings.monitoring.url ( .Values.global.jfb.settings.monitoring.namespace | default .Values.global.jfb.namespace ) | quote }}
   MONITORING_PROMETHEUS_NODE_EXPORTER_SERVICE_PORT: {{ printf "%s.%s.svc.cluster.local:9090" .Values.global.jfb.settings.monitoring.url ( .Values.global.jfb.settings.monitoring.namespace | default .Values.global.jfb.namespace ) | quote }}
   MONITORING_PROMETHEUS_NODE_EXPORTER_SERVICE_PORT_HTTP_METRICS: {{ printf "%s.%s.svc.cluster.local:9090" .Values.global.jfb.settings.monitoring.url ( .Values.global.jfb.settings.monitoring.namespace | default .Values.global.jfb.namespace ) | quote }}
-  JF_MONGODB_USER: {{ .Values.global.jfb.settings.mongoDb.user }}
+  JF_MONGODB_USER: {{ .Values.global.jfb.settings.mongoDb.user | quote }}
   JF_MONGODB_PORT: {{ .Values.global.jfb.settings.mongoDb.port | quote }}
   JF_MONGODB_PASSWORD: {{ .Values.global.jfb.settings.mongoDb.password | quote }}
   JF_MONGODB_DNS: {{ printf "%s.%s.svc.cluster.local" .Values.global.jfb.settings.mongoDb.dns ( .Values.global.jfb.settings.mongoDb.namespace | default .Values.global.jfb.namespace ) | quote }}
@@ -58,9 +73,39 @@ data:
   JF_CONTAINER_DATA_ROOT: {{ .Values.global.jfb.image.dataRoot | quote}}
   NODE_EXPORTER_PORT: {{ .Values.global.jfb.settings.monitoring.node_exporter | quote }}
   LOG_MIDDLEWARE_DNS: {{ printf "%s://%s.%s.svc.cluster.local:%s" .Values.global.jfb.settings.log.protocol .Values.global.jfb.settings.log.name ( .Values.global.jfb.settings.log.namespace | default .Values.global.jfb.namespace ) .Values.global.jfb.settings.log.port | quote }}
+  JF_KONG_ADMIN_DNS: {{ printf "%s.%s.svc.cluster.local" .Values.global.jfb.settings.kong.adminDns ( .Values.global.jfb.settings.kong.namespace | default .Values.global.jfb.namespace ) | quote }}
+  JF_KONG_PROXY_DNS: {{ printf "%s.%s.svc.cluster.local" .Values.global.jfb.settings.kong.proxyDns ( .Values.global.jfb.settings.kong.namespace | default .Values.global.jfb.namespace ) | quote }}
+  JONATHAN_IMAGE_PULL_SECRETS_EABLED: {{ .Values.global.jfb.image.pullSecrets.enabled | quote }}
   JONATHAN_IMAGE_PULL_SECRETS_EABLED: {{ .Values.global.jfb.image.pullSecrets.enabled | quote }}
   {{- if .Values.global.jfb.image.pullSecrets.enabled }}
   JONATHAN_IMAGE_PULL_SECRETS_NAME: {{ .Values.global.jfb.image.pullSecrets.name | quote }}
   {{- else }}
   JONATHAN_IMAGE_PULL_SECRETS_NAME: ""
+  {{- end }}
+  JONATHAN_PRIVATE_REPO_ENABLED: {{ .Values.global.jfb.settings.privateRepo.enabled | quote }}
+  JONATHAN_PRIVATE_PIP_ENABLED: {{ .Values.global.jfb.settings.privatePip.enabled | quote }}
+  {{- if .Values.global.jfb.settings.nexus.enabled }}
+  JONATHAN_NEXUS_PREFIX: {{ .Values.global.jfb.settings.nexus.prefix | quote }}
+  {{- end }}
+
+
+  {{- if .Values.global.jfb.rdma.enabled }}
+  JF_RDMA_ENABLED: "true"
+
+  {{- if .Values.global.jfb.rdma.mp.enabled }}
+  JF_MP_ENABLED: "true"
+  JFB_MP_SEED_NUM: {{ .Values.global.jfb.rdma.mp.seedNum | quote }}
+  JFB_MP_SEED_LIST: |
+  {{ .Values.global.jfb.rdma.mp.nodeSeedList | toJson | nindent 4 }}
+  {{- end }}
+
+  {{- if .Values.global.jfb.rdma.perf.enabled }}
+  JF_PERF_ENABLED: "true"
+  {{- end }}
+
+  {{- if .Values.global.jfb.rdma.p2p }}
+  JF_P2P_LIST: |
+  {{ .Values.global.jfb.rdma.p2p | toJson | nindent 4 }}
+  {{- end }}
+  
   {{- end }}

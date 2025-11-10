@@ -1,30 +1,39 @@
 import configparser
-from utils.PATH import *
 import os
+import requests
+import sys
 # ====================== DEFAULT ======================
-JF_INIT_ROOT_PW = os.environ['JF_INIT_ROOT_PW'] # root 초기 비밀번호
+
+FLIGHTBASE_USED = True
+
 PASSWORD_KEY = "$6$"
 ADMIN_NAME = "admin"
-
+ADMIN_TYPE = 0
+JF_SYSTEM_NAMESPACE = os.getenv('JF_SYSTEM_NAMESPACE', None)
 # [Maria DB Settings]
-JF_DB_HOST = os.environ['JF_DB_HOST']
-JF_DB_PORT = int(os.environ['JF_DB_PORT'])
-JF_DB_USER = os.environ['JF_DB_USER']
-JF_DB_PW = os.environ['JF_DB_PW']
-JF_DB_NAME = os.environ['JF_DB_NAME']
+JF_DB_HOST = os.getenv('JF_DB_HOST',None)
+JF_DB_PORT = int(os.getenv('JF_DB_PORT',0))
+JF_DB_USER = os.getenv('JF_DB_USER','root')
+JF_DB_PW = os.getenv('JF_DB_PW',None) 
+JF_DB_NAME = os.getenv('JF_DB_NAME',"msa_jfb")
+JF_LLM_DB_NAME = os.getenv('JF_LLM_DB_NAME',"jonathan_llm") 
 JF_DUMMY_DB_NAME = "jfb_dummy"
-JF_DB_CHARSET = os.environ['JF_DB_CHARSET']
-JF_DB_DOCKER = os.environ['JF_DB_DOCKER']
-JF_DB_ATTEMP_TO_CREATE = os.environ['JF_DB_ATTEMP_TO_CREATE'] == "true" # Attempt to create (DB TABLE and DUMMPY TABE) at every startup. can be slow.
+JF_DB_CHARSET = os.getenv('JF_DB_CHARSET', "utf8") 
+JF_DB_DOCKER = os.getenv('JF_DB_DOCKER', None)
+JF_DB_ATTEMP_TO_CREATE = True if os.getenv('JF_DB_ATTEMP_TO_CREATE') == "true" else False # Attempt to create (DB TABLE and DUMMPY TABE) at every startup. can be slow.
 JF_DB_MAX_CONNECTIONS = 10000
-JF_DB_UNIX_SOCKET = os.environ['JF_DB_UNIX_SOCKET']
-JF_DB_COLLATION = os.environ['JF_DB_COLLATION']
+JF_DB_UNIX_SOCKET = os.getenv('JF_DB_UNIX_SOCKET',None)
+JF_DB_COLLATION = os.getenv('JF_LLM_DB_COLLATION', 'utf8_general_ci')
 
 # [Docker Registry URL]
-DOCKER_REGISTRY_URL = os.environ['DOCKER_REGISTRY_URL'] # '192.168.1.13:5000/' # Should be an empty string or finished with slash(`/')
-DOCKER_REGISTRY_PROTOCOL = os.environ['DOCKER_REGISTRY_PROTOCOL'] # "http://" | "https://"
-REGISTRY_SVC_DNS = os.environ['REGISTRY_SVC_DNS']
-REGISTRY_SVC_PORT = os.environ['REGISTRY_SVC_PORT']
+DOCKER_REGISTRY_URL = os.getenv('DOCKER_REGISTRY_URL', None) # '192.168.1.13:5000/' # Should be an empty string or finished with slash(`/')
+SYSTEM_DOCKER_REGISTRY_URL = os.getenv('SYSTEM_DOCKER_REGISTRY_URL', None) # '192.168.1.13:5000/' # Should be an empty string or finished with slash(`/')
+if SYSTEM_DOCKER_REGISTRY_URL:
+    JF_DEFAULT_UBUNTU_20_IMAGE = SYSTEM_DOCKER_REGISTRY_URL + "jfb/" +  'jbi_ubuntu-20.04.6:latest'
+    JF_DEFAULT_UBUNTU_22_IMAGE = SYSTEM_DOCKER_REGISTRY_URL + "jfb/" +  'jbi_ubuntu-22.04.6:latest'
+DOCKER_REGISTRY_PROTOCOL = os.getenv('DOCKER_REGISTRY_PROTOCOL', "http://") # "http://" | "https://"
+SYSTEM_DOCKER_REGISTRY_PROTOCOL = os.getenv('SYSTEM_DOCKER_REGISTRY_PROTOCOL', "http://")
+IMAGE_NAMESPACE = f"{JF_SYSTEM_NAMESPACE}-image" if JF_SYSTEM_NAMESPACE else "default-image"
 
 # [Docker image (*.tar/Dockerfile) upload base path]
 BASE_IMAGE_PATH = '/jf-data/images' # in docker
@@ -32,18 +41,22 @@ BASE_DOCKERFILE_PATH = '/jf-data/images' # in docker
 HOST_BASE_IMAGE_PATH = '/jfbcore/jf-data/images' # in host
 HOST_BASE_DOCKERFILE_PATH = '/jfbcore/jf-data/images' # in host
 
-# JF_DEFAULT_IMAGE =  DOCKER_REGISTRY_URL + "jfb/" 'jf_default:latest'
-# JF_CPU_DEFAULT_IMAGE = DOCKER_REGISTRY_URL + "jfb/" + 'jf_ml_cpu_image:latest'
-# JF_GPU_TF2_IMAGE = DOCKER_REGISTRY_URL + "jfb/" + 'jf_ml_gpu_tf2_image:latest'
-# JF_GPU_TORCH_IMAGE = DOCKER_REGISTRY_URL + "jfb/" +  'jf_ml_gpu_torch_image:latest'
-JF_DEFAULT_UBUNTU_20_IMAGE = DOCKER_REGISTRY_URL + "jfb/" +  'jbi_ubuntu-20.04.6:latest'
-JF_DEFAULT_UBUNTU_22_IMAGE = DOCKER_REGISTRY_URL + "jfb/" +  'jbi_ubuntu-22.04.6:latest'
+
 
 #[Built in images]
-JF_DEFAULT_UBUNTU_20="JBI_Ubuntu-20.04.6-linux_5.4.0-182-generic"
-JF_DEFAULT_UBUNTU_22="JBI_Ubuntu-22.04.4-linux_5.4.0-187-generic"
+JF_DEFAULT_UBUNTU_20="JBI_Ubuntu-20.04.6"
+JF_DEFAULT_UBUNTU_22="JBI_Ubuntu-22.04.4"
+DEPLOYMENT_LLM_IMAGE="jfb-system/llm_deployment:dev"
+ANALYZER_IMAGE="jfb/analyzer:0.0.1"
 
-JONATHAN_IMAGE_PULL_SECRETS_EABLED=os.environ.get("JONATHAN_IMAGE_PULL_SECRETS_EABLED") == "true"
+
+
+JONATHAN_IMAGE_PULL_SECRETS_EABLED= True if os.getenv("JONATHAN_IMAGE_PULL_SECRETS_EABLED") == "true" else False
+
+JONATHAN_PRIVATE_REPO_ENABLED= os.getenv("JONATHAN_PRIVATE_REPO_ENABLED", "false") 
+JONATHAN_PRIVATE_PIP_ENABLED= os.getenv("JONATHAN_PRIVATE_PIP_ENABLED", "false")
+
+
 # JONATHAN_IMAGE_PULL_SECRETS_NAME=os.environ.get("JONATHAN_IMAGE_PULL_SECRETS_NAME")
 
 #[Others]
@@ -54,11 +67,12 @@ JONATHAN_IMAGE_PULL_SECRETS_EABLED=os.environ.get("JONATHAN_IMAGE_PULL_SECRETS_E
 # NODE_DB_NAME_AUTO_CHAGE_TO_KUBER_NODE_NAME = False # True = If DB NAME and KUBER NODE NAME are different, change to KUBER NODE NAME
 # IMAGE_LIBRARY_INIT = True # image.py
 
-#[Ingress option (jupyter, service, deployment)]
-EXTERNAL_HOST = os.environ['EXTERNAL_HOST'] # ex) flightbase.iacryl.com or None (then use local ip)
-EXTERNAL_HOST_REDIRECT = os.environ['EXTERNAL_HOST_REDIRECT'] == "true" # Redirect = True ( EXTERNAL_HOST ) , False ( EXTERNAL_HOST:nginx_port )
-INGRESS_PROTOCOL = os.environ['INGRESS_PROTOCOL']  # http, https ( for communication with front protocol )
-INGRESS_CLASS_NAME = os.environ['INGRESS_CLASS_NAME']
+#[Ingress option (jupyter, service, deployment))
+EXTERNAL_HOST = os.getenv('EXTERNAL_HOST', None) # ex) flightbase.iacryl.com or None (then use local ip)
+EXTERNAL_HOST_PORT = os.getenv('EXTERNAL_HOST_PORT', None)
+EXTERNAL_HOST_REDIRECT = True if os.getenv('EXTERNAL_HOST_REDIRECT') == "true" else False # Redirect = True ( EXTERNAL_HOST ) , False ( EXTERNAL_HOST:nginx_port )
+INGRESS_PROTOCOL = os.getenv('INGRESS_PROTOCOL', "http")  # http, https ( for communication with front protocol )
+INGRESS_CLASS_NAME = os.getenv('INGRESS_CLASS_NAME', None)
 
 #[Login option]
 NO_TOKEN_VALIDATION_CHECK = True # Allow Multiple Login, Ignore Token expired etc..
@@ -71,11 +85,11 @@ LOGIN_METHOD =  "jfb" # jfb(default), jonathan, kisti
 LOGIN_VALIDATION_CHECK_API = "" # jonathan("http://api.acryl.ai/accounts/profile"), kisti("http://10.211.55.52:8080/auth")
 
 #[Kuber Settings]
-KUBER_CONFIG_PATH = os.environ['KUBER_CONFIG_PATH']
+KUBER_CONFIG_PATH = os.getenv('KUBER_CONFIG_PATH', None)
 
 #[SSH BANNER and MOTD]
 SSH_BANNER_FILE_PATH = None # BANNER FILE PATH (None = Default Banner)
-SSH_MOTD_FILE_PATH = None # MOTD FILE PATH (None = Default MOTD)
+SSH_MOTD_FILE_PATH = None # MOTD FILE PATH (None = Default MOTD) 
 
 #[Dataset] FB에서 다운로드 지원여부
 DATASET_DOWNLOAD_ALLOW = True
@@ -86,48 +100,133 @@ DEPLOYMENT_API_MODE = "prefix" # "prefix" | "port" (TYPE.py - DEPLOYMENT_PREFIX_
 DEPLOYMENT_TEMPLATE_DB_UPDATE = False # 기존에 만들어진 Deployment 내용을 template화 (업데이트 시 최초 1회 사용으로 충분)
 
 # [HPS]
-HYPERPARAM_SEARCH_RUN_FILE = "python3 /hps_runfile/search_ver3-inter/search.py" # "/hps_runfile/hps_u" # /hps_runfile = /jfbcore/jf-bin/hps
-
+# HYPERPARAM_SEARCH_RUN_FILE = "python3 /hps_runfile/search_ver3-inter/search.py" # "/hps_runfile/hps_u" # /hps_runfile = /jfbcore/jf-bin/hps
+HYPERPARAM_SEARCH_CUSTOM_RUN_FILE = "python3 /hps/custom_search_new.py"
 # [FS-SETTING]
 FILESYSTEM_OPTION = "Unknown" # Unknown, MFS, Mounted
 MAIN_STORAGE_PATH = "/jfbcore" # TODO 임시. MAIN STORAGE 영역 이외에 SUB STORAGE 개념 추가 시 조정 필요
 
 # [JF STORAGE SETTING]
-JF_VOLUME_DATA_TYPE = os.environ['JF_VOLUME_DATA_TYPE']
-JF_VOLUME_DATA_PATH = os.environ['JF_VOLUME_DATA_PATH']
-JF_VOLUME_DATA_SERVER = os.environ['JF_VOLUME_DATA_SERVER']
-JF_VOLUME_BIN_TYPE = os.environ['JF_VOLUME_BIN_TYPE']
-JF_VOLUME_BIN_PATH = os.environ['JF_VOLUME_BIN_PATH']
-JF_VOLUME_BIN_SERVER = os.environ['JF_VOLUME_BIN_SERVER']
-JF_VOLUME_WORKSPACE_STORAGE_CLASS_NAME = os.environ['JF_VOLUME_WORKSPACE_STORAGE_CLASS_NAME']
-JF_SYSTEM_NAMESPACE = os.environ['JF_SYSTEM_NAMESPACE']
+JF_VOLUME_DATA_TYPE = os.getenv('JF_VOLUME_DATA_TYPE', None)
+JF_VOLUME_DATA_PATH = os.getenv('JF_VOLUME_DATA_PATH', None)
+JF_VOLUME_DATA_SERVER = os.getenv('JF_VOLUME_DATA_SERVER', None)
+JF_VOLUME_BIN_TYPE = os.getenv('JF_VOLUME_BIN_TYPE', None)
+JF_VOLUME_BIN_PATH = os.getenv('JF_VOLUME_BIN_PATH', None)
+JF_VOLUME_BIN_SERVER = os.getenv('JF_VOLUME_BIN_SERVER', None)
+JF_VOLUME_WORKSPACE_STORAGE_CLASS_NAME = os.getenv('JF_VOLUME_WORKSPACE_STORAGE_CLASS_NAME', None)
+
 
 # [JF MONGODB SETTING]
-JF_MONGODB_PASSWORD= os.environ['JF_MONGODB_PASSWORD']
-JF_MONGODB_DNS = os.environ['JF_MONGODB_DNS']
-JF_MONGODB_PORT = os.environ['JF_MONGODB_PORT']
-JF_MONGODB_USER = os.environ['JF_MONGODB_USER']
+JF_MONGODB_PASSWORD= os.getenv('JF_MONGODB_PASSWORD', None)
+JF_MONGODB_DNS = os.getenv('JF_MONGODB_DNS', None)
+JF_MONGODB_PORT = os.getenv('JF_MONGODB_PORT', None)
+JF_MONGODB_USER = os.getenv('JF_MONGODB_USER', None)
 
 # [JF REDIS SETTING]
-JF_REDIS_PROT = int(os.environ["JF_REDIS_PROT"])
-JF_REDIS_PASSWORD = os.environ["JF_REDIS_PASSWORD"]
-JF_REDIS_CLUSTER_ENABLED = os.environ["JF_REDIS_CLUSTER_ENABLED"] == "true"
-JF_REDIS_CLUSTER_DNS = os.environ["JF_REDIS_CLUSTER_DNS"]
-JF_REDIS_MASTER_DNS = os.environ["JF_REDIS_MASTER_DNS"]
-JF_REDIS_SLAVES_DNS = os.environ["JF_REDIS_SLAVES_DNS"]
+JF_REDIS_PROT = int(os.getenv("JF_REDIS_PROT", 0))
+JF_REDIS_PASSWORD = os.getenv("JF_REDIS_PASSWORD", None)
+JF_REDIS_CLUSTER_ENABLED = True if os.getenv("JF_REDIS_CLUSTER_ENABLED") == "true" else False
+JF_REDIS_CLUSTER_DNS = os.getenv("JF_REDIS_CLUSTER_DNS", None)
+JF_REDIS_MASTER_DNS = os.getenv("JF_REDIS_MASTER_DNS", None)
+JF_REDIS_SLAVES_DNS = os.getenv("JF_REDIS_SLAVES_DNS", None)
 
 # [JF MONITORING SETTING]
-JF_NODE_EXPORTER_PORT = os.environ["NODE_EXPORTER_PORT"]
+JF_NODE_EXPORTER_PORT = os.getenv("NODE_EXPORTER_PORT", None)
 
 # [JF INSTANCE SETTING] # example) 80% 사용하고 싶으면 0.8 입력
-JF_COMPUTING_NODE_CPU_PERCENT = float(os.environ["JF_COMPUTING_NODE_CPU_PERCENT"])
-JF_COMPUTING_NODE_RAM_PERCENT = float(os.environ["JF_COMPUTING_NODE_RAM_PERCENT"])
+JF_COMPUTING_NODE_CPU_PERCENT = float(os.getenv("JF_COMPUTING_NODE_CPU_PERCENT", 0.8))
+JF_COMPUTING_NODE_RAM_PERCENT = float(os.getenv("JF_COMPUTING_NODE_RAM_PERCENT", 0.8)) 
 
 # [PROMETHEUS]
 PROMETHEUS_DNS="http://monitoring-kube-prometheus-prometheus.jake.svc.cluster.local:9090/prometheus"
 
 # [EFK]
-LOG_MIDDLEWARE_DNS = os.environ.get("LOG_MIDDLEWARE_DNS")
+LOG_MIDDLEWARE_DNS = os.environ.get("LOG_MIDDLEWARE_DNS", None)
+
+# [KONG]
+JF_KONG_ADMIN_DNS = os.getenv('JF_KONG_ADMIN_DNS', None)
+JF_KONG_ADMIN_HTTP_PORT = os.getenv('JF_KONG_ADMIN_HTTP_PORT', "8001")
+JF_KONG_PROXY_DNS = os.getenv('JF_KONG_PROXY_DNS', None)
+
+# [INGRESS MANAGEMENT]
+JF_INGRESS_MANAGEMENT_SVC_HOST = os.getenv('JFB_APP_INGRESS_MANAGEMENT_SVC_SERVICE_HOST', None)
+JF_INGRESS_MANAGEMENT_SVC_PORT = os.getenv('JFB_APP_INGRESS_MANAGEMENT_SVC_SERVICE_PORT', None)
+JF_INGRESS_MANAGEMENT_DNS = f"{JF_INGRESS_MANAGEMENT_SVC_HOST}:{JF_INGRESS_MANAGEMENT_SVC_PORT}"
 
 # [KAFKA]
-JF_KAFKA_DNS = os.environ['JF_KAFKA_DNS']
+JF_KAFKA_DNS = os.getenv('JF_KAFKA_DNS', None)
+
+# [SSH]
+JF_SSH_PORT = os.getenv('JF_SSH_PORT', None)
+BASE_SSH_JUMP_FORMAT= 'ssh -o ProxyCommand="ssh -i /path/to/pem -p {ssh_port} -W %h:%p {header_user}@{ingress_ip}" root@{tool_pod_ip}'
+# JF_SSH_SVC_TYPE = os.getenv('JF_SSH_SVC_TYPE']
+
+# [DATASET]
+
+USER_UUID_SET = 20000
+
+
+# [HUGGINGFACE]
+LLM_USED = True # os.environ.get("LLM_USED") == "true"
+# [GITC]
+GITC_USED = False # RAG, PROMPT 사용 여부 flag (GITC에서만 rag, prompt 사용)
+
+HUGGINGFACE_TOKEN = os.getenv("HUGGINGFACE_TOKEN", "")
+if SYSTEM_DOCKER_REGISTRY_URL:
+    FINE_TUNING_IMAGE= SYSTEM_DOCKER_REGISTRY_URL +  "built-in-model/finetuning:cuda12.4-transformers4.52.4-torch2.5.1-ubuntu22.04" # "built-in-model/jonathan-finetuning:0.1.2-cuda12.4.1"
+else:
+    FINE_TUNING_IMAGE = "built-in-model/finetuning:cuda12.4-transformers4.52.4-torch2.5.1-ubuntu22.04"  # 기본값 설정 
+
+# [JONATHAN PRICING MODE]
+
+JF_PRICING_MODE = True if os.getenv("JF_PRICING_MODE",None) == "True" else False
+
+
+# [JONATHAN INTELLIGENCE]
+JONATHAN_INTELLIGENCE_USED = True
+if JONATHAN_INTELLIGENCE_USED:
+    HUGGINGFACE_TOKEN = os.getenv("HUGGINGFACE_TOKEN", os.getenv("JONATHAN_HUGGINGFACE_TOKEN", ""))
+    JF_BUILT_IN_MODEL_BURN = SYSTEM_DOCKER_REGISTRY_URL + "built-in-model/" +  'burn:latest'
+    
+    
+
+
+# [JONATHAN RDMA]
+JF_RDMA_ENABLED = os.getenv("JF_RDMA_ENABLED", None)
+JF_MP_ENABLED = os.getenv("JF_MP_ENABLED", None)
+JFB_MP_SEED_NUM = os.getenv("JFB_MP_SEED_NUM", None)
+JFB_MP_SEED_LIST = os.getenv("JFB_MP_SEED_LIST", None)
+JF_PERF_ENABLED = os.getenv("JF_PERF_ENABLED", None)
+JF_P2P_LIST = os.getenv("JF_P2P_LIST", None)
+
+# [JONATHAN KAFKA]
+JF_KAFKA_SECURITY_PROTOCOL = os.getenv("JF_KAFKA_SECURITY_PROTOCOL", "SASL_PLAINTEXT")
+JF_KAFKA_SASL_MECHANISM = os.getenv("JF_KAFKA_SASL_MECHANISM", "PLAIN")
+JF_KAFKA_SASL_USERNAME = os.getenv("JF_KAFKA_SASL_USERNAME", "acryl")
+JF_KAFKA_SASL_PASSWORD = os.getenv("JF_KAFKA_SASL_PASSWORD", "acryl4958@")
+
+# [NEXUS]
+
+JONATHAN_NEXUS_PREFIX = os.getenv("JONATHAN_NEXUS_PREFIX", "")
+JONATHAN_NEXUS_HOST = os.getenv("JONATHAN_NEXUS_HOST", "nexus-nexus-repository-manager.jonathan-nexus.svc.cluster.local")
+JONATHAN_NEXUS_PORT = os.getenv("JONATHAN_NEXUS_PORT", "8081")
+
+def check_offline_status(url="https://github.com", timeout=2):
+    """
+    socket을 사용하여 인터넷 연결 상태를 확인하여 오프라인 여부를 반환합니다.
+    """
+    try:
+        # DNS 조회로 연결 상태 확인 (timeout 3초)
+        requests.get(url, timeout=timeout)
+        print("Online environment", file=sys.stderr)
+        return "false"  # 온라인
+    except requests.RequestException:
+        print("Offline environment", file=sys.stderr)
+        return "true"   # 오프라인
+
+# 오프라인 상태 체크
+JF_OFFLINE_MODE = check_offline_status()
+
+# Kubernetes 설정
+KUBERNETES_API_SERVER = os.getenv('KUBERNETES_API_SERVER', 'kubernetes.default.svc.cluster.local:443')
+KUBERNETES_TOKEN = os.getenv('KUBERNETES_TOKEN', '')  # 서비스 계정 토큰

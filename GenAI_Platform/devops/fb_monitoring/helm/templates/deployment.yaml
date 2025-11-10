@@ -28,12 +28,40 @@ spec:
       {{- end }}
       containers:
       - name: {{ .Values.global.jfb.name.monitoring }}
-        image: {{ .Values.global.jfb.image.registry }}/{{ .Values.global.jfb.image.monitoring }}
+        image: {{ .Values.global.jfb.image.system.registry }}/{{ .Values.global.jfb.image.monitoring }}
         imagePullPolicy: {{ .Values.global.jfb.image.pullPolicy }}
         command: [ "/bin/bash", "-c"]
         args: ["cd /app; ./run.sh; sleep infinity;"]
+        resources:
+          limits:
+            cpu : 2
+            memory : "512M"
+          requests:
+            cpu : 1
+            memory : "256M"
         ports:
         - containerPort: 8000
+        - containerPort: 8080
+        # Liveness Probe: 애플리케이션이 살아있는지 확인 (실패시 pod 재시작)
+        livenessProbe:
+          httpGet:
+            path: /probe/liveness
+            port: 8080
+          initialDelaySeconds: 30      # 애플리케이션 시작 후 30초 대기
+          periodSeconds: 30            # 30초마다 체크
+          timeoutSeconds: 5            # 5초 timeout
+          failureThreshold: 3          # 3번 연속 실패시 재시작
+          successThreshold: 1          # 1번 성공시 정상으로 판단
+        # Readiness Probe: Redis 연결 상태 확인 (실패시 트래픽 차단)
+        readinessProbe:
+          httpGet:
+            path: /probe/readiness
+            port: 8080
+          initialDelaySeconds: 5      # 애플리케이션 시작 후 5초 대기
+          periodSeconds: 10            # 10초마다 체크
+          timeoutSeconds: 3            # 3초 timeout
+          failureThreshold: 3          # 3번 연속 실패시 not ready
+          successThreshold: 1          # 1번 성공시 ready로 판단
         envFrom:
         - configMapRef:
             name: jfb-settings

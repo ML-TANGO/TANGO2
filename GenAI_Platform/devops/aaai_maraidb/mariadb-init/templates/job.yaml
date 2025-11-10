@@ -1,0 +1,101 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: jfb-mysql-db-init-job
+  namespace: {{ .Values.global.jfb.namespace }}
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      initContainers:
+      - name: wait-for-jfb-db
+        image: {{ .Values.global.jfb.image.db }}
+        command: ['sh', '-c']
+        args:
+        - until mysql -h ${JF_DB_HOST} -u root -p${JF_DB_PW} -e "SHOW DATABASES;"; do echo "Waiting for database connection..."; sleep 1; done;
+        envFrom:
+        - configMapRef:
+            name: db-settings
+      containers:
+      - name: jfb-mysql-db-init-job
+        image: {{ .Values.global.jfb.image.registry }}/{{ .Values.global.jfb.image.pymysql }}
+        imagePullPolicy: Always
+        command: [ "/bin/bash", "-c"]
+        args: ["cd /app; python3 check.py;"]
+        envFrom:
+        - configMapRef:
+            name: db-settings
+        volumeMounts:
+        - name: check
+          mountPath: /app/check.py
+          subPath: check.py
+        - name: schema
+          mountPath: /app/schema.sql
+          subPath: schema.sql
+        - name: schema
+          mountPath: /app/schema_llm.sql
+          subPath: schema_llm.sql
+      volumes:
+      - name: check
+        configMap:
+          name: db-check
+      - name: schema
+        configMap:
+          name: db-schema
+  backoffLimit: 3 # 재시도 횟수
+  ttlSecondsAfterFinished: 1800 # 완료후 job 자동 삭제 / 1800초
+
+
+
+{{/*
+apiVersion: v1
+kind: Pod
+metadata:
+  name: jfb-mysql-db-init-job
+  namespace: {{ .Values.global.jfb.namespace }}
+spec:
+  serviceAccountName: jfb-db-sa
+  restartPolicy: Never
+  initContainers:
+  - name: wait
+    image: bitnami/kubectl
+    command: ["/bin/sh", "-c"]
+    args: 
+      - |
+        while true; do
+          kubectl wait --for=condition=available --namespace={{ .Values.global.jfb.namespace }} --timeout=300s deployment/{{ .Values.global.jfb.name.db }} && \
+          break
+          echo "Waiting for deployment jfb-mysql-db to be available..."
+          sleep 10
+        done
+  containers:
+  - name: jfb-mysql-db-init-job
+    image: {{ .Values.global.jfb.image.system.registry }}/{{ .Values.global.jfb.image.dbJob }}
+    imagePullPolicy: Always
+    command: [ "/bin/bash", "-c"]
+    args: ["cd /app; python3 check.py; sleep infinity;"]
+    env:
+    - name: MARIADB_ROOT_PASSWORD  # TODO 시크릿 사용
+      valueFrom:
+        configMapKeyRef:
+          name: jfb-settings
+          key: JF_DB_PW
+    envFrom:
+    - configMapRef:
+        name: jfb-settings
+    volumeMounts:
+    - name: jfb-mysql-db-data
+      mountPath: /var/lib/mysql
+    - name: check
+      mountPath: /app
+  volumes:
+  - name: jfb-mysql-db-data
+    persistentVolumeClaim:
+      claimName: jfb-mysql-db-pvc
+  - name: src
+    hostPath:
+      path: /jfbcore_msa/dev/db
+  - name: check
+    configMap:
+      name: db-check
+*/}}

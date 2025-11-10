@@ -25,7 +25,7 @@ spec:
       {{- end }}
       containers:
       - name: {{ .Values.global.jfb.name.front }}
-        image: {{ .Values.global.jfb.image.registry }}/{{ .Values.global.jfb.image.front }}
+        image: {{ .Values.global.jfb.image.system.registry }}/{{ .Values.global.jfb.image.front }}
         imagePullPolicy: {{ .Values.global.jfb.image.pullPolicy }}
         ports:
           - containerPort: 8001

@@ -1,27 +1,31 @@
-from fastapi import APIRouter, Depends, Request, Path
-from pydantic import BaseModel
-from utils.resource import CustomResource, response, token_checker
-from utils.settings import LOGIN_METHOD
+from fastapi import APIRouter, Request, Response, Depends
+from utils.resource import response, get_auth, get_user_id
 from utils.msa_db import db_user
-# import utils.db as db
 
-logout = APIRouter(
-    prefix = "/logout"
-)
-
-# class LogoutModel(BaseModel):
-#     user_name: str
-#     password: str
+logout = APIRouter(prefix="/logout")
 
 def svc_logout(user_id, token):
-    # delete login_session
+    # 로그인 세션 삭제
     db_user.delete_login_session(user_id=user_id)
-    return response(status=1, message="success", logout=True)
+    return response(status=1, message="success", logout=True, status_code=200)
 
 @logout.post("", tags=["logout"])
-@token_checker
-async def post_logout():
-    cr = CustomResource()
-    res = svc_logout(user_id=cr.check_user_id(), token=cr.check_token())
-    # log_access({'username':request.headers.get('Jf-User'), 'header':dict(request.headers), 'ret':ret})
+async def post_logout(request: Request):
+    res = response(status=1, message="success", logout=True, status_code=200)
+
+    try:
+        _, session = get_auth()
+        user_id = get_user_id()
+        
+        # 세션 삭제 로직 실행
+        res = svc_logout(user_id=user_id, token=session)
+    except Exception as e:
+        print(f"Error: {e}")
+    
+    # 🟢 쿠키 삭제 (Set-Cookie 헤더를 설정하여 만료 처리)
+    res.delete_cookie(
+        key="session",
+        path="/",  # 설정한 path와 동일해야 함
+    )
+
     return res

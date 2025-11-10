@@ -10,11 +10,12 @@ import traceback
 import threading
 from utils.common import run_func_with_print_line
 from init import init_default_image
+import uvicorn
 
 def initialize_app():
     app = FastAPI()
     api = FastAPI(
-        title="JFB API",
+        title="JFB IMAGE API",
         version='0.1',
         default_response_class=CustomResponse,
         middleware=CustomMiddleWare,
@@ -24,7 +25,7 @@ def initialize_app():
         # redirect_slashes=True,
     )
     api.include_router(images)
-
+    
     app.mount('/api', api)
 
     import logging
@@ -32,7 +33,7 @@ def initialize_app():
     class HealthCheckFilter(logging.Filter):
         def filter(self, record):
             return "GET /images/healthz" not in record.getMessage()
-
+    
     # 로깅 설정
     uvicorn_logger = logging.getLogger("uvicorn.access")
     uvicorn_logger.addFilter(HealthCheckFilter())
@@ -50,5 +51,5 @@ def main():
 
 
 if __name__=="__main__":
-    main()
-    uvicorn.run("main:app", port=8000, host='0.0.0.0', reload=True)
+    app = main()
+    uvicorn.run(app, port=8000, host='0.0.0.0', reload=True)

@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from utils import settings
 from utils.mongodb_key import DATABASE, NOTIFICATION_COLLECTION, REQUEST_COLLECTION, USER_DASHBOARD_TIMELINE, ADMIN_DASHBOARD_TIMELINE, TEST_DUMMY_TIMELINE
 from urllib.parse import quote
+from typing import Optional
 from pydantic import BaseModel
 from utils import notification_key
 from datetime import datetime, timedelta
@@ -43,7 +44,7 @@ class RequestInfo(BaseModel):
     create_datetime : datetime = datetime.now()
 
 class WorkspaceRequestInfo(BaseModel):
-    manager_id :int
+    manager_id :int  
     workspace_name : str
     allocate_instances : list
     start_datetime : str
@@ -60,13 +61,13 @@ class NotificationInfo(BaseModel):
     user_id : int
     read : int = 0
     user_type: str = notification_key.NOTIFICATION_USER_TYPE_ADMIN
-    noti_type: str
+    noti_type: str 
     message : str
-    create_datetime : datetime = datetime.now()
-
-
+    create_datetime : Optional[str | datetime] = datetime.now()
+    
+    
 class NotificationWorkspace(NotificationInfo):
-    workspace_id : int
+    workspace_id : int 
 
     # request_info : WorkspaceRequestInfo = None
 
@@ -90,9 +91,14 @@ def insert_admin_dashboard_dummy_timeline(dashboard_timeline : DashboardTimeLine
 def insert_admin_dashboard_timeline(dashboard_timeline : DashboardTimeLine) -> str:
     try:
         with mongodb_conn(database_name=DATABASE, collection_name=ADMIN_DASHBOARD_TIMELINE) as collection:
-            collection.insert_one(dashboard_timeline)
+        #with mongodb_conn(database_name=DATABASE, collection_name=ADMIN_DASHBOARD_TIMELINE) as collection:
+            result=collection.insert_one(dashboard_timeline)
+            print("ID",result.inserted_id)
         return True, ""
     except Exception as e:
+        traceback.print_exc()
+        return False, e
+    except:
         traceback.print_exc()
         return False, e
 
@@ -119,7 +125,7 @@ def get_resource_over_message(workspace_id : int, user_id: int, message : str):
     try:
         with mongodb_conn(database_name=DATABASE, collection_name=NOTIFICATION_COLLECTION) as collection:
             # 30분 전의 시각 계산
-            thirty_minutes_ago = datetime.now() - timedelta(hours=1)
+            thirty_minutes_ago = datetime.now() - timedelta(minutes=30)
             # print(thirty_minutes_ago)
             query = {
                 'user_id' : user_id,
@@ -132,7 +138,7 @@ def get_resource_over_message(workspace_id : int, user_id: int, message : str):
     except Exception as e:
         traceback.print_exc()
         return res
-
+    
 
 def insert_request(request : RequestInfo) -> str:
     try:
@@ -142,18 +148,18 @@ def insert_request(request : RequestInfo) -> str:
     except Exception as e:
         traceback.print_exc()
         return False, e
-
-
+    
+    
 def get_request_user_list():
     res = []
     try:
         with mongodb_conn(database_name=DATABASE, collection_name=REQUEST_COLLECTION) as collection:
-            res = list(collection.find({"type" : "user"}))
+            res = list(collection.find({"type" : "user"})) 
     except Exception as e:
         traceback.print_exc()
     return res
-
-
+    
+    
 def get_request_user(object_id):
     res = dict()
     try:
@@ -162,7 +168,7 @@ def get_request_user(object_id):
     except Exception as e:
         traceback.print_exc()
     return res
-
+    
 
 def delete_request_user(object_id):
     try:
@@ -209,7 +215,7 @@ def get_admin_dashboard_timeline(now_date):
     except:
         traceback.print_exc()
         return res
-
+    
 def get_admin_dashboard_dummy_timeline(now_date):
     res = None
     try:

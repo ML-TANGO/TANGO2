@@ -49,7 +49,7 @@ def insert_node(name, ip, role, status="Not ready"):
     except Exception as e:
         traceback.print_exc()
         return False
-
+    
 def update_node(id, name=None, ip=None, role=None, status="Not ready"):
     try:
         func_arg = locals()
@@ -102,7 +102,7 @@ def get_resource_group(id=None, name=None):
     except:
         traceback.print_exc()
         return False
-
+    
 
 def insert_resource_group(name):
     try:
@@ -162,26 +162,27 @@ def insert_node_gpu(node_id, resource_group_id, gpu_memory, gpu_uuid):
     except Exception as e:
         traceback.print_exc()
         return False
-
+    
 def get_node_gpu(gpu_uuid : str = None, gpu_id : int = None):
     res = None
     try:
         with get_db() as conn:
             cur = conn.cursor()
             sql = """
-                SELECT *
-                FROM node_gpu
+                SELECT ng.*, n.name as node_name
+                FROM node_gpu ng
+                LEFT JOIN node n ON n.id = ng.node_id
                 """
             if gpu_uuid:
-                sql += f""" WHERE gpu_uuid='{gpu_uuid}'"""
+                sql += f""" WHERE ng.gpu_uuid='{gpu_uuid}'"""
             elif gpu_id:
-                sql += f""" WHERE id={gpu_id}"""
+                sql += f""" WHERE ng.id={gpu_id}"""
             cur.execute(sql)
             res = cur.fetchone()
     except:
         traceback.print_exc()
     return res
-
+    
 def insert_node_cpu(node_id, resource_group_id, core):
     try:
         with get_db() as conn:
@@ -195,7 +196,7 @@ def insert_node_cpu(node_id, resource_group_id, core):
     except Exception as e:
         traceback.print_exc()
         return False
-
+    
 def get_node_cpu(node_id):
     res = None
     try:
@@ -212,7 +213,7 @@ def get_node_cpu(node_id):
         traceback.print_exc()
     return res
 
-
+    
 def insert_node_ram(node_id, size, type, model, speed, manufacturer, count):
     try:
         with get_db() as conn:
@@ -226,7 +227,7 @@ def insert_node_ram(node_id, size, type, model, speed, manufacturer, count):
     except Exception as e:
         traceback.print_exc()
         return False
-
+    
 def get_node_ram(node_id):
     res = None
     try:
@@ -256,11 +257,11 @@ select_list = [{
 def update_instance(instance_list):
     try:
         instance_data_list = [(item["instance_total_count"], item["instance_name"],) for item in instance_list]
-
+        
         with get_db() as conn:
             cur = conn.cursor()
             sql = """
-                UPDATE instance
+                UPDATE instance 
                 SET instance_count=%s
                 WHERE instance_name = %s"""
             cur.executemany(sql, instance_data_list)
@@ -290,7 +291,7 @@ def insert_instance(instance_list):
 
 def insert_node_instance(node_id, instance_list):
     try:
-        instance_data_list = [(node_id, item["instance_count"], item["instance_name"],)
+        instance_data_list = [(node_id, item["instance_count"], item["instance_name"],) 
                        for item in instance_list]
         with get_db() as conn:
             cur = conn.cursor()
@@ -371,7 +372,7 @@ def get_instance_list():
     except:
         traceback.print_exc()
     return res
-
+    
 def get_node_cpu(node_id):
     res = None
     try:
@@ -446,7 +447,36 @@ def get_node_gpu_list(node_id, group_by_gpu=False):
                 INNER JOIN node n ON n.id = ng.node_id
                 INNER JOIN resource_group rg ON rg.id = ng.resource_group_id
                 WHERE ng.node_id = '{node_id}'"""
+            
+            cur.execute(sql)
+            res = cur.fetchall()
+    except:
+        traceback.print_exc()
+    return res
 
+def get_node_npu_list(node_id, group_by_gpu=False):
+    """
+    group_by_gpu: True 일 경우 resource_group_id 기준으로 묶음 (uuid 무시)
+    """
+    res = []
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            if group_by_gpu == True:
+                sql = f"""
+                SELECT nn.*, n.name node_name, rg.name resource_name, count(*) npu_count
+                FROM node_npu nn
+                INNER JOIN node n ON n.id = nn.node_id
+                INNER JOIN resource_group rg ON rg.id = nn.resource_group_id
+                WHERE nn.node_id = '{node_id}'
+                GROUP BY nn.resource_group_id"""
+            else:
+                sql = f"""
+                SELECT nn.*, n.name node_name, rg.name resource_name
+                FROM node_npu nn
+                INNER JOIN node n ON n.id = nn.node_id
+                INNER JOIN resource_group rg ON rg.id = nn.resource_group_id
+                WHERE nn.node_id = '{node_id}'"""
             cur.execute(sql)
             res = cur.fetchall()
     except:
@@ -469,9 +499,9 @@ def get_node_instance_list(node_id=None, instance_id=None):
             LEFT JOIN resource_group rg ON rg.id = i.gpu_resource_group_id
             """
             if node_id:
-                sql += f"""WHERE ni.node_id  = {node_id} """
+                sql += f"""WHERE ni.node_id  = {node_id} AND n.status = 'Ready'"""
             elif instance_id:
-                sql += f"""WHERE i.id  = {instance_id} """
+                sql += f"""WHERE i.id  = {instance_id} AND n.status = 'Ready'"""
             cur.execute(sql)
             res = cur.fetchall()
     except:

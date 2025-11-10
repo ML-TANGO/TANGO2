@@ -1,0 +1,76 @@
+{{- range $index, $node := .Values.cluster }}
+apiVersion: v1
+kind: Pod
+metadata: 
+  name: deployment-{{ $.Values.deployment.deploymentId }}-{{ $.Values.deployment.deploymentWorkerId }}-llm-{{ $.Values.llm.type }}-{{ $.Values.llm.id }}-{{ $index }}
+  namespace: {{ include "namespace" $ }}
+  labels: 
+    pod_count: "{{ $.Values.node | default (list) | len }}"
+    {{- include "labels.base" (dict "Values" $.Values) | indent 4}}
+    {{- include "labels.node" (dict "node" $node "index" $index) | indent 4}}
+    {{- include "labels.deployment" (dict "Values" $.Values) | indent 4}}
+    {{- if eq  $index 0 }}
+    ray: header
+    {{- end }}
+  annotations:
+    acryl.ai/appType: user
+  {{- if $.Values.rdma.enabled }}
+    k8s.v1.cni.cncf.io/networks: default/{{ $node.node_name }}
+  {{- end }}
+spec:
+  {{- include "helpers.spec.setting" . | indent 2}}
+  {{- if ne $node.node_name "" }}
+  nodeName: {{ $node.node_name }}
+  {{- end }}
+  {{- if ne $.Values.pod.cpuInstance "" }}
+  nodeSelector:
+    jfb/cpu-instance.name: {{ $.Values.pod.cpuInstance }}
+  {{- end }}
+  hostname: {{ $.Values.metadata.name.podhHostname }} # pod안에서 hostname
+  containers:
+  {{/*------log 컨테이너---------------------------------------------*/}}
+  - name: log
+    image: {{ $.Values.pod.imageRegistry }}{{ $.Values.pod.image }}
+    imagePullPolicy: IfNotPresent
+    {{- include "helpers.spec.containers.setting" . | indent 4}}
+    {{- include "helpers.startupProbe" . | indent 4}}
+    resources:
+    {{- include "resources.log" (dict "Values" $.Values) | indent 6}}
+    command: ['/bin/bash', '-c', '/addlib/log.sh']
+    volumeMounts:
+    {{- include "volumeMounts" $ | nindent 6}}
+  {{/*------메인 컨테이너---------------------------------------------*/}}
+  - name: {{ $.Values.metadata.name.podName }}
+    image: {{ $.Values.pod.imageRegistry }}{{ $.Values.pod.image }}
+    imagePullPolicy: IfNotPresent
+    {{- include "helpers.spec.containers.setting" . | indent 4}}
+    {{- include "helpers.startupProbe" . | indent 4}}
+    env:
+    {{- include "env.base" (dict "Values" $.Values) |  indent 4}}
+    {{- include "env.node" (dict "node" $node) | indent 4}}
+    {{- include "env.gpu" (dict "node" $node) | indent 4}}
+    {{- include "env.rdma" (dict "Values" $.Values "node" $node) | indent 4}}
+    {{- include "env.deployment" (dict "Values" $.Values) |  indent 4}}
+    {{- include "env.llm" (dict "Values" $.Values "index" $index) | indent 4}}
+    {{- include "env.llm.db" (dict "Values" $.Values ) | indent 4}}
+    {{- include "env.llm.model" (dict "Values" $.Values ) | indent 4}}
+    {{- include "env.llm.playground" (dict "Values" $.Values ) | indent 4}} 
+    {{- include "env.llm.rag" (dict "Values" $.Values ) | indent 4}}
+    {{- include "env.cuda" (dict "Values" $.Values ) | indent 4}}
+    resources:
+    {{- include "resources" (dict "Values" $.Values "node" $node) | indent 6}}
+    command: ['/bin/bash', '-c', '/addlib/command.sh' ]     # | quote }}]
+    securityContext:
+      capabilities:
+        add:
+        - IPC_LOCK
+        {{- if $.Values.rdma.enabled }}
+        - NET_ADMIN
+        {{- end }}
+    volumeMounts:
+    {{- include "volumeMounts" $ | nindent 6}}
+    {{- include "volumeMounts.llm" $ | nindent 6}}
+  volumes:
+  {{- include "volumes" $ | nindent 4 }}
+---
+{{- end }}

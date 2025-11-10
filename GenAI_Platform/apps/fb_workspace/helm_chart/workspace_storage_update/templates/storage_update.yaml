@@ -1,0 +1,60 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Values.name }}
+  labels: 
+    role: jfb-api
+    # workspace_id : {{ .Values.workspace_id}}
+spec:
+  backoffLimit: 0  # 실패 시 재시도하지 않음
+  template:
+    metadata:
+      labels: 
+        role: jfb-api
+    spec:
+      serviceAccountName: jfb-ws-sa
+      containers:
+      - name: workspace-update
+        image: {{ .Values.image }}
+        securityContext:
+          runAsUser: 0
+        env:
+        {{- range $key, $val := .Values.env }}
+        - name: {{ $key }}
+          value: {{ $val | quote }}
+        {{- end}}
+        envFrom:
+        - configMapRef:
+            name: jfb-settings 
+        command: ["sh", "-c", " python3 /app/src/workspace_resize.py "] #while true; do sleep 30; done; python3 /app/src/workspace_resize.py
+        volumeMounts:
+        - name: jf-src
+          mountPath: /app
+        - name: jf-utils
+          mountPath: /fb_utils
+        {{- include "check_unique_volumeMounts" . | nindent 8 }}
+        # - name: main_storage
+        #   mountPath: /jf-data/{{ .Values.main_storage }}
+        # - name: data_storage
+        #   mountPath: /jf-data/{{ .Values.data_storage }}
+      # initContainers:
+      # - name: remove-finalizers
+      #   image: bitnami/kubectl:1.27.11
+      #   # image: {{ printf "%sbitnami/kubectl:latest" ( .Values.registry ) }}
+      #   command: ["sh", "-c", "kubectl patch pvc -n jonathan-system-{{ .Values.workspace_id }} jonathan-system-{{ .Values.workspace_id }}-data-pvc -p '{\"metadata\":{\"finalizers\":[]}}'  && kubectl patch pvc -n jonathan-system-{{ .Values.workspace_id }} jonathan-system-{{ .Values.workspace_id }}-main-pvc -p '{\"metadata\":{\"finalizers\":[]}}'  "] 
+      volumes:
+      - name: jf-src
+        persistentVolumeClaim:
+          claimName: jf-src-workspace-pvc
+      - name: jf-utils
+        persistentVolumeClaim:
+          claimName: jf-src-utils-pvc
+      {{- include "check_unique_volumes" . | nindent 6 }}
+      # - name: main_storage
+      #   persistentVolumeClaim:
+      #     claimName: {{ .Values.main_storage }}
+      # - name: data_storage
+      #   persistentVolumeClaim:
+      #     claimName: {{ .Values.data_storage }}
+      restartPolicy: Never
+      

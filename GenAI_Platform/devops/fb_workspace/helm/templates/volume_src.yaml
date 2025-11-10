@@ -27,10 +27,9 @@ spec:
     name: jf-src-workspace-pvc
   persistentVolumeReclaimPolicy: Retain
   storageClassName: ""
-  {{- $variables := dict -}}
-  {{- $_ := set $variables "src" .Values.global.jfb.volume.src }}
-  {{- $path := printf "%s/workspace_app" .Values.global.jfb.volume.src.path }}
-  {{- $_ := set $variables.src "path" $path }}
-  {{- include "lib.volume.type" $variables.src | nindent 2 }}
+  {{- $srcWorkspace := dict -}}
+  {{- $_ := set $srcWorkspace "src" (deepCopy .Values.global.jfb.volume.src) }}
+  {{- $_ := set $srcWorkspace.src "path" (printf "%s/%s" .Values.global.jfb.volume.src.path .Values.global.jfb.dir.workspace) }}
+  {{- include "lib.volume.type" $srcWorkspace.src | nindent 2 }}
 ---
 {{- end }}

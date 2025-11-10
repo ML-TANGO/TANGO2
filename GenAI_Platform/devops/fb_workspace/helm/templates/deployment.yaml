@@ -28,23 +28,24 @@ spec:
       {{- include "lib.initContainer.db" . | nindent 6}}
       containers:
       - name: {{ .Values.global.jfb.name.workspace }}
-        image:  {{ .Values.global.jfb.image.registry }}/{{ .Values.global.jfb.image.workspace }}
+        image:  {{ .Values.global.jfb.image.system.registry }}/{{ .Values.global.jfb.image.workspace }}
         imagePullPolicy: {{ .Values.global.jfb.image.pullPolicy }}
         command: [ "/bin/bash", "-c",]
         args: ["cd /app; ./run.sh; sleep infinity;"]
         {{- include "lib.probe.readiness" (dict "app" "workspace" )  | nindent 8 }}
         {{- include "lib.probe.liveness" (dict "app" "workspace" )  | nindent 8 }}
+        resources:
+          limits:
+            cpu : 0.5
+            memory : "256M"
+          requests:
+            cpu : 0.1
+            memory : "128M"
         ports:
         - containerPort: 8000
         envFrom:
         - configMapRef:
             name: jfb-settings
-        livenessProbe:
-          httpGet:
-            path: api/workspaces
-            port: 8000
-          initialDelaySeconds: 60
-          periodSeconds: 180
         volumeMounts:
         {{- include "lib.volume.volumeMounts"  (dict "name" "jf-kube" )  | nindent 8 }}
         {{- include "lib.volume.volumeMounts"  (dict "name" "jf-src" "enabled" .Values.global.jfb.volume.src.enabled )  | nindent 8 }}

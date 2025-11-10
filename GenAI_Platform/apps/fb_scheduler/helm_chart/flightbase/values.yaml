@@ -1,0 +1,16 @@
+name:
+registry:
+image:
+dataset_path:
+dataset_id:
+dataset_pvc_name:
+collect_id:
+workspace_id:
+main_pvc_name:
+main_sub_path: #subpath 지정을 위해서서
+collect_info:
+instance_id:
+resource:
+  cpu:
+  memory:
+  gpu:

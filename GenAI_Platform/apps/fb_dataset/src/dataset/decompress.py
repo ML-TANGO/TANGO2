@@ -4,7 +4,7 @@ from pathlib import Path
 import os
 import traceback
 import sys
-sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
+sys.path.append("/")
 from utils.redis import get_redis_client
 from utils.redis_key import DATASET_UPLOAD_LIST
 from utils.common import change_own
@@ -30,14 +30,14 @@ user_id = os.getenv("UPLOAD_USER")
 
 def get_redis():
     max_attempts = 5
-
+        
         # 연결 시도
     attempt = 0
     while attempt < max_attempts:
         try:
             # Redis 클라이언트 초기화
             redis = get_redis_client()
-
+            
             # 연결 성공 시, 함수를 종료하고 Redis 객체 반환
             return redis
         except Exception as e:
@@ -45,7 +45,7 @@ def get_redis():
             # 연결 실패 시, 일정 시간 대기 후 다시 시도
             time.sleep(2)
             attempt += 1
-
+        
         # 모든 시도가 실패한 경우, 예외를 발생시키기
         raise Exception("Failed to connect to Redis after several attempts")
 
@@ -53,7 +53,7 @@ redis = get_redis()
 
 print(target)
 try:
-
+    
     filename = target.name
     filename = filename.split('.')[0]
     print(filename)
@@ -127,3 +127,4 @@ except:
         decompress_info['status']="error"
     redis.hset(redis_key, redis_sub_key, json.dumps(decompress_info))
     traceback.print_exc()
+    

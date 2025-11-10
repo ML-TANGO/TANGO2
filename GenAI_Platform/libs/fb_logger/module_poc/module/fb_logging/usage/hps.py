@@ -10,12 +10,12 @@ def create_hps_group(self, username, workspace, hps_name, training_name):
         hps_name (str): The name of the hyperparameter search created.
         training_name (str): The name of the parent training.
     """
-    self.usage(data={"user": username,
-                     "workspace": workspace,
+    self.usage(data={"user": username, 
+                     "workspace": workspace, 
                      "task": "hyperparamsearch",
-                     "task_name": f"{training_name} / {hps_name}",
+                     "task_name": f"{training_name} / {hps_name}", 
                      "action": "create"})
-
+    
 def create_hps_task(self, username, workspace, hps_name, training_name, task_idx):
     """
     Logs a hyperparameter search task creation event.
@@ -27,12 +27,12 @@ def create_hps_task(self, username, workspace, hps_name, training_name, task_idx
         training_name (str): The name of the parent training.
         task_idx (int): The index of the task created.
     """
-    self.usage(data={"user": username,
-                     "workspace": workspace,
-                     "task": "hyperparamsearch",
-                     "task_name": f"{training_name} / {hps_name}[{task_idx}]",
+    self.usage(data={"user": username, 
+                     "workspace": workspace, 
+                     "task": "hyperparamsearch", 
+                     "task_name": f"{training_name} / {hps_name}[{task_idx}]", 
                      "action": "create"})
-
+    
 def delete_hps(self, username, workspace, hps_name, training_name):
     """
     Logs a hyperparameter search deletion event.
@@ -43,8 +43,8 @@ def delete_hps(self, username, workspace, hps_name, training_name):
         hps_name (str): The name of the hyperparameter search deleted.
         training_name (str): The name of the parent training.
     """
-    self.usage(data={"user": username,
-                     "workspace": workspace,
-                     "task": "hyperparamsearch",
-                     "task_name": f"{training_name} / {hps_name}",
+    self.usage(data={"user": username, 
+                     "workspace": workspace, 
+                     "task": "hyperparamsearch", 
+                     "task_name": f"{training_name} / {hps_name}", 
                      "action": "delete"})

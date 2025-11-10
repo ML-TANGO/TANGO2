@@ -1,0 +1,37 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: create-directory-job
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 10  # 작업 완료 후 10초 후에 자동 제거
+  template:
+    metadata:
+      labels:
+        app: create-directory
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: {{ .Values.nodeAffinity.key }}  # 노드에 설정된 레이블 키
+                    operator: In
+                    values:
+                      - {{ .Values.nodeAffinity.values }}  # 노드에 설정된 레이블 값
+      containers:
+        - name: busybox
+          image: busybox:latest
+          command:
+            - sh
+            - "-c"
+            - "mkdir -p {{ .Values.path }}/prometheus {{ .Values.path }}/alertmanager  mkdir -p {{ .Values.path }}/grafana && mkdir -p  echo 'prometheus Directory created!'"
+          volumeMounts:
+            - name: host-path-volume
+              mountPath: {{ .Values.path }}
+      restartPolicy: Never
+      volumes:
+        - name: host-path-volume
+          hostPath:
+            path: {{ .Values.path }}  # 노드에서 사용할 경로
+            type: DirectoryOrCreate

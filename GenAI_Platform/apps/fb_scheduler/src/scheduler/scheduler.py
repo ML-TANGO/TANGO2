@@ -1,38 +1,60 @@
-from utils import TYPE, PATH, settings, topic_key, redis_key, common
-from utils.msa_db import db_project, db_workspace, db_deployment, db_node, db_instance
-from utils.redis import get_redis_client, RedisQueue
-from utils.TYPE import RESOURCE_TYPE_GPU, RESOURCE_TYPE_CPU, RESOURCE_TYPES
-
-from scheduler.project_tool_run import create_hps_pod, create_training_pod, create_project_tool
-from scheduler.helm_run import (install_deployment_pod, install_deployment_svc_ing, uninstall_pod_deployment,
-                                delete_helm_resource)
-
-
-from datetime import datetime
-from typing import List
+import json, traceback, time, sys, threading
+import random
+import logging
 from collections import defaultdict
 from functools import reduce
+from typing import List
+from enum import Enum
 
-from confluent_kafka import Producer
-from confluent_kafka import Consumer, KafkaError, KafkaException, TopicPartition
+from confluent_kafka import Consumer
 from confluent_kafka.admin import AdminClient, NewTopic
 from kubernetes import config, client
 
-import json, traceback, time, sys, threading
-import random
-import math, re
+from utils import TYPE, PATH, settings, topic_key, redis_key, common
+from utils.msa_db import (
+    db_project, db_workspace, db_deployment, db_node,
+    db_instance, db_prepro, db_analyzing, db_collect
+)
+from utils.redis import get_redis_client, RedisQueue
+from scheduler.collect_run import (
+    create_crawling_collector, create_fb_deployment_collector,
+    create_public_api_collector, create_remote_server_collector
+)
+from scheduler.project_tool_run import create_hps_pod, create_training_pod, create_project_tool
+from scheduler.preprocessing_tool_run import create_preprocessing_tool, create_preprocessing_job
+if settings.LLM_USED:
+    from utils.llm_db import db_model
+    from scheduler.llm_run import create_fine_tuning
+    from scheduler.helm_run import uninstall_deployment_llm
+
+from scheduler.helm_run import (
+    install_deployment_pod, install_deployment_svc_ing, uninstall_pod_deployment,
+    delete_helm_project, delete_helm_fine_tuning, install_deployment_llm,
+    delete_helm_preprocessing, create_analyzer_pod, delete_helm_analyzer
+)
+from scheduler.resource_usage import *
 
 config.load_kube_config(config_file=settings.KUBER_CONFIG_PATH)
 coreV1Api = client.CoreV1Api()
 
+KAFKA_TIMEOUT = 0.5
+last_print_time = 0  
+PRINT_INTERVAL = 3  # seconds
+
+DEBUG = False
+class Status(Enum):
+    SUCCESS = 0
+    FAIL_RETRY = 1  # 실패 후 재실행 시도
+    FAIL_PASS = 2   # 실패 후 패스
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
 """
- 자원 부족
- * pods "h27b0d4a3c2c549f1e8724f581859a595-518" is forbidden: exceeded quota: jfb-93-quota, requested: limits.memory=330Gi, used: limits.memory=6Gi, limited: limits.memory=20Gi
+ 자원 부족:
+   * pods "xxx" is forbidden: exceeded quota ...
 
-
- 이미 실행중
-  Error: INSTALLATION FAILED: release: already exists
+ 이미 실행중:
+   Error: INSTALLATION FAILED: release: already exists
 """
 
 # Consumer 설정
@@ -40,9 +62,14 @@ conf = {
     'bootstrap.servers': settings.JF_KAFKA_DNS,
     'group.id': 'mygroup',
     'auto.offset.reset': 'earliest',
-    # 'enable.auto.commit' : True,
+    'max.poll.interval.ms': 10000,
+    'session.timeout.ms': 10000,
+    'enable.auto.commit': True,
+    'auto.commit.interval.ms': 5000,
 }
-
+kafka_admin_conf = {
+    'bootstrap.servers': settings.JF_KAFKA_DNS
+}
 
 class ThreadingLock:
     def __init__(self, lock):
@@ -59,24 +86,36 @@ class ThreadingLock:
 
 jf_tlock = ThreadingLock(threading.Lock())
 
-redis_client = get_redis_client(role="slave")
 
+def create_topic(topics: List[str] = []):
+    if not topics:
+        return
+    conf = {'bootstrap.servers': settings.JF_KAFKA_DNS}
+    a = AdminClient(conf)
+    new_topics = [topic for topic in topics if topic not in a.list_topics().topics]
+    if new_topics:
+        fs = a.create_topics([NewTopic(topic=topic, num_partitions=3, replication_factor=1) for topic in new_topics])
+        for topic, f in fs.items():
+            try:
+                f.result()
+                logging.info(f"✅ Topic '{topic}' created successfully.")
+            except Exception as e:
+                logging.error(f"❌ Failed to create topic '{topic}': {e}")
+    else:
+        logging.info("✅ All topics are already created.")
 
-"""
-{
-    workspace_id : {
-        instance_id: pod_info
-    }
+def get_optimal_gpus(data: List[dict], num_gpus: int):
+    """
+    {
+    "node-A": ["GPU1", "GPU2"],
+    "node-B": ["GPU3"],
+    ...
+    } 형식으로 정리 후에 가용 GPU가 많은 노드부터 순서대로 할당
 
-}
-
-"""
-def get_optimal_gpus(data, num_gpus):
+    """
     nodes = defaultdict(list)
     for item in data:
         nodes[item["node_name"]].append(item["gpu_uuid"])
-
-    # 노드를 내림차순으로 정렬하는 GPU 수를 기준으로 노드 정렬
     sorted_nodes = sorted(nodes.items(), key=lambda x: len(x[1]), reverse=True)
 
     result = []
@@ -85,74 +124,125 @@ def get_optimal_gpus(data, num_gpus):
     for node, gpus in sorted_nodes:
         if remaining_gpus <= 0:
             break
-
-        # 노드에 요청을 수행할 수 있는 충분한 GPU가 있으면 필요한 것만 가져갑니다
         if len(gpus) >= remaining_gpus:
             result.extend([{"node_name": node, "gpu_uuid": gpu} for gpu in gpus[:remaining_gpus]])
             remaining_gpus = 0
         else:
-            # 그렇지 않으면 이 노드에서 모든 GPU를 가져가고 다음 노드로 계속 이동합니다
             result.extend([{"node_name": node, "gpu_uuid": gpu} for gpu in gpus])
             remaining_gpus -= len(gpus)
-
     return result
 
+# def get_optimal_gpus(available_gpus: List[dict], num_gpus: int):
+#     """
+#     가능한 한 적은 노드에서 많은 GPU를 할당하도록 개선한 로직.
+#     동일 조건에서는 무작위로 노드를 선택함.
+#     """
+#     print("### avail:", available_gpus)
+#     # 우선 gpu_count로 내림차순 정렬
+#     sorted_nodes = sorted(available_gpus, key=lambda x: x["gpu_count"], reverse=True)
 
+#     # 동일한 gpu_count를 가진 노드를 그룹핑하여 셔플
+#     gpu_count_groups = {}
+#     for node in sorted_nodes:
+#         gpu_count = node["gpu_count"]
+#         gpu_count_groups.setdefault(gpu_count, []).append(node)
 
-def gpu_auto_clustering(available_gpus : List[dict], pod_per_gpu : int = None):
-    # 노드를 기준으로 데이터를 그룹화
+#     # 각 그룹 내에서 노드를 무작위로 섞음
+#     randomized_nodes = []
+#     for gpu_count in sorted(gpu_count_groups.keys(), reverse=True):
+#         nodes = gpu_count_groups[gpu_count]
+#         random.shuffle(nodes)
+#         randomized_nodes.extend(nodes)
+
+#     # GPU 할당 수행
+#     result = []
+#     remaining_gpus = num_gpus
+
+#     for node_info in randomized_nodes:
+#         if remaining_gpus <= 0:
+#             break
+
+#         allocatable = min(node_info["gpu_count"], remaining_gpus)
+#         result.append({
+#             "node_name": node_info["node_name"],
+#             "allocated_gpu_count": allocatable
+#         })
+#         remaining_gpus -= allocatable
+
+#     if remaining_gpus > 0:
+#         raise ValueError("요청한 GPU 개수보다 사용 가능한 GPU가 적습니다.")
+
+#     return result
+
+def gpu_auto_clustering(available_gpus: List[dict], pod_per_gpu: int = None):
     grouped_data = defaultdict(list)
     for item in available_gpus:
         grouped_data[item["node_name"]].append(item["gpu_uuid"])
 
-    # 노드별 GPU UUID 개수를 셈
-    node_counts = {node: len(uuids) for node, uuids in grouped_data.items()}
-
-    # 최대 공약수를 계산하는 함수
     def gcd(a, b):
         while b:
             a, b = b, a % b
         return a
 
-    # 여러 숫자의 최대 공약수를 계산하는 함수
     def gcd_multiple(numbers):
         return reduce(gcd, numbers)
 
-    # 노드별 GPU UUID 개수 리스트
+    node_counts = {node: len(uuids) for node, uuids in grouped_data.items()}
     counts = list(node_counts.values())
 
-    # 최대 공약수 계산
     if pod_per_gpu:
         max_gcd = pod_per_gpu
     else:
         max_gcd = gcd_multiple(counts)
 
-    # 최대 공약수에 맞춰 GPU UUID를 분리
     result = []
     for node, uuids in grouped_data.items():
         chunks = [uuids[i:i + max_gcd] for i in range(0, len(uuids), max_gcd)]
         for chunk in chunks:
             result.append({"node_name": node, "gpu_uuids": chunk})
     return result
+# def gpu_auto_clustering(optimal_allocations: List[dict], pod_per_gpu: int = 1):
+#     """
+#     각 노드의 GPU 수를 기준으로 pod_per_gpu로 나누어 클러스터링.
+#     """
+#     clusters = []
+#     for alloc in optimal_allocations:
+#         node_name = alloc["node_name"]
+#         gpu_count = alloc["allocated_gpu_count"]
 
+#         full_clusters, remainder = divmod(gpu_count, pod_per_gpu)
 
-def get_used_gpu_uuid(label_select : str):
-        used_gpu_uuid = []
-        live_pods = coreV1Api.list_pod_for_all_namespaces(label_selector=label_select).items
-        for live_pod in live_pods:
-            pod_labels = live_pod.metadata.labels
-            pod_status = live_pod.status.phase
-            if pod_status not in ["Succeeded", "Failed"]: # 동작 중인 pod만 검색
-                if "gpu_ids" in pod_labels:
-                    for gpu_id in pod_labels["gpu_ids"].split("."):
-                        if gpu_id:
-                            used_gpu_uuid.append(db_node.get_node_gpu(gpu_id=gpu_id)["gpu_uuid"])
-        return list(set(used_gpu_uuid))
+#         # 풀 클러스터 배정
+#         for _ in range(full_clusters):
+#             clusters.append({
+#                 "node_name": node_name,
+#                 "gpu_count": pod_per_gpu
+#             })
+
+#         # 나머지 GPU가 있으면 별도 클러스터로 배정
+#         if remainder:
+#             clusters.append({
+#                 "node_name": node_name,
+#                 "gpu_count": remainder
+#             })
+
+#     return clusters
+
+def get_used_gpu_uuid(label_select: str):
+    used_gpu_uuid = []
+    live_pods = coreV1Api.list_pod_for_all_namespaces(label_selector=label_select).items
+    for live_pod in live_pods:
+        pod_labels = live_pod.metadata.labels
+        pod_status = live_pod.status.phase
+        if pod_status not in ["Succeeded", "Failed"]:
+            if "gpu_ids" in pod_labels:
+                for gpu_id in pod_labels["gpu_ids"].split("."):
+                    if gpu_id:
+                        used_gpu_uuid.append(db_node.get_node_gpu(gpu_id=gpu_id)["gpu_uuid"])
+    return list(set(used_gpu_uuid))
 
 def get_available_gpus_by_model(model_name, data, instance_id):
-
     node_list = db_node.get_node_instance_list(instance_id=instance_id)
-
     node_name_list = [node["node_name"] for node in node_list]
 
     available_gpus = [
@@ -161,14 +251,13 @@ def get_available_gpus_by_model(model_name, data, instance_id):
         for gpu_uuid, gpu in gpus.items()
         if gpu['model_name'] == model_name and not gpu['used_info'] and node_name in node_name_list
     ]
-    # return available_gpus[:num_gpus]
     return available_gpus
+
 def acked(err, msg):
     if err is not None:
         print("Failed to deliver message: %s: %s" % (str(msg), str(err)))
     else:
         print("Message produced: %s" % (str(msg)))
-
 
 def try_json_deserializer(data):
     try:
@@ -177,776 +266,1002 @@ def try_json_deserializer(data):
         print("디코드 오류", file=sys.stderr)
         return json.loads(data)
 
+def get_gpu_auto_select(gpu_count: int, pod_count: int, gpu_data: list):
+    # 결과를 저장할 리스트
+    result = []
 
-"""
-scheduler 정리
+    # GPU를 노드 이름별로 그룹화
+    available_gpus = {}
+    for gpu_info in gpu_data:
+        node_name = gpu_info['node_name']
+        gpu_uuid = gpu_info['gpu_uuid']
+        if node_name not in available_gpus:
+            available_gpus[node_name] = []
+        available_gpus[node_name].append(gpu_uuid)
 
-1. 각 project , deployment 에서 kafka 에 pod 생성 요청을 날림
+    # 필요한 GPU의 총 수
+    total_required_gpus = pod_count * gpu_count
 
-2. workspace_item_pod_check thread 에서 각 project, deployment 별로 추가로 생성 할 수 있는지 check
-    2-1. redis WORKSPACE_ITEM_PENDING_POD 에서 각 project 및 deployment 별 pending에 걸린 pod 요청이 있는지 확인
-    2-2. pending에 걸린 pod 요청이 없을 경우 kafka에서 요청된 pod 이 있는지 확인
-    2-3. 각 project, deployment 별로 cpu, ram 사용율을 계산
+    # 사용할 수 있는 GPU를 할당
+    allocated_gpus = 0
+    for node_name, gpus in available_gpus.items():
+        if len(gpus) < gpu_count: # 해당 노드에 pod에 같이 할당 할 수 있는 gpu 개수가 부족할 경우 pass
+            continue
+        while allocated_gpus < total_required_gpus and gpus:
+            for _ in range(gpu_count):
+                if gpus and allocated_gpus < total_required_gpus:
+                    result.append({'node_name': node_name, 'gpu_uuid': gpus.pop(0)})
+                    allocated_gpus += 1
 
-3. pod_start_new 에서 workspace instance 별로 pod 실행 여부를 check
-    3-1 요청한 gpu model 이름과 해당 model 이 속한 instance를 가지고 있는 node 들 중에서 검색 후 사용가능한 gpu model 리스트를 조회
-    3-2 요청한 gpu의 개수가 2개 이상일 경우 auto, select 기준으로 gpu model 선정
-    3-3 위 정보를 추가로 helm install 실행 실패 시  WORKSPACE_INSTANCE_PENDING_POD 에 pod 정보 추가
+        # 필요한 GPU의 수에 도달하면 루프 종료
+        if allocated_gpus >= total_required_gpus:
+            break
 
+    # 필요한 GPU가 충분하지 않은 경우 예외 발생
+    if allocated_gpus < total_required_gpus:
+        return []
 
-
-"""
-
-
-
-
-
-
-def workspace_item_pod_check():
-
-    def db_sync(pending_pod : dict, pod_info : dict, pending_flag : bool = False, project = None, deployment = None):
-        if pod_info["pod_type"] == TYPE.TRAINING_ITEM_A:
-            training_info = db_project.get_training(training_id=pod_info["id"])
-            if training_info is None or training_info["end_datetime"]:
-                if pending_flag:
-                    del pending_pod[str(project["id"])] # 이미 삭제된 요청이라면 pending에서 삭제
-                return False
-        elif pod_info["pod_type"] == TYPE.TRAINING_ITEM_C:
-            hps_info = db_project.get_hps(hps_id=pod_info["id"])
-            if hps_info is None or hps_info["end_datetime"]:
-                if pending_flag:
-                    del pending_pod[str(project["id"])]
-                return False
-        elif pod_info["pod_type"] == TYPE.TRAINING_ITEM_B:
-            tool_info =db_project.get_project_tool(project_tool_id=pod_info["id"])
-            if tool_info is None or not tool_info['request_status']:
-                if pending_flag:
-                    del pending_pod[str(project["id"])]
-                return False
-        else: # 배포
-            worker_info = db_deployment.get_deployment_worker(deployment_worker_id=pod_info["deployment_worker_id"])
-            if worker_info is None or worker_info["end_datetime"]:
-                if pending_flag:
-                    del pending_pod[str(deployment["id"])]
-                return False
-        return True
+    return result
 
 
+# --------------------------------------------------------------------------------
+# (A) Kafka 메시지 -> Pending Pod 큐에 저장
+# --------------------------------------------------------------------------------
+def run_kafka_consumer():
+    """
+    Kafka에서 pod_info 메시지를 수신하여,
+    메시지에 포함된 workspace_id 기준으로 'WORKSPACE_ITEM_PENDING_POD2'에 저장.
+    (실제 실행은 run_scheduler()에서 처리)
+    """
+    logging.info("Starting Kafka Consumer...")
     consumer = Consumer(conf)
+    kafka_admin = AdminClient(kafka_admin_conf)
+    
+    type_id_map = {
+                TYPE.PROJECT_TYPE: "project_id",
+                TYPE.DEPLOYMENT_TYPE: "deployment_id",
+                TYPE.PREPROCESSING_TYPE: "preprocessing_id",
+                TYPE.ANALYZER_TYPE: "analyzer_id",
+                TYPE.COLLECT_TYPE: "collect_id",
+                TYPE.FINE_TUNING_TYPE: "model_id" if settings.LLM_USED else None
+            }
 
     while True:
         try:
-            time.sleep(0.5)
-            workspace_list = db_workspace.get_workspace_list()
+            time.sleep(0.3)
 
-            for workspace in workspace_list:
-                #======================================================================
-                # workspace item queue
-                #======================================================================
-                workspace_item_pending_pod = redis_client.hget(redis_key.WORKSPACE_ITEM_PENDING_POD, workspace["id"])
-                if not workspace_item_pending_pod:
+            # TODO: 추후 토픽 구조 변경
+            pod_info = dict()
+            kafka_topic_list = [topic for topic in kafka_admin.list_topics().topics]
+            kafka_topic_list = [x for x in kafka_topic_list if x != '__consumer_offsets']
+            if not kafka_topic_list:
+                continue
+            consumer.subscribe(kafka_topic_list)
+
+            try:
+                msgs = consumer.consume(num_messages=100, timeout=KAFKA_TIMEOUT)  # 신규 메시지 없을 시 None 반환
+                if not msgs:
+                    continue
+            except Exception as e:
+                logging.error("Exception occurred while fetching Kafka message", exc_info=True)
+                continue
+            
+            redis_client = get_redis_client()
+            for msg in msgs:
+                pod_info = try_json_deserializer(msg.value())
+                logging.info(f"[kafka polled msg] pod_info: {json.dumps(pod_info, ensure_ascii=False)}")
+                # 메시지에서 workspace_id 추출
+                ws_id = pod_info.get("workspace_id") or pod_info.get("metadata_workspace_id")
+                if not ws_id:
+                    logging.info("No workspace_id in pod_info, skipping.")
+                    continue
+                # {item_type}:{workspace_id}
+                # Pending Pod 큐에 저장
+                raw_pending = redis_client.hget(redis_key.WORKSPACE_ITEM_PENDING_POD2, ws_id)
+                if not raw_pending:
                     workspace_item_pending_pod = {
-                        "project" : {},
-                        "deployment" : {}
+                        TYPE.PROJECT_TYPE: {},
+                        TYPE.DEPLOYMENT_TYPE: {},
+                        TYPE.PREPROCESSING_TYPE: {},
+                        TYPE.ANALYZER_TYPE: {},
+                        TYPE.COLLECT_TYPE: {},
+                        TYPE.FINE_TUNING_TYPE: {}
                     }
                 else:
-                    workspace_item_pending_pod = json.loads(workspace_item_pending_pod)
+                    workspace_item_pending_pod = json.loads(raw_pending)
 
-                # instance queue
-                # workspace_instance_queue = redis_client.hget(redis_key.WORKSPACE_INSTANCE_PENDING, workspace["id"])
-                # if workspace_instance_queue:
-                #     workspace_instance_queue = json.loads(workspace_instance_queue)
-                # else:
-                #     workspace_instance_queue = {}
+                # pod_type별로 분류
+                ptype = pod_info["pod_type"]
 
-                # workspace resource
-                workspace_resource = db_workspace.get_workspace_resource(workspace_id=workspace["id"])
-                # workspace pod status
-                workspace_pod_status = redis_client.hget(redis_key.WORKSPACE_PODS_STATUS, workspace["id"])
-                if workspace_pod_status:
-                    workspace_pod_status = json.loads(workspace_pod_status)
-                else:
-                    workspace_pod_status = {}
-                projects_pod_status = workspace_pod_status.get(TYPE.PROJECT_TYPE, {})
-                deployment_pod_status = workspace_pod_status.get(TYPE.DEPLOYMENT_TYPE, {})
-
-                # project
-                project_list = db_project.get_project_list(workspace_id=workspace["id"])
-                project_pending_pod = workspace_item_pending_pod["project"]
-
-                for project in project_list:
-                    # TODO
-                    # cpu ram 를 사용해 사용 가능한 pod 계산
-                    project["gpu_allocate"] = project["gpu_allocate"] if project["gpu_allocate"] else 0
-                    project_gpu_allocate = project["gpu_allocate"] * project["instance_allocate"]
-                    project_cpu_allocate = project["cpu_allocate"] * project["instance_allocate"]
-                    project_ram_allocate = project["ram_allocate"] * project["instance_allocate"]
-                    used_gpu_allocate = 0
-                    used_ram_allocate = 0
-                    used_cpu_allocate = 0
-                    pending_gpu_allocate = 0
-                    pending_ram_allocate = 0
-                    pending_cpu_allocate = 0
-
-
-                    project_pod_status = projects_pod_status.get(str(project["id"]), {})
-                    project_tool_pod = project_pod_status.get(TYPE.TRAINING_ITEM_B, {})
-                    project_training_pod = project_pod_status.get(TYPE.TRAINING_ITEM_A, {})
-                    # 동작 중인 pod
-                    for tool_info in project_tool_pod.values():
-                        used_gpu_allocate += tool_info["resource"].get("gpu", 0)
-                        used_ram_allocate += tool_info["resource"].get("ram", 0)
-                        used_cpu_allocate += tool_info["resource"].get("cpu", 0)
-                    for training_info in project_training_pod.values():
-                        used_gpu_allocate += training_info["resource"].get("gpu", 0)
-                        used_ram_allocate += training_info["resource"]["cpu"]
-                        used_cpu_allocate += training_info["resource"].get("ram", 0)
-
-
-
-                    topic = topic_key.PROJECT_TOPIC.format(project["id"]) # TODO 포맷 변경
-                    pending_flag = False
-
-                    if str(project["id"]) in project_pending_pod:
-                        pod_info = project_pending_pod[str(project["id"])]
-                        pending_flag = True
-                    else:
-                        try:
-                            consumer.subscribe([topic])
-                            msg = consumer.poll(timeout=1)
-                            if msg is None or msg.error():
-                                continue
-                            # pod_info = json.loads(msg.value())
-                            pod_info = try_json_deserializer(msg.value())
-                        except Exception as e :
-                            #  토픽이 사라졌으므로 넘긴다 -> project가 사라졌을 경우, 아직 한번도 push를 안한경우
-                            print("no topic",file=sys.stderr)
-                            continue
-                    if not db_sync(pending_pod=project_pending_pod, pod_info=pod_info, pending_flag=pending_flag):
-                        continue
-
-                    instance_key = redis_key.WORKSPACE_INSTANCE_QUEUE.format(workspace["id"], project["instance_id"]) # TODO 포맷 변경
-                    redis_queue = RedisQueue(redis_client=redis_client, key=instance_key)
-
-                    # new_instance_queue = workspace_instance_queue.get(str(project["instance_id"]), [])
-
-                    # workspace로  대기중인 pod 확인
-                    # instance queue 확인
-                    instance_queue = redis_queue.fetch_queue_items()
-                    for instance_queue_pod in instance_queue:
-                        # instance_pod = {}
-                        instance_queue_pod = json.loads(instance_queue_pod)
-                        if instance_queue_pod.get("project_id", None) == project["id"]:
-                            pending_gpu_allocate += instance_queue_pod["gpu_count"]
-                            if instance_queue_pod.get("pod_type", None) == TYPE.TRAINING_ITEM_A:
-                                pending_ram_allocate += workspace_resource["job_ram_limit"]
-                                pending_cpu_allocate += workspace_resource["job_cpu_limit"]
-
-                            elif instance_queue_pod.get("pod_type", None) == TYPE.TRAINING_ITEM_B:
-                                pending_ram_allocate += workspace_resource["tool_ram_limit"]
-                                pending_cpu_allocate += workspace_resource["tool_cpu_limit"]
-
-                    available_gpu = project_gpu_allocate - used_gpu_allocate - pending_gpu_allocate
-                    available_cpu = project_cpu_allocate - used_cpu_allocate - pending_cpu_allocate
-                    available_ram = project_ram_allocate - used_ram_allocate - pending_ram_allocate
-                    # CPU 및 RAM 자원량 확인
-                    # job, tool 에 설정된 자원량보다 적으면 pending
-                    pod_count = 1
-                    if pod_info["gpu_cluster_auto"]:
-                        pod_count = pod_info["gpu_auto_cluster_case"]["server"]
-                    elif pod_info["gpu_count"] > 1:
-                        pod_count = pod_info["gpu_count"]/pod_info["pod_per_gpu"] if pod_info["pod_per_gpu"] != 0 else pod_info["gpu_count"]
-
-                    print("="*10, file=sys.stderr)
-                    print(pod_info["resource_type"], file=sys.stderr)
-                    print(available_gpu, available_cpu, available_ram , file=sys.stderr)
-                    print(pod_count, file=sys.stderr)
-                    print("="*10, file=sys.stderr)
-
-
-
-                    if pod_info["pod_type"] == TYPE.TRAINING_ITEM_A:
-
-
-                        if available_cpu < (workspace_resource["job_cpu_limit"]*pod_count) or available_ram < (workspace_resource["job_ram_limit"]*pod_count) or available_gpu < pod_info["gpu_count"]:
-                            project_pending_pod[str(project["id"])] = pod_info
-                            continue
+                # pod_info에서 해당 타입별 ID 가져오기
+                item_key = type_id_map.get(ptype)
+                if item_key:
+                    item_id = pod_info.get(item_key)
+                    if item_id:
+                        # 중복 처리 방지: 동일한 pod_info가 이미 있는지 확인
+                        existing_items = workspace_item_pending_pod.setdefault(ptype, {}).setdefault(str(item_id), [])
+                        # pod_info의 고유 식별자로 중복 체크 (id 기준)
+                        if not any(existing['id'] == pod_info['id'] for existing in existing_items):
+                            existing_items.append(pod_info)
+                            logging.info(f"[NEW POD ADDED] {ptype} ID {item_id}: pod_info added to pending")
                         else:
-                            if str(project["id"]) in project_pending_pod:
-                                del project_pending_pod[str(project["id"])]
-                    elif pod_info["pod_type"] == TYPE.TRAINING_ITEM_B:
-                        if available_cpu < (workspace_resource["tool_cpu_limit"]*pod_count) or available_ram < (workspace_resource["tool_ram_limit"]*pod_count) or available_gpu < pod_info["gpu_count"]:
-                            project_pending_pod[str(project["id"])] = pod_info
-                            continue
-                        else:
-                            if str(project["id"]) in project_pending_pod:
-                                del project_pending_pod[str(project["id"])]
-
-                    redis_queue.rput(json.dumps(pod_info))
-                    # new_instance_queue.append(pod_info)
-                    # workspace_instance_queue[str(project["instance_id"])] = new_instance_queue
-
-
-                # deployment
-                deployment_list = db_deployment.get_deployment_list_in_workspace(workspace_id=workspace["id"])
-                deployment_pending_pod = workspace_item_pending_pod["deployment"]
-
-                for deployment in deployment_list:
-                    deployment["gpu_allocate"] = deployment["gpu_allocate"] if deployment["gpu_allocate"] else 0
-                    deployment_gpu_allocate = deployment["gpu_allocate"] * deployment["instance_allocate"]
-                    deployment_cpu_allocate = deployment["cpu_allocate"] * deployment["instance_allocate"]
-                    deployment_ram_allocate = deployment["ram_allocate"] * deployment["instance_allocate"]
-                    worker_pod_status = deployment_pod_status.get(str(deployment["id"]), {})
-                    used_gpu_allocate = 0
-                    used_ram_allocate = 0
-                    used_cpu_allocate = 0
-                    pending_gpu_allocate = 0
-                    pending_ram_allocate = 0
-                    pending_cpu_allocate = 0
-
-                    # 동작 중인 worker
-                    for worker_info in worker_pod_status.values():
-                        used_gpu_allocate += worker_info["resource"].get("gpu", 0)
-                        used_ram_allocate += worker_info["resource"].get("ram", 0)
-                        used_cpu_allocate += worker_info["resource"].get("cpu", 0)
-
-                    topic = topic_key.DEPLOYMENT_TOPIC.format(deployment["id"])
-                    pending_flag = False
-                    if str(deployment["id"]) in deployment_pending_pod:
-                        pod_info = deployment_pending_pod[str(deployment["id"])]
-                        pending_flag = True
-                    else:
-
-                        try:
-                            consumer.subscribe([topic])
-                            msg = consumer.poll(timeout=1)
-
-                            if msg is None or msg.error():
-                                continue
-                            pod_info = json.loads(msg.value())
-
-                        except Exception as e :
-                            continue
-
-                    if not db_sync(pending_pod=deployment_pending_pod, pod_info=pod_info, pending_flag=pending_flag):
-                        continue
-
-                    instance_key = redis_key.WORKSPACE_INSTANCE_QUEUE.format(workspace["id"], deployment["instance_id"])
-                    redis_queue = RedisQueue(redis_client=redis_client, key=instance_key)
-                    # new_instance_queue = workspace_instance_queue.get(str(project["instance_id"]), [])
-                    # instance queue 확인 및 instance_pending 확인
-                    instance_queue = redis_queue.fetch_queue_items()
-                    for instance_queue_pod in instance_queue:
-                        instance_queue_pod = json.loads(instance_queue_pod)
-                        if instance_queue_pod.get("deployment_id") == deployment["id"]:
-                            pending_gpu_allocate += instance_queue_pod["gpu_count"]
-                            pending_ram_allocate += workspace_resource["deployment_ram_limit"]
-                            pending_cpu_allocate += workspace_resource["deployment_cpu_limit"]
-
-                    print(pending_gpu_allocate, pending_cpu_allocate, pending_ram_allocate , file=sys.stderr)
-
-                    available_gpu = deployment_gpu_allocate - used_gpu_allocate - pending_gpu_allocate
-                    available_cpu = deployment_cpu_allocate - used_cpu_allocate - pending_cpu_allocate
-                    available_ram = deployment_ram_allocate - used_ram_allocate - pending_ram_allocate
-                    # CPU 및 RAM 자원량 확인
-                    # print("="*10, file=sys.stderr)
-                    # # print(pod_info["resource_type"], file=sys.stderr)
-                    # print(available_gpu, available_cpu, available_ram , file=sys.stderr)
-                    # print("="*10, file=sys.stderr)
-                    # print("배포 워커 추가 가능 여부", file=sys.stderr)
-                    # print(available_cpu < workspace_resource["deployment_cpu_limit"] or available_ram < workspace_resource["deployment_ram_limit"] or available_gpu < pod_info["gpu_count"], file=sys.stderr)
-                    # print("="*10, file=sys.stderr)
-
-                    if available_cpu < workspace_resource["deployment_cpu_limit"] or available_ram < workspace_resource["deployment_ram_limit"] or available_gpu < pod_info["gpu_count"]:
-                        deployment_pending_pod[str(deployment["id"])] = pod_info
-                        continue
-                    else:
-                        if str(deployment["id"]) in deployment_pending_pod:
-                            del deployment_pending_pod[str(deployment["id"])]
-
-                    redis_queue.rput(json.dumps(pod_info))
-                    # new_instance_queue.append(pod_info)
-                    # workspace_instance_queue[str(project["instance_id"])] = new_instance_queue
-
-
-                    print("*"*20, file=sys.stderr)
-                redis_client.hset(redis_key.WORKSPACE_ITEM_PENDING_POD, workspace["id"], json.dumps(workspace_item_pending_pod))
+                            logging.info(f"[DUPLICATE SKIPPED] {ptype} ID {item_id}: pod_info already exists in pending")
+                logging.info(f"[workspace_item_pending_pod] : {json.dumps(workspace_item_pending_pod, ensure_ascii=False)}")
+                # Redis에 다시 저장
+                redis_client.hset(redis_key.WORKSPACE_ITEM_PENDING_POD2, ws_id, json.dumps(workspace_item_pending_pod))
 
         except Exception as e:
-            traceback.print_exc(file=sys.stderr)
+            consumer.unsubscribe()
+            traceback.format_exc()
+            time.sleep(1)
+    # consumer.close() # 필요시
 
-def pod_start_new():
-    def db_sync(pending_pod : dict, pod_info : dict, pending_flag : bool = False, project = None, deployment = None):
-        if pod_info["pod_type"] == TYPE.TRAINING_ITEM_A:
-            training_info = db_project.get_training(training_id=pod_info["id"])
-            if training_info is None or training_info["end_datetime"]:
-                if pending_flag:
-                    del pending_pod[str(project["id"])] # 이미 삭제된 요청이라면 pending에서 삭제
+def kafka_consume_msgs(consumer, kafka_admin, redis_client, type_id_map):
+    """
+    Kafka에서 pod_info 메시지를 수신하여,
+    메시지에 포함된 workspace_id 기준으로 'WORKSPACE_ITEM_PENDING_POD2'에 저장.
+    """
+    try:
+
+        # TODO: 추후 토픽 구조 변경
+        pod_info = dict()
+        # kafka_topic_list = [topic for topic in kafka_admin.list_topics().topics if topic != '__consumer_offsets']
+        # if not kafka_topic_list:
+        #     return
+        consumer.subscribe([str(topic_key.SCHEDULER_TOPIC)])
+
+        try:
+            msgs = consumer.consume(num_messages=100, timeout=KAFKA_TIMEOUT)  # 신규 메시지 없을 시 None 반환
+            if not msgs:
+                return True
+        except Exception as e:
+            logging.error("Exception occurred while fetching Kafka message", exc_info=True)
+            return True
+        
+        for msg in msgs:
+            pod_info = try_json_deserializer(msg.value())
+            logging.info(f"[kafka polled msg] pod_info: {json.dumps(pod_info, ensure_ascii=False)}")
+            # 메시지에서 workspace_id 추출
+            ws_id = pod_info.get("workspace_id") or pod_info.get("metadata_workspace_id")
+            if not ws_id:
+                logging.info("No workspace_id in pod_info, skipping.")
+                continue
+            # {item_type}:{workspace_id}
+            # Pending Pod 큐에 저장
+            raw_pending = redis_client.hget(redis_key.WORKSPACE_ITEM_PENDING_POD2, ws_id)
+            if not raw_pending:
+                workspace_item_pending_pod = {
+                    TYPE.PROJECT_TYPE: {
+                        # "1" : []
+                    },
+                    TYPE.DEPLOYMENT_TYPE: {},
+                    TYPE.PREPROCESSING_TYPE: {},
+                    TYPE.ANALYZER_TYPE: {},
+                    TYPE.COLLECT_TYPE: {},
+                    TYPE.FINE_TUNING_TYPE: {}
+                }
+            else:
+                workspace_item_pending_pod = json.loads(raw_pending)
+
+            # pod_type별로 분류
+            ptype = pod_info.get("pod_type", None)
+            if not ptype:
+                continue
+            # pod_info에서 해당 타입별 ID 가져오기
+            item_key = type_id_map.get(ptype)
+            if item_key:
+                item_id = pod_info.get(item_key)
+                if item_id:
+                    # 중복 처리 방지: 동일한 pod_info가 이미 있는지 확인
+                    existing_items = workspace_item_pending_pod.setdefault(ptype, {}).setdefault(str(item_id), [])
+                    # pod_info의 고유 식별자로 중복 체크 (id 기준)
+                    if not any(existing['id'] == pod_info['id'] for existing in existing_items):
+                        existing_items.append(pod_info)
+                        logging.info(f"[NEW POD ADDED] {ptype} ID {item_id}: pod_info added to pending")
+                    else:
+                        logging.info(f"[DUPLICATE SKIPPED] {ptype} ID {item_id}: pod_info already exists in pending")
+            logging.info(f"[workspace_item_pending_pod] : {json.dumps(workspace_item_pending_pod, ensure_ascii=False)}")
+            # Redis에 다시 저장
+            redis_client.hset(redis_key.WORKSPACE_ITEM_PENDING_POD2, ws_id, json.dumps(workspace_item_pending_pod))
+
+        # 메시지 처리 완료 후 commit
+        try:
+            consumer.commit()
+        except Exception as e:
+            logging.error(f"Failed to commit offset: {e}")
+
+    except Exception as e:
+        traceback.print_exc()
+        try:
+            consumer.unsubscribe()
+        except:
+            pass
+        try:
+            consumer.close()
+        except:
+            pass
+        logging.error("Kafka consumer error, will reinitialize", exc_info=True)
+        return False  # 실패 처리
+
+
+# --------------------------------------------------------------------------------
+# (B) Workspace 스케줄러 (기존 pod_start_new() 로직)
+# --------------------------------------------------------------------------------
+def run_scheduler():
+    """
+    1) 모든 workspace를 순회하며,
+       - Pending Pod에서 자원 사용량 계산 후, 실행 가능하면 인스턴스 큐로 이동
+       - 인스턴스 큐에서 pop -> Helm 배포 -> 실패 시 롤백/재대기
+    2) 기존의 pod_start_new() 함수를 대체
+    """
+
+    def db_sync(pod_info: dict, project=None, deployment=None, preprocessing=None, analyzer=None, fine_tuning=None, collect=None):
+        if pod_info["pod_type"] == TYPE.PROJECT_TYPE:
+            if pod_info["work_func_type"] == TYPE.TRAINING_ITEM_A:
+                training_info = db_project.get_training(training_id=pod_info["id"])
+                if training_info is None or training_info["end_datetime"]:
+                    return False
+            elif pod_info["work_func_type"] == TYPE.TRAINING_ITEM_C:
+                hps_info = db_project.get_hps(hps_id=pod_info["id"])
+                if hps_info is None or hps_info["end_datetime"]:
+                    return False
+            elif pod_info["work_func_type"] == TYPE.TRAINING_ITEM_B:
+                tool_info = db_project.get_project_tool(project_tool_id=pod_info["id"])
+                if tool_info is None or not tool_info['request_status'] or tool_info["end_datetime"]:
+                    return False
+        elif pod_info["pod_type"] == TYPE.PREPROCESSING_TYPE:
+            if pod_info["work_func_type"] == TYPE.PREPROCESSING_ITEM_A:
+                tool_info = db_prepro.get_preprocessing_tool_sync(preprocessing_tool_id=pod_info["id"])
+                if tool_info is None or not tool_info['request_status']:
+                    return False
+            elif pod_info["work_func_type"] == TYPE.PREPROCESSING_ITEM_B:
+                job_info = db_prepro.get_job_simple(preprocessing_job_id=pod_info["id"])
+                if job_info is None or job_info["end_datetime"]:
+                    return False
+        elif pod_info["pod_type"] == TYPE.ANALYZER_TYPE:
+            analyzer_graph_info = db_analyzing.get_analyzer_graph_sync(id=pod_info.get("graph_id"))
+            if analyzer_graph_info is None or analyzer_graph_info.get("end_datetime"):
                 return False
-        elif pod_info["pod_type"] == TYPE.TRAINING_ITEM_C:
-            hps_info = db_project.get_hps(hps_id=pod_info["id"])
-            if hps_info is None or hps_info["end_datetime"]:
-                if pending_flag:
-                    del pending_pod[str(project["id"])]
-                return False
-        elif pod_info["pod_type"] == TYPE.TRAINING_ITEM_B:
-            tool_info =db_project.get_project_tool(project_tool_id=pod_info["id"])
-            if tool_info is None or not tool_info['request_status']:
-                if pending_flag:
-                    del pending_pod[str(project["id"])]
-                return False
-        else: # 배포
+        elif pod_info["pod_type"] == TYPE.DEPLOYMENT_TYPE: # 배포
             worker_info = db_deployment.get_deployment_worker(deployment_worker_id=pod_info["deployment_worker_id"])
             if worker_info is None or worker_info["end_datetime"]:
-                if pending_flag:
-                    del pending_pod[str(deployment["id"])]
+                return False
+        elif pod_info["pod_type"] == TYPE.FINE_TUNING_TYPE:
+            model_info = db_model.get_model_sync(model_id=pod_info["model_id"])
+            if model_info is None or \
+                model_info["latest_fine_tuning_status"] in \
+                        [TYPE.KUBE_POD_STATUS_STOP, TYPE.KUBE_POD_STATUS_ERROR, TYPE.KUBE_POD_STATUS_RUNNING, TYPE.KUBE_POD_STATUS_DONE]:
+                return False
+        elif pod_info["pod_type"] == TYPE.COLLECT_TYPE:
+            collect_info = db_collect.get_collect_info(collect_id=pod_info["collect_info"]["id"])
+            if collect_info is None or collect_info["end_datetime"]:
                 return False
         return True
 
+    def workspace_db_sync(pod_info):
+        pt = pod_info.get("pod_type")
+        if pt == TYPE.PROJECT_TYPE:
+            wft = pod_info.get("work_func_type")
+            if wft == TYPE.TRAINING_ITEM_A:
+                training_info = db_project.get_training(training_id=pod_info["id"])
+                if (training_info is None or
+                    training_info["end_status"] == TYPE.KUBE_POD_STATUS_STOP or
+                    training_info["instance_id"] is None or
+                    training_info["end_datetime"]):
+                    return False
+            elif wft == TYPE.TRAINING_ITEM_C:
+                hps_info = db_project.get_hps(hps_id=pod_info["id"])
+                if hps_info is None or hps_info["end_datetime"]:
+                    return False
+            elif wft == TYPE.TRAINING_ITEM_B:
+                tool_info = db_project.get_project_tool(project_tool_id=pod_info["id"])
+                if (tool_info is None or
+                    not tool_info['request_status'] or
+                    tool_info["gpu_count"] != pod_info["gpu_count"] or
+                    tool_info["image_real_name"] != pod_info["image_name"] or
+                    json.loads(tool_info["gpu_select"]) != pod_info["gpu_select"] or
+                    tool_info["instance_id"] is None or
+                    tool_info["end_datetime"]):
+                    return False
+        elif pt == TYPE.PREPROCESSING_TYPE:
+            wft = pod_info.get("work_func_type")
+            if wft == TYPE.PREPROCESSING_ITEM_A:
+                tool_info = db_prepro.get_preprocessing_tool_sync(preprocessing_tool_id=pod_info["id"])
+                if (tool_info is None or
+                    not tool_info['request_status'] or
+                    tool_info["gpu_count"] != pod_info["gpu_count"] or
+                    tool_info["image_real_name"] != pod_info["image_name"] or
+                    json.loads(tool_info["gpu_select"]) != pod_info["gpu_select"] or
+                    tool_info["instance_id"] is None or
+                    tool_info["end_datetime"]):
+                    return False
+            elif wft == TYPE.PREPROCESSING_ITEM_B:
+                job_info = db_prepro.get_job_simple(preprocessing_job_id=pod_info["id"])
+                if (job_info is None or job_info["end_datetime"] or job_info["instance_id"] is None):
+                    return False
+        elif pt == TYPE.ANALYZER_TYPE:
+            analyzer_graph_info = db_analyzing.get_analyzer_graph_sync(id=pod_info.get("graph_id"))
+            if (analyzer_graph_info is None or
+                analyzer_graph_info.get("end_datetime") or
+                analyzer_graph_info.get("instance_id") is None):
+                return False
+        elif pt == TYPE.DEPLOYMENT_TYPE:
+            worker_info = db_deployment.get_deployment_worker(deployment_worker_id=pod_info["deployment_worker_id"])
+            if (worker_info is None or
+                worker_info["end_datetime"] or
+                worker_info["instance_id"] is None):
+                return False
+        elif pt == TYPE.COLLECT_TYPE:
+            collect_info = db_collect.get_collect_info(collect_id=pod_info["collect_info"]["id"])
+            if (collect_info is None or
+                collect_info["end_datetime"] or
+                collect_info["instance_id"] is None):
+                return False
+        if settings.LLM_USED:
+            if pt == TYPE.FINE_TUNING_TYPE:
+                model_info = db_model.get_model_sync(model_id=pod_info["model_id"])
+                if model_info is None or \
+                    model_info["latest_fine_tuning_status"] in \
+                        [TYPE.KUBE_POD_STATUS_STOP, TYPE.KUBE_POD_STATUS_ERROR, TYPE.KUBE_POD_STATUS_RUNNING, TYPE.KUBE_POD_STATUS_DONE]:
+                    return False
+        return True
 
+    
+
+    def calculate_pending_in_instance_queue(redis_queue, item, item_type):
+        """
+        인스턴스 큐에 들어있는 pod_info들 중,
+        item_type/id가 동일한 것들을 모아서 pending cpu/ram/gpu를 합산
+        """
+        def is_same_item(qpod, item_type, item_id):
+            """
+            qpod 안에 있는 id(project_id, deployment_id 등)와
+            현재 item['id']가 일치하는지 확인
+            """
+            if item_type == TYPE.PROJECT_TYPE:
+                return qpod.get("project_id") == item_id
+            elif item_type == TYPE.DEPLOYMENT_TYPE:
+                return qpod.get("deployment_id") == item_id
+            elif item_type == TYPE.PREPROCESSING_TYPE:
+                return qpod.get("preprocessing_id") == item_id
+            elif item_type == TYPE.ANALYZER_TYPE:
+                return qpod.get("analyzer_id") == item_id
+            elif item_type == TYPE.COLLECT_TYPE:
+                return qpod.get("collect_id") == item_id
+            return False
+        
+        USAGE_CALC_MAP = {
+            TYPE.PROJECT_TYPE: usage_for_project,
+            TYPE.DEPLOYMENT_TYPE: usage_for_deployment,
+            TYPE.PREPROCESSING_TYPE: usage_for_preprocessing,
+            TYPE.ANALYZER_TYPE: usage_for_analyzer,
+            TYPE.COLLECT_TYPE: usage_for_collector,
+            TYPE.FINE_TUNING_TYPE: usage_for_fine_tuning,
+            # LLM 등 다른 항목이 필요하다면 추가
+        }
+
+        pending_cpu = 0
+        pending_ram = 0
+        pending_gpu = 0
+
+        calc_fn = USAGE_CALC_MAP.get(item_type, None)
+        if not calc_fn:
+            # item_type에 대응하는 usage 함수가 없으면 바로 반환
+            return 0, 0, 0
+
+        instance_items = redis_queue.fetch_queue_items()
+        for data in instance_items:
+            qpod = json.loads(data)
+
+            # 1) item_type/id 매칭 여부 확인
+            if not is_same_item(qpod, item_type, item["id"]):
+                # 항목이 달라서 스킵
+                continue
+
+            # 2) GPU 개수 및 pod_count 계산
+            p_gpu = qpod["gpu_count"]
+            pod_count = 1
+            if qpod["gpu_cluster_auto"] and qpod["gpu_auto_cluster_case"]:
+                pod_count = qpod["gpu_auto_cluster_case"]["server"]
+            elif p_gpu > 1 and qpod["pod_per_gpu"]:
+                pod_count = p_gpu / qpod["pod_per_gpu"]
+
+            # 3) CPU, RAM 계산 (항목별 전담 함수 활용)
+            cpu, ram = calc_fn(item, qpod, pod_count)
+
+            # 4) pending 누적
+            pending_cpu += cpu
+            pending_ram += ram
+            pending_gpu += p_gpu
+
+        return pending_cpu, pending_ram, pending_gpu
+
+
+
+    def process_item_type(
+        ws_id,
+        workspace_item_pending_pod,
+        workspace_instance_used_resource,
+        item_type,
+        get_item_list_fn,
+        calculate_usage_fn,
+        get_limits_fn,
+        db_sync_fn
+    ):
+        """
+        1) DB에서 item_list를 가져옴
+        2) 자원 사용량을 합산 → workspace_instance_used_resource
+        3) pending_pod 확인 + db_sync
+        4) 인스턴스 큐에서 이미 대기중인 pod들의 자원(pending) 계산
+        5) available vs required 비교 → 인스턴스 큐로 rput or pending 유지
+        """
+        redis_client = get_redis_client()
+        pending_dict = workspace_item_pending_pod.get(item_type, {})
+
+        item_list = get_item_list_fn(workspace_id=ws_id)
+
+        # 삭제된 item id 삭제 용으로 추가
+        # 해당 로직이 없어도 기능상 문제는 없음(삭제해도 무방)
+        #=========
+        item_str_id_list = [str(item["id"]) for item in item_list]
+        pending_str_id_list = list(pending_dict.keys())
+        del_item_ids = set(pending_str_id_list) - set(item_str_id_list) 
+        for del_item_id in list(del_item_ids):
+            del pending_dict[del_item_id]
+        #=========
+
+        for item in item_list:
+            # 1) 자원 사용량 계산
+            used_cpu, used_ram, used_gpu = calculate_usage_fn(item)
+
+            inst_id = item["instance_id"]
+            # 인스턴스 큐
+            inst_queue_key = redis_key.WORKSPACE_INSTANCE_QUEUE.format(ws_id, inst_id)
+            redis_queue = RedisQueue(redis_client=redis_client, key=inst_queue_key)
+            if inst_id not in workspace_instance_used_resource:
+                workspace_instance_used_resource[inst_id] = {"cpu":0, "ram":0, "gpu":0}
+            workspace_instance_used_resource[inst_id]["cpu"] += used_cpu
+            workspace_instance_used_resource[inst_id]["ram"] += used_ram
+            workspace_instance_used_resource[inst_id]["gpu"] += used_gpu
+            # 2) Pending Pod 있는지 확인
+            item_id_str = str(item["id"])
+            if item_id_str in pending_dict and pending_dict[item_id_str] != []:
+                pod_info = pending_dict[item_id_str].pop(0)
+            else:
+                # 만약 pod_info의 item_id가 item["id"]인지 체크
+                # 없으면 continue
+                continue
+
+            # DB sync
+            if not db_sync_fn(
+                pod_info=pod_info,
+                **{item_type: item}  # ex) project=project
+            ):
+                logging.info(f"[PENDING REMOVED] {pod_info['pod_type']} ID {item_id_str}: 사용자 중지, 삭제")
+                continue
+
+            pen_cpu, pen_ram, pen_gpu = calculate_pending_in_instance_queue(redis_queue, item, item_type)
+            # pen_cpu, pen_ram, pen_gpu = 0, 0, 0
+
+            # total
+            total_cpu = item["cpu_allocate"] * item["instance_allocate"]
+            total_ram = item["ram_allocate"] * item["instance_allocate"]
+            total_gpu = item["gpu_allocate"] * item["instance_allocate"]
+
+
+            available_cpu = total_cpu - used_cpu - pen_cpu
+            available_ram = total_ram - used_ram - pen_ram
+            available_gpu = total_gpu - used_gpu - pen_gpu
+
+            # CPU/RAM Limit
+            limit_cpu, limit_ram = get_limits_fn(item, pod_info)
+            # GPU count
+            gpu_count = pod_info["gpu_count"]
+
+            # pod_count 계산 (gpu_cluster_auto 등, 원본 로직 그대로)
+            pod_count = 1
+            # print("pod_info:", pod_info)
+            pod_per_gpu = pod_info["pod_per_gpu"] if pod_info.get("pod_per_gpu") else 1
+            if pod_info["gpu_cluster_auto"] and pod_info["gpu_auto_cluster_case"]:
+                pod_count = pod_info["gpu_auto_cluster_case"]["server"]
+                pod_per_gpu = pod_info["gpu_auto_cluster_case"]["gpu_count"]
+                pod_info["pod_per_gpu"] = pod_per_gpu
+            elif gpu_count > 1 and pod_per_gpu:
+                pod_count = gpu_count / pod_per_gpu
+            pod_info["pod_count"] = pod_count
+
+
+            # 자원 비교
+            # TODO
+            # 파인튜닝의 경우 get_limits_fn 여기서 이미 계산됨
+            # 따라서, pod_count 를 곱하면 안됨
+            if item_type == TYPE.FINE_TUNING_TYPE:
+                need_cpu = limit_cpu
+                need_ram = limit_ram
+                need_gpu = gpu_count
+                pod_info["resource"] = {"cpu": limit_cpu, "ram": limit_ram}
+            else:
+                need_cpu = limit_cpu * pod_count * (pod_per_gpu if pod_per_gpu > 1 else 1)
+                need_ram = limit_ram * pod_count * (pod_per_gpu if pod_per_gpu > 1 else 1)
+                need_gpu = gpu_count
+                pod_info["resource"] = {"cpu": limit_cpu * (pod_per_gpu if pod_per_gpu > 1 else 1), "ram": limit_ram * (pod_per_gpu if pod_per_gpu > 1 else 1)}
+
+            
+            
+            if (available_cpu < need_cpu) or (available_ram < need_ram) or (available_gpu < need_gpu):
+                logging.info(
+                    f"{pod_info['pod_type']} ID {item_id_str}: 자원 부족으로 인한 Pending - CPU/RAM/GPU Available: {available_cpu}/{available_ram}/{available_gpu} | Need: {need_cpu}/{need_ram}/{need_gpu}"
+                )
+                pending_dict[item_id_str].insert(0, pod_info)  # 자원이 부족하여 pending 상태로 유지
+            else:
+                # 자원 충분 → pending 제거, 인스턴스 큐
+                if item_id_str in pending_dict:
+                    # del pending_dict[item_id_str]
+                    logging.info(f"[PENDING REMOVED] {pod_info['pod_type']} ID {item_id_str}: 자원 확보 완료 → 대기 해제")
+                 
+                try:
+                    
+                    redis_queue.rput(json.dumps(pod_info))                  
+                    logging.info(
+                        f"[QUEUE SUCCESS] {pod_info['pod_type']} ID {item_id_str}: 인스턴스 큐에 추가 완료 (CPU: {need_cpu}, RAM: {need_ram}, GPU: {need_gpu})"
+                    )
+                except Exception as e:
+                    logging.error(f"[QUEUE ERROR] {pod_info['pod_type']} ID {item_id_str}: 큐 추가 실패 - {e}")
+
+        if DEBUG:
+            logging.info("[WORKSPACE ITEM USED RESOURCE] : [%s] : %s", item_type ,json.dumps(workspace_instance_used_resource, ensure_ascii=False))
+
+    ITEM_PROCESSORS = {
+    TYPE.PROJECT_TYPE: {
+        "get_item_list_fn": db_project.get_project_list,        # (workspace_id=...)
+        "calculate_usage_fn": calculate_project_usage,
+        "get_limits_fn": get_project_limits,
+        "db_sync_fn": db_sync,  # 원본 db_sync 함수
+    },
+    TYPE.DEPLOYMENT_TYPE: {
+        "get_item_list_fn": db_deployment.get_deployment_list_in_workspace,
+        "calculate_usage_fn": calculate_deployment_usage,
+        "get_limits_fn": get_deployment_limits,
+        "db_sync_fn": db_sync,
+    },
+    TYPE.PREPROCESSING_TYPE: {
+        "get_item_list_fn": db_prepro.get_preprocessing_list_sync,
+        "calculate_usage_fn": calculate_preprocessing_usage,
+        "get_limits_fn": get_preprocessing_limits,
+        "db_sync_fn": db_sync,
+    },
+    TYPE.ANALYZER_TYPE: {
+        "get_item_list_fn": db_analyzing.get_analyzer_list,
+        "calculate_usage_fn": calculate_analyzer_usage,
+        "get_limits_fn": get_analyzer_limits,
+        "db_sync_fn": db_sync,
+    },
+    TYPE.COLLECT_TYPE: {
+        "get_item_list_fn": db_collect.get_collect_list,
+        "calculate_usage_fn": calculate_collector_usage,
+        "get_limits_fn": get_collector_limits,
+        "db_sync_fn": db_sync,
+    },
+    TYPE.FINE_TUNING_TYPE: {
+        "get_item_list_fn": db_model.get_models_sync,
+        "calculate_usage_fn": calculate_fine_tuning_usage,
+        "get_limits_fn": get_fine_tuning_limits,
+        "db_sync_fn": db_sync,                               # TODO: Fine Tuning은 실제론 db_sync 함수를 사용하지 않아 문제 생길 여지 있으므로 확인 필요
+    },
+    }
+
+    def process_all_item_types(ws_id, workspace_item_pending_pod, workspace_instance_used_resource):
+        """
+        Project / Deployment / Preprocessing / Analyzer / Collector 등
+        모든 항목에 대해 process_item_type(...)를 한꺼번에 호출
+        """
+        for itype, cfg in ITEM_PROCESSORS.items():
+            process_item_type(
+                ws_id=ws_id,
+                workspace_item_pending_pod=workspace_item_pending_pod,
+                workspace_instance_used_resource=workspace_instance_used_resource,
+                item_type=itype,
+                get_item_list_fn=cfg["get_item_list_fn"],
+                calculate_usage_fn=cfg["calculate_usage_fn"],
+                get_limits_fn=cfg["get_limits_fn"],
+                db_sync_fn=cfg["db_sync_fn"]
+            )
+            
+    def deploy_pod_via_helm(pod_info):
+        """
+        헬름 실행을 한 곳에서 관리.
+        pod_type 및 work_func_type 별로 기존 로직(create_* 등) 호출
+        """
+        res, message = None, None
+        pt = pod_info.get("pod_type")
+        if pt == TYPE.PROJECT_TYPE:
+            wft = pod_info.get("work_func_type")
+            if wft == TYPE.TRAINING_ITEM_A:
+                res, message = create_training_pod(pod_info=pod_info)
+            elif wft == TYPE.TRAINING_ITEM_B:
+                res, message = create_project_tool(pod_info=pod_info)
+            elif wft == TYPE.TRAINING_ITEM_C:
+                res, message = create_hps_pod(pod_info=pod_info)
+
+        elif pt == TYPE.DEPLOYMENT_TYPE:
+            if settings.LLM_USED and pod_info.get("is_llm"):
+                res, message = install_deployment_llm(pod_info=pod_info)
+            else:
+                res1, message = install_deployment_pod(deployment_info=pod_info)
+                res2, message = install_deployment_svc_ing(deployment_info=pod_info)
+                res = True if (res1 != False and res2 != False) else False
+
+        elif pt == TYPE.PREPROCESSING_TYPE:
+            wft = pod_info.get("work_func_type")
+            if wft == TYPE.PREPROCESSING_ITEM_A:
+                res, message = create_preprocessing_tool(pod_info=pod_info)
+            elif wft == TYPE.PREPROCESSING_ITEM_B:
+                res, message = create_preprocessing_job(pod_info=pod_info)
+
+        elif pt == TYPE.COLLECT_TYPE:
+            wft = pod_info.get("work_func_type")
+            if wft == TYPE.PUBLICAPI_TYPE:
+                res, message = create_public_api_collector(pod_info)
+            elif wft == TYPE.REMOTESERVER_TYPE:
+                print("RemoteServer Collector")
+                res, message = create_remote_server_collector(pod_info)
+            elif wft == TYPE.CRAWLING_TYPE:
+                res, message = create_crawling_collector(pod_info)
+            elif wft == TYPE.FB_DEPLOY_TYPE:
+                res, message = create_fb_deployment_collector(pod_info)
+
+        elif pt == TYPE.ANALYZER_TYPE:
+            res, message = create_analyzer_pod(pod_info=pod_info)
+
+        if settings.LLM_USED:
+            if pt == TYPE.FINE_TUNING_TYPE:
+                # LLM Fine Tuning
+                # CPU, RAM은 아래에서 설정 가능
+                res, message = create_fine_tuning(pod_info=pod_info)
+
+        return res, message
+
+    def revert_helm_on_failure(pod_info, workspace_id):
+        """
+        헬름 배포 실패 시 rollback (사용자 코드에서 하던 부분)
+        """
+        try:
+            if pod_info["pod_type"] == TYPE.DEPLOYMENT_TYPE:
+                if settings.LLM_USED and pod_info.get("is_llm"):
+                    uninstall_deployment_llm(
+                        deployment_id=pod_info["deployment_id"],
+                        llm_type=pod_info["llm_type"],
+                        llm_id=pod_info["llm_id"]
+                    )
+                else:
+                    uninstall_pod_deployment(
+                        workspace_id=workspace_id,
+                        deployment_id=pod_info["deployment_id"],
+                        deployment_worker_id=pod_info["deployment_worker_id"]
+                    )
+            elif pod_info["pod_type"] == TYPE.PROJECT_TYPE:
+                if pod_info["work_func_type"] == TYPE.TRAINING_ITEM_B:
+                    delete_helm_project(
+                        project_tool_type=TYPE.TOOL_TYPE[pod_info["tool_type"]],
+                        project_tool_id=pod_info["id"],
+                        workspace_id=workspace_id
+                    )
+                elif pod_info["work_func_type"] in [TYPE.TRAINING_ITEM_A, TYPE.TRAINING_ITEM_C]:
+                    delete_helm_project(
+                        project_tool_type=pod_info["work_func_type"],
+                        project_tool_id=pod_info["id"],
+                        workspace_id=workspace_id
+                    )
+            elif pod_info["pod_type"] == TYPE.PREPROCESSING_TYPE:
+                wft = pod_info["work_func_type"]
+                delete_helm_preprocessing(
+                    preprocessing_tool_type=wft,
+                    preprocessing_tool_id=pod_info["id"],
+                    workspace_id=workspace_id
+                )
+            elif pod_info.get("pod_type") == TYPE.ANALYZER_TYPE:
+                delete_helm_analyzer(pod_info=pod_info)
+            if settings.LLM_USED and pod_info["pod_type"] == TYPE.FINE_TUNING_TYPE:
+                delete_helm_fine_tuning(
+                    model_id=pod_info["model_id"],
+                    workspace_id=workspace_id
+                )
+        except Exception as e:
+            traceback.print_exc()
+            pass
+
+    def process_instance_queue_item(
+    redis_client,
+    pod_info,
+    instance,
+    ws_id,
+    workspace_instance_used_resource
+    ):
+        """
+        1) DB Sync
+        2) 인스턴스 자원 체크(available vs needed)
+        3) GPU/CPU/NPU 처리
+        4) Helm 배포 (deploy_pod_via_helm)
+        5) 실패시 revert
+        """
+        # 1) DB Sync
+        if not workspace_db_sync(pod_info):
+            return Status.FAIL_PASS, "사용자 중지, 삭제된 요청"
+
+        # 2) 인스턴스 자원 계산
+        total_cpu = instance["instance_allocate"] * instance["cpu_allocate"]
+        total_ram = instance["instance_allocate"] * instance["ram_allocate"]
+        total_gpu = instance["instance_allocate"] * instance["gpu_allocate"]
+
+        used_res = workspace_instance_used_resource.get(instance["instance_id"], {"cpu":0,"ram":0,"gpu":0})
+        available_cpu = total_cpu - used_res["cpu"]
+        available_ram = total_ram - used_res["ram"]
+        available_gpu = total_gpu - used_res["gpu"]
+        need_cpu = pod_info["resource"]["cpu"] * pod_info["pod_count"]
+        need_ram = pod_info["resource"]["ram"] * pod_info["pod_count"]
+        need_gpu = pod_info.get("gpu_count", 0)
+
+        if (available_cpu < need_cpu) or (available_ram < need_ram) or (available_gpu < need_gpu):
+            return Status.FAIL_RETRY, f"자원 부족 - instance id : {instance["instance_id"]} | CPU/RAM/GPU Available: {available_cpu}/{available_ram}/{available_gpu} | Need: {need_cpu}/{need_ram}/{need_gpu}"
+
+        # 3) GPU / CPU / NPU 처리
+        if need_gpu > 0:
+            # GPU 로직
+            free_workspace_gpu_count = (instance["instance_allocate"] * instance["gpu_allocate"]) - used_res["gpu"]
+            if need_gpu > free_workspace_gpu_count:
+                return Status.FAIL_RETRY, "Workspace GPU 자원 부족"
+
+            instance_selector = f"instance_id={instance['instance_id']}"
+            used_instance_gpu_uuid = get_used_gpu_uuid(label_select=instance_selector)
+
+            gpu_cluster_auto = pod_info["gpu_cluster_auto"]
+            gpu_select = pod_info.get("gpu_select", [])
+            if gpu_cluster_auto and need_gpu > 1:
+                # 예: 자동 클러스터링
+                gpu_auto_cluster_case = pod_info["gpu_auto_cluster_case"]
+                gpu_model_status = json.loads(redis_client.get(redis_key.GPU_INFO_RESOURCE))
+                available_gpus = get_available_gpus_by_model(
+                    model_name=instance["resource_name"], 
+                    data=gpu_model_status, 
+                    instance_id=instance["instance_id"]
+                )
+                # filter out used
+                real_available_gpus = []
+                for g in available_gpus:
+                    if g["gpu_uuid"] not in used_instance_gpu_uuid:
+                        real_available_gpus.append(g)
+                if not real_available_gpus:
+                    return Status.FAIL_RETRY, "GPU 없음"
+
+                # 예: common.get_gpu_auto_select_new(...)
+                auto_select = get_gpu_auto_select(
+                    gpu_count=gpu_auto_cluster_case["gpu_count"],
+                    pod_count=gpu_auto_cluster_case["server"],
+                    gpu_data=real_available_gpus
+                )
+                if not auto_select:
+                    return Status.FAIL_RETRY, "GPU auto select 실패"
+                # 클러스터링
+                real_available_gpus = gpu_auto_clustering(
+                    available_gpus=auto_select,
+                    pod_per_gpu=gpu_auto_cluster_case["gpu_count"]
+                )
+                pod_info["available_gpus"] = real_available_gpus
+
+            elif (not gpu_cluster_auto) and need_gpu > 1:
+                # 수동 클러스터링
+                gpu_cluster_status = True
+                for g in gpu_select:
+                    if g["gpu_uuid"] in used_instance_gpu_uuid:
+                        gpu_cluster_status = False
+                        break
+                if not gpu_cluster_status:
+                    return Status.FAIL_RETRY, "수동 클러스터링 충돌"
+                # 클러스터링
+                real_available_gpus = gpu_auto_clustering(
+                    available_gpus=gpu_select,
+                    pod_per_gpu=pod_info["pod_per_gpu"]
+                )
+                pod_info["available_gpus"] = real_available_gpus
+
+            else:
+                # need_gpu == 1 or other simple cases
+                gpu_model_status = json.loads(redis_client.get(redis_key.GPU_INFO_RESOURCE))
+                available_gpus = get_available_gpus_by_model(
+                    model_name=instance["resource_name"],
+                    data=gpu_model_status,
+                    instance_id=instance["instance_id"]
+                )
+                # filter out used
+                real_available_gpus = []
+                for g in available_gpus:
+                    if g["gpu_uuid"] not in used_instance_gpu_uuid:
+                        real_available_gpus.append(g)
+                if not real_available_gpus:
+                    return Status.FAIL_RETRY, "GPU 없음"
+
+                available_gpus = get_optimal_gpus(available_gpus, num_gpus=1)
+                available_gpus = gpu_auto_clustering(available_gpus, pod_per_gpu=1)
+                pod_info["available_gpus"] = available_gpus
+
+        elif need_gpu == 0 and instance["instance_type"] == TYPE.INSTANCE_TYPE_GPU:
+            # GPU 인스턴스지만 gpu_count=0
+            node_list = db_node.get_node_instance_list(instance_id=instance["instance_id"])
+            nodes = [n['node_name'] for n in node_list]
+            weights = [n['instance_allocate'] for n in node_list]
+            pod_info["available_node"] = random.choices(nodes, weights=weights, k=1)[0]
+
+        # CPU 인스턴스
+        elif instance["instance_type"] == TYPE.INSTANCE_TYPE_CPU:
+            node_list = db_node.get_node_instance_list(instance_id=instance["instance_id"])
+            nodes = [n['node_name'] for n in node_list]
+            weights = [n['instance_allocate'] for n in node_list]
+            pod_info["available_node"] = random.choices(nodes, weights=weights, k=1)[0]
+            pod_info["cpu_instance_name"] = instance["instance_name"]
+
+        # NPU 인스턴스
+        elif instance["instance_type"] == TYPE.INSTANCE_TYPE_NPU:
+            logging.info("NPU 사용")
+            pod_info["used_npu"] = True
+
+        # 4) helm 배포
+        res, message = deploy_pod_via_helm(pod_info)
+        if not res:
+            # rollback
+            revert_helm_on_failure(pod_info, ws_id)
+            return Status.FAIL_RETRY, message
+        else:
+            logging.info("helm ok")
+            return Status.SUCCESS, "success"
+
+    def print_pending_queue_pods(ws_id, workspace_item_pending_pod):
+        """
+        특정 워크스페이스의 pending pod 및 인스턴스 대기열을 정리하여 출력하는 함수.
+        - workspace_id: 워크스페이스 ID
+        - workspace_name: 워크스페이스 이름
+        - workspace_item_pending_pod: Pending된 Pod 정보 딕셔너리
+        - workspace_instances: 해당 워크스페이스의 인스턴스 리스트
+        """        
+        # workspace_id = workspace["id"]
+        # workspace_name = workspace["name"]
+        
+        logging.info("=" * 50)
+        logging.info(f"🟢 워크스페이스 #{ws_id} ") # [{workspace_name}]
+        logging.info("=" * 50)
+
+        has_pending = False  # Pending Pod이 하나라도 있는지 확인하는 플래그
+        
+        # 워크스페이스별 Pending Pod 개수 출력
+        for pod_type, pending_dict in workspace_item_pending_pod.items():
+            # print(pending_dict, file=sys.stderr)
+            total_pending = sum(len(v) for v in pending_dict.values())
+            if total_pending == 0:
+                continue  # 해당 타입에 pending된 pod가 없으면 건너뜀
+            
+            has_pending = True
+
+            logging.info(f"🔸 {pod_type} ({total_pending} pending)")
+            for item_id, pod_infos in pending_dict.items():
+                for pod_info in pod_infos:
+                    instance_id = pod_info.get("instance_id", "N/A")
+                    gpu_count = pod_info.get("gpu_count", 0)
+                    cpu_limit = pod_info.get("resource", {}).get("cpu", "N/A")
+                    ram_limit = pod_info.get("resource", {}).get("ram", "N/A")
+                    logging.info(f"  - ID: {item_id} | Instance: {instance_id} | GPU: {gpu_count} | CPU: {cpu_limit} | RAM: {ram_limit}")
+
+        if not has_pending:
+            logging.info("✅ 현재 PENDING 상태인 Pod이 없습니다.")
+
+    global last_print_time
     consumer = Consumer(conf)
-
-
-
+    kafka_admin = AdminClient(kafka_admin_conf)
+    
+    type_id_map = {
+                TYPE.PROJECT_TYPE: "project_id",
+                TYPE.DEPLOYMENT_TYPE: "deployment_id",
+                TYPE.PREPROCESSING_TYPE: "preprocessing_id",
+                TYPE.ANALYZER_TYPE: "analyzer_id",
+                TYPE.COLLECT_TYPE: "collect_id",
+                TYPE.FINE_TUNING_TYPE: "model_id" if settings.LLM_USED else None
+            }
+    
     while True:
         try:
             time.sleep(0.1)
+            redis_client = get_redis_client()
+            # workspace_list = db_workspace.get_workspace_list()
 
-            workspace_list = db_workspace.get_workspace_list()
+            # Kafka Consume Messages
+            success = kafka_consume_msgs(consumer, kafka_admin, redis_client, type_id_map)
+            if not success:
+                # 재생성
+                consumer = Consumer(conf)
+                kafka_admin = AdminClient(kafka_admin_conf)
+                logging.info("Kafka consumer reinitialized.")
+                time.sleep(3)
+            
+            # Pending Load
+            workspace_pending_pod = redis_client.hgetall(redis_key.WORKSPACE_ITEM_PENDING_POD2)
+            # print(workspace_pending_pod, file=sys.stderr)
+            # for workspace in workspace_list:
+            for ws_id, raw_pending in workspace_pending_pod.items():
+                workspace_item_pending_pod = json.loads(raw_pending)
+                #TODO
+                # workspace instance queue에 값이 있거나 instance queue =에 값이 있을 경우에만 돌 수 있도록 수정
+                
+                # 준비: instance별 자원 사용량 dict
+                workspace_instance_used_resource = {}
 
-            for workspace in workspace_list:
-                #======================================================================
-                # workspace item queue
-                #======================================================================
-                workspace_item_pending_pod = redis_client.hget(redis_key.WORKSPACE_ITEM_PENDING_POD, workspace["id"])
-                if not workspace_item_pending_pod:
-                    workspace_item_pending_pod = {
-                        "project" : {},
-                        "deployment" : {}
-                    }
-                else:
-                    workspace_item_pending_pod = json.loads(workspace_item_pending_pod)
+                # 1) Project / Deployment / Preprocessing / Analyzer / Collector 등 공통 처리
+                process_all_item_types(
+                    ws_id=ws_id,
+                    workspace_item_pending_pod=workspace_item_pending_pod,
+                    workspace_instance_used_resource=workspace_instance_used_resource
+                )
 
-                # workspace resource
-                workspace_resource = db_workspace.get_workspace_resource(workspace_id=workspace["id"])
-                # workspace pod status
-                workspace_pod_status = redis_client.hget(redis_key.WORKSPACE_PODS_STATUS, workspace["id"])
-                if workspace_pod_status:
-                    workspace_pod_status = json.loads(workspace_pod_status)
-                else:
-                    workspace_pod_status = {}
-                projects_pod_status = workspace_pod_status.get(TYPE.PROJECT_TYPE, {})
-                deployment_pod_status = workspace_pod_status.get(TYPE.DEPLOYMENT_TYPE, {})
-
-                # project
-                project_list = db_project.get_project_list(workspace_id=workspace["id"])
-                project_pending_pod = workspace_item_pending_pod["project"]
-
-                for project in project_list:
-                    # TODO
-                    # cpu ram 를 사용해 사용 가능한 pod 계산
-                    project["gpu_allocate"] = project["gpu_allocate"] if project["gpu_allocate"] else 0
-                    project["cpu_allocate"] = project["cpu_allocate"] if project["cpu_allocate"] else 0
-                    project["ram_allocate"] = project["ram_allocate"] if project["ram_allocate"] else 0
-
-                    project_gpu_allocate = project["gpu_allocate"] * project["instance_allocate"]
-                    project_cpu_allocate = project["cpu_allocate"] * project["instance_allocate"]
-                    project_ram_allocate = project["ram_allocate"] * project["instance_allocate"]
-                    used_gpu_allocate = 0
-                    used_ram_allocate = 0
-                    used_cpu_allocate = 0
-                    pending_gpu_allocate = 0
-                    pending_ram_allocate = 0
-                    pending_cpu_allocate = 0
-
-                    tools = db_project.get_project_tools(project_id=project["id"], is_running=True)
-                    trainings = db_project.get_training_is_running(project_id=project["id"])
-                    for tool_info in tools:
-                        used_gpu_allocate += tool_info["gpu_count"]
-                        used_ram_allocate += workspace_resource["tool_ram_limit"]
-                        used_cpu_allocate += workspace_resource["tool_cpu_limit"]
-                    for training_info in trainings:
-                        used_gpu_allocate += training_info["gpu_count"]
-                        used_ram_allocate += workspace_resource["job_ram_limit"]
-                        used_cpu_allocate += workspace_resource["job_cpu_limit"]
-
-
-                    # project_pod_status = projects_pod_status.get(str(project["id"]), {})
-                    # project_tool_pod = project_pod_status.get(TYPE.TRAINING_ITEM_B, {})
-                    # project_training_pod = project_pod_status.get(TYPE.TRAINING_ITEM_A, {})
-                    # 동작 중인 pod
-                    # for tool_info in project_tool_pod.values():
-                    #     used_gpu_allocate += tool_info["resource"].get("gpu", 0)
-                    #     used_ram_allocate += tool_info["resource"].get("ram", 0)
-                    #     used_cpu_allocate += tool_info["resource"].get("cpu", 0)
-                    # for training_info in project_training_pod.values():
-                    #     used_gpu_allocate += training_info["resource"].get("gpu", 0)
-                    #     used_ram_allocate += training_info["resource"]["cpu"]
-                    #     used_cpu_allocate += training_info["resource"].get("ram", 0)
-
-
-
-                    topic = topic_key.PROJECT_TOPIC.format(project["id"]) # TODO 포맷 변경
-                    pending_flag = False
-
-                    if str(project["id"]) in project_pending_pod:
-                        pod_info = project_pending_pod[str(project["id"])]
-                        pending_flag = True
-                    else:
-                        try:
-                            consumer.subscribe([topic])
-                            msg = consumer.poll(timeout=1)
-                            if msg is None or msg.error():
-                                continue
-                            # pod_info = json.loads(msg.value())
-                            pod_info = try_json_deserializer(msg.value())
-                        except Exception as e :
-                            #  토픽이 사라졌으므로 넘긴다 -> project가 사라졌을 경우, 아직 한번도 push를 안한경우
-                            print("no topic",file=sys.stderr)
-                            continue
-                    if not db_sync(pending_pod=project_pending_pod, pod_info=pod_info, pending_flag=pending_flag, project=project):
-                        continue
-
-                    instance_key = redis_key.WORKSPACE_INSTANCE_QUEUE.format(workspace["id"], project["instance_id"]) # TODO 포맷 변경
-                    redis_queue = RedisQueue(redis_client=redis_client, key=instance_key)
-
-                    # new_instance_queue = workspace_instance_queue.get(str(project["instance_id"]), [])
-
-                    # workspace로  대기중인 pod 확인
-                    # instance queue 확인
-                    instance_queue = redis_queue.fetch_queue_items()
-                    print(instance_queue)
-                    for instance_queue_pod in instance_queue:
-                        # instance_pod = {}
-                        instance_queue_pod = json.loads(instance_queue_pod)
-                        if instance_queue_pod.get("project_id", None) == project["id"]:
-                            pending_gpu_allocate += instance_queue_pod["gpu_count"]
-                            if instance_queue_pod.get("pod_type", None) == TYPE.TRAINING_ITEM_A:
-                                pending_ram_allocate += workspace_resource["job_ram_limit"]
-                                pending_cpu_allocate += workspace_resource["job_cpu_limit"]
-
-                            elif instance_queue_pod.get("pod_type", None) == TYPE.TRAINING_ITEM_B:
-                                pending_ram_allocate += workspace_resource["tool_ram_limit"]
-                                pending_cpu_allocate += workspace_resource["tool_cpu_limit"]
-
-                    available_gpu = project_gpu_allocate - used_gpu_allocate - pending_gpu_allocate
-                    available_cpu = project_cpu_allocate - used_cpu_allocate - pending_cpu_allocate
-                    available_ram = project_ram_allocate - used_ram_allocate - pending_ram_allocate
-                    # CPU 및 RAM 자원량 확인
-                    # job, tool 에 설정된 자원량보다 적으면 pending
-                    pod_count = 1
-                    if pod_info["gpu_cluster_auto"]:
-                        pod_count = pod_info["gpu_auto_cluster_case"]["server"]
-                    elif pod_info["gpu_count"] > 1:
-                        pod_count = pod_info["gpu_count"]/pod_info["pod_per_gpu"] if pod_info["pod_per_gpu"] != 0 else pod_info["gpu_count"]
-
-                    print("="*10, file=sys.stderr)
-                    print(pod_info["resource_type"], file=sys.stderr)
-                    print(available_gpu, available_cpu, available_ram , file=sys.stderr)
-                    print(pod_count, file=sys.stderr)
-                    print("="*10, file=sys.stderr)
-
-
-
-                    if pod_info["pod_type"] == TYPE.TRAINING_ITEM_A:
-
-
-                        if available_cpu < (workspace_resource["job_cpu_limit"]*pod_count) or available_ram < (workspace_resource["job_ram_limit"]*pod_count) or available_gpu < pod_info["gpu_count"]:
-                            project_pending_pod[str(project["id"])] = pod_info
-                            continue
-                        else:
-                            if str(project["id"]) in project_pending_pod:
-                                del project_pending_pod[str(project["id"])]
-                    elif pod_info["pod_type"] == TYPE.TRAINING_ITEM_B:
-                        if available_cpu < (workspace_resource["tool_cpu_limit"]*pod_count) or available_ram < (workspace_resource["tool_ram_limit"]*pod_count) or available_gpu < pod_info["gpu_count"]:
-                            project_pending_pod[str(project["id"])] = pod_info
-                            continue
-                        else:
-                            if str(project["id"]) in project_pending_pod:
-                                del project_pending_pod[str(project["id"])]
-
-                    redis_queue.rput(json.dumps(pod_info))
-
-
-                # deployment
-                deployment_list = db_deployment.get_deployment_list_in_workspace(workspace_id=workspace["id"])
-                deployment_pending_pod = workspace_item_pending_pod["deployment"]
-
-                for deployment in deployment_list:
-                    deployment["gpu_allocate"] = deployment["gpu_allocate"] if deployment["gpu_allocate"] else 0
-                    deployment["cpu_allocate"] = deployment["cpu_allocate"] if deployment["cpu_allocate"] else 0
-                    deployment["ram_allocate"] = deployment["ram_allocate"] if deployment["ram_allocate"] else 0
-
-
-                    deployment_gpu_allocate = deployment["gpu_allocate"] * deployment["instance_allocate"]
-                    deployment_cpu_allocate = deployment["cpu_allocate"] * deployment["instance_allocate"]
-                    deployment_ram_allocate = deployment["ram_allocate"] * deployment["instance_allocate"]
-                    # worker_pod_status = deployment_pod_status.get(str(deployment["id"]), {})
-                    used_gpu_allocate = 0
-                    used_ram_allocate = 0
-                    used_cpu_allocate = 0
-                    pending_gpu_allocate = 0
-                    pending_ram_allocate = 0
-                    pending_cpu_allocate = 0
-                    deployments = db_deployment.get_deployment_worker_running(deployment_id=deployment["id"])
-                    # 동작 중인 worker
-                    for worker_info in deployments:
-                        used_gpu_allocate += worker_info["gpu_per_worker"]
-                        used_ram_allocate += workspace_resource["deployment_ram_limit"]
-                        used_cpu_allocate += workspace_resource["deployment_cpu_limit"]
-
-                    topic = topic_key.DEPLOYMENT_TOPIC.format(deployment["id"])
-                    pending_flag = False
-                    if str(deployment["id"]) in deployment_pending_pod:
-                        pod_info = deployment_pending_pod[str(deployment["id"])]
-                        pending_flag = True
-                    else:
-
-                        try:
-                            consumer.subscribe([topic])
-                            msg = consumer.poll(timeout=1)
-
-                            if msg is None or msg.error():
-                                continue
-                            pod_info = json.loads(msg.value())
-
-                        except Exception as e :
-                            continue
-
-                    if not db_sync(pending_pod=deployment_pending_pod, pod_info=pod_info, pending_flag=pending_flag, deployment=deployment):
-                        continue
-
-                    instance_key = redis_key.WORKSPACE_INSTANCE_QUEUE.format(workspace["id"], deployment["instance_id"])
-                    redis_queue = RedisQueue(redis_client=redis_client, key=instance_key)
-                    # new_instance_queue = workspace_instance_queue.get(str(project["instance_id"]), [])
-                    # instance queue 확인 및 instance_pending 확인
-                    instance_queue = redis_queue.fetch_queue_items()
-                    for instance_queue_pod in instance_queue:
-                        instance_queue_pod = json.loads(instance_queue_pod)
-                        if instance_queue_pod.get("deployment_id") == deployment["id"]:
-                            pending_gpu_allocate += instance_queue_pod["gpu_count"]
-                            pending_ram_allocate += workspace_resource["deployment_ram_limit"]
-                            pending_cpu_allocate += workspace_resource["deployment_cpu_limit"]
-
-                    # print(pending_gpu_allocate, pending_cpu_allocate, pending_ram_allocate , file=sys.stderr)
-
-                    available_gpu = deployment_gpu_allocate - used_gpu_allocate - pending_gpu_allocate
-                    available_cpu = deployment_cpu_allocate - used_cpu_allocate - pending_cpu_allocate
-                    available_ram = deployment_ram_allocate - used_ram_allocate - pending_ram_allocate
-                    # CPU 및 RAM 자원량 확인
-                    # print("="*10, file=sys.stderr)
-                    # # print(pod_info["resource_type"], file=sys.stderr)
-                    # print(available_gpu, available_cpu, available_ram , file=sys.stderr)
-                    # print("="*10, file=sys.stderr)
-                    # print("배포 워커 추가 가능 여부", file=sys.stderr)
-                    # print(available_cpu < workspace_resource["deployment_cpu_limit"] or available_ram < workspace_resource["deployment_ram_limit"] or available_gpu < pod_info["gpu_count"], file=sys.stderr)
-                    # print("="*10, file=sys.stderr)
-
-                    if available_cpu < workspace_resource["deployment_cpu_limit"] or available_ram < workspace_resource["deployment_ram_limit"] or available_gpu < pod_info["gpu_count"]:
-                        deployment_pending_pod[str(deployment["id"])] = pod_info
-                        continue
-                    else:
-                        if str(deployment["id"]) in deployment_pending_pod:
-                            del deployment_pending_pod[str(deployment["id"])]
-
-                    redis_queue.rput(json.dumps(pod_info))
-                    # new_instance_queue.append(pod_info)
-                    # workspace_instance_queue[str(project["instance_id"])] = new_instance_queue
-
-
-                    print("*"*20, file=sys.stderr)
-                redis_client.hset(redis_key.WORKSPACE_ITEM_PENDING_POD, workspace["id"], json.dumps(workspace_item_pending_pod))
-
-
-
-                #======================================================================
-                # instance queue
-                #======================================================================
-                workspace_instances = db_workspace.get_workspace_instance_list(workspace_id=workspace["id"])
-
+                # pending 반영
+                redis_client.hset(
+                    redis_key.WORKSPACE_ITEM_PENDING_POD2,
+                    ws_id,
+                    json.dumps(workspace_item_pending_pod)
+                )
+                # Pending Pod Queue 상태 출력
+                if DEBUG:
+                    print_pending_queue_pods(ws_id, workspace_item_pending_pod)
+                
+                # 2) 인스턴스 큐에서 실제 helm 배포 시도
+                # -----------------------------------------------------------------------
+                workspace_instances = db_workspace.get_workspace_instance_list(workspace_id=ws_id)
 
                 for instance in workspace_instances:
-                    # 맞줘야 하는 key
-                    # gpu_count , pod_type
-
                     try:
-                        instance_key = redis_key.WORKSPACE_INSTANCE_QUEUE.format(workspace["id"], instance["instance_id"])
-                        redis_queue = RedisQueue(redis_client=redis_client,key=instance_key)
+                        instance_key = redis_key.WORKSPACE_INSTANCE_QUEUE.format(ws_id, instance["instance_id"])
+                        redis_queue = RedisQueue(redis_client=redis_client, key=instance_key)
                         pod_info_queue = redis_queue.pop_nowait()
-                        if pod_info_queue:
-                            pod_info = json.loads(pod_info_queue)
-                        else:
+                        if not pod_info_queue:
                             continue
+                        pod_info = json.loads(pod_info_queue)
                     except Exception as e:
-                        # redis key가 삭제 될 경우
+                        logging.info("pod_info_queue 에러")
                         continue
-
-                    # print(pod_info, file=sys.stderr)
-
-                    # DB sync
-                    if pod_info["pod_type"] == TYPE.TRAINING_ITEM_A:
-                        training_info = db_project.get_training(training_id=pod_info["id"])
-                        if training_info is None or training_info["end_status"] == TYPE.KUBE_POD_STATUS_STOP or training_info["instance_id"] is None:
-                            continue
-                    # elif pod_info["pod_type"] == TYPE.TRAINING_ITEM_C:
-                    #     hps_info = db_project.get_hps(hps_id=pod_info["id"])
-                    #     if hps_info is None or hps_info["end_datetime"]: # hps가 삭제 되었거나 중지되었을 떄
-                    #         continue
-                    elif pod_info["pod_type"] == TYPE.TRAINING_ITEM_B:
-                        tool_info =db_project.get_project_tool(project_tool_id=pod_info["id"])
-                        if tool_info is None or not tool_info['request_status'] or tool_info["gpu_count"] != pod_info["gpu_count"] \
-                            or tool_info["image_real_name"] != pod_info["image_name"] or json.loads(tool_info["gpu_select"]) != pod_info["gpu_select"] or \
-                                tool_info["instance_id"] is None: # tool이 삭제 되었거나 , 중지 , gpu 개수가 변경 되었을 경우, gpu 클러스터링이 변경 되었을 경우 삭제
-                            continue
-                    elif pod_info["pod_type"] == TYPE.DEPLOYMENT_TYPE:
-                        worker_info = db_deployment.get_deployment_worker(deployment_worker_id=pod_info["deployment_worker_id"])
-                        if worker_info is None or worker_info["end_datetime"] or worker_info["instance_id"] is None:
-                            continue
-
-                    if pod_info["gpu_count"] > 0: # GPU
-                        # 워크스페이스에서 해당 instance로 할당된 gpu 개수
-                        workspace_instance_gpu_count = instance["instance_allocate"] * instance["gpu_allocate"]
-                        gpu_select = pod_info.get("gpu_select",[])
-                        gpu_auto_cluster_case = pod_info["gpu_auto_cluster_case"]
-                        gpu_cluster_auto = pod_info["gpu_cluster_auto"] # True -> 자동 , False -> 수동
-                        # print("자동 클러스터링 : ", gpu_cluster_auto, file=sys.stderr)
-                        # workspace에서 사용중인 instance pod 조회
-                        used_workspace_instance_gpu_count = 0
-                        workspace_selector = "workspace_id={},instance_id={}".format(workspace["id"],instance["instance_id"])
-                        used_gpu_uuid = get_used_gpu_uuid(label_select=workspace_selector)
-
-
-                        # 해당 인스턴스를 사용하는 모든 pod 조회
-                        instance_selector = "instance_id={}".format(instance["instance_id"])
-                        used_instance_gpu_uuid = get_used_gpu_uuid(label_select=instance_selector)
-
-
-                        # 워크스페이스 인스턴스 할당량 확인
-                        used_workspace_instance_gpu_count += len(used_gpu_uuid)
-                        free_workspace_gpu_count = workspace_instance_gpu_count - used_workspace_instance_gpu_count
-
-                        print("="*20, file=sys.stderr)
-                        print("pod_info_gpu_count :", pod_info["gpu_count"], ", free_workspace_gpu_count :", free_workspace_gpu_count, file=sys.stderr)
-
-                        if pod_info["gpu_count"] > free_workspace_gpu_count:
-                            # if not pending_flag:
-                                # workspace_instance_pending_pod[resource_type][str(instance['instance_id'])] = pod_info
-                            redis_queue.lput(json.dumps(pod_info))
-                            continue
-                        # GPU INFO에서 사용가능한 GPU UUID 가져오기
-                        model_name = instance["resource_name"]
-                        gpu_model_status = json.loads(redis_client.get(redis_key.GPU_INFO_RESOURCE))
-                        available_gpus = get_available_gpus_by_model(model_name=model_name, data=gpu_model_status, instance_id=instance["instance_id"])
-
-                        # TODO
-                        # GPU INFO의 상태 업데이트가 늦을 경우를 대비해 추가한 로직
-                        real_available_gpus = []
-                        for available_gpu in list(available_gpus):
-                            if available_gpu["gpu_uuid"] not in used_instance_gpu_uuid:
-                                real_available_gpus.append(available_gpu)
-
-                        print("="*20, file=sys.stderr)
-                        print("실 사용 가능", real_available_gpus, file=sys.stderr)
-                        print("실 사용 가능2", available_gpus, file=sys.stderr)
-                        print("="*20, file=sys.stderr)
-
-                        if not real_available_gpus:
-                            # if not pending_flag:
-                                # workspace_instance_pending_pod[resource_type][str(instance['instance_id'])] = pod_info
-                            redis_queue.lput(json.dumps(pod_info))
-                            continue
-
-
-                        if pod_info["gpu_count"] == 1: # gpu가 하나일 경우
-
-                            real_available_gpus = get_optimal_gpus(data=real_available_gpus, num_gpus=1)
-                            # 클러스터링
-                            real_available_gpus = gpu_auto_clustering(real_available_gpus, pod_per_gpu=1)
-
-                        elif gpu_cluster_auto and pod_info["gpu_count"] > 1:  # 자동 클러스터링
-                            # TODO
-                            # real_available_gpus 를 가지고 gpu 선택 할 수 있도록 수정
-                            print("="*20, file=sys.stderr)
-                            print("자동 옵션 : pod 당 gpu 개수 :", gpu_auto_cluster_case["gpu_count"], ", pod 개수 : ", gpu_auto_cluster_case["server"], file=sys.stderr)
-                            print("="*20, file=sys.stderr)
-                            gpu_select = common.get_gpu_auto_select_new(gpu_count=gpu_auto_cluster_case["gpu_count"], pod_count=gpu_auto_cluster_case["server"], gpu_data=real_available_gpus)
-                            print("자동 선택 : ", gpu_select, file=sys.stderr)
-                            gpu_cluster_status = True
-                            for gpu in gpu_select:
-                                select_gpu_uuid = gpu["gpu_uuid"]
-                                if select_gpu_uuid in used_instance_gpu_uuid:
-                                    gpu_cluster_status = False
-                                    break
-
-                            if not gpu_cluster_status or gpu_select == []:
-                                # if not pending_flag:
-                                    # workspace_instance_pending_pod[resource_type][str(instance['instance_id'])] = pod_info
-                                redis_queue.lput(json.dumps(pod_info))
-                                continue
-                            # 클러스터링
-                            real_available_gpus = gpu_auto_clustering(available_gpus=gpu_select, pod_per_gpu=gpu_auto_cluster_case["gpu_count"])
-
-
-                        elif not gpu_cluster_auto and pod_info["gpu_count"] > 1:  # 수동 클러스터 구성일 경우 워크스페이스에서 해당 cluster를 사용중인지 확인
-
-                            gpu_cluster_status = True
-                            pod_per_gpu = pod_info["pod_per_gpu"]
-                            for gpu in gpu_select:
-                                select_gpu_uuid = gpu["gpu_uuid"]
-                                if select_gpu_uuid in used_instance_gpu_uuid:
-                                    gpu_cluster_status = False
-                                    break
-
-                            if not gpu_cluster_status:
-                                # if not pending_flag:
-                                    # workspace_instance_pending_pod[resource_type][str(instance['instance_id'])] = pod_info
-                                redis_queue.lput(json.dumps(pod_info))
-                                continue
-
-                            real_available_gpus = gpu_auto_clustering(available_gpus=gpu_select, pod_per_gpu=pod_per_gpu)
-
-                        pod_info["available_gpus"] = real_available_gpus
-                    elif pod_info["gpu_count"] == 0 and  instance["instance_type"] == "GPU": # GPU 인스턴스인데 gpu 개수가 0개일 경우 해당 인스턴스 중 가중치가 높은 노드 지정 (가중치의 기준은 인스턴스의 개수)
-                        node_list = db_node.get_node_instance_list(instance_id=instance["instance_id"])
-                        nodes = [item['node_name'] for item in node_list]
-                        weights = [item['instance_allocate'] for item in node_list]
-
-                        pod_info["available_node"] = random.choices(nodes, weights=weights, k=1)[0]
-                    # print(pod_info, file=sys.stderr)
-
-                    # CPU 인스턴스일 경우
-                    if instance["instance_type"] == "CPU":
-                        pod_info["cpu_instance_name"] = instance["instance_name"]
-
-                    # print(pod_info, file=sys.stderr)
-                    # helm 실행
-                    if pod_info["pod_type"] == TYPE.TRAINING_ITEM_A:
-                        res, message = create_training_pod(pod_info=pod_info)
-                    elif pod_info["pod_type"] == TYPE.TRAINING_ITEM_C:
-                        res, message = create_hps_pod(pod_info=pod_info)
-                    elif pod_info["pod_type"] == TYPE.TRAINING_ITEM_B:
-                        res, message = create_project_tool(pod_info=pod_info)
-                    elif pod_info["pod_type"] == TYPE.DEPLOYMENT_TYPE:
-                        res1, message = install_deployment_pod(deployment_info=pod_info)
-                        res2, message = install_deployment_svc_ing(deployment_info=pod_info)
-                        res = True if res1 != False and res2 != False else False
-                    print(res, file=sys.stderr, flush=True)
-                    if res: # helm 성공 시
-                        print("helm ok", file=sys.stderr)
-                        print(message, file=sys.stderr, flush=True)
-                        # if pending_flag:
-                        #     del workspace_instance_pending_pod[resource_type][str(instance['instance_id'])]
-                    else: # helm 실패 시
-                        print(message, file=sys.stderr)
-
-                        if pod_info["pod_type"] == TYPE.DEPLOYMENT_TYPE:
-                            uninstall_pod_deployment(workspace_id=pod_info["workspace_id"], deployment_id=pod_info["deployment_id"], deployment_worker_id=pod_info["deployment_worker_id"],)
-                        elif pod_info["pod_type"] == TYPE.TRAINING_ITEM_B:
-                            delete_helm_resource(project_tool_type=TYPE.TOOL_TYPE[pod_info["tool_type"]], project_tool_id=pod_info["id"])
-                        else:
-                            delete_helm_resource(project_tool_type=pod_info["pod_type"], project_tool_id=pod_info["id"])
-                        # queue 앞으로 다시 입력
+                    logging.info("POD INFO QUEUE : %s", pod_info)
+                    # 통합 함수 호출 → DB sync, 자원 체크, GPU 처리, helm 배포까지 수행
+                    status, msg = process_instance_queue_item(
+                        redis_client=redis_client,
+                        pod_info=pod_info,
+                        instance=instance,
+                        ws_id=ws_id,
+                        workspace_instance_used_resource=workspace_instance_used_resource
+                    )
+                    
+                    # 자원 부족 등으로 실패 시 → 다시 큐에 넣어두기
+                    if status == Status.FAIL_RETRY:
+                        logging.info(f"Instance Queue failed scheduling (retry): {msg}")
                         redis_queue.lput(json.dumps(pod_info))
-
+                    elif status == Status.FAIL_PASS:
+                        logging.info(f"Instance Queue failed scheduling (pass): {msg}")
+                    else:
+                        logging.info("Instance Queue scheduling success")
+            # Pending Pod Queue 상태 출력
+            # current_time = time.time()
+            # if current_time - last_print_time >= PRINT_INTERVAL:
+            #     workspace_pending = redis_client.hgetall(redis_key.WORKSPACE_ITEM_PENDING_POD2)
+            #     for workspace in workspace_list:
+            #         raw_pending = workspace_pending.get(workspace["id"])
+            #         if raw_pending:
+            #             workspace_item_pending_pod = json.loads(raw_pending)
+            #         else:
+            #             workspace_item_pending_pod = {
+            #                 TYPE.PROJECT_TYPE: {},
+            #                 TYPE.DEPLOYMENT_TYPE: {},
+            #                 TYPE.PREPROCESSING_TYPE: {},
+            #                 TYPE.ANALYZER_TYPE: {},
+            #                 TYPE.COLLECT_TYPE: {},
+            #                 TYPE.FINE_TUNING_TYPE: {},
+            #             }
+            #         print(f"3 {workspace["id"]} ", workspace_item_pending_pod, file=sys.stderr)
+            #         print_pending_queue_pods(workspace, workspace_item_pending_pod)
+            #     last_print_time = current_time
+                
         except Exception as e:
-            print(traceback.print_exc(), file=sys.stderr)
+            print(traceback.format_exc(), file=sys.stderr)

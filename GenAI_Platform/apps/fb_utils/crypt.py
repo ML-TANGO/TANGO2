@@ -1,7 +1,7 @@
 import base64
 import hashlib
 from Crypto import Random
-from Crypto.Cipher import AES
+from Crypto.Cipher import AES 
 # pip install pycrypto
 
 FRONT_KEY = 'robertirenelico!robertirenelico!'
@@ -61,13 +61,13 @@ class AESCipher():
 
     def encrypt(self, raw):
         if self.en_decode_type == "base64":
-            return self._encrypt_base64(raw)
+            return self._encrypt_base64(raw) 
         elif self.en_decode_type == "hex":
             return self._encrypt_hex(raw)
 
     def decrypt(self, enc):
         if self.en_decode_type == "base64":
-            return self._decrypt_base64(enc)
+            return self._decrypt_base64(enc) 
         elif self.en_decode_type == "hex":
             return self._decrypt_hex(enc)
 
@@ -87,10 +87,10 @@ def decrypt_user_token(user_token):
 
 """Creates a key pair then register it as a login credential for ssh
 
-:param userName: UNIX username
+:param userName: UNIX username 
 :type userName: str
 :returns: loc of a private key created
-:rtype: str
+:rtype: str 
 """
 import os
 def createAKeyForSSH(user_name):

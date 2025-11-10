@@ -27,15 +27,22 @@ spec:
       {{- end }}
       containers:
       - name: {{ .Values.global.jfb.name.resource }}
-        image:  {{ .Values.global.jfb.image.registry }}/{{ .Values.global.jfb.image.resource }}
+        image:  {{ .Values.global.jfb.image.system.registry }}/{{ .Values.global.jfb.image.resource }}
         imagePullPolicy: {{ .Values.global.jfb.image.pullPolicy }}
         command: [ "/bin/bash", "-c"]
         args: ["cd /app; ./run.sh; sleep infinity;"]
+        resources:
+          limits:
+            cpu : 0.5
+            memory : "512M"
+          requests:
+            cpu : 0.1
+            memory : "256M"
         ports:
         - containerPort: 8000
         env:
         - name: JFB_RESOURCE_IMAGE
-          value: {{ .Values.global.jfb.image.registry }}/{{ .Values.global.jfb.image.resource }}
+          value: {{ .Values.global.jfb.image.system.registry }}/{{ .Values.global.jfb.image.resource }}
         envFrom:
         - configMapRef:
             name: jfb-settings

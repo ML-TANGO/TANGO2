@@ -11,7 +11,7 @@ def get_notifications(limit :int = 10):
         with get_db() as conn:
             cur = conn.cursor()
             sql = """
-                    SELECT *
+                    SELECT * 
                     FROM notification_history
                     ORDER BY id DESC
                 """
@@ -40,4 +40,4 @@ def update_notifications_read(user_id : int, notification_id : int):
     except:
         traceback.print_exc()
     return False
-
+    

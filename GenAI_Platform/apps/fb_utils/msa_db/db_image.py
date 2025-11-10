@@ -10,7 +10,7 @@ import traceback
 import json
 import pymysql
 
-from utils.exceptions import *
+from utils.exception.exceptions import *
 
 admin_user_id_list = None
 
@@ -65,7 +65,7 @@ def get_image_list(workspace_id=None):
         return res
     except Exception as e:
         traceback.print_exc()
-        return False, e
+        return []
 
 def get_image_single(image_id):
     # import utils.db as db
@@ -104,7 +104,7 @@ def get_image_single(image_id):
             cur.execute(sql, image_id)
             res = cur.fetchall()
             res = reduce_joined_result(res, 'id', 'workspace', ('workspace_id', 'workspace_name'))
-
+            
             if not res:
                 return False
         return res[0]
@@ -209,7 +209,7 @@ def get_image_id_by_real_name(real_name):
             FROM image
             WHERE real_name=%s """
             cur.execute(sql, real_name)
-            res = cur.fetchall()
+            res = cur.fetchone()
         return res
     except Exception as e:
         traceback.print_exc()
@@ -240,7 +240,7 @@ def get_db_iid_list():
             WHERE iid is not NULL"""
             cur.execute(sql)
             res = cur.fetchall()
-
+            
             result = []
             for item in res:
                 result.append(item["iid"])
@@ -275,7 +275,7 @@ def update_image_data(image_id, data):
             "fail_reason" : "Not installed"
             "libs_digest" : [{'name': 'torch', 'version': '1.7.1+cu110'}, {'name': 'cuda', 'version': '11.0'}]
         }
-
+    
     * Null 을 넣고 싶을 경우 None 쓰기
     * fail_reason 같이, 문장을 넣어주는 경우에 "'"가 포함되면 에러가 발생할 수 있음 - example) Don't
     """
@@ -285,7 +285,7 @@ def update_image_data(image_id, data):
             sql = "UPDATE image SET "
             for col, row in data.items():
                 if row == None:              # Null case
-                    sql += f"{col}=Null, "
+                    sql += f"{col}=Null, "                    
                 elif col in ["status"]:      # status: int
                     sql += f"{col}={row}, "
                 elif col in ["libs_digest"]: # libs_digest: list
@@ -341,7 +341,7 @@ def insert_create_image(user_id, image_name, real_name, file_path, upload_type, 
             if not iid:
                 sql = """
                 INSERT INTO image(user_id, name, real_name,
-                file_path, status, type, access, description,
+                file_path, status, type, access, description, 
                 upload_filename, update_datetime)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP())
                 """
@@ -400,7 +400,7 @@ def delete_image_workspace(image_id, workspace_id):
         with get_db() as conn:
             cur = conn.cursor()
             sql = """
-            DELETE FROM image_workspace
+            DELETE FROM image_workspace 
             WHERE image_id = %s AND workspace_id = %s
             """
             cur.execute(sql, (image_id, workspace_id))
@@ -449,7 +449,8 @@ def get_installing_commit_image_list(tool_id: int):
             sql = """
                 SELECT i.*
                 FROM image i
-                WHERE JSON_UNQUOTE(JSON_EXTRACT(i.upload_filename, '$.training_tool_id'))=%s;
+                WHERE JSON_UNQUOTE(JSON_EXTRACT(i.upload_filename, '$.training_tool_id'))=%s
+                ORDER BY i.id DESC
             """.format()
             cur.execute(sql, (tool_id))
             res = cur.fetchone()
@@ -486,9 +487,9 @@ def get_node_list(page=None, limit=None, search_key="", search_value=""):
             cur = conn.cursor()
 
             sql = """
-                    SELECT n.*, ng.gpu_config
-                    from node n
-                    LEFT JOIN (Select node_id, group_concat(concat(model,"(",memory,")")) as gpu_config from node_gpu group by node_id) as ng on ng.node_id = n.id
+                    SELECT n.*, ng.gpu_config 
+                    from node n 
+                    LEFT JOIN (Select node_id, group_concat(concat(model,"(",memory,")")) as gpu_config from node_gpu group by node_id) as ng on ng.node_id = n.id  
                     """
             sql+= ''
 
@@ -507,41 +508,6 @@ def get_node_list(page=None, limit=None, search_key="", search_value=""):
         traceback.print_exc()
     return res
 
-def get_user(user_id=None, user_name=None):
-    res = None
-    try:
-        with get_db() as conn:
-        # with get_db() as conn:
-
-            cur = conn.cursor()
-
-            if user_id is not None:
-
-                sql = """SELECT u.*,
-                    ug.name AS group_name, ug.id AS group_id
-                    FROM user u
-                    LEFT JOIN user_usergroup uug ON uug.user_id = u.id
-                    LEFT JOIN usergroup ug ON uug.usergroup_id = ug.id
-                    WHERE u.id = %s"""
-
-                cur.execute(sql, (user_id,))
-            elif user_name is not None:
-
-                sql = """SELECT u.*,
-                    ug.name AS group_name, ug.id AS group_id
-                    FROM user u
-                    LEFT JOIN user_usergroup uug ON uug.user_id = u.id
-                    LEFT JOIN usergroup ug ON uug.usergroup_id = ug.id
-                    WHERE u.name = %s"""
-
-                cur.execute(sql, (user_name,))
-
-            res = cur.fetchone()
-    except:
-        traceback.print_exc()
-    return res
-
-
 def get_workspace_list(page : int=None, size: int=None, search_key: str=None, search_value: str=None, user_id: int=None, sort: int=None):
     try:
         res = []
@@ -552,7 +518,7 @@ def get_workspace_list(page : int=None, size: int=None, search_key: str=None, se
             FROM workspace w
             INNER JOIN user as u ON w.manager_id = u.id
             INNER JOIN user_workspace uw ON uw.workspace_id = w.id"""
-
+            
             if search_key != None and search_value != None:
                 sql += " and " if "where" in sql else " where "
                 if search_key == "name":
@@ -561,14 +527,14 @@ def get_workspace_list(page : int=None, size: int=None, search_key: str=None, se
                     sql += " w.manager_id = {} or uw.user_id = {} ".format(search_value, search_value)
                 else:
                     sql += " {} = {} ".format(search_key, search_value)
-
+            
             if user_id is not None:
                 if not "where" in sql:
                     sql += " where "
                 else:
                     sql += "and "
-                sql += " w.id in (select workspace_id from user_workspace WHERE user_id={}) ".format(user_id,user_id)
-
+                sql += " w.id in (select workspace_id from user_workspace WHERE user_id={}) ".format(user_id,user_id)        
+            
             if sort is not None:
                 if sort == "created_datetime":
                     sql += " ORDER BY w.create_datetime desc "
@@ -579,7 +545,7 @@ def get_workspace_list(page : int=None, size: int=None, search_key: str=None, se
 
             if page is not None and size is not None:
                 sql += " limit {}, {} ".format((page-1)*size, size)
-
+            
             cur.execute(sql)
             res = cur.fetchall()
         return res

@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{ .Values.name }}"
+  labels:
+    instance_id: "{{ .Values.instance_id }}"
+    pod_type: "collect"
+    collect_id: "{{ .Values.collect_id }}"
+    dataset_id: "{{ .Values.dataset_id }}"
+    work_func_type: "deployment"
+    workspace_id: "{{ .Values.workspace_id }}"
+    helm_name: {{ .Values.name }}
+spec:
+  containers:
+  - name: deployment
+    image: {{ .Values.registry }}{{ .Values.image }}
+    imagePullPolicy: Always
+    ports:
+    - containerPort: 80
+    securityContext:
+      runAsUser: 0
+      allowPrivilegeEscalation: false
+    env:
+        {{- range $key, $val := .Values.env }}
+        - name: {{ $key }}
+          value: {{ $val | quote }}
+        {{- end}}
+    command: ["sh", "-c", "python3 /app/src/collect/deployment_collect.py"] #while true; do sleep 30; done; python3 /app/src/collect/deployment_collect.py
+    resources:
+      limits:
+        cpu: {{ .Values.resource.cpu }}
+        memory: {{ .Values.resource.memory }} # 256 MiB
+    volumeMounts:
+    - name: data-pvc
+      mountPath: "/jf-data"
+      subPath: "{{ .Values.dataset_path }}"
+    - name: main-pvc
+      mountPath: "/jf-main"
+      subPath: "{{ .Values.main_sub_path }}"
+  volumes:
+  - name: data-pvc
+    persistentVolumeClaim:
+      claimName: {{ .Values.dataset_pvc_name }}
+  - name: main-pvc
+    persistentVolumeClaim:
+      claimName: {{ .Values.main_pvc_name }}

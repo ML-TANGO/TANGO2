@@ -1,8 +1,9 @@
-from utils.exceptions import *
+from utils.exception.exceptions import *
 from utils.TYPE import PERMISSION_ADMIN_LEVEL, PERMISSION_CREATOR_LEVEL, PERMISSION_GENERAL_USER_LEVEL, PERMISSION_MANAGER_LEVEL, PERMISSION_NOT_ACCESS_LEVEL
 from starlette_context import context
 from utils.msa_db import db_workspace, db_project, db_dataset, db_deployment, db_user
 from utils import settings
+from utils.resource import get_auth, get_user_id
 from datetime import datetime, timezone, timedelta
 import functools
 import traceback
@@ -33,12 +34,12 @@ def admin_access_check():
     def deco_func(f):
         @functools.wraps(f)
         async def wrapper(*args, **kwargs):
-                user_id = get_user_id_from_header_user(context.get('headers')["Jf-User"])
+                user_id = get_user_id()
             return await f(*args, **kwargs)
 
 2. jf-user
 request.headers.get('Jf-User')
--> context.get('headers')["Jf-User"]
+user_id = get_user_id()
 
 3. args[0]
 문제:
@@ -47,9 +48,9 @@ request.headers.get('Jf-User')
     -> fastapi route class 사용안함
 대응:
     일단은 사용하는 곳이 1곳 밖에 없어서 무시하고 넘김
-    deco로 넘겨줘서 사용하는 곳: training.py -> 1503 class Training -> def put
+    deco로 넘겨줘서 사용하는 곳: training.py -> 1503 class Training -> def put 
     print("call user permission level ",self.permission_level) # from deco
-
+    
 4. parser, kwargs.get, flask_restplus.reqparse.RequestParser()
 parser는 wrapper의 kwargs로 들어옴 => kwargs 출력해보면 됨
 ex) kwargs = {'workspace_id': 58}
@@ -295,7 +296,7 @@ def check_inaccessible_workspace(user_id, workspace_id, allow_max_level=4):
     level = check_workspace_access_level(user_id=user_id, workspace_id=workspace_id)
     # print("ws access level ", level, allow_max_level)
     if level <= allow_max_level:
-        return
+        return 
 
     raise InaccessibleWorkspaceError
 
@@ -303,7 +304,7 @@ def is_time_in_range(start_time_str: str, end_time_str: str) -> bool:
     # 문자열을 datetime 객체로 변환 (UTC 기준)
     start_time = datetime.strptime(start_time_str, "%Y-%m-%d %H:%M")
     end_time = datetime.strptime(end_time_str, "%Y-%m-%d %H:%M")
-
+    
     # 현재 시간을 UTC 기준으로 가져옴
     current_time = datetime.now()
     # 현재 시간이 시작 시간과 종료 시간 사이에 있는지 확인
@@ -317,7 +318,7 @@ def def_workspace_access_check(parser=None, allow_max_level=WORKSPACE_ALLOW_MAX_
         def wrapper(*args, **kwargs):
             workspace_id = None
             try:
-                user_id = get_user_id_from_header_user(context.get('headers')["Jf-User"])
+                user_id = get_user_id()
                 if check_admin_access_level(user_id) == 1:
                     return f(*args, **kwargs)
                 # workspace_id
@@ -367,7 +368,7 @@ def workspace_access_check(parser=None, allow_max_level=WORKSPACE_ALLOW_MAX_LEVE
         async def wrapper(*args, **kwargs):
             workspace_id = None
             try:
-                user_id = get_user_id_from_header_user(context.get('headers')["Jf-User"])
+                user_id = get_user_id()
                 if check_admin_access_level(user_id) == 1:
                     return await f(*args, **kwargs)
                 # workspace_id
@@ -503,7 +504,7 @@ def def_project_access_check(parser=None, allow_max_level=WORKSPACE_ALLOW_MAX_LE
             hps_id = None
             id_list = None
             try:
-                user_id = get_user_id_from_header_user(context.get('headers')['Jf-User'])
+                user_id = get_user_id()
                 if check_admin_access_level(user_id) == 1:
                     return f(*args, **kwargs)
             except CustomErrorList as ce:
@@ -516,28 +517,28 @@ def def_project_access_check(parser=None, allow_max_level=WORKSPACE_ALLOW_MAX_LE
                 project_id = kwargs.get("args").project_id
             elif kwargs.get("body") and hasattr(kwargs.get("body"), "project_id"):
                 project_id = kwargs.get("body").project_id
-
+            
             elif kwargs.get("project_tool_id") is not None:
                 project_tool_id = kwargs.get("project_tool_id")
             elif kwargs.get("args") and hasattr(kwargs.get("args"), "project_tool_id"):
                 project_tool_id = kwargs.get("args").project_tool_id
             elif kwargs.get("body") and hasattr(kwargs.get("body"), "project_tool_id"):
                 project_tool_id = kwargs.get("body").project_tool_id
-
+            
             elif kwargs.get("training_id") is not None:
                 training_id = kwargs.get("training_id")
             elif kwargs.get("args") and hasattr(kwargs.get("args"), "training_id"):
                 training_id = kwargs.get("args").training_id
             elif kwargs.get("body") and hasattr(kwargs.get("body"), "training_id"):
                 training_id = kwargs.get("body").training_id
-
+            
             elif kwargs.get("hps_id") is not None:
                 hps_id = kwargs.get("hps_id")
             elif kwargs.get("args") and hasattr(kwargs.get("args"), "hps_id"):
                 hps_id = kwargs.get("args").hps_id
             elif kwargs.get("body") and hasattr(kwargs.get("body"), "hps_id"):
                 hps_id = kwargs.get("body").hps_id
-
+            
             elif kwargs.get("id_list") is not None:
                 id_list = kwargs.get("id_list")
             elif kwargs.get("args") and hasattr(kwargs.get("args"), "id_list"):
@@ -545,7 +546,7 @@ def def_project_access_check(parser=None, allow_max_level=WORKSPACE_ALLOW_MAX_LE
             elif kwargs.get("body") and hasattr(kwargs.get("body"), "id_list"):
                 id_list = kwargs.get("body").id_list
             if project_id is not None:
-                try:
+                try: 
                     project_info = db_project.get_project(project_id=project_id)
                     if not project_info:
                         raise Exception("not exist project")
@@ -563,7 +564,7 @@ def def_project_access_check(parser=None, allow_max_level=WORKSPACE_ALLOW_MAX_LE
                     return response(status=0)
             elif training_id is not None:
                 try:
-
+                    
                     project_id = get_project_id_from_training_id(training_id=training_id)
                     project_info = db_project.get_project(project_id=project_id)
                     if not project_info:
@@ -594,11 +595,11 @@ def def_project_access_check(parser=None, allow_max_level=WORKSPACE_ALLOW_MAX_LE
             check_access_level = project_access_level_check(user_id=user_id, project_info=project_info)
             if check_access_level > allow_max_level:
                 raise Exception("not allowed user")
-
-
-
+            
+            
+            
             return f(*args, **kwargs)
-
+        
         wrapper._original = f
         return wrapper
 
@@ -616,7 +617,7 @@ def project_access_check(parser=None, allow_max_level=WORKSPACE_ALLOW_MAX_LEVEL)
             hps_id = None
             id_list = None
             try:
-                user_id = get_user_id_from_header_user(context.get('headers')['Jf-User'])
+                user_id = get_user_id()
                 if check_admin_access_level(user_id) == 1:
                     return await f(*args, **kwargs)
             except CustomErrorList as ce:
@@ -629,28 +630,28 @@ def project_access_check(parser=None, allow_max_level=WORKSPACE_ALLOW_MAX_LEVEL)
                 project_id = kwargs.get("args").project_id
             elif kwargs.get("body") and hasattr(kwargs.get("body"), "project_id"):
                 project_id = kwargs.get("body").project_id
-
+            
             elif kwargs.get("project_tool_id") is not None:
                 project_tool_id = kwargs.get("project_tool_id")
             elif kwargs.get("args") and hasattr(kwargs.get("args"), "project_tool_id"):
                 project_tool_id = kwargs.get("args").project_tool_id
             elif kwargs.get("body") and hasattr(kwargs.get("body"), "project_tool_id"):
                 project_tool_id = kwargs.get("body").project_tool_id
-
+            
             elif kwargs.get("training_id") is not None:
                 training_id = kwargs.get("training_id")
             elif kwargs.get("args") and hasattr(kwargs.get("args"), "training_id"):
                 training_id = kwargs.get("args").training_id
             elif kwargs.get("body") and hasattr(kwargs.get("body"), "training_id"):
                 training_id = kwargs.get("body").training_id
-
+            
             elif kwargs.get("hps_id") is not None:
                 hps_id = kwargs.get("hps_id")
             elif kwargs.get("args") and hasattr(kwargs.get("args"), "hps_id"):
                 hps_id = kwargs.get("args").hps_id
             elif kwargs.get("body") and hasattr(kwargs.get("body"), "hps_id"):
                 hps_id = kwargs.get("body").hps_id
-
+            
             elif kwargs.get("id_list") is not None:
                 id_list = kwargs.get("id_list")
             elif kwargs.get("args") and hasattr(kwargs.get("args"), "id_list"):
@@ -658,7 +659,7 @@ def project_access_check(parser=None, allow_max_level=WORKSPACE_ALLOW_MAX_LEVEL)
             elif kwargs.get("body") and hasattr(kwargs.get("body"), "id_list"):
                 id_list = kwargs.get("body").id_list
             if project_id is not None:
-                try:
+                try: 
                     project_info = await db_project.get_project_new(project_id=project_id)
                     if not project_info:
                         raise Exception("not exist project")
@@ -676,7 +677,7 @@ def project_access_check(parser=None, allow_max_level=WORKSPACE_ALLOW_MAX_LEVEL)
                     return response(status=0)
             elif training_id is not None:
                 try:
-
+                    
                     project_id = get_project_id_from_training_id(training_id=training_id)
                     project_info = await db_project.get_project_new(project_id=project_id)
                     if not project_info:
@@ -707,11 +708,11 @@ def project_access_check(parser=None, allow_max_level=WORKSPACE_ALLOW_MAX_LEVEL)
             check_access_level = project_access_level_check(user_id=user_id, project_info=project_info)
             if check_access_level > allow_max_level:
                 raise Exception("not allowed user")
-
-
-
+            
+            
+            
             return await f(*args, **kwargs)
-
+        
         wrapper._original = f
         return wrapper
 
@@ -766,7 +767,7 @@ def dataset_access_check(parser=None, allow_max_level=DATASET_ALLOW_MAX_LEVEL):
         @functools.wraps(f)
         def wrapper(*args, **kwargs):
             # print(**args)
-            user_id = get_user_id_from_header_user(context.get('headers')["Jf-User"])
+            user_id = get_user_id()
             if kwargs.get("dataset_id") is not None:
                 dataset_id = kwargs.get("dataset_id")
             elif kwargs.get("args") and hasattr(kwargs.get("args"), "dataset_id"):
@@ -873,8 +874,8 @@ def admin_access_check(parser=None, allow_max_level=ADMIN_ALLOW_MAX_LEVEL):
         @functools.wraps(f)
         async def wrapper(*args, **kwargs):
             try:
-                user_id = get_user_id_from_header_user(context.get('headers')["Jf-User"])
-                permission_level = check_inaccessible_admin(user_id=1, allow_max_level=allow_max_level)
+                user_id = get_user_id()
+                permission_level = check_inaccessible_admin(user_id=user_id, allow_max_level=allow_max_level)
 
             except CustomErrorList as ce:
                 traceback.print_exc()
@@ -993,7 +994,7 @@ def check_deployment_template_access_level(user_id, deployment_template_id=None,
     # 2
     if is_workspace_manager(user_id=user_id, **access_check_info):
         return 2
-
+    
     if is_deployment_template_group_owner(user_id=user_id, **access_check_info):
         return 3
     # 3
@@ -1025,7 +1026,7 @@ def check_inaccessible_deployment(user_id, deployment_id, allow_max_level=4, **m
 
 def check_inaccessible_deployment_template(user_id, deployment_template_id=None, deployment_template_group_id=None , allow_max_level=4, **more_option):
     try:
-        level = check_deployment_template_access_level(user_id=user_id, deployment_template_id=deployment_template_id,
+        level = check_deployment_template_access_level(user_id=user_id, deployment_template_id=deployment_template_id, 
                                                         deployment_template_group_id=deployment_template_group_id)
 
         if level <= allow_max_level:
@@ -1036,7 +1037,7 @@ def check_inaccessible_deployment_template(user_id, deployment_template_id=None,
         traceback.print_exc()
         raise ce
     except Exception as e:
-        raise e
+        raise e 
 
 def deployment_access_check(parser=None, allow_max_level=DEPLOYMENT_ALLOW_MAX_LEVEL):
     # from utils.resource import send
@@ -1051,11 +1052,11 @@ def deployment_access_check(parser=None, allow_max_level=DEPLOYMENT_ALLOW_MAX_LE
             deployment_id_list = None
 
             try:
-                user_id = get_user_id_from_header_user(context.get('headers')["Jf-User"])
+                user_id = get_user_id()
             except CustomErrorList as ce:
                 traceback.print_exc()
                 return response(status=0, **ce.response())
-
+            
             # kwargs
             if kwargs.get("deployment_id") is not None:
                 deployment_id = kwargs.get("deployment_id")
@@ -1172,10 +1173,10 @@ def image_access_check(parser=None, method=None, priority="MANAGER", allow_max_l
     def deco_func(f):
         @functools.wraps(f)
         async def wrapper(*args, **kwargs):
-            user_id = get_user_id_from_header_user(context.get('headers')["Jf-User"])
+            user_id = get_user_id()
             workspace_id_list = None
             delete_list = []
-
+            
             # 수정
             body = kwargs["body"]
             if method == "IMAGE_UPDATE":
@@ -1190,7 +1191,7 @@ def image_access_check(parser=None, method=None, priority="MANAGER", allow_max_l
                 delete_all_list = body.delete_all_list
                 delete_ws_list = body.delete_ws_list
                 workspace_id = body.workspace_id
-
+                
                 # MSA 수정
                 delete_list = delete_all_list + delete_ws_list
 
@@ -1203,8 +1204,8 @@ def image_access_check(parser=None, method=None, priority="MANAGER", allow_max_l
                     for image_id in delete_list:
                         # 없는 이미지 체크
                         if not db_image.get_image_single(image_id):
-                            raise ItemNotExistError("Some of Image does not Exist. Reload page and Try again")
-
+                            raise ItemNotExistError("Some of Image does not Exist. Reload page and Try again")               
+                        
                         level = check_inaccessible_image(user_id=user_id, image_id=image_id, workspace_id=workspace_id,
                                                          priority=priority, method=method, allow_max_level=allow_max_level)
 
@@ -1254,13 +1255,13 @@ def sample_access_check(parser=None, allow_max_level=WORKSPACE_ALLOW_MAX_LEVEL):
         def wrapper(*args, **kwargs):
             # Get Permission level
             try:
-                user_id = get_user_id_from_header_user(context.get('headers')["Jf-User"])
+                user_id = get_user_id()
                 permission_level = check_inaccessible_sample(user_id=user_id,
                                                              allow_max_level=allow_max_level)
             except CustomErrorList as ce:
                 traceback.print_exc()
                 return send(response(status=0, **ce.response()))
-
+            
             # Path parser
             if kwargs:
                 if kwargs.get("post_id_int") is not None:
@@ -1286,7 +1287,7 @@ def sample_access_check(parser=None, allow_max_level=WORKSPACE_ALLOW_MAX_LEVEL):
                     post_id_list = parser.parse_args().get("post_id_list")
                 if parser.parse_args().get("post_id_dict") is not None:
                     post_id_dict = parser.parse_args().get("post_id_dict")
-
+  
             return f(*args, **kwargs)
         wrapper._original = f
         return wrapper
@@ -1302,25 +1303,25 @@ def sample_delete_access_check(parser=None, allow_max_level=WORKSPACE_ALLOW_MAX_
         def wrapper(*args, **kwargs):
             # Get Permission level
             try:
-                user_id = get_user_id_from_header_user(context.get('headers')["Jf-User"])
-                permission_level = check_inaccessible_sample(user_id=user_id,
+                user_id = get_user_id()
+                permission_level = check_inaccessible_sample(user_id=user_id, 
                                                                 allow_max_level=allow_max_level)
             except CustomErrorList as ce:
                 traceback.print_exc()
                 return send(response(status=0, **ce.response()))
-
+            
             # Path parser
             if kwargs:
                 if kwargs.get("delete_id") is not None:
                     delete_id = kwargs.get("delete_id")
-
+            
             # Query parser
             if isinstance(parser, flask_restplus.reqparse.RequestParser):
                 if parser.parse_args().get("delete_id") is not None:
                     delete_id = parser.parse_args().get("delete_id")
-
+            
             return f(*args, **kwargs)
         wrapper._original = f
         return wrapper
-
+    
     return deco_func

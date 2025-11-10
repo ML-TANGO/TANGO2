@@ -1,0 +1,31 @@
+# JFB CUSTOM
+# CSI TODO
+{{- if not .Values.global.jfb.storageClass.enabled }}
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ .Values.global.developer }}-kong-pv
+spec:
+  capacity:
+    storage: 8Gi
+  accessModes:
+    - ReadWriteOnce
+      #  claimRef:
+      #    name: data-{{ template "kong.name" . }}-postgres-0  # pvc 이름 끝에 자동으로 postgres-0가 붙음에 주의
+      #    #namespace: kong
+      #    namespace: {{ template "kong.namespace" . }}
+  {{- if eq .Values.global.jfb.volume.type "nfs" }}
+  nfs:
+    server: {{ .Values.global.jfb.volume.server }}
+    path: {{ .Values.global.jfb.volume.path }}
+  {{- else if eq .Values.global.jfb.volume.type "hostPath" }}
+  hostPath:
+    path: {{ .Values.global.jfb.volume.path }}
+  {{- else if eq .Values.global.jfb.volume.type "csi" }}
+  csi:
+    driver:
+    volumeHandle:
+    volumeAttributes:
+      fsType: 
+  {{- end }}
+{{- end }}

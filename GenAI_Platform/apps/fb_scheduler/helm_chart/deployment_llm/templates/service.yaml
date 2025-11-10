@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "name.network" . }}--service
+  namespace: {{ .Values.metadata.namespace.workspaceNamespace }}
+  # Kong Timeout Setting (in ms)
+  annotations:
+    konghq.com/connect-timeout: "1800000"
+    konghq.com/read-timeout: "1800000"
+    konghq.com/write-timeout: "1800000"
+  labels:
+    {{- include "labels.base" . | indent 4}}
+spec:
+  type: ClusterIP
+  selector:
+    ray: header # 첫번째 팟으로 api 요청하기 위함
+    deployment_id: {{ toString .Values.deployment.deploymentId | quote }}
+  ports: 
+    - name: deployment-api
+      port: 18555
+      targetPort: 18555

@@ -1,0 +1,17 @@
+name:
+registry:
+image:
+dataset_path:
+dataset_id:
+dataset_pvc_name:
+collect_id:
+workspace_id:
+collect_info:
+instance_id:
+resource:
+  cpu:
+  memory:
+  gpu:
+# env:
+
+

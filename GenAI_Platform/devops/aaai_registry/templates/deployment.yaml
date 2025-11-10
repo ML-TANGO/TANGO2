@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jfb-registry-deploy
+  namespace: {{ .Values.namespace }}
+spec:
+  selector:
+    matchLabels:
+      app: jfb-registry
+  template:
+    metadata:
+      labels:
+        app: jfb-registry
+    spec:
+      nodeSelector:
+        node-role.kubernetes.io/manage: ""
+      containers:
+        - image: registry:2
+          name: jfb-registry
+          ports:
+            - containerPort: {{ .Values.service.port }}
+          env:
+            - name: REGISTRY_STORAGE_DELETE_ENABLED
+              value: "true"
+            - name: REGISTRY_HTTP_ADDR
+              value: 0.0.0.0:{{ .Values.service.port }}
+            {{- include "env.auth" . | nindent 12 }}
+            {{- include "env.tls" . | nindent 12 }}
+          volumeMounts:
+            {{- include "volume.volumeMounts.data" . | nindent 12 }}
+            {{- include "volume.volumeMounts.auth" . | nindent 12 }}
+            {{- include "volume.volumeMounts.tls" . | nindent 12 }}
+      volumes:
+        {{- include "volume.volumes.data" . | nindent 8 }}
+        {{- include "volume.volumes.auth" . | nindent 8 }}
+        {{- include "volume.volumes.tls" . | nindent 8 }}

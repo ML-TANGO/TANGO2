@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 
 	//"crypto/tls"
 
@@ -24,9 +25,15 @@ func main() {
 	// And then you must remove all :s or redundant starting "SHA256 Fingerprint="
 	// Or, cert, _ := os.ReadFile("./ca.crt") then CACert: xxx
 	//cert, _ := os.ReadFile("./ca.crt")
+
+	esAddress := os.Getenv("ELASTICSEARCH_ADDRESS")
+	if esAddress == "" {
+		esAddress = "https://elasticsearch-master-hl:9200"
+	}
+	
 	cfg := elasticsearch.Config{
-		Addresses: []string{ // https://192.168.1.10:30414
-			"https://elasticsearch-master-hl:9200", // must be sent to inner 9200 port, not 9300!
+		Addresses: []string{ // https://192.168.0.20:32495 // https://elasticsearch-master-hl:9200
+			esAddress, // must be sent to inner 9200 port, not 9300!
 		},
 		Username: "elastic",
 		Password: "acryl4958!",

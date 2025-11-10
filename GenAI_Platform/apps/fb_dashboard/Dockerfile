@@ -1,6 +1,7 @@
-FROM python:3.11.4-alpine3.18
+FROM python:3.13.0-slim
 
-RUN apk update && apk add gcc python3-dev musl-dev build-base linux-headers bash curl
+RUN apt-get update && apt-get install -y --allow-downgrades --allow-change-held-packages --no-install-recommends \
+    vim git curl wget net-tools ethtool librdkafka-dev iputils-ping gnupg
 
 RUN mkdir -p /app/src /utils
 

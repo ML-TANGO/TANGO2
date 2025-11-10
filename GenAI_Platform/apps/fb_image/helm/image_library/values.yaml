@@ -2,6 +2,7 @@ common:
   imageId: 
   imageName: 
   systemRegistryUrl: 
+  userRegistryUrl:
   systemNamespace: 
 
 db:

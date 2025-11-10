@@ -27,10 +27,9 @@ spec:
     name: jf-src-monitoring-pvc
   persistentVolumeReclaimPolicy: Retain
   storageClassName: ""
-  {{- $variables := dict -}}
-  {{- $_ := set $variables "src" .Values.global.jfb.volume.src }}
-  {{- $path := printf "%s/monitoring_app" .Values.global.jfb.volume.src.path }}
-  {{- $_ := set $variables.src "path" $path }}
-  {{- include "lib.volume.type" $variables.src | nindent 2 }}
+  {{- $srcMonitoring := dict -}}
+  {{- $_ := set $srcMonitoring "src" (deepCopy .Values.global.jfb.volume.src) }}
+  {{- $_ := set $srcMonitoring.src "path" (printf "%s/%s" .Values.global.jfb.volume.src.path .Values.global.jfb.dir.monitoring) }}
+  {{- include "lib.volume.type" $srcMonitoring.src | nindent 2 }}
 ---
 {{- end }}

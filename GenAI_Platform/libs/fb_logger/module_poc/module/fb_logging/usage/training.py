@@ -8,12 +8,12 @@ def create_training(self, username, workspace, training_name, training_type):
         training_name (str): The name of the training created.
         training_type (str): The type of the training created. builtin or custom.
     """
-    self.usage(data={"user": username,
-                     "workspace": workspace,
+    self.usage(data={"user": username, 
+                     "workspace": workspace, 
                      "task": "training",
-                     "task_name": f"[{training_type}] {training_name}",
+                     "task_name": f"[{training_type}] {training_name}", 
                      "action": "create"})
-
+    
 def delete_training(self, username, workspace, training_name, training_type):
     """
     Logs a training deletion event.
@@ -24,12 +24,12 @@ def delete_training(self, username, workspace, training_name, training_type):
         training_name (str): The name of the training deleted.
         training_type (str): The type of the training deleted. builtin or custom.
     """
-    self.usage(data={"user": username,
-                     "workspace": workspace,
+    self.usage(data={"user": username, 
+                     "workspace": workspace, 
                      "task": "training",
-                     "task_name": f"[{training_type}] {training_name}",
+                     "task_name": f"[{training_type}] {training_name}", 
                      "action": "delete"})
-
+    
 def update_training(self, username, workspace, training_name, training_type):
     """
     Logs a training update event.
@@ -40,8 +40,8 @@ def update_training(self, username, workspace, training_name, training_type):
         training_name (str): The name of the training updated.
         training_type (str): The type of the training updated. builtin or custom.
     """
-    self.usage(data={"user": username,
-                     "workspace": workspace,
+    self.usage(data={"user": username, 
+                     "workspace": workspace, 
                      "task": "training",
-                     "task_name": f"[{training_type}] {training_name}",
+                     "task_name": f"[{training_type}] {training_name}", 
                      "action": "update"})

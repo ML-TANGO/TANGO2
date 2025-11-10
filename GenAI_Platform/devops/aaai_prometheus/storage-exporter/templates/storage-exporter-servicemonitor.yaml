@@ -1,0 +1,12 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: storage-exporter-servicemonitor
+spec:
+  selector:
+    matchLabels:
+      app: storage-exporter
+  endpoints:
+  - port: metrics
+    interval: 15s
+    path: /metrics

@@ -1,65 +1,87 @@
 #!/bin/bash
-IMAGE_REGI="192.168.1.14:30500"
-IMAGE_REPO="jfb-system"
-DOCKERFILE="Dockerfile"
-
-IMAGE_REGISTRY=$IMAGE_REGI/$IMAGE_REPO
 SCRIPT=$( readlink -m $( type -p $0 ))
 BASE_DIR=`dirname ${SCRIPT}`
-APP_NAME=$(basename $(pwd))
 
-# Get First tag ordered by tag name
-IMAGE_INFO=$(sudo crictl images | sort -k 2 | grep "$IMAGE_REGISTRY/$APP_NAME" | head -n 1) 
-
-# Docker Image
-# DOCKER_IMAGE_INFO=$(sudo docker images --format "{{.Repository}}\t{{.Tag}}" | grep "$IMAGE_REGISTRY/$APP_NAME" | head -n 1)  # Get First tag ordered by tag name
-
-if [[ -z "$IMAGE_INFO" ]]; then
-    echo "No image found with this App [$APP_NAME]!"
-    echo "Build the first version of image. ($IMAGE_REGISTRY/$APP_NAME:0.1.0)"
-    read -p "continue? (y/n)" user_input
-
-    if ! [[ "$user_input" == "y" || "$user_input" == "yes" ]]; then
-        exit 2
+# ============================================================
+# CLI INFO
+# ============================================================
+CLI='nerdctl'
+read -p "Image Build CLI? $CLI? (y/n) " RESPONSE
+if [ "$RESPONSE" == "n" ]; then
+    # CLI: docker
+    CLI='docker'
+    read -p "Image Build CLI? $CLI (y/n) " RESPONSE
+    if [ "$RESPONSE" == "n" ]; then
+        exit 0
+    fi 
+    INSECURE_REGISTRY=''
+else
+    # CLI: nerdctl
+    ### protocol
+    PROTOCOL='http'
+    read -p "Image registry protocol? $PROTOCOL (y/n) " RESPONSE
+    if [ "$RESPONSE" == "n" ]; then
+        PROTOCOL='https'
+        echo "using protocol $PROTOCOL"
     fi
 
-    sudo docker build --no-cache --tag $IMAGE_REGISTRY/$APP_NAME:0.1.0 -f $DOCKERFILE ..
-    sudo docker push $IMAGE_REGISTRY/$APP_NAME:0.1.0
-
-    echo "Image build & push completed"
-    exit 0
+    ### insecure
+    if [ "$PROTOCOL" == "http" ]; then
+        INSECURE_REGISTRY='--insecure-registry'
+    else
+        INSECURE_REGISTRY=''
+    fi
 fi
 
-IMAGE_NAME=$(echo $IMAGE_INFO | cut -d' ' -f1)
-IMAGE_TAG=$(echo $IMAGE_INFO | cut -d' ' -f2)
+# ============================================================
+# IMAGE INFO
+# ============================================================
+REGISTRY="registry.jonathan.acryl.ai"
+read -p "Image registry url? $REGISTRY (y/n) " RESPONSE
+if [ "$RESPONSE" == "n" ]; then
+    read -p "Enter Image registry url: " REGISTRY
+fi
 
-echo "################################"
-echo "Latest Crictl Image Info"
-echo "Name: $IMAGE_NAME"
-echo "Tag: $IMAGE_TAG"
-echo "################################"
+VERSION="dev"
+read -p "Image registry version? $VERSION (y/n) " RESPONSE
+if [ "$RESPONSE" == "n" ]; then
+    read -p "Enter Image version: " VERSION
+fi
+
+read -p "Image save tar? (y/n) " SAVE
+
+echo REGISTRY: $REGISTRY
+echo VERSION: $VERSION
+echo SAVE: $SAVE
 
 
-echo "Enter new tag in x.y.z format (ex. 2.13.5)"
-read -p ": " TAG
+# ============================================================
+# IMAGE BUILD
+# ============================================================
 
-pattern="^[0-9]+\.[0-9]+\.[0-9]+$"
+IMAGE=$REGISTRY/jfb-system/REPLACE_app:$VERSION
+BUILD_COMMAND="$CLI build --no-cache --tag $IMAGE -f Dockerfile .."
+PUSH_COMMAND="$CLI push $INSECURE_REGISTRY $IMAGE"
+SAVE_COMMAND="$CLI save -o REPLACE.tar $IMAGE"
 
-if ! [[ $TAG =~ $pattern ]]; then
-    echo "Please enter tag in correct format!"
-    exit 1
+
+read -p "APP NAME? (ex. dashboard) " APP
+
+echo cd $BASE_DIR
+cd $BASE_DIR
+
+command="${BUILD_COMMAND/REPLACE/"$APP"}"
+echo $command
+$command
+
+command="${PUSH_COMMAND/REPLACE/"$APP"}"
+echo $command
+$command
+
+if [ "$SAVE" == "y" ]; then
+    command="${SAVE_COMMAND/REPLACE/"$APP"}"
+    echo $command
+    $command
 fi
 
 
-echo "Build & Push an image [$IMAGE_NAME:$TAG] to registry."
-read -p "continue? (y/n)" user_input
-
-if ! [[ "$user_input" == "y" || "$user_input" == "yes" ]]; then
-    exit 2
-fi
-
-IMAGE_FULL_NAME="$IMAGE_NAME:$TAG"
-
-
-sudo docker build --no-cache --tag $IMAGE_FULL_NAME -f $DOCKERFILE ..
-sudo docker push $IMAGE_FULL_NAME

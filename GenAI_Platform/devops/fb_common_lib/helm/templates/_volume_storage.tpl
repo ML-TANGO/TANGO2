@@ -13,3 +13,12 @@
     claimName: storage-{{ $volume.name }}
 {{ end }}
 {{- end }}
+
+
+{{- define "lib.volume.sbclaim.storage" -}}
+{{- range $index, $volume := $.Values.global.jfb.volume.jfStorage -}}
+- name: storage-{{ $volume.name }}
+  persistentVolumeClaim:
+    claimName: storage-{{ $volume.name }}
+{{ end }}
+{{- end }}

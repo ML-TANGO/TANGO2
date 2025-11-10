@@ -4,6 +4,7 @@ package logquery;
 option go_package = "acryl.ai/go-poc";
 
 import "google/api/annotations.proto";
+import "google/protobuf/struct.proto";
 
 service LogQueryService {
   rpc QueryWorkspaceDashboardLogs (WorkspaceDashboardRequest) returns (SummaryLogsResponse) {
@@ -51,6 +52,91 @@ service LogQueryService {
       body: "*"
     };
   }
+
+  rpc QueryFineTuningAllLogs (FineTuningAllRequest) returns (SummaryLogsResponse) {
+    option (google.api.http) = {
+      post: "/v1/finetuning/all"
+      body: "*"
+    };
+  }
+
+  rpc QueryFineTuningFigureLogs (FineTuningFigureRequest) returns (SummaryLogsResponse) {
+    option (google.api.http) = {
+      post: "/v1/finetuning/figure"
+      body: "*"
+    };
+  }
+
+  rpc QueryRecentWorkerInfoLog (RecentWorkerInfoRequest) returns (RecentWorkerInfoResponse) {
+    option (google.api.http) = {
+      post: "/v1/worker/{deploymentWorkerId}"
+      body: "*"
+    };
+  }
+
+  rpc QueryWorkspaceResourceLogs (WorkspaceResourceRequest) returns (google.protobuf.Struct) {
+    option (google.api.http) = {
+      post: "/v1/resource/workspace/{workspaceId}"
+      body: "*"
+    };
+  }
+
+  rpc QueryClusterResourceLogs (ClusterResourceRequest) returns (google.protobuf.Struct) {
+    option (google.api.http) = {
+      post: "/v1/resource/cluster"
+      body: "*"
+    };
+  }
+
+  rpc ElasticNativeQuery (ElasticNativeQueryRequest) returns (ElasticNativeQueryResponse) {
+    option (google.api.http) = {
+      post: "/v1/debug/esquery"
+      body: "*"
+    };
+  }
+
+  rpc QueryBillingNetwork (BillingNetworkRequest) returns (BillingNetworkResponse){
+    option (google.api.http) = {
+      post: "/v1/billing/ancillary/{workspace}"
+      body: "*"
+    };
+  }
+
+  rpc QueryBillingInstance (BillingInstanceRequest) returns (BillingInstanceResponse){
+    option (google.api.http) = {
+      post: "/v1/billing/instance/{workspace}"
+      body: "*"
+    };
+  }
+
+  rpc QueryWorkspaceAllocationTime (WorkspaceAllocationTimeRequest) returns (WorkspaceAllocationTimeResponse){
+    option (google.api.http) = {
+      post: "/v1/workspace/allocationTime/{workspaceName}"
+      body: "*"
+    };
+  }
+
+  rpc QueryWorkspaceRecentModifyTime (WorkspaceRecentModifyTimeRequest) returns (WorkspaceRecentModifyTimeResponse){
+    option (google.api.http) = {
+      post: "/v1/workspace/modifyTime/{workspaceName}"
+      body: "*"
+    };
+  }
+
+  rpc QueryAllocationHistory (AllocationHistoryRequest) returns (AllocationHistoryResponse){
+    option (google.api.http) = {
+      post: "/v1/allocation"
+      body: "*"
+    };
+  }
+
+  rpc QuerySummaryAllocationUptime (SummaryAllocationUptimeRequest) returns (SummaryAllocationUptimeResponse){
+    option (google.api.http) = {
+      post: "/v1/allocation/uptime"
+      body: "*"
+    };
+  }
+  
 }
 
 message WorkspaceDashboardRequest {
@@ -71,13 +157,91 @@ message AdminDashboardRequest {
 }
 
 message AdminDetailRequest {
-  string timespan = 1;
+  string timeSpan = 1;
   string startTime = 2;
   int32 count = 3;
   int64 offset = 4;
   bool ascending = 5;
   string action = 6;
   string task = 7;
+  string searchKey = 8;
+  string searchTerm = 9;
+}
+
+message WorkspaceRecentModifyTimeRequest{
+  string workspaceName = 1;
+}
+
+message WorkspaceRecentModifyTimeResponse{
+  string modifyTime = 1;
+}
+
+message WorkspaceAllocationTimeRequest{
+  string workspaceName = 1; 
+  // string startTime = 2;
+  // string endTime = 3; 
+}
+
+message WorkspaceAllocationTimeResponse{
+  int32 activationMinutes = 1;
+  // repeated LogEntry instances = 2;
+  // repeated LogEntry storages = 3;
+}
+
+message WorkspaceAllocationHistoryRequest{
+  string workspace = 1;
+  string startTime = 2;
+  string endTime = 3;
+  int32 count = 4;
+  int64 offset = 5;
+}
+
+message WorkspaceAllocationHistoryResponse{
+  repeated LogEntry logs = 1;
+  int64 totalCount = 2;
+  int32 currentCount = 3;
+}
+
+message BillingNetworkRequest{
+  string workspace = 1;
+  string startTime = 2;
+  string endTime = 3;
+  string interval = 4;
+}
+
+message BillingNetworkResponse{
+  int64 totalCost = 1;
+  repeated BillingNetworkBucket buckets = 2;
+}
+
+message BillingNetworkBucket{
+  string timeStamp = 1;
+  int64 outbound = 2;
+  int64 paidCost = 3;
+}
+
+message BillingInstanceRequest{
+  string workspace = 1;
+  string startTime = 2;
+  string endTime = 3;
+  string interval = 4;
+}
+
+message BillingInstanceResponse{
+  int64 totalCost = 1;
+  repeated BillingInstanceBucket buckets = 2;
+}
+
+message BillingInstanceBucket{
+  string timeStamp = 1;
+  int64 totalCost = 2;
+  repeated BillingInstanceItem instances = 3;
+}
+
+message BillingInstanceItem{
+  string instanceId = 1;
+  int32 maxCount = 2;
+  int64 totalCost = 3;
 }
 
 message TrainingFigureRequest {
@@ -89,9 +253,10 @@ message TrainingFigureRequest {
 
 message TrainingAllRequest {
   string trainingTool = 1;
-  int64 trainingItemId = 2;
-  int32 count = 3;
-  int64 offset = 4;
+  string trainingCategory = 2;
+  int64 trainingItemId = 3;
+  int32 count = 4;
+  int64 offset = 5;
 }
 
 message DeploymentAllRequest{
@@ -112,6 +277,109 @@ message SummaryLogsResponse {
   int32 currentCount = 3;
 }
 
+message RecentWorkerInfoRequest {
+  int64 deploymentWorkerId = 1;
+}
+
+message RecentWorkerInfoResponse {
+  google.protobuf.Struct nginxCount = 1;
+  google.protobuf.Struct dashboardHistory = 2;
+  google.protobuf.Struct dashboardLiveHistory = 3;
+  string nginxAccessPerHour = 4;
+}
+
+message VanillaLogsResponse {
+  repeated LogEntry logs = 1;
+}
+
+message WorkerMonitoringRequest {
+  int64 deploymentWorkerId = 1;
+}
+
+message WorkerMonitoringResponse {
+  repeated LogEntry logs = 1;
+}
+
+message AllocationHistoryRequest {
+  string workspace = 1;
+  string usageType = 2;
+  string startTime = 3;
+  string endTime = 4;
+  string searchKey = 5;
+  string searchTerm = 6;
+  int32 count = 7;
+  int64 offset = 8;
+}
+
+message AllocationHistoryResponse {
+  repeated LogEntry logs = 1;
+  int64 totalCount = 2;
+  int32 currentCount = 3;
+}
+
+message FineTuningAllRequest{
+  int64 modelId = 1;
+  string podName = 2;
+  int32 count = 3;
+  int64 offset = 4;
+}
+
+message FineTuningFigureRequest{
+  int64 modelId = 1;
+  string workFunctionType = 2;
+  int32 count = 3;
+  int64 offset = 4;
+}
+
+message WorkspaceResourceRequest{
+  int64 workspaceId = 1;
+  string timeSpan = 2;
+  string interval = 3;
+  string startTime = 4;
+  string endTime = 5;
+}
+
+message ClusterResourceRequest{
+  string timeSpan = 1;
+  string interval = 2;
+  string startTime = 3;
+  string endTime = 4;
+}
+
+message ElasticNativeQueryRequest {
+  string queryIndex = 1;
+  string queryBody = 2;
+}
+
+message ElasticNativeQueryResponse {
+  google.protobuf.Struct response = 1;
+}
+
 message LogEntry {
   map<string, string> fields = 1;
+}
+
+message SummaryAllocationUptimeRequest{
+  string workspaceName = 1;
+  string startTime = 2;
+  string endTime = 3;
+}
+
+message SummaryAllocationUptimeResponse{
+  repeated WorkspaceUptimeEntry workspaceUptimes = 1;
+  repeated ProjectUptimeEntry projectUptimes = 2;
+}
+
+message WorkspaceUptimeEntry {
+  string workspaceName = 1;
+  int64 globalUptimeSeconds = 2;
+  int64 officeHourUptimeSeconds = 3;
+}
+
+message ProjectUptimeEntry {
+  string workspaceName = 1;
+  string type = 2;
+  string projectName = 3;
+  int64 globalUptimeSeconds = 4;
+  int64 officeHourUptimeSeconds = 5;
 }

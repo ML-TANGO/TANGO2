@@ -1,19 +1,15 @@
 {{- define "labels" }}
 api_mode: prefix
-deployment_id: {{ .Values.labels.deployment_id | quote }}
-deployment_name: {{ .Values.labels.deployment_name | quote }}
-deployment_total_gpu: {{ .Values.labels.deployment_total_gpu | quote }}
-deployment_type: {{ .Values.labels.deployment_type | quote }}
-deployment_worker_id: {{ .Values.labels.deployment_worker_id | quote }}
-executor_id: {{ .Values.labels.executor_id | quote }}
-executor_name: {{ .Values.labels.executor_name | quote }}
-pod_base_name: {{ .Values.metadata.pod.podBaseName | quote }}
-pod_name: {{ .Values.labels.pod_name | quote }}
 pod_type: deployment
-user: {{ .Values.labels.user | quote }}
-workspace_id: {{ .Values.labels.workspace_id | quote }}
-workspace_name: {{ .Values.labels.workspace_name | quote }}
-work_type: deployment
-work_func_type: deployment
-instance_id : {{ .Values.labels.instance_id | quote }}
+work_func_type: {{ .Values.labels.work_func_type | default "deployment" | quote }}
+role: jfb-user-functions
+deployment_type: {{ .Values.labels.deployment_type | default "" | quote }}
+deployment_name: {{ .Values.labels.deployment_name | default "" | quote }}
+deployment_id: {{ .Values.labels.deployment_id | default "" | quote }}
+workspace_id: {{ .Values.labels.workspace_id | default "" | quote }}
+workspace_name: {{ .Values.metadata.name.workspaceName | default "" | quote }}
+instance_id : {{ .Values.labels.instance_id | default "" | quote }}
+user: {{ .Values.labels.user | default "" | quote }}
+pod_base_name: {{ .Values.metadata.name.podBaseName | default "" | quote }}
+helm_name: {{ .Values.labels.helm_name | quote }}
 {{- end }}

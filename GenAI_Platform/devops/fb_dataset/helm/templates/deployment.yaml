@@ -28,17 +28,26 @@ spec:
       {{- end }}
       containers:
       - name: {{ .Values.global.jfb.name.dataset }}
-        image: {{ .Values.global.jfb.image.registry }}/{{ .Values.global.jfb.image.dataset }}
+        image: {{ .Values.global.jfb.image.system.registry }}/{{ .Values.global.jfb.image.dataset }}
         imagePullPolicy: {{ .Values.global.jfb.image.pullPolicy }}
         command: [ "/bin/bash", "-c"]
         args: ["cd /app; ./run.sh; sleep infinity;"]
         {{- include "lib.probe.readiness" (dict "app" "dataset" )  | nindent 8 }}
         {{- include "lib.probe.liveness" (dict "app" "dataset" )  | nindent 8 }}
+        resources:
+          limits:
+            cpu : 1
+            memory : "1G"
+          requests:
+            cpu : 0.2
+            memory : "256M"
         ports:
         - containerPort: 8000
         env:
         - name: JFB_DATASET_IMAGE
-          value: {{ .Values.global.jfb.image.registry }}/{{ .Values.global.jfb.image.dataset }}
+          value: {{ .Values.global.jfb.image.system.registry }}/{{ .Values.global.jfb.image.dataset }}
+        - name: FILEBROWSER_IMAGE
+          value: {{ .Values.global.jfb.image.system.registry }}/{{ .Values.global.jfb.image.filebrowser }}
         envFrom:
         - configMapRef:
             name: jfb-settings

@@ -1,0 +1,111 @@
+# selectors, labels, limits는 dict format 
+system:
+  namespace:
+
+metadata:
+  id:
+    instanceId:
+    workspaceId:
+  name:
+    podName:
+    podHostName:
+    podBaseName:
+    workspaceName:
+    helmName:
+    userName:
+  namespace:
+    systemNamespace:
+    workspaceNamespace:
+
+deployment:
+  deploymentType: 
+  deploymentName: 
+  deploymentId: 
+  deploymentWorkerId:  
+
+resources:
+  limits:
+    cpu:
+    memory:
+    gpu:
+    npu:
+  requests:
+    cpu:
+    memory:
+    gpu:
+    npu:
+
+pod:
+  cpuInstance:
+  image:
+  imgaeRegistry:
+
+ingress:
+  ingressClassName:
+
+labels:
+  work_func_type: 
+  
+annotations:
+
+env:
+
+
+llm:
+  type:
+  id:
+  name: 
+  gpu_count: 
+  db:
+    host:
+    port:
+    user:
+    pw:
+    name:
+    charset:
+    collation:
+
+  model: #playground model, rag embedding, rag reranker -> 각 팟에서 사용하는 모델 의미
+    type:
+    huggingface_id:
+    huggingface_token:
+    # ALLM 일때 사용
+    allm_name:
+    allm_commit_name: 
+    huggingface_api_token:
+
+  rag:
+    id:
+    chunk_len:
+    embedding_run: # reranker에서 필요한 값
+  
+  playground:
+    playground_id:
+    param_temperature: 
+    param_top_p: 
+    param_top_k: 
+    param_repetition_penalty: 
+    param_max_new_tokens: 
+    rag_chunk_max: # rag_docs 검색결과 상위 수 (변수명 변경)
+    prompt_system_message:
+    prompt_user_message:
+    run_rag: 
+    run_rag_embedding:
+    run_rag_reranker:
+    run_prompt: 
+
+
+gpu_auto_cluster_case:
+  server:
+  gpu_count:
+  total_device_count:
+
+rdma:
+  enabled:
+  mp:
+    enabled:
+    seed_num:
+    seed_list:
+  perf:
+    enabled:
+  p2p:

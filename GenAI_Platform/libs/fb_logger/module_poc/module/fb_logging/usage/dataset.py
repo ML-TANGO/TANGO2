@@ -19,7 +19,7 @@ def delete_dataset(self, username, workspace, dataset_name):
         dataset_name (str): The name of the dataset deleted.
     """
     self.usage(data={"user": username, "workspace": workspace, "task": "dataset", "task_name": dataset_name, "action": "delete"})
-
+    
 def update_dataset(self, username, workspace, dataset_name):
     """
     Logs a dataset update event.

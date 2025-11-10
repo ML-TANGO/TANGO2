@@ -1,0 +1,262 @@
+# Copyright 2020 NVIDIA
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Default values for network-operator.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+nfd:
+  enabled: true
+
+psp:
+  enabled: false
+
+sriovNetworkOperator:
+  enabled: false
+
+# Node Feature discovery chart related values
+node-feature-discovery:
+  image:
+    pullPolicy: IfNotPresent
+  nodeFeatureRule:
+    createCRD: false
+  master:
+    instance: "nvidia.networking"
+  worker:
+    tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: "Equal"
+        value: ""
+        effect: "NoSchedule"
+      - key: "node-role.kubernetes.io/control-plane"
+        operator: "Equal"
+        value: ""
+        effect: "NoSchedule"
+      - key: "nvidia.com/gpu"
+        operator: "Equal"
+        value: "present"
+        effect: "NoSchedule"
+    config:
+      sources:
+        pci:
+          deviceClassWhitelist:
+            - "02"
+            - "0200"
+            - "0207"
+          deviceLabelFields:
+            - vendor
+
+
+# SR-IOV Network Operator chart related values
+sriov-network-operator:
+  operator:
+    tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: "Exists"
+        effect: "NoSchedule"
+      - key: "node-role.kubernetes.io/control-plane"
+        operator: "Exists"
+        effect: "NoSchedule"
+    nodeSelector: {}
+    affinity:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: "node-role.kubernetes.io/master"
+                  operator: In
+                  values: [ "" ]
+            - matchExpressions:
+                - key: "node-role.kubernetes.io/control-plane"
+                  operator: In
+                  values: [ "" ]
+    nameOverride: ""
+    fullnameOverride: ""
+    resourcePrefix: "nvidia.com"
+    enableAdmissionController: false
+    cniBinPath: "/opt/cni/bin"
+    clusterType: "kubernetes"
+
+  # Image URIs for sriov-network-operator components
+  images:
+    operator: nvcr.io/nvidia/mellanox/sriov-network-operator:network-operator-24.10.0 #1.3.0
+    sriovConfigDaemon: nvcr.io/nvidia/mellanox/sriov-network-operator-config-daemon:network-operator-24.10.0 #1.3.0
+    sriovCni: ghcr.io/k8snetworkplumbingwg/sriov-cni:v2.8.1 #2.6.3
+    ibSriovCni: ghcr.io/k8snetworkplumbingwg/ib-sriov-cni:v1.1.1 #1.0.2
+    sriovDevicePlugin: ghcr.io/k8snetworkplumbingwg/sriov-network-device-plugin:v3.8.0 #3.5.1
+    resourcesInjector: ghcr.io/k8snetworkplumbingwg/network-resources-injector:8810e6a127366cc1eb829d3f7cb3f866d096946e #:v1.4
+    webhook: ghcr.io/k8snetworkplumbingwg/sriov-network-operator-webhook:network-operator-24.10.0 #v1.1.0
+
+# General Operator related values
+# The operator element allows to deploy network operator from an alternate location
+operator:
+  tolerations:
+    - key: "node-role.kubernetes.io/master"
+      operator: "Equal"
+      value: ""
+      effect: "NoSchedule"
+    - key: "node-role.kubernetes.io/control-plane"
+      operator: "Equal"
+      value: ""
+      effect: "NoSchedule"
+  nodeSelector: {}
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 1
+          preference:
+            matchExpressions:
+              - key: "node-role.kubernetes.io/master"
+                operator: In
+                values: [""]
+        - weight: 1
+          preference:
+            matchExpressions:
+              - key: "node-role.kubernetes.io/control-plane"
+                operator: In
+                values: [ "" ]
+  repository: nvcr.io/nvidia/cloud-native
+  image: network-operator
+  # imagePullSecrets: []
+  nameOverride: ""
+  fullnameOverride: ""
+  # tag, if defined will use the given image tag, else Chart.AppVersion will be used
+  # tag
+
+imagePullSecrets: []
+
+# NicClusterPolicy CR values:
+deployCR: false
+ofedDriver:
+  deploy: false
+  image: mofed
+  repository: nvcr.io/nvidia/mellanox
+  version: 5.7-1.0.2.0
+  # imagePullSecrets: []
+  # env, if defined will pass environment variables to the OFED container
+  # env:
+  #   - name: EXAMPLE_ENV_VAR
+  #     value: example_env_var_value
+  # Private mirror repository configuration
+  repoConfig:
+    name: ""
+  # Custom ssl key/certificate configuration
+  certConfig:
+    name: ""
+
+  startupProbe:
+    initialDelaySeconds: 10
+    periodSeconds: 20
+  livenessProbe:
+    initialDelaySeconds: 30
+    periodSeconds: 30
+  readinessProbe:
+    initialDelaySeconds: 10
+    periodSeconds: 30
+  upgradePolicy:
+    # global switch for automatic upgrade feature
+    # if set to false all other options are ignored
+    autoUpgrade: false
+    # how many nodes can be upgraded in parallel
+    # 0 means no limit, all nodes will be upgraded in parallel
+    maxParallelUpgrades: 0
+    # options for node drain (`kubectl drain`) before the driver reload
+    # if auto upgrade is enabled but drain.enable is false,
+    # then driver POD will be reloaded immediately without
+    # removing PODs from the node
+    drain:
+      enable: true
+      force: false
+      podSelector: ""
+      # It's recommended to set a timeout to avoid infinite drain in case non-fatal error keeps happening on retries
+      timeoutSeconds: 300
+      deleteEmptyDir: false
+
+nvPeerDriver:
+  deploy: false
+  image: nv-peer-mem-driver
+  repository: mellanox
+  version: 1.1-0
+  # imagePullSecrets: []
+  gpuDriverSourcePath: /run/nvidia/driver
+
+rdmaSharedDevicePlugin:
+  deploy: true
+  image: k8s-rdma-shared-dev-plugin
+  repository: nvcr.io/nvidia/cloud-native
+  version: v1.3.2
+  # imagePullSecrets: []
+  # The following defines the RDMA resources in the cluster
+  # it must be provided by the user when deploying the chart
+  # each entry in the resources element will create a resource with the provided <name> and list of devices
+  # example:
+  resources:
+    - name: rdma_shared_device_a
+      vendors: [15b3]
+
+sriovDevicePlugin:
+  deploy: false
+  image: sriov-network-device-plugin
+  repository: ghcr.io/k8snetworkplumbingwg
+  version: v3.5.1
+  # imagePullSecrets: []
+  resources:
+    - name: hostdev
+      vendors: [15b3]
+
+ibKubernetes:
+  deploy: false
+  image: ib-kubernetes
+  repository: ghcr.io/mellanox
+  version: v1.0.2
+  # imagePullSecrets: []
+  periodicUpdateSeconds: 5
+  pKeyGUIDPoolRangeStart: "02:00:00:00:00:00:00:00"
+  pKeyGUIDPoolRangeEnd: "02:FF:FF:FF:FF:FF:FF:FF"
+  ufmSecret: # specify the secret name here
+
+secondaryNetwork:
+  deploy: true
+  cniPlugins:
+    deploy: true
+    image: plugins
+    repository: ghcr.io/k8snetworkplumbingwg
+    version: v0.8.7-amd64
+    # imagePullSecrets: []
+  multus:
+    deploy: true
+    image: multus-cni
+    repository: ghcr.io/k8snetworkplumbingwg
+    version: v3.8
+    # imagePullSecrets: []
+    config: ''
+  ipoib:
+    deploy: false
+    image: ipoib-cni
+    repository: nvcr.io/nvidia/cloud-native
+    version: v1.1.0
+    # imagePullSecrets: []
+  ipamPlugin:
+    deploy: true
+    image: whereabouts
+    repository: ghcr.io/k8snetworkplumbingwg
+    version: v0.5.2-amd64
+    # imagePullSecrets: []
+
+# Can be set to nicclusterpolicy and override other ds node affinity,
+# e.g. https://github.com/Mellanox/network-operator/blob/master/manifests/stage-multus-cni/0050-multus-ds.yml#L26-L36
+#nodeAffinity:
+
+test:
+  pf: ens2f0

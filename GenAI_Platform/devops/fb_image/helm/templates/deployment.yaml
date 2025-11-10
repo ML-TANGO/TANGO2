@@ -24,7 +24,7 @@ spec:
       {{- include "lib.initContainer.db" . | nindent 6}}
       {{/*
       - name: init
-        image: {{ .Values.global.jfb.image.registry }}/{{ .Values.global.jfb.image.image }}
+        image: {{ .Values.global.jfb.image.system.registry }}/{{ .Values.global.jfb.image.image }}
         imagePullPolicy: {{ .Values.global.jfb.image.pullPolicy }}
         command: [ "/bin/bash", "-c"]
         args: ["cd /app/src; python3 init.py"]
@@ -40,10 +40,17 @@ spec:
       {{- end }}
       containers:
       - name: {{ .Values.global.jfb.name.image }}
-        image: {{ .Values.global.jfb.image.registry }}/{{ .Values.global.jfb.image.image }}
+        image: {{ .Values.global.jfb.image.system.registry }}/{{ .Values.global.jfb.image.image }}
         imagePullPolicy: {{ .Values.global.jfb.image.pullPolicy }}
         command: [ "/bin/bash", "-c"]
         args: ["cd /app; ./run.sh; sleep infinity;"]
+        resources:
+          limits:
+            cpu : 0.5
+            memory : "512M"
+          requests:
+            cpu : 0.2
+            memory : "256M"
         ports:
         - containerPort: 8000
         envFrom:
@@ -60,10 +67,10 @@ spec:
         {{- include "lib.volume.volumeMounts" (dict "name" "jf-kube" )  | nindent 8 }}
         {{- include "lib.volume.volumeMounts" (dict "name" "jf-src" "enabled" .Values.global.jfb.volume.src.enabled ) | nindent 8 }}
       - name: status
-        image: {{ .Values.global.jfb.image.registry }}/{{ .Values.global.jfb.image.image }}
+        image: {{ .Values.global.jfb.image.system.registry }}/{{ .Values.global.jfb.image.image }}
         imagePullPolicy: {{ .Values.global.jfb.image.pullPolicy }}
         command: [ "/bin/bash", "-c"]
-        args: ["containerd & cd /app/src/image; python3 status.py; while true; do sleep 30; done;"]
+        args: ["containerd & cd /app/src; python3 status.py; while true; do sleep 30; done;"]
         ports:
         - containerPort: 8001
         envFrom:
@@ -92,7 +99,7 @@ spec:
         - name: certs-client
           mountPath: /certs/client
         - name: certs-registry
-          mountPath: /etc/docker/certs.d/{{ .Values.global.jfb.image.registry }}/ca.crt
+          mountPath: /etc/docker/certs.d/{{ .Values.global.jfb.image.system.registry }}/ca.crt
           subPath: ca.crt
       volumes:
       - name: certs-ca

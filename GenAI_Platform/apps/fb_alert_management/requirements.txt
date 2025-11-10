@@ -1,0 +1,23 @@
+# starlette_context
+uvicorn
+fastapi
+kubernetes 
+pydantic
+paramiko
+PyMySQL
+redis
+confluent-kafka
+pymongo
+aiomysql
+aiohttp
+motor
+hypercorn
+uvloop
+aiofiles
+aiokafka
+pytest
+pycryptodome
+python-multipart
+matplotlib
+psutil
+fastapi

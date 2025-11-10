@@ -19,7 +19,8 @@ def create_node_init_job(node_id, node):
         }
         #TODO 네임스페이스를 어디로 지정?
         namespace = os.getenv("JF_SYSTEM_NAMESPACE")
-        registry_url = os.getenv("DOCKER_REGISTRY_URL")
+        # namespace = "gpu-operator"
+        registry_url = os.getenv("SYSTEM_DOCKER_REGISTRY_URL")
         env_command=""
         for key, val in env.items():
             if val:
@@ -42,20 +43,20 @@ def create_node_init_job(node_id, node):
         )
         print(result.stdout )
         redis.hset(JOB_LIST,helm_name,namespace)
-        return True, result.stdout
+        return True, result.stdout 
     except subprocess.CalledProcessError as e:
         traceback.print_exc()
         return False, f"Error executing Helm command: {e.stderr}"
     except:
         traceback.print_exc()
         return False, result.stdout
-
+    
 def delete_helm(node, namespace):
     try:
         helm_name=node+"-init"
         # namespace = os.getenv("JF_SYSTEM_NAMESPACE")
-
-
+        
+        
         command=f"""helm uninstall {helm_name} -n {namespace} """
 
         result = subprocess.run(
@@ -66,7 +67,7 @@ def delete_helm(node, namespace):
             stderr=subprocess.PIPE,
             text=True,
         )
-        return result.stdout
+        return result.stdout 
     except subprocess.CalledProcessError as e:
         traceback.print_exc()
         return f"Error executing Helm command: {e.stderr}"
@@ -109,7 +110,7 @@ def delete_helm(node, namespace):
 #                                 print(cpu_resource_group_id)
 #                             else:
 #                                 cpu_resource_group_id = cpu_resource_group['id']
-
+                            
 #                             node_db.insert_node_cpu(node_id=node_id, resource_group_id=cpu_resource_group_id, core=int(cpu['value']))
 
 #                     gpu_info = node_gpu_info_df[node_gpu_info_df['Hostname'] == node_name]

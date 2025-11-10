@@ -58,6 +58,7 @@ websocket-client==1.6.3
 Werkzeug==3.0.0
 aiomysql
 motor
+redis==5.0.4
 aioredis
 kubernetes_asyncio
 hypercorn

@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.global.jfb.name.ingress_management }}
+  namespace: {{ .Values.global.jfb.namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.global.jfb.name.ingress_management }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.global.jfb.name.ingress_management }}
+        role: jfb-api
+      annotations:
+        "acryl.ai/appType": system
+        checksum/config: {{ include "lib.lookup.settings" . }}
+    spec:
+      nodeSelector:
+      {{- include "lib.nodeSelector.manage" . | nindent 8 }}
+      serviceAccountName: {{ .Values.global.jfb.namespace }}-clusteradmin-ingress-management
+      {{- if .Values.global.jfb.image.pullSecrets.enabled }}
+      imagePullSecrets:
+      - name: {{ .Values.global.jfb.image.pullSecrets.name }}
+      {{- end }}
+      containers:
+      - name: {{ .Values.global.jfb.name.ingress_management }}
+        image: {{ .Values.global.jfb.image.system.registry }}/{{ .Values.global.jfb.image.ingress_management }}
+        imagePullPolicy: {{ .Values.global.jfb.image.pullPolicy }}
+        command: [ "/bin/bash", "-c"]
+        args: ["cd /app; ./run.sh; sleep infinity;"]
+        resources:
+          limits:
+            cpu : 0.5
+            memory : "512M"
+          requests:
+            cpu : 0.1
+            memory : "256M"
+        ports:
+        - containerPort: 8000
+        envFrom:
+        - configMapRef:
+            name: jfb-settings
+        volumeMounts:
+        {{- include "lib.volume.volumeMounts" (dict "name" "jf-src" "enabled" .Values.global.jfb.volume.src.enabled ) | nindent 8 }}
+        {{- include "lib.volume.volumeMounts" (dict "name" "jf-kube" )  | nindent 8 }}
+      volumes:
+      {{- include "lib.volume.claim" (dict "name" "jf-src" "app" "ingress-management" "enabled" .Values.global.jfb.volume.src.enabled ) | nindent 6 }}
+      {{- include "lib.volume.claim" (dict "name" "jf-kube")  | nindent 6 }}

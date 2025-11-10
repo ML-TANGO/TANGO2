@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{ .Values.name }}"
+  labels:
+    instance_id: "{{ .Values.instance_id }}"
+    pod_type: "collect"
+    collect_id: "{{ .Values.collect_id }}"
+    dataset_id: "{{ .Values.dataset_id }}"
+    work_func_type: "public-api"
+    workspace_id: "{{ .Values.workspace_id }}"
+    helm_name: {{ .Values.name }}
+spec:
+  containers:
+  - name: public-api
+    image: {{ .Values.registry }}{{ .Values.image }}
+    imagePullPolicy: Always
+    ports:
+    - containerPort: 80
+    securityContext:
+      runAsUser: 0
+      allowPrivilegeEscalation: false
+    env:
+        {{- range $key, $val := .Values.env }}
+        - name: {{ $key }}
+          value: {{ $val | quote }}
+        {{- end}}
+    # envFrom:
+    # - configMapRef:
+    #     name: jfb-settings
+    command: ["sh", "-c", "python3 /app/src/collect/public_api_request.py"] #while true; do sleep 30; done; python3 /app/src/collect/public_api_request.py
+    resources:
+      limits:
+        cpu: {{ .Values.resource.cpu }}
+        memory: {{ .Values.resource.memory }} # 256 MiB
+    volumeMounts:
+    - name: data-pvc
+      mountPath: "/jf-data"
+      subPath: "{{ .Values.dataset_path }}"
+    - name: config-volume
+      mountPath: /collect_config
+      readOnly: true
+    # - name: jf-src
+    #   mountPath: "/app"
+  volumes:
+  - name: data-pvc
+    persistentVolumeClaim:
+      claimName: {{ .Values.dataset_pvc_name }}
+  - name: config-volume
+    configMap:
+      name: {{ .Values.name }}-cm
+  # - name: jf-src
+  #   persistentVolumeClaim:
+  #     claimName: jf-src-collect-pvc

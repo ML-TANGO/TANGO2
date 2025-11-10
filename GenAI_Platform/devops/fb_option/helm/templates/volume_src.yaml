@@ -1,0 +1,35 @@
+{{- if .Values.global.jfb.volume.src.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jf-src-option-pvc
+  namespace: {{ .Values.global.jfb.namespace  }}
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1G
+  storageClassName: ""
+---
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: jf-{{ .Values.global.jfb.namespace }}-src-option-pv
+spec:
+  capacity:
+    storage: 1G
+  accessModes:
+    - ReadWriteMany
+  claimRef:
+    namespace: {{ .Values.global.jfb.namespace }}
+    name: jf-src-option-pvc
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  {{- $srcOption := dict -}}
+  {{- $_ := set $srcOption "src" (deepCopy .Values.global.jfb.volume.src) }}
+  {{- $_ := set $srcOption.src "path" (printf "%s/%s" .Values.global.jfb.volume.src.path .Values.global.jfb.dir.option) }}
+  {{- include "lib.volume.type" $srcOption.src | nindent 2 }}
+---
+{{- end }}

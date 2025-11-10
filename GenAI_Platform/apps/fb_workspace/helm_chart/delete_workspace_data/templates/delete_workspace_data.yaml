@@ -1,0 +1,61 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Values.job_name }}
+  labels:
+    role: jfb-api
+    workspace_id: {{ .Values.workspace_id | quote }}
+    workspace_name: {{ .Values.workspace_name | quote }}
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        role: jfb-api
+        workspace_id: {{ .Values.workspace_id | quote }}
+        workspace_name: {{ .Values.workspace_name | quote }}
+    spec:
+      serviceAccountName: jfb-ws-sa
+      containers:
+        - name: workspace-update
+          image: {{ .Values.registry }}busybox:latest
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+            fsGroup: 0
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - |-
+              set -e
+
+              log() {
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+              }
+
+              remove_directory() {
+                local dir=$1
+                if [ -d "$dir" ]; then
+                  log "Removing directory: $dir"
+                  rm -rf "$dir"
+                  log "Successfully removed: $dir"
+                else
+                  log "Directory does not exist: $dir"
+                fi
+              }
+
+              {{- if eq .Values.main_storage .Values.data_storage }}
+              remove_directory "/jf-data/{{ .Values.main_storage }}/data/{{ .Values.workspace_name }}"
+              remove_directory "/jf-data/{{ .Values.main_storage }}/main/{{ .Values.workspace_name }}"
+              {{- else }}
+              remove_directory "/jf-data/{{ .Values.main_storage }}/data/{{ .Values.workspace_name }}"
+              remove_directory "/jf-data/{{ .Values.main_storage }}/main/{{ .Values.workspace_name }}"
+              remove_directory "/jf-data/{{ .Values.data_storage }}/data/{{ .Values.workspace_name }}"
+              remove_directory "/jf-data/{{ .Values.data_storage }}/main/{{ .Values.workspace_name }}"
+              {{- end }}  
+          volumeMounts:
+            {{- include "check_unique_volumeMounts" . | nindent 12 }}
+      volumes:
+        {{- include "check_unique_volumes" . | nindent 8 }}
+      restartPolicy: Never
