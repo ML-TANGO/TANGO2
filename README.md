@@ -1,10 +1,10 @@
-# [**2025 4th TANGO Community Conference**](http://tangoai.or.kr)
+<!-- # [**2025 4th TANGO Community Conference**](http://tangoai.or.kr)
 * [**STCenter** (과학기술컨벤션센터 / 한국과학기술회관)](https://www.stcenter.or.kr/)
 * [**B1F, 22, Teheran-ro 7-gil, Gangnam-gu, Seoul, Republic of Korea** \
 (서울시 강남구 테헤란로 7길 22, 과학기술회관 대회의실1)](https://www.google.com/maps/place/%ED%95%9C%EA%B5%AD%EA%B3%BC%ED%95%99%EA%B8%B0%EC%88%A0%ED%9A%8C%EA%B4%80/data=!4m15!1m8!3m7!1s0x357ca157ddbed32f:0x29432bdf4b90af3d!2z7ISc7Jq47Yq567OE7IucIOqwleuCqOq1rCDthYztl6TrnoDroZw36ri4IDIy!3b1!8m2!3d37.500961!4d127.0306229!16s%2Fg%2F11bzn06m8v!3m5!1s0x357ca157de00cbb3:0xe5266ee55f1d179e!8m2!3d37.5007029!4d127.0307453!16s%2Fg%2F1tf8508h?entry=ttu&g_ep=EgoyMDI1MTAxNC4wIKXMDSoASAFQAw%3D%3D)
 * **2025-11-06 / 13:30~17:30**
 
----
+--- -->
 
 # **TANGO 2**
 
@@ -129,7 +129,33 @@ TANGO2
 <img width="1280" align="center" alt="SDS" src="docs/sds.png" /></p>
 
 **Software Defined Ship**: Going beyond the development of perception-centered AI agents using existing sensor fusion technology, we demonstrate that they understand and describe situations based on detected surrounding objects and environmental information, and make navigation decisions appropriate to the situation based on navigation rules.
-  
+
+---
+
+## [TANGO Community](http://tangoai.or.kr)
+__TANGO Community__ is an <ins>Artificial Intelligence(AI) democratization</ins> platform designed to allow anyone to easily enter the world of AI.
+Our community holds an annual conference to share our achievements and broaden our technological horizons.
+[_<ins>Feel free to join our fully open community!</ins>_](http://tangoai.or.kr)
+
+### TANGO on Media
+- Youtube
+    - [TANGO, 노코드 신경망 자동생성 통합개발 프레임워크의 품질 관리](https://www.youtube.com/watch?v=jrJCXAPKJn8)
+    - [성공하는 SW기업을 위한 AI, SW개발도구 'TANGO')](youtube.com/watch?v=IwyHOl3WjWQ&feature=youtu.be)
+
+- Article
+    - [[2025] “AI 지식 없어도 한 번에”ETRI, 노코드 기계학습 도구 공개](https://www.edaily.co.kr/News/Read?newsId=01466166642361784&mediaCodeNo=257&OutLnkChk=Y)
+    - [[2025] ETRI, 노코드 기계학습 개발도구 공개…“AI·SW지식 부족해도 한번 실행 OK”](https://www.edaily.co.kr/News/Read?newsId=01466166642361784&mediaCodeNo=257&OutLnkChk=Y)
+    - [[2025] “AI·SW지식 없어도 OK” ETRI, 노코드 기계학습 개발도구 공개](https://biz.heraldcorp.com/article/10606733?ref=naver)
+    - [[2025] ETRI, 노코드 머신러닝 개발 도구 모두 오픈소스로 공개..."AI·SW지식 부족해도 한번 실행 OK, SW 손쉽게 개발도와"](https://www.aitimes.kr/news/articleView.html?idxno=37020)
+    - [[2025] ETRI, 노코드 기계학습 개발도구(MLOps) 오픈소스로 공개](https://www.itbiznews.com/news/articleView.html?idxno=185623)
+    - [[2024] ETRI, 노코드 머신러닝 개발도구 '탱고 프레임워크' 오픈소스로 공개..."AI·SW지식 부족해도 한번 실행으로 OK!"](https://www.aitimes.kr/news/articleView.html?idxno=33084)
+    - [[2024] ETRI, '노코드' 기계학습 개발도구 공개…AI 지식 부족해도 개발 도와](https://www.etnews.com/20241204000236)
+    - [[2024] ETRI, 노코드 기계학습 개발도구로 산업 AX 지원](https://www.koit.co.kr/news/articleView.html?idxno=127056)
+    - [[2024] AI·IT 몰라도 '탱고'로 SW 만든다](https://www.fnnews.com/news/202412041037480146)
+    - [[2023] ETRI, 노코드 기계학습 개발도구 핵심기술 공개](https://www.sedaily.com/NewsView/29W5T2547W)
+    - [[2022] 과기정통부, 로우코드 기반 AI SW 개발 도구 공개](https://www.etnews.com/20221101000222)
+    - [[2022] 과기부-ETRI, 산업현장 핵심 'AI 알고리즘' 공개](https://www.hellodd.com/news/articleView.html?idxno=98512)
+    
 ---
 
 #### Acknowledgement <a name="ack"></a>
