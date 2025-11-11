@@ -138,23 +138,23 @@ Our community holds an annual conference to share our achievements and broaden o
 [_<ins>Feel free to join our fully open community!</ins>_](http://tangoai.or.kr)
 
 ### TANGO on Media
-- Youtube
-    - [TANGO, 노코드 신경망 자동생성 통합개발 프레임워크의 품질 관리](https://www.youtube.com/watch?v=jrJCXAPKJn8)
-    - [성공하는 SW기업을 위한 AI, SW개발도구 'TANGO')](youtube.com/watch?v=IwyHOl3WjWQ&feature=youtu.be)
+#### Youtube
+- [TANGO, 노코드 신경망 자동생성 통합개발 프레임워크의 품질 관리](https://www.youtube.com/watch?v=jrJCXAPKJn8)
+- [성공하는 SW기업을 위한 AI, SW개발도구 'TANGO')](youtube.com/watch?v=IwyHOl3WjWQ&feature=youtu.be)
 
-- Article
-    - [[2025] “AI 지식 없어도 한 번에”ETRI, 노코드 기계학습 도구 공개](https://www.edaily.co.kr/News/Read?newsId=01466166642361784&mediaCodeNo=257&OutLnkChk=Y)
-    - [[2025] ETRI, 노코드 기계학습 개발도구 공개…“AI·SW지식 부족해도 한번 실행 OK”](https://www.edaily.co.kr/News/Read?newsId=01466166642361784&mediaCodeNo=257&OutLnkChk=Y)
-    - [[2025] “AI·SW지식 없어도 OK” ETRI, 노코드 기계학습 개발도구 공개](https://biz.heraldcorp.com/article/10606733?ref=naver)
-    - [[2025] ETRI, 노코드 머신러닝 개발 도구 모두 오픈소스로 공개..."AI·SW지식 부족해도 한번 실행 OK, SW 손쉽게 개발도와"](https://www.aitimes.kr/news/articleView.html?idxno=37020)
-    - [[2025] ETRI, 노코드 기계학습 개발도구(MLOps) 오픈소스로 공개](https://www.itbiznews.com/news/articleView.html?idxno=185623)
-    - [[2024] ETRI, 노코드 머신러닝 개발도구 '탱고 프레임워크' 오픈소스로 공개..."AI·SW지식 부족해도 한번 실행으로 OK!"](https://www.aitimes.kr/news/articleView.html?idxno=33084)
-    - [[2024] ETRI, '노코드' 기계학습 개발도구 공개…AI 지식 부족해도 개발 도와](https://www.etnews.com/20241204000236)
-    - [[2024] ETRI, 노코드 기계학습 개발도구로 산업 AX 지원](https://www.koit.co.kr/news/articleView.html?idxno=127056)
-    - [[2024] AI·IT 몰라도 '탱고'로 SW 만든다](https://www.fnnews.com/news/202412041037480146)
-    - [[2023] ETRI, 노코드 기계학습 개발도구 핵심기술 공개](https://www.sedaily.com/NewsView/29W5T2547W)
-    - [[2022] 과기정통부, 로우코드 기반 AI SW 개발 도구 공개](https://www.etnews.com/20221101000222)
-    - [[2022] 과기부-ETRI, 산업현장 핵심 'AI 알고리즘' 공개](https://www.hellodd.com/news/articleView.html?idxno=98512)
+#### Article
+- [[2025] “AI 지식 없어도 한 번에”ETRI, 노코드 기계학습 도구 공개](https://www.edaily.co.kr/News/Read?newsId=01466166642361784&mediaCodeNo=257&OutLnkChk=Y)
+- [[2025] ETRI, 노코드 기계학습 개발도구 공개…“AI·SW지식 부족해도 한번 실행 OK”](https://www.edaily.co.kr/News/Read?newsId=01466166642361784&mediaCodeNo=257&OutLnkChk=Y)
+- [[2025] “AI·SW지식 없어도 OK” ETRI, 노코드 기계학습 개발도구 공개](https://biz.heraldcorp.com/article/10606733?ref=naver)
+- [[2025] ETRI, 노코드 머신러닝 개발 도구 모두 오픈소스로 공개..."AI·SW지식 부족해도 한번 실행 OK, SW 손쉽게 개발도와"](https://www.aitimes.kr/news/articleView.html?idxno=37020)
+- [[2025] ETRI, 노코드 기계학습 개발도구(MLOps) 오픈소스로 공개](https://www.itbiznews.com/news/articleView.html?idxno=185623)
+- [[2024] ETRI, 노코드 머신러닝 개발도구 '탱고 프레임워크' 오픈소스로 공개..."AI·SW지식 부족해도 한번 실행으로 OK!"](https://www.aitimes.kr/news/articleView.html?idxno=33084)
+- [[2024] ETRI, '노코드' 기계학습 개발도구 공개…AI 지식 부족해도 개발 도와](https://www.etnews.com/20241204000236)
+- [[2024] ETRI, 노코드 기계학습 개발도구로 산업 AX 지원](https://www.koit.co.kr/news/articleView.html?idxno=127056)
+- [[2024] AI·IT 몰라도 '탱고'로 SW 만든다](https://www.fnnews.com/news/202412041037480146)
+- [[2023] ETRI, 노코드 기계학습 개발도구 핵심기술 공개](https://www.sedaily.com/NewsView/29W5T2547W)
+- [[2022] 과기정통부, 로우코드 기반 AI SW 개발 도구 공개](https://www.etnews.com/20221101000222)
+- [[2022] 과기부-ETRI, 산업현장 핵심 'AI 알고리즘' 공개](https://www.hellodd.com/news/articleView.html?idxno=98512)
     
 ---
 
