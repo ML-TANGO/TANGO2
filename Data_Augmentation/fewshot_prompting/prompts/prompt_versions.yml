@@ -1,0 +1,81 @@
+# Define all available prompt components
+prompt_components:
+  # Component for Few-Shot Examples
+  few_shot_examples:
+    _type: "few_shot" # Special type for the loader to handle
+    prefix: |
+      You will be shown a series of example query-response pairs. Your goal is to understand the pattern and apply it to a final user query.
+
+      --- 
+      BEGINNING OF EXAMPLES 
+      ---
+    suffix: |
+      ---
+      END OF EXAMPLES
+      (**Important**: The examples above are for demonstration purposes only. They are separate from the final task below.)
+      ---
+    example_prompt:
+      _type: "prompt"
+      input_variables: ["query", "response"]
+      template: |
+        Query: {query}
+        Response: {response}
+
+  # Component for Chain of Thought
+  chain_of_thought:
+    _type: "component"
+    instruction: |
+      # Chain of Thought
+      First, think step-by-step to analyze the user's query based on the provided examples. Outline your reasoning process before constructing the final response.
+    template: |
+      # Thought Process
+      Let's think step by step:
+      1. Analyze the examples to identify the core transformation logic.
+      2. Apply this logic to the user's query.
+      3. Construct the response following the required format.
+
+  # Component for ReFlexion
+  reflexion:
+    _type: "component"
+    instruction: |
+      # Self-Critique (ReFlexion)
+      After generating an initial response, you must critique it. Identify flaws and create a plan for improvement before providing the final, corrected response.
+    template: |
+      # Initial Response
+      ...
+      # Critique and Plan
+      ...
+      # Final Response
+      ...
+
+  # Component for the final user query
+  final_query:
+    _type: "final_query" # Special type for the loader to handle
+    template: |
+      ---
+      # FINAL QUERY
+      Based on all the instructions and the required output structure, provide the final response to the user's query below.
+
+      **User Query:** {user_query}
+
+# Define strategies that combine components in a specific order
+prompt_strategies:
+  # Strategy for today's request: Few-Shot + CoT
+  few_shot_with_cot:
+    - "few_shot_examples"
+    - "chain_of_thought"
+    - "final_query"
+  
+  # Strategy to use ReFlexion
+  few_shot_with_reflexion:
+    - "few_shot_examples"
+    - "reflexion"
+    - "final_query"
+
+  # A simple few-shot strategy
+  few_shot_only:
+    - "few_shot_examples"
+    - "final_query"
+
+# Set the active strategy for the application
+active_strategy: "few_shot_only"

@@ -1,7 +1,8 @@
 import pandas as pd
 from typing import List
+import random
 
-def load_examples(input_csv_paths: List[str], output_csv_paths: List[str]) -> List[dict]:
+def load_examples(input_csv_paths: List[str], output_csv_paths: List[str], shuffle: bool = False) -> List[dict]:
     """
     여러 쌍의 CSV 파일에서 Few-Shot 예시를 불러옵니다.
     'file_name'을 기준으로 input.csv의 여러 라인을 합치고 output.csv의 단일 라인과 매칭합니다.
@@ -46,5 +47,9 @@ def load_examples(input_csv_paths: List[str], output_csv_paths: List[str]) -> Li
             print(f"⚠️ 경고: 파일을 찾을 수 없습니다: {input_path} 또는 {output_path}")
         except Exception as e:
             print(f"⚠️ 경고: {input_path}, {output_path} 처리 중 오류 발생: {e}")
+
+    if shuffle:
+        random.shuffle(all_examples)
+        print("🔀 예제를 성공적으로 셔플했습니다.")
 
     return all_examples
