@@ -1,0 +1,293 @@
+# GenAI Platform - Values Template
+# 이 파일을 복사하여 values_<서버명>.yaml로 저장하고 실제 환경에 맞게 수정하세요.
+# 예: cp values.yaml.template values_prod.yaml
+
+# ============================================================================
+# Global Settings
+# ============================================================================
+global:
+  jfb:
+    # 기본 네임스페이스 (대부분의 앱이 이 네임스페이스를 사용)
+    namespace: jonathan-system  # TODO: 환경에 맞게 수정
+
+    # ========================================================================
+    # Volume 설정
+    # ========================================================================
+    volume:
+      # jfData: 이미지 관련 데이터 저장소
+      jfData:
+        type: nfs  # TODO: nfs 또는 hostPath 선택
+        path: /storage/jf-storage/jf-data  # TODO: 실제 NFS 경로로 수정
+        server: <NFS_SERVER_IP>  # TODO: NFS 서버 IP 주소
+
+      # jfBin: 바이너리 파일 저장소
+      jfBin:
+        type: nfs  # TODO: nfs 또는 hostPath 선택
+        path: /storage/jf-storage/jf-bin  # TODO: 실제 NFS 경로로 수정
+        server: <NFS_SERVER_IP>  # TODO: NFS 서버 IP 주소
+
+      # jfStorage: 임시 스토리지 목록
+      jfStorage:
+        #storage_start
+        - type: "nfs"
+          name: "local-nfs"
+          path: /storage/jf-storage/tmp-storage  # TODO: 실제 경로로 수정
+          server: <NFS_SERVER_IP>  # TODO: NFS 서버 IP 주소
+        #storage_end
+
+      # markerData: 마커 데이터 저장소 (사용하는 경우)
+      markerData:
+        type: nfs
+        path: /storage/jf-storage/marker-data  # TODO: 실제 경로로 수정
+        server: <NFS_SERVER_IP>  # TODO: NFS 서버 IP 주소
+
+      # src: 소스 코드 볼륨 (개발 환경에서 사용)
+      src:
+        enabled: true  # 배포 환경에서는 false 권장
+        type: nfs
+        path: /jp/apps  # TODO: 실제 경로로 수정
+        server: <NFS_SERVER_IP>  # TODO: NFS 서버 IP 주소
+
+      # front: 프론트엔드 코드 볼륨 (개발 환경에서만 사용)
+      front:
+        enabled: false  # 개발 시에만 true
+        type: hostPath  # 개발 시 hostPath 권장 (nfs는 코드 반영이 느림)
+        path: /path/to/frontend  # TODO: enabled=true일 때만 설정
+        hostname: <NODE_HOSTNAME>  # hostPath 사용 시 노드 호스트명
+        server: <NFS_SERVER_IP>  # nfs 사용 시에만 설정
+
+    # ========================================================================
+    # Application Settings
+    # ========================================================================
+    settings:
+      # Nexus 설정 (사용하는 경우)
+      nexus:
+        hostname: "nexus-nexus-repository-manager.jonathan-nexus.svc.cluster.local"
+        port: 8081
+        enabled: false  # TODO: 사용 여부에 따라 true/false
+        prefix: "nexus"
+
+      # 데이터베이스 설정
+      db:
+        namespace: "jonathan-mariadb"  # MariaDB 네임스페이스
+        svc: "mariadb-galera"  # MariaDB 서비스 이름
+        port: "3306"
+
+      # 외부 접근 설정
+      external:
+        protocol: "http"  # http 또는 https
+        host: "<EXTERNAL_HOST_IP>"  # TODO: 외부 접근 가능한 IP 또는 도메인
+        port: "80"  # TODO: 외부 포트
+        sshPort: "30022"  # TODO: SSH 포트
+        redirect: "true"  # true: host만, false: host:port
+        ingressClassName: jonathan-kong  # Kong ingress 클래스 이름
+
+      # 초기 루트 비밀번호
+      initRootPassword: "<INIT_ROOT_PASSWORD>"  # TODO: 강력한 비밀번호로 변경
+
+      # Redis 설정
+      redis:
+        namespace: "jonathan-redis"  # Redis 네임스페이스
+        clusterEnabled: "true"  # 클러스터 모드 사용 여부
+        clusterDns: "redis-cluster"
+        clusterHeadlessDns: "redis-cluster-headless"
+        masterDns: "redis-master"
+        slaveDns: "redis-replicas"
+
+      # Kong 설정
+      kong:
+        namespace: "jonathan-kong"
+        adminDns: "kong-kong-admin"
+        proxyDns: "kong-kong-proxy"
+
+      # Kafka 설정
+      kafka:
+        namespace: "jonathan-kafka"
+        dns: "kafka"
+        # 보안 설정
+        protocol: "SASL_PLAINTEXT"  # 또는 PLAINTEXT
+        sasl_mechanism: "PLAIN"
+        sasl_username: "<KAFKA_USERNAME>"  # TODO: Kafka 사용자명
+        sasl_password: "<KAFKA_PASSWORD>"  # TODO: Kafka 비밀번호
+
+      # 모니터링 설정
+      monitoring:
+        node_exporter: "9100"
+        namespace: ""  # 비어있으면 global namespace 사용
+        url: monitoring-kube-prometheus-prometheus
+
+      # MongoDB 설정
+      mongoDb:
+        user: "root"
+        password: "<MONGODB_PASSWORD>"  # TODO: MongoDB 비밀번호
+        port: "27017"
+        namespace: "jonathan-mongodb"
+        dns: "mongodb-headless"
+
+      # 컴퓨팅 리소스 제한
+      computing:
+        cpu: 0.8  # 노드당 최대 CPU 사용률 (0.0 ~ 1.0)
+        ram: 0.8  # 노드당 최대 메모리 사용률 (0.0 ~ 1.0)
+
+      # 로그 설정
+      log:
+        name: log-middleware-rest
+        namespace: "jonathan-efk"  # EFK 네임스페이스
+        port: "8080"
+        protocol: "http"
+
+      # FileBrowser 설정
+      filebrowser:
+        max: 5  # 최대 인스턴스 수
+
+      # 비용 관리
+      costManagement:
+        enable: "True"
+
+      # Private Repository 설정
+      privateRepo:
+        enabled: false
+
+      # Private Pip 설정
+      privatePip:
+        enabled: false
+
+    # ========================================================================
+    # Image Registry Settings
+    # ========================================================================
+    image:
+      runtime: containerd  # containerd 또는 docker
+      
+      # 시스템 레지스트리 (플랫폼 앱 이미지)
+      system:
+        registry: "<SYSTEM_REGISTRY_IP>:<PORT>"  # TODO: 시스템 레지스트리 주소
+        protocol: https://  # http:// 또는 https://
+
+      # 사용자 레지스트리 (사용자가 업로드하는 이미지)
+      users:
+        registry: "<USER_REGISTRY_IP>:<PORT>"  # TODO: 사용자 레지스트리 주소
+        protocol: http://  # http:// 또는 https://
+
+      dataRoot: "/var/lib/containerd"  # 컨테이너 런타임 데이터 루트
+      pullPolicy: Always  # IfNotPresent, Always, Never
+
+      # Image Pull Secret 설정
+      pullSecrets:
+        enabled: false
+        name: ""  # enabled=true일 때만 설정
+
+      # ====================================================================
+      # Application Images
+      # ====================================================================
+      # 각 앱의 이미지 태그를 환경에 맞게 수정하세요
+      front: jfb-system/front:dev
+      marker_front: jfb-system/marker_front:dev
+      marker_back: jfb-system/marker_back:pdf2image
+      marker_db: mariadb:10.11
+      dbJob: jfb-system/db:dev
+      bin: jfb-system/bin:dev
+      user: jfb-system/user_app:dev
+      workspace: jfb-system/workspace_app:dev
+      dashboard: jfb-system/dashboard_app:dev
+      resource: jfb-system/resource_app:dev
+      training: jfb-system/training_app:dev
+      deployment: jfb-system/deployment_app:dev
+      dataset: jfb-system/dataset_app:dev
+      image: jfb-system/image_app:dev
+      monitoring: jfb-system/monitoring_app:dev
+      scheduler: jfb-system/scheduler_app:dev
+      notification: jfb-system/notification_app:dev
+      cost-management: jfb-system/cost_management_app:0.1.8
+      collect: jfb-system/collect_app:dev
+      ssh: jfb-system/ssh_app:dev
+      db: mariadb:10.11
+      storage: jfb-system/storage_app:dev
+      playground: jfb-system/playground_app:dev
+      rag: jfb-system/rag_app:dev
+      model: jfb-system/model_app:dev
+      prompt: jfb-system/prompt_app:dev
+      pipeline: jfb-system/pipeline_app:dev
+      preprocessing: jfb-system/preprocessing_app:dev
+      analyzing: jfb-system/analyzing_app:dev
+      option: jfb-system/option_app:dev
+      filebrowser: jfb-system/filebrowser:0.1.0
+      ingress_management: jfb-system/ingress_management_app:dev
+      alert_management: jfb-system/alert_management_app:dev
+
+    # ========================================================================
+    # Directory Mappings
+    # ========================================================================
+    dir:
+      utils: fb_utils
+      user: fb_user
+      workspace: fb_workspace
+      dashboard: fb_dashboard
+      resource: fb_resource
+      training: fb_training
+      deployment: fb_deployment
+      dataset: fb_dataset
+      image: fb_image
+      monitoring: fb_monitoring
+      scheduler: fb_scheduler
+      notification: fb_notification
+      ssh: fb_ssh
+      playground: llm_playground
+      rag: llm_rag
+      model: llm_model
+      prompt: llm_prompt
+      cost-management: fb_cost_management
+      pipeline: fb_pipeline
+      preprocessing: fb_preprocessing
+      collect: fb_collect
+      analyzing: fb_analyzing
+      option: fb_option
+      ingress_management: fb_ingress_management
+      alert_management: fb_alert_management
+
+    # ========================================================================
+    # Application Names (Helm Release Names)
+    # ========================================================================
+    name:
+      front: jfb-app-front
+      marker_front: marker-app-front
+      marker_back: marker-app-back
+      marker_db: marker-app-db
+      db: jfb-mysql-db
+      user: jfb-app-user
+      workspace: jfb-app-workspace
+      dashboard: jfb-app-dashboard
+      resource: jfb-app-resource
+      training: jfb-app-training
+      deployment: jfb-app-deployment
+      dataset: jfb-app-dataset
+      image: jfb-app-image
+      monitoring: jfb-app-monitoring
+      scheduler: jfb-app-scheduler
+      notification: jfb-app-notification
+      ssh: jfb-app-ssh
+      storage: jfb-app-storage
+      playground: jfb-llm-playground
+      model: jfb-llm-model
+      rag: jfb-llm-rag
+      prompt: jfb-llm-prompt
+      cost-management: jfb-cost-management
+      pipeline: jfb-app-pipeline
+      preprocessing: jfb-app-preprocessing
+      collect: jfb-app-collect
+      analyzing: jfb-app-analyzing
+      option: jfb-app-option
+      ingress_management: jfb-app-ingress-management
+      alert_management: jfb-app-alert-management
+
+    # ========================================================================
+    # RDMA Settings (고성능 네트워크, 선택사항)
+    # ========================================================================
+    rdma:
+      enabled: false  # TODO: RDMA 사용 시 true
+      mp:
+        enabled: false
+        seedNum: 3
+        nodeSeedList: []
+      perf:
+        enabled: false
+      p2p: []  # RDMA P2P로 연결된 노드 목록

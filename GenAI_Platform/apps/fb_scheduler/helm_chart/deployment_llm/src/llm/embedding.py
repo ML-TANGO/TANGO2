@@ -69,9 +69,11 @@ vector_store = None
 
 """
 # TEST OPENAI
-# from langchain_openai import ChatOpenAI
-# os.environ['OPENAI_API_KEY'] = os.getenv("OPENAI_API_KEY", "")
-# embedding_model = ChatOpenAI(model="gpt-3.5-turbo") 
+from langchain_openai import ChatOpenAI
+# OpenAI API Key는 환경 변수에서 가져옴 (OPENAI_API_KEY)
+if 'OPENAI_API_KEY' not in os.environ:
+    raise ValueError("OPENAI_API_KEY environment variable is required")
+embedding_model = ChatOpenAI(model="gpt-3.5-turbo") 
 """
 
 # embedding =======================================================================
