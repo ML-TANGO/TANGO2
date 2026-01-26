@@ -1,9 +1,7 @@
 global:
   kibanaEnabled: true
   defaultStorageClass: "jonathan-efk-sc"
-  imageRegistry: "registry.jonathan.acryl.ai"
-  security:
-    allowInsecureImages: true
+#   imageRegistry: ""
 #   imagePullSecrets: []
 
 image:
