@@ -318,7 +318,7 @@ dcgmExporter:
   enabled: true
   repository: registry.jonathan.acryl.ai # offline일 경우 로컬 레포지토리로 수정
   image: nvidia/dcgm-exporter
-  version: 4.0.0-acryl # 3.3.7-3.5.0-ubuntu22.04
+  version: 4.0.4-acryl # 3.3.7-3.5.0-ubuntu22.04
   imagePullPolicy: IfNotPresent
   env:
     - name: DCGM_EXPORTER_LISTEN

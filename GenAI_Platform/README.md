@@ -12,17 +12,17 @@ GenAI Platform은 기업용 대규모 언어 모델 개발을 위한 완전한 L
 쿠버네티스 기반 운영/배포를 위한 Helm 차트 및 실행 스크립트가 포함되어 있습니다.
 
 - **주요 인프라 차트(예시)**
-  - **NFS Provisioner**: `devops/aaai_nfs_provisioner/`
-  - **(Optional) MetalLB**: `devops/aaai_metallb/`
-  - **Kong(Ingress)**: `devops/aaai_kong/`
-  - **Registry**: `devops/aaai_registry/`
-  - **MariaDB**: `devops/aaai_maraidb/`
-  - **Kafka**: `devops/aaai_kafka/`
-  - **Redis**: `devops/aaai_redis/`
-  - **MongoDB**: `devops/aaai_mongodb/`
-  - **Prometheus/Grafana**: `devops/aaai_prometheus/`
-  - **EFK**: `devops/aaai_efk/`
-  - **GPU Operators**: `devops/aaai_gpu_operators/`
+  - **NFS Provisioner**: `devops/gaip_nfs_provisioner/`
+  - **(Optional) MetalLB**: `devops/gaip_metallb/`
+  - **Kong(Ingress)**: `devops/gaip_kong/`
+  - **Registry**: `devops/gaip_registry/`
+  - **MariaDB**: `devops/gaip_maraidb/`
+  - **Kafka**: `devops/gaip_kafka/`
+  - **Redis**: `devops/gaip_redis/`
+  - **MongoDB**: `devops/gaip_mongodb/`
+  - **Prometheus/Grafana**: `devops/gaip_prometheus/`
+  - **EFK**: `devops/gaip_efk/`
+  - **GPU Operators**: `devops/gaip_gpu_operators/`
 
 > 설치 순서/값 설정/주의사항은 `devops/INSTALL.md`에 정리되어 있습니다.
 
@@ -96,11 +96,11 @@ kubectl get pods -A
 ```
 GenAI_Platform/
 ├── devops/                        # 쿠버네티스 인프라 구성요소
-│   ├── aaai_efk/                  # 로그 수집 및 분석
-│   ├── aaai_prometheus/           # 모니터링 스택
-│   ├── aaai_kong/                 # ingress (kong)
-│   ├── aaai_registry/             # private registry
-│   ├── aaai_maraidb/              # mariadb
+│   ├── gaip_efk/                  # 로그 수집 및 분석
+│   ├── gaip_prometheus/           # 모니터링 스택
+│   ├── gaip_kong/                 # ingress (kong)
+│   ├── gaip_registry/             # private registry
+│   ├── gaip_maraidb/              # mariadb
 │   └── ...                        # 기타 인프라 구성요소
 │
 ├── apps/                          # 마이크로서비스
