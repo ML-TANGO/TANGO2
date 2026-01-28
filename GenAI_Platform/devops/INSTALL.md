@@ -52,29 +52,29 @@ cp ~/.kube/config GenAI_Platform/devops/fb_common_app/helm/file/kube/config
 
 ### 2) 로컬/개별 인프라 차트 values 파일
 
-인프라 차트(`aaai_*`)는 차트별로 values 파일 구조가 다릅니다.
+인프라 차트(`gaip_*`)는 차트별로 values 파일 구조가 다릅니다.
 
-- `aaai_nfs_provisioner/run.sh`: `-f <values.yaml>` **필수**
-- `aaai_kong/run.sh`: `-f <values.yaml>` **필수** (`developer:` 값을 namespace로 사용)
-- `aaai_registry/run.sh`: `-f <values.yaml>` **필수**
-- `aaai_maraidb/run.sh`: `install`은 기본 값으로 설치, `init -f <values.yaml>`은 **values 필요**
-- `aaai_kafka/run.sh`: 기본적으로 `values.yaml`을 사용(스크립트 내부 고정)
-- `aaai_redis/run.sh`, `aaai_mongodb/run.sh`: 기본 설정으로 설치(스크립트 내부 고정)
-- `aaai_prometheus/run.sh`: 스크립트 내부 `value.yaml` 사용 + `helm dependency build kube-prometheus-stack` 수행
+- `gaip_nfs_provisioner/run.sh`: `-f <values.yaml>` **필수**
+- `gaip_kong/run.sh`: `-f <values.yaml>` **필수** (`developer:` 값을 namespace로 사용)
+- `gaip_registry/run.sh`: `-f <values.yaml>` **필수**
+- `gaip_maraidb/run.sh`: `install`은 기본 값으로 설치, `init -f <values.yaml>`은 **values 필요**
+- `gaip_kafka/run.sh`: 기본적으로 `values.yaml`을 사용(스크립트 내부 고정)
+- `gaip_redis/run.sh`, `gaip_mongodb/run.sh`: 기본 설정으로 설치(스크립트 내부 고정)
+- `gaip_prometheus/run.sh`: 스크립트 내부 `value.yaml` 사용 + `helm dependency build kube-prometheus-stack` 수행
 
 ## 설치 순서(권장)
 
 아래 순서는 `devops`에 포함된 기본 차트(스토리지/네트워크/DB/메시징/모니터링) 의존성을 기준으로 정리한 권장 순서입니다.
 
-1. **NFS Provisioner** (`aaai_nfs_provisioner`)
-2. **(Optional) MetalLB** (`aaai_metallb`)
-3. **Kong** (`aaai_kong`)
-4. **Registry** (`aaai_registry`)
-5. **MariaDB (run → init)** (`aaai_maraidb`)
-6. **Kafka** (`aaai_kafka`)
-7. **Redis** (`aaai_redis`)
-8. **MongoDB** (`aaai_mongodb`)
-9. **Prometheus** (`aaai_prometheus`)
+1. **NFS Provisioner** (`gaip_nfs_provisioner`)
+2. **(Optional) MetalLB** (`gaip_metallb`)
+3. **Kong** (`gaip_kong`)
+4. **Registry** (`gaip_registry`)
+5. **MariaDB (run → init)** (`gaip_maraidb`)
+6. **Kafka** (`gaip_kafka`)
+7. **Redis** (`gaip_redis`)
+8. **MongoDB** (`gaip_mongodb`)
+9. **Prometheus** (`gaip_prometheus`)
 10. **Platform Apps** (`devops/run.sh`)
 11. **LLM Apps(선택)** (`devops/run_llm.sh`)
 
@@ -82,28 +82,28 @@ cp ~/.kube/config GenAI_Platform/devops/fb_common_app/helm/file/kube/config
 
 ### 1) NFS Provisioner
 
-`aaai_nfs_provisioner/run.sh`는 values 파일에서 `volumeName`을 읽어 namespace로 사용합니다.
+`gaip_nfs_provisioner/run.sh`는 values 파일에서 `volumeName`을 읽어 namespace로 사용합니다.
 
 ```bash
-cd GenAI_Platform/devops/aaai_nfs_provisioner
+cd GenAI_Platform/devops/gaip_nfs_provisioner
 ./run.sh install -f ./values.yaml
 ```
 
 ### 2) (Optional) MetalLB
 
-`aaai_metallb`는 manifest 기반입니다.
+`gaip_metallb`는 manifest 기반입니다.
 
 ```bash
-cd GenAI_Platform/devops/aaai_metallb
+cd GenAI_Platform/devops/gaip_metallb
 ./install.sh
 ```
 
 ### 3) Kong
 
-`aaai_kong/run.sh`는 values 파일에서 `developer:` 값을 읽어 namespace로 사용합니다.
+`gaip_kong/run.sh`는 values 파일에서 `developer:` 값을 읽어 namespace로 사용합니다.
 
 ```bash
-cd GenAI_Platform/devops/aaai_kong
+cd GenAI_Platform/devops/gaip_kong
 ./run.sh install -f ./values.yaml
 ```
 
@@ -114,7 +114,7 @@ cd GenAI_Platform/devops/aaai_kong
 ### 4) Registry
 
 ```bash
-cd GenAI_Platform/devops/aaai_registry
+cd GenAI_Platform/devops/gaip_registry
 ./run.sh install -f ./values.yaml
 ```
 
@@ -139,7 +139,7 @@ cd GenAI_Platform/devops/aaai_registry
 ### 5) MariaDB (run → init)
 
 ```bash
-cd GenAI_Platform/devops/aaai_maraidb
+cd GenAI_Platform/devops/gaip_maraidb
 
 # DB 설치 (galera)
 ./run.sh install
@@ -151,22 +151,22 @@ cd GenAI_Platform/devops/aaai_maraidb
 ### 6) Kafka / Redis / MongoDB
 
 ```bash
-cd GenAI_Platform/devops/aaai_kafka
+cd GenAI_Platform/devops/gaip_kafka
 ./run.sh install
 
-cd ../aaai_redis
+cd ../gaip_redis
 ./run.sh install
 
-cd ../aaai_mongodb
+cd ../gaip_mongodb
 ./run.sh install
 ```
 
 ### 7) Prometheus
 
-`aaai_prometheus/run.sh`는 내부에서 `helm dependency build kube-prometheus-stack`를 수행하고, 설치 후 `ingress.yaml`도 적용합니다.
+`gaip_prometheus/run.sh`는 내부에서 `helm dependency build kube-prometheus-stack`를 수행하고, 설치 후 `ingress.yaml`도 적용합니다.
 
 ```bash
-cd GenAI_Platform/devops/aaai_prometheus
+cd GenAI_Platform/devops/gaip_prometheus
 ./run.sh install
 ```
 
@@ -209,10 +209,10 @@ cd GenAI_Platform/devops
 
 인프라 차트는 각각 독립적인 values 파일 구조를 가집니다:
 
-- **`aaai_nfs_provisioner`**: `nfs.server`, `nfs.path`, `nfs.volumeName`, `storageClass.name`
-- **`aaai_kong`**: `global.developer`, `global.jfb.static.*`, `global.jfb.storageClass.*`, `global.jfb.volume.*`
-- **`aaai_registry`**: `namespace`, `service.*`, `volume.*`
-- **`aaai_maraidb (init)`**: `global.jfb.namespace`, `global.jfb.settings.db.*`, `global.jfb.image.*`
+- **`gaip_nfs_provisioner`**: `nfs.server`, `nfs.path`, `nfs.volumeName`, `storageClass.name`
+- **`gaip_kong`**: `global.developer`, `global.jfb.static.*`, `global.jfb.storageClass.*`, `global.jfb.volume.*`
+- **`gaip_registry`**: `namespace`, `service.*`, `volume.*`
+- **`gaip_maraidb (init)`**: `global.jfb.namespace`, `global.jfb.settings.db.*`, `global.jfb.image.*`
 
 각 차트의 `values.yaml` 파일을 참고하여 설정하세요.
 
