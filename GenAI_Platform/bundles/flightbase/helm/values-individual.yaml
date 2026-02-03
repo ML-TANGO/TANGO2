@@ -1,0 +1,192 @@
+# !JONATHAN 으로 검색 -> 필수 입력
+global:
+  jfb:
+    namespace: jonathan-system  # jfb
+
+    # commonapp의 dependency 설정 여부
+    individual:
+      commonapp_enabled: true
+
+    volume:
+      jfData: # 사용하는 곳: image
+        type: nfs      # !JONATHAN # nfs, hostpath
+        path:          # !JONATHAN #/jfbcore_msa/jf-data
+        server:        # !JONATHAN # 192.168.1.20
+
+      jfBin:
+        type: nfs      # !JONATHAN # nfs, hostpath
+        path:          # !JONATHAN # /jfbcore_msa/jf-bin
+        server:        # !JONATHAN # 192.168.1.20
+
+      jfStorage:
+        #storage_start
+        - type: "nfs"
+          name: "local-nfs"
+          path: 
+          server:
+        #storage_end
+
+      src:
+        enabled: true # true, false (배포일 경우 false)
+        type: nfs # nfs
+        # path: (printf "%s/%s" .Values.global.jfb.volume.src.path .Values.global.jfb.dir.*)
+        path: /jp/apps
+        server: 
+
+      front:
+        enabled: false # 개발시 src 마운트 경로 위한 볼륨
+        # enabled: true 일 경우 작성
+        type: # 개발시 nfs로 설정하면 코드반영 바로 안됨, hostPath 권장
+        path: # type: hostPath, nfs 일때 작성
+        # type: hostPath 일때 작성
+        hostname:
+        # type: nfs 일때 작성
+        server: 
+
+    settings:
+      db:
+        namespace: "jonathan-mariadb" # 없으면 global namespace 사용
+        svc: 'mariadb-galera'
+        port: '3306'
+      external:
+        protocol: 'http'
+        host: "" # !JONATHAN
+        port: "80"
+        sshPort: "30022"
+        redirect: "true" # true -> host , false -> host:port 
+        ingressClassName: jonathan-kong
+        # 아래 내용 주석처리 후 sshPort 추가함 (24-11-15)
+        #ssh:
+        #port: 8222
+        #svcType: "LoadBalancer"
+      initRootPassword: 'acryl1234!'
+      redis:
+        namespace: "jonathan-redis" # 없으면 global namespace 사용
+        clusterEnabled: 'true'
+        clusterDns: "redis-cluster"
+        clusterHeadlessDns: "redis-cluster-headless"
+        masterDns: "redis-master"
+        slaveDns: "redis-replicas"
+      kong:
+        namespace: "jonathan-kong" # 없으면 global namespace 사용
+        admin-dns: "kong-kong-admin"
+      kafka:
+        namespace: "jonathan-kafka" # 없으면 global namespace 사용
+        dns: "kafka"
+      monitoring:
+        node_exporter: "9100"
+        namespace:          # 없으면 global namespace 사용 (appUrl은 적용 X)
+        url: monitoring-kube-prometheus-prometheus
+        # nodeExporterServicePort: "monitoring-kube-prometheus-prometheus.jfb.svc.cluster.local:9090"
+        # nodeExporterServicePortHttpMetrics: "monitoring-kube-prometheus-prometheus.jfb.svc.cluster.local:9090"
+      mongoDb:
+        user: "root"
+        password: "acryl4958@"
+        port: "27017"
+        namespace: "jonathan-mongodb" # 없으면 global namespace 사용
+        dns: "mongodb-headless"
+      computing: 
+        cpu: 0.8 # float
+        ram: 0.8 # float
+      log:
+        name: log-middleware-rest
+        namespace: "jonathan-efk"                  # 없으면 global namespace 사용
+        port: "8080"
+        protocol: "http"
+      filebrowser:
+        max: 5
+      costManagement:
+        enable: "True"
+
+    image:
+      runtime: containerd # containerd, docker
+      system: # jonathan system API APP registry
+        registry: ":" # !JONATHAN
+        protocol: http://
+      users: # jonathan 유저들이 올리는 이미지
+        registry: ":" # !JONATHAN
+        protocol: http://  # :// 까지 쓰기
+      dataRoot: '/var/lib/containerd'
+      pullPolicy: Always # IfNotPresent, Always, Never
+      pullSecrets:
+        enabled: false
+        name: "test" # true 일경우 입력
+      front: jfb-system/front:0.2.0
+      dbJob: jfb-system/db:dev
+      bin: jfb-system/bin:dev
+      user: jfb-system/user_app:0.2.0
+      workspace: jfb-system/workspace_app:0.2.0
+      dashboard: jfb-system/dashboard_app:0.2.0
+      resource: jfb-system/resource_app:0.2.0
+      training: jfb-system/training_app:dev
+      deployment: jfb-system/deployment_app:0.2.0
+      dataset: jfb-system/dataset_app:0.2.0
+      image: jfb-system/image_app:dev
+      monitoring: jfb-system/monitoring_app:0.2.0
+      scheduler: jfb-system/scheduler_app:dev
+      notification: jfb-system/notification_app:0.2.0
+      cost-management: jfb-system/cost_management_app:0.1.8
+      collect: jfb-system/collect_app:dev
+      ssh: jfb-system/ssh_app:dev
+      db: mariadb:10.11
+      storage: jfb-system/storage_app:dev
+      playground: jfb-system/playground_app:dev
+      rag: jfb-system/rag_app:dev
+      model: jfb-system/model_app:dev
+      prompt: jfb-system/prompt_app:dev
+      pipeline: jfb-system/pipeline_app:dev
+      preprocessing: jfb-system/preprocessing_app:dev
+      analyzing: jfb-system/analyzing_app:dev
+      option: jfb-system/option_app:dev
+
+    dir:
+      utils: fb_utils
+      user: fb_user
+      workspace: fb_workspace
+      dashboard: fb_dashboard
+      resource: fb_resource
+      training: fb_training
+      deployment: fb_deployment
+      dataset: fb_dataset
+      image: fb_image
+      monitoring: fb_monitoring
+      scheduler: fb_scheduler
+      notification: fb_notification
+      ssh: fb_ssh
+      playground: llm_playground
+      rag: llm_rag
+      model: llm_model
+      prompt: llm_prompt
+      cost-management : fb_cost_management
+      pipeline: fb_pipeline
+      preprocessing: fb_preprocessing
+      collect: fb_collect
+      analyzing: fb_analyzing
+      option: fb_option
+
+    name:
+      front: jfb-app-front
+      db: jfb-mysql-db
+      user: jfb-app-user
+      workspace: jfb-app-workspace
+      dashboard: jfb-app-dashboard
+      resource: jfb-app-resource
+      training: jfb-app-training
+      deployment: jfb-app-deployment
+      dataset: jfb-app-dataset
+      image: jfb-app-image
+      monitoring: jfb-app-monitoring
+      scheduler: jfb-app-scheduler
+      notification: jfb-app-notification
+      ssh: jfb-app-ssh
+      storage: jfb-app-storage
+      playground: jfb-llm-playground
+      model: jfb-llm-model
+      rag: jfb-llm-rag
+      prompt: jfb-llm-prompt
+      cost-management : jfb-cost-management
+      pipeline: jfb-app-pipeline
+      preprocessing: jfb-app-preprocessing
+      collect: jfb-app-collect
+      analyzing: jfb-app-analyzing
+      option: jfb-app-option

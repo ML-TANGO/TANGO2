@@ -1,0 +1,54 @@
+apiVersion: v2
+name: flightbase-bundle
+description: Jonathan flightbase 
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+
+dependencies:
+  - name: commonlib
+    version: "0.1.0"
+    repository: "file://../../../devops/fb_common_lib/helm"
+  - name: jfb-commonapp
+    version: "0.1.0"
+    repository: "file://../../../devops/fb_common_app/helm"
+  - name: jfb-dashboard
+    version: "0.1.0"
+    repository: "file://../../../devops/fb_dashboard/helm"
+  - name: jfb-dataset
+    version: "0.1.0"
+    repository: "file://../../../devops/fb_dataset/helm"
+  - name: jfb-deployment
+    version: "0.1.0"
+    repository: "file://../../../devops/fb_deployment/helm"
+  - name: jfb-front
+    version: "0.1.0"
+    repository: "file://../../../devops/fb_front/helm"
+  - name: jfb-image
+    version: "0.1.0"
+    repository: "file://../../../devops/fb_image/helm"
+  - name: jfb-monitoring
+    version: "0.1.0"
+    repository: "file://../../../devops/fb_monitoring/helm"
+  - name: jfb-notification
+    version: "0.1.0"
+    repository: "file://../../../devops/fb_notification/helm"
+  - name: jfb-resource
+    version: "0.1.0"
+    repository: "file://../../../devops/fb_resource/helm"
+  - name: jfb-scheduler
+    version: "0.1.0"
+    repository: "file://../../../devops/fb_scheduler/helm"
+  - name: jfb-ssh
+    version: "0.1.0"
+    repository: "file://../../../devops/fb_ssh/helm"
+  - name: jfb-training
+    version: "0.1.0"
+    repository: "file://../../../devops/fb_training/helm"
+  - name: jfb-user
+    version: "0.1.0"
+    repository: "file://../../../devops/fb_user/helm"
+  - name: jfb-workspace
+    version: "0.1.0"
+    repository: "file://../../../devops/fb_workspace/helm"
+    
