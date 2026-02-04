@@ -1,0 +1,130 @@
+spec:
+  inputs:
+    appName: 
+      description: Job 이름의 접두사로 사용할 앱 이름으로 고유하게 default 값을 지정해 주세요.
+      default: "Flightbase 번들"
+    dirName:
+      description: 현재 디렉토리로 bundles 폴더 안의 폴더 이름을 default 값으로 지정해 주세요.
+      default: "flightbase"
+
+
+---
+
+stages:
+  - preflight
+  - build
+  - test
+  - push
+  - deploy
+
+include:
+  - local: devops/ci-commons/general.gitlab-ci.yml # 일반 템플릿 로드
+  - local: devops/ci-commons/python.gitlab-ci.yml # 파이썬 템플릿 로드
+  - local: devops/ci-commons/helm.gitlab-ci.yml # 헬름 템플릿 로드
+  - local: devops/ci-commons/kaniko.gitlab-ci.yml # kaniko 템플릿 로드
+  - local: devops/ci-commons/argo.gitlab-ci.yml # argo 템플릿 로드
+  - local: bundles/flightbase/cicd/flightbase.gitlab-ci.yml # flightbase 템플릿 로드
+
+".$[[ inputs.appName ]].when_apps_changed": # rules:changes가 extends된 변수를 인식하지 못하는 버그가 있어서 추가로 작성 필요
+  rules:
+    - changes:
+      - "apps/fb*/**/*"
+
+".$[[ inputs.appName ]].skip_apps_changed": # rules:changes가 extends된 변수를 인식하지 못하는 버그가 있어서 추가로 작성 필요
+  rules:
+    - changes:
+      - "apps/fb*/**/*"
+      when: never
+
+".$[[ inputs.appName ]].when_devops_changed": # rules:changes가 extends된 변수를 인식하지 못하는 버그가 있어서 추가로 작성 필요
+  rules:
+    - changes:
+      - "devops/fb*/**/*" 
+      - "bundles/$[[ inputs.dirName ]]/**/*"
+
+".$[[ inputs.appName ]].skip_devops_changed": # rules:changes가 extends된 변수를 인식하지 못하는 버그가 있어서 추가로 작성 필요
+  rules:
+    - changes:
+      - "devops/fb*/**/*" 
+      - "bundles/$[[ inputs.dirName ]]/**/*"
+      when: never
+
+".$[[ inputs.appName ]].when_any_changed": # rules:changes가 extends된 변수를 인식하지 못하는 버그가 있어서 추가로 작성 필요
+  rules:
+    - changes:
+      - "apps/fb*/**/*"
+      - "devops/fb*/**/*"
+      - "bundles/$[[ inputs.dirName ]]/**/*"
+
+##################################################################
+# 아래 variables에서 변수 값을 적절히 수정해 주세요.
+
+".$[[ inputs.appName ]].variables": 
+  variables:
+    HELM_CHART_NAME: "flightbase-bundle" # 헬름 차트 이름, 실제 헬름 차트의 name에 맞게 수정 필요
+    HELM_CHART_VERSION: "0.1.0" # 헬름 차트 버전, 수정 필요
+    ARGOCD_APP_NAME: "flightbase-bundle" # 앱 이름, 수정 필요
+    DIR_NAME: $[[ inputs.dirName ]]
+
+    BUNDLES_DIR_REL: "bundles/${DIR_NAME}" # 데브옵스 경로, 필요 시 수정
+
+    BUNDLES_DIR: "${CI_PROJECT_DIR}/${BUNDLES_DIR_REL}" 
+    HELM_CHART_DIR: "${BUNDLES_DIR}/helm" # 헬름 차트 경로, 필요 시 수정
+    REQUIREMENT_DIR: "${APPS_DIR}/requirements.txt" # requirements.txt 파일 경로, 필요 시 수정
+  extends:
+    - ".flightbase.variables"
+
+##################################################################
+
+
+"$[[ inputs.appName ]], CI 로드 확인":  # 해당 CI 파일 로드 확인용
+  stage: preflight
+  script:
+    - echo "$[[ inputs.appName ]] CI 확인 완료"    
+
+
+"$[[ inputs.appName ]], 헬름 차트 배포":
+  extends: 
+    - ".$[[ inputs.appName ]].variables"
+    - .helm_push_recursive
+    - ".$[[ inputs.appName ]].when_devops_changed" 
+  stage: push
+
+"$[[ inputs.appName ]], Argo로 배포(번들)": 
+  extends: 
+    - ".$[[ inputs.appName ]].variables"
+    - .argo_refresh_no_image_changed
+    - .general_skip_deploy_not_needed
+    - ".$[[ inputs.appName ]].when_any_changed"
+  stage: deploy
+  # needs:
+  #   - "$[[ inputs.appName ]], 헬름 차트 배포" # 헬름 업로드 이후 진행
+
+
+# "$[[ inputs.appName ]], Argo로 배포(차트 포함 갱신)": 
+#   extends: 
+#     - ".$[[ inputs.appName ]].variables"
+#     - .argo_refresh_custom
+#     - .general_skip_deploy_not_needed
+#     - ".$[[ inputs.appName ]].when_any_changed"
+#   variables:
+#     ARGOCD_SET_ARGS: "--helm-set global.jfb.image.front=jfb-system/front:0.2.0
+#       --helm-set global.jfb.image.dbJob=jfb-system/db:${CI_COMMIT_SHORT_SHA}
+#       --helm-set global.jfb.image.bin=jfb-system/bin:${CI_COMMIT_SHORT_SHA}
+#       --helm-set global.jfb.image.user=jfb-system/user_app:${CI_COMMIT_SHORT_SHA}
+#       --helm-set global.jfb.image.workspace=jfb-system/workspace_app:${CI_COMMIT_SHORT_SHA}
+#       --helm-set global.jfb.image.dashboard=jfb-system/dashboard_app:${CI_COMMIT_SHORT_SHA}
+#       --helm-set global.jfb.image.resource=jfb-system/resource_app:${CI_COMMIT_SHORT_SHA}
+#       --helm-set global.jfb.image.training=jfb-system/training_app:${CI_COMMIT_SHORT_SHA}
+#       --helm-set global.jfb.image.deployment=jfb-system/deployment_app:${CI_COMMIT_SHORT_SHA}
+#       --helm-set global.jfb.image.dataset=jfb-system/dataset_app:${CI_COMMIT_SHORT_SHA}
+#       --helm-set global.jfb.image.image=jfb-system/image_app:${CI_COMMIT_SHORT_SHA}
+#       --helm-set global.jfb.image.monitoring=jfb-system/monitoring_app:${CI_COMMIT_SHORT_SHA}
+#       --helm-set global.jfb.image.scheduler=jfb-system/scheduler_app:${CI_COMMIT_SHORT_SHA}
+#       --helm-set global.jfb.image.notification=jfb-system/notification_app:${CI_COMMIT_SHORT_SHA}
+#       --helm-set global.jfb.image.ssh=jfb-system/ssh_app:${CI_COMMIT_SHORT_SHA}
+#       --helm-set global.jfb.image.storage=jfb-system/storage_app:${CI_COMMIT_SHORT_SHA}
+#       "
+#   stage: deploy
+#   needs:
+#     - "$[[ inputs.appName ]], 헬름 차트 배포" # 헬름 업로드 이후 진행
