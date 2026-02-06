@@ -9,7 +9,7 @@ spec:
       serviceAccountName: {{ .Values.namespace }}-clusteradmin-resource
       containers:
       - name: {{ .Values.name }}
-        image: {{ printf "%s/jfb-system/kubectl:latest" ( .Values.registry | trimSuffix "/") }}
+        image: docker.io/bitnamilegacy/kubectl:1.33.4-debian-12-r0
         securityContext:
           privileged: true
         command: ["/bin/bash", "-c", "--"]
