@@ -9,8 +9,8 @@ imagePullSecrets: []
 
 nfs:
   # *********** JFB CUSTOM ***********
-  server: 192.168.0.40
-  path: /storage/jf-storage/system
+  server: 192.168.0.44
+  path: /storage/jonathan-storage/system
   mountOptions: 
   volumeName: jonathan-system
   # Reclaim policy for the main nfs volume

@@ -34,7 +34,7 @@ spec:
     spec:
       containers:
       - name: filebrowser
-        image: {{ .Values.registry }}jfb-system/filebrowser:0.1.0
+        image: docker.io/acrylaaai/filebrowser:0.1.0
         ports:
         - containerPort: 80
         env:

@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: storage-exporter
-        image: registry.jonathan.acryl.ai/jfb-system/storage-exporter:0.1.4
+        image: docker.io/acrylaaai/storage-exporter:0.3.1
         command: ["sh", "-c", "python3 /app/storage-metric.py"]
         # args: [] # while true; do sleep 30; done; python3 /app/storage-metric.py
         ports:

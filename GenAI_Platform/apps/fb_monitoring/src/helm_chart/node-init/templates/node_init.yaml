@@ -20,7 +20,7 @@ spec:
       #     effect: NoSchedule
       containers:
       - name: node-init-container
-        image: {{ .Values.registry_url}}jfb-system/node-init:dev
+        image: docker.io/acrylaaai/node-init:dev
         securityContext:
           privileged: true
         env:

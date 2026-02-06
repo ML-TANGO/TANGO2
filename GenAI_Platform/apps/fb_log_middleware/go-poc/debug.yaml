@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
         - name: debug
-          image: registry.jonathan.acryl.ai/jfb-system/fb_log_middleware:debug
+          image: docker.io/acrylaaai/fb_log_middleware:debug
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
