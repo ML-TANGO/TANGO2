@@ -602,10 +602,11 @@ def reduce_joined_result(rows, reduce_by, reduce_to, reduce_column):
         if not all_null:
             reduced_list.append(d)
     try:
-        res[-1][reduce_to] = reduced_list
+        if len(res) > 0:
+            res[-1][reduce_to] = reduced_list
     except IndexError:
         traceback.print_exc()
-        return False
+        return []
     return res
 
 

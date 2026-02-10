@@ -81,7 +81,7 @@ install_all(){
   # sed -i "s/<cis-metric-port>/$CSI_METRIC_PORT/g" $VALUE_PATH
   # sed -i "s/<rook-ceph-metric-port>/$ROOK_CEPH_METRIC_PORT/g" $VALUE_PATH
 
-  #cd $BASE_DIR
+  cd $BASE_DIR
   helm dependency build kube-prometheus-stack
   if [ "$LOCAL_STORAGE" == "true" ]; then
     helm install local-storage ./local_storage/local-storage -n $NAMESPACE \
