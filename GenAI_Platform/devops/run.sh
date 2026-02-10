@@ -57,7 +57,7 @@ if [ ! -e "$BASE_DIR/fb_common_app/helm/file/kube/config" ]; then
 fi
 
 CHARTS=(
-    "common_app" "dashboard" "dataset" "front" "image" "monitoring" "notification"
+    "common_app" "dashboard" "dataset" "deployment" "front" "image" "monitoring" "notification"
     "option" "resource" "scheduler"
     "user" "workspace" "alert_management" "ingress_management"
 )
