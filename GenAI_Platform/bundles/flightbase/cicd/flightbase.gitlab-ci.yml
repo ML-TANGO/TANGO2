@@ -1,0 +1,6 @@
+.flightbase.variables:
+  variables:
+    CONFIGURATION_DIR: "${CI_PROJECT_DIR}/bundles/flightbase/cicd/configuration" 
+    COMMONAPP_CHART_DIR: "${CI_PROJECT_DIR}/devops/fb_common_app/helm"
+    COMMONLIB_CHART_DIR: "devops/fb_common_lib/**/*"
+    COMMON_PACKAGE_DIR: "apps/fb_utils/**/*"
