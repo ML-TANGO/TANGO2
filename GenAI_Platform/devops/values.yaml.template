@@ -1,5 +1,79 @@
+# ============================================================================
 # GenAI Platform - Values Template
-# 이 파일을 복사하여 values_<서버명>.yaml로 저장하고 실제 환경에 맞게 수정하세요.
+# ============================================================================
+# 버전: v2.0.1
+# 최종 수정: 2025-02
+#
+# 사용법:
+#   1. 파일 하단부 내용을 복사하여 values_<서버명>.yaml로 저장
+#      예: cp values.yaml.template values_prod.yaml
+#   2. 아래 [필수 설정 체크리스트]의 항목을 모두 수정
+#   3. 환경에 따라 [선택 설정]을 조정
+#   4. Helm install/upgrade 시 해당 values 파일을 지정
+#
+# ============================================================================
+# 🚀 필수 설정 체크리스트 (반드시 수정해야 동작합니다)
+# ============================================================================
+#
+#  □ NFS 서버 IP 설정
+#    → global.jfb.volume.jfData.server
+#    → global.jfb.volume.jfBin.server
+#    → global.jfb.volume.jfStorage[0].server
+#    → global.jfb.volume.markerData.server
+#    → global.jfb.volume.src.server (src.enabled=true인 경우)
+#    ※ 모든 volume이 동일한 NFS 서버를 사용해도 됩니다.
+#
+#  □ NFS Export 경로 확인
+#    → 각 volume의 path가 NFS 서버에 실제로 존재해야 합니다.
+#    → NFS export 옵션: rw,sync,no_root_squash,no_subtree_check 권장
+#
+#  □ 외부 접근 설정
+#    → global.jfb.settings.external.host (외부에서 접근 가능한 IP 또는 도메인)
+#
+#  □ 사용자 이미지 레지스트리
+#    → global.jfb.image.users.registry
+#    ※ 프라이빗 레지스트리가 없으면 system.registry와 동일하게 설정
+#
+#  □ 비밀번호 변경 (보안 필수)
+#    → global.jfb.settings.initRootPassword (플랫폼 루트 비밀번호)
+#    → global.jfb.settings.kafka.sasl_password (Kafka 인증)
+#    → global.jfb.settings.mongoDb.password (MongoDB 인증)
+#    → global.jfb.secrets.workspace.integration.encryptionKey
+#    ※ 템플릿의 기본값은 예시이며, 반드시 강력한 비밀번호로 변경하세요.
+#
+# ============================================================================
+# ⚠️ 사전 요구사항 (설치 전 반드시 확인)
+# ============================================================================
+#
+# [인프라 요구사항]
+#   - Kubernetes 1.24+ 클러스터
+#   - Helm 3.x
+#   - 컨테이너 런타임: containerd (기본) 또는 docker
+#   - NFS 서버 구성 완료 (export 경로 생성 + 적절한 퍼미션)
+#
+# [의존 서비스] (아래 서비스가 사전 설치되어 있어야 합니다)
+#   - MariaDB  → 네임스페이스: jonathan-mariadb
+#   - Redis    → 네임스페이스: jonathan-redis
+#   - Kafka    → 네임스페이스: jonathan-kafka
+#   - MongoDB  → 네임스페이스: jonathan-mongodb
+#   - Kong     → 네임스페이스: jonathan-kong
+#   - EFK 스택 → 네임스페이스: jonathan-efk (로그 수집용)
+#
+# [네임스페이스 사전 생성]
+#   아래 네임스페이스를 미리 생성해야 합니다:
+#     kubectl create namespace jonathan-system
+#     kubectl create namespace jonathan-mariadb
+#     kubectl create namespace jonathan-redis
+#     kubectl create namespace jonathan-kafka
+#     kubectl create namespace jonathan-mongodb
+#     kubectl create namespace jonathan-kong
+#     kubectl create namespace jonathan-efk
+#   ※ Nexus 사용 시: kubectl create namespace jonathan-nexus
+#
+# ============================================================================
+
+# GenAI Platform - Values Template
+# 하단부 내용을 복사하여 values_<서버명>.yaml로 저장하고 실제 환경에 맞게 수정하세요.
 # 예: cp values.yaml.template values_prod.yaml
 
 # ============================================================================
@@ -7,215 +81,330 @@
 # ============================================================================
 global:
   jfb:
-    # 기본 네임스페이스 (대부분의 앱이 이 네임스페이스를 사용)
-    namespace: jonathan-system  # TODO: 환경에 맞게 수정
+    # 기본 네임스페이스 (플랫폼 앱들이 배포될 네임스페이스)
+    namespace: jonathan-system  # [필수] 환경에 맞게 수정
 
     # ========================================================================
     # Volume 설정
     # ========================================================================
+    # NFS 사용 시 사전 조건:
+    #   - NFS 서버에 해당 경로가 존재해야 함
+    #   - NFS export 설정 예시 (/etc/exports):
+    #     /opt/dynamic-storage/jf-data  *(rw,sync,no_root_squash,no_subtree_check)
+    #   - 각 Kubernetes 워커 노드에 nfs-common 패키지 설치 필요
+    #     (Ubuntu: apt install nfs-common / CentOS: yum install nfs-utils)
+    #
+    # 참고: 모든 volume이 동일한 NFS 서버를 사용해도 됩니다.
+    #       그 경우 모든 server 필드에 같은 IP를 입력하면 됩니다.
+    # ========================================================================
     volume:
-      # jfData: 이미지 관련 데이터 저장소
+
+      # jfData: 플랫폼 이미지/데이터 저장소 (학습 데이터, 모델 파일 등)
       jfData:
-        type: nfs  # TODO: nfs 또는 hostPath 선택
-        path: /storage/jf-storage/jf-data  # TODO: 실제 NFS 경로로 수정
-        server: <NFS_SERVER_IP>  # TODO: NFS 서버 IP 주소
+        type: nfs                                 # nfs 또는 hostPath
+        path: /opt/dynamic-storage/jf-data        # [필수] NFS export 경로
+        server: <NFS_SERVER_IP>                   # [필수] NFS 서버 IP (예: 192.168.1.100)
 
-      # jfBin: 바이너리 파일 저장소
+      # jfBin: 바이너리/실행 파일 저장소 (플랫폼 내부 바이너리)
       jfBin:
-        type: nfs  # TODO: nfs 또는 hostPath 선택
-        path: /storage/jf-storage/jf-bin  # TODO: 실제 NFS 경로로 수정
-        server: <NFS_SERVER_IP>  # TODO: NFS 서버 IP 주소
+        type: nfs                                 # nfs 또는 hostPath
+        path: /opt/dynamic-storage/jf-bin         # [필수] NFS export 경로
+        server: <NFS_SERVER_IP>                   # [필수] NFS 서버 IP
 
-      # jfStorage: 임시 스토리지 목록
+      # jfStorage: 임시 작업 스토리지 (학습 중간 결과물 등)
+      # ※ 여러 스토리지를 추가하려면 storage_start/storage_end 사이에 항목을 추가하세요.
+      #    이 마커는 플랫폼이 스토리지 목록을 파싱할 때 사용하므로 삭제하지 마세요.
       jfStorage:
         #storage_start
         - type: "nfs"
-          name: "local-nfs"
-          path: /storage/jf-storage/tmp-storage  # TODO: 실제 경로로 수정
-          server: <NFS_SERVER_IP>  # TODO: NFS 서버 IP 주소
+          name: "local-nfs"                       # 스토리지 식별 이름 (플랫폼 UI에 표시)
+          path: /opt/dynamic-storage/tmp-storage  # [필수] NFS export 경로
+          server: <NFS_SERVER_IP>                 # [필수] NFS 서버 IP
+        # 스토리지 추가 예시:
+        # - type: "nfs"
+        #   name: "extra-storage"
+        #   path: /opt/dynamic-storage/extra
+        #   server: 192.168.1.100
         #storage_end
 
-      # markerData: 마커 데이터 저장소 (사용하는 경우)
+      # markerData: 마커(어노테이션) 데이터 저장소
+      # ※ 마커 기능을 사용하지 않는 경우에도 경로 설정은 필요합니다.
       markerData:
         type: nfs
-        path: /storage/jf-storage/marker-data  # TODO: 실제 경로로 수정
-        server: <NFS_SERVER_IP>  # TODO: NFS 서버 IP 주소
+        path: /opt/dynamic-storage/marker-data    # [필수] NFS export 경로
+        server: <NFS_SERVER_IP>                   # [필수] NFS 서버 IP
 
-      # src: 소스 코드 볼륨 (개발 환경에서 사용)
+      # src: 백엔드 소스 코드 볼륨
+      # ※ 개발 환경에서 소스 코드를 직접 마운트하여 핫리로드할 때 사용
+      # ※ 운영/배포 환경에서는 enabled: false 권장 (이미지에 코드가 포함됨)
       src:
-        enabled: true  # 배포 환경에서는 false 권장
+        enabled: true                             # 운영 환경: false / 개발 환경: true
         type: nfs
-        path: /jp/apps  # TODO: 실제 경로로 수정
-        server: <NFS_SERVER_IP>  # TODO: NFS 서버 IP 주소
+        path: <SRC_PATH>                          # [조건부 필수] enabled=true일 때 TANGO2/GenAI_Platform/apps 소스 절대 경로
+                                                  # 주의: 해당 경로에 NFS 설정이 되어있어야 정상적으로 동작함
+        server: <NFS_SERVER_IP>                   # [조건부 필수] enabled=true일 때 NFS 서버 IP
 
-      # front: 프론트엔드 코드 볼륨 (개발 환경에서만 사용)
+      # front: 프론트엔드 소스 코드 볼륨
+      # ※ 프론트엔드 개발 시에만 사용 (코드 변경 즉시 반영)
+      # ※ 운영 환경에서는 반드시 enabled: false
       front:
-        enabled: false  # 개발 시에만 true
-        type: hostPath  # 개발 시 hostPath 권장 (nfs는 코드 반영이 느림)
-        path: /path/to/frontend  # TODO: enabled=true일 때만 설정
-        hostname: <NODE_HOSTNAME>  # hostPath 사용 시 노드 호스트명
-        server: <NFS_SERVER_IP>  # nfs 사용 시에만 설정
+        enabled: false                            # 운영 환경: false (프론트엔드 개발 시에만 true)
+        type: hostPath                            # 개발 시 hostPath 권장 (NFS는 파일 변경 감지가 느림)
+        path: "/path/to/frontend"                 # [조건부 필수] enabled=true일 때 프론트엔드 소스 경로
+        hostname: "<NODE_HOSTNAME>"               # [조건부 필수] type=hostPath일 때 해당 노드의 hostname
+        server: "<NFS_SERVER_IP>"                 # [조건부 필수] type=nfs일 때 NFS 서버 IP
 
     # ========================================================================
     # Application Settings
     # ========================================================================
     settings:
-      # Nexus 설정 (사용하는 경우)
+
+      # --------------------------------------------------------------------
+      # Nexus Repository (Private Maven/NPM/Docker Registry)
+      # ※ 인터넷이 차단된 폐쇄망 환경에서 패키지 프록시로 사용
+      # ※ 사용하지 않는 경우 enabled: false로 두면 됩니다.
+      # --------------------------------------------------------------------
       nexus:
         hostname: "nexus-nexus-repository-manager.jonathan-nexus.svc.cluster.local"
         port: 8081
-        enabled: false  # TODO: 사용 여부에 따라 true/false
+        enabled: false                            # Nexus 사용 시 true
         prefix: "nexus"
 
-      # 데이터베이스 설정
+      # --------------------------------------------------------------------
+      # 데이터베이스 설정 (MariaDB)
+      # ※ MariaDB가 아래 네임스페이스에 미리 설치되어 있어야 합니다.
+      # --------------------------------------------------------------------
       db:
-        namespace: "jonathan-mariadb"  # MariaDB 네임스페이스
-        svc: "mariadb-galera"  # MariaDB 서비스 이름
+        namespace: "jonathan-mariadb"             # MariaDB가 설치된 네임스페이스
+        svc: "mariadb-galera"                     # MariaDB 서비스 이름 (Galera 클러스터)
         port: "3306"
 
+      # --------------------------------------------------------------------
       # 외부 접근 설정
+      # ※ 사용자가 브라우저에서 플랫폼에 접근할 때 사용되는 주소입니다.
+      # --------------------------------------------------------------------
       external:
-        protocol: "http"  # http 또는 https
-        host: "<EXTERNAL_HOST_IP>"  # TODO: 외부 접근 가능한 IP 또는 도메인
-        port: "80"  # TODO: 외부 포트
-        sshPort: "30022"  # TODO: SSH 포트
-        redirect: "true"  # true: host만, false: host:port
-        ingressClassName: jonathan-kong  # Kong ingress 클래스 이름
+        protocol: "http"                          # "http" 또는 "https"
+                                                  # ※ https 사용 시 TLS 인증서를 Kong Ingress에
+                                                  #   별도로 설정해야 합니다. (별도 가이드 참조)
+        host: "<EXTERNAL_HOST_IP>"                # [필수] 외부 접근 IP 또는 도메인
+                                                  #   예: "platform.example.com" 또는 "10.0.1.50"
+        port: "80"                                # 외부 접근 포트 (HTTP: 80, HTTPS: 443)
+        sshPort: "30022"                          # SSH 접근 포트 (NodePort 범위: 30000-32767)
 
-      # 초기 루트 비밀번호
-      initRootPassword: "<INIT_ROOT_PASSWORD>"  # TODO: 강력한 비밀번호로 변경
+        # redirect 설정:
+        #   "true"  → URL에 포트를 포함하지 않음 (예: http://platform.example.com)
+        #             ※ 80(HTTP) 또는 443(HTTPS) 포트를 사용할 때 선택
+        #   "false" → URL에 포트를 포함함 (예: http://10.0.1.50:8080)
+        #             ※ 비표준 포트를 사용할 때 선택
+        redirect: "true"
 
+        # Kong Ingress Controller의 IngressClass 이름
+        # ※ Kong이 사전 설치되어 있어야 하며, 해당 IngressClass가 존재해야 합니다.
+        #   확인: kubectl get ingressclass
+        ingressClassName: jonathan-kong
+
+      # --------------------------------------------------------------------
+      # 비밀번호 설정
+      # ⚠️ 아래 기본값은 예시입니다. 반드시 강력한 비밀번호로 변경하세요!
+      #    권장: 영문 대소문자 + 숫자 + 특수문자 조합, 12자 이상
+      # --------------------------------------------------------------------
+      initRootPassword: "tango1234!"              # [필수] 플랫폼 루트 계정 비밀번호
+                                                  # ※ 비워두면 설치 실패합니다.
+
+      # --------------------------------------------------------------------
       # Redis 설정
+      # ※ Redis가 아래 네임스페이스에 미리 설치되어 있어야 합니다.
+      # --------------------------------------------------------------------
       redis:
-        namespace: "jonathan-redis"  # Redis 네임스페이스
-        clusterEnabled: "true"  # 클러스터 모드 사용 여부
-        clusterDns: "redis-cluster"
+        namespace: "jonathan-redis"
+        clusterEnabled: "true"                    # Redis 클러스터 모드: "true" 또는 "false" (문자열)
+        clusterDns: "redis-cluster"               # 클러스터 모드 서비스 이름
         clusterHeadlessDns: "redis-cluster-headless"
-        masterDns: "redis-master"
+        masterDns: "redis-master"                 # Sentinel/Standalone 모드 서비스 이름
         slaveDns: "redis-replicas"
 
-      # Kong 설정
+      # --------------------------------------------------------------------
+      # Kong API Gateway 설정
+      # ※ Kong이 아래 네임스페이스에 미리 설치되어 있어야 합니다.
+      # --------------------------------------------------------------------
       kong:
         namespace: "jonathan-kong"
-        adminDns: "kong-kong-admin"
-        proxyDns: "kong-kong-proxy"
+        adminDns: "kong-kong-admin"               # Kong Admin API 서비스 이름
+        proxyDns: "kong-kong-proxy"               # Kong Proxy 서비스 이름
 
+      # --------------------------------------------------------------------
       # Kafka 설정
+      # ※ Kafka가 아래 네임스페이스에 미리 설치되어 있어야 합니다.
+      # --------------------------------------------------------------------
       kafka:
         namespace: "jonathan-kafka"
-        dns: "kafka"
-        # 보안 설정
-        protocol: "SASL_PLAINTEXT"  # 또는 PLAINTEXT
-        sasl_mechanism: "PLAIN"
-        sasl_username: "<KAFKA_USERNAME>"  # TODO: Kafka 사용자명
-        sasl_password: "<KAFKA_PASSWORD>"  # TODO: Kafka 비밀번호
+        dns: "kafka"                              # Kafka 서비스 이름
+        protocol: "SASL_PLAINTEXT"                # "SASL_PLAINTEXT" (인증 사용) 또는 "PLAINTEXT" (인증 없음)
+        sasl_mechanism: "PLAIN"                   # SASL 메커니즘 (protocol이 SASL_* 일 때만 적용)
+        sasl_username: "tango"                    # Kafka 인증 사용자명
+        sasl_password: "tango1234!"               # Kafka 인증 비밀번호
+                                                  # ※ 비워두면 Kafka 연결에 실패합니다.
 
-      # 모니터링 설정
+      # --------------------------------------------------------------------
+      # 모니터링 설정 (Prometheus)
+      # ※ kube-prometheus-stack이 설치되어 있어야 합니다.
+      # --------------------------------------------------------------------
       monitoring:
-        node_exporter: "9100"
-        namespace: ""  # 비어있으면 global namespace 사용
-        url: monitoring-kube-prometheus-prometheus
+        node_exporter: "9100"                     # Node Exporter 포트
+        namespace: ""                             # 비어있으면 global namespace 사용
+        url: monitoring-kube-prometheus-prometheus # Prometheus 서비스 이름
 
+      # --------------------------------------------------------------------
       # MongoDB 설정
+      # ※ MongoDB가 아래 네임스페이스에 미리 설치되어 있어야 합니다.
+      # --------------------------------------------------------------------
       mongoDb:
         user: "root"
-        password: "<MONGODB_PASSWORD>"  # TODO: MongoDB 비밀번호
+        password: "tango1234@"                    # MongoDB 비밀번호
+                                                  # ※ 비워두면 MongoDB 연결에 실패합니다.
         port: "27017"
         namespace: "jonathan-mongodb"
-        dns: "mongodb-headless"
+        dns: "mongodb-headless"                   # MongoDB Headless 서비스 이름
 
+      # --------------------------------------------------------------------
       # 컴퓨팅 리소스 제한
+      # ※ 플랫폼이 각 노드에서 사용할 수 있는 최대 리소스 비율
+      # ※ 1.0 = 100%, 시스템 안정성을 위해 0.8 이하 권장
+      # --------------------------------------------------------------------
       computing:
-        cpu: 0.8  # 노드당 최대 CPU 사용률 (0.0 ~ 1.0)
-        ram: 0.8  # 노드당 최대 메모리 사용률 (0.0 ~ 1.0)
+        cpu: 0.8                                  # 노드당 최대 CPU 사용률 (0.0 ~ 1.0)
+        ram: 0.8                                  # 노드당 최대 메모리 사용률 (0.0 ~ 1.0)
 
-      # 로그 설정
+      # --------------------------------------------------------------------
+      # 로그 미들웨어 설정 (EFK 스택 연동)
+      # --------------------------------------------------------------------
       log:
         name: log-middleware-rest
-        namespace: "jonathan-efk"  # EFK 네임스페이스
+        namespace: "jonathan-efk"
         port: "8080"
         protocol: "http"
 
+      # --------------------------------------------------------------------
       # FileBrowser 설정
+      # ※ 플랫폼 내 파일 탐색기 인스턴스 수 제한
+      # --------------------------------------------------------------------
       filebrowser:
-        max: 5  # 최대 인스턴스 수
+        max: 5                                    # 동시 실행 가능한 최대 인스턴스 수
 
-      # 비용 관리
+      # --------------------------------------------------------------------
+      # 비용 관리 기능
+      # --------------------------------------------------------------------
       costManagement:
-        enable: "True"
+        enable: "True"                            # "True" 또는 "False" (문자열, 대문자 주의)
 
-      # Private Repository 설정
+      # --------------------------------------------------------------------
+      # Private Repository / Pip 설정
+      # ※ 폐쇄망 환경에서 내부 패키지 저장소를 사용할 때 활성화
+      # --------------------------------------------------------------------
       privateRepo:
-        enabled: false
-
-      # Private Pip 설정
+        enabled: false                            # 내부 패키지 저장소 사용 시 true
       privatePip:
-        enabled: false
+        enabled: false                            # 내부 pip 저장소 사용 시 true
+
+    # ========================================================================
+    # Secrets 설정
+    # ========================================================================
+    secrets:
+      workspace:
+        integration:
+          # 워크스페이스 간 데이터 암호화 키 (Fernet 키)
+          # ⚠️ 반드시 변경하세요! 아래 명령어로 새 키를 생성할 수 있습니다:
+          #   python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+          encryptionKey: ""                       # Fernet 암호화 키
 
     # ========================================================================
     # Image Registry Settings
     # ========================================================================
     image:
-      runtime: containerd  # containerd 또는 docker
-      
-      # 시스템 레지스트리 (플랫폼 앱 이미지)
+      runtime: containerd                         # "containerd" 또는 "docker"
+
+      # 시스템 레지스트리: 플랫폼 앱 이미지를 가져오는 레지스트리
       system:
-        registry: "<SYSTEM_REGISTRY_IP>:<PORT>"  # TODO: 시스템 레지스트리 주소
-        protocol: https://  # http:// 또는 https://
+        registry: "docker.io"                     # 폐쇄망: 내부 레지스트리 주소로 변경
+        protocol: https://                        # "http://" 또는 "https://"
 
-      # 사용자 레지스트리 (사용자가 업로드하는 이미지)
+      # 사용자 레지스트리: 사용자가 빌드/업로드하는 이미지 저장소
+      # ※ 프라이빗 레지스트리가 없는 경우 system.registry와 동일하게 설정
       users:
-        registry: "<USER_REGISTRY_IP>:<PORT>"  # TODO: 사용자 레지스트리 주소
-        protocol: http://  # http:// 또는 https://
+        registry: "<USER_REGISTRY_IP>:<PORT>"     # [필수] 사용자 이미지 레지스트리 주소
+                                                  #   예: "registry.example.com:5000"
+                                                  #   프라이빗 레지스트리 없으면: "docker.io"
+        protocol: http://                         # "http://" 또는 "https://"
 
-      dataRoot: "/var/lib/containerd"  # 컨테이너 런타임 데이터 루트
-      pullPolicy: Always  # IfNotPresent, Always, Never
+      dataRoot: "/var/lib/containerd"             # 컨테이너 런타임 데이터 루트 경로
+                                                  # docker 사용 시: "/var/lib/docker"
+      pullPolicy: Always                          # IfNotPresent / Always / Never
 
-      # Image Pull Secret 설정
+      # Image Pull Secret (프라이빗 레지스트리 인증이 필요한 경우)
       pullSecrets:
-        enabled: false
-        name: ""  # enabled=true일 때만 설정
+        enabled: false                            # 인증 필요 시 true
+        name: ""                                  # enabled=true일 때 Secret 이름
+                                                  # 사전 생성 필요:
+                                                  #   kubectl create secret docker-registry <name> \
+                                                  #     --docker-server=<registry> \
+                                                  #     --docker-username=<user> \
+                                                  #     --docker-password=<pass> \
+                                                  #     -n jonathan-system
 
-      # ====================================================================
+      # ==================================================================
       # Application Images
-      # ====================================================================
-      # 각 앱의 이미지 태그를 환경에 맞게 수정하세요
-      front: jfb-system/front:dev
-      marker_front: jfb-system/marker_front:dev
-      marker_back: jfb-system/marker_back:pdf2image
-      marker_db: mariadb:10.11
-      dbJob: jfb-system/db:dev
-      bin: jfb-system/bin:dev
-      user: jfb-system/user_app:dev
-      workspace: jfb-system/workspace_app:dev
-      dashboard: jfb-system/dashboard_app:dev
-      resource: jfb-system/resource_app:dev
-      training: jfb-system/training_app:dev
-      deployment: jfb-system/deployment_app:dev
-      dataset: jfb-system/dataset_app:dev
-      image: jfb-system/image_app:dev
-      monitoring: jfb-system/monitoring_app:dev
-      scheduler: jfb-system/scheduler_app:dev
-      notification: jfb-system/notification_app:dev
-      cost-management: jfb-system/cost_management_app:0.1.8
-      collect: jfb-system/collect_app:dev
-      ssh: jfb-system/ssh_app:dev
+      # ==================================================================
+      # 각 앱의 컨테이너 이미지 태그입니다.
+      # ※ 빈 값 또는 주석이 달린 항목은 현재 사용하지 않는 기능이므로
+      #   수정할 필요 없습니다. 빈 값 그대로 두면 됩니다.
+      # ※ 폐쇄망 환경에서는 registry 주소를 내부 레지스트리로 변경하세요.
+      #
+      # [활성 서비스]
+      front: acrylaaai/genai-platform-front:tango_v2.0.1
+      bin: acrylaaai/genai-platform-bin:tango_v2.0.1
+      user: acrylaaai/genai-platform-user_app:tango_v2.0.1
+      workspace: acrylaaai/genai-platform-workspace_app:tango_v2.0.1
+      dashboard: acrylaaai/genai-platform-dashboard_app:tango_v2.0.1
+      resource: acrylaaai/genai-platform-resource_app:tango_v2.0.1
+      training: acrylaaai/genai-platform-training_app:tango_v2.0.1
+      deployment: acrylaaai/genai-platform-deployment_app:tango_v2.0.1
+      dataset: acrylaaai/genai-platform-dataset_app:tango_v2.0.1
+      image: acrylaaai/genai-platform-image_app:tango_v2.0.1
+      monitoring: acrylaaai/genai-platform-monitoring_app:tango_v2.0.1
+      scheduler: acrylaaai/genai-platform-scheduler_app:tango_v2.0.1
+      notification: acrylaaai/genai-platform-notification_app:tango_v2.0.1
+      collect: acrylaaai/genai-platform-collect_app:tango_v2.0.1
+      ssh: acrylaaai/genai-platform-ssh_app:tango_v2.0.1
       db: mariadb:10.11
-      storage: jfb-system/storage_app:dev
-      playground: jfb-system/playground_app:dev
-      rag: jfb-system/rag_app:dev
-      model: jfb-system/model_app:dev
-      prompt: jfb-system/prompt_app:dev
-      pipeline: jfb-system/pipeline_app:dev
-      preprocessing: jfb-system/preprocessing_app:dev
-      analyzing: jfb-system/analyzing_app:dev
-      option: jfb-system/option_app:dev
-      filebrowser: jfb-system/filebrowser:0.1.0
-      ingress_management: jfb-system/ingress_management_app:dev
-      alert_management: jfb-system/alert_management_app:dev
+      playground: acrylaaai/genai-platform-playground_app:tango_v2.0.1
+      model: acrylaaai/genai-platform-model_app:tango_v2.0.1
+      pipeline: acrylaaai/genai-platform-pipeline_app:tango_v2.0.1
+      preprocessing: acrylaaai/genai-platform-preprocessing_app:tango_v2.0.1
+      analyzing: acrylaaai/genai-platform-analyzing_app:tango_v2.0.1
+      option: acrylaaai/genai-platform-option_app:tango_v2.0.1
+      filebrowser: acrylaaai/genai-platform-filebrowser:0.1.0
+      ingress_management: acrylaaai/genai-platform-ingress_management_app:tango_v2.0.1
+      alert_management: acrylaaai/genai-platform-alert_management_app:tango_v2.0.1
+      #
+      # [미사용 서비스] - 수정 불필요, 빈 값으로 두세요
+      marker_front:                               # 미사용 (마커 프론트엔드)
+      marker_back:                                # 미사용 (마커 백엔드)
+      marker_db:                                  # 미사용 (마커 DB)
+      dbJob:                                      # 미사용 (deprecated)
+      storage:                                    # 미사용 (deprecated)
+      cost-management:                            # 미사용 (deprecated)
+      #
+      # [예약 서비스] - 향후 활성화 예정, 현재는 수정 불필요
+      rag: acrylaaai/genai-platform-rag_app:dev           # 예약 (RAG 기능)
+      prompt: acrylaaai/genai-platform-prompt_app:dev     # 예약 (프롬프트 관리)
 
     # ========================================================================
     # Directory Mappings
+    # ========================================================================
+    # 각 앱의 소스 코드 디렉토리 이름입니다.
+    # ※ src.enabled=true인 개발 환경에서만 의미가 있습니다.
+    # ※ 일반적으로 수정할 필요 없습니다.
     # ========================================================================
     dir:
       utils: fb_utils
@@ -246,6 +435,10 @@ global:
 
     # ========================================================================
     # Application Names (Helm Release Names)
+    # ========================================================================
+    # 각 앱의 Helm 릴리스 이름입니다.
+    # ※ 일반적으로 수정할 필요 없습니다.
+    # ※ 네임스페이스 내 리소스 이름 충돌 시에만 수정하세요.
     # ========================================================================
     name:
       front: jfb-app-front
@@ -280,14 +473,31 @@ global:
       alert_management: jfb-app-alert-management
 
     # ========================================================================
-    # RDMA Settings (고성능 네트워크, 선택사항)
+    # RDMA Settings (고성능 GPU 통신, 선택사항)
+    # ========================================================================
+    # RDMA(Remote Direct Memory Access)는 GPU 간 고속 데이터 전송을 위한 설정입니다.
+    # ※ InfiniBand 또는 RoCE 네트워크가 구성된 환경에서만 사용
+    # ※ 일반 이더넷 환경에서는 enabled: false로 두세요.
+    #
+    # 활성화 조건:
+    #   - InfiniBand/RoCE NIC가 장착된 GPU 노드
+    #   - RDMA 디바이스 플러그인이 Kubernetes에 설치됨
+    #   - 노드 간 RDMA 네트워크 연결 확인 완료
     # ========================================================================
     rdma:
-      enabled: false  # TODO: RDMA 사용 시 true
+      enabled: false                              # RDMA 사용 시 true
+
+      # Multi-Process Service (MPS) 설정
+      # ※ 여러 프로세스가 하나의 GPU를 공유할 때 사용
       mp:
-        enabled: false
-        seedNum: 3
-        nodeSeedList: []
+        enabled: false                            # MPS 사용 시 true
+        seedNum: 3                                # 시드 노드 수 (분산 학습 초기화용)
+        nodeSeedList: []                          # 시드 노드 호스트명 목록
+                                                  # 예: ["gpu-node-01", "gpu-node-02", "gpu-node-03"]
+
+      # RDMA 성능 최적화 설정
       perf:
-        enabled: false
-      p2p: []  # RDMA P2P로 연결된 노드 목록
+        enabled: false                            # 성능 최적화 사용 시 true
+        p2p: []                                   # RDMA P2P(Peer-to-Peer)로 연결된 노드 쌍 목록
+                                                  # 예: [["gpu-node-01", "gpu-node-02"],
+                                                  #      ["gpu-node-03", "gpu-node-04"]]
