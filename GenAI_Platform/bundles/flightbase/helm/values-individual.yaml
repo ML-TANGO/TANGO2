@@ -59,7 +59,7 @@ global:
         #ssh:
         #port: 8222
         #svcType: "LoadBalancer"
-      initRootPassword: 'acryl1234!'
+      initRootPassword: 'tango1234!'
       redis:
         namespace: "jonathan-redis" # 없으면 global namespace 사용
         clusterEnabled: 'true'
@@ -81,7 +81,7 @@ global:
         # nodeExporterServicePortHttpMetrics: "monitoring-kube-prometheus-prometheus.jfb.svc.cluster.local:9090"
       mongoDb:
         user: "root"
-        password: "acryl4958@"
+        password: "tango1234@"
         port: "27017"
         namespace: "jonathan-mongodb" # 없으면 global namespace 사용
         dns: "mongodb-headless"

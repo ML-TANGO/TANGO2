@@ -2,7 +2,7 @@
 NAMESPACE='jonathan-mariadb'
 CONTAINER_NAME='mariadb-galera'
 USER='root'
-PASSWORD='acryl4958@'
+PASSWORD='tango1234@'
 DATABASE='msa_jfb'
 TIME=$(date -u +"%Y%m%d-utc%H%M")
 

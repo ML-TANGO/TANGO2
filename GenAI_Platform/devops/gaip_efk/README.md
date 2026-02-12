@@ -294,7 +294,7 @@ Filter에서는 각종 로그에 대해 여러 처리를 거치게 됩니다.
         Port 9200
         Buffer_Size False
         HTTP_User elastic
-        HTTP_Passwd acryl4958!
+        HTTP_Passwd tango1234!
         tls On
         tls.verify Off
         Logstash_Format On
@@ -316,7 +316,7 @@ Filter에서는 각종 로그에 대해 여러 처리를 거치게 됩니다.
         Port 9200
         Buffer_Size False
         HTTP_User elastic
-        HTTP_Passwd acryl4958!
+        HTTP_Passwd tango1234!
         tls On
         tls.verify Off
         Logstash_Format On
@@ -337,7 +337,7 @@ Filter에서는 각종 로그에 대해 여러 처리를 거치게 됩니다.
         Port 9200
         Buffer_Size False
         HTTP_User elastic
-        HTTP_Passwd acryl4958!
+        HTTP_Passwd tango1234!
         tls On
         tls.verify Off
         Logstash_Format On
@@ -358,7 +358,7 @@ Filter에서는 각종 로그에 대해 여러 처리를 거치게 됩니다.
         Port 9200
         Buffer_Size False
         HTTP_User elastic
-        HTTP_Passwd acryl4958!
+        HTTP_Passwd tango1234!
         tls On
         tls.verify Off
         Logstash_Format On

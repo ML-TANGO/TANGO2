@@ -21,7 +21,7 @@ global:
   imagePullSecrets: []
   storageClass: ""
   redis:
-    password: "acryl4958@"
+    password: "tango1234@"
   ## Compatibility adaptations for Kubernetes platforms
   ##
   compatibility:
