@@ -22,7 +22,7 @@ global:
   storageClass: "jonathan-system-sc"
   redis:
     # JFB
-    password: "acryl4958@"
+    password: "tango1234@"
   ## Compatibility adaptations for Kubernetes platforms
   ##
   compatibility:

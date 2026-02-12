@@ -46,7 +46,7 @@ HOST_BASE_DOCKERFILE_PATH = '/jfbcore/jf-data/images' # in host
 #[Built in images]
 JF_DEFAULT_UBUNTU_20="JBI_Ubuntu-20.04.6"
 JF_DEFAULT_UBUNTU_22="JBI_Ubuntu-22.04.4"
-DEPLOYMENT_LLM_IMAGE="jfb-system/llm_deployment:dev"
+DEPLOYMENT_LLM_IMAGE="acrylaaai/llm_deployment:dev"
 ANALYZER_IMAGE="jfb/analyzer:0.0.1"
 
 
@@ -173,7 +173,7 @@ GITC_USED = False # RAG, PROMPT 사용 여부 flag (GITC에서만 rag, prompt �
 
 HUGGINGFACE_TOKEN = os.getenv("HUGGINGFACE_TOKEN", "")
 if SYSTEM_DOCKER_REGISTRY_URL:
-    FINE_TUNING_IMAGE= SYSTEM_DOCKER_REGISTRY_URL +  "built-in-model/finetuning:cuda12.4-transformers4.52.4-torch2.5.1-ubuntu22.04" # "built-in-model/jonathan-finetuning:0.1.2-cuda12.4.1"
+    FINE_TUNING_IMAGE= SYSTEM_DOCKER_REGISTRY_URL + "acrylaaai/finetuning:cuda12.4-transformers4.52.4-torch2.5.1-ubuntu22.04" # "built-in-model/jonathan-finetuning:0.1.2-cuda12.4.1"
 else:
     FINE_TUNING_IMAGE = "built-in-model/finetuning:cuda12.4-transformers4.52.4-torch2.5.1-ubuntu22.04"  # 기본값 설정 
 
@@ -202,8 +202,8 @@ JF_P2P_LIST = os.getenv("JF_P2P_LIST", None)
 # [JONATHAN KAFKA]
 JF_KAFKA_SECURITY_PROTOCOL = os.getenv("JF_KAFKA_SECURITY_PROTOCOL", "SASL_PLAINTEXT")
 JF_KAFKA_SASL_MECHANISM = os.getenv("JF_KAFKA_SASL_MECHANISM", "PLAIN")
-JF_KAFKA_SASL_USERNAME = os.getenv("JF_KAFKA_SASL_USERNAME", "acryl")
-JF_KAFKA_SASL_PASSWORD = os.getenv("JF_KAFKA_SASL_PASSWORD", "acryl4958@")
+JF_KAFKA_SASL_USERNAME = os.getenv("JF_KAFKA_SASL_USERNAME", "tango")
+JF_KAFKA_SASL_PASSWORD = os.getenv("JF_KAFKA_SASL_PASSWORD", "tango1234@")
 
 # [NEXUS]
 

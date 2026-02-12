@@ -8,8 +8,8 @@ helm install \
        -n gpu-operator gpu-operator --create-namespace \
        . --values values.yaml \
        --set driver.enabled=false \
-       --set driver.rdma.enabled=true \
-       --set driver.rdma.useHostMofed=true \
+       --set driver.rdma.enabled=false \
+       --set driver.rdma.useHostMofed=false \
        --set mig.strategy=mixed \
        --set dcgmExporter.serviceMonitor.interval=1s 
        

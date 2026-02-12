@@ -7,7 +7,7 @@ TIME_DATE_FORMAT_SQL = "%Y-%m-%d %H:%i:%S"
 JF_DB_HOST = os.environ.get("JF_DB_HOST") if os.environ.get("JF_DB_HOST") else '192.168.1.20'
 JF_DB_PORT = int(os.environ.get("JF_DB_PORT")) if os.environ.get("JF_DB_PORT") else 30001
 JF_DB_USER = os.environ.get("JF_DB_USER") if os.environ.get("JF_DB_USER") else 'root'
-JF_DB_PW = os.environ.get("JF_DB_PW") if os.environ.get("JF_DB_PW") else 'acryl4958@'
+JF_DB_PW = os.environ.get("JF_DB_PW") if os.environ.get("JF_DB_PW") else 'tango1234@'
 JF_DB_NAME = os.environ.get("JF_DB_NAME") if os.environ.get("JF_DB_NAME") else 'msa_jfb'
 JF_DB_CHARSET = os.environ.get("JF_DB_CHARSET") if os.environ.get("JF_DB_CHARSET") else 'utf8'
 

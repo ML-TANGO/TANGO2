@@ -107,8 +107,8 @@ grafana:
     enabled: true
     size: 20Gi
     storageClassName: local-storage
-  adminUser: "acryl"
-  adminPassword: "acryl1234"
+  adminUser: "tango"
+  adminPassword: "tango1234"
 
 alertmanager:
   alertmanagerSpec:

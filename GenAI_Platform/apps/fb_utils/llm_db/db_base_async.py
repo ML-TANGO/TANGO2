@@ -22,7 +22,7 @@ except :
 try:
     db_pw = settings.JF_DB_PW
 except :
-    db_pw = 'acryl4958@'
+    db_pw = 'tango1234@'
 try:
     db_name = "jonathan_llm"
 except :

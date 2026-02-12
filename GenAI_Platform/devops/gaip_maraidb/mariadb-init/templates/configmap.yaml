@@ -8,7 +8,7 @@ data:
   JF_DB_PORT: {{ .Values.global.jfb.settings.db.port | quote }}
   JF_DB_UNIX_SOCKET: '/jf-src/master/conf/db/mysqld.sock'
   JF_DB_USER: 'root'
-  JF_DB_PW: 'acryl4958@'
+  JF_DB_PW: 'tango1234@'
   JF_DB_NAME: 'msa_jfb'
   JF_DB_CHARSET: 'utf8'
   JF_DB_DOCKER: 'JF-mariadb'

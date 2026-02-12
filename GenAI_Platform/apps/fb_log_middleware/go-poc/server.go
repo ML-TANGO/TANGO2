@@ -36,7 +36,7 @@ func main() {
 			esAddress, // must be sent to inner 9200 port, not 9300!
 		},
 		Username: "elastic",
-		Password: "acryl4958!",
+		Password: "tango1234!",
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // Ignore CA verification
 		},

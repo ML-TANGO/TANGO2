@@ -286,7 +286,7 @@ config:
         Port 9200
         Buffer_Size False
         HTTP_User elastic
-        HTTP_Passwd acryl4958!
+        HTTP_Passwd tango1234!
         tls On
         tls.verify Off
         Logstash_Format On
@@ -308,7 +308,7 @@ config:
         Port 9200
         Buffer_Size False
         HTTP_User elastic
-        HTTP_Passwd acryl4958!
+        HTTP_Passwd tango1234!
         tls On
         tls.verify Off
         Logstash_Format On
@@ -329,7 +329,7 @@ config:
         Port 9200
         Buffer_Size False
         HTTP_User elastic
-        HTTP_Passwd acryl4958!
+        HTTP_Passwd tango1234!
         tls On
         tls.verify Off
         Logstash_Format On
@@ -350,7 +350,7 @@ config:
         Port 9200
         Buffer_Size False
         HTTP_User elastic
-        HTTP_Passwd acryl4958!
+        HTTP_Passwd tango1234!
         tls On
         tls.verify Off
         Logstash_Format On

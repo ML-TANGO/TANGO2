@@ -20,7 +20,7 @@ spec:
         - name: ELASTICSEARCH_USERNAME
           value: elastic
         - name: ELASTICSEARCH_PASSWORD
-          value: "acryl4958!"
+          value: "tango1234!"
         volumeMounts:
         - name: config-script
           mountPath: /scripts

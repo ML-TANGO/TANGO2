@@ -81,8 +81,8 @@ grafana:
     enabled: true
     size: 100Gi
     storageClassName: <storageclass-name>
-  adminUser: "acryl"
-  adminPassword: "acryl1234"
+  adminUser: "tango"
+  adminPassword: "tango1234"
 
   altermanager:
   altermanagerSpec:

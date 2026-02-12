@@ -5,9 +5,9 @@ import json
 auth_config = {
     "auths": {
         "IP:PORT": {
-            "username": "acryl",
-            "password": "acryl",
-            "auth": base64.b64encode(b"acryl:acryl").decode()
+            "username": "tango",
+            "password": "tango",
+            "auth": base64.b64encode(b"tango:tango").decode()
         }
     }
 }

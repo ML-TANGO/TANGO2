@@ -204,7 +204,7 @@ async def create_model_helm(workspace_id : int, model_id : int, model_name:str, 
             save_commit_name = TYPE.MODEL_FIRST_COMMIT_NAME
 
         helm_name = TYPE.MODEL_COMMIT_JOB_HELM_NAME.format(MODEL_ID=model_id)
-        image = settings.SYSTEM_DOCKER_REGISTRY_URL + "jfb-system/fine_tuning_app:dev"
+        image = settings.SYSTEM_DOCKER_REGISTRY_URL + "acrylaaai/llm-finetune:dev"
         helm_command = f"""helm install {helm_name} ./model_download \
             -n {namespace}  \
             --set namespace="{namespace}" \
@@ -260,7 +260,7 @@ async def load_or_stop_helm(workspace_id : int, model_id: int, latest_checkpoint
         os.chdir("/app/helm/")
 
         helm_name = TYPE.MODEL_COMMIT_JOB_HELM_NAME.format(MODEL_ID=model_id)
-        image = settings.SYSTEM_DOCKER_REGISTRY_URL + "jfb-system/fine_tuning_app:dev"
+        image = settings.SYSTEM_DOCKER_REGISTRY_URL + "acrylaaai/llm-finetune:dev"
         helm_command = f"""helm install {helm_name} ./model_download \
             -n {namespace}  \
             --set namespace="{namespace}" \

@@ -9,7 +9,7 @@ data:
   JF_DB_PORT: {{ .Values.global.jfb.settings.db.port | quote }}
   JF_DB_UNIX_SOCKET: '/jf-src/master/conf/db/mysqld.sock'
   JF_DB_USER: 'root'
-  JF_DB_PW: 'acryl4958@'
+  JF_DB_PW: 'tango1234@'
   JF_DB_NAME: 'msa_jfb'
   JF_DB_CHARSET: 'utf8'
   JF_DB_DOCKER: 'JF-mariadb'
@@ -20,7 +20,7 @@ data:
   JS_DB_PORT: {{ .Values.global.jfb.settings.db.port | quote }}
   JS_DB_UNIX_SOCKET: '/jf-src/master/conf/db/mysqld.sock'
   JS_DB_USER: 'root'
-  JS_DB_PW: 'acryl4958@'
+  JS_DB_PW: 'tango1234@'
   JS_DB_NAME: 'msa_jsb'
   JS_DB_CHARSET: 'utf8'
   JS_DB_DOCKER: 'JF-mariadb'
@@ -53,7 +53,7 @@ data:
   JF_SYSTEM_NAMESPACE: {{ .Values.global.jfb.namespace }}
   JF_KAFKA_DNS: {{ printf "%s.%s.svc.cluster.local" .Values.global.jfb.settings.kafka.dns ( .Values.global.jfb.settings.kafka.namespace | default .Values.global.jfb.namespace ) | quote }}
   JF_REDIS_PROT: "6379"
-  JF_REDIS_PASSWORD: "acryl4958@"
+  JF_REDIS_PASSWORD: "tango1234@"
   JF_REDIS_CLUSTER_ENABLED: {{ .Values.global.jfb.settings.redis.clusterEnabled | quote }}
   JF_REDIS_CLUSTER_HEADLESS_DNS: {{ printf "%s.%s.svc.cluster.local" .Values.global.jfb.settings.redis.clusterHeadlessDns ( .Values.global.jfb.settings.redis.namespace | default .Values.global.jfb.namespace ) | quote }}
   JF_REDIS_CLUSTER_DNS: {{ printf "%s.%s.svc.cluster.local" .Values.global.jfb.settings.redis.clusterDns ( .Values.global.jfb.settings.redis.namespace | default .Values.global.jfb.namespace ) | quote }}

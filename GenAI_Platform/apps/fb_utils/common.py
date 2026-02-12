@@ -790,6 +790,10 @@ def resource_str_column_to_dict(res, key_list=None):
     if res is None:
         return res
 
+    # bool이나 다른 예상치 못한 타입 처리
+    if not isinstance(res, (dict, list)):
+        return res
+
     def convert_str_to_json(res, key_list):
         for convert_key in key_list:
             if res.get(convert_key) is None:
