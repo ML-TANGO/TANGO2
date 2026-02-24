@@ -1,5 +1,6 @@
 import sys
 from langchain_ollama import OllamaLLM
+from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate, FewShotPromptTemplate, ChatPromptTemplate, MessagesPlaceholder
 from langchain_classic.chains import LLMChain
 from langchain_classic.memory import ConversationBufferMemory
@@ -7,21 +8,25 @@ from langchain_classic.memory import ConversationBufferMemory
 # 모듈화된 함수들 임포트
 from src.config import read_config
 from src.ollama_manager import start_ollama, stop_ollama, pull_model_if_needed
+from src.vllm_manager import start_vllm, stop_vllm
 from src.data_loader import load_examples
 from src.prompt_loader import load_prompt_config, load_prompt_components
 from src.app_ui import run_cli, run_web
 
 def main():
     """Main function to run the application."""
-    ollama_status = None
-    ollama_process = None
+    ollama_status, ollama_process = None, None
+    vllm_status, vllm_process = None, None
     model_name = None
+    backend = None
     try:
         # 1. 설정 읽기
         config = read_config()
         ui_mode = config.get('app', 'UI_MODE', fallback='cli')
         interaction_mode = config.get('app', 'INTERACTION_MODE', fallback='single_shot')
+        backend = config.get('app', 'BACKEND', fallback='ollama').lower()
         model_name = config.get('app', 'MODEL_NAME', fallback='gemma3')
+        
         web_host = config.get('web', 'HOST', fallback='127.0.0.1')
         web_port = config.getint('web', 'PORT', fallback=5000)
 
@@ -30,17 +35,44 @@ def main():
         use_dspy = config.getboolean('DSPY', 'USE_DSPY', fallback=False)
         dspy_metric = config.get('DSPY', 'METRIC', fallback='bert_score')
 
-        print(f"--- Mode: {ui_mode.upper()} | Interaction: {interaction_mode.upper()} ---")
+        print(f"--- Backend: {backend.upper()} | Mode: {ui_mode.upper()} | Interaction: {interaction_mode.upper()} ---")
         if use_dspy and interaction_mode == 'single_shot':
             print(f"--- DSPy Optimizer: {dspy_optimizer} ---")
 
-        # 2. Ollama 서버 및 모델 준비
-        ollama_status, ollama_process = start_ollama()
-        if ollama_status is None:
-            return
+        # 2. 백엔드 및 모델 준비
+        if backend == 'ollama':
+            ollama_status, ollama_process = start_ollama()
+            if ollama_status is None:
+                return
 
-        if not pull_model_if_needed(model_name):
-            print(f"'{model_name}' 모델을 준비할 수 없어 프로그램을 종료합니다.")
+            if not pull_model_if_needed(model_name):
+                print(f"'{model_name}' 모델을 준비할 수 없어 프로그램을 종료합니다.")
+                return
+            
+            llm = OllamaLLM(model=model_name)
+            backend_url = config.get('ollama', 'OLLAMA_URL', fallback='http://localhost:11434')
+
+        elif backend == 'vllm':
+            vllm_url = config.get('vllm', 'VLLM_URL', fallback='http://localhost:8000/v1')
+            vllm_model_path = config.get('vllm', 'MODEL_PATH', fallback=None)
+
+            vllm_status, vllm_process = start_vllm(vllm_url, model_name, model_path=vllm_model_path)
+            if vllm_status is None:
+                print(f"vLLM 서버를 시작할 수 없어 프로그램을 종료합니다.")
+                return
+
+            # 클라이언트가 사용할 모델 식별자를 결정합니다. (로컬 경로 우선)
+            client_model_name = vllm_model_path if vllm_model_path and vllm_model_path.strip() else model_name
+            
+            # vLLM (OpenAI-compatible) LLM setup
+            llm = ChatOpenAI(
+                model=client_model_name,
+                openai_api_base=vllm_url,
+                openai_api_key="none" # vLLM typically doesn't need a key
+            )
+            backend_url = vllm_url
+        else:
+            print(f"지원하지 않는 백엔드입니다: {backend}")
             return
 
         # 3. Few-Shot 예시 로드
@@ -76,7 +108,6 @@ def main():
                 print("💡 입력된 Few-Shot 예시 파일이 없습니다.")
 
         # 4. LLM 및 실행 컨텍스트 설정
-        llm = OllamaLLM(model=model_name)
         context = {}
 
         if interaction_mode == 'conversational': # conversational 모드 프롬프트 설정
@@ -85,7 +116,11 @@ def main():
 
             example_template_str = conv_templates['example_template']
             for ex in examples:
-                system_message += f"Query: {ex['query']}\nResponse: {ex['response']}\n\n"
+                # Use the template from config or fallback to simple format
+                if example_template_str:
+                     system_message += example_template_str.format(query=ex['query'], response=ex['response']) + "\n\n"
+                else:
+                     system_message += f"Query: {ex['query']}\nResponse: {ex['response']}\n\n"
 
             memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
             prompt = ChatPromptTemplate.from_messages([
@@ -102,7 +137,12 @@ def main():
                 print("   (MIPROv2와 같은 일부 옵티마이저는 시간이 오래 걸릴 수 있습니다.)")
                 try:
                     from src.dspy_handler import compile_program, print_program_details
-                    compiled_program = compile_program(model_name, dspy_optimizer, examples, metric_name=dspy_metric)
+                    compiled_program = compile_program(
+                        model_name, dspy_optimizer, examples, 
+                        metric_name=dspy_metric,
+                        backend=backend,
+                        backend_url=backend_url
+                    )
                     print("✅ DSPy 프로그램 컴파일 완료!")
 
                     # 컴파일된 프로그램의 상세 내용(지시문, 예제) 출력
@@ -143,8 +183,10 @@ def main():
         print("\n사용자에 의해 프로그램이 중단되었습니다.")
     finally:
         # Unload the model and/or stop the server
-        if ollama_status:
+        if backend == 'ollama' and (ollama_status or ollama_process):
             stop_ollama(ollama_status, ollama_process, model_name)
+        elif backend == 'vllm' and vllm_process:
+            stop_vllm(vllm_status, vllm_process)
         print("Application shut down.")
 
 if __name__ == "__main__":

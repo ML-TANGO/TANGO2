@@ -83,16 +83,29 @@ def convert_examples(example_data):
         dspy_examples.append(dspy.Example(query=eg['query'], response=eg['response']).with_inputs("query"))
     return dspy_examples
 
-def compile_program(model_name, optimizer_name, examples, metric_name="bert_score", max_bootstrapped_demos=4, max_labeled_demos=16):
+def compile_program(model_name, optimizer_name, examples, metric_name="bert_score", backend="ollama", backend_url="http://localhost:11434", max_bootstrapped_demos=4, max_labeled_demos=16):
     """
     Configures the LLM and compiles a DSPy program using the specified optimizer.
     """
-    # 1. Configure the LLM for DSPy using LiteLLM's 'ollama_chat' provider
-    # The model name requires the 'ollama_chat/' prefix to be routed correctly by litellm.
-    llm_client = dspy.LM(
-        model=f"ollama_chat/{model_name}",
-        api_base="http://localhost:11434"
-    )
+    # 1. Configure the LLM for DSPy
+    if backend == 'vllm':
+        # vLLM provides OpenAI-compatible API
+        # Using 'openai/' prefix tells LiteLLM to use OpenAI client structure,
+        # but we point it to the vLLM server via api_base.
+        print(f"--- DSPy Backend: vLLM ({backend_url}) ---")
+        llm_client = dspy.LM(
+            model=f"openai/{model_name}", 
+            api_base=backend_url,
+            api_key="EMPTY" # vLLM often requires a non-empty key even if unused
+        )
+    else:
+        # Default to Ollama
+        print(f"--- DSPy Backend: Ollama ({backend_url}) ---")
+        llm_client = dspy.LM(
+            model=f"ollama_chat/{model_name}",
+            api_base=backend_url
+        )
+
     dspy.settings.configure(lm=llm_client)
 
     # 2. Convert pandas examples to dspy.Example

@@ -12,11 +12,22 @@ import io
 LOG_FILE = "conversation.log"
 CSV_RESPONSE_LOG_FILE = "csv_query_responses.log"
 
+def get_content(response):
+    """Safely extracts content from a model's response, which could be a string, dict, or a message object."""
+    if hasattr(response, 'content'):
+        return response.content
+    if isinstance(response, dict) and 'text' in response:
+        return response['text']
+    if isinstance(response, str):
+        return response
+    return str(response)
+
 def log_conversation(query, response):
     """Logs the user query and model response to a file."""
-    with open(LOG_FILE, "a") as f:
+    response_content = get_content(response)
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
         f.write(f"User: {query}\n")
-        f.write(f"Model: {response}\n")
+        f.write(f"Model: {response_content}\n")
         f.write("-" * 20 + "\n")
 
 def log_csv_response(response):
@@ -24,24 +35,25 @@ def log_csv_response(response):
     Logs the LLM response to a separate file for CSV queries.
     If the response contains a 'Final Response:' section, only that part is logged.
     """
-    log_text = response
+    response_content = get_content(response)
+    log_text = response_content
     # Attempt to extract 'Final Response:' if present, for structured outputs
-    if "# Final Response" in response:
-        match = re.search(r'# Final Response\s*\n(.*?)(?=\n#|\Z)', response, re.DOTALL | re.IGNORECASE)
+    if "# Final Response" in log_text:
+        match = re.search(r'# Final Response\s*\n(.*?)(?=\n#|\Z)', log_text, re.DOTALL | re.IGNORECASE)
         if match:
             log_text = match.group(1).strip()
-    elif "Final Response:" in response: # Legacy fallback for older reflection prompts
+    elif "Final Response:" in log_text: # Legacy fallback for older reflection prompts
         try:
-            log_text = response.split("Final Response:")[1].strip()
+            log_text = log_text.split("Final Response:")[1].strip()
         except IndexError:
-            log_text = response
-    elif "Final Answer:" in response: # Even older legacy fallback
+            pass # Keep original log_text
+    elif "Final Answer:" in log_text: # Even older legacy fallback
         try:
-            log_text = response.split("Final Answer:")[1].strip()
+            log_text = log_text.split("Final Answer:")[1].strip()
         except IndexError:
-            log_text = response
+            pass # Keep original log_text
 
-    with open(CSV_RESPONSE_LOG_FILE, "a") as f:
+    with open(CSV_RESPONSE_LOG_FILE, "a", encoding="utf-8") as f:
         f.write(log_text + "\n[[---]]\n")
 
 def _assemble_prompt(loaded_components, examples, user_query):
@@ -165,7 +177,7 @@ def run_cli(context: dict):
                         full_response = ""
                         print("Model: ", end="", flush=True)
                         for chunk in chain.stream({"user_query": query}):
-                            response_piece = chunk.get('text', '')
+                            response_piece = get_content(chunk)
                             print(response_piece, end="", flush=True)
                             full_response += response_piece
                         print()
@@ -177,14 +189,15 @@ def run_cli(context: dict):
                         if current_mode == "dspy_single_shot":
                             dspy_program = context['dspy_program']
                             result = dspy_program(query=query)
-                            response = result.response
+                            response = get_content(result.response)
                             print(f"Model: {response}")
                             log_conversation(query, response)
                             log_csv_response(response)
                         else: # original single_shot
                             llm = context['llm']
                             final_prompt = _assemble_prompt(context['prompt_components'], context['examples'], query)
-                            response = llm.invoke(final_prompt)
+                            raw_response = llm.invoke(final_prompt)
+                            response = get_content(raw_response)
                             print(f"Model: {response}")
                             log_conversation(query, response)
                             log_csv_response(response)
@@ -201,7 +214,7 @@ def run_cli(context: dict):
                 print(f"Error: File not found at '{file_path}'")
                 continue
             try:
-                with open(file_path, 'r') as f:
+                with open(file_path, 'r', encoding="utf-8") as f:
                     query_to_send = f.read()
                 print(f"Querying with content from '{file_path}'...")
             except Exception as e:
@@ -216,7 +229,7 @@ def run_cli(context: dict):
             full_response = ""
             print("Model: ", end="", flush=True)
             for chunk in chain.stream({"user_query": query_to_send}):
-                response_piece = chunk.get('text', '')
+                response_piece = get_content(chunk)
                 print(response_piece, end="", flush=True)
                 full_response += response_piece
             print()
@@ -225,7 +238,7 @@ def run_cli(context: dict):
             print("Model is thinking... (DSPy)")
             dspy_program = context['dspy_program']
             result = dspy_program(query=query_to_send)
-            response = result.response
+            response = get_content(result.response)
             print(f"Model: {response}")
             log_conversation(query_to_send, response)
         else: # original single_shot
@@ -235,7 +248,8 @@ def run_cli(context: dict):
             print("\n--- Assembled Prompt ---\n")
             print(final_prompt)
             print("\n------------------------\n")
-            response = llm.invoke(final_prompt)
+            raw_response = llm.invoke(final_prompt)
+            response = get_content(raw_response)
             print(f"Model: {response}")
             log_conversation(query_to_send, response)
 
@@ -253,47 +267,16 @@ def run_web(context: dict, host: str, port: int):
             return Response("data: Query is required.\n\n", mimetype='text/event-stream')
 
         chain = context['chain']
-        def generate():
-            full_response = ""
-            for chunk in chain.stream({"user_query": user_query}):
-                response_piece = chunk.get('text', '')
-                full_response += response_piece
-                for line in response_piece.splitlines():
-                    yield f"data: {line}\\n" # Send newline as a literal string
-                yield "data: \n" # Use a single newline as a separator event for the client
-
-        def log_after_stream(q, r):
-            log_conversation(q, r)
-
-        def new_generate():
-            chain_response = chain.invoke({"user_query": user_query})
-            response_text = chain_response.get('text', '') if isinstance(chain_response, dict) else str(chain_response)
-            log_conversation(user_query, response_text)
-
-            # stream the full response
-            for char in response_text:
-                if char == '\n':
-                    yield "data: <br>\n\n" # Send <br> for newlines
-                else:
-                    yield f"data: {char}\n\n"
-
-        def stream_and_log():
-            full_response = ""
-            # Stream response to client
-            for chunk in chain.stream({"user_query": user_query}):
-                response_piece = chunk.get('text', '')
-                full_response += response_piece
-                yield f"data: {response_piece.replacechr(10, '<br>')}\n\n"
-            # Log after streaming is complete
-            log_conversation(user_query, full_response)
 
         def generate_and_log_after():
             full_response = ""
+            # Stream response to client
             for chunk in chain.stream({"user_query": user_query}):
-                response_piece = chunk.get('text', '')
+                response_piece = get_content(chunk)
                 full_response += response_piece
                 # Send data chunk by chunk
                 yield f"data: {response_piece}\n\n"
+            # Log after streaming is complete
             log_conversation(user_query, full_response)
 
         return Response(generate_and_log_after(), mimetype='text/event-stream')
@@ -313,7 +296,7 @@ def run_web(context: dict, host: str, port: int):
             try:
                 dspy_program = context['dspy_program']
                 result = dspy_program(query=user_query)
-                response = result.response
+                response = get_content(result.response)
                 log_conversation(user_query, response)
                 return jsonify({"response": response, "assembled_prompt": "[Prompt compiled by DSPy. Not available for display.]"})
             except Exception as e:
@@ -322,7 +305,8 @@ def run_web(context: dict, host: str, port: int):
             try:
                 llm = context['llm']
                 final_prompt = _assemble_prompt(context['prompt_components'], context['examples'], user_query)
-                response = llm.invoke(final_prompt)
+                raw_response = llm.invoke(final_prompt)
+                response = get_content(raw_response)
                 log_conversation(user_query, response)
                 return jsonify({"response": response, "assembled_prompt": final_prompt})
             except Exception as e:
