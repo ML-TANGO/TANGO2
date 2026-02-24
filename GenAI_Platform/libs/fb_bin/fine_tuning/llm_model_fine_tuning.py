@@ -8,6 +8,9 @@ import signal
 import json
 import pytz
 from datetime import datetime
+import asyncio
+import threading
+import time
 import numpy as np
 from transformers import (
     AutoTokenizer, 
@@ -29,6 +32,11 @@ from typing import Optional, Dict, Any, Tuple, Union
 from dataclasses import dataclass
 from pathlib import Path
 
+# aiokafka (옵셔널) - 없으면 리스너 비활성화
+from aiokafka import AIOKafkaConsumer  # type: ignore
+
+
+
 
 @dataclass
 class TrainingConfig:
@@ -36,16 +44,16 @@ class TrainingConfig:
     fp16: bool = True  # 16비트 정밀도 사용으로 메모리 절약 및 학습 속도 향상
     weight_decay: float = 0.01  # 가중치 감쇠로 과적합 방지
     overwrite_output_dir: bool = True  # 기존 출력 디렉토리 덮어쓰기
-    output_dir: str = "/tmp_model"  # 모델 저장 경로
+    output_dir: str = "/model"  # 모델 저장 경로
     logging_dir: str = "/logs"  # 로그 저장 경로
     remove_unused_columns: bool = True  # 사용하지 않는 컬럼 제거로 메모리 효율성
     save_total_limit: int = 1  # 저장할 체크포인트 수 제한
     save_strategy: str = "steps"  # 스텝 단위로 모델 저장
     logging_strategy: str = "steps"  # 스텝 단위로 로그 기록
     eval_strategy: str = "steps"  # 스텝 단위로 평가 실행
-    eval_steps: int = 5  # 평가 실행 간격
-    logging_steps: int = 5 # 로그 기록 간격
-    save_steps: int = 1000  # 모델 저장 간격
+    eval_steps: int = 500  # 평가 실행 간격
+    logging_steps: int = 100  # 로그 기록 간격
+    save_steps: int = 500  # 모델 저장 간격
     prediction_loss_only: bool = True  # 예측 손실만 계산하여 메모리 절약
     dataloader_pin_memory: bool = False  # 메모리 고정 비활성화 (DeepSpeed 호환성)
     dataloader_num_workers: int = 0  # 데이터 로더 워커 수 (DeepSpeed 호환성)
@@ -75,9 +83,9 @@ class PathManager:
     
     def __init__(self):
         self.model_path = Path("/model")  # 기본 모델 경로
-        self.lora_source_model_path = Path("/model/source_model")  # LoRA 소스 모델 경로
+        self.lora_source_model_path = Path("/source_model")  # LoRA 소스 모델 경로
         self.log_path = Path("/logs")  # 로그 저장 경로
-        self.output_path = Path("/tmp_model")  # 임시 모델 저장 경로
+        self.output_path = Path("/model")  # 임시 모델 저장 경로 # tmp_model
         self.config_path = Path("/configurations")  # 설정 파일 경로
         self.fine_tuning_config_path = Path("/fine_tuning/ds_config.json")  # DeepSpeed 설정 경로
     
@@ -142,6 +150,196 @@ class SavePeftAdapterCallback(TrainerCallback):
             model.save_pretrained(adapter_save_path)
             self.logger.info(f"Adapter saved at {adapter_save_path}")
 
+
+class KafkaStopTrainingCallback(TrainerCallback):
+    """
+    Kafka 중지 신호를 감지해 학습을 조기 종료하는 콜백
+
+    Args:
+        stop_signal_manager: 중지 신호 이벤트를 보유하는 매니저
+        logger: 로거 인스턴스
+    """
+
+    def __init__(self, stop_signal_manager, logger):
+        self.stop_signal_manager = stop_signal_manager
+        self.logger = logger
+
+    def on_step_end(self, args, state, control, **kwargs):
+        try:
+            if self.stop_signal_manager and self.stop_signal_manager.is_stop_requested():
+                if state.is_world_process_zero:
+                    self.logger.info("⛔ Kafka 중지 요청을 감지했습니다. 학습을 안전하게 종료합니다.")
+                control.should_training_stop = True
+                # 일부 버전 호환을 위해 epoch 중단 플래그도 설정
+                if hasattr(control, "should_epoch_stop"):
+                    control.should_epoch_stop = True
+        except Exception as e:
+            self.logger.warning(f"Kafka 중지 콜백 처리 중 경고: {e}")
+        return control
+
+    def on_step_begin(self, args, state, control, **kwargs):
+        try:
+            if self.stop_signal_manager and self.stop_signal_manager.is_stop_requested():
+                if state.is_world_process_zero:
+                    self.logger.info("⛔ 중지 신호 감지 - step begin에서 즉시 중단 플래그 설정")
+                control.should_training_stop = True
+                if hasattr(control, "should_epoch_stop"):
+                    control.should_epoch_stop = True
+        except Exception as e:
+            self.logger.warning(f"Kafka 중지 콜백(step_begin) 처리 중 경고: {e}")
+        return control
+
+    def on_substep_end(self, args, state, control, **kwargs):
+        # gradient_accumulation_steps>1 환경에서 더 빠른 중단을 유도
+        try:
+            if self.stop_signal_manager and self.stop_signal_manager.is_stop_requested():
+                if state.is_world_process_zero:
+                    self.logger.info("⛔ 중지 신호 감지 - substep end에서 중단 플래그 설정")
+                control.should_training_stop = True
+                if hasattr(control, "should_epoch_stop"):
+                    control.should_epoch_stop = True
+        except Exception as e:
+            self.logger.warning(f"Kafka 중지 콜백(substep_end) 처리 중 경고: {e}")
+        return control
+
+
+class StopSignalManager:
+    """
+    Kafka Consumer를 백그라운드에서 실행하여 중지 요청을 감지하는 매니저
+    
+    메시지 포맷(JSON 문자열 권장): {"action": "stop", "job_id": "..."}
+    - action == stop 이고, job_id가 일치하면 중지로 간주
+    - JSON 파싱 실패 시 원시 문자열에 'stop' 포함 여부로 보조 판정
+    """
+
+    def __init__(
+        self,
+        enable_listener: bool,
+        bootstrap_servers: Optional[str],
+        topic: Optional[str],
+        group_id: Optional[str],
+        job_id: Optional[str],
+        logger,
+    ) -> None:
+        self.enable_listener = bool(enable_listener)
+        self.bootstrap_servers = bootstrap_servers
+        self.topic = topic
+        # 그룹을 비워두면(=None) 모든 컨슈머가 동일 메시지를 수신합니다.
+        # 분산 학습(멀티 랭크)에서 모든 프로세스가 중지 신호를 받도록 기본 None 권장
+        self.group_id = group_id or None
+        self.job_id = job_id
+        self.logger = logger
+        self._consumer = None
+        self._thread: Optional[threading.Thread] = None
+        self._stop_event = threading.Event()
+        self._stop_requested = threading.Event()
+
+    def _create_consumer(self):
+        if not self.enable_listener:
+            return None
+        if not self.bootstrap_servers or not self.topic:
+            self.logger.warning("Kafka 서버 또는 토픽이 설정되지 않아 중지 리스너를 비활성화합니다.")
+            return None
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            consumer = AIOKafkaConsumer(
+                self.topic,
+                loop=loop,
+                bootstrap_servers=[s.strip() for s in self.bootstrap_servers.split(",") if s.strip()],
+                group_id=self.group_id,
+                enable_auto_commit=True,
+                auto_offset_reset="latest",
+                value_deserializer=lambda m: m.decode("utf-8", errors="ignore"),
+            )
+            return consumer
+        except Exception as e:
+            self.logger.warning(f"aiokafka Consumer 생성 중 경고: {e}")
+            return None
+
+    def start(self) -> None:
+        if not self.enable_listener:
+            return
+        if self._thread and self._thread.is_alive():
+            return
+
+        def _run():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+            async def _consume():
+                # 기본 유효성 검사
+                if not self.bootstrap_servers or not self.topic:
+                    self.logger.warning("Kafka 서버 또는 토픽이 설정되지 않아 중지 리스너를 비활성화합니다.")
+                    return
+                try:
+                    consumer = AIOKafkaConsumer(
+                        self.topic,
+                        bootstrap_servers=[s.strip() for s in self.bootstrap_servers.split(",") if s.strip()],
+                        group_id=self.group_id,
+                        enable_auto_commit=True,
+                        auto_offset_reset="latest",
+                        value_deserializer=lambda m: m.decode("utf-8", errors="ignore"),
+                    )
+                except Exception as e:
+                    self.logger.warning(f"aiokafka Consumer 생성 중 경고: {e}")
+                    return
+
+                self._consumer = consumer
+                self.logger.info(
+                    f"Kafka 중지 리스너 시작 (topic={self.topic}, group_id={self.group_id}, job_id={self.job_id})"
+                )
+                try:
+                    await consumer.start()
+                    while not self._stop_event.is_set():
+                        try:
+                            msg = await consumer.getone()
+                            if self._stop_event.is_set():
+                                break
+                            payload = msg.value
+                            if not payload:
+                                continue
+                            matched = False
+                            try:
+                                data = json.loads(payload)
+                                action = str(data.get("action", "")).lower()
+                                msg_job_id = data.get("job_id")
+                                if action == "stop" and (self.job_id is None or str(self.job_id) == str(msg_job_id)):
+                                    matched = True
+                            except Exception:
+                                text = str(payload).lower()
+                                if "stop" in text:
+                                    if self.job_id is None or (self.job_id and str(self.job_id) in text):
+                                        matched = True
+                            if matched:
+                                self.logger.info("Kafka로부터 중지 요청을 수신했습니다. 중지 플래그를 설정합니다.")
+                                self._stop_requested.set()
+                                break
+                        except Exception as inner:
+                            self.logger.warning(f"Kafka 폴링 중 경고: {inner}")
+                            await asyncio.sleep(1.0)
+                finally:
+                    try:
+                        await consumer.stop()
+                    except Exception:
+                        pass
+                    self.logger.info("Kafka 중지 리스너를 종료했습니다.")
+
+            loop.run_until_complete(_consume())
+
+        self._thread = threading.Thread(target=_run, name="kafka-stop-listener", daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        try:
+            self._stop_event.set()
+            if self._thread and self._thread.is_alive():
+                self._thread.join(timeout=5)
+        except Exception:
+            pass
+
+    def is_stop_requested(self) -> bool:
+        return self._stop_requested.is_set()
 
 class GPUManager:
     """GPU 관련 기능을 관리하는 클래스"""
@@ -225,50 +423,45 @@ class ModelManager:
         """모델 타입에 따른 LoRA 타겟 모듈을 반환 - attention 관련 모듈들에 LoRA 적용"""
         model_name = model.__class__.__name__.lower()
 
-        # 1) 각 모델 아키텍처별 LoRA 적용할 attention 모듈 매핑
         target_modules_map = {
-            "gpt2":       ["c_attn", "c_proj"],                  # GPT-2는 Q/K/V를 합친 c_attn과 출력 투영 c_proj 사용 :contentReference[oaicite:0]{index=0}
-            "gptj":       ["c_attn", "c_proj"],                  # GPT-J도 GPT-2 스타일 Conv1D 사용 :contentReference[oaicite:1]{index=1}
-            "gpt_neo":    ["c_attn", "c_proj"],                  # GPT-Neo 역시 c_attn, c_proj 네이밍 사용 :contentReference[oaicite:2]{index=2}
-            "gpt_neox":   ["query_key_value", "dense"],          # GPT-NeoX는 query_key_value 합산 투영과 dense 출력 투영 :contentReference[oaicite:3]{index=3}
-            "opt":        ["q_proj", "k_proj", "v_proj", "out_proj"],  # OPTAttention의 q_proj/k_proj/v_proj/out_proj :contentReference[oaicite:4]{index=4}
-            "bloom":      ["self_attention.query_key_value", "self_attention.dense"],  # BLOOM은 QKV 합산, dense 투영 
-            "llama":      ["q_proj", "k_proj", "v_proj", "o_proj"],       # LLaMA self-attention 
-            "llama2":     ["q_proj", "k_proj", "v_proj", "o_proj"],       # LLaMA-2도 동일 네이밍 :contentReference[oaicite:7]{index=7}
-            "qwen":       ["q_proj", "k_proj", "v_proj", "o_proj"],       # Qwen은 LLaMA 계열 기반 
-            "deepseek-r1":["q_proj", "k_proj", "v_proj", "o_proj"],       # DeepSeek-R1 self-attention :contentReference[oaicite:9]{index=9}
-            "mpt":        ["q_proj", "k_proj", "v_proj", "o_proj"],       # MPT는 q_proj/k_proj/v_proj/out_proj 사용 :contentReference[oaicite:10]{index=10}
-            "falcon":     ["q_proj", "k_proj", "v_proj", "out_proj"],     # Falcon도 Transformer 기반 q_proj/k_proj/v_proj/out_proj :contentReference[oaicite:11]{index=11}
+            "gpt2":     ["c_attn", "c_proj"],
+            "gptj":     ["c_attn", "c_proj"],
+            "gpt_neo":  ["c_attn", "c_proj"],
+            "gpt_neox": ["query_key_value", "dense"],
+            "opt":      ["q_proj", "k_proj", "v_proj", "out_proj"],
+            "bloom":    ["query_key_value", "dense"],
+            "llama":    ["q_proj", "k_proj", "v_proj", "o_proj"],
+            "llama2":   ["q_proj", "k_proj", "v_proj", "o_proj"],
+            "qwen":     ["q_proj", "k_proj", "v_proj", "o_proj"],
+            "deepseek-r1": ["q_proj", "k_proj", "v_proj", "o_proj"],
+            "mpt":      ["q_proj", "k_proj", "v_proj", "o_proj"],
+            "falcon":   ["q_proj", "k_proj", "v_proj", "out_proj"],
         }
 
-        # 2) 키워드 매핑 우선 적용
         for keyword, modules in target_modules_map.items():
             if keyword in model_name:
                 base_modules = modules.copy()
                 break
         else:
-            # 3) Mistral/Mixtral 특수 처리
-            if any(k in model_name for k in ["mistral", "mixtral"]):
-                base_modules = ["q_proj", "v_proj"]
-            else:
-                # 4) 기본 자동 탐지 (이름에 attn/attention/proj 가 들어가는 모든 모듈)
-                base_modules = [
-                    name for name, _ in model.named_modules()
-                    if any(tag in name.lower() for tag in ["attn", "attention", "proj"])
-                ]
+            # 미지정 아키텍처 일반 규칙: 표준 프로젝션 레이어만 타겟
+            base_modules = ["q_proj", "k_proj", "v_proj", "o_proj", "out_proj", "c_proj", "c_attn", "query_key_value", "dense"]
 
-        # 5) nn.Linear 레이어 스캔을 통해 빠진 attention 계열 레이어명 보완
-        #    — 이름에 proj/attn/query/key/value 등이 포함된 nn.Linear를 추가
-        all_modules = set(base_modules)
+        # leaf Linear 모듈만 필터링 (컨테이너 제외)
+        allowed = set()
         for name, module in model.named_modules():
-            if isinstance(module, nn.Linear):
-                lname = name.lower()
-                if any(tag in lname for tag in ["proj", "attn", "query", "key", "value"]):
-                    all_modules.add(name)
+            last = name.split(".")[-1]
+            if last in base_modules and isinstance(module, nn.Linear):
+                allowed.add(last)
 
-        # 6) 최종 리스트 반환
-        #    — 중복 제거를 위해 set → list 변환, 정렬(Optional)
-        return sorted(all_modules)
+        # 최소한의 보강: 아무것도 못 찾으면 Linear 중 proj 계열만
+        if not allowed:
+            for name, module in model.named_modules():
+                if isinstance(module, nn.Linear):
+                    last = name.split(".")[-1]
+                    if any(tag in last for tag in ["q_proj", "k_proj", "v_proj", "o_proj", "out_proj", "c_proj", "query_key_value", "dense"]):
+                        allowed.add(last)
+
+        return sorted(allowed)
 
 
 class DatasetManager:
@@ -292,7 +485,7 @@ class DatasetManager:
             raise FileNotFoundError(f"❌ 경로가 존재하지 않음: {dataset_path}")
 
         if path.is_dir():
-            print(f"[INFO] 디렉토리 기반 arrow 로드: {dataset_path}")
+            DatasetManager.logger.info(f"[INFO] 디렉토리 기반 arrow 로드: {dataset_path}")
             return load_from_disk(dataset_path)
 
         ext = path.suffix.lower()
@@ -301,14 +494,11 @@ class DatasetManager:
             loader_args["split"] = split
 
         if ext in [".json", ".jsonl"]:
-            print(f"[INFO] JSON 파일 로드: {dataset_path}")
+            DatasetManager.logger.info(f"[INFO] JSON 파일 로드: {dataset_path}")
             return load_dataset("json", **loader_args)
         elif ext == ".csv":
-            print(f"[INFO] CSV 파일 로드: {dataset_path}")
+            DatasetManager.logger.info(f"[INFO] CSV 파일 로드: {dataset_path}")
             return load_dataset("csv", **loader_args)
-        elif ext == ".arrow":
-            print(f"[INFO] Arrow 파일 로드: {dataset_path}")
-            return Dataset.from_file(dataset_path)
         else:
             raise ValueError(f"⚠️ 지원하지 않는 확장자: {ext}")
 
@@ -317,32 +507,22 @@ class DatasetManager:
         """데이터셋을 로드하고 전처리 - 토크나이징 및 train/validation 분할"""
         dataset = DatasetManager.load_dataset_by_path(dataset_path=dataset_path)
         
-        # Arrow 파일 등에서 단일 Dataset이 반환된 경우 처리
-        if isinstance(dataset, Dataset):
-            print(f"[INFO] 단일 Dataset 감지. 전체 데이터를 train으로 사용합니다.")
-            # 전체 데이터를 train으로 사용 (evaluation 없이 학습)
-            train_dataset = dataset
-            eval_dataset = None
-            print(f"📈 Train 샘플 수: {len(train_dataset)}")
-            print(f"📉 Evaluation 데이터셋 없이 학습을 진행합니다.")
+        # train/validation 분할 - validation이 있으면 validation 사용, 없으면 test 사용
+        train_dataset = dataset['train']
+        eval_dataset = dataset.get('validation', dataset.get('test'))
+        
+        # 데이터셋에 있는 split 종류 로그 출력
+        available_splits = list(dataset.keys())
+        DatasetManager.logger.info(f"📊 데이터셋에서 사용 가능한 split 종류: {available_splits}")
+        DatasetManager.logger.info(f"📈 사용할 train split: train (샘플 수: {len(train_dataset)})")
+        
+        if eval_dataset is not None:
+            eval_split_name = 'validation' if 'validation' in dataset else 'test'
+            DatasetManager.logger.info(f"📉 사용할 evaluation split: {eval_split_name} (샘플 수: {len(eval_dataset)})")
         else:
-            # DatasetDict인 경우 기존 로직 사용
-            # train/validation 분할 - validation이 있으면 validation 사용, 없으면 test 사용
-            train_dataset = dataset['train']
-            eval_dataset = dataset.get('validation', dataset.get('test'))
-            
-            # 데이터셋에 있는 split 종류 로그 출력
-            available_splits = list(dataset.keys())
-            print(f"📊 데이터셋에서 사용 가능한 split 종류: {available_splits}")
-            print(f"📈 사용할 train split: train (샘플 수: {len(train_dataset)})")
-            
-            if eval_dataset is not None:
-                eval_split_name = 'validation' if 'validation' in dataset else 'test'
-                print(f"📉 사용할 evaluation split: {eval_split_name} (샘플 수: {len(eval_dataset)})")
-            else:
-                print(f"⚠️ 경고: 데이터셋에 'validation' 또는 'test' 스플릿이 없습니다. "
-                      f"현재 사용 가능한 스플릿: {available_splits}. "
-                      f"평가 데이터셋 없이 학습을 진행합니다.")
+            DatasetManager.logger.warning(f"⚠️ 경고: 데이터셋에 'validation' 또는 'test' 스플릿이 없습니다. "
+                  f"현재 사용 가능한 스플릿: {available_splits}. "
+                  f"평가 데이터셋 없이 학습을 진행합니다.")
 
         # 토크나이징 함수 - 텍스트를 토큰으로 변환하고 labels 설정
         def tokenize_function(examples):
@@ -450,7 +630,7 @@ class TrainingManager:
         return steps_per_epoch
 
     def train_model(self, model, train_dataset: Dataset, eval_dataset: Optional[Dataset], 
-                   training_args: TrainingArguments, tokenizer, data_collator=None):
+                   training_args: TrainingArguments, tokenizer, data_collator=None, stop_signal_manager: Optional[object] = None):
         """모델 학습 실행 - Trainer를 사용한 실제 학습 프로세스"""
         # transformers 4.52.4 호환성을 위한 설정 - DeepSpeed와의 호환성 문제 해결
         training_args.dataloader_pin_memory = False
@@ -462,6 +642,10 @@ class TrainingManager:
             training_args.eval_steps = None
             self.logger.info("⚠️ 평가 데이터셋이 없어 평가를 비활성화합니다.")
         
+        callbacks = [SavePeftAdapterCallback(save_directory=training_args.output_dir)]
+        if stop_signal_manager is not None:
+            callbacks.append(KafkaStopTrainingCallback(stop_signal_manager=stop_signal_manager, logger=self.logger))
+
         trainer = Trainer(
             model=model,
             args=training_args,
@@ -470,7 +654,7 @@ class TrainingManager:
             tokenizer=tokenizer,
             optimizers=(None, None),  # DeepSpeed가 optimizer를 관리하므로 None
             data_collator=data_collator,
-            callbacks=[SavePeftAdapterCallback(save_directory=training_args.output_dir)]
+            callbacks=callbacks
         )
         
         self.logger.info("TRAINING START")
@@ -490,10 +674,65 @@ class FineTuningEngine:
         self.training_manager = TrainingManager(self.logger)
         self.pod_index = int(os.getenv("POD_INDEX", 0))  # 분산 학습에서 현재 pod 인덱스
 
+    def _is_lora_checkpoint_dir(self, directory: Path) -> bool:
+        """
+        LoRA 체크포인트 디렉토리 여부를 판단합니다.
+
+        - adapter_config.json이 존재하고,
+        - adapter_model.bin 또는 adapter_model*.safetensors 가 존재하면 LoRA 체크포인트로 간주합니다.
+
+        Args:
+            directory (Path): 확인할 디렉토리 경로
+
+        Returns:
+            bool: LoRA 체크포인트 디렉토리이면 True, 아니면 False
+        """
+        try:
+            if directory is None or not directory.exists() or not directory.is_dir():
+                return False
+
+            config_path = directory / "adapter_config.json"
+            adapter_bin = directory / "adapter_model.bin"
+            has_safetensors = any(directory.glob("adapter_model*.safetensors"))
+
+            return config_path.exists() and (adapter_bin.exists() or has_safetensors)
+        except Exception as e:
+            self.logger.warning(f"LoRA 체크포인트 판별 중 오류 발생 (directory: {directory}): {e}")
+            return False
+
+    def _get_base_model_path_from_adapter(self, adapter_dir: Path) -> Optional[Path]:
+        """
+        어댑터 디렉토리의 adapter_config.json에서 base_model_name_or_path를 읽어
+        로컬 경로가 유효하면 해당 경로를 반환합니다.
+
+        Args:
+            adapter_dir (Path): LoRA 어댑터가 위치한 디렉토리 경로
+
+        Returns:
+            Optional[Path]: 로컬에서 확인 가능한 base 모델 경로, 없으면 None
+        """
+        try:
+            config_path = adapter_dir / "adapter_config.json"
+            if not config_path.exists():
+                return None
+
+            with open(config_path, "r", encoding="utf-8") as fp:
+                cfg = json.load(fp)
+
+            base_model_str = cfg.get("base_model_name_or_path")
+            if not base_model_str:
+                return None
+
+            base_path = Path(base_model_str)
+            return base_path if base_path.exists() else None
+        except Exception as e:
+            self.logger.warning(f"adapter_config.json 파싱 중 오류 발생 (adapter_dir: {adapter_dir}): {e}")
+            return None
+
     def load_tokenizer(self, model_path: Path):
         """토크나이저 로드 - 패딩 토큰을 EOS 토큰으로 설정"""
         try:
-            tokenizer = AutoTokenizer.from_pretrained(str(model_path))
+            tokenizer = AutoTokenizer.from_pretrained(str(model_path), trust_remote_code=True)
             tokenizer.pad_token = tokenizer.eos_token  # 패딩 토큰을 EOS 토큰으로 설정
             self.logger.info("TOKENIZER LOAD SUCCESS")
             return tokenizer
@@ -508,23 +747,44 @@ class FineTuningEngine:
         try:
             is_source_model_lora = False
             remove_unused_columns = True
-            
-            # LoRA 소스 모델이 있으면 우선 사용
-            if self.path_manager.lora_source_model_path.exists():
-                model_path = self.path_manager.lora_source_model_path
-                is_source_model_lora = True
-            else:
-                model_path = self.path_manager.model_path
+            # LoRA 체크포인트 디렉토리 판별 및 base 모델 경로로 치환
+            # - 입력된 model_path가 어댑터만 포함하는 LoRA 체크포인트라면
+            #   base 모델이 위치한 경로(/source_model)를 사용하도록 전환합니다.
+            if self._is_lora_checkpoint_dir(model_path):
+                # 1순위: 사전 마운트된 /source_model 사용
+                if self.path_manager.lora_source_model_path.exists():
+                    model_path = self.path_manager.lora_source_model_path
+                    is_source_model_lora = True
+                else:
+                    # 2순위: adapter_config.json의 base_model_name_or_path가 로컬 경로이면 사용
+                    resolved_base = self._get_base_model_path_from_adapter(model_path)
+                    if resolved_base is not None:
+                        model_path = resolved_base
+                        is_source_model_lora = True
+                    else:
+                        # base 모델 경로를 찾지 못하면 안전하게 종료
+                        raise FileNotFoundError(
+                            "LoRA 체크포인트가 감지되었으나 base 모델 경로(/source_model 또는 adapter_config의 로컬 경로)를 찾지 못했습니다."
+                        )
+
+            # 기본 경로 결정 (위 LoRA 체크 결과를 우선 적용)
+            # if not is_source_model_lora:
+            #     if self.path_manager.lora_source_model_path.exists():
+            #         model_path = self.path_manager.lora_source_model_path
+            #         is_source_model_lora = True
+            #     else:
+            #         model_path = self.path_manager.model_path
 
             # 모델 로드 - 8비트 양자화 옵션 지원
             if args.load_in_8bit:
                 quantization_config = BitsAndBytesConfig(load_in_8bit=True)
                 model = AutoModelForCausalLM.from_pretrained(
                     str(model_path),
-                    quantization_config=quantization_config
+                    quantization_config=quantization_config,
+                    trust_remote_code=True
                 )
             else:
-                model = AutoModelForCausalLM.from_pretrained(str(model_path))
+                model = AutoModelForCausalLM.from_pretrained(str(model_path), trust_remote_code=True)
 
             # LoRA 설정 - 기존 LoRA 모델 병합 또는 새 LoRA 적용
             if args.used_lora or is_source_model_lora:
@@ -532,23 +792,28 @@ class FineTuningEngine:
                     # 기존 LoRA 모델을 로드하고 병합
                     model = PeftModel.from_pretrained(model, str(self.path_manager.model_path))
                     model = model.merge_and_unload()  # LoRA 가중치를 원본 모델에 병합
-                    if self.pod_index == 0:
-                        # 소스 모델을 출력 디렉토리로 복사
-                        FileManager.copy_dir_contents(
-                            self.path_manager.lora_source_model_path, 
-                            self.path_manager.output_path / "source_model"
-                        )
+                    # if self.pod_index == 0:
+                    #     # 소스 모델을 출력 디렉토리로 복사
+                    #     FileManager.copy_dir_contents(
+                    #         self.path_manager.lora_source_model_path, 
+                    #         self.path_manager.output_path / "source_model"
+                    #     )
                     remove_unused_columns = False  # 병합된 모델은 컬럼 제거 불필요
-                else:
-                    if self.pod_index == 0:
-                        # 원본 모델을 출력 디렉토리로 복사
-                        FileManager.copy_dir_contents(
-                            self.path_manager.model_path, 
-                            self.path_manager.output_path / "source_model"
-                        )
+                # else:
+                    # if self.pod_index == 0:
+                    #     # 원본 모델을 출력 디렉토리로 복사
+                    #     FileManager.copy_dir_contents(
+                    #         self.path_manager.model_path, 
+                    #         self.path_manager.output_path / "source_model"
+                    #     )
+                
 
                 # 모델 타입에 따른 LoRA 타겟 모듈 설정
-                target_modules = ModelManager.get_target_modules(model)
+                model_type = str(getattr(model.config, "model_type", "")).lower()
+                if model_type == "gpt_oss" or "gptoss" in model.__class__.__name__.lower():
+                    target_modules = ["q_proj", "k_proj", "v_proj", "o_proj"]
+                else:
+                    target_modules = ModelManager.get_target_modules(model)
                 lora_config = LoraConfig(
                     r=8,  # LoRA 랭크 (적응 가능한 파라미터 수)
                     lora_alpha=16,  # LoRA 스케일링 팩터
@@ -579,6 +844,14 @@ class FineTuningEngine:
 
             # 모델 로드 (LoRA 설정 포함)
             model, remove_unused_columns = self.load_model(model_path, args)
+            
+            if args.config_path:
+                # 사용자 정의 설정 파일 로드
+                config_path = self.path_manager.config_path / args.config_path
+                with open(config_path, "r", encoding="utf-8") as file:
+                    config = json.load(file)
+                args.cutoff_length = config.get("cutoff_length", args.cutoff_length)
+
 
             # 학습 인자 설정 (사용자 설정 또는 기본값)
             training_args = self.training_manager.create_training_arguments(args, remove_unused_columns)
@@ -592,7 +865,9 @@ class FineTuningEngine:
 
             # steps per epoch 계산 (분산 학습 고려)
             steps_per_epoch = self.training_manager.calculate_steps_per_epoch(training_args, train_dataset)
-            update_steps_per_epoch(steps_per_epoch=steps_per_epoch)
+            # 오직 primary 프로세스(랭크0/로컬랭크0) && 첫 번째 파드에서만 DB 반영
+            if (int(os.getenv("RANK", "0")) == 0) and (int(os.getenv("LOCAL_RANK", "0")) == 0) and (self.pod_index == 0):
+                update_steps_per_epoch(steps_per_epoch=steps_per_epoch)
 
             self.logger.info("="*20)
             self.logger.info("TRAIN SETTING SUCCESS")
@@ -601,17 +876,50 @@ class FineTuningEngine:
             # 데이터 콜레이터 설정 (언어 모델링용)
             data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
 
-            # 모델 학습 실행
+            # Kafka 중지 리스너 시작 (환경 변수 기반)
+            stop_manager = None
+            try:
+                env_enable = os.getenv("KAFKA_ENABLE_STOP_LISTENER")
+                env_bootstrap = os.getenv("KAFKA_BOOTSTRAP_SERVERS")
+                env_topic = os.getenv("KAFKA_TOPIC")
+                env_group = os.getenv("KAFKA_GROUP_ID")
+                env_job_id = os.getenv("STOP_JOB_ID") or os.getenv("JOB_ID")
+
+                def _to_bool(s):
+                    if s is None:
+                        return False
+                    v = str(s).strip().lower()
+                    return v in ("1", "true", "yes", "y", "on")
+
+                enable_listener = _to_bool(env_enable)
+                if enable_listener:
+                    stop_manager = StopSignalManager(
+                        enable_listener=True,
+                        bootstrap_servers=env_bootstrap,
+                        topic=env_topic,
+                        group_id=env_group,
+                        job_id=env_job_id,
+                        logger=self.logger,
+                    )
+            except Exception as e:
+                self.logger.warning(f"중지 리스너 초기화 경고: {e}")
+
+            if stop_manager is not None:
+                stop_manager.start()
+
+            # 모델 학습 실행 (중지 콜백 등록)
             trainer = self.training_manager.train_model(
-                model, train_dataset, eval_dataset, training_args, tokenizer, data_collator
+                model, train_dataset, eval_dataset, training_args, tokenizer, data_collator, stop_signal_manager=stop_manager
             )
 
-            # 결과 저장 (첫 번째 pod에서만 실행)
-            if self.pod_index == 0:
+            # 결과 저장 (첫 번째 pod의 primary 프로세스만 실행)
+            if self.pod_index == 0 and (int(os.getenv("RANK", "0")) == 0) and (int(os.getenv("LOCAL_RANK", "0")) == 0):
                 trainer.save_model(training_args.output_dir)  # 최종 모델 저장
+                # tokenizer.json 손상 방지를 위해 토크나이저를 명시적으로 저장
+                tokenizer.save_pretrained(training_args.output_dir)
                 FileManager.delete_checkpoint_dir(self.path_manager.output_path)  # 체크포인트 정리
-                FileManager.clear_dir_contents(self.path_manager.model_path)  # 기존 모델 정리
-                FileManager.copy_dir_contents(self.path_manager.output_path, self.path_manager.model_path)  # 새 모델 복사
+                # FileManager.clear_dir_contents(self.path_manager.model_path)  # 기존 모델 정리
+                # FileManager.copy_dir_contents(self.path_manager.output_path, self.path_manager.model_path)  # 새 모델 복사
 
             self.logger.info("="*20)
             self.logger.info("FINE TUNING SUCCESS AND MODEL SAVE SUCCESS")
@@ -620,8 +928,17 @@ class FineTuningEngine:
         except Exception as e:
             traceback.print_exc()
             self.logger.error(f"파인튜닝 중 오류 발생: {e}")
-            update_finetuning_error_status()
+            # 오직 primary 프로세스(랭크0/로컬랭크0) && 첫 번째 파드에서만 오류 상태 업데이트
+            if (int(os.getenv("RANK", "0")) == 0) and (int(os.getenv("LOCAL_RANK", "0")) == 0) and (self.pod_index == 0):
+                update_finetuning_error_status()
             raise e
+        finally:
+            # Kafka 리스너 종료
+            try:
+                if 'stop_manager' in locals() and stop_manager is not None:
+                    stop_manager.stop()
+            except Exception:
+                pass
 
 
 def main():
@@ -655,15 +972,20 @@ def main():
                        help="분산 학습 사용 여부 (0: 비활성화, 1: 활성화)")
     parser.add_argument("--load_in_8bit", type=int, default=0, 
                        help="8비트 양자화로 모델 로드 여부 (메모리 절약용, 0: 비활성화, 1: 활성화)")
+    # Kafka 관련 CLI 인자는 제거하고 환경 변수를 사용합니다.
 
+    # args = parser.parse_args()
+    # pod_index = int(os.getenv("POD_INDEX", 0))
+    
     args = parser.parse_args()
     pod_index = int(os.getenv("POD_INDEX", 0))
+    is_primary_proc = (int(os.getenv("RANK", "0")) == 0) and (int(os.getenv("LOCAL_RANK", str(args.local_rank))) == 0)
     
-    # 첫 번째 pod에서만 초기화 작업 수행
-    if pod_index == 0:
+    # 오직 primary 프로세스(랭크0/로컬랭크0) && 첫 번째 파드에서만 초기화 작업 수행
+    if pod_index == 0 and is_primary_proc:
         update_finetuning_running_status()  # 파인튜닝 상태 업데이트
         path_manager = PathManager()
-        FileManager.clear_dir_contents(path_manager.output_path)  # 출력 디렉토리 정리
+        # FileManager.clear_dir_contents(path_manager.output_path)  # 출력 디렉토리 정리
         FileManager.clear_dir_contents(path_manager.log_path)  # 로그 디렉토리 정리
 
     # FineTuningArgs 객체 생성
@@ -691,7 +1013,7 @@ def main():
     try:
         engine.fine_tuning(fine_tuning_args)
     except Exception:
-        if pod_index == 0:
+        if pod_index == 0 and is_primary_proc:
             update_finetuning_error_status()  # 오류 상태 업데이트
 
 
@@ -701,116 +1023,70 @@ if __name__ == "__main__":
 
 """
 ================================================================================
-📋 전체 파인튜닝 워크플로우 흐름 설명
+📋 전체 파인튜닝 워크플로우 요약 (업데이트)
 ================================================================================
 
-🎯 목적: Hugging Face 기반 언어 모델의 효율적인 파인튜닝을 위한 통합 엔진
+🎯 목적: Hugging Face 기반 언어 모델의 효율적인 파인튜닝 엔진
 
-🔄 전체 프로세스 흐름:
+🔄 전체 프로세스:
 
-1️⃣ 초기화 단계 (main 함수)
-   ├── 명령행 인자 파싱 (분산 학습 설정, 데이터셋 경로, LoRA 옵션 등)
-   ├── pod_index 확인 (분산 학습에서 현재 pod 식별)
-   └── 첫 번째 pod에서만 초기화 작업 수행
-       ├── 파인튜닝 상태 업데이트 (DB)
-       ├── 출력 디렉토리 정리 (/tmp_model)
+1️⃣ 초기화 (main)
+   ├── 명령행 인자 파싱 (분산, 데이터셋, LoRA, 8bit, DeepSpeed)
+   ├── POD_INDEX 확인 (분산 환경 식별)
+   └── 첫 번째 pod 전용 초기화
+       ├── 파인튜닝 실행 상태 DB 업데이트
        └── 로그 디렉토리 정리 (/logs)
 
-2️⃣ 경로 및 환경 설정 (PathManager)
-   ├── 모델 경로 결정 (/model 또는 /model/source_model)
-   ├── LoRA 소스 모델 우선 사용 (존재 시)
-   └── 필요한 디렉토리 생성
+2️⃣ 경로/환경 (PathManager)
+   ├── 모델 경로: /source_model 존재 시 우선, 없으면 /model
+   └── 출력/로그 디렉토리 생성 (/model, /logs)
 
-3️⃣ 토크나이저 로드 (load_tokenizer)
-   ├── AutoTokenizer로 모델별 토크나이저 자동 로드
-   ├── 패딩 토큰을 EOS 토큰으로 설정 (언어 모델링용)
-   └── 오류 발생 시 DB 상태 업데이트
+3️⃣ 토크나이저 (load_tokenizer)
+   ├── AutoTokenizer.from_pretrained 로드
+   └── pad_token 을 eos_token 으로 설정 (언어 모델링용)
 
-4️⃣ 모델 로드 및 LoRA 설정 (load_model)
-   ├── 모델 로드 옵션
-   │   ├── 8비트 양자화 (메모리 절약)
-   │   └── 일반 로드
-   ├── LoRA 처리 로직
-   │   ├── 기존 LoRA 모델인 경우
-   │   │   ├── PeftModel 로드
-   │   │   ├── merge_and_unload()로 가중치 병합
-   │   │   └── 소스 모델 복사
-   │   └── 새 LoRA 적용인 경우
-   │       ├── 모델 타입별 타겟 모듈 자동 탐지
-   │       ├── LoraConfig 설정 (r=8, alpha=16, dropout=0.05)
-   │       └── get_peft_model()로 LoRA 적용
-   └── remove_unused_columns 플래그 결정
+4️⃣ 모델 로드/LoRA (load_model)
+   ├── LoRA 체크포인트 디렉토리 입력 시 base 모델 경로 자동 치환
+   │   └── /source_model 또는 adapter_config.json 의 로컬 경로 사용
+   ├── 8bit 양자화 옵션 지원 (BitsAndBytes)
+   ├── 기존 LoRA 병합 지원
+   │   └── PeftModel.from_pretrained(..., /model) → merge_and_unload()
+   └── 새 LoRA 적용 가능 (r=8, alpha=16, dropout=0.05, target_modules 자동 탐지)
 
-5️⃣ 학습 인자 설정 (create_training_arguments)
-   ├── 사용자 설정 파일 사용 (config_path 제공 시)
-   │   ├── JSON 설정 파일 로드
-   │   ├── cutoff_length 제거 (토크나이징에서 처리됨)
-   │   └── 중복 파라미터 필터링
-   └── 기본 DeepSpeed 설정 사용
-       ├── learning_rate, epochs, warmup_steps 등
-       └── DeepSpeed 설정 파일 경로 지정
+5️⃣ 학습 인자 (create_training_arguments)
+   ├── 사용자 JSON 제공 시 로드, 중복/불필요 키 제거
+   └── 미제공 시 기본 DeepSpeed 설정 사용
 
-6️⃣ 데이터셋 준비 (prepare_datasets)
-   ├── 데이터셋 로드
-   │   ├── 디렉토리 기반 Arrow 형식
-   │   ├── JSON/JSONL 파일
-   │   └── CSV 파일
-   ├── train/validation 분할
-   │   ├── validation이 있으면 validation 사용, 없으면 test 사용
-   │   └── validation이 없으면 오류 발생
-   ├── 토크나이징
-   │   ├── 패딩, 트렁케이션, attention_mask 생성
-   │   └── labels를 input_ids와 동일하게 설정 (언어 모델링)
-   └── PyTorch 텐서 형태로 포맷 설정
+6️⃣ 데이터셋 (prepare_datasets)
+   ├── 디렉토리(arrow)/JSON(JSONL)/CSV 자동 로드
+   ├── train 사용, validation 없으면 test 사용
+   └── 평가 스플릿 없으면 경고 로그 후 평가 비활성화로 학습 진행
 
-7️⃣ 학습 스케줄링 (calculate_steps_per_epoch)
-   ├── 분산 학습 고려
-   │   ├── world_size (총 디바이스 수)
-   │   ├── per_device_batch_size
-   │   └── gradient_accumulation_steps
-   ├── 실제 배치 크기 계산
-   │   └── effective_batch_size = batch_size × world_size × accumulation
-   └── epoch당 스텝 수 계산
-       └── steps_per_epoch = total_samples ÷ effective_batch_size
+7️⃣ 스텝 계산 (calculate_steps_per_epoch)
+   ├── world_size, per_device_batch_size, gradient_accumulation 고려
+   └── steps_per_epoch 계산 후 DB 업데이트
 
-8️⃣ 모델 학습 실행 (train_model)
-   ├── Trainer 설정
-   │   ├── DeepSpeed 호환성 설정 (pin_memory=False, num_workers=0)
-   │   ├── optimizers=None (DeepSpeed가 관리)
-   │   └── SavePeftAdapterCallback 추가 (LoRA 어댑터 저장)
-   ├── 학습 시작
-   │   ├── trainer.can_return_loss = True
-   │   └── trainer.train()
-   └── 학습 완료
+8️⃣ 학습 실행 (train_model)
+   ├── DeepSpeed 호환 설정 (pin_memory=False, num_workers=0)
+   ├── DataCollatorForLanguageModeling(mlm=False)
+   ├── SavePeftAdapterCallback 등록
+   ├── KafkaStopTrainingCallback (환경 변수로 리스너 활성 시) 등록
+   └── trainer.train()
 
-9️⃣ 결과 저장 및 정리 (첫 번째 pod에서만)
-   ├── 최종 모델 저장 (trainer.save_model)
-   ├── 체크포인트 정리 (checkpoint-* 디렉토리 삭제)
-   ├── 기존 모델 정리 (/model 디렉토리 비우기)
-   └── 새 모델 복사 (/tmp_model → /model)
+9️⃣ 저장/정리 (첫 번째 pod)
+   └── 최종 모델 저장 및 checkpoint-* 디렉토리 정리
 
-🔧 핵심 기술적 특징:
+🔧 특징
+- 분산 학습(DeepSpeed), LoRA 자동 타겟 탐지/병합, 8bit 옵션
+- 환경 변수 기반 Kafka 중지 리스너 지원: KAFKA_ENABLE_STOP_LISTENER, KAFKA_BOOTSTRAP_SERVERS,
+  KAFKA_TOPIC, KAFKA_GROUP_ID, STOP_JOB_ID/JOB_ID
+- 견고한 로깅과 단계별 예외 처리 및 DB 상태 업데이트
 
-• 분산 학습 지원: DeepSpeed를 통한 다중 GPU/노드 학습
-• LoRA 효율성: 적은 파라미터로 대형 모델 파인튜닝
-• 메모리 최적화: 8비트 양자화, 16비트 정밀도, 그래디언트 누적
-• 자동화: 모델 타입별 LoRA 타겟 모듈 자동 탐지
-• 오류 처리: 각 단계별 예외 처리 및 DB 상태 업데이트
-• 재현 가능성: 고정된 seed와 체계적인 로깅
-
-📊 성능 최적화 포인트:
-
-• 배치 크기: VRAM 용량에 따른 자동 최적화
-• 학습률: 워밍업과 스케줄링 지원
-• 체크포인트: 저장 제한으로 디스크 공간 절약
-• 데이터 로딩: 배치 처리와 메모리 효율적 토크나이징
-
-🚀 사용 시나리오:
-
-1. 단일 GPU 파인튜닝: used_dist=0, used_lora=1
-2. 다중 GPU 파인튜닝: used_dist=1, num_gpus=N
-3. 기존 LoRA 모델 연속 학습: lora_source_model_path 사용
-4. 메모리 제약 환경: load_in_8bit=1, gradient_accumulation_steps=N
+🧪 사용 시나리오
+- 단일 GPU: used_dist=0, used_lora=1
+- 다중 GPU: used_dist=1, num_gpus=N
+- 기존 LoRA 연속 학습: base 모델 로드 후 어댑터 병합
+- 메모리 제약: load_in_8bit=1, gradient_accumulation_steps=N
 
 ================================================================================
 """
