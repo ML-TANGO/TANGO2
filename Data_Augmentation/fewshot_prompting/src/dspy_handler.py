@@ -11,6 +11,15 @@ class GenerateResponse(dspy.Signature):
     query = dspy.InputField(desc="The user's query.")
     response = dspy.OutputField(desc="The generated response.")
 
+class ConversationalSignature(dspy.Signature):
+    """Given a chat history and a query, generate a response."""
+    __doc__ = "Given a chat history and a query, generate a response."
+
+    chat_history = dspy.InputField(desc="The past conversation history, as a string.")
+    query = dspy.InputField(desc="The user's current query.")
+    response = dspy.OutputField(desc="The model's response.")
+
+
 # Global BERTScorer instance to avoid reloading the model
 _bert_scorer = None
 
@@ -73,33 +82,32 @@ def jaccard_metric(example, pred, trace=None):
 
     return len(intersection) / len(union) if union else 0.0
 
-def convert_examples(example_data):
+def convert_examples(example_data, is_conversational=False):
     """
     Converts a list of dictionaries (from pandas) into a list of dspy.Example objects.
     """
     dspy_examples = []
     for eg in example_data:
-        # Assuming the keys from data_loader are 'query' and 'response'
-        dspy_examples.append(dspy.Example(query=eg['query'], response=eg['response']).with_inputs("query"))
+        example = dspy.Example(query=eg['query'], response=eg['response'])
+        if is_conversational:
+            dspy_examples.append(example.with_inputs("query", "chat_history"))
+        else:
+            dspy_examples.append(example.with_inputs("query"))
     return dspy_examples
 
-def compile_program(model_name, optimizer_name, examples, metric_name="bert_score", backend="ollama", backend_url="http://localhost:11434", max_bootstrapped_demos=4, max_labeled_demos=16):
+def compile_program(model_name, optimizer_name, examples, metric_name="bert_score", backend="ollama", backend_url="http://localhost:11434", max_bootstrapped_demos=4, max_labeled_demos=16, is_conversational=False):
     """
     Configures the LLM and compiles a DSPy program using the specified optimizer.
     """
     # 1. Configure the LLM for DSPy
     if backend == 'vllm':
-        # vLLM provides OpenAI-compatible API
-        # Using 'openai/' prefix tells LiteLLM to use OpenAI client structure,
-        # but we point it to the vLLM server via api_base.
         print(f"--- DSPy Backend: vLLM ({backend_url}) ---")
         llm_client = dspy.LM(
-            model=f"openai/{model_name}", 
+            model=f"openai/{model_name}",
             api_base=backend_url,
-            api_key="EMPTY" # vLLM often requires a non-empty key even if unused
+            api_key="EMPTY"
         )
     else:
-        # Default to Ollama
         print(f"--- DSPy Backend: Ollama ({backend_url}) ---")
         llm_client = dspy.LM(
             model=f"ollama_chat/{model_name}",
@@ -109,16 +117,28 @@ def compile_program(model_name, optimizer_name, examples, metric_name="bert_scor
     dspy.settings.configure(lm=llm_client)
 
     # 2. Convert pandas examples to dspy.Example
-    trainset = convert_examples(examples)
+    trainset = convert_examples(examples, is_conversational=is_conversational)
 
-    # 3. Define the DSPy program
-    class CoT(dspy.Module):
-        def __init__(self):
-            super().__init__()
-            self.prog = dspy.ChainOfThought(GenerateResponse)
+    # 3. Define the DSPy program based on mode
+    if is_conversational:
+        class ConversationalCoT(dspy.Module):
+            def __init__(self):
+                super().__init__()
+                self.prog = dspy.ChainOfThought(ConversationalSignature)
 
-        def forward(self, query):
-            return self.prog(query=query)
+            def forward(self, query, chat_history=""):
+                return self.prog(query=query, chat_history=chat_history)
+        program_to_compile = ConversationalCoT()
+    else:
+        class CoT(dspy.Module):
+            def __init__(self):
+                super().__init__()
+                self.prog = dspy.ChainOfThought(GenerateResponse)
+
+            def forward(self, query):
+                return self.prog(query=query)
+        program_to_compile = CoT()
+
 
     # 4. Select Metric
     if metric_name == "jaccard":
@@ -141,7 +161,7 @@ def compile_program(model_name, optimizer_name, examples, metric_name="bert_scor
 
     # 6. Compile the program
     compiled_program = optimizer.compile(
-        student=CoT(),
+        student=program_to_compile,
         trainset=trainset
     )
 
@@ -152,7 +172,7 @@ def print_program_details(program):
     Prints the few-shot examples (demos) and instructions of a compiled DSPy program.
     """
     print("\n" + "="*50)
-    print("🔍 [DSPy Optimized Program Details]")
+    print("[DSPy Optimized Program Details]")
     print("="*50)
 
     try:
@@ -163,7 +183,7 @@ def print_program_details(program):
             return
 
         for name, predictor in predictors:
-            print(f"\n👉 Predictor: {name} ({type(predictor).__name__})")
+            print(f"\nPredictor: {name} ({type(predictor).__name__})")
 
             # 1. Print Instructions
             instructions = None
@@ -174,7 +194,7 @@ def print_program_details(program):
                 instructions = getattr(predictor.signature, 'instructions', None)
 
             if instructions:
-                print("\n📝 [Optimized Instructions]:")
+                print("\n[Optimized Instructions]:")
                 print(f"  {instructions}")
             else:
                 print("  (Instructions not found)")
@@ -183,7 +203,7 @@ def print_program_details(program):
             demos = getattr(predictor, 'demos', [])
 
             if demos:
-                print(f"\n📚 [Selected Few-Shot Examples] (Count: {len(demos)}):")
+                print(f"\n[Selected Few-Shot Examples] (Count: {len(demos)}):")
                 for i, demo in enumerate(demos):
                     print(f"\n  --- Example #{i+1} ---")
                     try:

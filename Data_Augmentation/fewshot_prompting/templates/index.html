@@ -130,7 +130,7 @@
         function sendQuery() {
             const query = queryInput.value;
             if (!query.trim()) return;
-            if (mode === 'conversational') {
+            if (mode === 'conversational' || mode === 'dspy_conversational') {
                 sendQueryConversational(query);
             } else {
                 sendQuerySingleShot(query);

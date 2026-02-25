@@ -27,7 +27,7 @@ def main():
         do_shuffle = config.getboolean('app', 'SHUFFLE_EXAMPLES', fallback=False)
         backend = config.get('app', 'BACKEND', fallback='ollama').lower()
         model_name = config.get('app', 'MODEL_NAME', fallback='gemma3')
-        
+
         web_host = config.get('web', 'HOST', fallback='127.0.0.1')
         web_port = config.getint('web', 'PORT', fallback=5000)
 
@@ -49,7 +49,7 @@ def main():
             if not pull_model_if_needed(model_name):
                 print(f"'{model_name}' 모델을 준비할 수 없어 프로그램을 종료합니다.")
                 return
-            
+
             llm = OllamaLLM(model=model_name)
             backend_url = config.get('ollama', 'OLLAMA_URL', fallback='http://localhost:11434')
 
@@ -64,7 +64,7 @@ def main():
 
             # 클라이언트가 사용할 모델 식별자를 결정합니다. (로컬 경로 우선)
             client_model_name = vllm_model_path if vllm_model_path and vllm_model_path.strip() else model_name
-            
+
             # vLLM (OpenAI-compatible) LLM setup
             llm = ChatOpenAI(
                 model=client_model_name,
@@ -83,7 +83,7 @@ def main():
             if ui_mode == 'web':
                 print("\n[Web UI 모드] 웹 세션에서 사용할 Few-shot 예제를 미리 설정합니다.")
             print("="*50)
-            print("🤖 Few-Shot 예시로 사용할 CSV 파일 경로를 입력해주세요.")
+            print("Few-Shot 예시로 사용할 CSV 파일 경로를 입력해주세요.")
             print("   - 경로 입력을 마치려면 그냥 Enter를 누르세요.")
             print("="*50)
             input_csv_paths, output_csv_paths = [], []
@@ -101,49 +101,80 @@ def main():
                 examples = load_examples(input_csv_paths, output_csv_paths, shuffle=do_shuffle)
 
                 if examples:
-                    print(f"✅ 총 {len(examples)}개의 Few-Shot 예시를 성공적으로 불러왔습니다.")
+                    print(f"총 {len(examples)}개의 Few-Shot 예시를 성공적으로 불러왔습니다.")
                 else:
                     print("⚠️  불러온 예시가 없습니다.")
             else:
-                print("💡 입력된 Few-Shot 예시 파일이 없습니다.")
+                print("입력된 Few-Shot 예시 파일이 없습니다.")
 
         # 4. LLM 및 실행 컨텍스트 설정
         context = {}
 
         if interaction_mode == 'conversational': # conversational 모드 프롬프트 설정
-            conv_templates = load_prompt_config("prompts/conversational.yml")
-            system_message = conv_templates['system_message_prefix'] + "\n\n"
-
-            example_template_str = conv_templates['example_template']
-            for ex in examples:
-                # Use the template from config or fallback to simple format
-                if example_template_str:
-                     system_message += example_template_str.format(query=ex['query'], response=ex['response']) + "\n\n"
-                else:
-                     system_message += f"Query: {ex['query']}\nResponse: {ex['response']}\n\n"
-
-            memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
-            prompt = ChatPromptTemplate.from_messages([
-                ("system", system_message),
-                MessagesPlaceholder(variable_name="chat_history"),
-                ("human", "{user_query}"),
-            ])
-            chain = LLMChain(llm=llm, prompt=prompt, memory=memory, verbose=True)
-            context = {"mode": "conversational", "chain": chain}
-
-        else: # single_shot 모드
-            if use_dspy and examples: # DSPy 사용 로직
-                print("\n🚀 DSPy 옵티마이저를 사용하여 프롬프트를 컴파일합니다...")
+            if use_dspy and examples:
+                print("\nDSPy 옵티마이저를 사용하여 대화형 프롬프트를 컴파일합니다...")
                 print("   (MIPROv2와 같은 일부 옵티마이저는 시간이 오래 걸릴 수 있습니다.)")
                 try:
                     from src.dspy_handler import compile_program, print_program_details
                     compiled_program = compile_program(
-                        model_name, dspy_optimizer, examples, 
+                        client_model_name, dspy_optimizer, examples,
+                        metric_name=dspy_metric,
+                        backend=backend,
+                        backend_url=backend_url,
+                        is_conversational=True
+                    )
+                    print("DSPy 대화형 프로그램 컴파일 완료!")
+                    print_program_details(compiled_program)
+
+                    memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+                    context = {
+                        "mode": "dspy_conversational",
+                        "dspy_program": compiled_program,
+                        "memory": memory,
+                    }
+                except ImportError as e:
+                    print(f"\n[에러] DSPy 관련 모듈을 임포트하는 데 실패했습니다: {e}")
+                    print("   'pip install dspy-ai'를 실행하여 라이브러리를 설치해주세요.")
+                    return
+                except Exception as e:
+                    print(f"\n[에러] DSPy 대화형 프로그램 컴파일 중 오류가 발생했습니다: {e}")
+                    return
+            else:
+                if use_dspy and not examples:
+                    print("\nDSPy를 사용하도록 설정되었지만, Few-shot 예제가 제공되지 않아 기존 대화형 방식으로 실행합니다.")
+
+                conv_templates = load_prompt_config("prompts/conversational.yml")
+                system_message = conv_templates['system_message_prefix'] + "\n\n"
+
+                example_template_str = conv_templates['example_template']
+                for ex in examples:
+                    if example_template_str:
+                         system_message += example_template_str.format(query=ex['query'], response=ex['response']) + "\n\n"
+                    else:
+                         system_message += f"Query: {ex['query']}\nResponse: {ex['response']}\n\n"
+
+                memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+                prompt = ChatPromptTemplate.from_messages([
+                    ("system", system_message),
+                    MessagesPlaceholder(variable_name="chat_history"),
+                    ("human", "{user_query}"),
+                ])
+                chain = LLMChain(llm=llm, prompt=prompt, memory=memory, verbose=True)
+                context = {"mode": "conversational", "chain": chain}
+
+        else: # single_shot 모드
+            if use_dspy and examples: # DSPy 사용 로직
+                print("\nDSPy 옵티마이저를 사용하여 프롬프트를 컴파일합니다...")
+                print("   (MIPROv2와 같은 일부 옵티마이저는 시간이 오래 걸릴 수 있습니다.)")
+                try:
+                    from src.dspy_handler import compile_program, print_program_details
+                    compiled_program = compile_program(
+                        client_model_name, dspy_optimizer, examples,
                         metric_name=dspy_metric,
                         backend=backend,
                         backend_url=backend_url
                     )
-                    print("✅ DSPy 프로그램 컴파일 완료!")
+                    print("DSPy 프로그램 컴파일 완료!")
 
                     # 컴파일된 프로그램의 상세 내용(지시문, 예제) 출력
                     print_program_details(compiled_program)

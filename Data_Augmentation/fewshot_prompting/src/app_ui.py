@@ -172,7 +172,8 @@ def run_cli(context: dict):
 
                 for i, query in enumerate(queries_to_process):
                     print(f"\n--- Processing Query {i+1}/{len(queries_to_process)} ---")
-                    if mode == 'conversational':
+                    current_mode = context.get("mode")
+                    if current_mode == 'conversational':
                         chain = context['chain']
                         full_response = ""
                         print("Model: ", end="", flush=True)
@@ -183,9 +184,21 @@ def run_cli(context: dict):
                         print()
                         log_conversation(query, full_response)
                         log_csv_response(full_response)
+                    elif current_mode == 'dspy_conversational':
+                         print("Model is thinking... (DSPy Conversational)")
+                         dspy_program = context['dspy_program']
+                         memory = context['memory']
+                         history_messages = memory.load_memory_variables({})['chat_history']
+                         chat_history_str = "\n".join([f"{type(m).__name__}: {m.content}" for m in history_messages])
+
+                         result = dspy_program(query=query, chat_history=chat_history_str)
+                         response = get_content(result.response)
+                         print(f"Model: {response}")
+                         memory.save_context({"input": query}, {"output": response})
+                         log_conversation(query, response)
+                         log_csv_response(response)
                     else: # single_shot or dspy_single_shot
                         print("Model is thinking...")
-                        current_mode = context.get("mode")
                         if current_mode == "dspy_single_shot":
                             dspy_program = context['dspy_program']
                             result = dspy_program(query=query)
@@ -234,6 +247,19 @@ def run_cli(context: dict):
                 full_response += response_piece
             print()
             log_conversation(query_to_send, full_response)
+        elif current_mode == 'dspy_conversational':
+            print("Model is thinking... (DSPy Conversational)")
+            dspy_program = context['dspy_program']
+            memory = context['memory']
+            history_messages = memory.load_memory_variables({})['chat_history']
+            chat_history_str = "\n".join([f"{type(m).__name__}: {m.content}" for m in history_messages])
+
+            result = dspy_program(query=query_to_send, chat_history=chat_history_str)
+            response = get_content(result.response)
+
+            print(f"Model: {response}")
+            memory.save_context({"input": query_to_send}, {"output": response})
+            log_conversation(query_to_send, response)
         elif current_mode == "dspy_single_shot":
             print("Model is thinking... (DSPy)")
             dspy_program = context['dspy_program']
@@ -259,27 +285,44 @@ def run_web(context: dict, host: str, port: int):
 
     @app.route('/query_stream')
     def query_stream():
-        if context.get("mode") != 'conversational':
-            return Response("data: Streaming is only available in conversational mode.\n\n", mimetype='text/event-stream')
+        current_mode = context.get("mode")
+        if current_mode not in ['conversational', 'dspy_conversational']:
+            return Response("data: Streaming is only available in conversational modes.\n\n", mimetype='text/event-stream')
 
         user_query = request.args.get('query', '')
         if not user_query:
             return Response("data: Query is required.\n\n", mimetype='text/event-stream')
 
-        chain = context['chain']
+        if current_mode == 'conversational':
+            chain = context['chain']
+            def generate_and_log_after():
+                full_response = ""
+                # Stream response to client
+                for chunk in chain.stream({"user_query": user_query}):
+                    response_piece = get_content(chunk)
+                    full_response += response_piece
+                    # Send data chunk by chunk
+                    yield f"data: {response_piece}\n\n"
+                # Log after streaming is complete
+                log_conversation(user_query, full_response)
+            return Response(generate_and_log_after(), mimetype='text/event-stream')
 
-        def generate_and_log_after():
-            full_response = ""
-            # Stream response to client
-            for chunk in chain.stream({"user_query": user_query}):
-                response_piece = get_content(chunk)
-                full_response += response_piece
-                # Send data chunk by chunk
-                yield f"data: {response_piece}\n\n"
-            # Log after streaming is complete
-            log_conversation(user_query, full_response)
+        elif current_mode == 'dspy_conversational':
+            dspy_program = context['dspy_program']
+            memory = context['memory']
+            def generate_and_log_dspy():
+                history_messages = memory.load_memory_variables({})['chat_history']
+                chat_history_str = "\n".join([f"{type(m).__name__}: {m.content}" for m in history_messages])
 
-        return Response(generate_and_log_after(), mimetype='text/event-stream')
+                result = dspy_program(query=user_query, chat_history=chat_history_str)
+                response = get_content(result.response)
+
+                memory.save_context({"input": user_query}, {"output": response})
+                log_conversation(user_query, response)
+
+                # Yield the full response as a single event
+                yield f"data: {response}\n\n"
+            return Response(generate_and_log_dspy(), mimetype='text/event-stream')
 
 
     @app.route('/query_single_shot', methods=['POST'])
@@ -321,3 +364,4 @@ def run_web(context: dict, host: str, port: int):
     Timer(1, lambda: webbrowser.open_new(url)).start()
     print(f"Starting web server at http://{host}:{port} (accessible at {url})")
     app.run(host=host, port=port)
+
