@@ -4,7 +4,8 @@
 `run_step1_infra_base.sh`, `run_step2_core_infra.sh`, `run_step3_optional_obs.sh` 스크립트로 간소화하여
 실제 설치자가 그대로 따라할 수 있도록 단계별 절차를 구체화한 가이드입니다.
 
-상세한 설명은 아래 목차의 Notion 링크를 참조해주시기 바랍니다.
+상세한 설명은 아래의 Notion 링크를 참조해주시기 바랍니다.
+[상세 설치 가이드](https://www.notion.so/Tango-GenAI-Platform-2f69d352990380d28ea0f4767aa0393a?pvs=21)
 
 설치에 필요한 코드와 Helm 차트는 TANGO2 저장소의 main 브랜치에 포함되어 있습니다. 
 설치 대상 서버에서 저장소를 내려받은 뒤 절차를 진행합니다.
@@ -15,10 +16,10 @@
 
 ## 📑 목차
 
-- [시스템 요구사항](https://www.notion.so/Tango-GenAI-Platform-2f69d352990380d28ea0f4767aa0393a?pvs=21)
-- [설치 전 준비사항](https://www.notion.so/Tango-GenAI-Platform-2f69d352990380d28ea0f4767aa0393a?pvs=21)
-- [설치 단계별 가이드](https://www.notion.so/Tango-GenAI-Platform-2f69d352990380d28ea0f4767aa0393a?pvs=21)
-- [플랫폼 설치 후 초기 설정](https://www.notion.so/Tango-GenAI-Platform-2f69d352990380d28ea0f4767aa0393a?pvs=21)
+- [시스템 요구사항]
+- [설치 전 준비사항]
+- [설치 단계별 가이드]
+- [플랫폼 설치 후 초기 설정]
 
 ---
 
@@ -71,7 +72,7 @@ ls run_step1_infra_base.sh run_step2_core_infra.sh run_step3_optional_obs.sh
 
 ### 1-4. 핵심 입력값 확정 (필수)
 
-설치 전에 아래 값은 확정해 두어야 합니다.
+설치 전에 아래 값들을 미리 파악해 두고, 이후 2-2절에서 `values_<서버명>.yaml`에 기입합니다.
 
 - `global.jfb.settings.external.host`
 - `global.jfb.volume.*.server` (NFS 서버 IP)
@@ -102,7 +103,7 @@ cp values.yaml.template values_<서버명>.yaml
 - `global.jfb.volume.jfBin.server/path`
 - `global.jfb.volume.jfStorage[0].server/path/name`
 - `global.jfb.volume.markerData.server/path`
-- `global.jfb.volume.src.enabled/path/server` (개발형 운영 시)
+- `global.jfb.volume.src.enabled/path/server` (개발환경 사용 시 enable)
 - `global.jfb.settings.external.host/port/protocol`
 - `global.jfb.settings.initRootPassword`
 - `global.jfb.settings.kafka.sasl_username/sasl_password`
@@ -138,7 +139,8 @@ sudo chmod -R 775 /storage/tango-storage
 
 ### 3-1. 1단계: 기반 인프라 (필수)
 
-대상: NFS Provisioner (+ 필요 시 MetalLB)
+대상: NFS Provisioner 
+(+ 베어메탈/온프레미스 환경에서 LoadBalancer 타입 서비스가 필요하면 MetalLB 설치)
 
 #### 실행 명령 (표준)
 
@@ -187,7 +189,7 @@ kubectl get pvc -A
 cd GenAI_Platform/devops
 chmod +x run_step2_core_infra.sh
 
-# 별도로 values 설정 안했으면 뒤의 인자는 생략해도 무방
+# 별도로 --kong, --registry, --mariadb 인자에 넘기는 파일들을 변경하지 않았으면 뒤의 인자는 생략
 ./run_step2_core_infra.sh \
   --kong ./gaip_kong/values.yaml \
   --registry ./gaip_registry/values.yaml \
@@ -291,7 +293,7 @@ kubectl delete pod -n jonathan-system <user-pod-name>
 
 ## 5. 설치 후 초기 설정 (UI 기준)
 
-아래 순서로 진행하면 된다.
+아래 순서로 진행하면 된다. (Notion 상세 가이드의 설명과 이미지 참고)
 
 1. **관리자 로그인**
    - 계정: `admin`
@@ -303,7 +305,7 @@ kubectl delete pod -n jonathan-system <user-pod-name>
      - 이름: `local-nfs` (예시)
      - 타입: `nfs`
      - IP: NFS 서버 IP
-     - 마운트 경로: values에 넣은 스토리지 루트 경로와 동일
+     - 마운트 경로: values에 넣은 `jfStorage.path` 스토리지 루트 경로와 동일
    - 등록 후 확인:
      ```bash
      kubectl get pod -A | rg -i "storage|provisioner"
