@@ -95,7 +95,7 @@ def convert_examples(example_data, is_conversational=False):
             dspy_examples.append(example.with_inputs("query"))
     return dspy_examples
 
-def compile_program(model_name, optimizer_name, examples, metric_name="bert_score", backend="ollama", backend_url="http://localhost:11434", max_bootstrapped_demos=4, max_labeled_demos=16, is_conversational=False):
+def compile_program(model_name, optimizer_name, examples, metric_name="bert_score", backend="ollama", backend_url="http://localhost:11434", max_bootstrapped_demos=6, is_conversational=False, mipro_auto_level='light'):
     """
     Configures the LLM and compiles a DSPy program using the specified optimizer.
     """
@@ -152,7 +152,7 @@ def compile_program(model_name, optimizer_name, examples, metric_name="bert_scor
     optimizer_map = {
         "BootstrapFewShot": BootstrapFewShot(metric=metric_fn, max_bootstrapped_demos=max_bootstrapped_demos),
         "BootstrapFewShotWithRandomSearch": BootstrapFewShotWithRandomSearch(metric=metric_fn, max_bootstrapped_demos=max_bootstrapped_demos, num_candidate_programs=10),
-        "MIPROv2": MIPROv2(metric=metric_fn, max_bootstrapped_demos=max_bootstrapped_demos, init_temperature=1.0)
+        "MIPROv2": MIPROv2(metric=metric_fn, max_bootstrapped_demos=max_bootstrapped_demos, auto=mipro_auto_level)
     }
 
     optimizer = optimizer_map.get(optimizer_name)

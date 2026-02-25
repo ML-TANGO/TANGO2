@@ -35,10 +35,13 @@ def main():
         dspy_optimizer = config.get('DSPY', 'OPTIMIZER', fallback='BootstrapFewShot')
         use_dspy = config.getboolean('DSPY', 'USE_DSPY', fallback=False)
         dspy_metric = config.get('DSPY', 'METRIC', fallback='bert_score')
+        dspy_mipro_auto_level = config.get('DSPY', 'MIPRO_AUTO_LEVEL', fallback='light')
 
         print(f"--- Backend: {backend.upper()} | Mode: {ui_mode.upper()} | Interaction: {interaction_mode.upper()} ---")
-        if use_dspy and interaction_mode == 'single_shot':
-            print(f"--- DSPy Optimizer: {dspy_optimizer} ---")
+        if use_dspy:
+            print(f"--- DSPy Optimizer: {dspy_optimizer} | Metric: {dspy_metric} ---")
+            if dspy_optimizer == 'MIPROv2':
+                print(f"--- DSPy MIPRO Auto Level: {dspy_mipro_auto_level.upper()} ---")
 
         # 2. 백엔드 및 모델 준비
         if backend == 'ollama':
@@ -121,7 +124,8 @@ def main():
                         metric_name=dspy_metric,
                         backend=backend,
                         backend_url=backend_url,
-                        is_conversational=True
+                        is_conversational=True,
+                        mipro_auto_level=dspy_mipro_auto_level
                     )
                     print("DSPy 대화형 프로그램 컴파일 완료!")
                     print_program_details(compiled_program)
@@ -172,7 +176,8 @@ def main():
                         client_model_name, dspy_optimizer, examples,
                         metric_name=dspy_metric,
                         backend=backend,
-                        backend_url=backend_url
+                        backend_url=backend_url,
+                        mipro_auto_level=dspy_mipro_auto_level
                     )
                     print("DSPy 프로그램 컴파일 완료!")
 
