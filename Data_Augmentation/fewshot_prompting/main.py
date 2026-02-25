@@ -24,6 +24,7 @@ def main():
         config = read_config()
         ui_mode = config.get('app', 'UI_MODE', fallback='cli')
         interaction_mode = config.get('app', 'INTERACTION_MODE', fallback='single_shot')
+        do_shuffle = config.getboolean('app', 'SHUFFLE_EXAMPLES', fallback=False)
         backend = config.get('app', 'BACKEND', fallback='ollama').lower()
         model_name = config.get('app', 'MODEL_NAME', fallback='gemma3')
         
@@ -79,6 +80,8 @@ def main():
         examples = []
         load_examples_needed = True #TODO: 항상 필요한지 고민
         if load_examples_needed:
+            if ui_mode == 'web':
+                print("\n[Web UI 모드] 웹 세션에서 사용할 Few-shot 예제를 미리 설정합니다.")
             print("="*50)
             print("🤖 Few-Shot 예시로 사용할 CSV 파일 경로를 입력해주세요.")
             print("   - 경로 입력을 마치려면 그냥 Enter를 누르세요.")
@@ -95,9 +98,6 @@ def main():
                     output_csv_paths.append(path)
 
             if input_csv_paths and output_csv_paths:
-                shuffle_choice = input("🔀 예제를 셔플하시겠습니까? (y/n, 기본값 n): ").lower().strip()
-                do_shuffle = shuffle_choice == 'y'
-
                 examples = load_examples(input_csv_paths, output_csv_paths, shuffle=do_shuffle)
 
                 if examples:
