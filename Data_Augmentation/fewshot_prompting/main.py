@@ -6,7 +6,7 @@ from langchain_classic.chains import LLMChain
 from langchain_classic.memory import ConversationBufferMemory
 
 # 모듈화된 함수들 임포트
-from src.config import read_config
+from src.config import read_config, get_few_shot_files
 from src.ollama_manager import start_ollama, stop_ollama, pull_model_if_needed
 from src.vllm_manager import start_vllm, stop_vllm
 from src.data_loader import load_examples
@@ -25,6 +25,7 @@ def main():
         ui_mode = config.get('app', 'UI_MODE', fallback='cli')
         interaction_mode = config.get('app', 'INTERACTION_MODE', fallback='single_shot')
         do_shuffle = config.getboolean('app', 'SHUFFLE_EXAMPLES', fallback=False)
+        fallback_to_interactive = config.getboolean('FEW_SHOT_DATA', 'FALLBACK_TO_INTERACTIVE', fallback=True)
         backend = config.get('app', 'BACKEND', fallback='ollama').lower()
         model_name = config.get('app', 'MODEL_NAME', fallback='gemma3')
 
@@ -81,9 +82,27 @@ def main():
 
         # 3. Few-Shot 예시 로드
         examples = []
-        load_examples_needed = True #TODO: 항상 필요한지 고민
-        if load_examples_needed:
-            if ui_mode == 'web':
+
+        # config.ini에서 로드 시도
+        input_csv_paths, output_csv_paths = get_few_shot_files(config)
+
+        if input_csv_paths and output_csv_paths:
+            print(f"config.ini에서 Few-shot 파일 경로를 불러왔습니다: {len(input_csv_paths)} 쌍")
+            if len(input_csv_paths) != len(output_csv_paths):
+                print("입력 CSV 파일과 출력 CSV 파일의 개수가 일치하지 않습니다.")
+            else:
+                examples = load_examples(input_csv_paths, output_csv_paths, shuffle=do_shuffle)
+                if examples:
+                    print(f"총 {len(examples)}개의 Few-Shot 예시를 성공적으로 불러왔습니다.")
+                else:
+                    print("config.ini에 지정된 파일에서 예시를 불러오지 못했습니다.")
+
+        # config.ini에서 예제를 불러오지 못한 경우, 사용자에게 입력 요청
+        if not examples and fallback_to_interactive:
+            if input_csv_paths: # 경로는 있었지만 로딩에 실패한 경우
+                 print("사용자 입력을 통해 Few-shot 예제를 다시 설정합니다.")
+
+            if ui_mode == 'web' and not input_csv_paths:
                 print("\n[Web UI 모드] 웹 세션에서 사용할 Few-shot 예제를 미리 설정합니다.")
             print("="*50)
             print("Few-Shot 예시로 사용할 CSV 파일 경로를 입력해주세요.")
@@ -109,6 +128,9 @@ def main():
                     print("⚠️  불러온 예시가 없습니다.")
             else:
                 print("입력된 Few-Shot 예시 파일이 없습니다.")
+
+        if not examples:
+             print("로딩된 Few-Shot 예시가 없습니다. Zero-shot 모드로 실행됩니다.")
 
         # 4. LLM 및 실행 컨텍스트 설정
         context = {}
