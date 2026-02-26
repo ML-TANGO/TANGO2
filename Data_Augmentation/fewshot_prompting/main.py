@@ -66,11 +66,11 @@ def main():
                 return
 
             # 클라이언트가 사용할 모델 식별자를 결정합니다. (로컬 경로 우선)
-            client_model_name = vllm_model_path if vllm_model_path and vllm_model_path.strip() else model_name
+            model_name = vllm_model_path if vllm_model_path and vllm_model_path.strip() else model_name
 
             # vLLM (OpenAI-compatible) LLM setup
             llm = ChatOpenAI(
-                model=client_model_name,
+                model=model_name,
                 openai_api_base=vllm_url,
                 openai_api_key="none" # vLLM typically doesn't need a key
             )
@@ -120,7 +120,7 @@ def main():
                 try:
                     from src.dspy_handler import compile_program, print_program_details
                     compiled_program = compile_program(
-                        client_model_name, dspy_optimizer, examples,
+                        model_name, dspy_optimizer, examples,
                         metric_name=dspy_metric,
                         backend=backend,
                         backend_url=backend_url,
@@ -173,7 +173,7 @@ def main():
                 try:
                     from src.dspy_handler import compile_program, print_program_details
                     compiled_program = compile_program(
-                        client_model_name, dspy_optimizer, examples,
+                        model_name, dspy_optimizer, examples,
                         metric_name=dspy_metric,
                         backend=backend,
                         backend_url=backend_url,

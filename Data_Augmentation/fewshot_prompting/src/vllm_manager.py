@@ -4,14 +4,26 @@ import subprocess
 import os
 import signal
 import time
+import threading
+from collections import deque
 from urllib.parse import urlparse
+
+# This function will run in a background thread to consume pipe output
+def _drain_pipe_to_deque(pipe, deque_buffer):
+    """Reads from a pipe and appends lines to a deque."""
+    try:
+        with pipe:
+            for line in iter(pipe.readline, ''):
+                deque_buffer.append(line)
+    except Exception:
+        # Pipe was closed or another error occurred
+        pass
 
 def start_vllm(vllm_url, model_name, model_path=None):
     """
     Checks for a running vLLM server. If not found, starts a temporary one.
-    Returns a tuple: (status, process_object)
-    status: "existing_service", "temp_server", or None
-    process_object: The subprocess.Popen object if a temp server was started, else None.
+    This version uses background threads to drain stdout/stderr, preventing hangs
+    while keeping recent logs in memory for debugging.
     """
     if check_vllm_ready(vllm_url):
         return "existing_service", None
@@ -23,7 +35,6 @@ def start_vllm(vllm_url, model_name, model_path=None):
         host = parsed_url.hostname
         port = parsed_url.port
         
-        # Determine which model identifier to use: local path or model name
         model_to_load = model_path if model_path and model_path.strip() else model_name
         if model_path and model_path.strip():
             print(f"    Using local model path: {model_to_load}")
@@ -48,9 +59,23 @@ def start_vllm(vllm_url, model_name, model_path=None):
             preexec_fn=os.setsid
         )
         
+        # Create in-memory buffers for recent logs
+        stdout_deque = deque(maxlen=100)
+        stderr_deque = deque(maxlen=100)
+        
+        # Attach deques to process object for access in error handling
+        temp_server_process.stdout_deque = stdout_deque
+        temp_server_process.stderr_deque = stderr_deque
+
+        # Start background threads to drain the pipes
+        stdout_thread = threading.Thread(target=_drain_pipe_to_deque, args=(temp_server_process.stdout, stdout_deque), daemon=True)
+        stderr_thread = threading.Thread(target=_drain_pipe_to_deque, args=(temp_server_process.stderr, stderr_deque), daemon=True)
+        stdout_thread.start()
+        stderr_thread.start()
+
         # Wait for the temp server to become responsive
         print("    Waiting for temporary vLLM server to initialize...")
-        max_wait_time = 60  # vLLM can take a while to load models
+        max_wait_time = 60
         wait_interval = 5
         waited_time = 0
         
@@ -67,11 +92,17 @@ def start_vllm(vllm_url, model_name, model_path=None):
         if temp_server_process:
             print("Error: Failed to start temporary vLLM server in time. Terminating process.")
             os.killpg(os.getpgid(temp_server_process.pid), signal.SIGTERM)
-            stdout, stderr = temp_server_process.communicate()
-            print("--- vLLM Server STDOUT ---")
-            print(stdout)
-            print("--- vLLM Server STDERR ---")
-            print(stderr)
+            
+            # Give threads a moment to catch final output
+            time.sleep(0.5) 
+            
+            print("--- vLLM Server STDOUT (last 100 lines) ---")
+            for line in list(stdout_deque):
+                print(line, end='')
+            print("--- vLLM Server STDERR (last 100 lines) ---")
+            for line in list(stderr_deque):
+                print(line, end='')
+                
         return None, None
 
     except FileNotFoundError:
