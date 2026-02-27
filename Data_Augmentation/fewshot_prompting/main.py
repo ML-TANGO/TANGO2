@@ -1,4 +1,5 @@
 import sys
+import os
 from langchain_ollama import OllamaLLM
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate, FewShotPromptTemplate, ChatPromptTemplate, MessagesPlaceholder
@@ -7,8 +8,8 @@ from langchain_classic.memory import ConversationBufferMemory
 
 # 모듈화된 함수들 임포트
 from src.config import read_config, get_few_shot_files
-from src.ollama_manager import start_ollama, stop_ollama, pull_model_if_needed
-from src.vllm_manager import start_vllm, stop_vllm
+from src.ollama_manager import start_ollama, stop_ollama, prepare_model
+from src.vllm_manager import start_vllm, stop_vllm, get_vllm_model
 from src.data_loader import load_examples
 from src.prompt_loader import load_prompt_config, load_prompt_components
 from src.app_ui import run_cli, run_web
@@ -50,8 +51,10 @@ def main():
             if ollama_status is None:
                 return
 
-            if not pull_model_if_needed(model_name):
-                print(f"'{model_name}' 모델을 준비할 수 없어 프로그램을 종료합니다.")
+            # Update model_name with the one that is actually ready
+            model_name = prepare_model(model_name)
+            if not model_name:
+                print(f"Ollama 모델을 준비할 수 없어 프로그램을 종료합니다.")
                 return
 
             llm = OllamaLLM(model=model_name)
@@ -66,8 +69,14 @@ def main():
                 print(f"vLLM 서버를 시작할 수 없어 프로그램을 종료합니다.")
                 return
 
-            # 클라이언트가 사용할 모델 식별자를 결정합니다. (로컬 경로 우선)
-            model_name = vllm_model_path if vllm_model_path and vllm_model_path.strip() else model_name
+            print("--> vLLM server is running. Querying for loaded model ID...")
+            running_model = get_vllm_model(vllm_url)
+            if running_model:
+                model_name = running_model
+                print(f"--> Successfully identified running model: {model_name}")
+            else:
+                 model_name = vllm_model_path if vllm_model_path and os.path.isdir(vllm_model_path) else model_name
+                 print(f"    - Could not query model ID from API. Using best-guess name: {model_name}")
 
             # vLLM (OpenAI-compatible) LLM setup
             llm = ChatOpenAI(

@@ -60,13 +60,13 @@ def start_ollama():
         temp_server_process = subprocess.Popen(
             "ollama serve", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, preexec_fn=os.setsid
         )
-        
+
         # Wait for the temp server to become responsive
         print("    Waiting for temporary server to initialize...")
         max_wait_time = 30
         wait_interval = 2
         waited_time = 0
-        
+
         while waited_time < max_wait_time:
             time.sleep(wait_interval)
             waited_time += wait_interval
@@ -147,25 +147,52 @@ def stop_ollama(status, process, model_name):
         except Exception as e:
             print(f"    - Error while stopping server: {e}")
 
-def pull_model_if_needed(model_name):
-    """Checks if the model exists locally and pulls it if it doesn't."""
-    print(f"Checking if model '{model_name}' exists locally...")
+def prepare_model(model_name):
+    """
+    Ensures a model is ready for use, with a fallback mechanism.
+    It tries the specified model_name first, then a default model.
+    Returns the name of the model that is ready, or None if all attempts fail.
+    """
+    candidates = []
+    if model_name and model_name.strip():
+        candidates.append(model_name)
+
+    default_model = "gemma3:4b"
+    if default_model not in candidates:
+        candidates.append(default_model)
+
+    print(f"--> Model preparation priority: {', '.join(f'"{c}"' for c in candidates)}")
+
     try:
+        # Get the list of models once to avoid multiple shell calls
         result = subprocess.run("ollama list", shell=True, check=True, capture_output=True, text=True)
-        if model_name in result.stdout:
-            print(f"Model '{model_name}' already exists.")
-            return True
+        local_models = result.stdout
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print("Error: 'ollama' command not found or failed to run. Please ensure Ollama is installed and running.")
+        return None
+
+    for candidate in candidates:
+        print(f"--- Checking for model: '{candidate}' ---")
+        # Check if the model (and tag) is in the list output
+        if f"{candidate}" in local_models:
+            print(f"--> Model '{candidate}' found locally.")
+            return candidate
         else:
-            print(f"Model '{model_name}' not found. Pulling from Ollama...")
-            # This will use the system service and download to the system directory
-            pull_command = f"ollama pull {model_name}"
-            print(f"Running command: {pull_command}")
-            pull_process = subprocess.run(pull_command, shell=True, check=True)
-            print(f"Model '{model_name}' pulled successfully.")
-            return True
-    except subprocess.CalledProcessError as e:
-        print(f"Error during model check/pull: {e.stderr}")
-        return False
-    except FileNotFoundError:
-        print("Error: 'ollama' command not found.")
-        return False
+            print(f"Model '{candidate}' not found locally. Attempting to pull...")
+            try:
+                # Use Popen for real-time output, but Run is simpler if we wait anyway
+                pull_command = f"ollama pull {candidate}"
+                print(f"    Running command: {pull_command}")
+                # Using check=True will raise CalledProcessError on failure (e.g., model not found)
+                subprocess.run(pull_command, shell=True, check=True, text=True, capture_output=True)
+                print(f"--> Model '{candidate}' pulled successfully.")
+                return candidate
+            except subprocess.CalledProcessError as e:
+                print(f"    - Failed to pull '{candidate}'. Reason:")
+                # Show a snippet of stderr, which usually has the "not found" message
+                stderr_snippet = (e.stderr or e.stdout or "No output from command.").strip().split('\n')[-1]
+                print(f"    - {stderr_snippet}")
+                print(f"    - Trying next candidate...")
+
+    print("\nError: All model candidates failed. Could not prepare a model for Ollama.")
+    return None
