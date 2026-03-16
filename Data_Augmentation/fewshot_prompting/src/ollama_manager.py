@@ -161,7 +161,7 @@ def prepare_model(model_name):
     if default_model not in candidates:
         candidates.append(default_model)
 
-    print(f"--> Model preparation priority: {', '.join(f'"{c}"' for c in candidates)}")
+    # print(f"--> Model preparation priority: {', '.join(f'"{c}"' for c in candidates)}")
 
     try:
         # Get the list of models once to avoid multiple shell calls
