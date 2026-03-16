@@ -92,7 +92,8 @@
             const modelMessageDiv = appendMessage('Thinking...', 'model');
             try {
                 // Use the new single_shot endpoint
-                const result = await fetch('/query_single_shot', {
+                const basePath = window.location.pathname.replace(/\/$/, '');
+                const result = await fetch(`${basePath}/query_single_shot`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ query: query })
@@ -112,7 +113,8 @@
             appendMessage(query, 'user');
             const modelMessageDiv = appendMessage('', 'model');
             // Use the robust, standard EventSource API
-            const evtSource = new EventSource(`/query_stream?query=${encodeURIComponent(query)}`);
+            const basePath = window.location.pathname.replace(/\/$/, '');
+            const evtSource = new EventSource(`${basePath}/query_stream?query=${encodeURIComponent(query)}`);
             evtSource.onmessage = function(event) {
                 // The browser's EventSource reconstructs the message, joining data fields with newlines.
                 modelMessageDiv.textContent = event.data;
