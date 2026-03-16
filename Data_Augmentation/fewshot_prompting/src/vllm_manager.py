@@ -122,7 +122,7 @@ def start_vllm(vllm_url, model_name, model_path=None):
     if default_model not in candidates:
         candidates.append(default_model)
 
-    print(f"--> Model loading priority: {', '.join(f'"{c}"' for c in candidates)}")
+    # print(f"--> Model loading priority: {', '.join(f'"{c}"' for c in candidates)}")
 
     try:
         parsed_url = urlparse(vllm_url)
