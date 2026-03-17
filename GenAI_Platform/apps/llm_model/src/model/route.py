@@ -39,6 +39,10 @@ async def download_default_configuration():
             "num_train_epochs" : 3,
             "cutoff_length" : 512,
             "warmup_steps" : 0,
+            "precision": "auto",
+            "auto_target_modules": 1,
+            "dataset_format": "auto",
+            "zero_stage": 1,
             "deepspeed" : {
                         "train_batch_size": "auto",
                         "train_micro_batch_size_per_gpu": "auto",

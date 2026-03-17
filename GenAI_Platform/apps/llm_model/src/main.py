@@ -3,7 +3,7 @@ import json
 import threading
 import traceback
 from fastapi import FastAPI, Request, Depends
-from huggingface_hub import HfFolder
+from huggingface_hub import login
 from model.route import model
 from utils.resource import CustomResponse
 from utils.redis import get_redis_client_async
@@ -25,8 +25,11 @@ def initialize_app():
     )
     # 허깅페이스 토큰을 여기에 입력하세요
     hf_token = settings.HUGGINGFACE_TOKEN
-    # 토큰 설정 및 저장
-    HfFolder.save_token(hf_token)
+    # 토큰 설정 및 저장 (네트워크 미연결 환경에서 검증 실패 허용)
+    try:
+        login(token=hf_token, add_to_git_credential=False)
+    except Exception:
+        pass
     
     api.include_router(model)
     app.mount('/api', api)

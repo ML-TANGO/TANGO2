@@ -1,4 +1,6 @@
-CREATE DATABASE IF NOT EXISTS `jonathan_llm`;
+CREATE DATABASE IF NOT EXISTS `jonathan_llm`
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
 USE `jonathan_llm`;
 
 CREATE TABLE IF NOT EXISTS `playground` (
