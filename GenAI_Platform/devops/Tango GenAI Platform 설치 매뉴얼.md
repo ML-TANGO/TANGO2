@@ -62,8 +62,6 @@
 
 ## **CLI 기반 쿠버네티스 관리 도구 K9s**
 
-![image.png](image.png)
-
 [https://github.com/derailed/k9s](https://github.com/derailed/k9s)
 
 ```bash
@@ -71,9 +69,6 @@ sudo wget https://github.com/derailed/k9s/releases/latest/download/k9s_linux_amd
 ```
 
 <aside>
-ℹ️
-
-![image.png](image%201.png)
 
 Notion의 모든 코드는 복사가 가능합니다
 
@@ -137,8 +132,6 @@ external:
 		host:"XXX.XXX.XXX.XXX" # TODO: 외부 접근 가능한 IP 또는 도메인
 ```
 
-![image.png](image%202.png)
-
 - `external.host`는 **사용자가 브라우저로 접속할 주소(IP/도메인)** 입니다.
 - 로컬 서버 설치이며 MetalLB/LoadBalancer를 사용하는 경우, Kong 설치 후 아래 명령으로 외부 IP를 확인한 뒤 `external.host`에 반영합니다.
     
@@ -146,15 +139,9 @@ external:
     
 - 외부 IP를 즉시 확정할 수 없으면, 우선 내부 접근 가능한 IP로 설치를 완료한 뒤 `external.host`만 수정하여 재배포합니다.
 
-![image.png](image%203.png)
-
 각 앱들의 이미지 태그를 지정합니다.
-
 공유용 오픈소스 앱 이미지들은 Docker Hub에 저장되어 있습니다. [https://hub.docker.com/u/acrylaaai](https://hub.docker.com/u/acrylaaai)
 
-![ex) /storage/jonathan-storage 를 저장 경로로 삼을 경우](image%204.png)
-
-ex) /storage/jonathan-storage 를 저장 경로로 삼을 경우
 
 저장소 내 저장 경로를 생성합니다. (values 파일의 값과 일치해야 합니다.)
 
@@ -245,6 +232,49 @@ cp ~/.kube/config /TANGO2/GenAI_Platform/devops/fb_common_app/helm/file/kube/con
     ```
     
 - 각 `gaip_*` 실행 전 체크: `ls -al values.yaml`(존재/링크 대상 확인) 및 `./run.sh --help`로 values 인자 필요 여부 확인.”
+
+### 네트워크 대역 확인 및 서비스 타입 결정
+
+인프라 차트 설치 전, 플랫폼에 접속할 클라이언트의 네트워크 대역과 클러스터 노드의 대역이 동일한지 확인합니다.
+이 결정에 따라 MetalLB 설치 여부 및 Kong의 서비스 타입(LoadBalancer / NodePort)이 달라집니다.
+
+**MetalLB L2 모드의 서브넷 제약**
+
+MetalLB L2 모드는 **동일한 L2 브로드캐스트 도메인(동일 서브넷)** 내에서만 ARP 응답이 동작합니다.
+MetalLB가 할당한 VIP와 접속 클라이언트가 서로 다른 서브넷에 있고, 두 대역 간 L3 라우팅이 구성되어 있지 않으면 접근이 불가합니다.
+
+> **예시 상황:**
+> - 마스터 노드 IP: `10.254.180.53` (내부망 A)
+> - MetalLB VIP: `192.168.0.57` (내부망 B)
+> - 두 대역 간 라우팅 미구성 → 내부망 A에서 VIP로 접근 불가
+
+**서비스 타입 결정 기준**
+
+| 조건 | 권장 서비스 타입 | 비고 |
+|------|-----------------|------|
+| 클라이언트와 클러스터가 동일 서브넷 | **LoadBalancer** (MetalLB) | 기본 설치 방식 |
+| 서브넷이 다르지만 L3 라우팅 구성됨 | **NodePort** | 마스터 노드 IP로 직접 접근 |
+| 서브넷이 다르고 라우팅 미구성 | **NodePort** + 라우팅 요청 | 네트워크 담당자에게 inter-VLAN routing 요청 |
+| 클라우드 환경 (CSP LB 사용) | **LoadBalancer** | MetalLB 불필요 |
+
+**라우팅 구성 여부 확인 방법**
+
+클라이언트 PC에서 마스터 노드로 ping을 보내 확인합니다.
+
+```bash
+# 다른 서브넷의 PC에서 실행
+ping <마스터_노드_IP>
+# 예: ping 10.254.180.53
+```
+
+- **ping 성공**: 라우팅이 이미 구성된 상태 → NodePort 전환만으로 접속 가능
+- **ping 실패**: 네트워크 담당자에게 **서브넷 간 라우팅(inter-VLAN routing)** 구성을 요청한 뒤 진행
+
+> **결정 결과에 따른 설치 진행:**
+> - **LoadBalancer 방식**: 아래 인프라 차트를 순서대로 설치합니다. (MetalLB → Kong 순서)
+> - **NodePort 방식**: MetalLB 설치를 건너뛰고, Kong 설치 시 서비스 타입을 NodePort로 설정합니다. 상세 설정은 아래 [IP 변경 및 서비스 타입 전환 가이드](#-ip-변경-및-서비스-타입-전환-가이드)를 참고합니다.
+
+---
 
 ### 인프라 차트 설치
 
@@ -345,9 +375,7 @@ EFK 사용을 위해 동적 프로비저닝을 지원하는 도구입니다.
     ```
     
     <aside>
-    ⚠️
-    
-    주의: MariaDB 설치 시 configmap과 chart의 접속 패스워드가 일치하는지 확인
+    ⚠️ 주의: MariaDB 설치 시 configmap과 chart의 접속 패스워드가 일치하는지 확인
     
     </aside>
     
@@ -398,9 +426,7 @@ EFK 사용을 위해 동적 프로비저닝을 지원하는 도구입니다.
     ```
     
     <aside>
-    ⚠️
-    
-    values.yaml의 DB 비밀번호 설정(`global.jfb.settings.db.*` 등)과, 설치 과정에서 생성되는 ConfigMap/Secret의 값이 일치해야 합니다. 
+    ⚠️ values.yaml의 DB 비밀번호 설정(`global.jfb.settings.db.*` 등)과, 설치 과정에서 생성되는 ConfigMap/Secret의 값이 일치해야 합니다. 
     
     불일치 시 로그인/연결 실패가 발생합니다(재설치 시 잔존 리소스 삭제 필요).
     
@@ -434,9 +460,7 @@ EFK 사용을 위해 동적 프로비저닝을 지원하는 도구입니다.
     - 실행 위치: `GenAI_Platform/devops/gaip_gpu_operators` 디렉터리에서 **마스터 노드에서 1회 실행**합니다.
     
     <aside>
-    ⚠️
-    
-    설치 중 아래 유형의 오류가 발생하면 먼저 `nvidia-smi`로 **드라이버/라이브러리 상태를 확인**합니다.
+    ⚠️ 설치 중 아래 유형의 오류가 발생하면 먼저 `nvidia-smi`로 **드라이버/라이브러리 상태를 확인**합니다.
     
     - `nvidia-smi: command not found` → 드라이버/유틸 미설치
     - `Driver/library version mismatch` → 드라이버 버전 꼬임
@@ -549,6 +573,176 @@ cd GenAI_Platform/devops
 
 ---
 
+## 🔄 IP 변경 및 서비스 타입 전환 가이드
+
+설치 후 네트워크 환경이 변경되거나, MetalLB VIP와 실제 접근 대역이 다른 경우 아래 절차에 따라 IP 변경 또는 서비스 타입(LoadBalancer ↔ NodePort) 전환을 수행합니다.
+
+### 방법 A: 할당 IP 변경 (LoadBalancer 유지)
+
+MetalLB VIP를 접근 가능한 대역의 IP로 변경하는 방법입니다. 동일 서브넷 내 접근만 필요한 경우 적합합니다.
+
+**1) MetalLB IP 풀 변경**
+
+```bash
+cd TANGO2/GenAI_Platform/devops/gaip_metallb
+```
+
+`metallb-config.yaml`의 `spec.addresses`를 변경합니다.
+
+```yaml
+# metallb-config.yaml
+spec:
+  addresses:
+    - <새로운_VIP>/32   # /32 서브넷마스크 권장 (단일 IP 할당)
+```
+
+```bash
+# MetalLB 설정 재적용
+kubectl apply -f metallb-config.yaml
+```
+
+**2) Kong static IP 변경**
+
+```bash
+cd ../gaip_kong
+```
+
+`values.yaml`의 `global.jfb.static.ip`를 변경합니다.
+
+```yaml
+# gaip_kong/values.yaml
+global:
+  jfb:
+    static:
+      enabled: true
+      ip: <새로운_VIP>   # MetalLB에서 할당한 IP와 동일하게 설정
+```
+
+```bash
+# Kong 관련 PV, PVC 삭제 후 재설치 (필수)
+./run.sh uninstall
+kubectl delete pvc -l app=kong -n <kong-namespace>   # 잔존 PVC 삭제
+kubectl delete pv <kong-관련-pv>                       # 잔존 PV 삭제
+./run.sh install -f ./values.yaml
+```
+
+<aside>
+⚠️ Kong 재설치 시 기존 PV/PVC를 반드시 삭제해야 합니다. 잔존 리소스가 있으면 IP 변경이 반영되지 않습니다.
+</aside>
+
+**3) 어플리케이션 external.host 변경**
+
+`values_<서버명>.yaml`의 외부 접근 설정을 변경합니다.
+
+```yaml
+# values_<서버명>.yaml
+global:
+  jfb:
+    settings:
+      external:
+        protocol: "http"
+        host: "<새로운_VIP>"   # MetalLB에서 할당한 새 IP
+```
+
+```bash
+cd TANGO2/GenAI_Platform/devops
+./run.sh install -f ./values_<서버명>.yaml
+./run_llm.sh install -f ./values_<서버명>.yaml
+```
+
+### 방법 B: NodePort 방식 전환 (LoadBalancer → NodePort)
+
+MetalLB VIP 대신 **마스터 노드의 고정 IP + NodePort**로 직접 접근하는 방법입니다. 서브넷이 다른 환경에서 가장 확실한 해결책입니다.
+
+**1) Kong 서비스 타입 변경**
+
+`gaip_kong/values.yaml`에서 아래 3가지를 변경합니다.
+
+```yaml
+# (1) proxy.type 변경
+proxy:
+  type: NodePort          # LoadBalancer → NodePort
+
+# (2) HTTP nodePort 주석 해제
+  http:
+    servicePort: 80
+    containerPort: 8000
+    nodePort: 32080       # 주석 해제
+
+# (3) TLS nodePort 주석 해제
+  tls:
+    servicePort: 443
+    containerPort: 8443
+    nodePort: 32443       # 주석 해제
+```
+
+```bash
+cd TANGO2/GenAI_Platform/devops/gaip_kong
+
+# Kong 관련 PV, PVC 삭제 후 재설치 (필수)
+./run.sh uninstall
+kubectl delete pvc -l app=kong -n <kong-namespace>
+kubectl delete pv <kong-관련-pv>
+./run.sh install -f ./values.yaml
+```
+
+<aside>
+⚠️ NodePort 범위는 30000~32767로 제한됩니다. 기존 80/443 포트 대신 별도 포트 번호를 URL에 명시해야 합니다.
+</aside>
+
+**2) 어플리케이션 external.host 변경**
+
+NodePort 전환 후에는 `external.host`를 **마스터 노드 IP**로, 포트도 NodePort에 맞게 변경해야 합니다.
+프론트엔드가 이 값을 기준으로 API 요청 URL을 생성하므로 반드시 일치시켜야 합니다.
+
+```yaml
+# values_<서버명>.yaml
+global:
+  jfb:
+    settings:
+      external:
+        protocol: "http"
+        host: "<마스터_노드_IP>"          # 예: "10.254.180.53"
+        port: 32080                       # NodePort에 맞게 설정
+```
+
+```bash
+cd TANGO2/GenAI_Platform/devops
+./run.sh install -f ./values_<서버명>.yaml
+./run_llm.sh install -f ./values_<서버명>.yaml
+```
+
+**3) 접속 확인**
+
+```bash
+# HTTP 접속 확인
+curl http://<마스터_노드_IP>:32080
+# 예: curl http://10.254.180.53:32080
+
+# HTTPS 접속 확인 (자체 서명 인증서 사용 시 -k 옵션)
+curl -k https://<마스터_노드_IP>:32443
+```
+
+브라우저에서도 `http://<마스터_노드_IP>:32080`으로 접속하여 정상 동작을 확인합니다.
+
+### NodePort → LoadBalancer 복원
+
+NodePort에서 다시 LoadBalancer로 전환하려면 위 과정을 역순으로 수행합니다.
+
+1. `gaip_kong/values.yaml`에서 `proxy.type`을 `LoadBalancer`로 변경하고, `nodePort` 항목을 다시 주석 처리
+2. Kong PV/PVC 삭제 후 재설치
+3. `values_<서버명>.yaml`의 `external.host`를 MetalLB VIP로, `port` 설정을 제거(또는 80/443 기본값)
+4. 어플리케이션 재설치
+
+### 다른 서브넷에서도 접속이 필요한 경우
+
+NodePort 전환은 **마스터 노드 IP에 접근 가능한 대역**에서의 문제를 해결합니다.
+서브넷이 다른 곳에서도 접속이 필요하다면, **네트워크 담당자(전산팀)에게 라우터 또는 L3 스위치에서 서브넷 간 라우팅(inter-VLAN routing) 구성을 요청**해야 합니다.
+
+라우팅이 구성되면 NodePort 방식으로 모든 대역에서 접속이 가능합니다.
+
+---
+
 ## ✔️ 플랫폼 설치 후 초기 설정
 
 - [ ]  Jonathan 정상 실행 확인
@@ -558,8 +752,6 @@ cd GenAI_Platform/devops
 - [ ]  사용자 계정으로 로그인
 
 ### GenAI Platform(Jonathan) 정상 실행 확인
-
-![image.png](image%205.png)
 
 설치가 정상적으로 완료되면 브라우저를 통해 설정한 `EXTERNAL_HOST_IP`로 접속 시 초기 화면이 표시됩니다.
 
@@ -576,13 +768,9 @@ cd GenAI_Platform/devops
 
 관리자 로그인 후 서버에서 사용할 저장소를 활성화해야 합니다.
 
-![image.png](image%206.png)
-
 관리자 로그인 후 **스토리지 메뉴**에서 스토리지를 추가/활성화합니다.
 
 (참고: 2.5 버전 UI에서는 ‘스토리지 추가’ 버튼이 헤더 영역의 메뉴 안에 숨겨져 있습니다. 전체 스토리지 원을 10번 이상 누르고 헤더 버튼을 누르면 모달이 활성화됩니다. (잘 안될 수 있어서 계속 시도)
-
-![image.png](image%207.png)
 
 - 스토리지 이름(예: local-nfs)
 - IP 주소 (다른 서버일 경우 해당 서버 IP, 현재 서버일 경우 현재 서버 IP 입력)
@@ -609,51 +797,24 @@ storage-local-nfs-storage-exporter
 
 ### 사용자 생성
 
-![image.png](image%208.png)
-
-![image.png](image%209.png)
-
 `사용자 > 사용자 추가`에서 **아이디/비밀번호/이름(필수)**를 입력하고, 사용자 그룹, 이메일, 이름, 소속, 직책 등의 정보를 입력합니다.
 
 ### 인스턴스 생성
 
-![image.png](image%2010.png)
-
-노드 탭에서 맨 아래로 스크롤합니다
-
-![image.png](image%2011.png)
-
-활성화된 노드를 선택하여 설정 버튼을 누릅니다
-
+1. <노드> 탭에서 맨 아래로 스크롤하여, 활성화된 노드를 선택하여 설정 버튼을 누릅니다
 (만약 GPU 자원의 MIG, NVLink 등이 필요한 경우에는 별도로 문의 바랍니다.)
 
-![image.png](image%2012.png)
+2. 클러스터 노드에 설치된 GPU를 인스턴스 단위로 가상화하여 할당할 수 있도록 설정합니다.
 
-클러스터 노드에 설치된 GPU를 인스턴스 단위로 가상화하여 할당할 수 있도록 설정합니다.
+3. 앞에서 GPU exporter 설정이 정상적으로 되었다면, 할당 가능한 GPU 자원이 표시됩니다.
 
-앞에서 GPU exporter 설정이 정상적으로 되었다면, 할당 가능한 GPU 자원이 표시됩니다.
+4. 인스턴스의 vCPU, vRAM, 개수를 선택한 뒤, 유효성 검사를 실시합니다.
 
-![image.png](image%2013.png)
+5. 유효성 검사가 완료되면, 저장 버튼을 눌러 인스턴스를 활성화합니다.
 
-인스턴스를 다음과 같이 선택한 뒤, 유효성 검사를 실시합니다.
-
-![image.png](image%2014.png)
-
-유효성 검사가 완료되면, 저장 버튼을 눌러 인스턴스를 활성화합니다.
-
-인스턴스 설정 초기화가 필요하다면 초기화 버튼을 눌러 진행하시면 됩니다.
-
-![image.png](image%2015.png)
-
-가상화된 자원이 다음과 같이 표시되면 정상적으로 완료된 것입니다.
+6. 인스턴스 설정 초기화가 필요하다면 초기화 버튼을 눌러 진행하시면 됩니다.
 
 ### 워크스페이스 생성
-
-![image.png](image%2016.png)
-
-![image.png](image%2017.png)
-
-![image.png](image%2018.png)
 
 워크스페이스 탭에서 워크스페이스를 생성합니다.
 
@@ -662,18 +823,12 @@ storage-local-nfs-storage-exporter
 
 ### 사용자 계정으로 로그인
 
-![image.png](image%2019.png)
-
 생성한 사용자 계정으로 로그인하여 워크스페이스 목록에 표시되면 설치가 완료됩니다.
-
-![image.png](image%2020.png)
 
 워크스페이스 상세 화면 상단(또는 좌측 메뉴)의 `GenAI Platform` 버튼을 클릭하면 대시보드로 이동합니다.
 
 <aside>
-✅
-
-여기까지 정상적으로 진행하셨다면 초기 설정이 모두 완료된 것입니다.
+✅ 여기까지 정상적으로 진행하셨다면 초기 설정이 모두 완료된 것입니다.
 
 </aside>
 
