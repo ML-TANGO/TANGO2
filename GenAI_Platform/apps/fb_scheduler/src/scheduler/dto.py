@@ -289,6 +289,10 @@ class FineTuningParam(BaseModel):
     warmup_steps : int = Field(default=0, description='Linear warmup over warmup_steps.')
     load_in_8bit : int = Field(default=0, description='')
     used_lora : int = Field(default=0, description='used lora')
+    precision : Optional[str] = Field(default="auto", description='학습 정밀도: "auto" | "fp16" | "bf16"')
+    auto_target_modules : Optional[int] = Field(default=1, description='LoRA 타겟 모듈 자동 감지: 1=auto(all-linear), 0=static map')
+    dataset_format : Optional[str] = Field(default="auto", description='데이터셋 형식: "auto" | "text" | "chat" | "instruction"')
+    zero_stage : Optional[int] = Field(default=1, description='DeepSpeed ZeRO stage: 1, 2, 3')
 
 
 

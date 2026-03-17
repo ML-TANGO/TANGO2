@@ -20,6 +20,6 @@ aiofiles
 aiokafka
 aiopath
 pytest
-huggingface-hub==0.34.3  # 최신버전에서 HFFolder 지원하지 않아 구버전으로 롤백
+huggingface-hub>=0.28.0
 pycryptodome
 python-multipart

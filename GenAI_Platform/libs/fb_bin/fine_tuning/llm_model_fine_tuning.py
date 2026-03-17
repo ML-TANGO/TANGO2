@@ -41,7 +41,8 @@ from aiokafka import AIOKafkaConsumer  # type: ignore
 @dataclass
 class TrainingConfig:
     """학습 설정을 관리하는 데이터 클래스"""
-    fp16: bool = True  # 16비트 정밀도 사용으로 메모리 절약 및 학습 속도 향상
+    fp16: bool = True  # 16비트 정밀도 (기본값, precision 자동 감지로 덮어씀)
+    bf16: bool = False  # BF16 정밀도 (BF16 네이티브 모델에서 자동 활성화)
     weight_decay: float = 0.01  # 가중치 감쇠로 과적합 방지
     overwrite_output_dir: bool = True  # 기존 출력 디렉토리 덮어쓰기
     output_dir: str = "/model"  # 모델 저장 경로
@@ -55,6 +56,7 @@ class TrainingConfig:
     logging_steps: int = 100  # 로그 기록 간격
     save_steps: int = 500  # 모델 저장 간격
     prediction_loss_only: bool = True  # 예측 손실만 계산하여 메모리 절약
+    gradient_checkpointing: bool = True  # activation 재계산으로 VRAM 절약 (학습 속도 ~20% 감소, 메모리 대폭 절약)
     dataloader_pin_memory: bool = False  # 메모리 고정 비활성화 (DeepSpeed 호환성)
     dataloader_num_workers: int = 0  # 데이터 로더 워커 수 (DeepSpeed 호환성)
 
@@ -76,6 +78,10 @@ class FineTuningArgs:
     used_dist: int = 1  # 분산 학습 사용 여부
     load_in_8bit: int = 0  # 8비트 양자화 사용 여부
     deepspeed: Optional[str] = None  # DeepSpeed 설정 파일 경로
+    precision: str = "auto"  # 학습 정밀도: "auto" | "fp16" | "bf16"
+    auto_target_modules: int = 1  # LoRA 타겟 모듈 자동 감지: 1=auto(all-linear), 0=static map
+    dataset_format: str = "auto"  # 데이터셋 형식: "auto" | "text" | "chat" | "instruction"
+    zero_stage: int = 1  # DeepSpeed ZeRO stage: 1, 2, 3
 
 
 class PathManager:
@@ -419,8 +425,12 @@ class ModelManager:
     """모델 관련 기능을 관리하는 클래스"""
 
     @staticmethod
-    def get_target_modules(model) -> list:
-        """모델 타입에 따른 LoRA 타겟 모듈을 반환 - attention 관련 모듈들에 LoRA 적용"""
+    def get_target_modules(model, auto: bool = True):
+        """LoRA 타겟 모듈을 반환 - auto=True이면 PEFT all-linear 자동 감지 사용"""
+        if auto:
+            return "all-linear"  # PEFT >= 0.13.0: 모든 Linear 레이어 자동 감지
+
+        # auto=False: 아키텍처별 static map (하위 호환 fallback)
         model_name = model.__class__.__name__.lower()
 
         target_modules_map = {
@@ -503,19 +513,19 @@ class DatasetManager:
             raise ValueError(f"⚠️ 지원하지 않는 확장자: {ext}")
 
     @staticmethod
-    def prepare_datasets(dataset_path: str, cutoff_length: int, tokenizer) -> Tuple[Dataset, Optional[Dataset]]:
+    def prepare_datasets(dataset_path: str, cutoff_length: int, tokenizer, dataset_format: str = "auto") -> Tuple[Dataset, Optional[Dataset]]:
         """데이터셋을 로드하고 전처리 - 토크나이징 및 train/validation 분할"""
         dataset = DatasetManager.load_dataset_by_path(dataset_path=dataset_path)
-        
+
         # train/validation 분할 - validation이 있으면 validation 사용, 없으면 test 사용
         train_dataset = dataset['train']
         eval_dataset = dataset.get('validation', dataset.get('test'))
-        
+
         # 데이터셋에 있는 split 종류 로그 출력
         available_splits = list(dataset.keys())
         DatasetManager.logger.info(f"📊 데이터셋에서 사용 가능한 split 종류: {available_splits}")
         DatasetManager.logger.info(f"📈 사용할 train split: train (샘플 수: {len(train_dataset)})")
-        
+
         if eval_dataset is not None:
             eval_split_name = 'validation' if 'validation' in dataset else 'test'
             DatasetManager.logger.info(f"📉 사용할 evaluation split: {eval_split_name} (샘플 수: {len(eval_dataset)})")
@@ -524,20 +534,49 @@ class DatasetManager:
                   f"현재 사용 가능한 스플릿: {available_splits}. "
                   f"평가 데이터셋 없이 학습을 진행합니다.")
 
-        # 토크나이징 함수 - 텍스트를 토큰으로 변환하고 labels 설정
+        # 데이터셋 형식 자동 감지
+        sample_columns = train_dataset.column_names
+        if dataset_format == "auto":
+            if "messages" in sample_columns or "conversations" in sample_columns:
+                detected_format = "chat"
+            elif "instruction" in sample_columns:
+                detected_format = "instruction"
+            else:
+                detected_format = "text"
+        else:
+            detected_format = dataset_format
+        DatasetManager.logger.info(f"📝 데이터셋 형식: {detected_format} (요청: {dataset_format})")
+
+        # 토크나이징 함수 - 형식에 따라 분기
         def tokenize_function(examples):
+            if detected_format == "chat":
+                # messages/conversations 컬럼 → chat template 적용
+                col = "messages" if "messages" in examples else "conversations"
+                texts = [
+                    tokenizer.apply_chat_template(msgs, tokenize=False, add_generation_prompt=False)
+                    if hasattr(tokenizer, "apply_chat_template") and tokenizer.chat_template
+                    else " ".join(m.get("content", "") for m in msgs)
+                    for msgs in examples[col]
+                ]
+            elif detected_format == "instruction":
+                # instruction/input/output 컬럼 → 프롬프트 조합
+                instructions = examples.get("instruction", [""] * len(examples["instruction"]))
+                inputs = examples.get("input", [""] * len(instructions))
+                outputs = examples.get("output", [""] * len(instructions))
+                texts = [
+                    f"{inst}\n{inp}\n{out}".strip()
+                    for inst, inp, out in zip(instructions, inputs, outputs)
+                ]
+            else:
+                # 기본: text 컬럼
+                texts = examples["text"]
+
             tok = tokenizer(
-                examples["text"],
-                padding="max_length",   # 항상 max_length 길이로 패딩
+                texts,
+                padding="max_length",
                 truncation=True,
                 max_length=cutoff_length,
                 return_attention_mask=True
-                # examples['text'],
-                # padding=True,
-                # max_length=cutoff_length,
-                # truncation=True,
-                # return_tensors='pt',
-                # return_attention_mask=True
             )
             # causal LM용 labels = input_ids 복사본
             tok["labels"] = [list(ids) for ids in tok["input_ids"]]
@@ -576,39 +615,75 @@ class TrainingManager:
         self.training_config = TrainingConfig()
         # TrainingArguments에서 제외할 파라미터들 (중복 방지)
         self.exclude_keys = {
-            "fp16", "weight_decay", "overwrite_output_dir", "output_dir", "logging_dir",
+            "fp16", "bf16", "weight_decay", "overwrite_output_dir", "output_dir", "logging_dir",
             "remove_unused_columns", "save_total_limit", "save_strategy", "logging_strategy",
             "eval_strategy", "eval_steps", "logging_steps", "save_steps", "prediction_loss_only",
             "dataloader_pin_memory", "dataloader_num_workers"
         }
 
-    def create_training_arguments(self, args: FineTuningArgs, remove_unused_columns: bool) -> TrainingArguments:
-        """TrainingArguments 생성 - 사용자 설정 파일 또는 기본 DeepSpeed 설정 사용"""
+    @staticmethod
+    def build_deepspeed_config(use_bf16: bool, zero_stage: int = 1) -> dict:
+        """DeepSpeed 설정을 동적으로 생성 - precision과 ZeRO stage에 따라 fp16/bf16 자동 전환"""
+        return {
+            "train_batch_size": "auto",
+            "train_micro_batch_size_per_gpu": "auto",
+            "gradient_accumulation_steps": "auto",
+            "gradient_clipping": "auto",
+            "zero_allow_untested_optimizer": True,
+            "fp16": {
+                "enabled": not use_bf16,
+                "loss_scale": 0,
+                "loss_scale_window": 1000,
+                "initial_scale_power": 16,
+                "hysteresis": 2,
+                "min_loss_scale": 1,
+            },
+            "bf16": {
+                "enabled": use_bf16,
+            },
+            "zero_optimization": {
+                "stage": zero_stage,
+                "allgather_partitions": True,
+                "allgather_bucket_size": 5e8,
+                "overlap_comm": True,
+                "reduce_scatter": True,
+                "reduce_bucket_size": 5e8,
+                "contiguous_gradients": True,
+                "round_robin_gradients": True,
+            },
+        }
+
+    def create_training_arguments(self, args: FineTuningArgs, remove_unused_columns: bool, use_bf16: bool = False) -> TrainingArguments:
+        """TrainingArguments 생성 - 사용자 설정 파일 또는 동적 DeepSpeed 설정 사용"""
         self.training_config.remove_unused_columns = remove_unused_columns
-        
+
         if args.config_path:
             # 사용자 정의 설정 파일 로드
             config_path = self.path_manager.config_path / args.config_path
             with open(config_path, "r", encoding="utf-8") as file:
                 config = json.load(file)
-            
+
             # cutoff_length는 토크나이징에서 이미 처리되므로 제거
             if config.get("cutoff_length"):
                 del config["cutoff_length"]
-            
+
             # 제외할 파라미터를 제거하고 필터링하여 중복 방지
-            filtered_data = {key: value for key, value in config.items() 
+            filtered_data = {key: value for key, value in config.items()
                            if key not in self.exclude_keys}
-            
+
             return TrainingArguments(**filtered_data, **self.training_config.__dict__)
         else:
-            # 디폴트 DeepSpeed config 사용
+            # DeepSpeed config 동적 생성 (precision + ZeRO stage 반영)
+            ds_config = TrainingManager.build_deepspeed_config(
+                use_bf16=use_bf16, zero_stage=args.zero_stage
+            )
+            self.logger.info(f"DeepSpeed config 동적 생성: precision={'bf16' if use_bf16 else 'fp16'}, ZeRO stage={args.zero_stage}")
             return TrainingArguments(
                 learning_rate=args.learning_rate,
                 gradient_accumulation_steps=args.gradient_accumulation_steps,
                 num_train_epochs=args.num_train_epochs,
                 warmup_steps=args.warmup_steps,
-                deepspeed=str(self.path_manager.fine_tuning_config_path),
+                deepspeed=ds_config,
                 **self.training_config.__dict__
             )
 
@@ -730,10 +805,15 @@ class FineTuningEngine:
             return None
 
     def load_tokenizer(self, model_path: Path):
-        """토크나이저 로드 - 패딩 토큰을 EOS 토큰으로 설정"""
+        """토크나이저 로드 - pad_token이 없는 경우에만 EOS 토큰으로 설정"""
         try:
             tokenizer = AutoTokenizer.from_pretrained(str(model_path), trust_remote_code=True)
-            tokenizer.pad_token = tokenizer.eos_token  # 패딩 토큰을 EOS 토큰으로 설정
+            if tokenizer.pad_token is None or tokenizer.pad_token_id is None:
+                tokenizer.pad_token = tokenizer.eos_token
+                tokenizer.pad_token_id = tokenizer.eos_token_id
+                self.logger.info("pad_token 미정의 → eos_token으로 설정")
+            else:
+                self.logger.info(f"pad_token 사용: {tokenizer.pad_token}")
             self.logger.info("TOKENIZER LOAD SUCCESS")
             return tokenizer
         except Exception as e:
@@ -776,15 +856,21 @@ class FineTuningEngine:
             #         model_path = self.path_manager.model_path
 
             # 모델 로드 - 8비트 양자화 옵션 지원
+            # torch_dtype="auto": 모델 config의 네이티브 dtype(fp16/bf16)으로 로딩하여 VRAM 절약
             if args.load_in_8bit:
                 quantization_config = BitsAndBytesConfig(load_in_8bit=True)
                 model = AutoModelForCausalLM.from_pretrained(
                     str(model_path),
                     quantization_config=quantization_config,
+                    torch_dtype="auto",
                     trust_remote_code=True
                 )
             else:
-                model = AutoModelForCausalLM.from_pretrained(str(model_path), trust_remote_code=True)
+                model = AutoModelForCausalLM.from_pretrained(
+                    str(model_path),
+                    torch_dtype="auto",
+                    trust_remote_code=True
+                )
 
             # LoRA 설정 - 기존 LoRA 모델 병합 또는 새 LoRA 적용
             if args.used_lora or is_source_model_lora:
@@ -813,7 +899,9 @@ class FineTuningEngine:
                 if model_type == "gpt_oss" or "gptoss" in model.__class__.__name__.lower():
                     target_modules = ["q_proj", "k_proj", "v_proj", "o_proj"]
                 else:
-                    target_modules = ModelManager.get_target_modules(model)
+                    target_modules = ModelManager.get_target_modules(
+                        model, auto=bool(args.auto_target_modules)
+                    )
                 lora_config = LoraConfig(
                     r=8,  # LoRA 랭크 (적응 가능한 파라미터 수)
                     lora_alpha=16,  # LoRA 스케일링 팩터
@@ -821,6 +909,8 @@ class FineTuningEngine:
                     target_modules=target_modules  # LoRA를 적용할 모듈들
                 )
                 model = get_peft_model(model, lora_config)
+                # LoRA는 대부분 파라미터를 frozen → gradient checkpointing과 호환되려면 입력에 requires_grad 필요
+                model.enable_input_require_grads()
                 self.logger.info("LORA MODEL LOAD SUCCESS")
 
             self.logger.info("MODEL LOAD SUCCESS")
@@ -844,7 +934,17 @@ class FineTuningEngine:
 
             # 모델 로드 (LoRA 설정 포함)
             model, remove_unused_columns = self.load_model(model_path, args)
-            
+
+            # Precision 자동 감지 및 TrainingConfig 업데이트
+            if args.precision == "auto":
+                model_dtype = getattr(model.config, "torch_dtype", None)
+                use_bf16 = (model_dtype == torch.bfloat16)
+            else:
+                use_bf16 = (args.precision == "bf16")
+            self.training_manager.training_config.bf16 = use_bf16
+            self.training_manager.training_config.fp16 = not use_bf16
+            self.logger.info(f"학습 정밀도: {'BF16' if use_bf16 else 'FP16'} (precision={args.precision}, model_dtype={getattr(model.config, 'torch_dtype', 'unknown')})")
+
             if args.config_path:
                 # 사용자 정의 설정 파일 로드
                 config_path = self.path_manager.config_path / args.config_path
@@ -854,12 +954,12 @@ class FineTuningEngine:
 
 
             # 학습 인자 설정 (사용자 설정 또는 기본값)
-            training_args = self.training_manager.create_training_arguments(args, remove_unused_columns)
+            training_args = self.training_manager.create_training_arguments(args, remove_unused_columns, use_bf16=use_bf16)
             self.logger.info("TRAINING ARGUMENT LOAD SUCCESS")
 
             # 데이터셋 준비 (토크나이징 및 train/validation 분할)
             train_dataset, eval_dataset = DatasetManager.prepare_datasets(
-                args.dataset_path, args.cutoff_length, tokenizer
+                args.dataset_path, args.cutoff_length, tokenizer, dataset_format=args.dataset_format
             )
             self.logger.info("DATASET LOAD SUCCESS")
 
@@ -970,8 +1070,16 @@ def main():
                        help="LoRA (Low-Rank Adaptation) 사용 여부 (0: 비활성화, 1: 활성화)")
     parser.add_argument("--used_dist", type=int, default=1, 
                        help="분산 학습 사용 여부 (0: 비활성화, 1: 활성화)")
-    parser.add_argument("--load_in_8bit", type=int, default=0, 
+    parser.add_argument("--load_in_8bit", type=int, default=0,
                        help="8비트 양자화로 모델 로드 여부 (메모리 절약용, 0: 비활성화, 1: 활성화)")
+    parser.add_argument("--precision", type=str, default="auto",
+                       help="학습 정밀도: auto(모델 dtype 자동 감지) | fp16 | bf16")
+    parser.add_argument("--auto_target_modules", type=int, default=1,
+                       help="LoRA 타겟 모듈 자동 감지: 1=auto(all-linear), 0=static map")
+    parser.add_argument("--dataset_format", type=str, default="auto",
+                       help="데이터셋 형식: auto | text | chat | instruction")
+    parser.add_argument("--zero_stage", type=int, default=1,
+                       help="DeepSpeed ZeRO stage: 1, 2, 3 (기본값: 1)")
     # Kafka 관련 CLI 인자는 제거하고 환경 변수를 사용합니다.
 
     # args = parser.parse_args()
@@ -1003,7 +1111,11 @@ def main():
         used_lora=args.used_lora,
         used_dist=args.used_dist,
         load_in_8bit=args.load_in_8bit,
-        deepspeed=args.deepspeed
+        deepspeed=args.deepspeed,
+        precision=args.precision,
+        auto_target_modules=args.auto_target_modules,
+        dataset_format=args.dataset_format,
+        zero_stage=args.zero_stage,
     )
 
     # 파인튜닝 엔진 실행

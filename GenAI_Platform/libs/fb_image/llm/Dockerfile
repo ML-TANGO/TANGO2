@@ -12,8 +12,7 @@ RUN pip3 install -U "setuptools<81"
 RUN pip3 install -U "git+https://github.com/NICTA/pyairports.git"
 RUN pip3 install -U langchain langchain-huggingface langchain-unstructured langchain-community langchain-milvus || true
 RUN pip3 install -U langchain langchain-huggingface langchain-unstructured langchain-community langchain-milvus || true
-RUN pip3 install -U vllm==v0.5.4 modelscope ray ray[default]
-# vLLM 0.5.4는 transformers 4.44.x / tokenizers 0.19.x 와 호환됨
-# langchain-huggingface 설치 시 최신 버전으로 올라가므로 여기서 다시 고정
-RUN pip3 install transformers==4.44.2 tokenizers==0.19.1
-# RUN pip3 install -U vllm==v0.6.5 modelscope ray ray[default]
+RUN pip3 install -U "vllm>=0.8.0" modelscope "ray[default]"
+# vLLM 0.8.x+: Qwen 3, LLaMA 4 등 최신 아키텍처 지원 (transformers>=4.51.0 필요)
+# langchain-huggingface 설치 시 버전이 내려갈 수 있으므로 다시 고정
+RUN pip3 install "transformers>=4.52.4,<5.0.0" "tokenizers>=0.21.0"

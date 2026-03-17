@@ -6,7 +6,7 @@ import uvicorn
 from fastapi import FastAPI, Request, Depends
 from playground.route import playgrounds
 from utils.resource import CustomResponse, CustomMiddleWare
-from huggingface_hub import HfFolder
+from huggingface_hub import login
 from utils import settings
 from utils import TYPE
 from utils.msa_db.db_base import get_db
@@ -64,8 +64,11 @@ def set_llm_deployment_image():
 def init_setting():
     # 허깅페이스 토큰을 여기에 입력하세요
     hf_token = settings.HUGGINGFACE_TOKEN
-    # 토큰 설정 및 저장
-    HfFolder.save_token(hf_token)
+    # 토큰 설정 및 저장 (네트워크 미연결 환경에서 검증 실패 허용)
+    try:
+        login(token=hf_token, add_to_git_credential=False)
+    except Exception:
+        pass
     # llm 이미지 세팅
     set_llm_deployment_image()
     # set_download_huggingface_readme()

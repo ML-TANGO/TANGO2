@@ -1,3 +1,6 @@
+-- DB charset: utf8mb4 (4-byte UTF-8, 이모지 지원)
+-- ALTER DATABASE `jonathan_llm` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS `playground` (
     `id`                    INT(11) NOT NULL AUTO_INCREMENT,
     `name`                  VARCHAR(32),
