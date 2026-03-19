@@ -285,25 +285,31 @@ def run_web(context: dict, host: str, port: int):
 
     @app.route('/query_stream')
     def query_stream():
+        print(f"[DEBUG] /query_stream 호출됨", flush=True)
         current_mode = context.get("mode")
+        print(f"[DEBUG] 현재 모드: {current_mode}", flush=True)
         if current_mode not in ['conversational', 'dspy_conversational']:
             return Response("data: Streaming is only available in conversational modes.\n\n", mimetype='text/event-stream')
 
         user_query = request.args.get('query', '')
+        print(f"[DEBUG] 사용자 쿼리 수신: {user_query}", flush=True)
         if not user_query:
             return Response("data: Query is required.\n\n", mimetype='text/event-stream')
 
         if current_mode == 'conversational':
             chain = context['chain']
             def generate_and_log_after():
+                print(f"[DEBUG] conversational 모드 응답 생성 시작...", flush=True)
                 full_response = ""
                 # Stream response to client
                 for chunk in chain.stream({"user_query": user_query}):
                     response_piece = get_content(chunk)
                     full_response += response_piece
+                    print(f"[DEBUG] chunk 수신됨 (길이: {len(response_piece)})", flush=True)
                     # Send data chunk by chunk
                     yield f"data: {response_piece}\n\n"
                 # Log after streaming is complete
+                print(f"[DEBUG] 응답 스트리밍 완료. 총 길이: {len(full_response)}", flush=True)
                 log_conversation(user_query, full_response)
             return Response(generate_and_log_after(), mimetype='text/event-stream')
 
@@ -311,11 +317,13 @@ def run_web(context: dict, host: str, port: int):
             dspy_program = context['dspy_program']
             memory = context['memory']
             def generate_and_log_dspy():
+                print(f"[DEBUG] dspy_conversational 모드 프로그램 실행 시작...", flush=True)
                 history_messages = memory.load_memory_variables({})['chat_history']
                 chat_history_str = "\n".join([f"{type(m).__name__}: {m.content}" for m in history_messages])
 
                 result = dspy_program(query=user_query, chat_history=chat_history_str)
                 response = get_content(result.response)
+                print(f"[DEBUG] DSPy 프로그램 실행 완료. 응답 길이: {len(response)}", flush=True)
 
                 memory.save_context({"input": user_query}, {"output": response})
                 log_conversation(user_query, response)
@@ -327,32 +335,41 @@ def run_web(context: dict, host: str, port: int):
 
     @app.route('/query_single_shot', methods=['POST'])
     def query_single_shot():
+        print(f"[DEBUG] /query_single_shot 호출됨", flush=True)
         current_mode = context.get("mode")
+        print(f"[DEBUG] 현재 모드: {current_mode}", flush=True)
         if current_mode not in ["single_shot", "dspy_single_shot"]:
             return jsonify({"error": "This endpoint is for single-shot modes only."}), 400
 
         user_query = request.json.get('query')
+        print(f"[DEBUG] 사용자 쿼리 수신: {user_query}", flush=True)
         if not user_query:
             return jsonify({"error": "Query is required"}), 400
 
         if current_mode == "dspy_single_shot":
             try:
+                print(f"[DEBUG] dspy_single_shot 실행 시작...", flush=True)
                 dspy_program = context['dspy_program']
                 result = dspy_program(query=user_query)
                 response = get_content(result.response)
+                print(f"[DEBUG] DSPy 실행 완료. 응답 길이: {len(response)}", flush=True)
                 log_conversation(user_query, response)
                 return jsonify({"response": response, "assembled_prompt": "[Prompt compiled by DSPy. Not available for display.]"})
             except Exception as e:
+                print(f"[DEBUG] DSPy 에러 발생: {e}", flush=True)
                 return jsonify({"error": f"Error during DSPy execution: {str(e)}"}), 500
         else: # original single_shot
             try:
+                print(f"[DEBUG] single_shot (기본 LLM) 실행 시작...", flush=True)
                 llm = context['llm']
                 final_prompt = _assemble_prompt(context['prompt_components'], context['examples'], user_query)
                 raw_response = llm.invoke(final_prompt)
                 response = get_content(raw_response)
+                print(f"[DEBUG] LLM 실행 완료. 응답 길이: {len(response)}", flush=True)
                 log_conversation(user_query, response)
                 return jsonify({"response": response, "assembled_prompt": final_prompt})
             except Exception as e:
+                print(f"[DEBUG] LLM 에러 발생: {e}", flush=True)
                 return jsonify({"error": f"Error during LLM execution: {str(e)}"}), 500
 
     @app.route('/')
