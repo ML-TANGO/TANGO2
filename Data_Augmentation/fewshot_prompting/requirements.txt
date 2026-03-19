@@ -8,3 +8,5 @@ langchain-classic==1.0.0
 langchain-core==1.0.0
 pyyaml==6.0.1
 dspy-ai==3.0.4
+langchain-openai==1.0.1
+vllm==0.15.1
