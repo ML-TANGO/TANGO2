@@ -489,9 +489,9 @@ async def get_models_by_huggingface(model_name : str = None, huggingface_token :
     
     if private:
         huggingface_token = front_cipher.decrypt(huggingface_token)
-        models = api.list_models(limit=10, task="text-generation", library="transformers", model_name=model_name, expand=["private"], token=huggingface_token)
+        models = api.list_models(limit=10, filter=["text-generation", "transformers"], search=model_name, expand=["private"], token=huggingface_token)
     else:
-        models = api.list_models(limit=10, task="text-generation", library="transformers", model_name=model_name)
+        models = api.list_models(limit=10, filter=["text-generation", "transformers"], search=model_name)
     parse_model_ids = [ model.id for model in models]
     return parse_model_ids
 
