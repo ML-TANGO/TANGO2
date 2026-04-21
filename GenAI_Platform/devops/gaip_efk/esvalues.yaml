@@ -71,13 +71,13 @@ kibana:
         usePemCerts: true
   #nodeSelector:
   #  node-role.kubernetes.io/manage: ""
-  resources: 
+  resources:
     limits:
-      cpu: 3000m
-      memory: 8Gi
-    requests:
-      cpu: 500m
+      cpu: 1000m
       memory: 2Gi
+    requests:
+      cpu: 200m
+      memory: 1Gi
   service:
     type: NodePort
   # ingress:
@@ -94,14 +94,14 @@ kibana:
 
 master:
   replicaCount: 1
-  resources: 
+  resources:
     limits:
-      cpu: 4000m
-      memory: 5Gi
+      cpu: 1000m
+      memory: 3Gi
     requests:
-      cpu: 3000m
-      memory: 4Gi
-  heapSize: 2048m
+      cpu: 500m
+      memory: 2Gi
+  heapSize: 1024m
   #nodeSelector:
   #  node-role.kubernetes.io/manage: ""
   persistence:
@@ -109,12 +109,12 @@ master:
 
 data:
   replicaCount: 1
-  resources: 
+  resources:
     limits:
-      cpu: 4000m
+      cpu: 2000m
       memory: 10Gi
     requests:
-      cpu: 3000m
+      cpu: 1000m
       memory: 8Gi
   heapSize: 4096m
   # nodeSelector:
@@ -129,28 +129,28 @@ coordinating:
   #   minReplicas: 2
   #   maxReplicas: 7
   #   targetMemory: "90"
-  resources: 
+  resources:
     limits:
-      cpu: 2000m
-      memory: 3Gi
-    requests:
       cpu: 1000m
       memory: 2Gi
+    requests:
+      cpu: 200m
+      memory: 1Gi
   ## Note: The recommended heapSize is half of the container's memory.
-  heapSize: 1024m
+  heapSize: 512m
   #nodeSelector:
   #  node-role.kubernetes.io/manage: ""
 
 ingest:
   replicaCount: 1
-  resources: 
+  resources:
     limits:
-      cpu: 1000m
-      memory: 1Gi
-    requests:
       cpu: 500m
       memory: 1Gi
-  heapSize: 512m
+    requests:
+      cpu: 200m
+      memory: 512Mi
+  heapSize: 256m
   #nodeSelector:
   #  node-role.kubernetes.io/manage: ""
 
