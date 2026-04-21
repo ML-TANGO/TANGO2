@@ -30,3 +30,9 @@ rdma:
   perf:
     enabled:
   p2p:
+
+# Pod termination grace period in seconds.
+# 0 (prior default) caused immediate SIGKILL preventing preStop hook execution and graceful shutdown.
+# 60 gives preStop (fine_tuning_stop.sh) time to run and deepspeed/NCCL a chance to clean up.
+# Raise for large multi-GPU jobs that need more time for NCCL finalize.
+terminationGracePeriodSeconds: 60
