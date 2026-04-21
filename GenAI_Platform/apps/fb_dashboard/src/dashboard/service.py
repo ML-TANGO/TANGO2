@@ -60,6 +60,25 @@ async def check_healthz():
     await redis_client.hgetall(redis_key.WORKSPACE_PODS_STATUS)
     return True
 
+
+def _fine_tuning_pod_claims_resources(status: str) -> bool:
+    """Return True if a fine-tuning pod with this status should contribute to the
+    workspace instance-usage graph.
+
+    Background: `TYPE.KUBER_NOT_RUNNING_STATUS` intentionally excludes "error" —
+    an errored training pod still occupies cluster resources until the user
+    acknowledges it. However, OOMKilled pods (which also surface as "error")
+    silently accumulate here; the monitoring loop keeps rewriting them to Redis
+    WORKSPACE_PODS_STATUS even after the corresponding K8s ResourceQuota has
+    been released. For the per-instance graph we therefore exclude "error"
+    explicitly so the graph matches the (quota-derived) usage percentage.
+    """
+    if status in TYPE.KUBER_NOT_RUNNING_STATUS:
+        return False
+    if status == TYPE.KUBE_POD_STATUS_ERROR:
+        return False
+    return True
+
 #===================================================================================================
 # admin dashboard
 def get_admin_dashboard_info():
@@ -406,10 +425,12 @@ async def get_workspace_instance_used(redis_client, workspace_id):
                 platform_resource_used_total[TYPE.PLATFORM_A_LLM]["gpu"] += total_gpu
 
         for model_id, model_train in model_pod.items():
-            if model_train["status"] in TYPE.KUBER_NOT_RUNNING_STATUS: # 20241217 wyatt 수정
+            if not _fine_tuning_pod_claims_resources(model_train["status"]):
+                # 2026-04-21: exclude OOMKilled / errored fine-tuning pods so the
+                # instance graph matches the quota-derived usage percentage.
                 continue
             total_cpu = model_train["resource"]["cpu"]
-            total_gpu = model_train["resource"]["gpu"] 
+            total_gpu = model_train["resource"]["gpu"]
             total_ram = model_train["resource"]["ram"]
             instance_id = model_train["instance_id"]
             instance_status[int(instance_id)][TYPE.FINE_TUNING_TYPE][model_id] = {
