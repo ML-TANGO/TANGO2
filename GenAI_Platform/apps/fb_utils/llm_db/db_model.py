@@ -137,7 +137,7 @@ def get_models_sync(workspace_id : int):
             cur = conn.cursor()
             sql = """
                 SELECT m.id, m.description, m.name, m.create_user_id, m.workspace_id,
-                m.latest_fine_tuning_status, m.instance_id, m.gpu_count, m.instance_count, m.instance_count as instance_allocate,
+                m.latest_fine_tuning_status, m.instance_id, m.gpu_count, m.instance_count,
                 m.commit_status, m.pod_count,
                 DATE_FORMAT(m.create_datetime, %s) AS create_datetime, 
                 w.name as workspace_name, u.name as create_user_name,
