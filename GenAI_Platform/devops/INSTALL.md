@@ -54,19 +54,24 @@ cp ~/.kube/config GenAI_Platform/devops/fb_common_app/helm/file/kube/config
 
 인프라 차트(`gaip_*`)는 차트별로 values 파일 구조가 다릅니다.
 
-- `gaip_nfs_provisioner/run.sh`: `-f <values.yaml>` **필수**
+- `gaip_nfs_provisioner/run.sh`: `-f <values.yaml>` **필수**. 현재 시스템/EFK/마커 용도로 values가 분리되어 있습니다 (`values-system.yaml`, `values-efk.yaml`, `values-marker.yaml`, `*_dev.yaml`).
 - `gaip_kong/run.sh`: `-f <values.yaml>` **필수** (`developer:` 값을 namespace로 사용)
 - `gaip_registry/run.sh`: `-f <values.yaml>` **필수**
 - `gaip_maraidb/run.sh`: `install`은 기본 값으로 설치, `init -f <values.yaml>`은 **values 필요**
 - `gaip_kafka/run.sh`: 기본적으로 `values.yaml`을 사용(스크립트 내부 고정)
-- `gaip_redis/run.sh`, `gaip_mongodb/run.sh`: 기본 설정으로 설치(스크립트 내부 고정)
+- `gaip_redis/run.sh`: 기본 설정으로 설치(스크립트 내부 고정). 단일 노드 환경에서도 `redis-cluster` 차트를 사용합니다.
+- `gaip_mongodb/run.sh`: 기본 설정으로 설치(스크립트 내부 고정)
 - `gaip_prometheus/run.sh`: 스크립트 내부 `value.yaml` 사용 + `helm dependency build kube-prometheus-stack` 수행
+- `gaip_efk/`: `run.sh` 단일 진입점 대신 `helm_repo_add.sh` → `helm_upgrade_elastic.sh` → (Elastic Pod Running 확인) → `elastic_init.sh` → `helm_upgrade_fluent.sh` 순서로 분리되어 있습니다.
+- `gaip_gpu_operators/run.sh`: 인자 없이 실행. NVIDIA GPU 노드가 있는 경우에만 필요합니다.
+
+> **2026-04-21 기준 기본 리소스 조정**: `gaip_redis/redis-cluster/values.yaml` 와 `gaip_efk/esvalues.yaml` 의 CPU/메모리 request 가 실측 사용량 수준으로 축소되었습니다 (단일 노드 환경에서 파인튜닝 admission 거부 완화 목적). 별도 노드 자원 여유가 충분한 클러스터에서 더 큰 워크로드를 받게 하려면 두 values 의 `resources.requests` 를 환경에 맞게 상향 조정하세요.
 
 ## 설치 순서(권장)
 
 아래 순서는 `devops`에 포함된 기본 차트(스토리지/네트워크/DB/메시징/모니터링) 의존성을 기준으로 정리한 권장 순서입니다.
 
-1. **NFS Provisioner** (`gaip_nfs_provisioner`)
+1. **NFS Provisioner** (`gaip_nfs_provisioner`) — system / efk / (선택) marker
 2. **(Optional) MetalLB** (`gaip_metallb`)
 3. **Kong** (`gaip_kong`)
 4. **Registry** (`gaip_registry`)
@@ -74,9 +79,43 @@ cp ~/.kube/config GenAI_Platform/devops/fb_common_app/helm/file/kube/config
 6. **Kafka** (`gaip_kafka`)
 7. **Redis** (`gaip_redis`)
 8. **MongoDB** (`gaip_mongodb`)
-9. **Prometheus** (`gaip_prometheus`)
-10. **Platform Apps** (`devops/run.sh`)
-11. **LLM Apps(선택)** (`devops/run_llm.sh`)
+9. **(Optional) Prometheus** (`gaip_prometheus`)
+10. **(Optional) EFK** (`gaip_efk`) — Elastic 설치 → Pod Running 확인 → init/Fluent 설치
+11. **(Optional) GPU Operators** (`gaip_gpu_operators`) — NVIDIA GPU 노드가 있는 경우
+12. **Platform Apps** (`devops/run.sh`)
+13. **LLM Apps(선택)** (`devops/run_llm.sh`)
+
+### 권장 설치 흐름 (`run_step1/2/3` 스크립트 사용)
+
+위 순서를 단계별로 묶어 실행하는 래퍼 스크립트가 추가되어 있습니다. **신규 환경 설치 시에는 이 흐름을 권장합니다.**
+
+```bash
+cd GenAI_Platform/devops
+
+# Step 1 — 스토리지/네트워크 베이스 (NFS + 선택적 MetalLB)
+./run_step1_infra_base.sh \
+  --system ./gaip_nfs_provisioner/values-system.yaml \
+  --efk    ./gaip_nfs_provisioner/values-efk.yaml \
+  --metallb            # MetalLB가 필요할 때만
+
+# Step 2 — 핵심 인프라 (Kong → Registry → MariaDB init)
+./run_step2_core_infra.sh \
+  --kong     ./gaip_kong/values.yaml \
+  --registry ./gaip_registry/values.yaml \
+  --mariadb  ./gaip_maraidb/values.yaml
+
+# Kafka / Redis / MongoDB 는 step 스크립트로 묶여 있지 않습니다.
+# 아래 "설치 예시 → 6) Kafka / Redis / MongoDB" 항목을 참고하여 개별 실행하세요.
+
+# Step 3 — 선택 옵저버빌리티 / GPU
+./run_step3_optional_obs.sh --prometheus
+./run_step3_optional_obs.sh --efk           # Elastic 설치만
+# Elastic Pod이 모두 Running 된 뒤
+./run_step3_optional_obs.sh --efk --efk-init   # Elastic init + Fluent
+./run_step3_optional_obs.sh --gpu            # GPU 노드가 있는 경우만
+```
+
+> 각 스크립트는 모두 `devops/` 디렉터리에서 실행해야 합니다. 옵션을 생략하면 default values 파일을 사용합니다.
 
 ## 설치 예시
 
@@ -168,6 +207,38 @@ cd ../gaip_mongodb
 ```bash
 cd GenAI_Platform/devops/gaip_prometheus
 ./run.sh install
+```
+
+### 8) EFK (선택)
+
+`gaip_efk`는 단일 `run.sh`가 아닌, 단계가 분리된 스크립트들로 구성됩니다. Elastic 클러스터가 정상 기동된 뒤에 init/Fluent를 실행하는 것이 안전합니다.
+
+```bash
+cd GenAI_Platform/devops/gaip_efk
+
+# 1) Helm 저장소 등록
+./helm_repo_add.sh
+
+# 2) Elastic 설치
+./helm_upgrade_elastic.sh
+
+# 3) Elastic Pod이 모두 Running 인지 확인
+kubectl -n efk get pods
+
+# 4) 인덱스/유저 초기화 + Fluent 설치
+./elastic_init.sh
+./helm_upgrade_fluent.sh
+```
+
+> `esvalues.yaml`의 master/data/coordinating/ingest/Kibana 리소스는 2026-04-21 기준 단일 노드 환경에서도 동작 가능한 수준으로 축소되어 있습니다. 더 큰 워크로드를 다루는 환경에서는 `resources.requests`/`heapSize`를 다시 상향하세요.
+
+### 9) GPU Operators (선택)
+
+NVIDIA GPU 노드가 있는 환경에서만 설치합니다.
+
+```bash
+cd GenAI_Platform/devops/gaip_gpu_operators
+./run.sh
 ```
 
 ## Platform Apps / LLM Apps 설치
