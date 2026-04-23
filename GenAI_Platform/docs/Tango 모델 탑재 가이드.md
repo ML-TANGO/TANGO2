@@ -43,18 +43,24 @@
 
 ## 0.5 현재 엔진 버전 정보
 
-> ℹ️ **최종 업데이트: 2026-03-13**
-> 
+> ℹ️ **최종 업데이트: 2026-04-22** (소스 기준 동기화)
+>
+> 아래 표는 저장소의 **소스 코드(requirements / Dockerfile)** 가 정의하는 진실 값입니다. 컨테이너 내부에서 `pip install` 시점에 해석되는 실제 패치 버전은 빌드 시점에 따라 달라질 수 있으므로, 모델/어댑터를 만들 때는 **허용 범위 안의 최신 안정 버전**을 기준으로 작업해 주세요.
 
-| 구성 요소 | 버전 |
-| --- | --- |
-| vLLM (배포) | `0.16.0` |
-| transformers | `4.57.6` (`>=4.52.4, <5.0.0`) |
-| torch | `2.5.1` (`>=2.5.1, <2.6.0`) |
-| PEFT | `0.18.1` |
-| DeepSpeed | `0.18.7` |
-| bitsandbytes | `>=0.45.0` |
-| CUDA | `12.4.1` |
+| 구성 요소 | 코드 기준 허용 범위 | 출처 |
+| --- | --- | --- |
+| CUDA (파인튜닝 베이스) | `12.4.1` | `apps/llm_model/fine_tuning_image/Dockerfile` (`nvidia/cuda:12.4.1-devel-ubuntu22.04`) |
+| torch | `>=2.5.1, <2.6.0` | `apps/llm_model/fine_tuning_image/requirements.txt` |
+| transformers | `>=4.52.4, <5.0.0` | 동상 |
+| PEFT | `>=0.15.0` | 동상 |
+| DeepSpeed | `>=0.16.0` | 동상 |
+| accelerate | `>=1.5.0` | 동상 |
+| bitsandbytes | `>=0.45.0` | 동상 |
+| huggingface-hub | `>=0.28.0` | 동상 |
+| tokenizers | `>=0.21.0` | 동상 |
+| vLLM (배포/서빙) | 배포 시 helm values 의 이미지 태그로 결정 | `apps/fb_scheduler/helm_chart/deployment_llm/values.yaml` 의 `pod.image` |
+
+> ⚠️ vLLM 은 본 저장소의 파이썬 의존성으로 고정되어 있지 않고, 모델 배포 시 helm 차트 (`deployment_llm`) 가 별도 이미지를 끌어와서 사용합니다. 운영 클러스터에서 실제로 어떤 vLLM 버전이 사용되는지는 helm values 의 `pod.image` 태그를 확인하세요. (운영팀에 의해 환경별로 다를 수 있습니다.)
 
 ---
 

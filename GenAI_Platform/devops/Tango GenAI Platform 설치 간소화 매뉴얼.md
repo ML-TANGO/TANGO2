@@ -92,8 +92,9 @@ ls run_step1_infra_base.sh run_step2_core_infra.sh run_step3_optional_obs.sh
 ```bash
 cd GenAI_Platform/devops
 cp values.yaml.template values_<서버명>.yaml
-# 예: cp values.yaml.template values_tango2.yaml
 ```
+
+> 📌 `values_<서버명>.yaml` 파일은 운영 환경의 IP/계정/비밀번호가 들어가므로 **저장소에 커밋하지 않습니다.** 저장소 루트의 `.gitignore` 가 `/devops/values_*.yaml` 패턴으로 자동 차단합니다.
 
 ### 2-2. 필수 항목 입력
 
@@ -178,6 +179,8 @@ kubectl get pvc -A
 
 대상: Kong / Registry / MariaDB / Kafka / Redis / MongoDB
 
+> 📌 **Redis 리소스 기본값 (2026-04-21 기준)**: `gaip_redis/redis-cluster/values.yaml` 의 CPU/Memory `requests` 가 단일 노드 환경에서 파인튜닝 admission 거부를 피하도록 실측 사용량 수준으로 축소되어 있습니다 (CPU 2→500m, Memory 8Gi→2Gi 등). 노드 자원이 충분한 클러스터에서 더 큰 워크로드를 받게 하려면 해당 values 의 `resources.requests` 를 환경에 맞게 상향하세요.
+
 2-3절 에서 설정한 NFS 서버 주소와 도커 이미지 레지스트리 경로를 `./gaip_registry/values.yaml`에 입력합니다.
 
 #### 표준 설치 스크립트 실행
@@ -224,6 +227,10 @@ kubectl get pods -A | rg -n "kong|registry|mariadb|kafka|redis|mongo"
 ### 3-3. 3단계: 관측/옵션 (선택)
 
 대상: Prometheus / GPU Operators / EFK
+
+> 📌 **EFK(Elasticsearch) 리소스 기본값 (2026-04-21 기준)**: `gaip_efk/esvalues.yaml` 의 master/data/coordinating/ingest/Kibana CPU·heapSize 가 단일 노드 환경에서도 동작 가능한 수준으로 축소되어 있습니다. 더 큰 로그 트래픽을 받는 환경에서는 `resources.requests` 와 `heapSize` 를 다시 상향해 주세요.
+>
+> 📌 **EFK 설치 순서 주의**: `--efk` 만 먼저 실행해 Elastic Pod 가 모두 `Running` 인지 확인한 뒤에 `--efk --efk-init` 으로 인덱스 초기화와 Fluent 설치를 진행해야 안전합니다 (아래 설치 예시 순서 그대로).
 
 #### 표준 설치 스크립트 실행
 

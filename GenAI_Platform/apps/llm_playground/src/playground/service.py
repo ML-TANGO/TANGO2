@@ -594,9 +594,9 @@ async def get_hugging_face_model(model_name : str = None, huggingface_token : st
         api = HfApi()
         if private:
             huggingface_token = front_cipher.decrypt(huggingface_token)
-            models = api.list_models(limit=10, task="text-generation", library="transformers", model_name=model_name, expand=["private"], token=huggingface_token)
+            models = api.list_models(limit=10, filter=["text-generation", "transformers"], search=model_name, expand=["private"], token=huggingface_token)
         else:
-            models = api.list_models(limit=10, task="text-generation", library="transformers", model_name=model_name)
+            models = api.list_models(limit=10, filter=["text-generation", "transformers"], search=model_name)
 
         for model_info in models: 
             # model_info = api.model_info(model.id) # list_models 에서 가져온 정보로 조회가 안되 model_info사용 (author, last_modified...)

@@ -268,3 +268,81 @@ class PodName():
 
     def get_base_pod_name(self):
         return self.base_pod_name
+
+
+# === Node request budget helper (added for fine-tuning admission guard) =====
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class NodeBudget:
+    """대상 노드의 남은 K8s scheduler request 예산."""
+    node_name: str
+    memory_free_bytes: int
+    cpu_free_millicores: int
+    gpu_free: int
+    # 진단용 원본 값
+    memory_allocatable_bytes: int
+    memory_used_bytes: int
+    cpu_allocatable_millicores: int
+    cpu_used_millicores: int
+
+
+# K8s pod phase 중 "노드의 request 예산을 차지하는" 상태
+# Succeeded/Failed는 terminated라 차감되지 않음.
+_BUDGETED_POD_PHASES = {"Pending", "Running"}
+
+
+def _millicores(cpu_qty) -> int:
+    if cpu_qty is None:
+        return 0
+    return int(float(parse_quantity(str(cpu_qty))) * 1000)
+
+
+def _bytes(mem_qty) -> int:
+    if mem_qty is None:
+        return 0
+    return int(float(parse_quantity(str(mem_qty))))
+
+
+def get_node_request_budget(node_name: str) -> NodeBudget:
+    """주어진 노드의 남은 memory/cpu/gpu request 예산을 계산해 반환.
+
+    Raises:
+        ApiException: 노드 조회 실패 시. 호출자는 예외 시 FAIL_RETRY 처리(Task 4).
+    """
+    v1 = client.CoreV1Api()
+    node = v1.read_node(node_name)
+    alloc = node.status.allocatable or {}
+    alloc_mem = _bytes(alloc.get("memory"))
+    alloc_cpu_mc = _millicores(alloc.get("cpu"))
+    alloc_gpu = int(alloc.get("nvidia.com/gpu", 0) or 0)
+
+    pod_list = v1.list_pod_for_all_namespaces(field_selector=f"spec.nodeName={node_name}")
+    used_mem = 0
+    used_cpu_mc = 0
+    used_gpu = 0
+    for pod in pod_list.items or []:
+        if pod.status is None or pod.status.phase not in _BUDGETED_POD_PHASES:
+            continue
+        # field_selector는 서버측 필터이지만, 방어적으로 클라이언트측에서도
+        # 노드 이름을 재확인해 다른 노드의 Pod가 예산에 섞이지 않도록 한다.
+        if pod.spec is None or pod.spec.node_name != node_name:
+            continue
+        for c in (pod.spec.containers or []):
+            req = (c.resources.requests if c.resources else None) or {}
+            used_mem += _bytes(req.get("memory"))
+            used_cpu_mc += _millicores(req.get("cpu"))
+            used_gpu += int(req.get("nvidia.com/gpu", 0) or 0)
+
+    return NodeBudget(
+        node_name=node_name,
+        memory_free_bytes=max(0, alloc_mem - used_mem),
+        cpu_free_millicores=max(0, alloc_cpu_mc - used_cpu_mc),
+        gpu_free=max(0, alloc_gpu - used_gpu),
+        memory_allocatable_bytes=alloc_mem,
+        memory_used_bytes=used_mem,
+        cpu_allocatable_millicores=alloc_cpu_mc,
+        cpu_used_millicores=used_cpu_mc,
+    )

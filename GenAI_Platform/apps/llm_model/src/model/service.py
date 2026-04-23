@@ -134,30 +134,35 @@ async def check_model_files(directory_path):
     else:
         return False
 
-async def delete_helm_repo(helm_repo_name : str,  workspace_id : int):
+async def delete_helm_repo(
+    helm_repo_name: str, workspace_id: int
+) -> Tuple[bool, str]:
+    namespace = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=workspace_id)
+    # --wait: 리소스 실제 삭제까지 블록
+    # --timeout 90s: Pod grace period(60s)보다 30s 여유
+    command = f"helm uninstall {helm_repo_name} -n {namespace} --wait --timeout 90s"
+
+    print(command)
     try:
-        namespace = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=workspace_id)
-        command = f"helm uninstall {helm_repo_name} -n {namespace}"
-        
-        print(command)
         process = await asyncio.create_subprocess_shell(
             command,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        
         stdout, stderr = await process.communicate()
+        out = stdout.decode() if stdout else ""
+        err = stderr.decode().strip() if stderr else ""
 
         if process.returncode == 0:
-            return 1, stdout
-        else:
-            err_msg = stderr.strip()
-            if "cannot re-use a name that is still in use" in err_msg:
-                return True, ""
-            print(stdout)
-            print(err_msg)
-            print(command)
-            return False, err_msg
+            return True, out
+
+        # 이미 삭제된 release는 성공으로 간주 (재시도/중복 호출 멱등)
+        if "release not found" in err.lower():
+            return True, "release already absent"
+
+        print(out)
+        print(err)
+        return False, err
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
         return False, str(e)
@@ -1082,28 +1087,106 @@ async def running_fine_tuning(model_id : int, model_dataset_id : int, instance_i
     
     return True
 
-async def stop_fine_tuning(model_id : int):
-    
+async def _uninstall_fine_tuning_with_retry(
+    repo: str,
+    workspace_id: int,
+    max_attempts: int = 2,
+    retry_delay_s: float = 3.0,
+) -> Tuple[bool, str]:
+    """Helm uninstall with bounded retry for transient failures.
+
+    Returns (ok, last_message). Does not sleep after the final attempt.
+
+    Only (False, message) returns from delete_helm_repo trigger a retry —
+    exceptions raised by delete_helm_repo propagate to the caller
+    (delete_helm_repo already wraps subprocess errors in its own try/except
+    and returns (False, ...), so exception propagation is not expected).
+    """
+    last_msg = ""
+    for attempt in range(1, max_attempts + 1):
+        ok, msg = await delete_helm_repo(
+            helm_repo_name=repo, workspace_id=workspace_id
+        )
+        if ok:
+            return True, msg
+        last_msg = msg
+        if attempt < max_attempts:
+            await asyncio.sleep(retry_delay_s)
+    return False, last_msg
+
+
+async def stop_fine_tuning(model_id: int):
     model_info = await db_model.get_model(model_id)
-    workspace_info = await db_model.get_workspace_model(workspace_id=model_info["workspace_id"])
+    workspace_info = await db_model.get_workspace_model(
+        workspace_id=model_info["workspace_id"]
+    )
     fine_tuning_repo = TYPE.FINE_TUNING_REPO_NAME.format(model_id)
-    # helm 삭제
-    res, message = await delete_helm_repo(helm_repo_name=fine_tuning_repo, workspace_id=model_info["workspace_id"])
-    await db_model.update_model_fine_tuning_status(status=TYPE.KUBE_POD_STATUS_STOP, model_id=model_id)
-    tmp_path = PATH.JF_MODEL_TMP_PATH.format(STORAGE_NAME=workspace_info["main_storage_name"], WORKSPACE_NAME=workspace_info["name"], MODEL_NAME=model_info["name"])
-    # checkpoint- 폴더 하위 정보 위치 이동 
+
+    # 1) Helm uninstall (재시도 포함)
+    #    이 시점의 latest_fine_tuning_status는 INSTALLING/RUNNING/PENDING —
+    #    service.py의 재실행 가드가 자연스럽게 차단 중.
+    uninstall_ok, uninstall_msg = await _uninstall_fine_tuning_with_retry(
+        repo=fine_tuning_repo,
+        workspace_id=model_info["workspace_id"],
+    )
+    if not uninstall_ok:
+        # 거짓 STOP 대신 error 기록 (error는 재실행 허용 상태이므로
+        # 사용자가 재시도 가능 — 의도된 동작).
+        await db_model.update_model_fine_tuning_status(
+            status=TYPE.KUBE_POD_STATUS_ERROR, model_id=model_id
+        )
+        return False, f"helm uninstall failed: {uninstall_msg}"
+
+    # 2) 체크포인트 후처리.
+    #    중요: 여기서도 아직 STOP을 기록하지 않는다. 재실행 가드 유지.
+    tmp_path = PATH.JF_MODEL_TMP_PATH.format(
+        STORAGE_NAME=workspace_info["main_storage_name"],
+        WORKSPACE_NAME=workspace_info["name"],
+        MODEL_NAME=model_info["name"],
+    )
     if not await move_checkpoint_files_to_parent(tmp_path):
-        # 체크포인트가 없다면 commit하지 않음
+        # 체크포인트가 없는 경우 — commit job도 건너뛰고 종료.
+        # 재실행 가드를 풀어주기 위해 STOP 기록.
+        await db_model.update_model_fine_tuning_status(
+            status=TYPE.KUBE_POD_STATUS_STOP, model_id=model_id
+        )
         return False, "not exist checkpoint"
-    
-    latest_checkpoint_path = PATH.JF_POD_MODEL_LATEST_CHECKPOINT_PATH.format(MODEL_NAME=model_info["name"])
-    tmp_model_path = PATH.JF_POD_MODEL_TMP_MODEL_PATH.format(MODEL_NAME=model_info["name"])
-    # latest 폴더 비우기
-    res , message = await load_or_stop_helm(workspace_id=model_info["workspace_id"], model_id=model_id, latest_checkpoint_path=latest_checkpoint_path, tmp_model_path=tmp_model_path)
+
+    # 3) commit job 설치 (load_or_stop_helm은 별도 Helm release).
+    latest_checkpoint_path = PATH.JF_POD_MODEL_LATEST_CHECKPOINT_PATH.format(
+        MODEL_NAME=model_info["name"]
+    )
+    tmp_model_path = PATH.JF_POD_MODEL_TMP_MODEL_PATH.format(
+        MODEL_NAME=model_info["name"]
+    )
+    res, message = await load_or_stop_helm(
+        workspace_id=model_info["workspace_id"],
+        model_id=model_id,
+        latest_checkpoint_path=latest_checkpoint_path,
+        tmp_model_path=tmp_model_path,
+    )
     if res:
-        await db_model.update_model_commit_status(commit_status=TYPE.KUBE_POD_STATUS_RUNNING, model_id=model_id, latest_commit_id=model_info["latest_commit_id"], commit_type=TYPE.COMMIT_TYPE_STOP)
-        return res, "success"
-    return res, message
+        # 4) commit job 설치 성공 — 재실행 차단 권한을 commit_status로 이관.
+        #    순서 중요: commit_status를 먼저 RUNNING으로 올리고,
+        #    그 다음 latest_fine_tuning_status를 STOP으로 전이.
+        #    commit_status=RUNNING은 fb_monitoring이 commit pod 종료 시
+        #    DONE/ERROR로 전이 (monitoring_service.py 참조).
+        await db_model.update_model_commit_status(
+            commit_status=TYPE.KUBE_POD_STATUS_RUNNING,
+            model_id=model_id,
+            latest_commit_id=model_info["latest_commit_id"],
+            commit_type=TYPE.COMMIT_TYPE_STOP,
+        )
+        await db_model.update_model_fine_tuning_status(
+            status=TYPE.KUBE_POD_STATUS_STOP, model_id=model_id
+        )
+        return True, "success"
+
+    # commit job 설치 실패 — 가드 해제 위해 ERROR 기록.
+    await db_model.update_model_fine_tuning_status(
+        status=TYPE.KUBE_POD_STATUS_ERROR, model_id=model_id
+    )
+    return False, message
 
 async def get_efk_fine_tuning_logs(model_id : int, pod_name : str, count : int = 100, is_all : bool = True):
     request_log_data = {

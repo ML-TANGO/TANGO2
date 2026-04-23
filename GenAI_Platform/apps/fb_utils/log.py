@@ -98,6 +98,49 @@ class WorkspaceAllocationInfo:
         }
 
 
+def _emit_usage(payload: dict):
+    """Serialize usage payload as JSON so None -> null and values are escaped."""
+    print("[JFB/USAGE]", json.dumps(payload, separators=(",", ":"), ensure_ascii=False))
+
+
+def _build_usage_payload(
+    task,
+    action,
+    user,
+    workspace,
+    task_name=None,
+    update_details=None,
+    info=None,
+):
+    payload = {
+        "user": user,
+        "task": str(task) if task is not None else None,
+        "action": str(action) if action is not None else None,
+        "workspace": workspace,
+        "task_name": task_name,
+        "update_details": update_details,
+    }
+    if info is not None:
+        payload["info"] = info
+    return payload
+
+
+def _resolve_user_name(user_id, user_name):
+    if user_id:
+        info = db_user.get_user(user_id=user_id)
+        if info:
+            return info.get("name")
+    return user_name if user_name else None
+
+
+def _resolve_workspace_name(workspace_id, workspace_name):
+    if workspace_id:
+        info = db_workspace.get_workspace(workspace_id=workspace_id)
+        if info:
+            return info.get("name")
+    return workspace_name if workspace_name else None
+
+
 def logging_info_history(
     task,
     action,
@@ -118,24 +161,18 @@ def logging_info_history(
     :param update_details: stirng, updated detailed information
     :param info: json object, additional information
     """
-    # if info is dict or list, convert to json string
-    if info:
-        if type(info) == dict or type(info) == list:
-            info = json.dumps(info)
-
-    user = (
-        db_user.get_user(user_id=user_id).get("name")
-        if user_id
-        else user_name if user_name else None
-    )
-    workspace = (
-        db_workspace.get_workspace(workspace_id=workspace_id).get("name")
-        if workspace_id
-        else workspace_name if workspace_name else None
-    )
-
-    print(
-        f'[JFB/USAGE] {{"user": "{user}", "task": "{task}", "action": "{action}", "workspace": "{workspace}", "task_name": "{task_name}", "update_details": "{update_details}", "info": {info}}}'
+    user = _resolve_user_name(user_id, user_name)
+    workspace = _resolve_workspace_name(workspace_id, workspace_name)
+    _emit_usage(
+        _build_usage_payload(
+            task=task,
+            action=action,
+            user=user,
+            workspace=workspace,
+            task_name=task_name,
+            update_details=update_details,
+            info=info,
+        )
     )
 
 
@@ -157,19 +194,17 @@ def logging_history(
     :param task_name: string, name of task
     :param update_details: stirng, updated detailed information
     """
-    user = (
-        db_user.get_user(user_id=user_id).get("name")
-        if user_id
-        else user_name if user_name else None
-    )
-    workspace = (
-        db_workspace.get_workspace(workspace_id=workspace_id).get("name")
-        if workspace_id
-        else workspace_name if workspace_name else None
-    )
-
-    print(
-        f'[JFB/USAGE] {{"user": "{user}", "task": "{task}", "action": "{action}", "workspace": "{workspace}", "task_name": "{task_name}", "update_details": "{update_details}"}}'
+    user = _resolve_user_name(user_id, user_name)
+    workspace = _resolve_workspace_name(workspace_id, workspace_name)
+    _emit_usage(
+        _build_usage_payload(
+            task=task,
+            action=action,
+            user=user,
+            workspace=workspace,
+            task_name=task_name,
+            update_details=update_details,
+        )
     )
 
 
@@ -191,17 +226,25 @@ async def logging_history_async(
     :param task_name: string, name of task
     :param update_details: stirng, updated detailed information
     """
-    user_info = await db_user.get_user_async(user_id=user_id)
-    user = user_info.get("name") if user_id else user_name if user_name else None
-    workspace_info = await db_workspace.get_workspace_async(workspace_id=workspace_id)
-    workspace = (
-        workspace_info.get("name")
-        if workspace_id
-        else workspace_name if workspace_name else None
-    )
-
-    print(
-        f'[JFB/USAGE] {{"user": "{user}", "task": "{task}", "action": "{action}", "workspace": "{workspace}", "task_name": "{task_name}", "update_details": "{update_details}"}}'
+    user = user_name if user_name else None
+    if user_id:
+        user_info = await db_user.get_user_async(user_id=user_id)
+        if user_info:
+            user = user_info.get("name")
+    workspace = workspace_name if workspace_name else None
+    if workspace_id:
+        workspace_info = await db_workspace.get_workspace_async(workspace_id=workspace_id)
+        if workspace_info:
+            workspace = workspace_info.get("name")
+    _emit_usage(
+        _build_usage_payload(
+            task=task,
+            action=action,
+            user=user,
+            workspace=workspace,
+            task_name=task_name,
+            update_details=update_details,
+        )
     )
 
 def logging_project_pod_history(

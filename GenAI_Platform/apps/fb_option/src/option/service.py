@@ -398,12 +398,13 @@ async def get_categories_by_model():
 
 async def get_models_by_huggingface(model_name : str = None, huggingface_token : str = None, private : int = 0, task: str = None) -> list[str]:
     api = HfApi()
-    
+
+    filters = [task] if task else None
     if private:
         huggingface_token = front_cipher.decrypt(huggingface_token)
-        models = api.list_models(limit=10, model_name=model_name, token=huggingface_token, task=task)
+        models = api.list_models(limit=10, search=model_name, filter=filters, token=huggingface_token)
     else:
-        models = api.list_models(limit=10, model_name=model_name, task=task)
+        models = api.list_models(limit=10, search=model_name, filter=filters)
     parse_model_ids = [{"id" : model.id, "url" : f"https://huggingface.co/{model.id}"} for model in models]
     return parse_model_ids
 

@@ -59,6 +59,7 @@ def get_workspaces(args : model.WsSearchModel = Depends()):
 # @admin_access_check()
 def create_workspace(body: model.WsCreateModel):
     try:
+        _, headers_user_id = get_user_info()
         manager_id = body.manager_id
         workspace_name = body.workspace_name
         allocate_instances = body.allocate_instances
@@ -76,14 +77,15 @@ def create_workspace(body: model.WsCreateModel):
                                     workspace_name=workspace_name,
                                     allocate_instances=allocate_instances,
                                     start_datetime=start_datetime,
-                                    end_datetime=end_datetime, 
+                                    end_datetime=end_datetime,
                                     description=description,
                                     users=users,
                                     data_storage_id=data_storage_id,
                                     data_storage_request=data_storage_request,
                                     main_storage_id=main_storage_id,
                                     main_storage_request=main_storage_request,
-                                    use_marker=use_marker)
+                                    use_marker=use_marker,
+                                    headers_user_id=headers_user_id)
         if res == True:
             return response(status=1, message="success")
         else:
@@ -98,7 +100,8 @@ def create_workspace(body: model.WsCreateModel):
 # @admin_access_check()
 def update_workspace(body: model.WsUpdateModel):
     try:
-        workspace_id = body.workspace_id        
+        _, headers_user_id = get_user_info()
+        workspace_id = body.workspace_id
         workspace_name = body.workspace_name
         start_datetime = body.start_datetime
         end_datetime = body.end_datetime
@@ -112,11 +115,11 @@ def update_workspace(body: model.WsUpdateModel):
         main_storage_id = body.main_storage_id
         use_marker = body.use_marker
         # res = svc.update_workspace(workspace_id=workspace_id, workspace_name=workspace_name, training_gpu=training_gpu,
-        #                                                 deployment_gpu=deployment_gpu, start_datetime=start_datetime, end_datetime=end_datetime, users=users, 
+        #                                                 deployment_gpu=deployment_gpu, start_datetime=start_datetime, end_datetime=end_datetime, users=users,
         #                                                 description=description, guaranteed_gpu=guaranteed_gpu, headers_user=user_name, manager_id=manager_id, workspace_size=workspace_size)
         # db.request_logging(self.check_user(), 'workspaces', 'put', str(args), res['status)
         res = svc.update_workspace(workspace_id=workspace_id, workspace_name=workspace_name, allocate_instances=allocate_instances, start_datetime=start_datetime, end_datetime=end_datetime, \
-            users=users, description=description, manager_id=manager_id, data_storage_request=data_storage_request, main_storage_request=main_storage_request, data_storage_id=data_storage_id, main_storage_id=main_storage_id, use_marker=use_marker)
+            users=users, description=description, manager_id=manager_id, data_storage_request=data_storage_request, main_storage_request=main_storage_request, data_storage_id=data_storage_id, main_storage_id=main_storage_id, use_marker=use_marker, headers_user_id=headers_user_id)
         return res
     except CustomErrorList as ce:
         return ce.response()
@@ -182,10 +185,11 @@ def refuse_request_workspace(args : model.RefuseWorkspace):
 @workspaces.post("/request-accept", description="워크스페이스 생성 수락")
 def accept_request_workspace(body : model.RWsCreateModel):
     try:
+        _, headers_user_id = get_user_info()
         request_workspace_id = body.request_workspace_id
 
 
-        res = svc.request_workspace_accept(request_workspace_id=request_workspace_id)
+        res = svc.request_workspace_accept(request_workspace_id=request_workspace_id, headers_user_id=headers_user_id)
 
         if res == True:
             return response(status=1, message="success")

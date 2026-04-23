@@ -1446,6 +1446,198 @@ def set_mem_info_to_redis():
             traceback.print_exc()
             pass
 
+# ---------------------------------------------------------------------------
+# Fine-tuning OOM cleanup helpers
+# ---------------------------------------------------------------------------
+# Background: when a fine-tuning Pod is OOMKilled, the monitoring watcher
+# invokes `helm uninstall` to tear down the Helm release. If that command
+# fails (timeout, release-not-found mismatch, etc.) the caller previously
+# discarded the error and the Pod stayed in the cluster, which in turn kept
+# the monitoring loop re-adding the pod to Redis WORKSPACE_PODS_STATUS.
+# These helpers add a K8s-API fallback and structured logging so at least
+# one of the two cleanup paths succeeds (or we log loudly).
+
+_FT_CLEANUP_LOGGER = logging.getLogger(__name__)
+
+_K8S_CONFIG_LOADED = False
+
+
+def _ensure_k8s_config_loaded():
+    """Idempotently load a kubernetes client configuration.
+
+    Matches the in-cluster-first, kubeconfig-fallback pattern already used in
+    `apps/fb_utils/kube.py:11-15`. Called lazily the first time we need the
+    client so importing this module in tests / CI does not require a live
+    cluster.
+    """
+    global _K8S_CONFIG_LOADED
+    if _K8S_CONFIG_LOADED:
+        return
+    try:
+        config.load_incluster_config()
+    except Exception:
+        kube_config_path = os.getenv("KUBER_CONFIG_PATH")
+        if kube_config_path:
+            config.load_kube_config(config_file=kube_config_path)
+        else:
+            config.load_kube_config()
+    _K8S_CONFIG_LOADED = True
+
+
+def _invoke_delete_helm_resource(helm_name: str, workspace_id: int):
+    """Shell out to `helm uninstall`. Module-level so tests can patch it.
+
+    Mirrors the nested `delete_helm_resource` inside `set_workspace_pod_status`
+    with two intentional divergences:
+      - adds a 60s subprocess timeout (the nested version has none)
+      - treats "release not found" as idempotent success
+    These divergences apply only to the fine-tuning OOM cleanup path.
+
+    Returns (ok: bool, message: str).
+    """
+    namespace = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=workspace_id)
+    command = f"helm uninstall {helm_name} -n {namespace}"
+    try:
+        result = subprocess.run(
+            command,
+            shell=True,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=60,
+        )
+        return True, result.stdout
+    except subprocess.CalledProcessError as e:
+        err_msg = (e.stderr or "").strip()
+        if "cannot re-use a name that is still in use" in err_msg:
+            return True, err_msg
+        if "Release not loaded" in err_msg or "not found" in err_msg.lower():
+            return True, "release already absent"
+        return False, err_msg
+    except subprocess.TimeoutExpired:
+        return False, "helm uninstall timed out"
+
+
+def _invoke_k8s_delete_pod(pod_name: str, workspace_id: int):
+    """Delete a Pod directly via the K8s API. Module-level so tests can patch.
+
+    Uses force delete (grace_period_seconds=0) because the cleanup paths that
+    call this helper are exactly the ones where the container is already dead
+    (OOMKilled) or the Pod has lost user-level progress (CrashLoopBackOff) and
+    the monitoring loop has decided to tear it down.
+
+    Returns (ok: bool, message: str). Never raises.
+    """
+    try:
+        _ensure_k8s_config_loaded()
+        namespace = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=workspace_id)
+        api = client.CoreV1Api()
+        api.delete_namespaced_pod(
+            name=pod_name,
+            namespace=namespace,
+            grace_period_seconds=0,
+        )
+        return True, "deleted"
+    except Exception as e:  # k8s client raises ApiException and others
+        return False, f"{type(e).__name__}: {e}"
+
+
+def _invoke_k8s_delete_helm_release_secrets(helm_name: str, workspace_id: int):
+    """Delete Helm v3 release-metadata Secrets directly via the K8s API.
+
+    When `helm uninstall` fails but we still tear down the Pod via the K8s
+    fallback, the Helm release *metadata* (stored as Secrets with labels
+    ``owner=helm,name=<release>``) stays behind. The next `helm install
+    {same_name}` in `apps/fb_scheduler/src/scheduler/llm_run.py` then fails
+    with ``cannot re-use a name that is still in use``, which the scheduler
+    silently treats as success — stranding the model in `installing` forever.
+
+    Deleting the release Secrets makes the release name reusable again.
+    ``delete_collection_namespaced_secret`` is idempotent (no-op when the
+    label selector matches nothing), so we do not need to pre-check.
+
+    Returns (ok: bool, message: str). Never raises.
+    """
+    try:
+        _ensure_k8s_config_loaded()
+        namespace = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=workspace_id)
+        api = client.CoreV1Api()
+        label_selector = f"owner=helm,name={helm_name}"
+        api.delete_collection_namespaced_secret(
+            namespace=namespace,
+            label_selector=label_selector,
+        )
+        return True, "helm-release-secrets-deleted"
+    except Exception as e:  # k8s client raises ApiException and others
+        return False, f"{type(e).__name__}: {e}"
+
+
+def _ensure_fine_tuning_pod_deleted(pod_name: str, helm_name: str, workspace_id: int):
+    """Best-effort cleanup for an OOMKilled fine-tuning Pod.
+
+    Strategy:
+      1. Try `helm uninstall`.
+      2. On failure, log a warning and fall back to direct K8s deletion of
+         **both** the Pod **and** the Helm release-metadata Secrets. Deleting
+         only the Pod would leave `fine-tuning-{model_id}` blocked for re-use
+         and the next install would silently stall in `installing` — see
+         `_invoke_k8s_delete_helm_release_secrets` for the full rationale.
+      3. Only report k8s-fallback success when both deletions succeed; log at
+         ERROR level with the specific partial-failure details otherwise.
+      4. Never raises; the monitoring loop must continue regardless.
+
+    Returns (ok: bool, path: str) where path is one of
+    "helm" | "k8s-fallback" | "all-failed".
+    """
+    try:
+        helm_ok, helm_msg = _invoke_delete_helm_resource(
+            helm_name=helm_name, workspace_id=workspace_id
+        )
+    except Exception as e:
+        helm_ok, helm_msg = False, f"{type(e).__name__}: {e}"
+
+    if helm_ok:
+        return True, "helm"
+
+    _FT_CLEANUP_LOGGER.warning(
+        "[fine-tuning OOM cleanup] helm uninstall failed for pod=%s helm=%s ws=%s: %s. "
+        "Falling back to direct K8s Pod + Helm-release-Secret deletion.",
+        pod_name, helm_name, workspace_id, helm_msg,
+    )
+
+    try:
+        pod_ok, pod_msg = _invoke_k8s_delete_pod(
+            pod_name=pod_name, workspace_id=workspace_id
+        )
+    except Exception as e:
+        pod_ok, pod_msg = False, f"{type(e).__name__}: {e}"
+
+    try:
+        secrets_ok, secrets_msg = _invoke_k8s_delete_helm_release_secrets(
+            helm_name=helm_name, workspace_id=workspace_id
+        )
+    except Exception as e:
+        secrets_ok, secrets_msg = False, f"{type(e).__name__}: {e}"
+
+    if pod_ok and secrets_ok:
+        _FT_CLEANUP_LOGGER.info(
+            "[fine-tuning OOM cleanup] K8s fallback cleaned pod=%s and helm=%s ws=%s "
+            "(pod_msg=%s, secrets_msg=%s).",
+            pod_name, helm_name, workspace_id, pod_msg, secrets_msg,
+        )
+        return True, "k8s-fallback"
+
+    _FT_CLEANUP_LOGGER.error(
+        "[fine-tuning OOM cleanup] FALLBACK incomplete for pod=%s helm=%s ws=%s. "
+        "helm_err=%s | pod_ok=%s pod_msg=%s | secrets_ok=%s secrets_msg=%s. "
+        "The release name may remain blocked; the next install will silently fail.",
+        pod_name, helm_name, workspace_id, helm_msg,
+        pod_ok, pod_msg, secrets_ok, secrets_msg,
+    )
+    return False, "all-failed"
+
+
 # workspace pod status
 def set_workspace_pod_status():
     from utils.msa_db import db_project, db_workspace
@@ -1761,7 +1953,11 @@ def set_workspace_pod_status():
                                     elif pod_info["label_pod_type"] == TYPE.FINE_TUNING_TYPE and pod_info["label_work_func_type"] == TYPE.FINE_TUNING_TYPE:
                                         model_id = pod_info["label_model_id"]
                                         model_db.update_model_fine_tuning_status_sync(status=TYPE.KUBE_POD_STATUS_ERROR, model_id=model_id)
-                                        delete_helm_resource(workspace_id=workspace_id, helm_name=pod_info["label_helm_name"])
+                                        _ensure_fine_tuning_pod_deleted(
+                                            pod_name=pod_info["pod"],
+                                            helm_name=pod_info["label_helm_name"],
+                                            workspace_id=workspace_id,
+                                        )
                                     elif pod_info["label_work_func_type"] in [TYPE.PREPROCESSING_ITEM_B, TYPE.PREPROCESSING_ITEM_A] and pod_info["label_pod_type"] == TYPE.PREPROCESSING_TYPE:
                                         preprocessing_item_id = pod_info["label_preprocessing_item_id"]
                                         preprocessing_item_type = pod_info["label_work_func_type"]
@@ -1886,7 +2082,11 @@ def set_workspace_pod_status():
                                 elif pod_info["label_work_func_type"] == TYPE.FINE_TUNING_TYPE and pod_info["label_pod_type"] == TYPE.FINE_TUNING_TYPE:
                                     model_id = pod_info["label_model_id"]
                                     model_db.update_model_fine_tuning_status_sync(status=status, model_id=model_id)
-                                    delete_helm_resource(workspace_id=workspace_id, helm_name=pod_info["label_helm_name"])
+                                    _ensure_fine_tuning_pod_deleted(
+                                        pod_name=pod_info["pod"],
+                                        helm_name=pod_info["label_helm_name"],
+                                        workspace_id=workspace_id,
+                                    )
                                         
                                 else: # TODO 사용자가 삭제하기 전까지 해당 pod에 대한 gpu 사용을 유지해야 하는가?
                                     status = TYPE.KUBE_POD_STATUS_ERROR

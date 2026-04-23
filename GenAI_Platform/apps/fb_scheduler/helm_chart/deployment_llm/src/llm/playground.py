@@ -94,7 +94,20 @@ async def lifespan(app: FastAPI):
         if torch.cuda.is_available():
             # 첫 번째 GPU 디바이스의 Compute Capability 확인
             device_id = 0
-            major, minor = torch.cuda.get_device_capability(device=device_id)
+            # nvidia-container-runtime이 device node(/dev/nvidia-uvm 등)를 준비하기 전에
+            # lifespan이 먼저 실행되는 race condition 방어. 최대 30초 재시도.
+            last_err = None
+            for _ in range(30):
+                try:
+                    torch.cuda.init()
+                    major, minor = torch.cuda.get_device_capability(device=device_id)
+                    last_err = None
+                    break
+                except RuntimeError as e:
+                    last_err = e
+                    time.sleep(1)
+            if last_err is not None:
+                raise RuntimeError(f"CUDA driver not ready after 30s: {last_err}")
             compute_capability = major + minor / 10.0
 
             # bfloat16 지원 여부 판단 (Compute Capability 8.0 이상 필요)

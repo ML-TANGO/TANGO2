@@ -9,8 +9,10 @@ from enum import Enum
 from confluent_kafka import Consumer
 from confluent_kafka.admin import AdminClient, NewTopic
 from kubernetes import config, client
+from kubernetes.client.rest import ApiException
 
 from utils import TYPE, PATH, settings, topic_key, redis_key, common
+from utils.kube import get_node_request_budget
 from utils.msa_db import (
     db_project, db_workspace, db_deployment, db_node,
     db_instance, db_prepro, db_analyzing, db_collect
@@ -487,6 +489,80 @@ def kafka_consume_msgs(consumer, kafka_admin, redis_client, type_id_map):
 # --------------------------------------------------------------------------------
 # (B) Workspace 스케줄러 (기존 pod_start_new() 로직)
 # --------------------------------------------------------------------------------
+def _fine_tuning_node_budget_guard(pod_info):
+    """대상 노드(들)에 pod을 수용할 K8s request 예산이 남았는지 실측 검증.
+
+    호출 시점: process_instance_queue_item 내부, GPU/node 선택 완료 후 deploy_pod_via_helm 직전.
+    이 시점에 pod_info에는 반드시 available_gpus[*].node_name 또는 available_node 가 채워져 있음
+    (fine-tuning 경로 기준).
+
+    Returns:
+        (ok: bool, reason: str) — ok=False면 호출자가 Status.FAIL_RETRY 반환.
+    """
+    pod_count = pod_info.get("pod_count") or 1
+    try:
+        pod_count = max(1, int(pod_count))
+    except (TypeError, ValueError):
+        pod_count = 1
+
+    total_ram_gb = float(pod_info["resource"]["ram"])
+    total_cpu_cores = float(pod_info["resource"]["cpu"])
+    total_gpu = int(pod_info.get("gpu_count", 0) or 0)
+
+    per_pod_mem_bytes = int((total_ram_gb / pod_count) * (10 ** 9))
+    per_pod_cpu_mc = int((total_cpu_cores / pod_count) * 1000)
+    per_pod_gpu = (total_gpu // pod_count) if pod_count > 0 else total_gpu
+
+    # 노드별 수요 집계(한 노드가 여러 pod 호스트하는 경우 대비)
+    node_demand = {}  # node_name -> [mem_bytes, cpu_mc, gpu]
+    available_gpus = pod_info.get("available_gpus") or []
+    available_node = pod_info.get("available_node")
+
+    if available_gpus:
+        for g in available_gpus:
+            n = g.get("node_name")
+            if not n:
+                return False, f"available_gpus entry missing node_name: {g!r}"
+            slot = node_demand.setdefault(n, [0, 0, 0])
+            slot[0] += per_pod_mem_bytes
+            slot[1] += per_pod_cpu_mc
+            slot[2] += per_pod_gpu
+    elif available_node:
+        node_demand[available_node] = [
+            int(total_ram_gb * 10 ** 9),
+            int(total_cpu_cores * 1000),
+            total_gpu,
+        ]
+    else:
+        # NPU 경로 등 특정 노드 pinning이 없는 경우. 현 fine-tuning 범위에서는 예상되지 않음.
+        # 게이트를 우회해 기존 동작 유지(워크스페이스 쿼터 체크는 이미 통과).
+        return True, "no specific node binding; node budget guard skipped"
+
+    for node_name, (need_mem, need_cpu_mc, need_gpu) in node_demand.items():
+        try:
+            budget = get_node_request_budget(node_name)
+        except ApiException as e:
+            return False, f"node={node_name} budget ApiException: status={e.status} reason={e.reason}"
+        except Exception as e:
+            return False, f"node={node_name} budget fetch error: {e!r}"
+
+        if budget.memory_free_bytes < need_mem:
+            return False, (
+                f"node={node_name} memory insufficient: "
+                f"free={budget.memory_free_bytes}B < need={need_mem}B "
+                f"(allocatable={budget.memory_allocatable_bytes}B, used={budget.memory_used_bytes}B)"
+            )
+        if budget.cpu_free_millicores < need_cpu_mc:
+            return False, (
+                f"node={node_name} cpu insufficient: "
+                f"free={budget.cpu_free_millicores}m < need={need_cpu_mc}m"
+            )
+        if budget.gpu_free < need_gpu:
+            return False, f"node={node_name} gpu insufficient: free={budget.gpu_free} < need={need_gpu}"
+
+    return True, "ok"
+
+
 def run_scheduler():
     """
     1) 모든 workspace를 순회하며,
@@ -743,10 +819,14 @@ def run_scheduler():
             pen_cpu, pen_ram, pen_gpu = calculate_pending_in_instance_queue(redis_queue, item, item_type)
             # pen_cpu, pen_ram, pen_gpu = 0, 0, 0
 
-            # total
-            total_cpu = item["cpu_allocate"] * item["instance_allocate"]
-            total_ram = item["ram_allocate"] * item["instance_allocate"]
-            total_gpu = item["gpu_allocate"] * item["instance_allocate"]
+            # Fine-tuning 모델은 db_model.get_models_sync가 instance_allocate를 제공하지 않는다
+            # (Task 1에서 잘못된 SQL alias 제거). 타 item_type은 자체 쿼리로 instance_allocate를
+            # 공급하므로 폴백: instance_allocate → instance_count → 1.
+            # 실제 노드 용량 검증은 process_instance_queue_item::_fine_tuning_node_budget_guard (Task 4)가 수행.
+            _alloc_count = item.get("instance_allocate", item.get("instance_count", 1))
+            total_cpu = item["cpu_allocate"] * _alloc_count
+            total_ram = item["ram_allocate"] * _alloc_count
+            total_gpu = item["gpu_allocate"] * _alloc_count
 
 
             available_cpu = total_cpu - used_cpu - pen_cpu
@@ -1103,6 +1183,15 @@ def run_scheduler():
         elif instance["instance_type"] == TYPE.INSTANCE_TYPE_NPU:
             logging.info("NPU 사용")
             pod_info["used_npu"] = True
+
+        # 3-b) FINE_TUNING 한정: 노드 실측 K8s request 예산 guard
+        # workspace 쿼터(step 2)와 GPU/node 선택(step 3)은 통과했더라도,
+        # 외부 워크로드(Redis/EFK 등) 때문에 해당 노드의 실측 request 예산이
+        # 부족할 수 있다. 부족 시 FAIL_RETRY로 되돌려 다음 틱에 재평가.
+        if pod_info.get("pod_type") == TYPE.FINE_TUNING_TYPE:
+            ok, reason = _fine_tuning_node_budget_guard(pod_info)
+            if not ok:
+                return Status.FAIL_RETRY, f"노드 예산 부족/확인 실패로 재시도: {reason}"
 
         # 4) helm 배포
         res, message = deploy_pod_via_helm(pod_info)

@@ -435,9 +435,9 @@ def delete_workspace_storage_volumes(workspace_id: int) -> tuple[bool, str]:
         traceback.print_exc()
         return False, str(e)
 # =================================================================================
-def create_workspace(manager_id : int, workspace_name : str,  start_datetime: str, end_datetime: str, users : List[int], 
+def create_workspace(manager_id : int, workspace_name : str,  start_datetime: str, end_datetime: str, users : List[int],
                      description : str, main_storage_id : int, data_storage_request : str, main_storage_request : str, data_storage_id: int, \
-                        allocate_instances : List[dict] =[], use_marker : int = 0):
+                        allocate_instances : List[dict] =[], use_marker : int = 0, headers_user_id : int = None):
     """
     allocate_instances = {
         "instance_id" : int,
@@ -548,7 +548,7 @@ def create_workspace(manager_id : int, workspace_name : str,  start_datetime: st
             for user in users:
                 db_workspace.insert_user_workspace(workspace_id=workspace_id, user_id=user)
             # log
-            logging_history(task=LogParam.Task.WORKSPACE, action=LogParam.Action.CREATE, workspace_name=workspace_name)
+            logging_history(task=LogParam.Task.WORKSPACE, action=LogParam.Action.CREATE, workspace_name=workspace_name, task_name=workspace_name, user_id=headers_user_id)
             return True
         else:
             return False
@@ -575,10 +575,10 @@ def create_workspace(manager_id : int, workspace_name : str,  start_datetime: st
             delete_workspace_namespace_volume(workspace_id=workspace_id)
         raise e
 
-def update_workspace(workspace_id : int, workspace_name: str,  
+def update_workspace(workspace_id : int, workspace_name: str,
                      start_datetime: str, end_datetime: str, users : List[int], description : str, manager_id : int,
                      main_storage_request : int = None, data_storage_request : int = None, data_storage_id : int = None, main_storage_id: int = None, allocate_instances : List[dict] = [],
-                     manager_request : bool = False, use_marker : int = 0):
+                     manager_request : bool = False, use_marker : int = 0, headers_user_id : int = None):
     
     try:
         
@@ -932,7 +932,7 @@ def update_workspace(workspace_id : int, workspace_name: str,
         db_workspace.insert_user_workspace_s(workspaces_id=[[workspace_id]]*len(add_user), users_id=add_user)
         db_workspace.delete_user_workspace_s(workspaces_id=[[workspace_id]]*len(del_user), users_id=del_user)
 
-        logging_info_history(task=LogParam.Task.WORKSPACE, action=LogParam.Action.UPDATE, workspace_name=workspace_name, info=previous_allocation_info.to_dict())
+        logging_info_history(task=LogParam.Task.WORKSPACE, action=LogParam.Action.UPDATE, workspace_name=workspace_name, task_name=workspace_name, user_id=headers_user_id, info=previous_allocation_info.to_dict())
         #logging_history(task=LogParam.Task.WORKSPACE, action=LogParam.Action.UPDATE, workspace_name=workspace_name)
 
         return response(status=1, message="success")
@@ -1019,7 +1019,7 @@ def delete_workspaces(workspace_list : List[int], headers_user_id : int, headers
                     message=notification_key.WORKSPACE_DELETE_MESSAGE.format(workspace_name=workspace["name"])
                 )
                 KafkaProducer(conf).produce(topic=topic_key.ALERT_SYSTEM_TOPIC, value=notification.model_dump_json())
-                logging_history(task=LogParam.Task.WORKSPACE, action=LogParam.Action.DELETE, workspace_name=workspace.get("name"))
+                logging_history(task=LogParam.Task.WORKSPACE, action=LogParam.Action.DELETE, workspace_name=workspace.get("name"), task_name=workspace.get("name"), user_id=headers_user_id)
                 return True
             else:
                 raise Exception("워크스페이스 삭제 권한이 없습니다. 관리자이거나 해당 워크스페이스의 매니저인 경우에만 삭제가 가능합니다.")
@@ -1178,7 +1178,7 @@ def refuse_workspace_request(request_workspace_id : int):
         return response(status=1, result=True)
     return response(status=0, result=False)
 
-def request_workspace_accept(request_workspace_id: int):
+def request_workspace_accept(request_workspace_id: int, headers_user_id: int = None):
     workspace_id = None # 없으면 Exception에서 UnboundLocalError 걸릴 수도 있음
     try:
         info = db_workspace.get_workspace_request(request_workspace_id=request_workspace_id)
@@ -1190,15 +1190,16 @@ def request_workspace_accept(request_workspace_id: int):
             create_workspace(manager_id=info.get("manager_id"),
                             workspace_name=info.get("name"),
                             allocate_instances=json.loads(info.get("allocate_instance_list")),
-                            start_datetime=info.get("start_datetime"), 
+                            start_datetime=info.get("start_datetime"),
                             end_datetime=info.get("end_datetime"),
-                            users=json.loads(info.get("user_list")), 
-                            description=info.get("description"), 
+                            users=json.loads(info.get("user_list")),
+                            description=info.get("description"),
                             main_storage_id=info.get("main_storage_id"),
                             main_storage_request=info.get("main_storage_size"),
                             data_storage_id=info.get("data_storage_id"),
                             data_storage_request=info.get("data_storage_size"),
-                            use_marker=info.get("use_marker")
+                            use_marker=info.get("use_marker"),
+                            headers_user_id=headers_user_id
                             )
             MESSAGE = notification_key.WORKSPACE_CREATE_ACCEP_MESSAGE.format(workspace_name=workspace_name)
         elif request_type == "update":
@@ -1215,7 +1216,8 @@ def request_workspace_accept(request_workspace_id: int):
                 data_storage_request=info.get("data_storage_size"),
                 data_storage_id=info.get("data_storage_id"),
                 main_storage_id=info.get("main_storage_id"),
-                use_marker=info.get("use_marker")
+                use_marker=info.get("use_marker"),
+                headers_user_id=headers_user_id
             )
             MESSAGE = notification_key.WORKSPACE_UPDATE_ACCEP_MESSAGE.format(workspace_name=workspace_name)
         

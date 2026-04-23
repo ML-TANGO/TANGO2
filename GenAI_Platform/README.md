@@ -34,29 +34,33 @@ GenAI Platform은 기업용 대규모 언어 모델 개발을 위한 완전한 L
 - **`fb_dataset`** - 데이터셋 생명주기 관리
 - **`fb_image`** - 이미지 처리 및 관리
 
-#### 모니터링 및 운영 서비스
+#### 모니터링 / 알림 서비스
+- **`fb_alert_management`** - Kafka 기반 실시간 경보(alert) 수집·전파
 - **`fb_log_middleware`** - 로그 수집 미들웨어
 - **`fb_logger`** - 중앙화 로깅 시스템
-- **`fb_monitoring`** - 시스템 헬스 모니터링
+- **`fb_monitoring`** - 시스템 헬스 및 학습/배포 Pod 모니터링
 - **`fb_notification`** - 알림 시스템
-- **`fb_resource`** - 쿠버네티스 리소스/스토리지 관리
 
-#### 사용자 및 작업 관리 서비스
-- **`fb_scheduler`** - 작업 스케줄링 및 리소스 할당
+#### 인프라 / 운영 서비스
+- **`fb_ingress_management`** - Kong 등 Ingress 리소스 자동화
+- **`fb_resource`** - 쿠버네티스 리소스/스토리지 관리
+- **`fb_scheduler`** - 작업 스케줄링, 노드 예산 admission guard
+
+#### 사용자 / 시스템 관리 서비스
+- **`fb_option`** - 플랫폼/사용자 옵션 및 외부 모델 카탈로그 관리
 - **`fb_user`** - 사용자 인증 및 권한 관리
-- **`fb_utils`** - 공통 유틸리티 라이브러리
+- **`fb_utils`** - 공통 유틸리티 라이브러리(K8s 헬퍼 포함)
 - **`fb_workspace`** - 멀티테넌트 워크스페이스
 
 #### LLM 서비스
-- **`llm_model`** - LLM 모델 다운로드/관리 및 서빙 관련 기능
+- **`fb_deployment`** - LLM 모델 배포/실행 관리
+- **`llm_model`** - LLM 모델 다운로드/관리 및 파인튜닝/서빙 제어
 - **`llm_playground`** - 대화형 LLM 실험 환경(프롬프트/RAG/테스트)
-- **`llm_rag`** - RAG API 서비스
 
 ### ✅ 공유 라이브러리 (`libs/`)
-- **공통 ML 프레임워크**
-  - 분산 훈련 지원
-  - 모델 관리 유틸리티
-  - 데이터 처리 라이브러리
+- **`fb_bin`** - ML 프레임워크 공유 바이너리/리소스
+- **`fb_image`** - 이미지 처리 공통 모듈
+- **`fb_logger`** - 로깅 공통 모듈
 
 ## 🔧 빠른 시작
 
@@ -104,26 +108,31 @@ GenAI_Platform/
 │   └── ...                        # 기타 인프라 구성요소
 │
 ├── apps/                          # 마이크로서비스
+│   ├── fb_alert_management/       # 실시간 경보 처리
 │   ├── fb_dashboard/              # 웹 관리 인터페이스
 │   ├── fb_dataset/                # 데이터셋 관리
+│   ├── fb_deployment/             # LLM 배포 관리
 │   ├── fb_image/                  # 이미지 처리
+│   ├── fb_ingress_management/     # Ingress 리소스 자동화
 │   ├── fb_log_middleware/         # 로그 미들웨어
 │   ├── fb_logger/                 # 중앙 로깅
 │   ├── fb_monitoring/             # 시스템 모니터링
 │   ├── fb_notification/           # 알림 시스템
+│   ├── fb_option/                 # 플랫폼/사용자 옵션 관리
 │   ├── fb_resource/               # 리소스/스토리지 관리
-│   ├── fb_scheduler/              # 작업 스케줄링
+│   ├── fb_scheduler/              # 작업 스케줄링·admission guard
 │   ├── fb_user/                   # 사용자 관리
 │   ├── fb_utils/                  # 공통 유틸리티
 │   ├── fb_workspace/              # 워크스페이스
 │   ├── llm_model/                 # LLM 모델/서빙
-│   ├── llm_playground/            # LLM 실험/플레이그라운드
-│   └── llm_rag/                   # RAG API
+│   └── llm_playground/            # LLM 실험/플레이그라운드
 │
 ├── libs/                          # 공유 라이브러리
-│   └── fb_bin/                    # ML 프레임워크
+│   ├── fb_bin/                    # ML 프레임워크 공유 바이너리/리소스
+│   ├── fb_image/                  # 이미지 처리 공통 모듈
+│   └── fb_logger/                 # 로깅 공통 모듈
 │
-└── tools/                         # 개발 도구
+└── docs/                          # 사용자/개발자 문서 (목차: docs/README.md)
 ```
 
 ## 💻 개발 가이드
@@ -157,4 +166,6 @@ pip install -r requirements.txt
 
 ---
 
-**참고**: 인프라/앱/LLM 설치 방법은 `devops/INSTALL.md`에 최신 기준으로 정리되어 있습니다.
+**참고**:
+- 사용자/협력기관/모델 엔지니어용 가이드 인덱스: [`docs/README.md`](docs/README.md)
+- 인프라/앱/LLM 설치 방법: [`devops/INSTALL.md`](devops/INSTALL.md) (간소 절차는 [`devops/Tango GenAI Platform 설치 간소화 매뉴얼.md`](devops/Tango%20GenAI%20Platform%20설치%20간소화%20매뉴얼.md))
