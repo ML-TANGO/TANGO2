@@ -80,6 +80,7 @@ ls run_step1_infra_base.sh run_step2_core_infra.sh run_step3_optional_obs.sh
 - `global.jfb.volume.*.path` (NFS export 경로)
 - `global.jfb.image.users.registry` (사용자 이미지 푸시/풀에 사용할 레지스트리 주소)
 - `global.jfb.settings.initRootPassword` (관리자 비밀번호)
+- `global.jfb.settings.huggingface.token` (선택, HuggingFace 모델/private repo 사용 시 필수 — 미사용 시 빈 값)
 
 각 인프라 차트 비밀번호는 임의로 변경하지 않는 것을 권장합니다.
 
@@ -109,6 +110,14 @@ cp values.yaml.template values_<서버명>.yaml
 - `global.jfb.settings.external.host/port/protocol` (사용자 UI/API의 **외부 접속 주소/프로토콜/포트**)
 - `global.jfb.settings.initRootPassword` (초기 **관리자(admin) 비밀번호**)
 - `global.jfb.image.users.registry` (사용자 이미지 **푸시/풀 레지스트리 주소*)
+- `global.jfb.settings.huggingface.token` (선택, **HuggingFace 토큰** — 아래 박스 참조)
+
+> 💡 **HuggingFace 토큰 (`global.jfb.settings.huggingface.token`)**
+> - HuggingFace 모델/private 레포를 다운로드할 때 사용됩니다. nexus 등 오프라인/사내 모델 레포만 쓰는 환경에서는 **빈 값으로 두세요** — startup 시 HF login을 자동 스킵합니다.
+> - 토큰 발급: https://huggingface.co/settings/tokens
+> - 적용 경로: `values_<서버명>.yaml` → `jfb-settings` ConfigMap의 `HUGGINGFACE_TOKEN` 환경변수 → `llm_model`/`llm_playground`/`fb_scheduler` 등 자동 주입.
+> - 토큰 회전 시 `helm upgrade`만 실행하면 deployment `checksum/config` annotation이 갱신되어 관련 Pod이 자동 rollout 됩니다.
+> - ⚠️ **실제 토큰은 `values_<서버명>.yaml`(gitignored)에만 입력**합니다. `values.yaml.template` 등 git 추적 파일에는 빈 문자열로 두세요.
 
 ### 2-3. 스토리지 경로 생성 및 권한
 

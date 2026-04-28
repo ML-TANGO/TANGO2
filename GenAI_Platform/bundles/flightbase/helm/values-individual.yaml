@@ -73,6 +73,10 @@ global:
       kafka:
         namespace: "jonathan-kafka" # 없으면 global namespace 사용
         dns: "kafka"
+      huggingface:
+        # HuggingFace 액세스 토큰. 빈 문자열이면 HF login을 스킵 (offline/nexus 모드).
+        # 실제 값은 devops/values_tango2.yaml (gitignored) 에서 override 한다.
+        token: ""
       monitoring:
         node_exporter: "9100"
         namespace:          # 없으면 global namespace 사용 (appUrl은 적용 X)

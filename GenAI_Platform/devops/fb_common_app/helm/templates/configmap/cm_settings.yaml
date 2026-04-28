@@ -75,6 +75,7 @@ data:
   LOG_MIDDLEWARE_DNS: {{ printf "%s://%s.%s.svc.cluster.local:%s" .Values.global.jfb.settings.log.protocol .Values.global.jfb.settings.log.name ( .Values.global.jfb.settings.log.namespace | default .Values.global.jfb.namespace ) .Values.global.jfb.settings.log.port | quote }}
   JF_KONG_ADMIN_DNS: {{ printf "%s.%s.svc.cluster.local" .Values.global.jfb.settings.kong.adminDns ( .Values.global.jfb.settings.kong.namespace | default .Values.global.jfb.namespace ) | quote }}
   JF_KONG_PROXY_DNS: {{ printf "%s.%s.svc.cluster.local" .Values.global.jfb.settings.kong.proxyDns ( .Values.global.jfb.settings.kong.namespace | default .Values.global.jfb.namespace ) | quote }}
+  HUGGINGFACE_TOKEN: {{ .Values.global.jfb.settings.huggingface.token | default "" | quote }}
   JONATHAN_IMAGE_PULL_SECRETS_EABLED: {{ .Values.global.jfb.image.pullSecrets.enabled | quote }}
   JONATHAN_IMAGE_PULL_SECRETS_EABLED: {{ .Values.global.jfb.image.pullSecrets.enabled | quote }}
   {{- if .Values.global.jfb.image.pullSecrets.enabled }}
