@@ -15,6 +15,7 @@ spec:
         {{- include "lib.label.jfb" . | nindent 8 }}
       annotations:
         "acryl.ai/appType": system
+        checksum/config: {{ include "lib.lookup.settings" . }}
     spec:
       serviceAccountName: jfb-model-sa
       containers:

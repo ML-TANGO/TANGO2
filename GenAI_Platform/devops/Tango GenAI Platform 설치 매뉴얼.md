@@ -117,16 +117,34 @@ cp values.yaml.template values_<서버명>.yaml
  - <INIT_ROOT_PASSWORD>: 초기 루트 비밀번호
  - <KAFKA_USERNAME>, <KAFKA_PASSWORD>: Kafka 인증 정보
  - <MONGODB_PASSWORD>: MongoDB 비밀번호
+ - <HUGGINGFACE_TOKEN>: HuggingFace 액세스 토큰 (선택, HF 모델/private repo 사용 시 필수)
 # 기타 TODO 주석이 있는 항목들 확인
 
 # `devops/values.yaml.template` 파일에는 다음 주요 섹션이 포함되어 있습니다:
  -`global.jfb.namespace`: 기본 네임스페이스
  -`global.jfb.volume.*`: 볼륨 설정 (jfData, jfBin, jfStorage, src, front 등)
- -`global.jfb.settings.*`: 앱 설정 (db, redis, kafka, mongodb, monitoring 등)
+ -`global.jfb.settings.*`: 앱 설정 (db, redis, kafka, mongodb, monitoring, huggingface 등)
  -`global.jfb.image.*`: 이미지 레지스트리 및 이미지 태그 설정
  -`global.jfb.dir.*`: 디렉토리 매핑
  -`global.jfb.name.*`: Helm release 이름
 ```
+
+#### **HuggingFace 토큰 설정 (선택)**
+
+`llm_model`, `llm_playground`, `fb_scheduler`(LLM 배포 잡)에서 HuggingFace 모델/private 레포 다운로드에 사용되는 토큰입니다. 값을 비워 두면 startup 시 HF login을 자동 스킵하므로 **nexus 등 오프라인/사내 모델 레포만 사용하는 환경에서는 설정 불필요**합니다.
+
+```yaml
+# values_<서버명>.yaml
+global:
+  jfb:
+    settings:
+      huggingface:
+        token: "hf_xxxxxxxxxxxxxxxx"   # https://huggingface.co/settings/tokens 에서 발급
+```
+
+- 토큰은 `jfb-settings` ConfigMap의 `HUGGINGFACE_TOKEN` 환경변수로 주입되며, `envFrom`을 사용하는 모든 메인 앱(llm_model, llm_playground, fb_scheduler 등)에 자동 전파됩니다.
+- `helm upgrade`로 토큰 값을 변경하면 deployment의 `checksum/config` annotation이 갱신되어 `llm_model`/`llm_playground` Pod이 자동 rollout 됩니다(별도 `kubectl rollout restart` 불필요).
+- ⚠️ **보안**: 실제 토큰은 `values_<서버명>.yaml`에만 입력합니다. 해당 파일은 `.gitignore`(`/devops/values_*.yaml`)로 자동 차단되어 저장소에 커밋되지 않습니다. **저장소에 커밋되는 코드/템플릿(`values.yaml.template`)에는 절대 실제 토큰을 넣지 마세요.**
 
 `<NFS_SERVER_IP>`는 **NFS 서버의 IP**이며, 설치 서버(마스터) IP와 동일하지 않을 수 있습니다.”
 
