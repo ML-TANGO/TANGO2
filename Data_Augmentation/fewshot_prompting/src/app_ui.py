@@ -8,6 +8,9 @@ from prompt_toolkit import prompt
 from prompt_toolkit.history import InMemoryHistory
 import pandas as pd
 import io
+import base64
+import mimetypes
+from langchain_core.messages import HumanMessage, AIMessage
 
 LOG_FILE = "conversation.log"
 CSV_RESPONSE_LOG_FILE = "csv_query_responses.log"
@@ -55,6 +58,39 @@ def log_csv_response(response):
 
     with open(CSV_RESPONSE_LOG_FILE, "a", encoding="utf-8") as f:
         f.write(log_text + "\n[[---]]\n")
+
+def parse_multimodal_input(user_input):
+    """
+    사용자 입력을 LangChain 멀티모달 리스트 형식으로 변환합니다.
+    - CLI: '텍스트 [image: 경로]' 형태 처리
+    - Web: {'query': '...', 'images': ['base64...']} 형태 처리
+    """
+    content = []
+    
+    if isinstance(user_input, dict):
+        query = user_input.get('query', '')
+        images = user_input.get('images', [])
+        if query:
+            content.append({"type": "text", "text": query})
+        for img_data in images:
+            content.append({"type": "image_url", "image_url": {"url": img_data}})
+    else:
+        image_pattern = r'\[image:\s*(.*?)\]'
+        found_images = re.findall(image_pattern, user_input)
+        clean_text = re.sub(image_pattern, '', user_input).strip()
+        if clean_text:
+            content.append({"type": "text", "text": clean_text})
+        for img_path in found_images:
+            img_path = img_path.strip()
+            if os.path.exists(img_path):
+                with open(img_path, "rb") as f:
+                    encoded = base64.b64encode(f.read()).decode('utf-8')
+                mime_type, _ = mimetypes.guess_type(img_path)
+                if not mime_type: mime_type = "image/jpeg"
+                content.append({"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{encoded}"}})
+            else:
+                print(f"[Warning] 이미지를 찾을 수 없습니다: {img_path}")
+    return content
 
 def _assemble_prompt(loaded_components, examples, user_query):
     """
@@ -177,7 +213,7 @@ def run_cli(context: dict):
                         chain = context['chain']
                         full_response = ""
                         print("Model: ", end="", flush=True)
-                        for chunk in chain.stream({"user_query": query}):
+                        for chunk in chain.stream({"user_query": query}, config={"configurable": {"session_id": "csv_batch"}}):
                             response_piece = get_content(chunk)
                             print(response_piece, end="", flush=True)
                             full_response += response_piece
@@ -194,7 +230,7 @@ def run_cli(context: dict):
                          result = dspy_program(query=query, chat_history=chat_history_str)
                          response = get_content(result.response)
                          print(f"Model: {response}")
-                         memory.save_context({"input": query}, {"output": response})
+                         memory.save_context({"user_query": query}, {"output": response})
                          log_conversation(query, response)
                          log_csv_response(response)
                     else: # single_shot or dspy_single_shot
@@ -239,13 +275,24 @@ def run_cli(context: dict):
         current_mode = context.get("mode")
         if current_mode == 'conversational':
             chain = context['chain']
+            # 멀티모달 입력 파싱 및 메시지 객체화
+            multimodal_content = parse_multimodal_input(query_to_send)
+            input_msg = [HumanMessage(content=multimodal_content)]
+            
             full_response = ""
             print("Model: ", end="", flush=True)
-            for chunk in chain.stream({"user_query": query_to_send}):
+            for chunk in chain.stream({"user_query": input_msg}, config={"configurable": {"session_id": "cli"}}):
                 response_piece = get_content(chunk)
                 print(response_piece, end="", flush=True)
                 full_response += response_piece
             print()
+            
+            # 히스토리 수동 저장 (컨텍스트 유지의 핵심)
+            try:
+                history = chain.get_session_history("cli")
+                history.add_message(AIMessage(content=full_response))
+            except Exception: pass
+
             log_conversation(query_to_send, full_response)
         elif current_mode == 'dspy_conversational':
             print("Model is thinking... (DSPy Conversational)")
@@ -258,7 +305,7 @@ def run_cli(context: dict):
             response = get_content(result.response)
 
             print(f"Model: {response}")
-            memory.save_context({"input": query_to_send}, {"output": response})
+            memory.save_context({"user_query": query_to_send}, {"output": response})
             log_conversation(query_to_send, response)
         elif current_mode == "dspy_single_shot":
             print("Model is thinking... (DSPy)")
@@ -283,33 +330,37 @@ def run_web(context: dict, host: str, port: int):
     """Runs the web interface."""
     app = Flask(__name__, template_folder=os.path.abspath('templates'))
 
-    @app.route('/query_stream')
+    @app.route('/query_stream', methods=['POST'])
     def query_stream():
-        print(f"[DEBUG] /query_stream 호출됨", flush=True)
+        print(f"[DEBUG] /query_stream 호출됨 (POST)", flush=True)
         current_mode = context.get("mode")
-        print(f"[DEBUG] 현재 모드: {current_mode}", flush=True)
         if current_mode not in ['conversational', 'dspy_conversational']:
-            return Response("data: Streaming is only available in conversational modes.\n\n", mimetype='text/event-stream')
+            return Response("data: {\"chunk\": \"Streaming is only available in conversational modes.\"}\n\n", mimetype='text/event-stream')
 
-        user_query = request.args.get('query', '')
-        print(f"[DEBUG] 사용자 쿼리 수신: {user_query}", flush=True)
-        if not user_query:
-            return Response("data: Query is required.\n\n", mimetype='text/event-stream')
+        data = request.json
+        user_query = data.get('query', '')
+        if not user_query and not data.get('images'):
+            return Response("data: {\"chunk\": \"Query or Image is required.\"}\n\n", mimetype='text/event-stream')
 
         if current_mode == 'conversational':
             chain = context['chain']
+            # 멀티모달 입력 파싱
+            multimodal_content = parse_multimodal_input(data)
+            input_msg = [HumanMessage(content=multimodal_content)]
+
             def generate_and_log_after():
-                print(f"[DEBUG] conversational 모드 응답 생성 시작...", flush=True)
                 full_response = ""
-                # Stream response to client
-                for chunk in chain.stream({"user_query": user_query}):
+                import json
+                for chunk in chain.stream({"user_query": input_msg}, config={"configurable": {"session_id": "web"}}):
                     response_piece = get_content(chunk)
                     full_response += response_piece
-                    print(f"[DEBUG] chunk 수신됨 (길이: {len(response_piece)})", flush=True)
-                    # Send data chunk by chunk
-                    yield f"data: {response_piece}\n\n"
-                # Log after streaming is complete
-                print(f"[DEBUG] 응답 스트리밍 완료. 총 길이: {len(full_response)}", flush=True)
+                    yield f"data: {json.dumps({'chunk': response_piece})}\n\n"
+                
+                # AI 답변을 히스토리에 수동 저장
+                try:
+                    history = chain.get_session_history("web")
+                    history.add_message(AIMessage(content=full_response))
+                except Exception: pass
                 log_conversation(user_query, full_response)
             return Response(generate_and_log_after(), mimetype='text/event-stream')
 
@@ -325,7 +376,7 @@ def run_web(context: dict, host: str, port: int):
                 response = get_content(result.response)
                 print(f"[DEBUG] DSPy 프로그램 실행 완료. 응답 길이: {len(response)}", flush=True)
 
-                memory.save_context({"input": user_query}, {"output": response})
+                memory.save_context({"user_query": user_query}, {"output": response})
                 log_conversation(user_query, response)
 
                 # Yield the full response as a single event
@@ -363,7 +414,10 @@ def run_web(context: dict, host: str, port: int):
                 print(f"[DEBUG] single_shot (기본 LLM) 실행 시작...", flush=True)
                 llm = context['llm']
                 final_prompt = _assemble_prompt(context['prompt_components'], context['examples'], user_query)
-                raw_response = llm.invoke(final_prompt)
+                # single_shot은 현재 텍스트 조합 방식이므로 텍스트로 전달하되 
+                # 나중을 위해 HumanMessage 리스트 구조를 지원하도록 invoke 호출 방식 변경
+                multimodal_content = parse_multimodal_input(final_prompt)
+                raw_response = llm.invoke([HumanMessage(content=multimodal_content)])
                 response = get_content(raw_response)
                 print(f"[DEBUG] LLM 실행 완료. 응답 길이: {len(response)}", flush=True)
                 log_conversation(user_query, response)
@@ -381,4 +435,3 @@ def run_web(context: dict, host: str, port: int):
     Timer(1, lambda: webbrowser.open_new(url)).start()
     print(f"Starting web server at http://{host}:{port} (accessible at {url})")
     app.run(host=host, port=port)
-

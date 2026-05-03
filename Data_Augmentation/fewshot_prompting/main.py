@@ -1,10 +1,11 @@
 import sys
 import os
-from langchain_ollama import OllamaLLM
+from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
-from langchain_core.prompts import PromptTemplate, FewShotPromptTemplate, ChatPromptTemplate, MessagesPlaceholder
-from langchain_classic.chains import LLMChain
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_classic.memory import ConversationBufferMemory
+from langchain_core.runnables.history import RunnableWithMessageHistory
+from langchain_core.chat_history import InMemoryChatMessageHistory
 
 # 모듈화된 함수들 임포트
 from src.config import read_config, get_few_shot_files
@@ -20,6 +21,7 @@ def main():
     vllm_status, vllm_process = None, None
     model_name = None
     backend = None
+    chat_session = {}
     try:
         # 1. 설정 읽기
         config = read_config()
@@ -28,7 +30,7 @@ def main():
         do_shuffle = config.getboolean('app', 'SHUFFLE_EXAMPLES', fallback=False)
         fallback_to_interactive = config.getboolean('FEW_SHOT_DATA', 'FALLBACK_TO_INTERACTIVE', fallback=True)
         backend = config.get('app', 'BACKEND', fallback='ollama').lower()
-        model_name = config.get('app', 'MODEL_NAME', fallback='gemma3')
+        model_name = config.get('app', 'MODEL_NAME', fallback='Qwen3.5')
 
         web_host = config.get('web', 'HOST', fallback='127.0.0.1')
         web_port = config.getint('web', 'PORT', fallback=5000)
@@ -57,8 +59,12 @@ def main():
                 print(f"Ollama 모델을 준비할 수 없어 프로그램을 종료합니다.")
                 return
 
-            llm = OllamaLLM(model=model_name)
             backend_url = config.get('ollama', 'OLLAMA_URL', fallback='http://localhost:11434')
+            llm = ChatOllama(
+                model=model_name,
+                base_url=backend_url,
+                num_ctx=32000,
+            )
 
         elif backend == 'vllm':
             vllm_url = config.get('vllm', 'VLLM_URL', fallback='http://localhost:8000/v1')
@@ -188,14 +194,24 @@ def main():
                     else:
                          system_message += f"Query: {ex['query']}\nResponse: {ex['response']}\n\n"
 
-                memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
                 prompt = ChatPromptTemplate.from_messages([
                     ("system", system_message),
                     MessagesPlaceholder(variable_name="chat_history"),
-                    ("human", "{user_query}"),
+                    MessagesPlaceholder(variable_name="user_query"),
                 ])
-                chain = LLMChain(llm=llm, prompt=prompt, memory=memory, verbose=True)
-                context = {"mode": "conversational", "chain": chain}
+                
+                def get_chat_history(session_id):
+                    if session_id not in chat_session:
+                        chat_session[session_id] = InMemoryChatMessageHistory()
+                    return chat_session[session_id]
+                chain = prompt | llm
+                conversational_chain = RunnableWithMessageHistory(
+                    chain,
+                    get_chat_history,
+                    input_messages_key="user_query",
+                    history_messages_key="chat_history",
+                )
+                context = {"mode": "conversational", "chain": conversational_chain}
 
         else: # single_shot 모드
             if use_dspy and examples: # DSPy 사용 로직
@@ -208,6 +224,7 @@ def main():
                         metric_name=dspy_metric,
                         backend=backend,
                         backend_url=backend_url,
+                        is_conversational=False,
                         mipro_auto_level=dspy_mipro_auto_level
                     )
                     print("DSPy 프로그램 컴파일 완료!")
