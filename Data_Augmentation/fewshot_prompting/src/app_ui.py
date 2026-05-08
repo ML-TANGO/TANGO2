@@ -10,6 +10,7 @@ import pandas as pd
 import io
 import base64
 import mimetypes
+import dspy
 from langchain_core.messages import HumanMessage, AIMessage
 
 LOG_FILE = "conversation.log"
@@ -66,7 +67,7 @@ def parse_multimodal_input(user_input):
     - Web: {'query': '...', 'images': ['base64...']} 형태 처리
     """
     content = []
-    
+
     if isinstance(user_input, dict):
         query = user_input.get('query', '')
         images = user_input.get('images', [])
@@ -91,6 +92,27 @@ def parse_multimodal_input(user_input):
             else:
                 print(f"[Warning] 이미지를 찾을 수 없습니다: {img_path}")
     return content
+
+def get_dspy_images(user_input):
+    """
+    사용자 입력에서 DSPy용 dspy.Image 객체를 추출합니다.
+    """
+    dspy_images = []
+    if isinstance(user_input, dict):
+        images = user_input.get('images', [])
+        for img_data in images:
+            if ',' in img_data:
+                base64_str = img_data.split(',')[1]
+                dspy_images.append(dspy.Image.from_base64(base64_str))
+    else:
+        image_pattern = r'\[image:\s*(.*?)\]'
+        found_images = re.findall(image_pattern, user_input)
+        for img_path in found_images:
+            img_path = img_path.strip()
+            if os.path.exists(img_path):
+                dspy_images.append(dspy.Image.from_file(img_path))
+
+    return dspy_images
 
 def _assemble_prompt(loaded_components, examples, user_query):
     """
@@ -278,7 +300,7 @@ def run_cli(context: dict):
             # 멀티모달 입력 파싱 및 메시지 객체화
             multimodal_content = parse_multimodal_input(query_to_send)
             input_msg = [HumanMessage(content=multimodal_content)]
-            
+
             full_response = ""
             print("Model: ", end="", flush=True)
             for chunk in chain.stream({"user_query": input_msg}, config={"configurable": {"session_id": "cli"}}):
@@ -286,22 +308,22 @@ def run_cli(context: dict):
                 print(response_piece, end="", flush=True)
                 full_response += response_piece
             print()
-            
-            # 히스토리 수동 저장 (컨텍스트 유지의 핵심)
-            try:
-                history = chain.get_session_history("cli")
-                history.add_message(AIMessage(content=full_response))
-            except Exception: pass
 
             log_conversation(query_to_send, full_response)
         elif current_mode == 'dspy_conversational':
             print("Model is thinking... (DSPy Conversational)")
             dspy_program = context['dspy_program']
             memory = context['memory']
+
+            # 멀티모달 처리 (이미지 추출 및 텍스트 정제)
+            dspy_images = get_dspy_images(query_to_send)
+            dspy_image = dspy_images[0] if dspy_images else None
+            clean_query = re.sub(r'\[image:\s*(.*?)\]', '', query_to_send).strip()
+
             history_messages = memory.load_memory_variables({})['chat_history']
             chat_history_str = "\n".join([f"{type(m).__name__}: {m.content}" for m in history_messages])
 
-            result = dspy_program(query=query_to_send, chat_history=chat_history_str)
+            result = dspy_program(query=clean_query, chat_history=chat_history_str, image=dspy_image)
             response = get_content(result.response)
 
             print(f"Model: {response}")
@@ -310,7 +332,13 @@ def run_cli(context: dict):
         elif current_mode == "dspy_single_shot":
             print("Model is thinking... (DSPy)")
             dspy_program = context['dspy_program']
-            result = dspy_program(query=query_to_send)
+
+            # 멀티모달 처리
+            dspy_images = get_dspy_images(query_to_send)
+            dspy_image = dspy_images[0] if dspy_images else None
+            clean_query = re.sub(r'\[image:\s*(.*?)\]', '', query_to_send).strip()
+
+            result = dspy_program(query=clean_query, image=dspy_image)
             response = get_content(result.response)
             print(f"Model: {response}")
             log_conversation(query_to_send, response)
@@ -355,12 +383,8 @@ def run_web(context: dict, host: str, port: int):
                     response_piece = get_content(chunk)
                     full_response += response_piece
                     yield f"data: {json.dumps({'chunk': response_piece})}\n\n"
-                
-                # AI 답변을 히스토리에 수동 저장
-                try:
-                    history = chain.get_session_history("web")
-                    history.add_message(AIMessage(content=full_response))
-                except Exception: pass
+                print(chain.get_session_history('web'))
+
                 log_conversation(user_query, full_response)
             return Response(generate_and_log_after(), mimetype='text/event-stream')
 
@@ -369,10 +393,15 @@ def run_web(context: dict, host: str, port: int):
             memory = context['memory']
             def generate_and_log_dspy():
                 print(f"[DEBUG] dspy_conversational 모드 프로그램 실행 시작...", flush=True)
+
+                # 멀티모달 처리
+                dspy_images = get_dspy_images(data)
+                dspy_image = dspy_images[0] if dspy_images else None
+
                 history_messages = memory.load_memory_variables({})['chat_history']
                 chat_history_str = "\n".join([f"{type(m).__name__}: {m.content}" for m in history_messages])
 
-                result = dspy_program(query=user_query, chat_history=chat_history_str)
+                result = dspy_program(query=user_query, chat_history=chat_history_str, image=dspy_image)
                 response = get_content(result.response)
                 print(f"[DEBUG] DSPy 프로그램 실행 완료. 응답 길이: {len(response)}", flush=True)
 
@@ -401,7 +430,12 @@ def run_web(context: dict, host: str, port: int):
             try:
                 print(f"[DEBUG] dspy_single_shot 실행 시작...", flush=True)
                 dspy_program = context['dspy_program']
-                result = dspy_program(query=user_query)
+
+                # 멀티모달 처리
+                dspy_images = get_dspy_images(request.json)
+                dspy_image = dspy_images[0] if dspy_images else None
+
+                result = dspy_program(query=user_query, image=dspy_image)
                 response = get_content(result.response)
                 print(f"[DEBUG] DSPy 실행 완료. 응답 길이: {len(response)}", flush=True)
                 log_conversation(user_query, response)
@@ -414,7 +448,7 @@ def run_web(context: dict, host: str, port: int):
                 print(f"[DEBUG] single_shot (기본 LLM) 실행 시작...", flush=True)
                 llm = context['llm']
                 final_prompt = _assemble_prompt(context['prompt_components'], context['examples'], user_query)
-                # single_shot은 현재 텍스트 조합 방식이므로 텍스트로 전달하되 
+                # single_shot은 현재 텍스트 조합 방식이므로 텍스트로 전달하되
                 # 나중을 위해 HumanMessage 리스트 구조를 지원하도록 invoke 호출 방식 변경
                 multimodal_content = parse_multimodal_input(final_prompt)
                 raw_response = llm.invoke([HumanMessage(content=multimodal_content)])
