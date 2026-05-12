@@ -337,7 +337,7 @@ SDS-VLM의 학습/배포/추론을 조나단 대시보드에서 직접 제어하
 
 | 조나단 UI 화면 | 에바 연동 내용 | 호출 API |
 |---|---|---|
-| 학습 프로젝트 | 에바 VLM 학습 시작/중지/진행률 표시 | `POST /train`, `GET /train/status`, `POST /train/stop` |
+| 학습 프로젝트 | SDS-VLM 학습 시작/중지/진행률 표시 | `POST /train`, `GET /train/status`, `POST /train/stop` |
 | 모델 관리 | 체크포인트 목록 및 현재 활성 모델 표시 | `GET /models` |
 | 배포 | 체크포인트 선택 후 서비스 적용 | `POST /deploy` |
 | 플레이그라운드 | 이미지+AIS 입력 → 추론 결과 | `POST /run` |
