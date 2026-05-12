@@ -304,7 +304,7 @@ MAX_STEPS=5000      # 조기 종료
 
 ---
 
-### Phase 2a — CC3M LoRA 파인튜닝
+### Phase 2 — CC3M LoRA 파인튜닝
 
 Phase 1 프로젝터를 불러와 LoRA로 LLM을 파인튜닝합니다.
 
@@ -339,7 +339,7 @@ clip_llama31_lora/
 
 ---
 
-### Phase 2b — LLaMarine 텍스트 전용 LoRA 계속학습
+### Phase 3 — LLaMarine 텍스트 전용 LoRA 계속학습
 
 기존 LoRA 체크포인트에서 이어받아 해양 도메인 텍스트 데이터로 LLM을 추가 학습합니다.  
 Vision Encoder / Projector를 로드하지 않아 메모리 효율적입니다.
@@ -378,7 +378,7 @@ NUM_EPOCHS=1
 
 ---
 
-### Phase 3 — SDS 도메인 LoRA 파인튜닝
+### Phase 4 — SDS 도메인 LoRA 파인튜닝
 
 SDS 데이터셋 100개로 시각+텍스트 통합 파인튜닝을 진행합니다.  
 3가지 시나리오 중 `SCENARIO` 환경 변수로 선택합니다.
@@ -437,7 +437,7 @@ $PYTHON train.py \
     --output_dir checkpoints/my_projector \
     --num_epochs 1 --batch_size 8 --grad_accum 4
 
-# Phase 2: 신규 LoRA
+# Phase 2/3: 신규 LoRA
 $PYTHON train.py \
     --train_type lora \
     --projector_path checkpoints/my_projector/projector.bin \
@@ -446,7 +446,7 @@ $PYTHON train.py \
     --output_dir checkpoints/my_lora \
     --num_epochs 3 --batch_size 4 --lora_r 128 --lora_alpha 256
 
-# Phase 3: 기존 LoRA 이어받아 계속학습
+# Phase 4: 기존 LoRA 이어받아 계속학습
 $PYTHON train.py \
     --train_type lora \
     --projector_path checkpoints/my_lora/projector.bin \
