@@ -1,0 +1,1402 @@
+[
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-0dL1k060Ox_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-0dL1k060Ox/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.454585 Lon:127.731907 | Speed:17.5kt Heading:140.6° | Size:93m x 28m Draft:3m\n- Nearby vessel (ID:1) | Lat:34.446715 Lon:127.735849 | Speed:20.1kt Heading:114.6° | Size:134m x 24m Draft:4m | BoundingBox:[x=975 y=318 w=408 h=263]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Dawn fog covers the sea surface at low level restricting visibility. Own vessel is proceeding southeast on course 141 degrees at approximately 17.5 knots, while a target vessel on course 115 degrees at approximately 20.1 knots has been detected on radar on the starboard bow proceeding east-southeast in a developing crossing situation.\n\nWith a crossing target detected on radar on the starboard bow in dawn fog, immediately reduce to safe speed (Rule 6) and sound fog signals per Rule 35 in accordance with Rule 19. Continuously calculate the target's CPA and TCPA through radar plotting, and if risk of collision is confirmed, avoid altering course to port and secure a safe passing distance by altering course to starboard or reducing speed."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-0dLhkqLMw_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-0dLhkqLMw/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.377160 Lon:127.754502 | Speed:24.6kt Heading:263.6° | Size:97m x 20m Draft:3m\n- Nearby vessel (ID:1) | Lat:34.378553 Lon:127.747088 | Speed:15.9kt Heading:252.2° | Size:95m x 18m Draft:5m | BoundingBox:[x=1113 y=405 w=197 h=153]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "In reduced visibility due to afternoon rain, own vessel is proceeding on course 263.7 degrees at 24.6 knots in a westerly direction. A target vessel ahead on course 252.3 degrees at 15.9 knots is proceeding in a similar direction, forming an Overtaking Situation. The fast approach speed and rain-reduced visibility necessitate continuous radar monitoring and safe distance maintenance.\n\nThis is an Overtaking Situation with the target vessel ahead. In accordance with COLREG Rule 13, own vessel must keep clear of the overtaken vessel until finally past and clear. Due to rain-reduced visibility, enhance radar surveillance and maintain safe speed per Rule 19, and alter course sufficiently to port or starboard to maintain a CPA of at least 1 nautical mile while safely overtaking."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-0dzraEavMx_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-0dzraEavMx/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.963010 Lon:127.643884 | Speed:16.0kt Heading:349.0° | Size:84m x 25m Draft:5m\n- Nearby vessel (ID:1) | Lat:34.968410 Lon:127.639978 | Speed:17.2kt Heading:9.8° | Size:100m x 21m Draft:3m | BoundingBox:[x=426 y=405 w=221 h=154]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Clear daytime conditions with good visibility and calm seas. Own vessel is proceeding north on course 349.0 degrees at 16.0 knots, while a target vessel on course 9.8 degrees at 17.3 knots is crossing from the port side. Although the heading difference is approximately 21 degrees, the target is faster, creating a crossing situation.\n\nThis is a Crossing Situation with the target vessel on the port side. In accordance with COLREG Rule 17, own vessel is the stand-on vessel and shall maintain present course and speed. If the target vessel fails to take appropriate give-way action, sound the attention signal (five or more short blasts). If collision becomes imminent, take cooperative action such as altering course to starboard."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-0p0rtLzOH_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-0p0rtLzOH/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.322954 Lon:127.389455 | Speed:17.1kt Heading:263.1° | Size:113m x 22m Draft:6m\n- Nearby vessel (ID:1) | Lat:34.322860 Lon:127.381657 | Speed:20.9kt Heading:76.7° | Size:101m x 18m Draft:5m | BoundingBox:[x=878 y=227 w=314 h=418]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Visibility is good and the sea is calm during daytime. A target vessel approaching from the bow direction at approximately 21 knots on course 76.7 degrees has been visually identified. This is a Head-on Situation with the own vessel, and given the high relative speed of approach, continuous lookout and vigilance are required for collision prevention.\n\nThis is a Head-on Situation with the target vessel approaching from directly ahead. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port. If the target's intentions are unclear, sound the attention signal (five or more short blasts) without delay, and continuously monitor the target's bearing change while maintaining a minimum CPA of 1 nautical mile until the risk of collision has been eliminated."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-0pvAkDzMx_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-0pvAkDzMx/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.360275 Lon:127.704030 | Speed:19.7kt Heading:78.9° | Size:89m x 16m Draft:6m\n- Nearby vessel (ID:1) | Lat:34.362023 Lon:127.712967 | Speed:10.0kt Heading:79.6° | Size:125m x 17m Draft:3m | BoundingBox:[x=807 y=423 w=67 h=112]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Weather is clear and the sea is calm with very good visibility. A vessel proceeding on course approximately 79.6 degrees at 9.97 knots is positioned ahead of own vessel's bow. Own vessel is proceeding on course 78.9 degrees at 19.72 knots, overtaking the vessel ahead. The target vessel's movements are being closely monitored for safe overtaking.\n\nThis is an Overtaking Situation where own vessel is overtaking the target. In accordance with COLREG Rule 13, own vessel is the give-way vessel and must maintain sufficient safe passing distance (CPA of at least 1 nautical mile) without impeding the target's course. Take particular care not to cross ahead or approach too closely to avoid ship-to-ship interaction effects, and maintain vigilance until the overtaking maneuver is fully completed."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-H-FMrdbSdY_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-H-FMrdbSdY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.688700 Lon:127.095396 | Speed:21.2kt Heading:190.2° | Size:115m x 26m Draft:5m\n- Nearby vessel (ID:1) | Lat:35.678975 Lon:127.094210 | Speed:8.5kt Heading:186.8° | Size:122m x 15m Draft:3m | BoundingBox:[x=784 y=436 w=48 h=83]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Clear daytime conditions with good visibility and calm seas. Own vessel is proceeding south on course 190.2 degrees at 21.2 knots, while a slower target vessel on course 186.8 degrees at 8.5 knots is navigating in a similar direction ahead. With own vessel approximately 2.5 times faster than the target, an overtaking situation is developing with rapid closure.\n\nThis is an Overtaking Situation. In accordance with COLREG Rule 13, the overtaking vessel shall keep clear of the overtaken vessel until finally past and clear. Given the significant speed difference, alter course early to port or starboard to maintain a CPA of at least 1 nautical mile, and maintain vigilant lookout until the overtaking maneuver is complete."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-H-F_rRP2ZY_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-H-F_rRP2ZY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.468330 Lon:128.204930 | Speed:19.3kt Heading:255.0° | Size:128m x 16m Draft:5m\n- Nearby vessel (ID:1) | Lat:34.465157 Lon:128.196504 | Speed:21.4kt Heading:65.2° | Size:94m x 28m Draft:4m | BoundingBox:[x=694 y=423 w=65 h=112]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Clear daytime weather with bright afternoon sunlight and good visibility. Own vessel is proceeding west-southwest on course 255.0 degrees at approximately 19.3 knots, while a target vessel on course 65.2 degrees at approximately 21.4 knots has been identified approaching from the east-northeast. This is a Head-on Situation with a combined closing speed of approximately 40.7 knots.\n\nThis is a Head-on Situation. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port. If the target's intentions are unclear, sound the attention signal (five or more short blasts) without delay, and maintain a minimum CPA of 1 nautical mile."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-H-LCr1yoZY_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-H-LCr1yoZY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.880645 Lon:127.961797 | Speed:15.4kt Heading:88.3° | Size:112m x 19m Draft:3m\n- Nearby vessel (ID:1) | Lat:35.883034 Lon:127.968774 | Speed:18.2kt Heading:109.2° | Size:113m x 16m Draft:4m | BoundingBox:[x=388 y=402 w=236 h=161]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Clear daytime weather with good visibility and calm seas. Own vessel is proceeding eastward on course 088 degrees at approximately 15.5 knots, while a target vessel on the port bow heading east-southeast on course 109 degrees at approximately 18 knots is forming a Crossing Situation across own vessel's path.\n\nThis is a Crossing Situation with the target on the port side. In accordance with COLREG Rule 17, own vessel is the stand-on vessel and must maintain present course and speed. If the target fails to take avoiding action, sound the attention signal and alter course to starboard if collision becomes imminent."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-H-i0H5CZb_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-H-i0H5CZb/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.397316 Lon:127.895884 | Speed:25.0kt Heading:172.4° | Size:83m x 22m Draft:4m\n- Nearby vessel (ID:1) | Lat:35.391802 Lon:127.897445 | Speed:21.0kt Heading:352.1° | Size:148m x 21m Draft:3m | BoundingBox:[x=732 y=402 w=104 h=161]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Twilight conditions with visibility gradually decreasing due to sunset, with relatively calm seas. Own vessel is proceeding south on course 172 degrees at approximately 25 knots, with a target vessel heading north on course 352 degrees at 21 knots approaching head-on. The target vessel's movements are being closely monitored given the high closing speed.\n\nIn a Head-on Situation during twilight due to sunset, in accordance with COLREG Rule 14, immediately alter course substantially to starboard to pass port-to-port. Confirm the target's navigation lights (masthead lights, sidelights) and continuously observe the bearing until the risk of collision has been eliminated."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-H-iCrVyEZV_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-H-iCrVyEZV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.824557 Lon:128.499295 | Speed:17.6kt Heading:195.6° | Size:92m x 24m Draft:4m\n- Nearby vessel (ID:1) | Lat:34.817861 Lon:128.499185 | Speed:21.4kt Heading:229.5° | Size:109m x 29m Draft:3m | BoundingBox:[x=314 y=257 w=555 h=368]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Visibility is extremely restricted due to sunset, rain, and fog. Own vessel is proceeding on course 195.6 degrees at 17.6 knots, with a target vessel detected on radar on the port bow on course 229.5 degrees at 21.4 knots crossing own vessel's path heading southwest. The target's higher speed may cause rapid situation development.\n\nWith a crossing target detected on radar on the port bow in extremely restricted visibility, immediately reduce to safe speed (Rule 6) per Rule 19 and sound fog signals per Rule 35. Avoid altering course to port per Rule 19(d)(i). Alter course to starboard or reduce speed to ensure a CPA of at least 1 nautical mile."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-H-q0xT_mP_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-H-q0xT_mP/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.067342 Lon:128.422945 | Speed:22.3kt Heading:285.3° | Size:109m x 22m Draft:3m\n- Nearby vessel (ID:1) | Lat:35.066684 Lon:128.414743 | Speed:18.0kt Heading:321.3° | Size:131m x 18m Draft:4m | BoundingBox:[x=162 y=249 w=633 h=382]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "In clear weather with good visibility, own vessel is proceeding west-northwest on course 285 degrees at approximately 22.3 knots. The target vessel with a dark hull and yellow superstructure is identified ahead, proceeding northwest on course 321 degrees at approximately 18.0 knots, forming a Crossing Situation across own vessel's course. The sea is relatively calm with some swell, requiring careful vigilance for collision prevention.\n\nThis is a Crossing Situation with the target vessel on the port side. In accordance with COLREG Rule 17, own vessel is the stand-on vessel and must maintain present course and speed. However, if the target fails to take appropriate avoiding action and the risk of collision (decreasing CPA) is detected, immediately sound the attention signal (five or more short blasts), and if collision becomes imminent, take cooperative action by altering course to starboard while avoiding a port turn."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-HHF0HRj_mY_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-HHF0HRj_mY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.462973 Lon:128.341791 | Speed:24.7kt Heading:9.7° | Size:125m x 24m Draft:5m\n- Nearby vessel (ID:1) | Lat:35.470605 Lon:128.342842 | Speed:15.0kt Heading:181.7° | Size:107m x 24m Draft:3m | BoundingBox:[x=770 y=291 w=164 h=309]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Visibility is severely restricted due to dense fog. Own vessel is proceeding north on course approximately 10 degrees at 24.7 knots, while a target vessel on course approximately 182 degrees at 15.0 knots is approaching head-on from the bow direction. The risk of collision exists under restricted visibility, requiring thorough vigilance and safe navigation.\n\nUnder restricted visibility due to dense fog with the risk of a Head-on encounter, immediately reduce to safe speed and sound fog signals in accordance with COLREG Rule 19. As the target is approaching from dead ahead on radar, alter course substantially to starboard with sufficient time margin to avoid any close-quarters situation."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-HHF0xWgSmY_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-HHF0xWgSmY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.134594 Lon:128.699634 | Speed:22.7kt Heading:9.7° | Size:148m x 17m Draft:5m\n- Nearby vessel (ID:1) | Lat:35.142227 Lon:128.705846 | Speed:23.5kt Heading:198.4° | Size:119m x 26m Draft:6m | BoundingBox:[x=1189 y=343 w=221 h=224]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Clear daytime weather with good visibility and calm seas. Own vessel is proceeding northward on course 010 degrees at approximately 22.7 knots, with a target vessel on course 198 degrees at approximately 23.5 knots approaching from the south-southwest. This is a Head-on Situation with a combined closing speed of approximately 46 knots requiring immediate response.\n\nThis is a Head-on Situation. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port. With a combined closing speed of approximately 46 knots, execute early and decisive course alteration and maintain a CPA of at least 1 nautical mile."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-HHFC-EdY_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-HHFC-EdY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.167848 Lon:128.236516 | Speed:23.8kt Heading:224.7° | Size:145m x 16m Draft:4m\n- Nearby vessel (ID:1) | Lat:35.165727 Lon:128.230365 | Speed:16.6kt Heading:210.2° | Size:109m x 15m Draft:4m | BoundingBox:[x=1050 y=192 w=625 h=485]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "In reduced visibility due to afternoon rain, own vessel is proceeding on course 224.7 degrees at 23.8 knots in a southwest direction, with a target vessel identified ahead on course 210.2 degrees at 16.7 knots heading in a similar direction. This is an Overtaking Situation as own vessel approaches at higher speed, requiring thorough radar surveillance and vigilance due to rain-reduced visibility.\n\nThis is an Overtaking Situation with the target vessel ahead. In accordance with COLREG Rule 13, own vessel must keep clear of the overtaken vessel until finally past and clear. Due to rain-reduced visibility, maintain safe speed and continuously monitor the target's distance via radar per Rule 19, and alter course sufficiently to starboard to maintain a CPA of at least 1 nautical mile while safely overtaking."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-HHFCrI7SdP_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-HHFCrI7SdP/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.569997 Lon:128.019916 | Speed:20.5kt Heading:126.0° | Size:97m x 20m Draft:6m\n- Nearby vessel (ID:1) | Lat:34.563524 Lon:128.025741 | Speed:23.1kt Heading:303.8° | Size:142m x 26m Draft:5m | BoundingBox:[x=1104 y=425 w=118 h=109]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Dense fog with extremely restricted visibility. Own vessel is proceeding southeast on course 126.0 degrees at 20.5 knots, while a target vessel on course 303.8 degrees at 23.1 knots is approaching from the northwest in a head-on situation detected by radar. The combined closing speed of approximately 44 knots and near-zero visibility demand urgent action.\n\nThis is a Head-on Situation. In accordance with COLREG Rule 14, alter course to starboard by at least 30 degrees. With dense fog severely restricting visibility, immediately reduce to safe speed per Rule 6, comply with Rule 19 restricted visibility procedures, and sound fog signals per Rule 35 (one prolonged blast at intervals of no more than 2 minutes). Monitor CPA by radar plotting and ensure a minimum CPA of 1 nautical mile."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-HHFCrMjEmP_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-HHFCrMjEmP/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.763064 Lon:127.965549 | Speed:23.0kt Heading:14.2° | Size:134m x 21m Draft:6m\n- Nearby vessel (ID:1) | Lat:34.769928 Lon:127.968042 | Speed:10.6kt Heading:17.8° | Size:80m x 22m Draft:7m | BoundingBox:[x=844 y=315 w=138 h=273]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Clear skies and calm seas with good visibility during daytime. Own vessel is proceeding northward on course 014 degrees at approximately 23 knots, with a slower vessel ahead on course 018 degrees at approximately 10.6 knots. An overtaking situation is developing, requiring careful approach while maintaining safe distance.\n\nThis is an Overtaking Situation. In accordance with COLREG Rule 13, own vessel must maintain sufficient safe passing distance (CPA of at least 1 nautical mile) without impeding the target's course. Take care to avoid ship-to-ship interaction, and maintain vigilance until overtaking is fully completed."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-HHLCHmjMdP_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-HHLCHmjMdP/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.225458 Lon:127.743420 | Speed:18.6kt Heading:289.4° | Size:98m x 25m Draft:4m\n- Nearby vessel (ID:1) | Lat:34.230657 Lon:127.735384 | Speed:22.8kt Heading:258.1° | Size:107m x 23m Draft:5m | BoundingBox:[x=1016 y=339 w=375 h=232]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Visibility is severely restricted due to dense sea fog. Own vessel is proceeding on course 289.4 degrees at 18.6 knots, while the target vessel on course 258.1 degrees at 22.8 knots is forming a Crossing Situation across own vessel's course. The crossing situation is developing under restricted visibility, requiring utmost caution.\n\nUnder restricted visibility with a crossing collision risk, immediately reduce speed, sound fog signals, and continue radar plotting in accordance with COLREG Rule 19. As the target is positioned on the starboard bow, alter course to starboard to keep clear and maintain a safe distance (CPA of at least 1 nautical mile)."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-HHi0xdoZV_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-HHi0xdoZV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.840606 Lon:127.499015 | Speed:18.7kt Heading:1.2° | Size:140m x 29m Draft:3m\n- Nearby vessel (ID:1) | Lat:34.847420 Lon:127.501823 | Speed:19.5kt Heading:178.0° | Size:139m x 16m Draft:3m | BoundingBox:[x=1101 y=417 w=137 h=125]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "During sunset twilight with the horizon tinged orange and rapidly decreasing sea surface illumination. Own vessel is proceeding due north on course 001 degrees at 18.7 knots, with a target vessel on course 178 degrees at 19.5 knots approaching head-on from due south. The courses are nearly exactly reciprocal with a combined closing speed of approximately 38 knots requiring urgent decision-making.\n\nThis is a Head-on Situation. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port. With nearly exact reciprocal courses, take early and clear avoiding action. In the low-light sunset environment, actively utilize radar and AIS to ensure a CPA of at least 1 nautical mile."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-HHqC-Q5omb_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-HHqC-Q5omb/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.088568 Lon:128.411243 | Speed:23.9kt Heading:133.0° | Size:88m x 21m Draft:3m\n- Nearby vessel (ID:1) | Lat:34.085760 Lon:128.421025 | Speed:19.6kt Heading:177.2° | Size:85m x 28m Draft:4m | BoundingBox:[x=204 y=316 w=519 h=268]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Visibility is severely restricted in dawn fog, with warm orange hues of early morning light softly tinting the mist. Own vessel is proceeding southeast on course 133 degrees at approximately 23.9 knots at high speed, while a target vessel on course 177 degrees at approximately 19.6 knots has been detected on radar on the port bow crossing own vessel's path heading southward.\n\nWith a crossing target detected on radar on the port bow in dawn fog, immediately reduce to safe speed (Rule 6) and sound fog signals per Rule 35 in accordance with Rule 19. As required by Rule 19(d)(i), avoid altering course to port for a vessel forward of the beam, and monitor CPA trends through radar plotting. If risk of collision exists, alter course to starboard or reduce speed to secure a safe passing distance."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-HHqM-pCdb_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-HHqM-pCdb/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.893395 Lon:127.747139 | Speed:19.2kt Heading:226.6° | Size:86m x 27m Draft:7m\n- Nearby vessel (ID:1) | Lat:34.887204 Lon:127.739256 | Speed:8.6kt Heading:229.8° | Size:102m x 21m Draft:5m | BoundingBox:[x=810 y=357 w=105 h=200]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Visibility is good with low wave height and calm sea conditions. The vessel ahead is proceeding south-west (approx. 230 degrees) at approximately 8.6 knots, while own vessel is advancing in the same direction at approximately 19.2 knots, currently overtaking said vessel.\n\nThis is an Overtaking Situation where own vessel is overtaking the target. In accordance with COLREG Rule 13, own vessel is the give-way vessel and must maintain sufficient safe passing distance (CPA of at least 1 nautical mile) without impeding the target's course. Take particular care not to cross ahead or approach too closely to avoid ship-to-ship interaction effects, and maintain vigilance until the overtaking maneuver is fully completed."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-HHq_-Wy0eV_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-HHq_-Wy0eV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.069645 Lon:128.436477 | Speed:23.2kt Heading:219.2° | Size:136m x 18m Draft:3m\n- Nearby vessel (ID:1) | Lat:34.063119 Lon:128.433302 | Speed:16.1kt Heading:242.0° | Size:101m x 20m Draft:4m | BoundingBox:[x=295 y=265 w=501 h=354]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Visibility is reduced due to afternoon rainfall. Own vessel is proceeding on course 219.2 degrees at 23.2 knots in a southwest direction, with a target vessel identified ahead on course 242.0 degrees at 16.1 knots heading in a similar direction. Own vessel is approaching significantly faster than the target, forming an overtaking situation, requiring continuous radar monitoring due to rain-reduced visibility.\n\nThis is an Overtaking Situation with the target vessel ahead. In accordance with COLREG Rule 13, own vessel must keep clear of the overtaken vessel until finally past and clear. Due to reduced visibility from rain, enhance radar surveillance and maintain safe speed per Rule 19, and alter course sufficiently to maintain a CPA of at least 1 nautical mile while safely overtaking."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-HHq_HNyMmY_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-HHq_HNyMmY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.243984 Lon:128.815220 | Speed:16.3kt Heading:132.7° | Size:108m x 26m Draft:3m\n- Nearby vessel (ID:1) | Lat:35.240677 Lon:128.820960 | Speed:9.2kt Heading:129.9° | Size:109m x 15m Draft:3m | BoundingBox:[x=620 y=247 w=208 h=389]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Visibility is restricted due to dense fog, with own vessel proceeding on course 132 degrees at 16.3 knots. A vessel proceeding on approximately course 130 degrees at 9.2 knots has been identified ahead, and own vessel is overtaking at higher speed. Lookout and radar monitoring are being enhanced for safe overtaking under restricted visibility.\n\nUnder restricted visibility due to dense fog while overtaking the target ahead, immediately reduce to safe speed and sound fog signals in accordance with COLREG Rules 19 and 35, while enhancing radar surveillance. Even if the target is confirmed on radar, maintain sufficient passing distance to avoid any close-quarters situation."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-HrLC-wOCmP_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-HrLC-wOCmP/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.141472 Lon:127.232301 | Speed:23.3kt Heading:346.7° | Size:144m x 19m Draft:7m\n- Nearby vessel (ID:1) | Lat:35.148600 Lon:127.227976 | Speed:23.7kt Heading:168.3° | Size:90m x 27m Draft:6m | BoundingBox:[x=491 y=296 w=271 h=302]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "In reduced visibility due to afternoon rain, own vessel is proceeding on course 346.7 degrees at 23.3 knots in a north-northwest direction, with a target vessel approaching head-on on course 168.3 degrees at 23.7 knots. This is a Head-on Situation with nearly reciprocal courses, and with a high combined closing speed of approximately 47 knots, urgent action is required along with heightened caution due to rain-reduced visibility.\n\nThis is a Head-on Situation with the target vessel approaching from directly ahead. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port with the target vessel. Due to reduced visibility from rain, enhance radar surveillance per Rule 19, sound the attention signal (five or more short blasts) if the target's intentions are unclear, and maintain a minimum CPA of 1 nautical mile."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-Hri_r72eY_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-Hri_r72eY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.790225 Lon:127.042020 | Speed:15.7kt Heading:114.2° | Size:88m x 25m Draft:6m\n- Nearby vessel (ID:1) | Lat:34.789591 Lon:127.053930 | Speed:24.2kt Heading:291.2° | Size:85m x 26m Draft:5m | BoundingBox:[x=389 y=335 w=250 h=234]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "During twilight as sunset progresses, the horizon is tinged orange and the sea surface is darkening. Own vessel is proceeding on course 114 degrees at 15.7 knots, with a target vessel on course 291 degrees at 24.2 knots approaching head-on at high speed. The combined closing speed of approximately 40 knots requires heightened caution due to reduced visual observation in low-light sunset conditions.\n\nThis is a Head-on Situation. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port. Due to reduced visibility from sunset twilight, monitor the target's masthead and sidelights to identify approach direction early, and utilize radar and AIS to ensure a CPA of at least 1 nautical mile. Sound the attention signal (five or more short blasts) if the target's intentions are unclear."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-HxL0Hzj_ZY_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-HxL0Hzj_ZY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.813827 Lon:127.001474 | Speed:24.1kt Heading:210.3° | Size:138m x 19m Draft:7m\n- Nearby vessel (ID:1) | Lat:34.806869 Lon:127.000530 | Speed:15.2kt Heading:29.8° | Size:122m x 23m Draft:4m | BoundingBox:[x=383 y=412 w=166 h=137]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Visibility is severely restricted due to dense fog. A target vessel approaching on course 29.8 degrees at 15.2 knots has been identified ahead. Own vessel is proceeding on course 210.3 degrees at 24.1 knots, approaching the target in a Head-on configuration, requiring careful vigilance for collision prevention under restricted visibility.\n\nUnder restricted visibility due to dense fog with the risk of a Head-on encounter, immediately reduce to safe speed and sound fog signals in accordance with COLREG Rule 19. As the target is approaching from dead ahead on radar, alter course substantially to starboard with sufficient time margin to avoid any close-quarters situation."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-Hxi0xXgCZY_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-Hxi0xXgCZY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.571615 Lon:128.850962 | Speed:20.0kt Heading:181.0° | Size:104m x 15m Draft:7m\n- Nearby vessel (ID:1) | Lat:34.562910 Lon:128.846340 | Speed:20.6kt Heading:351.9° | Size:105m x 15m Draft:5m | BoundingBox:[x=1118 y=325 w=367 h=252]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Visibility is restricted due to dense sea fog. A target vessel is approaching from the bow direction at approximately 20.6 knots on a reciprocal course (Head-on), requiring thorough vigilance for collision prevention.\n\nUnder restricted visibility due to dense fog with the risk of a Head-on encounter, immediately reduce to safe speed and sound fog signals in accordance with COLREG Rule 19. As the target is approaching from dead ahead on radar, alter course substantially to starboard with sufficient time margin to avoid any close-quarters situation."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-HxiC-rg2ZP_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-HxiC-rg2ZP/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.751046 Lon:127.774297 | Speed:19.7kt Heading:79.4° | Size:139m x 28m Draft:4m\n- Nearby vessel (ID:1) | Lat:34.751044 Lon:127.780829 | Speed:15.3kt Heading:266.7° | Size:114m x 23m Draft:3m | BoundingBox:[x=976 y=203 w=238 h=465]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Visibility is extremely restricted due to simultaneous sunset, rain, and fog. Own vessel is proceeding eastward on course 79.4 degrees at 19.7 knots, with a target vessel on course 266.7 degrees at 15.3 knots detected on radar approaching head-on from the west. The combined closing speed of approximately 35 knots in extremely poor visibility requires early response.\n\nThis is a Head-on Situation. In accordance with COLREG Rule 14, alter course substantially to starboard to pass port-to-port. Due to extremely restricted visibility, immediately reduce to safe speed (Rule 6) per Rule 19 and sound fog signals per Rule 35. Alter course to starboard by at least 30 degrees early to ensure a CPA of at least 1 nautical mile."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-Hxq0xjgSmb_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-Hxq0xjgSmb/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.634074 Lon:127.979544 | Speed:22.0kt Heading:193.4° | Size:123m x 27m Draft:7m\n- Nearby vessel (ID:1) | Lat:34.627230 Lon:127.978301 | Speed:15.9kt Heading:16.1° | Size:103m x 25m Draft:4m | BoundingBox:[x=682 y=301 w=185 h=296]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Visibility is severely restricted due to simultaneous sunset, rain, and fog. Own vessel is proceeding on course 194 degrees at 22.0 knots, with a target vessel on course 016 degrees at 15.9 knots detected on radar approaching head-on from the north. The combined closing speed of approximately 38 knots and extremely poor visibility require urgent response.\n\nThis is a Head-on Situation. In accordance with Rule 14, alter course substantially to starboard. Due to extremely restricted visibility, immediately reduce speed to safe speed (Rule 6) per Rule 19 and sound fog signals per Rule 35. Monitor CPA via radar plotting, alter course to starboard by at least 30 degrees, and ensure a CPA of at least 1 nautical mile. Port alteration is strictly prohibited."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-HxqCxMMdP_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-HxqCxMMdP/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.596606 Lon:128.586378 | Speed:20.2kt Heading:4.8° | Size:132m x 21m Draft:6m\n- Nearby vessel (ID:1) | Lat:35.604057 Lon:128.584482 | Speed:23.4kt Heading:29.4° | Size:81m x 23m Draft:6m | BoundingBox:[x=345 y=290 w=455 h=311]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Twilight conditions with surroundings gradually darkening as sunset progresses, with relatively calm seas. Own vessel is proceeding north at 20.19 knots, while a target vessel at 23.40 knots on course 29.44 degrees is crossing own vessel's course in a Crossing Situation. Visibility limitations are being noted while closely monitoring the target vessel's movements.\n\nIn a Crossing Situation during sunset with the target vessel on the starboard bow, in accordance with COLREG Rule 15, own vessel is the give-way vessel and must keep clear of the target. Avoid crossing ahead by altering course to starboard or reducing speed, and identify the target's navigation lights while passing safely astern."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-LCLAkPzMx_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-LCLAkPzMx/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.341927 Lon:127.669742 | Speed:21.3kt Heading:58.7° | Size:96m x 27m Draft:7m\n- Nearby vessel (ID:1) | Lat:35.343274 Lon:127.677950 | Speed:24.0kt Heading:245.5° | Size:122m x 19m Draft:7m | BoundingBox:[x=1099 y=228 w=364 h=417]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "In reduced visibility due to afternoon rainfall, own vessel is proceeding on course 58.7 degrees at 21.3 knots in an east-northeast direction. A target vessel on nearly reciprocal course of 245.5 degrees at 24.0 knots is approaching head-on. This Head-on Situation with a high combined closing speed of approximately 45 knots, coupled with rain-reduced visibility, significantly elevates collision risk and demands immediate vigilance and response.\n\nThis is a Head-on Situation with the target vessel approaching from directly ahead. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port. Due to rain-reduced visibility, enhance radar surveillance per Rule 19, and sound the attention signal (five or more short blasts) if the target's intentions are unclear. Maintain a minimum CPA of 1 nautical mile while continuously monitoring the target's bearing change."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-LCzraxa0I7_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-LCzraxa0I7/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.783277 Lon:128.005277 | Speed:21.4kt Heading:163.2° | Size:135m x 28m Draft:3m\n- Nearby vessel (ID:1) | Lat:34.776519 Lon:128.005039 | Speed:19.1kt Heading:140.6° | Size:107m x 24m Draft:3m | BoundingBox:[x=1093 y=412 w=200 h=138]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Dawn fog lies low over the sea surface restricting visibility, with warm early morning light spreading softly above the mist. Own vessel is proceeding south-southeast on course 163 degrees at approximately 21.4 knots, while a target vessel on course 141 degrees at approximately 19.1 knots has been detected on radar ahead on the starboard bow, proceeding southeast at a slower speed in an overtaking situation.\n\nWith an overtaking situation detected on radar in dawn fog with restricted visibility, immediately reduce to safe speed (Rule 6) and sound fog signals of one prolonged blast at two-minute intervals per Rule 35 in accordance with Rule 19. Continuously monitor the target's CPA through radar plotting, and ensure a CPA of at least 1 nautical mile before passing. Alter course to pass at a safe distance, and be prepared to reduce speed further if the situation develops unfavorably."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-LWLAaO6zB7_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-LWLAaO6zB7/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.290147 Lon:128.541590 | Speed:15.7kt Heading:250.9° | Size:83m x 28m Draft:7m\n- Nearby vessel (ID:1) | Lat:34.285756 Lon:128.534871 | Speed:21.9kt Heading:289.9° | Size:84m x 22m Draft:5m | BoundingBox:[x=448 y=415 w=212 h=130]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Under clear skies with afternoon sunlight, good visibility, and calm seas. Own vessel is proceeding west-southwest on course 250.9 degrees at approximately 15.7 knots, while a target vessel on the port bow at course 289.9 degrees and approximately 21.9 knots is crossing own vessel's path. Continuous vigilance is required due to the target's higher speed.\n\nThis is a Crossing Situation with the target vessel on the port side. In accordance with COLREG Rule 17, own vessel is the stand-on vessel and must maintain present course and speed. If the target fails to take appropriate avoiding action, immediately sound the attention signal (five or more short blasts), and if collision becomes imminent, take cooperative action by altering course to starboard."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-LWLr6R6vBH_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-LWLr6R6vBH/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.961302 Lon:128.737584 | Speed:24.6kt Heading:6.9° | Size:126m x 15m Draft:3m\n- Nearby vessel (ID:1) | Lat:35.968089 Lon:128.743064 | Speed:17.5kt Heading:182.5° | Size:100m x 17m Draft:5m | BoundingBox:[x=1183 y=314 w=379 h=274]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Dawn fog envelops the surroundings with extremely restricted visibility. Own vessel is proceeding northward on course 7 degrees at approximately 24.6 knots at high speed, while a target vessel on course 183 degrees at approximately 17.5 knots has been detected on radar approaching from the south in a head-on situation. The combination of own vessel's high speed and poor visibility creates a high-risk situation.\n\nWith own vessel navigating at a high speed of approximately 24.6 knots and a head-on target detected on radar in extremely restricted dawn fog visibility, immediately reduce speed substantially to safe speed (Rule 6) and keep engines ready in accordance with Rule 19. Sound fog signals per Rule 35, and continuously monitor the target through radar plotting. If risk of collision is confirmed, alter course to starboard by a substantial angle early to secure a safe CPA. Avoid altering course to port. Speed reduction is the top priority given the currently excessive speed."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-Ld01aGzOw_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-Ld01aGzOw/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.140661 Lon:127.680748 | Speed:21.9kt Heading:314.1° | Size:90m x 22m Draft:4m\n- Nearby vessel (ID:1) | Lat:35.147082 Lon:127.673541 | Speed:10.4kt Heading:315.6° | Size:147m x 23m Draft:3m | BoundingBox:[x=877 y=332 w=126 h=240]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "In reduced visibility due to afternoon rain, own vessel is proceeding on course 314.1 degrees at 21.9 knots in a northwest direction, with a target vessel ahead on nearly the same course of 315.6 degrees at 10.4 knots. This is an Overtaking Situation as own vessel approaches at more than twice the target's speed, requiring radar utilization and thorough vigilance due to rain-reduced visibility.\n\nThis is an Overtaking Situation with the target vessel ahead. In accordance with COLREG Rule 13, own vessel must keep clear of the overtaken vessel until finally past and clear. Due to rain-reduced visibility, maintain safe speed and continuously monitor the target via radar per Rule 19, and alter course sufficiently to starboard to maintain a CPA of at least 1 nautical mile while safely overtaking."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-Lp0rka0Ow_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-Lp0rka0Ow/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.925457 Lon:127.183250 | Speed:23.7kt Heading:106.2° | Size:124m x 16m Draft:3m\n- Nearby vessel (ID:1) | Lat:35.922389 Lon:127.192390 | Speed:11.1kt Heading:110.7° | Size:125m x 18m Draft:7m | BoundingBox:[x=918 y=313 w=143 h=273]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "During sunset with calm seas and fair visibility. Own vessel is proceeding on course 106.2 degrees at 23.7 knots, with a target vessel identified ahead on course 110.7 degrees at 11.1 knots. The courses are similar but own vessel's speed is significantly higher, and an overtaking situation is currently developing.\n\nWhile overtaking the target during sunset with reduced visibility, in accordance with COLREG Rule 13, own vessel is the give-way vessel and must maintain sufficient passing distance (CPA of at least 1 nautical mile) without impeding the target's course. Continuously observe the target's sternlight and pass safely."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-r-FMxiySZb_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-r-FMxiySZb/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.360782 Lon:128.063119 | Speed:18.9kt Heading:181.1° | Size:89m x 23m Draft:7m\n- Nearby vessel (ID:1) | Lat:35.354574 Lon:128.064322 | Speed:16.0kt Heading:9.8° | Size:143m x 22m Draft:3m | BoundingBox:[x=507 y=268 w=319 h=354]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Clear skies and calm seas with good visibility. Own vessel is proceeding southward on course 181 degrees at approximately 18.9 knots, with a target vessel on course 010 degrees at approximately 16 knots approaching from the north. This is a Head-on Situation requiring prompt action.\n\nThis is a Head-on Situation. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port. Sound the attention signal if the target's intentions are unclear, and maintain a CPA of at least 1 nautical mile."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-r-LMr6MdV_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-r-LMr6MdV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.264353 Lon:128.374835 | Speed:21.0kt Heading:295.2° | Size:85m x 26m Draft:6m\n- Nearby vessel (ID:1) | Lat:34.264587 Lon:128.365182 | Speed:20.4kt Heading:328.4° | Size:134m x 29m Draft:6m | BoundingBox:[x=230 y=321 w=452 h=262]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "During twilight as sunset progresses, ambient light is diminishing but the sea remains relatively calm. A target vessel crossing from starboard to port at approximately 20.36 knots has been identified. Under COLREG, own vessel becomes the give-way vessel in this situation, requiring continuous monitoring of the target's bearing change and readiness to take collision avoidance action.\n\nIn a Crossing Situation during sunset with the target vessel on the starboard bow, in accordance with COLREG Rule 15, own vessel is the give-way vessel and must keep clear of the target. Avoid crossing ahead by altering course to starboard or reducing speed, and identify the target's navigation lights while passing safely astern."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-r-i0-dCdP_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-r-i0-dCdP/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.110556 Lon:128.623744 | Speed:20.3kt Heading:162.7° | Size:139m x 21m Draft:6m\n- Nearby vessel (ID:1) | Lat:35.101156 Lon:128.625231 | Speed:17.5kt Heading:344.9° | Size:105m x 20m Draft:4m | BoundingBox:[x=1002 y=435 w=66 h=87]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "During sunset with visibility gradually decreasing, the sea state is relatively calm. Own vessel is proceeding on course 162.7 degrees at 20.3 knots, with a target vessel on the horizon approaching on course 344.9 degrees at 17.5 knots in a Head-on Situation. Caution is required regarding reduced visibility from backlighting, and the target vessel's movements must be continuously assessed.\n\nIn a Head-on Situation during twilight due to sunset, in accordance with COLREG Rule 14, immediately alter course substantially to starboard to pass port-to-port. Confirm the target's navigation lights (masthead lights, sidelights) and continuously observe the bearing until the risk of collision has been eliminated."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-r-i0-kEmV_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-r-i0-kEmV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.923610 Lon:128.926822 | Speed:18.8kt Heading:296.2° | Size:93m x 17m Draft:4m\n- Nearby vessel (ID:1) | Lat:35.926924 Lon:128.920484 | Speed:10.4kt Heading:296.9° | Size:131m x 24m Draft:7m | BoundingBox:[x=942 y=407 w=101 h=148]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "During sunset twilight with darkening sea surface and residual red afterglow on the horizon. Own vessel is proceeding on course 296 degrees at 18.8 knots, with a target vessel ahead on nearly the same course of 297 degrees at 10.4 knots. This is an Overtaking Situation with own vessel approaching at nearly twice the target's speed, requiring attention to the target's sternlight in low-light conditions.\n\nThis is an Overtaking Situation. In accordance with COLREG Rule 13, own vessel must keep clear of the overtaken vessel until finally past and clear. In the low-light sunset environment, monitor the target's sternlight to confirm approach direction, and alter course sufficiently to port or starboard to maintain a CPA of at least 1 nautical mile while safely overtaking."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-r-qMraEdY_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-r-qMraEdY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.403029 Lon:127.137939 | Speed:24.2kt Heading:164.9° | Size:111m x 22m Draft:6m\n- Nearby vessel (ID:1) | Lat:35.394003 Lon:127.138890 | Speed:12.0kt Heading:165.4° | Size:124m x 21m Draft:5m | BoundingBox:[x=1003 y=432 w=74 h=92]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Visibility is extremely restricted due to simultaneous sunset, rain, and fog. Own vessel is proceeding on course 165 degrees at 24.2 knots at high speed, with a slower target ahead on course 166 degrees at 12.0 knots. This is an Overtaking Situation with own vessel approaching at twice the target's speed, which is very dangerous in extremely poor visibility.\n\nThis is an Overtaking Situation. In accordance with Rule 13, keep clear of the target. Due to extremely restricted visibility, immediately reduce speed substantially to safe speed (Rule 6) per Rule 19. Sound fog signals per Rule 35, monitor CPA via radar plotting, and maintain a CPA of at least 1 nautical mile while safely overtaking."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-r-q_-6jCZb_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-r-q_-6jCZb/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.529863 Lon:128.260933 | Speed:16.4kt Heading:338.8° | Size:121m x 24m Draft:7m\n- Nearby vessel (ID:1) | Lat:34.537580 Lon:128.259968 | Speed:23.6kt Heading:167.5° | Size:108m x 17m Draft:5m | BoundingBox:[x=1053 y=284 w=215 h=322]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Visibility is considerably restricted due to dense fog. Own vessel is proceeding north-northwest on course approximately 339 degrees at 16.4 knots, while the target vessel is approaching on course approximately 167 degrees at 23.6 knots in a Head-on configuration. The risk of collision with the high-speed approaching target in restricted visibility is significant, requiring thorough vigilance and immediate avoidance action.\n\nUnder restricted visibility due to dense fog with the risk of a Head-on encounter, immediately reduce to safe speed and sound fog signals in accordance with COLREG Rule 19. As the target is approaching from dead ahead on radar, alter course substantially to starboard with sufficient time margin to avoid any close-quarters situation."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rHF0-MYoeV_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rHF0-MYoeV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.409970 Lon:127.241989 | Speed:23.6kt Heading:164.6° | Size:92m x 22m Draft:7m\n- Nearby vessel (ID:1) | Lat:35.404754 Lon:127.247306 | Speed:16.8kt Heading:197.8° | Size:117m x 20m Draft:7m | BoundingBox:[x=332 y=409 w=242 h=144]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Clear daytime conditions with good visibility and relatively calm seas. Own vessel is proceeding south-southeast on course 164.6 degrees at 23.6 knots, while a target vessel on course 197.8 degrees at 16.8 knots is crossing from the port side in a south-southwest direction.\n\nThis is a Crossing Situation with the target vessel on the port side. In accordance with COLREG Rule 17, own vessel is the stand-on vessel and shall maintain present course and speed. If the target vessel fails to take appropriate give-way action, sound the attention signal (five or more short blasts). If collision becomes imminent, take cooperative action such as altering course to starboard."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rHF0rCg_dY_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rHF0rCg_dY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.774155 Lon:127.101314 | Speed:15.2kt Heading:181.0° | Size:100m x 19m Draft:3m\n- Nearby vessel (ID:1) | Lat:34.766611 Lon:127.103557 | Speed:21.8kt Heading:0.5° | Size:147m x 17m Draft:7m | BoundingBox:[x=454 y=287 w=283 h=317]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Visibility is severely restricted due to dense fog. A target vessel is approaching from ahead at approximately 21.8 knots heading north, while own vessel is heading south, resulting in a Head-on Situation. Under these restricted visibility conditions, thorough vigilance and safe speed compliance are required for collision prevention.\n\nUnder restricted visibility due to dense fog with the risk of a Head-on encounter, immediately reduce to safe speed and sound fog signals in accordance with COLREG Rule 19. As the target is approaching from dead ahead on radar, alter course substantially to starboard with sufficient time margin to avoid any close-quarters situation."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rHiCrRMZY_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rHiCrRMZY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.434031 Lon:128.979843 | Speed:18.7kt Heading:348.9° | Size:129m x 27m Draft:5m\n- Nearby vessel (ID:1) | Lat:35.440890 Lon:128.978953 | Speed:8.0kt Heading:352.5° | Size:115m x 16m Draft:4m | BoundingBox:[x=927 y=417 w=73 h=126]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Visibility is good with calm seas and clear weather. Own vessel is proceeding on course 348.8 degrees at 18.7 knots, with a slower vessel ahead on course 352.5 degrees at 8.0 knots. As own vessel's speed is higher, an overtaking situation is developing, and safe distance from the target vessel must be maintained while navigating with caution.\n\nThis is an Overtaking Situation where own vessel is overtaking the target. In accordance with COLREG Rule 13, own vessel is the give-way vessel and must maintain sufficient safe passing distance (CPA of at least 1 nautical mile) without impeding the target's course. Take particular care not to cross ahead or approach too closely to avoid ship-to-ship interaction effects, and maintain vigilance until the overtaking maneuver is fully completed."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rHqCxUhMmY_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rHqCxUhMmY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.522081 Lon:128.601400 | Speed:16.0kt Heading:314.1° | Size:94m x 28m Draft:7m\n- Nearby vessel (ID:1) | Lat:34.529014 Lon:128.596553 | Speed:21.1kt Heading:125.8° | Size:141m x 27m Draft:7m | BoundingBox:[x=1013 y=292 w=358 h=307]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Clear skies and calm seas with good visibility. Own vessel is proceeding on course 314 degrees at 15.96 knots, with a target vessel approaching from the bow on course 126 degrees at 21.14 knots in a Head-on Situation. Both vessels are on reciprocal courses, requiring continuous attention.\n\nThis is a Head-on Situation with the target vessel approaching from directly ahead. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port. If the target's intentions are unclear, sound the attention signal (five or more short blasts) without delay, and continuously monitor the target's bearing change while maintaining a minimum CPA of 1 nautical mile until the risk of collision has been eliminated."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rrFCxT7SdP_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rrFCxT7SdP/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.825361 Lon:128.165436 | Speed:20.1kt Heading:249.7° | Size:149m x 21m Draft:4m\n- Nearby vessel (ID:1) | Lat:34.821679 Lon:128.160456 | Speed:18.1kt Heading:59.8° | Size:143m x 19m Draft:6m | BoundingBox:[x=412 y=392 w=167 h=184]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Dense dawn sea fog envelops the surroundings with extremely restricted visibility. Own vessel is proceeding west-southwest on course 250 degrees at approximately 20.2 knots, while a target vessel on course 60 degrees at approximately 18.1 knots has been detected on radar approaching from the east-northeast in a head-on situation.\n\nWith a head-on target detected on radar on the port bow in extremely restricted dawn fog visibility, immediately reduce to safe speed (Rule 6) and keep engines ready in accordance with Rule 19. Sound fog signals of one prolonged blast at two-minute intervals per Rule 35, and continuously monitor the target through radar plotting. Alter course to starboard by a substantial angle to secure a safe CPA. Altering course to port must be avoided."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rrL0-ESeb_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rrL0-ESeb/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.616908 Lon:127.475132 | Speed:16.8kt Heading:286.9° | Size:86m x 17m Draft:5m\n- Nearby vessel (ID:1) | Lat:34.620939 Lon:127.469478 | Speed:20.4kt Heading:104.1° | Size:97m x 24m Draft:7m | BoundingBox:[x=1110 y=159 w=647 h=533]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "During sunset twilight with orange afterglow reflecting on the sea surface and decreasing illumination. Own vessel is proceeding on course 287 degrees at 16.8 knots, with a target vessel on course 104 degrees at 20.4 knots approaching head-on from the east-southeast. The combined closing speed of approximately 37 knots in low-light conditions requires immediate response.\n\nThis is a Head-on Situation. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port. In the low-light sunset environment, monitor the target's masthead and sidelights, and utilize radar and AIS to ensure a CPA of at least 1 nautical mile."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rrL0xHSZV_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rrL0xHSZV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.728365 Lon:128.198470 | Speed:22.4kt Heading:89.6° | Size:126m x 21m Draft:4m\n- Nearby vessel (ID:1) | Lat:35.726013 Lon:128.205330 | Speed:20.3kt Heading:267.3° | Size:109m x 18m Draft:7m | BoundingBox:[x=1120 y=229 w=493 h=421]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "During sunset with the western horizon tinged orange and the sea surface darkening. Own vessel is proceeding due east on course 090 degrees at 22.4 knots, with a target vessel on course 267 degrees at 20.3 knots approaching head-on from due west. The combined closing speed of approximately 43 knots is very high, requiring urgent action.\n\nThis is a Head-on Situation. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port. With a combined closing speed of approximately 43 knots, execute early and decisive course alteration. In the low-light sunset environment, actively utilize radar and AIS to ensure a CPA of at least 1 nautical mile."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rriCrV0Zb_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rriCrV0Zb/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.277926 Lon:127.307566 | Speed:24.6kt Heading:9.9° | Size:105m x 25m Draft:5m\n- Nearby vessel (ID:1) | Lat:34.286371 Lon:127.310787 | Speed:10.8kt Heading:8.7° | Size:104m x 17m Draft:3m | BoundingBox:[x=963 y=431 w=73 h=94]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "During sunset, the sky is reddening and gradually darkening while the sea remains relatively calm. A target vessel's silhouette is identified ahead, proceeding north on course approximately 8.7 degrees at 10.8 knots. Own vessel is proceeding at high speed of 24.6 knots, and an Overtaking Situation is developing due to the speed difference. Overtaking is being conducted with safe distance while being mindful of reduced visibility during twilight.\n\nWhile overtaking the target during sunset with reduced visibility, in accordance with COLREG Rule 13, own vessel is the give-way vessel and must maintain sufficient passing distance (CPA of at least 1 nautical mile) without impeding the target's course. Continuously observe the target's sternlight and pass safely."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rrq0rXhEZV_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rrq0rXhEZV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.949209 Lon:128.778199 | Speed:16.7kt Heading:212.0° | Size:86m x 18m Draft:7m\n- Nearby vessel (ID:1) | Lat:35.945823 Lon:128.772373 | Speed:23.2kt Heading:186.5° | Size:135m x 17m Draft:3m | BoundingBox:[x=1024 y=224 w=626 h=430]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Clear daytime weather with good visibility and calm seas. Own vessel is proceeding on course 212 degrees at approximately 16.7 knots, with a high-speed target vessel on the starboard bow on course 187 degrees at approximately 23.2 knots crossing own vessel's path. Early response is required due to the target's higher speed.\n\nThis is a Crossing Situation with the target on the starboard side. In accordance with COLREG Rule 15, own vessel is the give-way vessel. Alter course to starboard by at least 30 degrees early to pass astern of the target and maintain a CPA of at least 1 nautical mile."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rrqCrpy2ZP_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rrqCrpy2ZP/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.935719 Lon:127.581117 | Speed:17.6kt Heading:12.1° | Size:122m x 24m Draft:3m\n- Nearby vessel (ID:1) | Lat:35.942268 Lon:127.580049 | Speed:20.5kt Heading:28.3° | Size:94m x 25m Draft:6m | BoundingBox:[x=442 y=409 w=198 h=144]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Under clear skies with good visibility and calm seas. Own vessel is proceeding northward on course 012 degrees at approximately 17.6 knots, while a target vessel on the port bow on course 028 degrees at approximately 20.5 knots is crossing own vessel's path.\n\nThis is a Crossing Situation with the target on the port side. In accordance with COLREG Rule 17, own vessel is the stand-on vessel and must maintain course and speed. Sound the attention signal if the target fails to act, and alter course to starboard if collision becomes imminent."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rrq_-7VEmb_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rrq_-7VEmb/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.281349 Lon:127.539085 | Speed:20.4kt Heading:33.7° | Size:113m x 25m Draft:3m\n- Nearby vessel (ID:1) | Lat:34.286486 Lon:127.548264 | Speed:24.0kt Heading:214.2° | Size:134m x 23m Draft:4m | BoundingBox:[x=1187 y=430 w=114 h=97]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Visibility is extremely restricted in dense dawn fog. Own vessel is proceeding north-northeast on course 34 degrees at approximately 20.4 knots, while a target vessel on course 214 degrees at approximately 24.0 knots has been detected on radar approaching at high speed from the south-southwest in a head-on situation. The very high closing speed demands urgent response.\n\nWith a high-speed head-on target detected on radar in extremely restricted dawn fog visibility, immediately reduce speed substantially to safe speed (Rule 6) and keep engines ready in accordance with Rule 19. Sound fog signals per Rule 35, and urgently calculate CPA and TCPA through radar plotting. With a combined closing speed exceeding 44 knots, immediately execute a substantial starboard course alteration to ensure sufficient safe distance. Altering course to port is strictly prohibited."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rrq_ruhSeY_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rrq_ruhSeY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.060783 Lon:128.384244 | Speed:20.1kt Heading:268.4° | Size:134m x 23m Draft:6m\n- Nearby vessel (ID:1) | Lat:35.061558 Lon:128.373387 | Speed:23.4kt Heading:87.3° | Size:149m x 16m Draft:6m | BoundingBox:[x=920 y=328 w=167 h=246]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Visibility is extremely restricted due to combined sunset, rain, and fog. Own vessel is proceeding westward on course 268.4 degrees at 20.1 knots, with a target vessel on course 87.3 degrees at 23.4 knots detected on radar approaching head-on from the east. The combined closing speed of approximately 43.5 knots requires urgent response.\n\nThis is a Head-on Situation. In accordance with Rule 14, alter course substantially to starboard. Due to extremely restricted visibility, immediately reduce speed substantially to safe speed (Rule 6) per Rule 19 and sound fog signals per Rule 35. Alter course to starboard by at least 30 degrees as early as possible to ensure a CPA of at least 1 nautical mile. Port alteration is strictly prohibited."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rxF0-tKSmY_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rxF0-tKSmY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.647637 Lon:127.694154 | Speed:16.9kt Heading:316.1° | Size:133m x 24m Draft:5m\n- Nearby vessel (ID:1) | Lat:34.649909 Lon:127.687677 | Speed:16.3kt Heading:329.4° | Size:126m x 19m Draft:3m | BoundingBox:[x=110 y=218 w=578 h=439]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "During the dawn period just after sunrise with rain falling, the low sun on the eastern horizon is casting reflections on the water. Own vessel is proceeding northwest on course 316.1 degrees at 16.9 knots, while slowly overtaking a target vessel on the port bow on course 329.4 degrees at 16.3 knots in an overtaking situation. The speed difference of only 0.6 knots results in very gradual closing, and rainfall is reducing visibility.\n\nThis is an Overtaking Situation. In accordance with COLREG Rule 13, own vessel as the overtaking vessel must keep clear of the overtaken vessel until finally past and well clear. As rainfall is reducing visibility, reduce to a safe speed per Rule 6 and comply with Rule 19 for restricted visibility navigation. Maintain continuous surveillance utilizing radar and AIS, and alter course with sufficient passing distance to ensure a CPA of 1 nautical mile or more."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rxFMrOhCeV_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rxFMrOhCeV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.891959 Lon:127.270210 | Speed:19.6kt Heading:103.2° | Size:125m x 18m Draft:5m\n- Nearby vessel (ID:1) | Lat:35.890673 Lon:127.280677 | Speed:10.3kt Heading:100.9° | Size:89m x 19m Draft:4m | BoundingBox:[x=744 y=350 w=108 h=212]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Weather is clear with good visibility and relatively calm seas. The target vessel ahead is proceeding on course 101 degrees at 10.3 knots. Own vessel is on course 103 degrees at 19.6 knots, faster than the target vessel, and an overtaking situation is developing.\n\nThis is an Overtaking Situation where own vessel is overtaking the target. In accordance with COLREG Rule 13, own vessel is the give-way vessel and must maintain sufficient safe passing distance (CPA of at least 1 nautical mile) without impeding the target's course. Take particular care not to cross ahead or approach too closely to avoid ship-to-ship interaction effects, and maintain vigilance until the overtaking maneuver is fully completed."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rxF_xHVSmY_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rxF_xHVSmY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.075683 Lon:128.472152 | Speed:18.6kt Heading:5.5° | Size:98m x 22m Draft:6m\n- Nearby vessel (ID:1) | Lat:35.083890 Lon:128.470635 | Speed:21.9kt Heading:182.9° | Size:111m x 27m Draft:6m | BoundingBox:[x=503 y=306 w=233 h=284]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Clear daytime conditions with good visibility and relatively calm seas. Own vessel is proceeding north on course 5.5 degrees at 18.6 knots, while a target vessel on course 182.9 degrees at 21.9 knots is approaching from the south in a head-on situation. The combined closing speed of approximately 40 knots requires immediate action.\n\nThis is a Head-on Situation. In accordance with COLREG Rule 14, both vessels shall alter course to starboard by at least 30 degrees to pass port-to-port. With a combined closing speed of approximately 40 knots, take early and decisive action to ensure a minimum CPA of 1 nautical mile. If the target's intentions are unclear, sound the attention signal (five or more short blasts) without delay."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rxL0HiPEmY_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rxL0HiPEmY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.849079 Lon:128.814183 | Speed:22.1kt Heading:3.0° | Size:99m x 17m Draft:5m\n- Nearby vessel (ID:1) | Lat:35.856740 Lon:128.811637 | Speed:17.6kt Heading:38.4° | Size:94m x 16m Draft:7m | BoundingBox:[x=357 y=328 w=408 h=249]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Under clear skies with afternoon sunlight, good visibility, and calm seas. Own vessel is proceeding northward on course 3.0 degrees at approximately 22.1 knots, while a target vessel on the port bow at course 38.4 degrees and approximately 17.6 knots is crossing own vessel's path in a northeasterly direction.\n\nThis is a Crossing Situation with the target vessel on the port side. In accordance with COLREG Rule 17, own vessel is the stand-on vessel and must maintain present course and speed. If the target fails to take appropriate avoiding action, immediately sound the attention signal (five or more short blasts), and if collision becomes imminent, take cooperative action by altering course to starboard."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rxLMx2KomY_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rxLMx2KomY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.460649 Lon:127.219712 | Speed:20.4kt Heading:70.7° | Size:139m x 20m Draft:6m\n- Nearby vessel (ID:1) | Lat:34.461934 Lon:127.230227 | Speed:18.1kt Heading:248.8° | Size:90m x 26m Draft:4m | BoundingBox:[x=979 y=349 w=176 h=214]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "During the dawn period just after sunrise, intense glare and backlight from the low sun directly ahead to the east is severely limiting forward visibility. Own vessel is proceeding east-northeast on course 071 degrees at approximately 20.4 knots, while a target vessel on course 249 degrees at approximately 18.1 knots is approaching from the west-southwest in a head-on situation. Visual identification of the target is extremely difficult due to direct sunrise glare.\n\nThis is a Head-on Situation. In accordance with COLREG Rule 14, both vessels must alter course to starboard to pass port to port. As extreme glare from direct sunrise ahead renders forward visual observation nearly impossible, maintain systematic lookout relying primarily on radar and AIS as required by Rule 5, and reduce to a safe speed per Rule 6. Take early action to alter course to starboard by at least 30 degrees to ensure a CPA of 1 nautical mile or more."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rxL_rqgCmY_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rxL_rqgCmY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.389507 Lon:128.713663 | Speed:24.7kt Heading:222.3° | Size:99m x 21m Draft:4m\n- Nearby vessel (ID:1) | Lat:35.385450 Lon:128.707420 | Speed:22.3kt Heading:37.8° | Size:136m x 23m Draft:7m | BoundingBox:[x=923 y=229 w=333 h=415]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Visibility is severely restricted due to dense sea fog. Own vessel is proceeding on course 222 degrees at 24.7 knots, while a target vessel approaching on course 38 degrees at 22.3 knots is in a Head-on Situation. The risk of collision due to restricted visibility exists, requiring enhanced radar monitoring and safe speed maintenance.\n\nUnder restricted visibility due to dense fog with the risk of a Head-on encounter, immediately reduce to safe speed and sound fog signals in accordance with COLREG Rule 19. As the target is approaching from dead ahead on radar, alter course substantially to starboard with sufficient time margin to avoid any close-quarters situation."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rxiCxTh0db_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rxiCxTh0db/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.610820 Lon:127.592767 | Speed:15.6kt Heading:51.7° | Size:102m x 28m Draft:5m\n- Nearby vessel (ID:1) | Lat:35.614667 Lon:127.597962 | Speed:7.3kt Heading:51.3° | Size:148m x 22m Draft:5m | BoundingBox:[x=688 y=249 w=196 h=386]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Visibility is reduced due to afternoon rain. Own vessel is proceeding on course 51.7 degrees at 15.6 knots in a northeast direction, with a slower target vessel ahead on nearly the same course of 51.3 degrees at 7.3 knots. This is an Overtaking Situation as own vessel approaches at approximately twice the target's speed, requiring caution due to reduced visibility from rainfall.\n\nThis is an Overtaking Situation with the target vessel ahead. In accordance with COLREG Rule 13, own vessel must keep clear of the overtaken vessel until finally past and clear. Due to reduced visibility from rain, utilize radar per Rule 19 to continuously monitor distance to the target, and alter course sufficiently to port or starboard to maintain a CPA of at least 1 nautical mile while safely overtaking."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rxi_xv2ZV_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rxi_xv2ZV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.498274 Lon:128.853636 | Speed:17.6kt Heading:23.9° | Size:106m x 16m Draft:5m\n- Nearby vessel (ID:1) | Lat:34.506216 Lon:128.858770 | Speed:8.9kt Heading:19.5° | Size:107m x 21m Draft:7m | BoundingBox:[x=879 y=338 w=158 h=230]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Visibility is severely restricted due to combined sunset, rain, and fog. Own vessel is proceeding north-northeast on course 024 degrees at 17.6 knots, while a target vessel on course 020 degrees at 8.9 knots has been detected ahead. An overtaking situation is developing, requiring heightened caution due to poor visibility.\n\nThis is an Overtaking Situation. In accordance with COLREG Rule 13, own vessel must keep clear of the target. Due to severely restricted visibility from sunset, rain and fog, immediately reduce to safe speed (Rule 6) per Rule 19. Sound fog signals per Rule 35 and continuously monitor CPA via radar plotting. Maintain a CPA of at least 1 nautical mile while safely overtaking."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rxq0xF_eb_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rxq0xF_eb/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.141266 Lon:128.538551 | Speed:24.3kt Heading:230.5° | Size:95m x 17m Draft:6m\n- Nearby vessel (ID:1) | Lat:34.136503 Lon:128.531968 | Speed:11.9kt Heading:234.8° | Size:95m x 23m Draft:6m | BoundingBox:[x=808 y=420 w=80 h=119]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Visibility is good during daytime and the sea state is relatively calm. The target vessel ahead is proceeding on a similar south-westerly course (approx. 235 degrees), but own vessel's speed (24.3 knots) significantly exceeds the target's (11.9 knots), resulting in an overtaking situation. Continuous lookout and safe distance maintenance are required for collision prevention.\n\nThis is an Overtaking Situation where own vessel is overtaking the target. In accordance with COLREG Rule 13, own vessel is the give-way vessel and must maintain sufficient safe passing distance (CPA of at least 1 nautical mile) without impeding the target's course. Take particular care not to cross ahead or approach too closely to avoid ship-to-ship interaction effects, and maintain vigilance until the overtaking maneuver is fully completed."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rxqM-f2mb_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rxqM-f2mb/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.920175 Lon:127.036241 | Speed:24.2kt Heading:58.2° | Size:93m x 20m Draft:3m\n- Nearby vessel (ID:1) | Lat:35.924055 Lon:127.045270 | Speed:10.2kt Heading:57.9° | Size:144m x 28m Draft:4m | BoundingBox:[x=909 y=428 w=65 h=101]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Visibility is extremely restricted due to combined sunset, rain, and fog. Own vessel is proceeding on course 058 degrees at 24.2 knots at high speed, with a target vessel ahead on identical course 058 degrees at 10.2 knots. This is an Overtaking Situation with a speed difference of approximately 14 knots, dangerous in extremely poor visibility.\n\nThis is an Overtaking Situation. In accordance with Rule 13, keep clear of the target. Due to extremely restricted visibility, immediately reduce speed substantially to safe speed (Rule 6) per Rule 19. Sound fog signals per Rule 35, monitor CPA via radar plotting, and maintain a CPA of at least 1 nautical mile."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-vC0AaMzMx_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-vC0AaMzMx/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.127002 Lon:128.098120 | Speed:23.0kt Heading:239.4° | Size:139m x 18m Draft:7m\n- Nearby vessel (ID:1) | Lat:34.121304 Lon:128.093651 | Speed:22.4kt Heading:53.8° | Size:107m x 16m Draft:5m | BoundingBox:[x=44 y=202 w=531 h=460]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "In reduced visibility due to afternoon rain, own vessel is proceeding on course 239.4 degrees at 23.0 knots in a west-southwest direction. A target vessel on nearly reciprocal course of 53.8 degrees at 22.4 knots is approaching head-on. This Head-on Situation with a high combined closing speed of approximately 45 knots, combined with rain-reduced visibility, significantly increases collision risk and requires immediate response.\n\nThis is a Head-on Situation with the target vessel approaching from directly ahead. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port. Due to rain-reduced visibility, enhance radar surveillance per Rule 19, and sound the attention signal (five or more short blasts) if the target's intentions are unclear. Maintain a minimum CPA of 1 nautical mile while continuously monitoring the relative bearing change."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-vCzr65vIx_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-vCzr65vIx/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.622494 Lon:128.294197 | Speed:24.4kt Heading:114.1° | Size:148m x 15m Draft:7m\n- Nearby vessel (ID:1) | Lat:34.620945 Lon:128.301230 | Speed:12.5kt Heading:116.2° | Size:136m x 23m Draft:3m | BoundingBox:[x=564 y=262 w=260 h=364]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "During the dawn period just after sunrise, the low sun above the eastern horizon is causing golden reflections and glare on the water surface. Own vessel is proceeding east-southeast on course 114.1 degrees at 24.4 knots, while overtaking a slower target vessel ahead on course 116.2 degrees at 12.5 knots in an overtaking situation. The speed difference of approximately 11.9 knots results in rapid closing.\n\nThis is an Overtaking Situation. In accordance with COLREG Rule 13, own vessel as the overtaking vessel must keep clear of the overtaken vessel until finally past and well clear. As sunrise glare may impair visual observation, maintain continuous surveillance utilizing radar and AIS as required by Rule 5. Alter course to port or starboard with sufficient passing distance to ensure a CPA of 1 nautical mile or more."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-vW016W6LBx_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-vW016W6LBx/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.848813 Lon:127.585375 | Speed:22.8kt Heading:193.2° | Size:80m x 23m Draft:5m\n- Nearby vessel (ID:1) | Lat:35.843342 Lon:127.583072 | Speed:9.4kt Heading:190.2° | Size:110m x 16m Draft:7m | BoundingBox:[x=876 y=204 w=286 h=458]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "During sunrise with rain falling and the low eastern sun creating golden reflections on the water surface. Own vessel is proceeding south-southwest on course 193.2 degrees at 22.8 knots, while overtaking a slower target vessel ahead on course 190.2 degrees at 9.4 knots in an overtaking situation. Reduced visibility due to rainfall requires extra caution.\n\nThis is an Overtaking Situation. In accordance with COLREG Rule 13, own vessel as the overtaking vessel must keep clear of the overtaken vessel until finally past and well clear. As rainfall is reducing visibility, reduce to a safe speed per Rule 6 and comply with Rule 19 for restricted visibility navigation. Maintain continuous surveillance utilizing radar and AIS, and alter course with sufficient passing distance to ensure a CPA of 1 nautical mile or more."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-vd01arvI7_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-vd01arvI7/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.381140 Lon:127.127510 | Speed:15.5kt Heading:195.3° | Size:113m x 19m Draft:5m\n- Nearby vessel (ID:1) | Lat:34.373847 Lon:127.128015 | Speed:21.1kt Heading:228.4° | Size:82m x 22m Draft:4m | BoundingBox:[x=317 y=309 w=449 h=283]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Under clear skies with good visibility and calm seas during daytime. Own vessel is proceeding south-southwest on course 195 degrees at approximately 15.5 knots, while a target vessel on the port bow at course 228 degrees and approximately 21 knots is crossing own vessel's path. Continuous vigilance is required due to the target's higher speed.\n\nThis is a Crossing Situation with the target vessel on the port side. In accordance with COLREG Rule 17, own vessel is the stand-on vessel and must maintain present course and speed. If the target fails to take appropriate avoiding action, immediately sound the attention signal (five or more short blasts), and if collision becomes imminent, take cooperative action by altering course to starboard."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-vdLA60Bx_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-vdLA60Bx/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.124078 Lon:127.011632 | Speed:15.3kt Heading:137.3° | Size:145m x 26m Draft:6m\n- Nearby vessel (ID:1) | Lat:34.116992 Lon:127.015611 | Speed:15.3kt Heading:88.2° | Size:85m x 19m Draft:7m | BoundingBox:[x=966 y=330 w=435 h=246]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "During the post-sunset twilight phase, the sea is relatively calm with the target vessel's silhouette clearly visible against the red sunset background. Own vessel is proceeding on course 137 degrees at 15.3 knots, forming a Crossing Situation with a target vessel (course 88 degrees, 15.3 knots) crossing from port to starboard. The target vessel's movements are being closely monitored for collision prevention.\n\nIn a Crossing Situation during sunset with the target vessel on the port side, in accordance with COLREG Rule 17, own vessel is the stand-on vessel and must maintain present course and speed. However, if the target's lights are approaching without avoiding action, immediately sound the attention signal (with light signals), and if collision becomes imminent, take cooperative action by altering course to starboard."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-vpLhasvOH_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-vpLhasvOH/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.382360 Lon:127.223304 | Speed:21.2kt Heading:67.4° | Size:99m x 15m Draft:4m\n- Nearby vessel (ID:1) | Lat:34.386643 Lon:127.228712 | Speed:15.4kt Heading:242.7° | Size:137m x 15m Draft:7m | BoundingBox:[x=270 y=243 w=371 h=396]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Visibility is severely restricted due to simultaneous sunset, rain, and fog. Own vessel is proceeding on course 067 degrees at 21.2 knots, with a target vessel on course 243 degrees at 15.4 knots detected on radar approaching head-on from the west-southwest. The combined closing speed of approximately 37 knots and extremely poor visibility heighten collision risk.\n\nThis is a Head-on Situation. In accordance with COLREG Rule 14, alter course substantially to starboard to pass port-to-port. Due to extremely restricted visibility, immediately reduce to safe speed (Rule 6) per Rule 19 and sound fog signals per Rule 35. Monitor CPA via radar plotting and alter course to starboard by at least 30 degrees to ensure a CPA of at least 1 nautical mile."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-vpz1aVvB7_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-vpz1aVvB7/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.149134 Lon:127.246785 | Speed:21.7kt Heading:271.8° | Size:116m x 19m Draft:3m\n- Nearby vessel (ID:1) | Lat:34.152091 Lon:127.237728 | Speed:24.3kt Heading:206.6° | Size:96m x 21m Draft:3m | BoundingBox:[x=987 y=342 w=445 h=226]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "During sunset twilight with low ambient light and orange afterglow on the horizon. Own vessel is proceeding westward on course 272 degrees at 21.7 knots, with a high-speed target vessel on the starboard bow on course 207 degrees at 24.3 knots crossing own vessel's path heading south-southwest. Both vessels are at high speed, requiring urgent response.\n\nThis is a Crossing Situation with the target on the starboard side. In accordance with COLREG Rule 15, own vessel is the give-way vessel. With both vessels at high speed, alter course to starboard by at least 30 degrees early to pass astern of the target and maintain a CPA of at least 1 nautical mile. Actively utilize radar and AIS in the low-light sunset environment."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-x-FCHX7SdP_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-x-FCHX7SdP/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.562340 Lon:127.088757 | Speed:20.2kt Heading:145.2° | Size:126m x 22m Draft:5m\n- Nearby vessel (ID:1) | Lat:35.553881 Lon:127.095202 | Speed:22.2kt Heading:319.2° | Size:90m x 22m Draft:7m | BoundingBox:[x=874 y=370 w=124 h=177]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Dense dawn fog severely restricts visibility, with the warm glow of early morning light faintly diffusing through the mist along the eastern horizon. Own vessel is proceeding south-southeast on course 145 degrees at approximately 20.2 knots, while a target vessel on course 319 degrees at approximately 22.2 knots has been detected on radar approaching from the northwest in a head-on situation. Visual identification is impossible due to fog, requiring heightened vigilance.\n\nWith a head-on target detected on radar in dawn fog with restricted visibility, immediately reduce to safe speed (Rule 6) and keep engines ready for immediate maneuvering in accordance with COLREG Rule 19. Sound fog signals of one prolonged blast at intervals of not more than two minutes as required by Rule 35, and continuously monitor the target through radar plotting. If risk of collision is confirmed, alter course to starboard by a substantial margin in ample time. A port turn is strictly prohibited in a head-on situation."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-x-L0rg0eV_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-x-L0rg0eV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.550525 Lon:127.023306 | Speed:22.1kt Heading:131.6° | Size:108m x 28m Draft:3m\n- Nearby vessel (ID:1) | Lat:35.546419 Lon:127.029830 | Speed:11.8kt Heading:127.2° | Size:141m x 15m Draft:6m | BoundingBox:[x=725 y=264 w=186 h=356]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Low-light conditions due to sunset with relatively calm seas. Own vessel is proceeding south-east (131.6 degrees) at 22.1 knots, overtaking a vessel ahead on a similar course (127.2 degrees) at 11.8 knots. The target vessel's stern silhouette is identified, and overtaking is being conducted while maintaining safe distance with attention to visibility.\n\nWhile overtaking the target during sunset with deteriorating visibility, in accordance with COLREG Rule 13, own vessel is the give-way vessel and must identify the target's sternlight while maintaining sufficient safe distance. Take care not to impede the target's course during overtaking, and enhance vigilance until the maneuver is completed."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-x-LMHUYSmV_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-x-LMHUYSmV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.304999 Lon:127.558701 | Speed:16.9kt Heading:208.4° | Size:114m x 29m Draft:5m\n- Nearby vessel (ID:1) | Lat:35.296532 Lon:127.557760 | Speed:23.8kt Heading:260.0° | Size:132m x 23m Draft:7m | BoundingBox:[x=398 y=426 w=185 h=106]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Dense dawn fog drapes the sea severely restricting visibility. Own vessel is proceeding south-southwest on course 208 degrees at approximately 16.9 knots, while a target vessel on course 260 degrees at approximately 23.8 knots has been detected on radar on the port bow, crossing own vessel's path heading westward at high speed.\n\nWith a high-speed crossing target detected on radar on the port bow in dawn fog, immediately reduce to safe speed (Rule 6) and sound fog signals per Rule 35 in accordance with Rule 19. As required by Rule 19(d)(i), avoid altering course to port for a vessel forward of the beam, and continuously calculate CPA through radar plotting. If risk of collision exists, secure a safe passing distance by altering course to starboard or substantially reducing speed."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-x-LMrwgodY_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-x-LMrwgodY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.814031 Lon:128.359699 | Speed:24.4kt Heading:91.8° | Size:129m x 22m Draft:3m\n- Nearby vessel (ID:1) | Lat:35.816033 Lon:128.367137 | Speed:23.4kt Heading:120.0° | Size:119m x 19m Draft:4m | BoundingBox:[x=151 y=222 w=643 h=428]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Visibility is extremely restricted due to sunset, rain and fog. Own vessel is proceeding eastward on course 092 degrees at 24.5 knots at high speed, with a target vessel detected on radar on the starboard bow on course 120 degrees at 23.4 knots crossing own vessel's path. Both vessels at high speed in extremely poor visibility create high risk.\n\nWith a crossing target detected on radar in extremely restricted visibility, immediately reduce to safe speed (Rule 6) per Rule 19 and sound fog signals per Rule 35. As required by Rule 19(d)(i), avoid altering course to port for a vessel forward of the beam. Alter course to starboard or reduce speed to ensure a CPA of at least 1 nautical mile."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-x-iCr17EdY_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-x-iCr17EdY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.063218 Lon:127.815228 | Speed:19.1kt Heading:345.7° | Size:139m x 24m Draft:4m\n- Nearby vessel (ID:1) | Lat:35.069099 Lon:127.816541 | Speed:15.4kt Heading:160.5° | Size:127m x 18m Draft:5m | BoundingBox:[x=1204 y=398 w=225 h=169]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "During sunrise with the low sun on the eastern horizon causing strong glare and water reflections from the starboard side. Own vessel is proceeding north-northwest on course 346 degrees at approximately 19.1 knots, while a target vessel on course 161 degrees at approximately 15.4 knots is approaching from the south-southeast in a head-on situation. The combined closing speed is approximately 35 knots.\n\nThis is a Head-on Situation. In accordance with COLREG Rule 14, both vessels must alter course to starboard to pass port to port. The sunrise glare from the starboard side may delay identification of the other vessel, so actively utilize radar and AIS to detect the target early as required by Rule 5, and alter course to starboard by at least 30 degrees to ensure a CPA of 1 nautical mile or more."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-x-iCxfjEmY_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-x-iCxfjEmY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.117519 Lon:127.816904 | Speed:23.4kt Heading:244.7° | Size:123m x 16m Draft:4m\n- Nearby vessel (ID:1) | Lat:35.113337 Lon:127.811408 | Speed:24.5kt Heading:274.0° | Size:82m x 26m Draft:7m | BoundingBox:[x=199 y=214 w=637 h=441]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Clear daytime weather with good visibility and calm seas. Own vessel is proceeding west-southwest on course 245 degrees at approximately 23.4 knots, while a target vessel on the port bow on course 274 degrees at approximately 24.5 knots is crossing own vessel's path. Both vessels at high speed require continuous vigilance.\n\nThis is a Crossing Situation with the target on the port side. In accordance with COLREG Rule 17, own vessel is the stand-on vessel and must maintain course and speed. Sound the attention signal if the target fails to act, and alter course to starboard if collision becomes imminent."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-x-q_HMZV_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-x-q_HMZV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.432540 Lon:127.126419 | Speed:20.1kt Heading:21.0° | Size:127m x 19m Draft:5m\n- Nearby vessel (ID:1) | Lat:35.439548 Lon:127.126561 | Speed:20.5kt Heading:59.6° | Size:130m x 22m Draft:3m | BoundingBox:[x=264 y=298 w=499 h=301]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "During twilight as sunset progresses, surroundings are getting darker while the sea remains relatively calm. Own vessel is proceeding on course 21 degrees at 20.1 knots, with a target vessel on course 60 degrees at 20.5 knots crossing own vessel's course. The risk of collision exists, and the target vessel's movements are being closely monitored.\n\nIn a Crossing Situation during twilight with restricted visibility due to sunset, the target vessel is on the starboard side. In accordance with COLREG Rule 15, own vessel is the give-way vessel and must keep clear of the target. Identify the target's navigation lights (red/green) visually, and alter course substantially to starboard or reduce speed to pass safely astern (CPA of at least 1 nautical mile)."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-xHL0rLEmb_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-xHL0rLEmb/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.316073 Lon:128.036343 | Speed:18.0kt Heading:83.3° | Size:106m x 29m Draft:7m\n- Nearby vessel (ID:1) | Lat:35.316030 Lon:128.042659 | Speed:20.2kt Heading:267.6° | Size:139m x 21m Draft:4m | BoundingBox:[x=950 y=392 w=109 h=183]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "During sunset twilight with the horizon tinged orange and rapidly decreasing illumination. Own vessel is proceeding eastward on course 083 degrees at 18.0 knots, with a target vessel on course 268 degrees at 20.2 knots approaching head-on from the west. The combined closing speed of approximately 38 knots in low-light conditions requires immediate vigilance and response.\n\nThis is a Head-on Situation. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port. In sunset twilight, confirm the target's navigation lights early and actively utilize radar and AIS to ensure a CPA of at least 1 nautical mile. Sound the attention signal (five or more short blasts) if the target's intentions are unclear."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-xHLC-KyomP_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-xHLC-KyomP/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.130269 Lon:127.500994 | Speed:18.5kt Heading:101.0° | Size:122m x 29m Draft:4m\n- Nearby vessel (ID:1) | Lat:35.126383 Lon:127.509261 | Speed:18.8kt Heading:52.7° | Size:122m x 19m Draft:5m | BoundingBox:[x=981 y=329 w=442 h=249]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Visibility is extremely restricted due to sunset, rain, and fog. Own vessel is proceeding eastward on course 101 degrees at 18.5 knots, with a target vessel detected on radar on the starboard bow on course 053 degrees at 18.8 knots crossing own vessel's path heading northeast. Similar speeds and poor visibility create high close-quarters risk.\n\nWith a crossing target detected on radar in extremely restricted visibility, immediately reduce to safe speed (Rule 6) per Rule 19 and sound fog signals per Rule 35. Avoid altering course to port per Rule 19(d)(i). Alter course to starboard or reduce speed to ensure a CPA of at least 1 nautical mile."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-xHLM-rh0db_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-xHLM-rh0db/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.132032 Lon:127.192666 | Speed:23.1kt Heading:309.7° | Size:144m x 28m Draft:7m\n- Nearby vessel (ID:1) | Lat:34.136421 Lon:127.183956 | Speed:12.4kt Heading:313.9° | Size:146m x 26m Draft:3m | BoundingBox:[x=622 y=323 w=206 h=255]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Visibility is severely restricted due to dense sea fog. Own vessel is proceeding on course 309.74 degrees at 23.11 knots, with a target vessel identified ahead on course 313.88 degrees at 12.38 knots. Own vessel is overtaking the target at higher speed, but the restricted visibility poses significant risk, requiring thorough lookout and safe distance maintenance.\n\nUnder restricted visibility due to dense fog while overtaking the target ahead, immediately reduce to safe speed and sound fog signals in accordance with COLREG Rules 19 and 35, while enhancing radar surveillance. Even if the target is confirmed on radar, maintain sufficient passing distance to avoid any close-quarters situation."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-xHqCxgg_eP_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-xHqCxgg_eP/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.558716 Lon:128.755330 | Speed:19.0kt Heading:67.0° | Size:133m x 22m Draft:5m\n- Nearby vessel (ID:1) | Lat:34.559067 Lon:128.765348 | Speed:24.5kt Heading:13.5° | Size:85m x 22m Draft:7m | BoundingBox:[x=1012 y=339 w=428 h=230]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Clear daytime conditions with good visibility and calm seas. Own vessel is proceeding east-northeast on course 67.0 degrees at 19.0 knots, while a fast target vessel on course 13.5 degrees at 24.5 knots is crossing from the starboard side in a north-northeast direction. The target's higher speed requires early response.\n\nThis is a Crossing Situation with the target vessel on the starboard bow. In accordance with COLREG Rule 15, own vessel is the give-way vessel and must avoid crossing ahead of the target by making a substantial alteration of course to starboard or reducing speed to pass safely astern. Action must be taken early and positively, and the target's bearing change must be closely monitored until a minimum CPA of 1 nautical mile is secured."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-xrLM-P5EZY_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-xrLM-P5EZY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.448593 Lon:127.178653 | Speed:21.6kt Heading:351.1° | Size:142m x 19m Draft:4m\n- Nearby vessel (ID:1) | Lat:35.457465 Lon:127.178764 | Speed:17.0kt Heading:164.4° | Size:135m x 22m Draft:7m | BoundingBox:[x=985 y=431 w=89 h=94]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "During sunrise with the low sun on the eastern horizon creating golden reflections on the water and glare from the starboard side. Own vessel is proceeding northward at high speed on course 351 degrees at approximately 21.7 knots, while a target vessel on course 165 degrees at approximately 17.0 knots is approaching from the south-southeast in a head-on situation.\n\nThis is a Head-on Situation. In accordance with COLREG Rule 14, both vessels must alter course to starboard to pass port to port. As the combined closing speed is approximately 39 knots, take early action to alter course to starboard by at least 30 degrees and ensure a CPA of 1 nautical mile or more. The low sunrise sun on the starboard side may impair visual observation, so actively utilize radar and AIS as required by Rule 5."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-xrL_HbK_ZV_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-xrL_HbK_ZV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.669224 Lon:127.447193 | Speed:17.6kt Heading:81.9° | Size:81m x 18m Draft:7m\n- Nearby vessel (ID:1) | Lat:34.673214 Lon:127.456577 | Speed:16.2kt Heading:153.7° | Size:143m x 19m Draft:4m | BoundingBox:[x=357 y=357 w=406 h=200]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "In reduced visibility due to afternoon rain, own vessel is proceeding eastward on course 81.9 degrees at 17.7 knots. A target vessel on course 153.7 degrees at 16.2 knots is crossing from the port bow heading south-southeast, forming a Crossing Situation. With distances decreasing between both vessels amid rain-reduced visibility, careful monitoring is required.\n\nThis is a Crossing Situation with the target vessel on the port side. In accordance with COLREG Rule 17, own vessel is the stand-on vessel and must maintain present course and speed. Due to rain-reduced visibility, enhance radar surveillance per Rule 19. If the target fails to take appropriate avoiding action and CPA decreases below 1 nautical mile, sound the attention signal (five or more short blasts), and if collision becomes imminent, alter course to starboard to avoid."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-xrq0HzbEmV_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-xrq0HzbEmV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.315687 Lon:128.330845 | Speed:21.5kt Heading:62.2° | Size:145m x 20m Draft:4m\n- Nearby vessel (ID:1) | Lat:35.318565 Lon:128.339511 | Speed:10.1kt Heading:58.1° | Size:115m x 19m Draft:3m | BoundingBox:[x=928 y=423 w=87 h=112]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Clear daytime conditions with good visibility and calm seas. Own vessel is proceeding east-northeast on course 62.2 degrees at 21.5 knots, while a slower target vessel on course 58.1 degrees at 10.1 knots is navigating in a similar direction ahead. With own vessel's speed more than double that of the target, an overtaking situation is developing.\n\nThis is an Overtaking Situation. In accordance with COLREG Rule 13, the overtaking vessel shall keep clear of the overtaken vessel until finally past and clear. Alter course to port or starboard sufficiently to maintain a CPA of at least 1 nautical mile, and maintain vigilant lookout until the overtaking maneuver is complete."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-xrq0rboZV_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-xrq0rboZV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.369921 Lon:127.031317 | Speed:17.1kt Heading:60.6° | Size:137m x 16m Draft:6m\n- Nearby vessel (ID:1) | Lat:34.372945 Lon:127.040069 | Speed:19.5kt Heading:247.3° | Size:85m x 15m Draft:4m | BoundingBox:[x=923 y=329 w=126 h=249]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Post-sunset twilight with rapidly decreasing illumination and residual red afterglow beyond the horizon. Own vessel is proceeding on course 061 degrees at 17.1 knots, with a target vessel on course 247 degrees at 19.5 knots approaching head-on from the west-southwest. The combined closing speed of approximately 37 knots and low-light environment demand immediate response.\n\nThis is a Head-on Situation. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port. In the low-light post-sunset environment, monitor the target's navigation lights to determine its course early, and actively utilize radar and AIS to ensure a CPA of at least 1 nautical mile."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-xrq_-kPoZV_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-xrq_-kPoZV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.513832 Lon:127.767916 | Speed:17.1kt Heading:85.4° | Size:95m x 17m Draft:6m\n- Nearby vessel (ID:1) | Lat:35.515227 Lon:127.776532 | Speed:15.2kt Heading:264.2° | Size:120m x 27m Draft:3m | BoundingBox:[x=669 y=309 w=164 h=282]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Clear afternoon skies and calm seas with good visibility. Own vessel is proceeding eastward on course 85.4 degrees at approximately 17.2 knots, while a target vessel on course 264.2 degrees at approximately 15.2 knots has been identified approaching from the west. This is a Head-on Situation with a combined closing speed of approximately 32.4 knots.\n\nThis is a Head-on Situation. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port. If the target's intentions are unclear, sound the attention signal (five or more short blasts) without delay, and maintain a minimum CPA of 1 nautical mile."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-xrq_HBhoZb_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-xrq_HBhoZb/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.882463 Lon:128.760800 | Speed:20.1kt Heading:199.0° | Size:107m x 21m Draft:3m\n- Nearby vessel (ID:1) | Lat:34.875495 Lon:128.754709 | Speed:23.6kt Heading:166.3° | Size:94m x 28m Draft:5m | BoundingBox:[x=988 y=344 w=356 h=223]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Clear daytime weather with good visibility and calm seas. Own vessel is proceeding on course 199 degrees at approximately 20 knots, with a high-speed target vessel on the starboard bow on course 166 degrees at approximately 23.6 knots crossing own vessel's path. Early avoiding action is needed for collision prevention.\n\nThis is a Crossing Situation with the target on the starboard side. In accordance with COLREG Rule 15, own vessel is the give-way vessel. Alter course to starboard by at least 30 degrees early to maintain a CPA of at least 1 nautical mile."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-xxFCxogMeY_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-xxFCxogMeY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.327161 Lon:128.423836 | Speed:17.7kt Heading:39.5° | Size:117m x 23m Draft:5m\n- Nearby vessel (ID:1) | Lat:35.330249 Lon:128.431176 | Speed:16.6kt Heading:11.8° | Size:122m x 29m Draft:3m | BoundingBox:[x=1054 y=277 w=535 h=339]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Visibility is severely restricted due to dense fog. Own vessel is proceeding on course 39.6 degrees at 17.7 knots, with a target vessel identified ahead on course 11.8 degrees at 16.6 knots heading in a similar direction. Own vessel is approaching faster than the target, and an overtaking situation is developing, requiring heightened caution due to fog-restricted visibility.\n\nUnder restricted visibility due to dense fog while overtaking the target ahead, own vessel is the give-way vessel per COLREG Rule 13 and must not impede the target's course. Immediately reduce to safe speed per Rule 19, sound fog signals per Rule 35, and enhance radar surveillance. Maintain a CPA of at least 1 nautical mile while safely overtaking."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-xxL0HxMZb_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-xxL0HxMZb/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.378518 Lon:128.978870 | Speed:17.1kt Heading:19.1° | Size:84m x 24m Draft:5m\n- Nearby vessel (ID:1) | Lat:35.385388 Lon:128.979253 | Speed:19.2kt Heading:36.1° | Size:110m x 18m Draft:6m | BoundingBox:[x=371 y=293 w=392 h=311]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "During twilight with ambient light decreasing as sunset progresses, the sea state is relatively calm. Own vessel is proceeding on course 19.14 degrees at 17.08 knots, with a target vessel on course 36.13 degrees at 19.18 knots crossing own vessel's course ahead. The visually identified target vessel's movements are being closely monitored while navigating safely.\n\nIn a Crossing Situation during sunset with the target vessel on the starboard bow, in accordance with COLREG Rule 15, own vessel is the give-way vessel and must keep clear of the target. Avoid crossing ahead by altering course to starboard or reducing speed, and identify the target's navigation lights while passing safely astern."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-xxiCxM7oZb_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-xxiCxM7oZb/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.033093 Lon:128.467287 | Speed:22.5kt Heading:229.0° | Size:131m x 18m Draft:4m\n- Nearby vessel (ID:1) | Lat:35.029086 Lon:128.461376 | Speed:19.4kt Heading:45.5° | Size:123m x 15m Draft:6m | BoundingBox:[x=837 y=274 w=180 h=343]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "During sunrise with the low sun rising from the eastern horizon on the port quarter astern, forming strong golden reflections on the sea surface. Own vessel is proceeding southwest at high speed on course 229 degrees at approximately 22.5 knots, while a target vessel on course 046 degrees at approximately 19.4 knots is approaching from the northeast in a head-on situation. The combined closing speed is very high at approximately 42 knots.\n\nThis is a Head-on Situation. In accordance with COLREG Rule 14, both vessels must alter course to starboard to pass port to port. With a combined closing speed of approximately 42 knots, take early and substantial action to alter course to starboard by at least 30 degrees to ensure a CPA of 1 nautical mile or more. As the target is approaching from the direction of sunrise backlight, actively utilize radar and AIS as required by Rule 5."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-xxiCxqOomb_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-xxiCxqOomb/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.796274 Lon:128.822620 | Speed:16.0kt Heading:58.6° | Size:124m x 19m Draft:7m\n- Nearby vessel (ID:1) | Lat:34.800129 Lon:128.832510 | Speed:21.7kt Heading:242.9° | Size:124m x 25m Draft:3m | BoundingBox:[x=928 y=355 w=104 h=204]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Dense sea fog blankets the surface during dawn, severely reducing visibility. Own vessel is proceeding east-northeast on course 59 degrees at approximately 16.0 knots, while a target vessel on course 243 degrees at approximately 21.7 knots has been detected on radar approaching rapidly from the west-southwest in a head-on situation. Urgent vigilance is required.\n\nWith a head-on target detected on radar in severely restricted dawn fog visibility, immediately reduce to safe speed (Rule 6) and keep engines ready in accordance with Rule 19. Sound fog signals of one prolonged blast at two-minute intervals per Rule 35, and continuously calculate the target's CPA and TCPA through radar plotting. If risk of collision is determined, alter course to starboard by a substantial angle early. Altering course to port must be avoided."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-xxi_-x50ZP_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-xxi_-x50ZP/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.876003 Lon:127.079460 | Speed:23.3kt Heading:151.3° | Size:90m x 25m Draft:3m\n- Nearby vessel (ID:1) | Lat:35.868236 Lon:127.083576 | Speed:12.5kt Heading:151.4° | Size:146m x 20m Draft:4m | BoundingBox:[x=911 y=347 w=127 h=216]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "In reduced visibility due to afternoon rain, own vessel is proceeding on course 151.4 degrees at 23.3 knots in a south-southeast direction, with a target vessel identified ahead on the identical course of 151.4 degrees at 12.5 knots. This is a typical Overtaking Situation as own vessel approaches at nearly twice the target's speed, requiring continuous radar monitoring due to rain-reduced visibility.\n\nThis is an Overtaking Situation with the target vessel on the identical course ahead. In accordance with COLREG Rule 13, own vessel must keep clear of the overtaken vessel until finally past and clear. During rain, enhance radar surveillance and maintain safe speed per Rule 19, and alter course sufficiently to port or starboard to maintain a CPA of at least 1 nautical mile while safely overtaking."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-xxi_xoyEdV_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-xxi_xoyEdV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.171958 Lon:127.277550 | Speed:19.3kt Heading:203.4° | Size:115m x 26m Draft:5m\n- Nearby vessel (ID:1) | Lat:35.164441 Lon:127.273659 | Speed:9.3kt Heading:200.0° | Size:146m x 21m Draft:5m | BoundingBox:[x=825 y=342 w=114 h=226]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Clear daytime weather with good visibility and calm seas. Own vessel is proceeding south-southwest on course 203 degrees at approximately 19.3 knots, with a slower vessel ahead on course 200 degrees at approximately 9.3 knots. An overtaking situation is developing as own vessel's speed is more than double the target's.\n\nThis is an Overtaking Situation. In accordance with COLREG Rule 13, own vessel must maintain sufficient safe passing distance (CPA of at least 1 nautical mile). Maintain vigilance until overtaking is fully completed."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-xxqMxOKEmP_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-xxqMxOKEmP/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.240480 Lon:127.735534 | Speed:15.8kt Heading:79.6° | Size:80m x 26m Draft:5m\n- Nearby vessel (ID:1) | Lat:34.243836 Lon:127.743389 | Speed:16.2kt Heading:98.0° | Size:135m x 27m Draft:4m | BoundingBox:[x=331 y=277 w=450 h=334]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "During the dawn period just after sunrise, intense solar glare from directly ahead to the east is severely limiting forward visibility. Own vessel is proceeding eastward on course 080 degrees at approximately 15.8 knots, while a target vessel on the starboard bow on course 098 degrees at approximately 16.2 knots is crossing own vessel's path. Visual observation of the target vessel is extremely difficult due to the direct sunrise glare.\n\nThis is a Crossing Situation with the target vessel on the starboard side. In accordance with COLREG Rule 15, own vessel is the give-way vessel and must take action to avoid crossing ahead of the target by altering course to starboard or reducing speed. As forward visibility is extremely limited by direct sunrise glare, strengthen surveillance using radar and AIS as required by Rule 5, and alter course to starboard by at least 30 degrees to ensure a CPA of 1 nautical mile or more."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-zCzh6o0O7_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-zCzh6o0O7/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.057271 Lon:127.495112 | Speed:18.8kt Heading:145.2° | Size:90m x 28m Draft:4m\n- Nearby vessel (ID:1) | Lat:34.050144 Lon:127.496928 | Speed:21.9kt Heading:116.6° | Size:132m x 29m Draft:3m | BoundingBox:[x=1059 y=300 w=484 h=299]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "During sunset twilight with decreasing illumination and darkening sea surface. Own vessel is proceeding on course 145 degrees at 18.8 knots, with a target vessel on the starboard bow on course 117 degrees at 21.9 knots crossing own vessel's path. The target's higher speed requires early response.\n\nThis is a Crossing Situation with the target on the starboard side. In accordance with COLREG Rule 15, own vessel is the give-way vessel and must avoid crossing ahead of the target by altering course to starboard or reducing speed. In sunset low-light conditions, monitor the target's green sidelight, alter course to starboard by at least 30 degrees early to pass astern of the target, and maintain a CPA of at least 1 nautical mile."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-zW01axLOw_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-zW01axLOw/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.559175 Lon:128.485330 | Speed:19.8kt Heading:63.4° | Size:93m x 24m Draft:4m\n- Nearby vessel (ID:1) | Lat:34.560087 Lon:128.495431 | Speed:17.9kt Heading:250.3° | Size:111m x 28m Draft:6m | BoundingBox:[x=1162 y=426 w=102 h=107]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Visibility is good during daytime with slight waves but relatively calm seas. Own vessel is proceeding on course 063 degrees at approximately 19.8 knots, while a target vessel is approaching from ahead on course 250 degrees at approximately 17.9 knots. Both vessels are approaching head-on, requiring continuous vigilance.\n\nThis is a Head-on Situation with the target vessel approaching from directly ahead. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port. If the target's intentions are unclear, sound the attention signal (five or more short blasts) without delay, and continuously monitor the target's bearing change while maintaining a minimum CPA of 1 nautical mile until the risk of collision has been eliminated."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-zWL16t60Bw_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-zWL16t60Bw/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.605158 Lon:128.908246 | Speed:23.9kt Heading:236.1° | Size:143m x 23m Draft:7m\n- Nearby vessel (ID:1) | Lat:35.600705 Lon:128.900645 | Speed:13.7kt Heading:237.8° | Size:129m x 20m Draft:5m | BoundingBox:[x=754 y=302 w=152 h=290]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "During the dawn period just after sunrise, the low sun rising from the east astern is casting warm golden reflections on the water surface. Own vessel is proceeding southwest at high speed on course 236 degrees at approximately 23.9 knots, while overtaking a slower target vessel ahead on course 238 degrees at approximately 13.7 knots.\n\nThis is an Overtaking Situation. In accordance with COLREG Rule 13, own vessel as the overtaking vessel must keep clear of the overtaken vessel until finally past and well clear. Water surface reflections from the sunrise astern may impair identification of the target vessel's hull at distance ahead, so maintain continuous surveillance utilizing radar and AIS as required by Rule 5. Alter course to port or starboard maintaining sufficient passing distance to ensure a CPA of 1 nautical mile or more."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-zWLh6_LI7_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-zWLh6_LI7/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.097162 Lon:128.279054 | Speed:21.7kt Heading:12.1° | Size:98m x 18m Draft:3m\n- Nearby vessel (ID:1) | Lat:35.106503 Lon:128.281748 | Speed:9.1kt Heading:12.9° | Size:85m x 25m Draft:7m | BoundingBox:[x=874 y=436 w=48 h=84]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "During the dawn period just after sunrise, the low sun on the eastern horizon to starboard is causing golden reflections and glare on the water. Own vessel is proceeding northward at high speed on course 012 degrees at approximately 21.7 knots, while overtaking a slower target vessel ahead on course 013 degrees at approximately 9.1 knots in an overtaking situation.\n\nThis is an Overtaking Situation. In accordance with COLREG Rule 13, own vessel as the overtaking vessel must keep clear of the overtaken vessel until finally past and well clear. As the starboard side sunrise glare may affect visual observation, maintain continuous surveillance utilizing radar and AIS as required by Rule 5. Alter course to port or starboard with sufficient passing distance to ensure a CPA of 1 nautical mile or more."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-zWzAtqkLOH_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-zWzAtqkLOH/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.408557 Lon:128.519062 | Speed:21.0kt Heading:31.7° | Size:143m x 22m Draft:4m\n- Nearby vessel (ID:1) | Lat:35.416136 Lon:128.525212 | Speed:20.7kt Heading:211.9° | Size:124m x 29m Draft:5m | BoundingBox:[x=882 y=433 w=51 h=89]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "Good visibility and calm seas under clear afternoon skies. Own vessel is proceeding north-northeast on course 31.7 degrees at approximately 21.0 knots, while a target vessel on course 211.9 degrees at approximately 20.7 knots has been identified approaching from the south-southwest. This is a Head-on Situation with a combined closing speed of approximately 41.7 knots.\n\nThis is a Head-on Situation. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port. If the target's intentions are unclear, sound the attention signal (five or more short blasts) without delay, and maintain a minimum CPA of 1 nautical mile."
+      }
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-zdvAaKvBw_en",
+    "image": "tango_sds-unity-llm-20260226-v0.3-zdvAaKvBw/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.932325 Lon:127.932691 | Speed:19.2kt Heading:135.7° | Size:149m x 21m Draft:6m\n- Nearby vessel (ID:1) | Lat:34.928059 Lon:127.942294 | Speed:15.4kt Heading:319.0° | Size:89m x 22m Draft:4m | BoundingBox:[x=417 y=320 w=289 h=260]\n\nBased on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules."
+      },
+      {
+        "from": "gpt",
+        "value": "During sunset twilight with red afterglow on the horizon and decreasing illumination at sea. Own vessel is proceeding on course 136 degrees at 19.2 knots, with a target vessel on course 319 degrees at 15.4 knots approaching head-on from the northwest. Caution is needed for target identification in sunset backlight and low-light conditions.\n\nThis is a Head-on Situation. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port. In sunset twilight, monitor the target's navigation lights and utilize radar and AIS to ensure a CPA of at least 1 nautical mile."
+      }
+    ]
+  }
+]

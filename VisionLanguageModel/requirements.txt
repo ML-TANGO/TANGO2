@@ -1,0 +1,41 @@
+# VisionLanguageModelV2 — Python dependencies
+#
+# !! PyTorch는 이 파일로 설치하지 마세요 !!
+# CUDA 버전에 맞는 빌드를 conda로 설치해야 합니다 (README 3-4절 참고):
+#
+#   conda install pytorch torchvision torchaudio pytorch-cuda=12.8 \
+#       -c pytorch -c nvidia -y
+#
+# 위 conda 설치 후 아래 명령으로 나머지 패키지를 설치합니다:
+#
+#   pip install -r requirements.txt
+
+# ── Hugging Face 생태계 ───────────────────────────────────────────────────────
+transformers==5.3.0
+tokenizers==0.22.2
+huggingface_hub==1.7.2
+safetensors==0.7.0
+peft==0.18.1
+accelerate==1.13.0
+
+# ── 학습 ──────────────────────────────────────────────────────────────────────
+deepspeed==0.18.8
+sentencepiece==0.2.1
+einops==0.8.2
+
+# ── 모니터링 / 시각화 ─────────────────────────────────────────────────────────
+wandb==0.26.1
+torchinfo==1.8.0
+
+# ── 데모 웹 앱 ────────────────────────────────────────────────────────────────
+gradio==6.14.0
+
+# ── 데이터 처리 ───────────────────────────────────────────────────────────────
+pillow==12.1.1
+pandas==3.0.1
+numpy==2.4.3
+
+# ── 기타 유틸리티 ─────────────────────────────────────────────────────────────
+tqdm==4.67.3
+requests==2.32.5
+psutil==7.2.2
