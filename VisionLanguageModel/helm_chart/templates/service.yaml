@@ -1,0 +1,16 @@
+{{- if .Values.backend.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.metadata.pod_name }}-backend-svc
+  namespace: {{ .Values.metadata.namespace }}
+spec:
+  type: NodePort
+  ports:
+  - port: {{ .Values.service.backend.port }}
+    targetPort: {{ .Values.service.backend.targetPort }}
+    nodePort: {{ .Values.service.backend.nodePort }}
+    protocol: TCP
+  selector:
+    app: {{ .Values.labels.helm_name }}-backend
+{{- end }}

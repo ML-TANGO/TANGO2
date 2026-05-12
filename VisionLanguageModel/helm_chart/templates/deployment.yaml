@@ -1,0 +1,59 @@
+{{- if .Values.backend.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.metadata.pod_name }}-backend
+  namespace: {{ .Values.metadata.namespace }}
+  labels:
+    app: {{ .Values.labels.helm_name }}-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.labels.helm_name }}-backend
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.labels.helm_name }}-backend
+      annotations:
+        acryl.ai/appType: user   # 조나단 플랫폼 필수 어노테이션 — 누락 시 서비스 미인식
+    spec:
+      containers:
+      - name: backend
+        image: {{ .Values.backend.image }}
+        imagePullPolicy: {{ .Values.backend.imagePullPolicy }}
+        ports:
+        - containerPort: {{ .Values.backend.port }}
+        resources:
+          limits:
+            cpu: {{ .Values.backend.resources.limits.cpu }}
+            memory: {{ .Values.backend.resources.limits.memory }}
+            nvidia.com/gpu: {{ index .Values.backend.resources.limits "nvidia.com/gpu" }}
+          requests:
+            cpu: {{ .Values.backend.resources.requests.cpu }}
+            memory: {{ .Values.backend.resources.requests.memory }}
+            nvidia.com/gpu: {{ index .Values.backend.resources.requests "nvidia.com/gpu" }}
+        env:
+        {{- range $key, $val := .Values.backend.env }}
+        - name: {{ $key }}
+          value: {{ $val | quote }}
+        {{- end }}
+        volumeMounts:
+        {{- toYaml .Values.backend.volumeMounts | nindent 8 }}
+        readinessProbe:
+          httpGet:
+            path: {{ .Values.backend.readinessProbe.httpGet.path }}
+            port: {{ .Values.backend.readinessProbe.httpGet.port }}
+          initialDelaySeconds: {{ .Values.backend.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.backend.readinessProbe.periodSeconds }}
+          failureThreshold: {{ .Values.backend.readinessProbe.failureThreshold }}
+        livenessProbe:
+          httpGet:
+            path: {{ .Values.backend.livenessProbe.httpGet.path }}
+            port: {{ .Values.backend.livenessProbe.httpGet.port }}
+          initialDelaySeconds: {{ .Values.backend.livenessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.backend.livenessProbe.periodSeconds }}
+          failureThreshold: {{ .Values.backend.livenessProbe.failureThreshold }}
+      volumes:
+      {{- toYaml .Values.backend.volumes | nindent 6 }}
+{{- end }}

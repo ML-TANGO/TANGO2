@@ -1,0 +1,18 @@
+__pycache__/
+*.pyc
+*.pyo
+.git/
+.env
+.venv/
+venv/
+*.log
+.DS_Store
+# 체크포인트/모델은 NFS 마운트로 제공 (이미지에 포함 불가)
+checkpoints/
+*.bin
+*.safetensors
+*.pt
+*.ckpt
+# 대용량 데이터셋
+SDS/
+HDD/

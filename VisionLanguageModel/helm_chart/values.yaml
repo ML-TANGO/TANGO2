@@ -1,0 +1,93 @@
+# ── 메타데이터 (helm install 시 --set 으로 주입) ─────────────────────────────
+metadata:
+  namespace: ""          # 배포 대상 네임스페이스 (예: tango-eva)
+  workspace_id: ""       # 조나단 워크스페이스 ID
+  project_id: ""         # 조나단 프로젝트 ID
+  pod_name: ""           # Pod 이름 (예: eva-vlm-1)
+
+labels:
+  helm_name: ""          # helm 릴리스명과 동일하게 설정
+  workspace_id: ""
+  project_id: ""
+
+# ── 서비스(포트) 설정 ─────────────────────────────────────────────────────────
+service:
+  backend:
+    port: 8000           # 클러스터 내부 접근 포트
+    targetPort: 8000     # 컨테이너 내부 포트 (Dockerfile EXPOSE와 일치)
+    nodePort: 30080      # 클러스터 외부 접속 포트 (30000-32767, 환경별 조정)
+
+# ── Ingress 설정 ──────────────────────────────────────────────────────────────
+ingress:
+  enabled: true
+  className: "jonathan-kong"   # 조나단 플랫폼 Kong Ingress 클래스
+  path: "/msa/eva-vlm"         # 플랫폼 담당자(아크릴)와 사전 협의 후 확정
+
+# ── 백엔드 Pod 설정 ───────────────────────────────────────────────────────────
+backend:
+  enabled: true
+
+  image: "yvvyee/eva-vlm-backend:1.0.0"
+  imagePullPolicy: "IfNotPresent"
+
+  port: 8000
+
+  resources:
+    limits:
+      cpu: "8"
+      memory: "32Gi"
+      nvidia.com/gpu: "1"    # 추론에 최소 24GB VRAM GPU 1장 필요
+    requests:
+      cpu: "4"
+      memory: "16Gi"
+      nvidia.com/gpu: "1"
+
+  # ── 에바 모델 설정 (환경 변수로 주입) ───────────────────────────────────────
+  env:
+    # LLM 모델 경로 (NFS 마운트 경로 기준)
+    EVA_LLM_MODEL_PATH: "/models/llm/Llama-3.1-8B-Instruct"
+    # 체크포인트 경로 (projector.bin + LoRA 어댑터가 있는 디렉토리)
+    EVA_CHECKPOINT_PATH: "/models/checkpoints/sds_lora_ko_compact"
+    # 비전 인코더 (HF Hub 이름 또는 로컬 경로)
+    EVA_VISION_MODEL_NAME: "openai/clip-vit-large-patch14-336"
+    # 추론 디바이스
+    EVA_DEVICE: "cuda:0"
+    # HuggingFace 캐시 (CLIP 자동 다운로드 위치; 오프라인 환경이면 NFS 경로로 변경)
+    # HF_HOME: "/models/hf_cache"
+
+  # ── NFS 볼륨 마운트 ──────────────────────────────────────────────────────────
+  # 아크릴 플랫폼 NFS 서버 주소와 경로를 확인 후 실제 값으로 교체
+  volumes:
+    - name: eva-models
+      nfs:
+        server: "<NFS_SERVER_IP>"          # 플랫폼 NFS 서버 IP
+        path: "/nfs/eva/models"            # NFS 상의 모델 디렉토리
+    # (선택) CLIP 오프라인 캐시
+    # - name: eva-hf-cache
+    #   nfs:
+    #     server: "<NFS_SERVER_IP>"
+    #     path: "/nfs/eva/hf_cache"
+
+  volumeMounts:
+    - name: eva-models
+      mountPath: /models                   # 컨테이너 내 마운트 경로
+    # - name: eva-hf-cache
+    #   mountPath: /models/hf_cache
+
+  # ── 준비 확인 프로브 ─────────────────────────────────────────────────────────
+  # 모델 로드 완료 후 healthy 상태가 되므로 초기 지연을 충분히 설정
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: 8000
+    initialDelaySeconds: 120    # 모델 로드 시간(~2분) 고려
+    periodSeconds: 15
+    failureThreshold: 20        # 최대 5분 대기
+
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8000
+    initialDelaySeconds: 180
+    periodSeconds: 30
+    failureThreshold: 5
