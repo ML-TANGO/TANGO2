@@ -262,7 +262,7 @@ data/
 학습 전 모델 구조와 forward pass가 정상인지 확인합니다.
 
 ```bash
-PYTHON=<YOUR_LOCAL_PATH>/miniconda3/envs/eva/bin/python
+PYTHON=$HOME/miniconda3/envs/eva/bin/python
 
 $PYTHON load_test.py                                          # 기본 (CLIP + Llama)
 $PYTHON load_test.py --generate                               # 텍스트 생성까지
