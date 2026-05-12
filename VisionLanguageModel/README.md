@@ -94,6 +94,8 @@ conda config --add channels nvidia
 
 # 확인 (defaults가 없어야 함)
 conda config --show channels
+
+# <USER_HOME>/.condarc 파일에서 직접 수정하는 것도 가능
 ```
 
 올바른 출력:
@@ -138,7 +140,8 @@ pip install \
     sentencepiece==0.2.1 \
     pandas \
     pillow \
-    numpy
+    numpy \
+    huggingface_hub
 ```
 
 ---
@@ -158,12 +161,12 @@ CLIP은 `transformers`가 Hugging Face Hub에서 자동 다운로드합니다.
 
 ```bash
 # Llama 3.1 8B Instruct (HF 계정 + Meta 라이센스 동의 필요)
-huggingface-cli login
-huggingface-cli download meta-llama/Llama-3.1-8B-Instruct \
+hf login
+hf download meta-llama/Llama-3.1-8B-Instruct \
     --local-dir ~/Llama-3.1-8B-Instruct
 
 # Qwen3 8B (선택)
-huggingface-cli download Qwen/Qwen3-8B \
+hf download Qwen/Qwen3-8B \
     --local-dir ~/Qwen3-8B
 ```
 
@@ -176,9 +179,9 @@ huggingface-cli download Qwen/Qwen3-8B \
 일반적인 이미지-캡션 정렬 학습에 사용합니다.
 
 ```bash
-# 약 40 GB
-huggingface-cli download liuhaotian/LLaVA-CC3M-Pretrain-595K \
-    --local-dir ~/HDD/Dataset/LLaVA-CC3M-Pretrain-595K \
+# 약 40 GB (다운로드 후 images.zip 압축 해제 필요)
+hf download liuhaotian/LLaVA-CC3M-Pretrain-595K \
+    --local-dir <YOUR_DATA_ROOT>/LLaVA-CC3M-Pretrain-595K \
     --repo-type dataset
 ```
 
@@ -194,8 +197,8 @@ LLaVA-CC3M-Pretrain-595K/
 이미지 없이 해양 도메인 지식(AIS, COLREG, 충돌 회피 등)을 LLM에 주입합니다.
 
 ```bash
-huggingface-cli download CoastalAI/LLaMarine-SFT \
-    --local-dir ~/HDD/Dataset/llamarine-sft \
+hf download pentagoniac/llamarine-sft \
+    --local-dir <YOUR_DATA_ROOT>/llamarine-sft \
     --repo-type dataset
 ```
 
@@ -224,7 +227,7 @@ LLaVA JSON 포맷으로 변환 (3가지 시나리오 생성):
 
 ```bash
 python scripts/prepare_sds_dataset.py \
-    --dataset_dir /path/to/SDS/dataset/20260227
+    --dataset_dir <YOUR_TANGO2_PATH>/SDS/dataset/20260227
 ```
 
 출력:
@@ -260,7 +263,7 @@ data/
 학습 전 모델 구조와 forward pass가 정상인지 확인합니다.
 
 ```bash
-PYTHON=/home/ywlee/miniconda3/envs/eva/bin/python
+PYTHON=<YOUR_LOCAL_PATH>/miniconda3/envs/eva/bin/python
 
 $PYTHON load_test.py                                          # 기본 (CLIP + Llama)
 $PYTHON load_test.py --generate                               # 텍스트 생성까지
@@ -351,7 +354,7 @@ bash scripts/train_lora_marine.sh
 ```bash
 LLM_MODEL="/path/to/Llama-3.1-8B-Instruct"
 LORA_PATH="checkpoints/clip_llama31_lora"          # 이어받을 LoRA
-DATA_PATH="/path/to/llamarine-sft/train-*.parquet" # 54,657개
+DATA_PATH="/path/to/llamarine-sft/data/train-*.parquet" # 54,657개
 OUTPUT_DIR="checkpoints/clip_llama31_lora_marine"
 BATCH_SIZE=2
 GRAD_ACCUM=8
@@ -423,7 +426,7 @@ checkpoints/
 ### `train.py` 직접 실행
 
 ```bash
-PYTHON=/home/ywlee/miniconda3/envs/eva/bin/python
+PYTHON=<YOUR_LOCAL_ROOT>/miniconda3/envs/eva/bin/python
 
 # Phase 1: Projector 학습
 $PYTHON train.py \
@@ -473,7 +476,7 @@ $PYTHON train.py \
 학습된 체크포인트로 단일 이미지 추론을 실행합니다.
 
 ```bash
-PYTHON=/home/ywlee/miniconda3/envs/eva/bin/python
+PYTHON=<YOUR_LOCAL_PATH>/miniconda3/envs/eva/bin/python
 CKPT="checkpoints/sds_lora_en"
 
 $PYTHON test.py \
