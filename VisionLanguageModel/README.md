@@ -41,7 +41,7 @@ SDS(Software-defined Ship) 해상 도메인 데이터셋에 특화된 학습 파
 텍스트 출력 (해상상황묘사, 항해조력메시지 등)
 ```
 
-### 3단계 학습 파이프라인
+### 4단계 학습 파이프라인
 
 | 단계 | 스크립트 | 데이터 | 학습 대상 | 고정 | 목적 |
 |------|---------|--------|-----------|------|------|
@@ -173,7 +173,7 @@ hf download Qwen/Qwen3-8B \
 
 ## 5. 데이터셋 준비
 
-### Phase 1/2a — LLaVA-CC3M-Pretrain-595K
+### Phase 1/2 — LLaVA-CC3M-Pretrain-595K
 
 일반적인 이미지-캡션 정렬 학습에 사용합니다.
 
@@ -190,7 +190,7 @@ LLaVA-CC3M-Pretrain-595K/
 └── images/
 ```
 
-### Phase 2b — LLaMarine-SFT (텍스트 전용 해양 도메인)
+### Phase 3 — LLaMarine-SFT (텍스트 전용 해양 도메인)
 
 54,657개의 해양 instruction-output 쌍으로 구성된 텍스트 전용 데이터셋입니다.  
 이미지 없이 해양 도메인 지식(AIS, COLREG, 충돌 회피 등)을 LLM에 주입합니다.
@@ -207,7 +207,7 @@ llamarine-sft/
     └── train-00000-of-00001.parquet   # columns: instruction, output
 ```
 
-### Phase 3 — SDS 데이터셋
+### Phase 4 — SDS 데이터셋
 
 내부 시뮬레이션 데이터셋. 각 샘플 구조:
 
