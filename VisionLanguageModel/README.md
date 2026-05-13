@@ -463,7 +463,7 @@ $PYTHON train.py \
 |------|------|
 | `--train_type` | `projector` / `lora` / `full` |
 | `--projector_path` | Phase 1 결과 projector.bin 경로 |
-| `--resume_lora_path` | 기존 LoRA 디렉토리 (이어받기, Phase 2b/3용) |
+| `--resume_lora_path` | 기존 LoRA 디렉토리 (이어받기, Phase 3/4용) |
 | `--lora_r` / `--lora_alpha` | LoRA rank / alpha (기본: 128 / 256) |
 | `--max_steps` | epoch 대신 step 수로 조기 종료 |
 | `--wandb_project` | W&B 프로젝트명 (생략 시 비활성화) |
@@ -572,9 +572,9 @@ VisionLanguageModel/
 ├── scripts/
 │   ├── prepare_sds_dataset.py # SDS → LLaVA JSON 변환 (3가지 시나리오)
 │   ├── train_projector.sh     # Phase 1: Projector 사전학습
-│   ├── train_lora.sh          # Phase 2a: CC3M LoRA 파인튜닝
-│   ├── train_lora_marine.sh   # Phase 2b: LLaMarine 텍스트 전용 LoRA 계속학습
-│   ├── train_lora_sds.sh      # Phase 3: SDS 도메인 LoRA 파인튜닝 (3 시나리오)
+│   ├── train_lora.sh          # Phase 2: CC3M LoRA 파인튜닝
+│   ├── train_lora_marine.sh   # Phase 3: LLaMarine 텍스트 전용 LoRA 계속학습
+│   ├── train_lora_sds.sh      # Phase 4: SDS 도메인 LoRA 파인튜닝 (3 시나리오)
 │   ├── zero2.json             # DeepSpeed ZeRO-2 설정
 │   └── zero3.json             # DeepSpeed ZeRO-3 설정
 │
@@ -582,8 +582,8 @@ VisionLanguageModel/
 │   ├── app.py                 # Gradio 데모 앱
 │   └── run.sh                 # 데모 실행 스크립트
 │
-├── train.py                   # 이미지+텍스트 학습 진입점 (Phase 1/2a/3)
-├── train_text_lora.py         # 텍스트 전용 LoRA 학습 진입점 (Phase 2b)
+├── train.py                   # 이미지+텍스트 학습 진입점 (Phase 1/2/4)
+├── train_text_lora.py         # 텍스트 전용 LoRA 학습 진입점 (Phase 3)
 ├── test.py                    # 단일 이미지 추론 테스트
 ├── load_test.py               # 아키텍처·forward pass 검증
 ├── model_summary.py           # 모델 구조 출력 + W&B 로깅
