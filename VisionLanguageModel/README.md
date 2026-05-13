@@ -356,7 +356,7 @@ bash scripts/train_lora_marine.sh
 ```bash
 LLM_MODEL="/path/to/Llama-3.1-8B-Instruct"
 LORA_PATH="checkpoints/clip_llama31_lora"          # 이어받을 LoRA
-DATA_PATH="/path/to/llamarine-sft/data/train-*.parquet" # 54,657개
+DATA_PATH="/path/to/llamarine-sft/data/train-00000-of-00001.parquet" # 54,657개
 OUTPUT_DIR="checkpoints/clip_llama31_lora_marine"
 BATCH_SIZE=2
 GRAD_ACCUM=8
@@ -374,7 +374,7 @@ NUM_EPOCHS=1
 > python train_text_lora.py \
 >     --llm_model /path/to/Llama-3.1-8B-Instruct \
 >     --lora_path checkpoints/clip_llama31_lora \
->     --data_path /path/to/train.parquet \
+>     --data_path /path/to/llamarine-sft/data/train-00000-of-00001.parquet \
 >     --output_dir checkpoints/clip_llama31_lora_marine \
 >     --num_epochs 1 --batch_size 2 --grad_accum 8
 > ```
