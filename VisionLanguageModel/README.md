@@ -1,4 +1,4 @@
-# VisionLanguageModelV2
+# VisionLanguageModel
 
 선박 자율항행 지원을 위한 Vision-Language Model (VLM) 구현입니다.  
 CLIP 비전 인코더와 Llama 3.1 / Qwen3 언어 모델을 MLP 프로젝터로 연결하는 LLaVA 구조이며,  
@@ -67,34 +67,26 @@ SDS(Software-defined Ship) 해상 도메인 데이터셋에 특화된 학습 파
 
 ## 3. 가상환경 구성
 
-### 3-1. Miniconda 설치
+### 3-1. Miniforge 설치
 
 이미 설치되어 있으면 건너뜁니다.
 
 ```bash
-wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
-bash Miniconda3-latest-Linux-x86_64.sh -b -p $HOME/miniconda3
-$HOME/miniconda3/bin/conda init bash   # 또는 zsh
+wget "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh"
+bash Miniforge3-$(uname)-$(uname -m).sh -b -p $HOME/miniforge3
+$HOME/miniforge3/bin/conda init bash   # 또는 zsh
 source ~/.bashrc
 ```
 
-### 3-2. 채널 설정 — `defaults` 반드시 제거
+### 3-2. 채널 설정 확인
 
 > **중요: 라이센스 문제**  
 > Anaconda 기본 채널(`defaults`)은 상업적 환경에서 유료입니다.  
 > 연구·기관 환경에서는 반드시 `defaults`를 삭제하고 아래 무료 채널만 사용하십시오.
 
 ```bash
-conda config --remove channels defaults
-
-conda config --add channels conda-forge
-conda config --add channels pytorch
-conda config --add channels nvidia
-
-# 확인 (defaults가 없어야 함)
+# Miniforge 는 conda-forge 를 기본 채널로 사용함
 conda config --show channels
-
-# <USER_HOME>/.condarc 파일에서 직접 수정하는 것도 가능
 ```
 
 올바른 출력:
@@ -108,15 +100,14 @@ channels:
 ### 3-3. 가상환경 생성
 
 ```bash
-conda create -n eva python=3.11 -y
+conda create -n eva python=3.11 pip -y
 conda activate eva
 ```
 
 ### 3-4. PyTorch 설치 (CUDA 12.8)
 
 ```bash
-conda install pytorch torchvision torchaudio pytorch-cuda=12.8 \
-    -c pytorch -c nvidia -y
+pip install torch==2.11.0 torchvision --index-url https://download.pytorch.org/whl/cu128
 ```
 
 설치 확인:
@@ -159,8 +150,12 @@ CLIP은 `transformers`가 Hugging Face Hub에서 자동 다운로드합니다.
 ### 언어 모델 (로컬 다운로드 필요)
 
 ```bash
+# Hugging Face - Access Token 을 사용하여 로그인 필요
+hf auth login
+```
+
+```
 # Llama 3.1 8B Instruct (HF 계정 + Meta 라이센스 동의 필요)
-hf login
 hf download meta-llama/Llama-3.1-8B-Instruct \
     --local-dir ~/Llama-3.1-8B-Instruct
 
@@ -262,9 +257,18 @@ data/
 학습 전 모델 구조와 forward pass가 정상인지 확인합니다.
 
 ```bash
-PYTHON=$HOME/miniconda3/envs/eva/bin/python
+PYTHON=$HOME/miniforge3/envs/eva/bin/python
 
-$PYTHON load_test.py                                          # 기본 (CLIP + Llama)
+# 스크립트 파라미터 정의
+$PYTHON load_test.py  \
+    --vision \        # 비전 모델 경로
+    --llm \           # 언어 모델 경로
+    --device \        # CPU, 또는 GPU
+    --dtype \         # 데이터 타입
+    --generate \      # 텍스트 응답 생성 유무
+    --test_image      # 테스트 이미지 경로
+
+# 사용 예시
 $PYTHON load_test.py --generate                               # 텍스트 생성까지
 $PYTHON load_test.py --test_image /path/to/image.png --generate
 ```
@@ -432,8 +436,8 @@ $PYTHON train.py \
     --train_type projector \
     --vision_model openai/clip-vit-large-patch14-336 \
     --llm_model /path/to/Llama-3.1-8B-Instruct \
-    --data_path /path/to/chat.json \
-    --image_dir /path/to/images \
+    --data_path /path/to/LLaVA-CC3M-Pretrain-595K/chat.json \
+    --image_dir /path/to/LLaVA-CC3M-Pretrain-595K/images \
     --output_dir checkpoints/my_projector \
     --num_epochs 1 --batch_size 8 --grad_accum 4
 
@@ -441,8 +445,8 @@ $PYTHON train.py \
 $PYTHON train.py \
     --train_type lora \
     --projector_path checkpoints/my_projector/projector.bin \
-    --data_path /path/to/chat.json \
-    --image_dir /path/to/images \
+    --data_path /path/to/LLaVA-CC3M-Pretrain-595K/chat.json \
+    --image_dir /path/to/LLaVA-CC3M-Pretrain-595K/images \
     --output_dir checkpoints/my_lora \
     --num_epochs 3 --batch_size 4 --lora_r 128 --lora_alpha 256
 
@@ -452,21 +456,21 @@ $PYTHON train.py \
     --projector_path checkpoints/my_lora/projector.bin \
     --resume_lora_path checkpoints/my_lora \
     --data_path data/sds_train_en.json \
-    --image_dir /path/to/SDS/dataset \
+    --image_dir /path/to/SDS/dataset/20260227 \
     --output_dir checkpoints/my_sds_lora \
     --num_epochs 10 --batch_size 1 --grad_accum 2
 ```
 
 주요 `train.py` 인수:
 
-| 인수 | 설명 |
-|------|------|
-| `--train_type` | `projector` / `lora` / `full` |
-| `--projector_path` | Phase 1 결과 projector.bin 경로 |
-| `--resume_lora_path` | 기존 LoRA 디렉토리 (이어받기, Phase 3/4용) |
+| 인수 | 설명                                |
+|------|-----------------------------------|
+| `--train_type` | `projector` / `lora` / `full`     |
+| `--projector_path` | Phase 1 결과 projector.bin 경로       |
+| `--resume_lora_path` | 기존 LoRA 디렉토리 (이어받기, Phase 2/3/4용) |
 | `--lora_r` / `--lora_alpha` | LoRA rank / alpha (기본: 128 / 256) |
-| `--max_steps` | epoch 대신 step 수로 조기 종료 |
-| `--wandb_project` | W&B 프로젝트명 (생략 시 비활성화) |
+| `--max_steps` | epoch 대신 step 수로 조기 종료            |
+| `--wandb_project` | W&B 프로젝트명 (생략 시 비활성화)             |
 
 ---
 
@@ -475,7 +479,7 @@ $PYTHON train.py \
 학습된 체크포인트로 단일 이미지 추론을 실행합니다.
 
 ```bash
-PYTHON=$HOME/miniconda3/envs/eva/bin/python
+PYTHON=$HOME/miniforge3/envs/eva/bin/python
 CKPT="checkpoints/sds_lora_en"
 
 $PYTHON test.py \
