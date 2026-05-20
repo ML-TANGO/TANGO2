@@ -1,5 +1,6 @@
 import os
 import json
+import logging
 import threading
 import traceback
 import uvicorn
@@ -62,13 +63,18 @@ def set_llm_deployment_image():
 #         pass
 
 def init_setting():
-    # 허깅페이스 토큰을 여기에 입력하세요
+    # 허깅페이스 토큰: values_tango2.yaml → jfb-settings ConfigMap → env 로 주입.
+    # offline/nexus 모드에서는 비어 있을 수 있으므로 빈 값이면 login 자체를 스킵한다.
     hf_token = settings.HUGGINGFACE_TOKEN
-    # 토큰 설정 및 저장 (네트워크 미연결 환경에서 검증 실패 허용)
-    try:
-        login(token=hf_token, add_to_git_credential=False)
-    except Exception:
-        pass
+    if hf_token:
+        try:
+            login(token=hf_token, add_to_git_credential=False)
+        except Exception as exc:
+            logging.getLogger(__name__).warning("Hugging Face login failed: %s", exc)
+    else:
+        logging.getLogger(__name__).info(
+            "HUGGINGFACE_TOKEN not set; skipping Hugging Face login (offline mode)"
+        )
     # llm 이미지 세팅
     set_llm_deployment_image()
     # set_download_huggingface_readme()

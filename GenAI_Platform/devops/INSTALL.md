@@ -31,8 +31,11 @@ cp values.yaml.template values_<서버명>.yaml
 # - <INIT_ROOT_PASSWORD>: 초기 루트 비밀번호
 # - <KAFKA_USERNAME>, <KAFKA_PASSWORD>: Kafka 인증 정보
 # - <MONGODB_PASSWORD>: MongoDB 비밀번호
+# - <HUGGINGFACE_TOKEN>: HuggingFace 액세스 토큰 (선택, HF 모델/private repo 사용 시 필수)
 # 기타 TODO 주석이 있는 항목들 확인
 ```
+
+> 📌 **HuggingFace 토큰 (`global.jfb.settings.huggingface.token`)**: HuggingFace 모델/private 레포를 사용할 경우 토큰을 입력합니다. nexus 등 오프라인 환경에서는 빈 값으로 두면 startup 시 HF login을 자동 스킵합니다. 토큰은 ConfigMap `jfb-settings`의 `HUGGINGFACE_TOKEN` 환경변수로 주입되며, 값이 변경되면 `llm_model`/`llm_playground` Pod이 자동 rollout 됩니다 (`checksum/config` annotation 적용).
 
 #### 실행 예
 
