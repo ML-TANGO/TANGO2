@@ -82,12 +82,18 @@ class InfoResponse(BaseModel):
 # ══════════════════════════════════════════════════════════════════════════════
 
 class RunParams(BaseModel):
-    image_base64:       str          = Field(description="base64 인코딩된 PNG/JPG 이미지")
-    ais_rows:           List[AISRow] = Field(description="선박 AIS 데이터 행 목록")
+    image_base64:       str          = Field(
+        description="base64 인코딩된 PNG/JPG 이미지",
+        max_length=7_000_000,
+    )
+    ais_rows:           List[AISRow] = Field(
+        description="선박 AIS 데이터 행 목록",
+        max_length=64,
+    )
     output_type:        OutputType   = "영문 해상상황묘사"
     custom_prompt:      Optional[str] = Field(None, description="직접 지정 프롬프트 (없으면 output_type 기본값 사용)")
-    max_new_tokens:     int           = 512
-    repetition_penalty: float         = 1.1
+    max_new_tokens:     int           = Field(512, ge=1, le=4096)
+    repetition_penalty: float         = Field(1.1, ge=0.1, le=10.0)
     do_sample:          bool          = False
 
 

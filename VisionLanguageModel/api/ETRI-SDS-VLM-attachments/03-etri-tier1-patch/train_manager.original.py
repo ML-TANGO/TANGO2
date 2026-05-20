@@ -14,7 +14,6 @@ import json
 import os
 import re
 import shutil
-import signal
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -69,7 +68,10 @@ class TrainManager:
 
     @property
     def has_running_job(self) -> bool:
-        return self._running_job_id is not None
+        if self._running_job_id is None:
+            return False
+        job = self._jobs.get(self._running_job_id)
+        return job is not None and job.status == "running"
 
     def get_job(self, job_id: str) -> Optional[TrainJob]:
         return self._jobs.get(job_id)
@@ -120,34 +122,24 @@ class TrainManager:
 
         try:
             with open(job.log_path, "w") as log_f:
-                # A3: start_new_session=True — DeepSpeed 자식 프로세스를 새 세션으로
-                # 분리하여 stop() 시 process group 전체에 시그널 전달 가능하게 함
                 process = await asyncio.create_subprocess_exec(
                     *cmd,
                     stdout=log_f,
                     stderr=asyncio.subprocess.STDOUT,
                     cwd=vlm_root,
-                    start_new_session=True,
                 )
                 job._process = process
 
-                # A2: monitor를 별도 task로 실행하고 process 종료 후 cancel.
-                # 기존 gather() 방식은 _monitor_log의 while 루프가 process 종료
-                # 후에도 빠져나오지 못해 gather가 영원히 대기하는 deadlock 발생.
-                monitor_task = asyncio.create_task(self._monitor_log(job))
-                try:
-                    await process.wait()
-                finally:
-                    monitor_task.cancel()
-                    try:
-                        await monitor_task
-                    except asyncio.CancelledError:
-                        pass
+                # 로그 모니터링 태스크와 병렬 실행
+                await asyncio.gather(
+                    process.wait(),
+                    self._monitor_log(job),
+                )
 
             returncode = process.returncode
             if returncode == 0:
                 job.status = "completed"
-                job.current_step = job.total_steps
+                job.progress_pct_value = 100.0
             elif job.status != "stopped":
                 job.status = "failed"
                 job.error  = f"프로세스 종료 코드: {returncode}"
@@ -168,8 +160,7 @@ class TrainManager:
         output_dir: str,
     ) -> list[str]:
         """학습 단계별 CLI 명령을 생성한다."""
-        ds_stage  = params.zero_stage if params.zero_stage in (2, 3) else 2
-        ds_config = os.path.join(vlm_root, "scripts", f"zero{ds_stage}.json")
+        ds_config = os.path.join(vlm_root, "scripts", "zero2.json")
 
         if params.phase == "lora_marine":
             # train_text_lora.py (텍스트 전용, Phase 2b)
@@ -222,8 +213,6 @@ class TrainManager:
                 cmd += ["--lora_alpha", str(params.lora_alpha)]
             if params.max_steps:
                 cmd += ["--max_steps",  str(params.max_steps)]
-            if params.sds_scenario and params.phase == "lora_sds":
-                cmd += ["--sds_scenario", params.sds_scenario]
 
         return cmd
 
@@ -269,13 +258,12 @@ class TrainManager:
         if job.status != "running":
             raise RuntimeError(f"실행 중이 아닌 작업입니다 (status={job.status})")
 
-        if job._process and job._process.pid:
+        if job._process:
             try:
-                # A3: process group 전체에 SIGTERM — DeepSpeed torchrun 자식까지 정리
-                os.killpg(os.getpgid(job._process.pid), signal.SIGTERM)
+                job._process.terminate()
                 await asyncio.sleep(3)
                 if job._process.returncode is None:
-                    os.killpg(os.getpgid(job._process.pid), signal.SIGKILL)
+                    job._process.kill()
             except ProcessLookupError:
                 pass
 

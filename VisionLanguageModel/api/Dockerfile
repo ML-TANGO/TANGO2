@@ -1,6 +1,6 @@
 # ── 에바(Eva) VLM MSA 백엔드 ─────────────────────────────────────────────────
 #
-# 베이스: CUDA 12.4.1 (조나단 파인튜닝 이미지와 동일 CUDA 버전)
+# 베이스: CUDA 12.8.0 / Ubuntu 24.04 / Python 3.12
 # 포트: 8000 (FastAPI/uvicorn)
 #
 # 필수 볼륨 마운트 (Helm Chart values.yaml 참고):
@@ -14,29 +14,38 @@
 #   EVA_DEVICE              cuda:0  (기본값)
 # ─────────────────────────────────────────────────────────────────────────────
 
-FROM nvidia/cuda:12.4.1-devel-ubuntu22.04
+FROM nvidia/cuda:12.8.0-devel-ubuntu24.04
 
 # ── 시스템 패키지 ─────────────────────────────────────────────────────────────
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        python3.11 \
-        python3.11-dev \
+        python3.12 \
+        python3.12-dev \
+        python3.12-venv \
         python3-pip \
-        python3.11-venv \
+        build-essential \
         git \
         curl \
         fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
-# python3 → python3.11 심볼릭 링크
-RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 \
-    && update-alternatives --install /usr/bin/python  python  /usr/bin/python3.11 1
+# python3 / python 심볼릭 링크
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1 \
+    && update-alternatives --install /usr/bin/python  python  /usr/bin/python3.12 1
 
-# ── PyTorch (CUDA 12.4) ───────────────────────────────────────────────────────
+# Ubuntu 24.04 PEP 668 — externally-managed-environment 우회
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
+
+# ── PyTorch (CUDA 12.8) ───────────────────────────────────────────────────────
 RUN pip3 install --no-cache-dir \
-    torch==2.5.1 \
-    torchvision==0.20.1 \
-    --index-url https://download.pytorch.org/whl/cu124
+    torch==2.11.0 \
+    torchvision==0.26.0 \
+    torchaudio==2.11.0 \
+    --index-url https://download.pytorch.org/whl/cu128
+
+# ── flash-attn (소스 빌드, nvcc 12.8 사용) ────────────────────────────────────
+RUN pip3 install --no-cache-dir 'ninja>=1.11' 'packaging>=23.0' \
+    && MAX_JOBS=4 pip3 install --no-cache-dir flash-attn==2.8.3 --no-build-isolation
 
 # ── Python 패키지 ─────────────────────────────────────────────────────────────
 WORKDIR /app
@@ -61,6 +70,7 @@ ENV EVA_VISION_MODEL_NAME=openai/clip-vit-large-patch14-336
 ENV EVA_DEVICE=cuda:0
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
+ENV TORCH_EXTENSIONS_DIR=/tmp/torch_extensions
 
 # HuggingFace 캐시 → NFS 마운트된 경로를 사용하도록 설정 가능
 # (미설정 시 컨테이너 내 /root/.cache/huggingface/ 사용)

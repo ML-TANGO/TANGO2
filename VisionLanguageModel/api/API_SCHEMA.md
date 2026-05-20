@@ -8,13 +8,13 @@
 
 ## 1. 서비스 개요
 
-| 항목 | 내용 |
-|---|---|
-| 서비스명 | `eva-vlm` |
-| 버전 | `1.0.0` |
-| 포트 | `8000` |
-| Ingress 경로 | `/msa/eva-vlm` (플랫폼 담당자와 협의 후 확정) |
-| 베이스 이미지 | `nvidia/cuda:12.4.1-devel-ubuntu22.04` |
+| 항목 | 내용                                     |
+|---|----------------------------------------|
+| 서비스명 | `eva-vlm`                              |
+| 버전 | `1.1.0`                                |
+| 포트 | `8000`                                 |
+| Ingress 경로 | `/msa/eva-vlm` (플랫폼 담당자와 협의 후 확정)      |
+| 베이스 이미지 | `nvidia/cuda:12.8.0-devel-ubuntu24.04` |
 
 ### 전체 엔드포인트 요약
 
@@ -23,9 +23,11 @@
 | `/health` | GET | ✅ 필수 | 서비스·모델 상태 확인 |
 | `/info` | GET | ✅ 필수 | 서비스 메타정보 |
 | `/run` | POST | ✅ 필수 | **추론** — 이미지+AIS → 텍스트 |
-| `/train` | POST | 확장 | **학습 시작** — 비동기, job_id 반환 |
-| `/train/status` | GET | 확장 | **학습 진행 조회** |
-| `/train/stop` | POST | 확장 | **학습 중지** |
+| `/jobs/{job_id}` | GET | ✅ 표준 (E2-A) | **학습 진행 조회** — 플랫폼 표준 URL |
+| `/jobs/{job_id}/cancel` | POST | ✅ 표준 (E2-A) | **학습 중지** — 플랫폼 표준 URL |
+| `/train` | POST | 확장 | **학습 시작** — 비동기, HTTP 202, job_id 반환 |
+| `/train/status` | GET | 확장 (레거시) | 학습 진행 조회 — 하위 호환 유지 |
+| `/train/stop` | POST | 확장 (레거시) | 학습 중지 — 하위 호환 유지 |
 | `/models` | GET | 확장 | **체크포인트 목록** |
 | `/deploy` | POST | 확장 | **배포(체크포인트 전환)** |
 
@@ -207,20 +209,22 @@ SDS-VLM의 학습 파이프라인을 비동기로 실행합니다. 즉시 `job_i
 | `lora_marine` | `train_text_lora.py` | `marine_data_path`, `resume_lora_path` | Phase 3: 해양 텍스트 계속학습 |
 | `lora_sds` | `train.py` | `data_path`, `image_dir`, `projector_path`, `resume_lora_path` | Phase 4: SDS 특화 LoRA |
 
-**Response (성공)**
+**Response (성공, HTTP 202 Accepted)**
 ```json
 {
   "status": "success",
   "result": {
     "job_id": "a1b2c3d4",
-    "message": "Phase 'lora_sds' 학습이 시작됐습니다. GET /train/status?job_id=a1b2c3d4 로 진행 상황을 확인하세요."
+    "message": "Phase 'lora_sds' 학습이 시작됐습니다. GET /jobs/a1b2c3d4 로 진행 상황을 확인하세요."
   }
 }
 ```
 
 ---
 
-### GET /train/status?job_id={job_id} — 학습 진행 조회
+### GET /jobs/{job_id} — 학습 진행 조회 (표준 URL)
+
+조나단 플랫폼 표준 URL입니다. 기존 `/train/status?job_id=` 와 동일한 응답을 반환합니다.
 
 **Response**
 ```json
@@ -242,7 +246,48 @@ SDS-VLM의 학습 파이프라인을 비동기로 실행합니다. 즉시 `job_i
 
 ---
 
-### POST /train/stop?job_id={job_id} — 학습 중지
+### POST /jobs/{job_id}/cancel — 학습 중지 (표준 URL)
+
+조나단 플랫폼 표준 URL입니다. 기존 `/train/stop?job_id=` 와 동일하게 동작합니다.
+
+**Response**
+```json
+{
+  "status": "success",
+  "job_id": "a1b2c3d4",
+  "message": "학습 작업이 중지됐습니다."
+}
+```
+
+---
+
+### GET /train/status?job_id={job_id} — 학습 진행 조회 (레거시)
+
+> **하위 호환 유지용.** 신규 연동은 `GET /jobs/{job_id}` 사용 권장.
+
+**Response**
+```json
+{
+  "job_id": "a1b2c3d4",
+  "status": "running",
+  "phase": "lora_sds",
+  "progress_pct": 42.5,
+  "current_step": 34,
+  "total_steps": 80,
+  "current_loss": 0.3821,
+  "elapsed_sec": 387.2,
+  "output_dir": "/models/checkpoints/sds_lora_ko_compact_v2",
+  "error": null
+}
+```
+
+`status` 값: `"pending"` | `"running"` | `"completed"` | `"failed"` | `"stopped"`
+
+---
+
+### POST /train/stop?job_id={job_id} — 학습 중지 (레거시)
+
+> **하위 호환 유지용.** 신규 연동은 `POST /jobs/{job_id}/cancel` 사용 권장.
 
 **Response**
 ```json
@@ -337,7 +382,7 @@ SDS-VLM의 학습/배포/추론을 조나단 대시보드에서 직접 제어하
 
 | 조나단 UI 화면 | 에바 연동 내용 | 호출 API |
 |---|---|---|
-| 학습 프로젝트 | SDS-VLM 학습 시작/중지/진행률 표시 | `POST /train`, `GET /train/status`, `POST /train/stop` |
+| 학습 프로젝트 | SDS-VLM 학습 시작/중지/진행률 표시 | `POST /train`, `GET /jobs/{job_id}`, `POST /jobs/{job_id}/cancel` |
 | 모델 관리 | 체크포인트 목록 및 현재 활성 모델 표시 | `GET /models` |
 | 배포 | 체크포인트 선택 후 서비스 적용 | `POST /deploy` |
 | 플레이그라운드 | 이미지+AIS 입력 → 추론 결과 | `POST /run` |
@@ -354,7 +399,7 @@ helm install eva-vlm-1 ./helm_chart/ \
   --set metadata.project_id=<프로젝트_ID> \
   --set metadata.pod_name=eva-vlm-1 \
   --set labels.helm_name=eva-vlm-1 \
-  --set backend.image=yvvyee/eva-vlm-backend:1.0.0 \
+  --set backend.image=yvvyee/eva-vlm-backend:1.1.0 \
   --set "backend.env.EVA_LLM_MODEL_PATH=/models/llm/Llama-3.1-8B-Instruct" \
   --set "backend.env.EVA_CHECKPOINT_PATH=/models/checkpoints/sds_lora_ko_compact" \
   --set "backend.env.EVA_CHECKPOINTS_ROOT=/models/checkpoints" \
@@ -364,21 +409,3 @@ helm install eva-vlm-1 ./helm_chart/ \
 ```
 
 ---
-
-## 9. 아크릴 전달 체크리스트
-
-| 항목 | 확인 |
-|---|---|
-| NFS `/nfs/eva/models/llm/` 에 LLM 가중치 업로드 | ☐ |
-| NFS `/nfs/eva/models/checkpoints/` 에 초기 체크포인트 업로드 | ☐ |
-| NFS `/nfs/eva/data/sds/` 에 SDS 학습 데이터 업로드 | ☐ |
-| Docker 이미지 (`yvvyee/eva-vlm-backend:1.0.0`) Docker Hub Push 완료 | ✅ |
-| `values.yaml` `<NFS_SERVER_IP>` 실제 값으로 교체 | ☐ |
-| `service.backend.nodePort` 충돌 확인 | ☐ |
-| `ingress.path` 확정 | ☐ |
-| `helm install` 후 `/health` → `"healthy"` 확인 | ☐ |
-| `/models` 응답에서 체크포인트 목록 확인 | ☐ |
-| `/train` 으로 테스트 학습 실행 및 `/train/status` 확인 | ☐ |
-| `/deploy` 로 체크포인트 전환 확인 | ☐ |
-| `/run` 으로 추론 결과 확인 | ☐ |
-| 조나단 UI 연동 범위 (학습/배포/추론 화면) 아크릴과 협의 | ☐ |

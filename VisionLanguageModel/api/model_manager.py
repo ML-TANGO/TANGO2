@@ -16,13 +16,15 @@ import io
 import os
 import base64
 import sys
+import threading
 import time
 import traceback
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import List, Optional
 
 import torch
-from PIL import Image
+from PIL import Image, ImageOps
 
 from schemas import AISRow, CheckpointInfo
 
@@ -119,6 +121,7 @@ class ModelManager:
         self._llm_model_path:    Optional[str] = None
         self._load_error:        Optional[str] = None
         self._loading:           bool = False
+        self._lock = threading.RLock()  # B3: /run 과 /deploy 동시 호출 직렬화
 
     # ── 상태 조회 ─────────────────────────────────────────────────────────────
 
@@ -153,8 +156,20 @@ class ModelManager:
     def load(self) -> None:
         """환경 변수에 지정된 초기 체크포인트로 모델을 로드한다."""
         self._ensure_vlm_in_path()
+        ckpt_path = os.environ.get("EVA_CHECKPOINT_PATH", "")
+
+        # G1: projector.bin 부재 시 traceback 대신 graceful skip.
+        # 학습 전용 컨테이너처럼 체크포인트가 아직 없는 환경에서도
+        # /train, /health 등 다른 엔드포인트는 정상 동작한다.
+        if not ckpt_path:
+            self._load_error = "EVA_CHECKPOINT_PATH 환경변수가 설정되지 않았습니다."
+            return
+        projector_file = os.path.join(ckpt_path, "projector.bin")
+        if not os.path.exists(projector_file):
+            self._load_error = f"projector.bin 없음 ({projector_file}) — 추론 비활성화"
+            return
+
         llm_path    = os.environ["EVA_LLM_MODEL_PATH"]
-        ckpt_path   = os.environ["EVA_CHECKPOINT_PATH"]
         vision_name = os.environ.get("EVA_VISION_MODEL_NAME", "openai/clip-vit-large-patch14-336")
         device_str  = os.environ.get("EVA_DEVICE", "cuda:0")
         self._load_checkpoint(ckpt_path, vision_name, llm_path, device_str)
@@ -166,14 +181,15 @@ class ModelManager:
         llm_model_path: Optional[str]    = None,
     ) -> None:
         """실행 중에 체크포인트를 전환한다. 기존 모델은 먼저 해제된다."""
-        checkpoints_root = os.environ.get("EVA_CHECKPOINTS_ROOT", "/models/checkpoints")
-        ckpt_path   = os.path.join(checkpoints_root, checkpoint_name)
-        vision_name = vision_model_name or self._vision_model_name or \
-                      os.environ.get("EVA_VISION_MODEL_NAME", "openai/clip-vit-large-patch14-336")
-        llm_path    = llm_model_path or self._llm_model_path or \
-                      os.environ["EVA_LLM_MODEL_PATH"]
-        device_str  = self.device_str or os.environ.get("EVA_DEVICE", "cuda:0")
-        self._load_checkpoint(ckpt_path, vision_name, llm_path, device_str)
+        with self._lock:
+            checkpoints_root = os.environ.get("EVA_CHECKPOINTS_ROOT", "/models/checkpoints")
+            ckpt_path   = os.path.join(checkpoints_root, checkpoint_name)
+            vision_name = vision_model_name or self._vision_model_name or \
+                          os.environ.get("EVA_VISION_MODEL_NAME", "openai/clip-vit-large-patch14-336")
+            llm_path    = llm_model_path or self._llm_model_path or \
+                          os.environ["EVA_LLM_MODEL_PATH"]
+            device_str  = self.device_str or os.environ.get("EVA_DEVICE", "cuda:0")
+            self._load_checkpoint(ckpt_path, vision_name, llm_path, device_str)
 
     def _load_checkpoint(
         self,
@@ -305,52 +321,58 @@ class ModelManager:
         do_sample:          bool  = False,
     ) -> tuple[str, float]:
         """추론 실행. (생성 텍스트, 소요 시간(초)) 반환."""
-        if self._model is None:
-            raise RuntimeError("모델이 로드되지 않았습니다.")
-
+        # B4: decompression bomb 방지 + EXIF orientation 보정 — 모델 락 밖에서 수행
+        Image.MAX_IMAGE_PIXELS = 32_000_000
         img_bytes = base64.b64decode(image_base64)
-        image = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+        image = ImageOps.exif_transpose(
+            Image.open(io.BytesIO(img_bytes))
+        ).convert("RGB")
 
         lang = "en" if "영문" in output_type else "ko"
         ais_text  = format_ais_text(ais_rows, lang=lang)
         question  = custom_prompt.strip() if custom_prompt else PROMPT_MAP.get(output_type, "")
         full_q    = f"{ais_text}\n\n{question}" if ais_text else question
 
-        tokenizer       = self._model.tokenizer
-        image_processor = self._model.vision_encoder.image_processor
+        # B3: /deploy 와의 동시 호출로 인한 CUDA 충돌 방지
+        with self._lock:
+            if self._model is None:
+                raise RuntimeError("모델이 로드되지 않았습니다.")
 
-        messages    = [{"role": "user", "content": f"<image>\n{full_q}"}]
-        prompt_text = tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True,
-        )
+            tokenizer       = self._model.tokenizer
+            image_processor = self._model.vision_encoder.image_processor
 
-        pixel_values = image_processor(images=image, return_tensors="pt").pixel_values
-        pixel_values = pixel_values.to(self._device, dtype=torch.bfloat16)
-
-        input_ids = tokenizer(
-            prompt_text, add_special_tokens=False, return_tensors="pt"
-        ).input_ids.to(self._device)
-        attention_mask = torch.ones_like(input_ids)
-
-        t0 = time.perf_counter()
-        with torch.no_grad():
-            output_ids = self._model.generate(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                pixel_values=pixel_values,
-                max_new_tokens=max_new_tokens,
-                do_sample=do_sample,
-                pad_token_id=tokenizer.pad_token_id,
-                eos_token_id=tokenizer.eos_token_id,
-                repetition_penalty=repetition_penalty,
+            messages    = [{"role": "user", "content": f"<image>\n{full_q}"}]
+            prompt_text = tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True,
             )
-        elapsed = time.perf_counter() - t0
 
-        response = tokenizer.decode(output_ids[0], skip_special_tokens=True)
-        if "</think>" in response:
-            response = response.split("</think>")[-1].strip()
-        elif full_q in response:
-            response = response.split(full_q)[-1].strip()
+            pixel_values = image_processor(images=image, return_tensors="pt").pixel_values
+            pixel_values = pixel_values.to(self._device, dtype=torch.bfloat16)
+
+            input_ids = tokenizer(
+                prompt_text, add_special_tokens=False, return_tensors="pt"
+            ).input_ids.to(self._device)
+            attention_mask = torch.ones_like(input_ids)
+
+            t0 = time.perf_counter()
+            with torch.no_grad():
+                output_ids = self._model.generate(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    pixel_values=pixel_values,
+                    max_new_tokens=max_new_tokens,
+                    do_sample=do_sample,
+                    pad_token_id=tokenizer.pad_token_id,
+                    eos_token_id=tokenizer.eos_token_id,
+                    repetition_penalty=repetition_penalty,
+                )
+            elapsed = time.perf_counter() - t0
+
+            response = tokenizer.decode(output_ids[0], skip_special_tokens=True)
+            if "</think>" in response:
+                response = response.split("</think>")[-1].strip()
+            elif full_q in response:
+                response = response.split(full_q)[-1].strip()
 
         return response, elapsed
 

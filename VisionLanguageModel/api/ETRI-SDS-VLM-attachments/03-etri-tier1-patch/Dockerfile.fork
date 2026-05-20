@@ -1,0 +1,21 @@
+# ── ETRI eva-vlm-backend:1.0.0 Tier-1 patch fork ─────────────────────────────
+# acryl 2026-05-19 — fix three Tier-1 bugs reported in
+# docs/superpowers/reviews/2026-05-12-ETRI-SDS-VLM-API-review.md §11:
+#   #1 flash-attn missing from the requirements (pip install at build time)
+#   #2 train_manager.py:134 _monitor_log deadlock
+#   #3 subprocess child session isolation (start_new_session=True)
+# ─────────────────────────────────────────────────────────────────────────────
+
+FROM docker.io/yvvyee/eva-vlm-backend:1.0.0
+
+# Tier1#1 — flash-attn 2.7.0.post2 builds from source against the base image's
+# torch 2.5.1+cu124. Takes ~5–10 minutes the first build; subsequent layers
+# are cached. Source build needs `ninja` and `packaging`; the base image
+# already ships nvcc 12.4 so no CUDA toolkit install is needed.
+RUN pip install --no-cache-dir 'ninja>=1.11' 'packaging>=23.0' \
+    && pip install --no-cache-dir 'flash-attn==2.7.0.post2' --no-build-isolation
+
+# Tier1#2 + Tier1#3 — overlay the patched train_manager.py over the base image.
+# The diff is preserved at /app/train_manager.patch for auditability.
+COPY train_manager.py /app/train_manager.py
+COPY train_manager.patch /app/train_manager.patch

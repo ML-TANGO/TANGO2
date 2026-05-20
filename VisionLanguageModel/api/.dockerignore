@@ -16,3 +16,5 @@ checkpoints/
 # 대용량 데이터셋
 SDS/
 HDD/
+.omc
+../.omc

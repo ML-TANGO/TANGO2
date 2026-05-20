@@ -2,14 +2,16 @@
 app.py — 에바(Eva) VLM MSA FastAPI 서버 (학습 / 배포 / 추론 통합)
 
 조나단(Jonathan) 플랫폼 MSA 규격 엔드포인트:
-    GET  /health              서비스 상태 확인
-    GET  /info                서비스 메타정보
-    POST /run                 추론 실행 (이미지 + AIS → 텍스트)
+    GET  /health                   서비스 상태 확인
+    GET  /info                     서비스 메타정보
+    POST /run                      추론 실행 (이미지 + AIS → 텍스트)
+    GET  /jobs/{job_id}            학습 작업 상태 조회 (표준 URL, E2-A)
+    POST /jobs/{job_id}/cancel     학습 작업 중지    (표준 URL, E2-A)
 
-에바 확장 엔드포인트 (아크릴과 협의 후 조나단 UI 연동):
-    POST /train               학습 시작 (비동기, job_id 반환)
-    GET  /train/status        학습 진행 상태 조회
-    POST /train/stop          학습 중지
+에바 확장 엔드포인트 (하위 호환 유지):
+    POST /train               학습 시작 (비동기, HTTP 202, job_id 반환)
+    GET  /train/status        학습 진행 상태 조회 (레거시 URL)
+    POST /train/stop          학습 중지           (레거시 URL)
     GET  /models              체크포인트 목록 조회
     POST /deploy              체크포인트 전환 (추론 모델 교체)
 """
@@ -20,7 +22,7 @@ import traceback
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, Query, Request
+from fastapi import FastAPI, HTTPException, Path, Query, Request
 from fastapi.responses import JSONResponse
 
 from model_manager import get_manager, PROMPT_MAP
@@ -47,10 +49,13 @@ async def lifespan(app: FastAPI):
     try:
         print("[Eva] 초기 모델 로드 시작...")
         manager.load()
-        print(
-            f"[Eva] 모델 로드 완료 — device={manager.device_str}, "
-            f"VRAM={manager.vram_used_gb:.1f}GB"
-        )
+        if manager.is_loaded:
+            print(
+                f"[Eva] 모델 로드 완료 — device={manager.device_str}, "
+                f"VRAM={manager.vram_used_gb:.1f}GB"
+            )
+        else:
+            print(f"[Eva] 모델 로드 건너뜀 — {manager.load_error}")
     except Exception:
         print(f"[Eva] 모델 로드 실패 (추론 불가, 다른 엔드포인트는 정상):\n{traceback.format_exc()}")
     yield
@@ -81,23 +86,26 @@ async def global_exception_handler(request: Request, exc: Exception):
 # 조나단 MSA 표준 엔드포인트
 # ════════════════════════════════════════════════════════════════════════════════
 
-@app.get("/health", response_model=HealthResponse, tags=["표준"])
+@app.get("/health", tags=["표준"])
 def health_check():
-    """서비스 및 모델 로드 상태 확인."""
+    """서비스 및 모델 로드 상태 확인. 미준비 시 503 반환(B2)."""
     m = get_manager()
     if m.is_loading:
-        status = "loading"
+        status, http_code = "loading", 503
     elif m.is_loaded:
-        status = "healthy"
+        status, http_code = "healthy", 200
     else:
-        status = "error"
+        status, http_code = "error", 503
 
-    return HealthResponse(
-        status=status,
-        timestamp=datetime.now(timezone.utc).isoformat(),
-        model_loaded=m.is_loaded,
-        device=m.device_str,
-        vram_used_gb=m.vram_used_gb,
+    return JSONResponse(
+        status_code=http_code,
+        content=HealthResponse(
+            status=status,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            model_loaded=m.is_loaded,
+            device=m.device_str,
+            vram_used_gb=m.vram_used_gb,
+        ).model_dump(),
     )
 
 
@@ -179,7 +187,7 @@ def run_inference(body: RunRequest):
 # 에바 확장 — 학습 (Training)
 # ════════════════════════════════════════════════════════════════════════════════
 
-@app.post("/train", response_model=TrainResponse, tags=["학습"])
+@app.post("/train", response_model=TrainResponse, status_code=202, tags=["학습"])
 async def start_training(body: TrainRequest):
     """
     에바 VLM 학습을 비동기로 시작한다.
@@ -190,19 +198,20 @@ async def start_training(body: TrainRequest):
     - `lora_marine` : Phase 2b — 해양 텍스트 계속학습 (이미지 없음)
     - `lora_sds`    : Phase 3 — SDS 도메인 특화 LoRA
 
-    즉시 `job_id`를 반환하며, 진행 상황은 `GET /train/status?job_id=<id>`로 확인한다.
+    즉시 `job_id`를 반환(HTTP 202 Accepted)하며, 진행 상황은
+    `GET /jobs/{job_id}` 또는 `GET /train/status?job_id=<id>`로 확인한다.
     """
     tm = get_train_manager()
     try:
         job_id = await tm.start(body.params)
     except RuntimeError as e:
-        return TrainResponse(
-            status="error", code="RESOURCE_EXHAUSTED", message=str(e)
-        )
+        raise HTTPException(status_code=429, detail={
+            "code": "RESOURCE_EXHAUSTED", "message": str(e)
+        })
     except Exception:
-        return TrainResponse(
-            status="error", code="INTERNAL_ERROR", message=traceback.format_exc()
-        )
+        raise HTTPException(status_code=500, detail={
+            "code": "INTERNAL_ERROR", "message": traceback.format_exc()
+        })
 
     return TrainResponse(
         status="success",
@@ -210,7 +219,7 @@ async def start_training(body: TrainRequest):
             "job_id": job_id,
             "message": (
                 f"Phase '{body.params.phase}' 학습이 시작됐습니다. "
-                f"GET /train/status?job_id={job_id} 로 진행 상황을 확인하세요."
+                f"GET /jobs/{job_id} 로 진행 상황을 확인하세요."
             ),
         },
     )
@@ -222,11 +231,10 @@ def train_status(job_id: str = Query(..., description="학습 job_id")):
     tm  = get_train_manager()
     job = tm.get_job(job_id)
     if job is None:
-        return TrainStatusResponse(
-            job_id=job_id,
-            status="failed",
-            message=f"job_id '{job_id}'를 찾을 수 없습니다.",
-        )
+        raise HTTPException(status_code=404, detail={
+            "code": "JOB_NOT_FOUND",
+            "message": f"job_id '{job_id}'를 찾을 수 없습니다.",
+        })
 
     return TrainStatusResponse(
         job_id=job.job_id,
@@ -249,17 +257,74 @@ async def stop_training(job_id: str = Query(..., description="중지할 학습 j
     try:
         await tm.stop(job_id)
     except KeyError as e:
-        return TrainStopResponse(
-            status="error", message=str(e)
-        )
+        raise HTTPException(status_code=404, detail={
+            "code": "JOB_NOT_FOUND", "message": str(e)
+        })
     except RuntimeError as e:
-        return TrainStopResponse(
-            status="error", job_id=job_id, message=str(e)
-        )
+        raise HTTPException(status_code=409, detail={
+            "code": "INVALID_STATE", "message": str(e)
+        })
     except Exception:
-        return TrainStopResponse(
-            status="error", job_id=job_id, message=traceback.format_exc()
-        )
+        raise HTTPException(status_code=500, detail={
+            "code": "INTERNAL_ERROR", "message": traceback.format_exc()
+        })
+
+    return TrainStopResponse(
+        status="success",
+        job_id=job_id,
+        message="학습 작업이 중지됐습니다.",
+    )
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# 조나단 표준 — 비동기 작업 관리 (플랫폼 URL 규격 E2-A)
+# GET  /jobs/{job_id}         → /train/status 와 동일 (표준 URL)
+# POST /jobs/{job_id}/cancel  → /train/stop   와 동일 (표준 URL)
+# ════════════════════════════════════════════════════════════════════════════════
+
+@app.get("/jobs/{job_id}", response_model=TrainStatusResponse, tags=["표준"])
+def get_job(job_id: str = Path(..., description="학습 job_id")):
+    """학습 작업 상태 조회 — 조나단 플랫폼 표준 URL(/jobs/{job_id})."""
+    tm  = get_train_manager()
+    job = tm.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail={
+            "code": "JOB_NOT_FOUND",
+            "message": f"job_id '{job_id}'를 찾을 수 없습니다.",
+        })
+
+    return TrainStatusResponse(
+        job_id=job.job_id,
+        status=job.status,
+        phase=job.phase,
+        progress_pct=job.progress_pct,
+        current_step=job.current_step,
+        total_steps=job.total_steps if job.total_steps > 0 else None,
+        current_loss=job.current_loss,
+        elapsed_sec=round(job.elapsed_sec, 1) if job.elapsed_sec else None,
+        output_dir=job.output_dir,
+        error=job.error,
+    )
+
+
+@app.post("/jobs/{job_id}/cancel", response_model=TrainStopResponse, tags=["표준"])
+async def cancel_job(job_id: str = Path(..., description="중지할 학습 job_id")):
+    """학습 작업 중지 — 조나단 플랫폼 표준 URL(/jobs/{job_id}/cancel)."""
+    tm = get_train_manager()
+    try:
+        await tm.stop(job_id)
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail={
+            "code": "JOB_NOT_FOUND", "message": str(e)
+        })
+    except RuntimeError as e:
+        raise HTTPException(status_code=409, detail={
+            "code": "INVALID_STATE", "message": str(e)
+        })
+    except Exception:
+        raise HTTPException(status_code=500, detail={
+            "code": "INTERNAL_ERROR", "message": traceback.format_exc()
+        })
 
     return TrainStopResponse(
         status="success",

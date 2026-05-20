@@ -27,7 +27,7 @@ ingress:
 backend:
   enabled: true
 
-  image: "yvvyee/eva-vlm-backend:1.0.0"
+  image: "yvvyee/eva-vlm-backend:1.1.0"
   imagePullPolicy: "IfNotPresent"
 
   port: 8000
