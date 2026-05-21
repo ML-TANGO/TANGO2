@@ -1,0 +1,125 @@
+# TANGO2 GenAI Platform — Error Catalog
+#
+# 외부 컨테이너 인터페이스 v1 (`docs/external-container-spec.md` Section 8) 의 에러 메시지 표준.
+# 사용자에게 표시되는 모든 에러는 4-튜플(problem/cause/fix/docs_url) 구조를 따른다.
+#
+# 사용 흐름:
+#   1. 외부 컨테이너 또는 플랫폼 코드가 `code` 발행 (stdout JSON Lines event 또는 raise)
+#   2. 플랫폼 fb_scheduler / API layer가 본 파일에서 code 매칭
+#   3. UI에 4-튜플 표시
+#
+# 네이밍: `E_` prefix + SCREAMING_SNAKE_CASE
+#
+# 각 SP는 자기 영역의 에러 코드를 본 파일에 추가한다.
+
+schema:
+  version: "1.0"
+  format:
+    description: |
+      <ERROR_CODE>:
+        problem: |
+          사용자가 보는 짧은 문제 설명 (1-2 문장, 한국어)
+        cause: |
+          왜 이 에러가 발생했는지 (1-3 문장, 한국어)
+        fix: |
+          사용자가 할 수 있는 액션 (1-3 줄, 한국어, 번호 매김 권장)
+        docs_url: "선택 — 자세한 가이드 링크"
+        severity: "critical | error | warning"
+
+# ============================================================
+# 외부 컨테이너 lifecycle 공통 에러
+# ============================================================
+errors:
+  E_OOM_DURING_QUANTIZATION:
+    problem: |
+      양자화 중 메모리 부족으로 작업이 중단되었습니다.
+    cause: |
+      선택한 양자화 파라미터가 노드 GPU 메모리를 초과합니다.
+      예: 13B 모델은 Q5_K_M 변환에 최소 24GB GPU 메모리 필요.
+    fix: |
+      1. 더 작은 양자화 파라미터(Q4_K_M) 선택, 또는
+      2. 더 큰 GPU 노드(A100 등)로 워크스페이스 이동, 또는
+      3. 모델을 더 작은 변형(7B)으로 교체
+    docs_url: "https://docs.tango.acryl.ai/quantization/oom"
+    severity: "error"
+
+  E_DATASET_NOT_FOUND:
+    problem: |
+      데이터셋을 찾을 수 없습니다.
+    cause: |
+      JF_DATASET_PATH 경로(/dataset/{NAME})에 데이터셋이 마운트되지 않았습니다.
+      데이터셋 이름이 잘못되었거나 워크스페이스에 등록되지 않은 데이터셋입니다.
+    fix: |
+      1. 워크스페이스의 데이터셋 목록에서 정확한 이름 확인
+      2. UI에서 데이터셋을 다시 선택하여 작업 재시작
+    severity: "error"
+
+  E_MODEL_INCOMPATIBLE:
+    problem: |
+      선택한 컨테이너가 이 모델을 지원하지 않습니다.
+    cause: |
+      외부 컨테이너 manifest의 `capabilities.supported_models`에 이 모델 아키텍처가 포함되지 않았습니다.
+    fix: |
+      1. 다른 컨테이너 선택, 또는
+      2. 컨테이너 제공 협력기관에 해당 모델 지원 요청
+    severity: "error"
+
+  E_PARAMS_INVALID:
+    problem: |
+      입력 파라미터가 잘못되었습니다.
+    cause: |
+      /input/params.json 의 값 형식 또는 범위가 컨테이너가 기대하는 사양과 맞지 않습니다.
+    fix: |
+      1. UI 입력값 다시 확인 (특히 숫자 범위, 모델 ID 형식)
+      2. 컨테이너 manifest의 inputs.params 사양 확인
+    severity: "error"
+
+  E_CONTAINER_STARTUP_TIMEOUT:
+    problem: |
+      컨테이너가 시간 내 준비 상태에 도달하지 못했습니다.
+    cause: |
+      컨테이너가 startupProbe failureThreshold (manifest의 estimated_startup_seconds 기반) 안에
+      /health 200 OK 응답을 반환하지 못했습니다. 모델 로딩이 너무 오래 걸리거나 컨테이너 내부에서 deadlock 발생.
+    fix: |
+      1. 컨테이너 manifest의 estimated_startup_seconds 값을 실제 startup 시간보다 크게 설정
+      2. 컨테이너 로그 확인 (다운로드 실패, OOM 등)
+      3. 더 큰 GPU 메모리 노드로 이동
+    severity: "error"
+
+  E_NETWORK_EGRESS_DENIED:
+    problem: |
+      컨테이너가 외부 네트워크 접근에 실패했습니다.
+    cause: |
+      manifest의 network.egress_whitelist 에 신고하지 않은 외부 도메인 접근 시도.
+      v1은 advisory only이지만 v2 enforce 도입 후 실제로 차단됩니다.
+    fix: |
+      1. 컨테이너 manifest 의 network.egress_whitelist 에 필요한 도메인 추가 후 재제출
+      2. 운영자 검토 게이트 통과 대기
+    severity: "warning"
+
+  E_INFRA_GPU_FAILURE:
+    problem: |
+      GPU 자원 할당 또는 동작 실패.
+    cause: |
+      클러스터 GPU 노드에 일시적 문제 발생 (드라이버 / NVML / NVIDIA device plugin 이슈).
+    fix: |
+      1. 잠시 후 작업 재시작
+      2. 지속 발생 시 운영팀에 문의
+    severity: "error"
+
+  E_USER_CANCELLED:
+    problem: |
+      사용자가 작업을 취소했습니다.
+    cause: |
+      UI에서 cancel 버튼 또는 SIGINT(130) 종료 코드.
+    fix: |
+      취소된 작업입니다. 다시 시작하려면 같은 설정으로 재실행하세요.
+    severity: "warning"
+
+# ============================================================
+# 카테고리별 에러는 각 SP가 추가:
+#   SP-3 (LLaVA): E_LLAVA_*
+#   SP-4 (양자화/포팅): E_QUANT_*, E_PORTING_*
+#   SP-5 (평가): E_EVAL_*
+#   SP-9 (라벨링): E_LABEL_*
+# ============================================================

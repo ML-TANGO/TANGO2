@@ -153,6 +153,15 @@ JF_INGRESS_MANAGEMENT_SVC_HOST = os.getenv('JFB_APP_INGRESS_MANAGEMENT_SVC_SERVI
 JF_INGRESS_MANAGEMENT_SVC_PORT = os.getenv('JFB_APP_INGRESS_MANAGEMENT_SVC_SERVICE_PORT', None)
 JF_INGRESS_MANAGEMENT_DNS = f"{JF_INGRESS_MANAGEMENT_SVC_HOST}:{JF_INGRESS_MANAGEMENT_SVC_PORT}"
 
+# [EXTERNAL CONTAINER]
+# fb_external_container service (SP-Ext.2) — domain BFFs route partner
+# container traffic here. Default points at the in-cluster ClusterIP; set
+# explicitly to override per environment.
+FB_EXTERNAL_CONTAINER_URL = os.getenv(
+    'FB_EXTERNAL_CONTAINER_URL',
+    'http://fb-external-container.jonathan-system.svc.cluster.local:8000',
+)
+
 # [KAFKA]
 JF_KAFKA_DNS = os.getenv('JF_KAFKA_DNS', None)
 

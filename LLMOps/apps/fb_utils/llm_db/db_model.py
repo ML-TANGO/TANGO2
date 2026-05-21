@@ -115,6 +115,7 @@ async def get_model(model_id : int) -> dict:
         m.latest_fine_tuning_status,
         m.latest_commit_id,
         m.commit_status, m.pod_count, m.instance_count,
+        m.training_type, m.external_manifest_name, m.external_manifest_version, m.external_job_id,
         DATE_FORMAT(m.create_datetime, %s) AS create_datetime,
         DATE_FORMAT(m.update_datetime, %s) AS update_datetime,
         DATE_FORMAT(m.start_datetime, %s) AS start_datetime,
@@ -503,6 +504,22 @@ def update_model_commit_status_sync(commit_status : str, model_id : int):
     except:
         traceback.print_exc()
         return False
+
+async def update_model_external_job(model_id : int, external_job_id : str) -> int:
+    """Bind a partner-container job_id onto an external training_type model.
+
+    Called from service.bind_external_job right after the BFF returns a
+    fresh job_id from POST /api/external/jobs. Idempotent: always overwrites
+    the latest job_id (재학습 시 새 job_id 로 교체).
+    """
+    sql = """
+        UPDATE model
+        SET external_job_id = %s
+        WHERE id = %s AND training_type = 'external'
+    """
+    res = await commit_query(query=sql, params=(external_job_id, model_id))
+    return res
+
 
 async def update_model_commit_status(commit_status : str, model_id : int, latest_commit_id : int, commit_type : str):
     sql = "UPDATE model SET commit_status = %s, latest_commit_id = %s, commit_type = %s WHERE id = %s"
