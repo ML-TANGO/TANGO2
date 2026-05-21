@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.global.jfb.name.external_container }}
+  namespace: {{ .Values.global.jfb.namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.global.jfb.name.external_container }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.global.jfb.name.external_container }}
+        {{- include "lib.label.jfb" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ include "lib.lookup.settings" . }}
+        acryl.ai/appType: system
+    spec:
+      nodeSelector:
+      {{- include "lib.nodeSelector.manage" . | nindent 8 }}
+      {{- if .Values.global.jfb.image.pullSecrets.enabled }}
+      imagePullSecrets:
+      - name: {{ .Values.global.jfb.image.pullSecrets.name }}
+      {{- end }}
+      containers:
+      - name: {{ .Values.global.jfb.name.external_container }}
+        # Local nerdctl --namespace=k8s.io build — IfNotPresent so we don't
+        # bypass the cache by trying to pull from Docker Hub.
+        image: {{ .Values.global.jfb.image.external_container }}
+        imagePullPolicy: {{ .Values.global.jfb.image.pullPolicy }}
+        command: ["/bin/bash", "-c"]
+        args: ["cd /app; ./run.sh"]
+        # Inline probes — commonlib's _probe.tpl is per-app hard-coded and
+        # doesn't yet have an external_container branch. /health/ is FastAPI
+        # router prefix; the inner endpoint is GET /health/.
+        readinessProbe:
+          httpGet:
+            path: /health/
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /health/
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          limits:
+            cpu: "0.5"
+            memory: "512M"
+          requests:
+            cpu: "0.1"
+            memory: "128M"
+        ports:
+        - containerPort: 8000
+        envFrom:
+        - configMapRef:
+            name: jfb-settings
+        volumeMounts:
+        {{- include "lib.volume.volumeMounts" (dict "name" "jf-src" "enabled" .Values.global.jfb.volume.src.enabled) | nindent 8 }}
+      volumes:
+      {{- include "lib.volume.claim" (dict "name" "jf-src" "app" "external-container" "enabled" .Values.global.jfb.volume.src.enabled) | nindent 6 }}

@@ -1,0 +1,6 @@
+dependencies:
+- name: commonlib
+  repository: file://../../fb_common_lib/helm
+  version: 0.1.0
+digest: sha256:1abb35f0f07e99caed95fba987fb288c3baefa1ea5eb4c1f536311a3d194576a
+generated: "2026-05-19T02:26:44.537942354Z"

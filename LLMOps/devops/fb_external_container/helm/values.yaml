@@ -1,0 +1,31 @@
+# fb_external_container service deployment values.
+# Per-environment overrides come from devops/values_<env>.yaml (gitignored)
+# via `devops/run.sh install -f ./values_tango2.yaml`.
+
+global:
+  jfb:
+    namespace: jonathan-system
+
+    image:
+      # Image is built locally with `cd apps && nerdctl --namespace=k8s.io
+      # build` and lands in containerd's k8s.io namespace. Pull policy is
+      # therefore IfNotPresent so we don't try to fetch from a registry the
+      # operator hasn't pushed to yet.
+      external_container: acrylaaai/genai-platform-external_container_app:tango_v2.0.1
+      pullPolicy: IfNotPresent
+      pullSecrets:
+        enabled: false
+        name: ""
+
+    name:
+      external_container: jfb-app-external-container
+
+    dir:
+      external_container: fb_external_container
+
+    volume:
+      src:
+        enabled: true
+        type: nfs
+        path: /jp/apps
+        server: ""
