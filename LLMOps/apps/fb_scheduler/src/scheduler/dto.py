@@ -1,5 +1,5 @@
-from pydantic import BaseModel, Field, validator, StrictStr
-from typing import Optional, List, Union
+from pydantic import BaseModel, ConfigDict, Field, validator, StrictStr
+from typing import Dict, Optional, List, Union
 import utils.HELP as HELP
 from utils import PATH
 from utils.TYPE import TRAINING_ITEM_A, TRAINING_ITEM_B, TRAINING_ITEM_C, PROJECT_TYPE, DEPLOYMENT_TYPE, PROJECT_POD_HOSTNAME, PROJECT_TYPE_A, PROJECT_TYPE_B, PROJECT_TYPE_C, DEPLOYMENT_TYPE_CUSTOM
@@ -295,5 +295,155 @@ class FineTuningParam(BaseModel):
     zero_stage : Optional[int] = Field(default=1, description='DeepSpeed ZeRO stage: 1, 2, 3')
 
 
+#==========================================================================
+# External container (SP-1 v2)
+# 1:1 mapping with apps/fb_scheduler/helm_chart/external_container/values.yaml
+# Field-level shape comes from apps/fb_external_container/src/manifest/schema.py
+# — kept as a separate DTO here so fb_scheduler stays decoupled from the
+# external-container service codebase.
+#==========================================================================
+
+class ExternalManifestMeta(BaseModel):
+    name: str
+    version: str
+    provider: str = ""
+    service_family: str = ""
+    contract_version: str = ""
+
+
+class ExternalResources(BaseModel):
+    cpu: str
+    memory: str
+    gpu: int = 0
+    gpu_memory: str = ""
+
+
+class ExternalInputDataset(BaseModel):
+    name: str = ""
+    access: str = ""
+
+
+class ExternalInputNamed(BaseModel):
+    name: str = ""
+
+
+class ExternalInputs(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    dataset: ExternalInputDataset = Field(default_factory=ExternalInputDataset)
+    base_model: ExternalInputNamed = Field(default_factory=ExternalInputNamed)
+    built_in_checkpoint: ExternalInputNamed = Field(default_factory=ExternalInputNamed)
+    # JSON string written to /input/params.json via ConfigMap. Empty string
+    # means "no params" — chart still mounts an empty file for path stability.
+    params_json: str = "{}"
+
+
+class ExternalEndpoints(BaseModel):
+    info: str = "/info"
+    health: str = "/health"
+    live: str = ""
+    run: str = "/run"
+    jobs: str = ""
+    cancel: str = ""
+
+
+class ExternalCapabilities(BaseModel):
+    estimated_startup_seconds: int = 300
+    estimated_duration_seconds: int = 0
+    timeout_seconds: int = 0
+
+
+class ExternalSecurityContext(BaseModel):
+    # SP-1 v2 §7.1 defaults. Override during mock validation for partner images
+    # that aren't yet non-root ready.
+    runAsNonRoot: bool = True
+    runAsUser: int = 1000
+    runAsGroup: int = 1000
+    allowPrivilegeEscalation: bool = False
+    readOnlyRootFilesystem: bool = True
+    dropAllCapabilities: bool = True
+
+
+class ExternalIngress(BaseModel):
+    enabled: bool = False
+    className: str = "jonathan-kong"
+    path_prefix: str = "/msa"
+
+
+class ExternalJFEnv(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    JF_HOME: str = "/root/project"
+    JF_HOST: str = ""
+    JF_ITEM_ID: str = ""
+    JF_POD_NAME: str = ""
+    JF_TOTAL_GPU: int = 0
+    JF_MODEL_PATH: str = "/model"
+    JF_MODEL_NAME: str = ""
+    JF_DATASET_PATH: str = "/dataset"
+    JF_DATASET_NAME: str = ""
+    JF_BUILT_IN_CHECKPOINT_PATH: str = "/built_in_checkpoint"
+    JF_INPUT_PATH: str = "/input"
+    JF_OUTPUT_PATH: str = "/output"
+    JF_JOB_TYPE: str = ""
+    JF_EXECUTION_MODE: str = ""
+    JF_PARAMS_PATH: str = "/input/params.json"
+    JF_PORT: str = "8000"
+    JF_HUGGINGFACE_TOKEN: str = ""
+
+
+class ExternalPodInfo(BaseModel):
+    # Identity & K8s placement
+    namespace: str
+    pod_name: str
+    helm_release: str
+    terminationGracePeriodSeconds: int = 60
+
+    # Manifest provenance (label-only)
+    manifest: ExternalManifestMeta
+
+    # Image
+    image: str
+    image_digest: str = ""
+    imagePullPolicy: str = "IfNotPresent"
+
+    # Classification (mirrors manifest.spec)
+    job_type: str
+    execution_mode: str
+    port: int = 8000
+    workspace_scope: str = "per-workspace"
+
+    # Resources & node placement
+    resources: ExternalResources
+    node_name: str = ""
+    gpu_uuids: str = ""
+    cpu_instance_name: str = ""
+
+    # Workspace inputs
+    inputs: ExternalInputs = Field(default_factory=ExternalInputs)
+
+    # HTTP endpoints (sync/async only)
+    endpoints: ExternalEndpoints = Field(default_factory=ExternalEndpoints)
+
+    # Capability declaration
+    capabilities: ExternalCapabilities = Field(default_factory=ExternalCapabilities)
+
+    # SP-1 v2 §7.1 hardening
+    securityContext: ExternalSecurityContext = Field(default_factory=ExternalSecurityContext)
+
+    # Sync-only Kong ingress
+    ingress: ExternalIngress = Field(default_factory=ExternalIngress)
+
+    # Labels merged onto the pod
+    labels: Dict[str, str] = Field(default_factory=dict)
+
+    # Partner-defined env extras (EVA_LLM_MODEL_PATH, etc.)
+    env: Dict[str, str] = Field(default_factory=dict)
+
+    # Manifest.secrets.required values (injected via helm --set spec.containers.env.*)
+    secrets: Dict[str, str] = Field(default_factory=dict)
+
+    # Platform metadata env (JF_*)
+    jf_env: ExternalJFEnv = Field(default_factory=ExternalJFEnv)
 
 

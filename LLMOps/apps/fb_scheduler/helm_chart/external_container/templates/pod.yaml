@@ -1,0 +1,249 @@
+{{- /*
+  external-container/templates/pod.yaml
+
+  Spec: docs/external-container-spec.md (SP-1 v2)
+
+  - kind: Pod + restartPolicy: Never matches fb_scheduler/fine_tuning pattern.
+    Inference pods (sync) are also Never; lifecycle (relaunch on crash) is
+    fb_scheduler's responsibility, not kubelet's.
+  - securityContext defaults to SP-1 v2 §7.1 (non-root, readOnlyRootFilesystem,
+    drop ALL capabilities). values.yaml exposes an override for mock work
+    while partner images mature.
+  - probes follow §5.2 — startupProbe absorbs cold-start, readinessProbe
+    gates traffic, livenessProbe only kicks in after startup completes.
+*/ -}}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ .Values.pod_name }}
+  namespace: {{ .Values.namespace }}
+  annotations:
+    acryl.ai/appType: user
+    acryl.ai/manifest-name: {{ .Values.manifest.name | quote }}
+    acryl.ai/manifest-version: {{ .Values.manifest.version | quote }}
+    acryl.ai/provider: {{ .Values.manifest.provider | quote }}
+    acryl.ai/service-family: {{ .Values.manifest.service_family | quote }}
+    acryl.ai/contract-version: {{ .Values.manifest.contract_version | quote }}
+  labels:
+    role: jfb-external-container
+    job_type: {{ .Values.job_type | quote }}
+    execution_mode: {{ .Values.execution_mode | quote }}
+    manifest_name: {{ .Values.manifest.name | quote }}
+    service_family: {{ .Values.manifest.service_family | quote }}
+    # SP-Ext review HIGH #C3: a per-release identifier so the Service
+    # selector below targets exactly this pod, never a sibling job's pod
+    # sharing the same manifest_name in the same namespace.
+    helm_release: {{ .Values.helm_release | quote }}
+    {{- range $key, $val := .Values.labels }}
+    {{ $key }}: {{ $val | quote }}
+    {{- end }}
+spec:
+  restartPolicy: Never
+  {{- if .Values.node_name }}
+  nodeName: {{ .Values.node_name }}
+  {{- end }}
+  {{- if .Values.cpu_instance_name }}
+  nodeSelector:
+    jfb/cpu-instance.name: {{ .Values.cpu_instance_name }}
+  {{- end }}
+  terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+  containers:
+  - name: external-container
+    {{- if .Values.image_digest }}
+    image: "{{ .Values.image }}@{{ .Values.image_digest }}"
+    {{- else }}
+    image: {{ .Values.image | quote }}
+    {{- end }}
+    imagePullPolicy: {{ .Values.imagePullPolicy | quote }}
+    {{- if and .Values.ingress.enabled (eq .Values.execution_mode "sync") }}
+    # When the partner pod is exposed through Kong at /msa/<name>, override
+    # the default uvicorn args so FastAPI knows about its root_path. Without
+    # this, the rendered Swagger UI references an absolute `/openapi.json`
+    # URL and `Try it out` lands on the wrong (or nonexistent) endpoint.
+    # Args mirror ETRI's eva-vlm-backend default Cmd, with --root-path added.
+    args:
+    - uvicorn
+    - app:app
+    - --host
+    - 0.0.0.0
+    - --port
+    - {{ .Values.port | quote }}
+    - --timeout-keep-alive
+    - "300"
+    - --root-path
+    - {{ printf "%s/%s" .Values.ingress.path_prefix .Values.manifest.name | quote }}
+    {{- end }}
+    {{- if ne .Values.execution_mode "batch" }}
+    ports:
+    - name: http
+      containerPort: {{ .Values.port }}
+      protocol: TCP
+    {{- end }}
+    env:
+    # ── Distributed env (PyTorch / DeepSpeed env-based init) ─────────────
+    # GPU 개수가 1 일 때는 정확히 작동. multi-GPU 학습은 partner container 가
+    # `deepspeed/torchrun` launcher 로 N process 띄워야 하며, 그 때 launcher
+    # 가 env 를 process 별로 override 한다. 우리는 default env 만 깔아둠 —
+    # launcher 없이 호출되는 partner 가 DeepSpeed 의 mpi_discovery fallback
+    # 으로 빠지지 않도록 하기 위함.
+    - name: RANK
+      value: "0"
+    - name: WORLD_SIZE
+      value: {{ .Values.resources.gpu | default 1 | quote }}
+    - name: LOCAL_RANK
+      value: "0"
+    - name: LOCAL_WORLD_SIZE
+      value: {{ .Values.resources.gpu | default 1 | quote }}
+    - name: MASTER_ADDR
+      value: "localhost"
+    - name: MASTER_PORT
+      value: "29500"
+    # ── Platform metadata (JF_*) ─────────────────────────────────────────
+    {{- range $key, $val := .Values.jf_env }}
+    {{- if ne (toString $val) "" }}
+    - name: {{ $key }}
+      value: {{ $val | quote }}
+    {{- end }}
+    {{- end }}
+    # ── Partner-defined extras (EVA_*, etc.) ─────────────────────────────
+    {{- range $key, $val := .Values.env }}
+    - name: {{ $key }}
+      value: {{ $val | quote }}
+    {{- end }}
+    # ── Secrets declared via manifest.secrets.required ───────────────────
+    # Values come from helm --set spec.containers.env.{NAME}=...
+    {{- range $key, $val := .Values.secrets }}
+    - name: {{ $key }}
+      value: {{ $val | quote }}
+    {{- end }}
+    {{- if .Values.gpu_uuids }}
+    - name: NVIDIA_VISIBLE_DEVICES
+      value: {{ .Values.gpu_uuids | quote }}
+    {{- end }}
+    resources:
+      limits:
+        cpu: {{ .Values.resources.cpu | quote }}
+        memory: {{ .Values.resources.memory | quote }}
+        {{- if gt (int .Values.resources.gpu) 0 }}
+        nvidia.com/gpu: {{ .Values.resources.gpu }}
+        {{- end }}
+      requests:
+        cpu: {{ .Values.resources.cpu | quote }}
+        memory: {{ .Values.resources.memory | quote }}
+        {{- if gt (int .Values.resources.gpu) 0 }}
+        nvidia.com/gpu: {{ .Values.resources.gpu }}
+        {{- end }}
+    securityContext:
+      runAsNonRoot: {{ .Values.securityContext.runAsNonRoot }}
+      {{- if .Values.securityContext.runAsNonRoot }}
+      runAsUser: {{ .Values.securityContext.runAsUser }}
+      runAsGroup: {{ .Values.securityContext.runAsGroup }}
+      {{- end }}
+      allowPrivilegeEscalation: {{ .Values.securityContext.allowPrivilegeEscalation }}
+      readOnlyRootFilesystem: {{ .Values.securityContext.readOnlyRootFilesystem }}
+      {{- if .Values.securityContext.dropAllCapabilities }}
+      capabilities:
+        drop:
+        - ALL
+      {{- end }}
+    {{- if ne .Values.execution_mode "batch" }}
+    # SP-1 v2 §5.2 probe semantics — separate /health (readiness) and /live
+    # (liveness), startupProbe absorbs cold-start so liveness doesn't loop.
+    startupProbe:
+      httpGet:
+        path: {{ .Values.endpoints.health | quote }}
+        port: {{ .Values.port }}
+      failureThreshold: {{ div (int .Values.capabilities.estimated_startup_seconds) 5 | default 60 }}
+      periodSeconds: 5
+    readinessProbe:
+      httpGet:
+        path: {{ .Values.endpoints.health | quote }}
+        port: {{ .Values.port }}
+      periodSeconds: 10
+      failureThreshold: 3
+    # livenessProbe 는 endpoints.live 가 있으면 거기, 없으면 endpoints.health
+    # 로 fallback. ETRI v1.0.0 (eva-vlm-infer) 처럼 /live 를 안 만든 partner
+    # 가 livenessProbe 404 로 SIGTERM 받아 sync pod 가 idle 상태에서 죽는 것
+    # 방어. /health 가 model_loaded 와 무관하게 200 응답하는 partner 면 충분.
+    livenessProbe:
+      httpGet:
+        path: {{ .Values.endpoints.live | default .Values.endpoints.health | quote }}
+        port: {{ .Values.port }}
+      periodSeconds: 30
+      failureThreshold: 3
+      initialDelaySeconds: {{ add (int .Values.capabilities.estimated_startup_seconds) 60 }}
+    {{- end }}
+    volumeMounts:
+    # /dataset/{name} — RO, subPath isolation per workspace ACL
+    {{- if .Values.inputs.dataset.name }}
+    - name: jf-data
+      mountPath: /dataset/{{ .Values.inputs.dataset.name }}
+      subPath: "{{ .Values.inputs.dataset.access }}/{{ .Values.inputs.dataset.name }}"
+      readOnly: true
+    {{- end }}
+    # /model — RW workspace model checkpoint (train/batch only)
+    {{- if and .Values.inputs.base_model.name (ne .Values.job_type "infer") }}
+    - name: jf-main
+      mountPath: /model
+      subPath: models/{{ .Values.inputs.base_model.name }}/latest_checkpoint
+    {{- end }}
+    # /models/checkpoints — infer only — commit_models RO mount.
+    # ETRI EVA_CHECKPOINTS_ROOT default 는 /models/checkpoints. 학습 종료 후
+    # commit_external_artifacts 가 결과를 models/<base_model>/commit_models/<name>/
+    # 로 옮기니, infer pod 의 ckpt_path = /models/checkpoints/<name> 이 그 path
+    # 에 자동 매핑되도록 subPath 를 commit_models 디렉토리로 mount.
+    {{- if and (eq .Values.job_type "infer") .Values.inputs.base_model.name }}
+    - name: jf-main
+      mountPath: /models/checkpoints
+      subPath: models/{{ .Values.inputs.base_model.name }}/commit_models
+      readOnly: true
+    {{- end }}
+    # /built_in_checkpoint — RO platform checkpoint cache
+    {{- if .Values.inputs.built_in_checkpoint.name }}
+    - name: jf-main
+      mountPath: /built_in_checkpoint
+      subPath: built_in_checkpoint/{{ .Values.inputs.built_in_checkpoint.name }}
+      readOnly: true
+    {{- end }}
+    # /input — RO, /input/params.json comes from configmap
+    - name: input-config
+      mountPath: /input
+      readOnly: true
+    # /output — RW, partner artifacts (model / metrics / dataset / logs)
+    - name: jf-main
+      mountPath: /output
+      subPath: jobs/{{ .Values.jf_env.JF_ITEM_ID }}/output
+    # /logs — RW, TensorBoard events etc.
+    - name: jf-main
+      mountPath: /logs
+      subPath: jobs/{{ .Values.jf_env.JF_ITEM_ID }}/logs
+    # /tmp — writable scratch (readOnlyRootFilesystem-safe)
+    - name: scratch
+      mountPath: /tmp
+    # /hf-cache — RO HuggingFace model cache (cluster-wide shared NFS).
+    # operator 가 `huggingface-cli download` 로 미리 받은 모델이 여기에 들어있고,
+    # manifest 의 spec.env 가 HF_HOME=/hf-cache 등을 설정하면 transformers 가
+    # 외부망 없이 cache hit 으로 LLM/projector/checkpoint 를 load 한다.
+    # Internal LLM 의 workspace/models/ 영역과 완전히 분리됨.
+    - name: hf-model-cache
+      mountPath: /hf-cache
+      readOnly: true
+  volumes:
+  - name: jf-main
+    persistentVolumeClaim:
+      claimName: {{ .Values.namespace }}-main-pvc
+  - name: jf-data
+    persistentVolumeClaim:
+      claimName: {{ .Values.namespace }}-data-pvc
+  - name: input-config
+    configMap:
+      name: {{ .Values.pod_name }}-input
+      items:
+      - key: params.json
+        path: params.json
+  - name: scratch
+    emptyDir:
+      sizeLimit: 4Gi
+  - name: hf-model-cache
+    persistentVolumeClaim:
+      claimName: hf-model-cache-pvc

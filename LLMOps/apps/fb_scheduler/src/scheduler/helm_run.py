@@ -597,7 +597,7 @@ def delete_helm_fine_tuning(model_id : int, workspace_id : int):
         os.chdir("/app/helm_chart/")
         namespace = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=workspace_id)
         command=f"helm uninstall {TYPE.FINE_TUNING_REPO_NAME.format(model_id)} -n {namespace}"
-        
+
         print(command)
         result = subprocess.run(
             command,
@@ -616,6 +616,41 @@ def delete_helm_fine_tuning(model_id : int, workspace_id : int):
         print(err_msg)
         print(command)
         return False ,err_msg
+
+
+def delete_helm_external(helm_release: str, namespace: str):
+    """Uninstall the helm release created by `external_run.create_external_pod`.
+
+    `namespace` is passed in rather than derived from a workspace_id because
+    SP-1 v2 allows `workspace_scope: shared` manifests to live outside the
+    standard `WORKSPACE_NAMESPACE.format(...)` pattern (cluster-wide hub
+    services etc.). Caller is responsible for matching the namespace used at
+    install time.
+    """
+    command = ""
+    try:
+        os.chdir("/app/helm_chart/")
+        command = f"helm uninstall {helm_release} -n {namespace}"
+
+        print(command)
+        result = subprocess.run(
+            command,
+            shell=True,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        return 1, result.stdout
+    except subprocess.CalledProcessError as e:
+        err_msg = (e.stderr or "").strip()
+        # Already gone — treat as success so cleanup is idempotent.
+        if "release: not found" in err_msg or "uninstalled" in err_msg:
+            return True, ""
+        print(e.stdout)
+        print(err_msg)
+        print(command)
+        return False, err_msg
 
 
 def install_deployment_llm(pod_info):

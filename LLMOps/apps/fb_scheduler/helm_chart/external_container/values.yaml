@@ -1,0 +1,114 @@
+# external-container chart values
+# All keys are placeholders — fb_scheduler/src/scheduler/external_run.py fills
+# them via helm --set / --set-json from the registered manifest + workspace
+# context.
+#
+# Shape mirrors apps/fb_external_container/src/manifest/schema.py.
+
+namespace: ""
+pod_name: ""
+helm_release: ""
+terminationGracePeriodSeconds: 60
+
+manifest:
+  name: ""
+  version: ""
+  provider: ""
+  service_family: ""
+  contract_version: ""
+
+# Container image (digest preferred — set image_digest to substitute image@sha256:...)
+image: ""
+image_digest: ""
+imagePullPolicy: IfNotPresent
+
+job_type: ""           # train | evaluate | preprocess | convert | infer
+execution_mode: ""     # sync | async | batch
+port: 8000
+workspace_scope: per-workspace
+
+# Resource request/limit. CPU/memory follow K8s quantity format; the
+# schema validator at registration time already enforces this.
+resources:
+  cpu: ""
+  memory: ""
+  gpu: 0
+  gpu_memory: ""
+
+# Node placement
+node_name: ""
+gpu_uuids: ""           # NVIDIA_VISIBLE_DEVICES — comma separated UUIDs
+cpu_instance_name: ""   # set to land on a CPU-only pool
+
+# Workspace inputs — names map to subPath under the workspace PVC.
+inputs:
+  dataset:
+    name: ""
+    access: ""          # owner / shared / public — workspace ACL bucket
+  base_model:
+    name: ""
+  built_in_checkpoint:
+    name: ""            # optional — /built_in_checkpoint mount
+  # /input/params.json content. ConfigMap-backed for provenance.
+  params_json: "{}"
+
+# HTTP endpoints — sync/async only. probe paths come from health/live.
+endpoints:
+  info: /info
+  health: /health
+  live: ""              # optional separate liveness path
+  run: /run
+  jobs: ""              # async only
+  cancel: ""            # async only
+
+capabilities:
+  estimated_startup_seconds: 300
+  estimated_duration_seconds: 0
+  timeout_seconds: 0    # 0 means use estimated_duration_seconds * 3
+
+# SP-1 v2 §7.1 defaults — opt-out via --set securityContext.runAsNonRoot=false
+# during mock validation if the partner image isn't yet non-root ready.
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  dropAllCapabilities: true
+
+# Ingress — sync mode only. async/batch keep service ClusterIP internal-only.
+ingress:
+  enabled: false
+  className: jonathan-kong
+  path_prefix: /msa     # full path becomes /msa/{manifest.name}
+
+# Labels merged onto the pod (acryl.ai/appType: user is always added).
+labels: {}
+
+# Partner-defined extra env (EVA_LLM_MODEL_PATH, EVA_CHECKPOINTS_ROOT, ...).
+env: {}
+
+# Secrets — declared in manifest.secrets.required, value injected at launch
+# time via --set spec.containers.env.{NAME}={VALUE}. Same env shape as `env`,
+# kept separate so values flow through a logged-redacted path.
+secrets: {}
+
+# Platform metadata env (JF_*) — fb_scheduler fills these per launch.
+jf_env:
+  JF_HOME: /root/project
+  JF_HOST: ""
+  JF_ITEM_ID: ""
+  JF_POD_NAME: ""
+  JF_TOTAL_GPU: 0
+  JF_MODEL_PATH: /model
+  JF_MODEL_NAME: ""
+  JF_DATASET_PATH: /dataset
+  JF_DATASET_NAME: ""
+  JF_BUILT_IN_CHECKPOINT_PATH: /built_in_checkpoint
+  JF_INPUT_PATH: /input
+  JF_OUTPUT_PATH: /output
+  JF_JOB_TYPE: ""
+  JF_EXECUTION_MODE: ""
+  JF_PARAMS_PATH: /input/params.json
+  JF_PORT: "8000"
+  JF_HUGGINGFACE_TOKEN: ""

@@ -1,0 +1,33 @@
+{{- /*
+  ClusterIP service for HTTP partner containers. batch mode skips this —
+  no HTTP endpoint to expose. async/sync both get ClusterIP; sync also gets
+  Ingress via templates/ingress.yaml when ingress.enabled=true.
+*/ -}}
+{{- if ne .Values.execution_mode "batch" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.pod_name }}-svc
+  namespace: {{ .Values.namespace }}
+  labels:
+    role: jfb-external-container
+    manifest_name: {{ .Values.manifest.name | quote }}
+    service_family: {{ .Values.manifest.service_family | quote }}
+spec:
+  type: ClusterIP
+  selector:
+    # SP-Ext review HIGH #C3: select by helm_release so each job's Service
+    # routes only to that job's pod, even when two releases of the same
+    # manifest_name coexist in one namespace.
+    role: jfb-external-container
+    manifest_name: {{ .Values.manifest.name | quote }}
+    helm_release: {{ .Values.helm_release | quote }}
+  # Port 80 → targetPort = partner's port — matches platform convention
+  # (fb_user, fb_workspace, ..., dashboard ingresses all hit svc:80) so
+  # the Kong ingress can reference port 80 uniformly.
+  ports:
+  - name: http
+    port: 80
+    targetPort: {{ .Values.port }}
+    protocol: TCP
+{{- end }}
