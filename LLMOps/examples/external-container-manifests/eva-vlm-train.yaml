@@ -1,0 +1,96 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# eva-vlm-train.yaml — SDS-VLM 4-phase 파인튜닝 학습 manifest (async, 1회 lifecycle)
+#
+# 스펙: docs/external-container-spec.md (SP-1 외부 컨테이너 계약 v2)
+# 짝:  eva-vlm-infer.yaml — 같은 이미지, 추론 영구 배포 (sync)
+#
+# 배포 형태: 학습 launch 시마다 새 pod 생성 → 완료 후 종료 (job lifecycle).
+# URL 정책: 회신 메일 §3 (1) 권장 안 (B) — ETRI 자체 URL 유지, manifest 에 명시.
+# ─────────────────────────────────────────────────────────────────────────────
+
+apiVersion: tango.acryl.ai/v1
+kind: ExternalContainer
+
+metadata:
+  name: eva-vlm-train
+  version: "1.0.0"
+  vendor: "ETRI (한국전자통신연구원)"
+  provider: ETRI
+  contact: "yvvyee@etri.re.kr"
+  description: |
+    SDS-VLM 4-phase 파인튜닝 학습 서비스 (LoRA + projector).
+    학습 완료 시 /output 에 체크포인트 저장 → 플랫폼 commit_model 자동 commit
+    → eva-vlm-infer pod 의 /deploy 호출로 모델 reload.
+
+spec:
+  # ── 이미지 / 분류 ───────────────────────────────────────────────────────────
+  image: docker.io/yvvyee/eva-vlm-backend:1.0.0     # eva-vlm-infer 와 동일 이미지
+  # image_digest: sha256:...                        # 권장 — 두 manifest 간 digest 일치 검증
+
+  job_type: train                     # train | evaluate | preprocess | convert | infer
+  execution_mode: async               # POST /run → 202 + {"job_id": "..."} 패턴
+  port: 8000
+  workspace_scope: per-workspace      # 학습 pod 도 워크스페이스 격리
+
+  # ── 자원 요구 ──────────────────────────────────────────────────────────────
+  resources:
+    cpu: "16"
+    memory: "64Gi"
+    gpu: 1                            # multi-GPU 필요 시 별도 manifest 변형
+    gpu_memory: "40Gi"                # LoRA/QLoRA + activation memory + flash-attn KV
+    accelerator: nvidia
+
+  # ── 입력 / 출력 ────────────────────────────────────────────────────────────
+  inputs:
+    base_model:
+      required: true                  # /built_in_checkpoint 또는 /model 로 mount
+    dataset:
+      required: true                  # /dataset/{name} — image + AIS + output_text multi-file
+                                      # (단일 dataset 디렉토리 내 split 파일로 패키징, §E1 참고)
+    params:
+      required: true                  # /input/params.json — lr, batch_size, phase, epoch 등
+
+  outputs:
+    metrics: true                     # /output/metrics.json (loss curve, eval score)
+    model: true                       # /output/model/ (LoRA adapter, projector.bin)
+    dataset: false
+    artifacts: true                   # /output/logs/ tensorboard events, checkpoints 중간 산출물
+
+  # ── 자격증명 ──────────────────────────────────────────────────────────────
+  secrets:
+    required: []                      # 학습은 offline (HF token 등 필요 시 추가)
+
+  # ── 네트워크 ──────────────────────────────────────────────────────────────
+  network:
+    egress_whitelist:
+      - "huggingface.co"              # 초기 base model pull (offline 모드 시 미사용)
+      - "hf.co"
+
+  # ── HTTP 엔드포인트 ───────────────────────────────────────────────────────
+  # 정책 (B) 적용 — ETRI 기존 URL 유지, manifest 에 URL 템플릿 명시.
+  # 플랫폼 BFF (apps/llm_model/external_vlm/clients/eva_vlm.py) 가 URL 호출 +
+  # 응답 dto normalize 책임 (status enum, job_id, progress, result, error).
+  endpoints:
+    info: /info
+    health: /health
+    run: /train                       # POST → 202 + {"job_id": "..."}
+    jobs: /train/status?job_id={id}   # GET, {id} 는 placeholder (플랫폼이 substitution)
+    cancel: /train/stop?job_id={id}   # POST, ETRI 자체 cancel URL
+
+  # ── 능력 / 제약 ───────────────────────────────────────────────────────────
+  capabilities:
+    supported_models:
+      - llama-3.1-8b
+      - qwen3-8b
+    min_gpu_memory_gb: 24
+    estimated_startup_seconds: 300    # startupProbe failureThreshold 산정 기준
+    estimated_duration_seconds: 7200  # 평균 학습 2시간 (참고용)
+    timeout_seconds: 21600            # hard timeout 6시간 (override 가능)
+
+  # ── Hybrid pair 공유 메타 (eva-vlm-infer.yaml 과 동일 값 유지 필수) ────────
+  # 플랫폼이 두 manifest 가 paired 인지, image/contract version skew 가 없는지
+  # launch 시 검증.
+  service_family: eva-vlm
+  contract_version: "1.0.0"
+  model_artifact_format: "projector.bin + LoRA adapter"
+  checkpoint_namespace: sds-marine

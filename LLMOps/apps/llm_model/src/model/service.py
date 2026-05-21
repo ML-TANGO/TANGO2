@@ -796,7 +796,8 @@ async def create_commit_model(commit_name : str, commit_message : str, model_id 
         return False
             
 async def create_model(workspace_id : int, model_name : str, description : str, create_user_id : int, private : int, huggingface_model_id : str = None, \
-    commit_model_id : int = None, huggingface_token : str = None, access : int = 0, users_id : List[int] = []) -> bool:
+    commit_model_id : int = None, huggingface_token : str = None, access : int = 0, users_id : List[int] = [], \
+    training_type : str = 'internal', external_manifest_name : str = None, external_manifest_version : str = None) -> bool:
     commit_model_info = {}
     model_id = None
     huggingface_git = None
@@ -804,9 +805,33 @@ async def create_model(workspace_id : int, model_name : str, description : str, 
         # check duplicate model name
         if await db_model.check_model_by_model_name(model_name=model_name, workspace_id=workspace_id):
             raise Exception(f"Error: model name duplicated")
-        
+
         workspace_info = await db_model.get_workspace_model(workspace_id=workspace_id)
-        
+
+        # ── External partner-container training model.
+        # Metadata-only row: helm/serve/commit pipelines belong to the partner
+        # pod (ETRI eva-vlm etc.), so the platform skips them here. The user
+        # opens the model detail → 외부 학습 탭 → "학습 시작" 버튼 which calls
+        # POST /api/external/jobs and then PATCH /models/{id}/external-job to
+        # bind the resulting job_id back.
+        if training_type == 'external':
+            if not external_manifest_name or not external_manifest_version:
+                raise Exception("Error: external_manifest_name/version required for external training_type")
+            model_id = await db_model.create_model(
+                workspace_id=workspace_id,
+                name=model_name,
+                create_user_id=create_user_id,
+                description=description,
+                huggingface_git='',  # NOT NULL column on legacy schema
+                access=access,
+                training_type='external',
+                external_manifest_name=external_manifest_name,
+                external_manifest_version=external_manifest_version,
+            )
+            if model_id and users_id:
+                await db_model.create_model_user_list(model_id=model_id, user_list=users_id)
+            return bool(model_id)
+
         if huggingface_model_id: # huggingface model download
             # 유효한 token인지 확인하는 작업 필요
             if not private: # 퍼블릭일 경우 회사 계정을 사용 
@@ -858,6 +883,115 @@ async def create_model(workspace_id : int, model_name : str, description : str, 
             await delete_model_folder(storage_name=workspace_info["main_storage_name"], workspace_name=workspace_info["name"], model_name=model_name)
         return False
 
+async def get_model_summary(model_id : int) -> dict:
+    """Lightweight single-model fetch for ModelDetailPage's redirect logic.
+
+    Returns the raw db_model.get_model row (id/name/training_type/external_*
+    /huggingface_*). The frontend uses training_type to decide whether to
+    redirect into the 외부 학습 탭 or the default Information 탭.
+    """
+    return await db_model.get_model(model_id=model_id)
+
+
+async def bind_external_job(model_id : int, external_job_id : str) -> bool:
+    """Persist the partner-container job_id onto the model row.
+
+    Called right after the frontend's "학습 시작" button triggers
+    POST /api/external/jobs and the BFF returns a job_id. The detail page
+    reads model.external_job_id to drive the existing SSE/log endpoints.
+    """
+    await db_model.update_model_external_job(model_id=model_id, external_job_id=external_job_id)
+    return True
+
+
+async def commit_external_artifacts(model_id : int, job_id : str,
+                                    output_subdir : str,
+                                    partner_metadata : dict = None,
+                                    commit_name : str = None,
+                                    commit_message : str = None) -> dict:
+    """External 학습 종료 후 결과물을 platform 의 commit_model 패턴에 통합한다.
+
+    Why
+    ---
+    Internal LLM 학습은 model_helm + commit_model row 를 자동 생성하지만,
+    external (협력기관 컨테이너) 학습은 partner pod 의 /output/<ckpt> 에 결과를
+    남기고 끝낸다. operator UX 통일을 위해 그 결과를 internal 과 동일한 layout
+    (`workspace/models/<external_name>/commit_models/<commit>/`) 으로 옮기고
+    `commit_model` 테이블 row 를 만들어 frontend Commit List 탭이 자동 표시되게.
+
+    Steps
+    -----
+    1. model row 조회 + training_type='external' 검증
+    2. src : `JF_MAIN_STORAGE_PATH/jobs/<job_id>/output/<output_subdir>/`
+       dst : `JF_MAIN_MODEL_PATH/commit_models/<commit_name>/`
+       (parent mkdir + shutil.move)
+    3. `commit_model` row insert (fine_tuning_config = partner_metadata json)
+    4. `model.latest_commit_id` update
+
+    fb_external_container 의 JobTracker terminal=COMPLETED hook 에서 호출된다.
+    수동 호출도 가능 (검증용).
+    """
+    import shutil
+    model_info = await db_model.get_model(model_id=model_id)
+    if not model_info:
+        raise Exception(f"model {model_id} not found")
+    if (model_info.get("training_type") or "internal") != "external":
+        raise Exception(f"model {model_id} is not training_type='external'")
+
+    workspace_info = await db_model.get_workspace_model(workspace_id=model_info["workspace_id"])
+    storage_name = workspace_info["main_storage_name"]
+    workspace_name = workspace_info["name"]
+
+    # commit_name: 사용자 지정 또는 job_id 앞 8자 + output_subdir 조합
+    if not commit_name:
+        commit_name = f"{output_subdir}-{job_id[:8]}"
+
+    # NFS path resolve (llm_model pod 안 mount = /jf-data/<storage>/main/<workspace>)
+    main_root = PATH.JF_MAIN_STORAGE_PATH.format(
+        STORAGE_NAME=storage_name, WORKSPACE_NAME=workspace_name,
+    )
+    src_dir = os.path.join(main_root, "jobs", job_id, "output", output_subdir)
+    model_root = PATH.JF_MAIN_MODEL_PATH.format(
+        STORAGE_NAME=storage_name, WORKSPACE_NAME=workspace_name,
+        MODEL_NAME=model_info["name"],
+    )
+    commit_dir = os.path.join(model_root, "commit_models", commit_name)
+
+    if not os.path.exists(src_dir):
+        raise Exception(f"source artifacts not found at {src_dir}")
+    if os.path.exists(commit_dir):
+        raise Exception(f"commit dir already exists: {commit_dir}")
+
+    # parent dirs (models/<name>/commit_models/) 가 외부 모델은 처음엔 없을 수 있다.
+    os.makedirs(os.path.dirname(commit_dir), exist_ok=True)
+    shutil.move(src_dir, commit_dir)
+
+    # fine_tuning_config 에 partner metadata 보존 (manifest 의 partner-specific
+    # 구조를 그대로 JSON 으로 — internal LLM 의 FineTuningConfig 와 schema 다르지만
+    # frontend Commit List 탭은 read-only 라 호환).
+    ft_config_json = json.dumps(partner_metadata or {}, ensure_ascii=False)
+
+    commit_id = await db_model.create_commit_model(
+        name=commit_name,
+        model_id=model_id,
+        workspace_id=model_info["workspace_id"],
+        create_user_id=model_info["create_user_id"],
+        fine_tuning_config=ft_config_json,
+        commit_message=(commit_message or f"external training {job_id[:8]}"),
+        model_description=(model_info.get("description") or ""),
+    )
+
+    # update model 의 latest_commit_id (model.update_model_commit_id 사용)
+    await db_model.update_model_commit_id(latest_commit_id=commit_id, model_id=model_id)
+
+    return {
+        "commit_id": commit_id,
+        "commit_name": commit_name,
+        "commit_dir": commit_dir,
+        "src_dir": src_dir,
+    }
+
+
 async def delete_model(model_id : int) -> bool:
     
     model_info = await db_model.get_model(model_id=model_id)
@@ -901,9 +1035,98 @@ async def delete_model_configuration(model_config_id : int) -> bool:
         return True
     return False
 
+async def _resolve_external_steps_per_epoch(model_info: dict, job_id: str) -> int:
+    """External training 의 total_steps 추정 — frontend "1 Epoch = N steps" 표시용.
+
+    Source priority:
+      1) fb_external_container detail 의 partner total_steps (학습 active 일 때)
+      2) commit_models 의 events.out.tfevents 의 train/loss last step (cleanup 후)
+      3) 둘 다 없으면 0
+    """
+    import os, glob as _glob
+    from utils import settings, PATH
+    import httpx
+
+    # 1. fb_external_container detail 시도 (tracker active)
+    try:
+        url = f"{settings.FB_EXTERNAL_CONTAINER_URL.rstrip('/')}/api/v1/jobs/{job_id}"
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(url)
+        if resp.status_code == 200:
+            detail = resp.json()
+            r = (detail.get("result") or {}).get("result") or {}
+            total = r.get("total_steps") or 0
+            if total and int(total) > 0:
+                return int(total)
+    except Exception:
+        pass
+
+    # 2. commit_models events fallback
+    try:
+        workspace_info = await db_model.get_workspace_model(
+            workspace_id=int(model_info["workspace_id"]),
+        )
+        if workspace_info and model_info.get("latest_commit_id"):
+            commit_row = await db_model.get_commit_model(commit_id=model_info["latest_commit_id"])
+            if commit_row:
+                main_root = PATH.JF_MAIN_STORAGE_PATH.format(
+                    STORAGE_NAME=workspace_info["main_storage_name"],
+                    WORKSPACE_NAME=workspace_info["name"],
+                )
+                runs_dir = (
+                    f"{main_root}/models/{model_info['name']}/commit_models/"
+                    f"{commit_row['name']}/runs"
+                )
+                if os.path.exists(runs_dir):
+                    run_paths = sorted(
+                        _glob.glob(os.path.join(runs_dir, "*")),
+                        key=os.path.getmtime,
+                        reverse=True,
+                    )
+                    if run_paths:
+                        parsed, latest_step = await parse_tensorboard_scalars_async(
+                            log_dir=run_paths[0], max_steps=50,
+                        )
+                        if latest_step and int(latest_step) > 0:
+                            return int(latest_step)
+    except Exception:
+        pass
+
+    return 0
+
+
 async def get_model_fine_tuning(model_id : int) -> dict:
-    
+
     model_info = await db_model.get_model(model_id=model_id)
+
+    # 외부 학습 모델은 dataset/commit/configuration 파이프라인이 없다.
+    # FineTuning 탭은 진입 시 frontend 에서 외부 학습 탭으로 redirect 하지만,
+    # backend 호출이 leakage 로 들어와도 minimal payload 만 반환해 IndexError/
+    # TypeError 를 회피한다.
+    if (model_info or {}).get("training_type") == "external":
+        # steps_per_epoch — frontend FineTuningGraph 의 "1 Epoch = N steps" 표시용.
+        # partner /train/status 의 total_steps (학습 시작 시 정확) 우선,
+        # tracker cleanup 후엔 events.out.tfevents 의 train/loss last step fallback.
+        steps_per_epoch = 0
+        job_id = model_info.get("external_job_id")
+        if job_id:
+            steps_per_epoch = await _resolve_external_steps_per_epoch(model_info, job_id)
+        return {
+            "model_id" : model_info["id"],
+            "model_name" : model_info["name"],
+            "training_type" : "external",
+            "external_manifest_name" : model_info.get("external_manifest_name"),
+            "external_manifest_version" : model_info.get("external_manifest_version"),
+            "external_job_id" : model_info.get("external_job_id"),
+            "steps_per_epoch" : steps_per_epoch,
+            "commit_model_count" : 0,
+            "model_datasets" : [],
+            "model_config_file_list" : [],
+            "latest_commit_info" : None,
+            "resource_info" : None,
+            "fine_tuning_config" : None,
+        }
+
     workspace_info = await db_model.get_workspace_model(workspace_id=model_info["workspace_id"])
     if model_info["latest_fine_tuning_config"] is None:
         fine_tuning_config = FineTuningConfig().model_dump()
@@ -981,7 +1204,13 @@ async def get_model_fine_tuning(model_id : int) -> dict:
         "latest_commit_info" : {
             "id" : latest_commit_info["id"],
             "name" : latest_commit_info["name"]
-        }
+        },
+        # External training marker — FineTuning 탭의 frontend 가 이 값을 보고
+        # 외부 학습 모델이면 안내 + 외부 학습 탭으로 redirect 한다.
+        "training_type" : model_info.get("training_type") or "internal",
+        "external_manifest_name" : model_info.get("external_manifest_name"),
+        "external_manifest_version" : model_info.get("external_manifest_version"),
+        "external_job_id" : model_info.get("external_job_id"),
         # "fine_tuning_log" : log_parser
     }
 

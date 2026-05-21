@@ -1,0 +1,242 @@
+# 외부 컨테이너 OpenAPI 템플릿 (출발점)
+# spec: docs/external-container-spec.md (v1, tango.acryl.ai/v1)
+#
+# 협력기관은 본 템플릿을 복사 후 자기 컨테이너에 맞게 수정:
+#   - info.title / info.version / info.description
+#   - components.schemas.RunRequest / RunResult: 자기 알고리즘 입출력 형식
+#   - paths.~/jobs/{job_id}: async 컨테이너만 유지, sync는 삭제
+#
+# FastAPI + Pydantic 권장 (1차년도 플랫폼 패턴과 일관, OpenAPI 자동 생성).
+
+openapi: 3.0.3
+info:
+  title: "{{컨테이너 이름}}"
+  version: "{{버전}}"
+  description: "{{한 줄 설명}}"
+  contact:
+    name: "{{협력기관 / 담당자}}"
+    email: "{{contact email}}"
+
+servers:
+  - url: "http://localhost:{port}"
+    description: "K8s pod 내부 호출 (플랫폼 fb_scheduler 가 접근). port = manifest.spec.port (default 8000) + JF_PORT 환경변수"
+    variables:
+      port:
+        default: "8000"
+        description: "manifest.spec.port 값. 컨테이너가 JF_PORT 환경변수에서 읽어 사용"
+
+paths:
+  /info:
+    get:
+      summary: "Container introspection"
+      description: |
+        플랫폼이 컨테이너 등록/launch 직후 호출하여 컨테이너 capability 확인.
+      responses:
+        '200':
+          description: "Container info"
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [name, version, execution_mode, job_type, spec_api_version]
+                properties:
+                  name:
+                    type: string
+                    description: "컨테이너 이름 (manifest.metadata.name과 일치)"
+                  version:
+                    type: string
+                    description: "컨테이너 버전 (manifest.metadata.version과 일치)"
+                  execution_mode:
+                    type: string
+                    enum: [sync, async, batch]
+                    description: "실행 모드"
+                  job_type:
+                    type: string
+                    enum: [train, evaluate, preprocess, convert]
+                    description: "작업 카테고리"
+                  supported_models:
+                    type: array
+                    items: { type: string }
+                    description: "지원 모델 아키텍처"
+                  min_gpu_memory_gb:
+                    type: number
+                    description: "최소 GPU 메모리 (GB)"
+                  estimated_duration_seconds:
+                    type: integer
+                    description: "예상 작업 시간 (초)"
+                  estimated_startup_seconds:
+                    type: integer
+                    description: "예상 cold-start 시간 (startupProbe 산정 기준)"
+                  spec_api_version:
+                    type: string
+                    const: "tango.acryl.ai/v1"
+
+  /health:
+    get:
+      summary: "Readiness check"
+      description: |
+        K8s readinessProbe + startupProbe 가 호출.
+        livenessProbe는 별도 /live 또는 K8s container exit code 사용.
+      responses:
+        '200':
+          description: "Ready"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { const: "ready" }
+        '503':
+          description: "Not ready (loading, starting up, etc.)"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { const: "loading" }
+                  reason: { type: string, description: "현재 상태 설명" }
+
+  /live:
+    get:
+      summary: "Liveness check (선택, async 컨테이너 권장)"
+      description: |
+        자체 deadlock/leak 검출 시 503 반환. 미구현 시 K8s livenessProbe는 container exit code 기반 사용.
+      responses:
+        '200':
+          description: "Process alive"
+        '503':
+          description: "Self-detected deadlock or leak"
+
+  /run:
+    post:
+      summary: "Execute job"
+      description: |
+        sync (200): 즉시 결과 반환.
+        async (202): job_id 반환 후 /jobs/{job_id} 폴링.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RunRequest'
+      responses:
+        '200':
+          description: "Sync mode — immediate result"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunResult'
+        '202':
+          description: "Async mode — job accepted"
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [job_id]
+                properties:
+                  job_id: { type: string }
+        '400':
+          description: "Invalid request (params validation failure)"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: "Internal error"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /jobs/{job_id}:
+    get:
+      summary: "Job status (async only)"
+      parameters:
+        - in: path
+          name: job_id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: "Job status"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobStatus'
+        '404':
+          description: "Job not found"
+
+  /jobs/{job_id}/cancel:
+    post:
+      summary: "Cancel job (async only, 선택)"
+      parameters:
+        - in: path
+          name: job_id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: "Cancellation accepted"
+        '404':
+          description: "Job not found"
+        '409':
+          description: "Job already completed"
+
+components:
+  schemas:
+    # === 협력기관이 자기 알고리즘 입출력 형식으로 채움 ===
+    RunRequest:
+      type: object
+      description: "협력기관이 자기 컨테이너에 필요한 입력 파라미터로 채움"
+      properties:
+        # 예시 — 평가 컨테이너 케이스
+        # eval_dataset_id: { type: string }
+        # checkpoint_path: { type: string }
+        # metrics: { type: array, items: { type: string, enum: [bleu, rouge, perplexity] } }
+
+    RunResult:
+      type: object
+      description: "협력기관이 자기 결과 형식으로 채움 (sync 모드)"
+      properties:
+        # 예시 — 평가 결과
+        # metrics:
+        #   type: object
+        #   properties:
+        #     bleu: { type: number }
+        #     rouge_l: { type: number }
+        # output_path:
+        #   type: string
+        #   description: "/output/metrics.json 경로"
+
+    JobStatus:
+      type: object
+      required: [job_id, status]
+      properties:
+        job_id:
+          type: string
+        status:
+          type: string
+          enum: [running, completed, failed, cancelled]
+        progress:
+          type: number
+          minimum: 0
+          maximum: 1
+        result:
+          $ref: '#/components/schemas/RunResult'
+        error:
+          $ref: '#/components/schemas/ErrorResponse'
+
+    ErrorResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: "errors.yaml 의 에러 코드 (E_ prefix, SCREAMING_SNAKE_CASE)"
+          example: "E_PARAMS_INVALID"
+        message:
+          type: string
+          description: "사람이 읽을 수 있는 에러 설명 (한국어 또는 영어)"
+        fatal:
+          type: boolean
+          description: "치명적 에러 여부 (작업 종료)"

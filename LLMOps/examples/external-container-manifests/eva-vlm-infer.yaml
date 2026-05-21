@@ -1,0 +1,98 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# eva-vlm-infer.yaml — SDS-VLM 추론 서비스 manifest (sync, 영구 배포)
+#
+# 스펙: docs/external-container-spec.md (SP-1 외부 컨테이너 계약 v2)
+# 짝:  eva-vlm-train.yaml — 같은 이미지, 학습 lifecycle (async)
+#
+# 배포 형태: 워크스페이스당 1 pod 영구 상주 (1 ws = 1 GPU 점유)
+# 학습 완료 → /deploy 호출로 체크포인트 swap (이미지 재배포 없이 모델 갱신)
+# ─────────────────────────────────────────────────────────────────────────────
+
+apiVersion: tango.acryl.ai/v1
+kind: ExternalContainer
+
+metadata:
+  name: eva-vlm-infer
+  version: "1.0.0"
+  vendor: "ETRI (한국전자통신연구원)"
+  provider: ETRI
+  contact: "yvvyee@etri.re.kr"        # 필요 시 변경
+  description: |
+    SDS-VLM (해양 도메인 Vision-Language Model) 추론 서비스.
+    image_base64 + AIS params 를 받아 자연어 응답을 반환.
+    학습은 eva-vlm-train.yaml 에서 분리 관리되며, 학습 완료된 체크포인트는
+    /deploy 엔드포인트로 reload 됩니다.
+
+spec:
+  # ── 이미지 / 분류 ───────────────────────────────────────────────────────────
+  image: docker.io/yvvyee/eva-vlm-backend:1.0.0
+  # image_digest: sha256:...          # 권장 — tag 변경 방어 (immutability)
+  # Phase 2 트리거 (계약 안정화 / SDF 진입 / 6개월 경과) 시 GHCR 또는
+  # acrylaaai 조직 계정으로 이전 검토.
+
+  job_type: infer                     # train | evaluate | preprocess | convert | infer
+  execution_mode: sync                # sync | async | batch
+  port: 8000
+  workspace_scope: per-workspace      # 워크스페이스마다 별도 helm install
+
+  # ── 자원 요구 ──────────────────────────────────────────────────────────────
+  resources:
+    cpu: "8"
+    memory: "32Gi"
+    gpu: 1
+    gpu_memory: "32Gi"                # llama-3.1-8b / qwen3-8b VLM 추론 + KV cache
+    accelerator: nvidia               # v1 은 nvidia 만 enforce
+
+  # ── 입력 / 출력 ────────────────────────────────────────────────────────────
+  inputs:
+    base_model:
+      required: true                  # /model 로 mount, JF_MODEL_NAME 으로 식별
+    dataset:
+      required: false                 # 추론은 dataset mount 없음
+    params:
+      required: true                  # /input/params.json (prompt template, decoding 옵션)
+
+  outputs:
+    metrics: false
+    model: false
+    dataset: false
+    artifacts: false                  # 추론은 영구 산출물 없음 (응답만 반환)
+
+  # ── 자격증명 ──────────────────────────────────────────────────────────────
+  secrets:
+    required: []                      # 외부 API 미사용 (offline VLM 추론)
+
+  # ── 네트워크 (advisory) ────────────────────────────────────────────────────
+  network:
+    egress_whitelist:
+      - "huggingface.co"              # 초기 모델 weights pull (offline 모드 시 미사용)
+      - "hf.co"
+
+  # ── HTTP 엔드포인트 ───────────────────────────────────────────────────────
+  endpoints:
+    info: /info                       # 필수 — manifest metadata + capabilities 반영
+    health: /health                   # readiness — model_loaded=True 일 때만 200
+    live: /live                       # liveness — 프로세스 alive 여부
+    run: /infer                       # 추론 — POST {image_base64, prompt, ais_params} → 200 {result}
+
+    # 확장 endpoint (Hybrid pair 전용 — SP-1 v2 표준 외)
+    deploy: /deploy                   # 학습 완료 체크포인트 reload (메일 §3 (2) 참고)
+    models: /models                   # 현재 로드된 모델 / 사용 가능 체크포인트 목록
+
+  # ── 능력 / 제약 ───────────────────────────────────────────────────────────
+  capabilities:
+    supported_models:
+      - llama-3.1-8b
+      - qwen3-8b
+    min_gpu_memory_gb: 16
+    estimated_startup_seconds: 300    # startupProbe failureThreshold 산정 기준
+    estimated_duration_seconds: 30    # 추론 1회 평균 응답 시간 (참고)
+    timeout_seconds: 300              # 추론 hard timeout
+
+  # ── Hybrid pair 공유 메타 (eva-vlm-train.yaml 과 동일 값 유지 필수) ────────
+  # 플랫폼이 두 manifest 가 paired 인지, image/contract version skew 가 없는지
+  # launch 시 검증.
+  service_family: eva-vlm
+  contract_version: "1.0.0"
+  model_artifact_format: "projector.bin + LoRA adapter"
+  checkpoint_namespace: sds-marine    # 워크스페이스 prefix 와 결합

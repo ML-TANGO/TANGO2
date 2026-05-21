@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Request, UploadFile, Form, File, Body, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.responses import RedirectResponse
-from pydantic import Field
+from pydantic import BaseModel, Field
+from typing import Optional
 from utils.resource import response, get_user_id, get_auth
 from utils.exception.exceptions import *
 import model.dto as dto
@@ -430,12 +431,17 @@ async def delete_model(model_id: int = Body(...), description: str = Body(...)):
 #         traceback.print_exc()
 #         return response(status=0, message="server error", result=[])
     
-@model.get("",summary='list - model', tags=TAG_MODEL)
-async def get_models(workspace_id: int=None):
+@model.get("",summary='list or single - model', tags=TAG_MODEL)
+async def get_models(workspace_id: int=None, model_id: int=None):
     try:
         res = None
         user_id = get_user_id()
-        res = await svc.get_models(workspace_id=workspace_id, header_user_id=user_id)
+        # ?model_id=N → 단건 조회 (frontend ModelDetailPage 가 training_type
+        # 분기를 위해 사용). workspace_id 만 주면 list 응답.
+        if model_id is not None:
+            res = await svc.get_model_summary(model_id=model_id)
+        else:
+            res = await svc.get_models(workspace_id=workspace_id, header_user_id=user_id)
         return response(status=1, result=res)
     except Exception as e:
         traceback.print_exc()
@@ -448,12 +454,73 @@ async def create_models(body: dto.PostModel):
         user_id = get_user_id()
         if body.create_user_id == 0:
             body.create_user_id = user_id
-        res = await svc.create_model(workspace_id=body.workspace_id, model_name=body.model_name, description=body.description, huggingface_model_id=body.huggingface_model_id, users_id = body.users_id,
-                                     commit_model_id=body.commit_model_id, huggingface_token=body.huggingface_token, create_user_id=body.create_user_id, private=body.private, access=body.access) # TODO 추후 수정
+        res = await svc.create_model(
+            workspace_id=body.workspace_id,
+            model_name=body.model_name,
+            description=body.description,
+            huggingface_model_id=body.huggingface_model_id,
+            users_id=body.users_id,
+            commit_model_id=body.commit_model_id,
+            huggingface_token=body.huggingface_token,
+            create_user_id=body.create_user_id,
+            private=body.private,
+            access=body.access,
+            training_type=body.training_type or 'internal',
+            external_manifest_name=body.external_manifest_name,
+            external_manifest_version=body.external_manifest_version,
+        )
         return response(status=1, result=res)
     except Exception as e:
         traceback.print_exc()
         return response(status=0, message="server error", result=None)
+
+
+class _ExternalJobBindBody(BaseModel):
+    """Body for PATCH /models/{model_id}/external-job — links a freshly
+    launched partner job_id back onto the model row so the detail page can
+    reuse the existing SSE/log endpoints (which key off job_id).
+    """
+    model_config = {"protected_namespaces": ()}
+    external_job_id: str
+
+
+@model.patch("/{model_id}/external-job", summary='bind external job to model', tags=TAG_MODEL)
+async def bind_external_job(model_id: int, body: _ExternalJobBindBody):
+    try:
+        await svc.bind_external_job(model_id=model_id, external_job_id=body.external_job_id)
+        return response(status=1, result={"model_id": model_id, "external_job_id": body.external_job_id})
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message="server error", result=None)
+
+
+class _ExternalCommitBody(BaseModel):
+    """Body for POST /models/{model_id}/external-commit — 학습 종료 후 결과물을
+    internal LLM 의 commit_model 패턴으로 통합한다.
+    """
+    model_config = {"protected_namespaces": ()}
+    job_id: str
+    output_subdir: str   # /output/<여기>/ — 학습 시 사용자가 지정한 checkpoint name
+    partner_metadata: Optional[dict] = None
+    commit_name: Optional[str] = None      # default: <output_subdir>-<job_id[:8]>
+    commit_message: Optional[str] = None
+
+
+@model.post("/{model_id}/external-commit", summary='commit external training artifacts', tags=TAG_MODEL)
+async def commit_external_artifacts(model_id: int, body: _ExternalCommitBody):
+    try:
+        res = await svc.commit_external_artifacts(
+            model_id=model_id,
+            job_id=body.job_id,
+            output_subdir=body.output_subdir,
+            partner_metadata=body.partner_metadata,
+            commit_name=body.commit_name,
+            commit_message=body.commit_message,
+        )
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
 
 
 

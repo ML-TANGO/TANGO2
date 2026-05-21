@@ -68,7 +68,7 @@ SAVE_COMMAND="$CLI save -o REPLACE.tar $IMAGE"
 
 if [ "$BUILD_ALL" == "y" ]; then
 
-    dir=("dashboard" "dataset" "deployment" "image" "monitoring" "notification" "resource" "scheduler" "ssh" "training" "user" "workspace")
+    dir=("dashboard" "dataset" "deployment" "external_container" "image" "monitoring" "notification" "resource" "scheduler" "ssh" "training" "user" "workspace")
     # dir=("model" "playground" "prompt" "rag")
     for APP in "${dir[@]}"; do
         if [[ "$APP" == "playground" || "$APP" == "model" || "$APP" == "rag"  || "$APP" == "prompt" ]]; then

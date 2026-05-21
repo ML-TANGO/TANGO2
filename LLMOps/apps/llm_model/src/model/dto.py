@@ -77,6 +77,12 @@ class PostModel(BaseModel):
     private: int = Field(default=0, description='llmops model commit id')
     commit_model_id : Optional[int] = Field(default=None, description='llmops model commit id')
     description : str = Field(default=None, description='llmops model description')
+    # 외부 협력기관 컨테이너 학습 모델 (eva-vlm 등).
+    # training_type='external' 일 때만 external_manifest_* 가 의미 있고,
+    # 그 경우 huggingface/commit 경로는 모두 무시된다.
+    training_type : Optional[str] = Field(default='internal', description="'internal' | 'external'")
+    external_manifest_name : Optional[str] = Field(default=None, description='manifest name (external only)')
+    external_manifest_version : Optional[str] = Field(default=None, description='manifest version (external only)')
     class Config:
         protected_namespaces = ()
         

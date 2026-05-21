@@ -134,6 +134,17 @@ global:
         path: /opt/dynamic-storage/marker-data    # [필수] NFS export 경로
         server: <NFS_SERVER_IP>                   # [필수] NFS 서버 IP
 
+      # hfModelCache: HuggingFace 모델 캐시 NFS (클러스터 전역 공유, RO)
+      # ※ 외부 협력기관 컨테이너 학습이 base LLM/projector/checkpoint 를 로드할 때 사용.
+      # ※ 운영자가 `HF_HOME=<여기> huggingface-cli download <model_id>` 로 미리 받음.
+      # ※ 외부 학습 manifest 의 spec.env 가 HF_HOME=/hf-cache 등을 가리키면 pod 내
+      #   transformers 가 외부망 없이 cache hit 으로 로드.
+      # ※ Internal LLM 의 workspace/models/ (`jfData`/`jfStorage`) 영역과 완전 분리.
+      hfModelCache:
+        type: nfs
+        path: /opt/dynamic-storage/hf-model-cache # [필수] NFS export 경로
+        server: <NFS_SERVER_IP>                   # [필수] NFS 서버 IP
+
       # src: 백엔드 소스 코드 볼륨
       # ※ 개발 환경에서 소스 코드를 직접 마운트하여 핫리로드할 때 사용
       # ※ 운영/배포 환경에서는 enabled: false 권장 (이미지에 코드가 포함됨)

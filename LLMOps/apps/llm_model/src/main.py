@@ -6,6 +6,7 @@ import traceback
 from fastapi import FastAPI, Request, Depends
 from huggingface_hub import login
 from model.route import model
+from external import close_external_client, external
 from utils.resource import CustomResponse
 from utils.redis import get_redis_client_async
 from utils.resource import CustomMiddleWare
@@ -38,10 +39,10 @@ def initialize_app():
         )
     
     api.include_router(model)
+    api.include_router(external)
     app.mount('/api', api)
 
-    
-    import logging
+
     # 필터 적용
     class HealthCheckFilter(logging.Filter):
         def filter(self, record):
@@ -56,7 +57,13 @@ def initialize_app():
     async def startup_event():
         # await initialize_redis()
         await get_redis_client_async()
-    
+
+    # SP-Ext review HIGH #L4: close the shared external-container httpx
+    # client on shutdown so socket pools and lock state don't leak.
+    @app.on_event("shutdown")
+    async def shutdown_event():
+        await close_external_client()
+
     return app
     
 def main():

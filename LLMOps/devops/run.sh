@@ -59,7 +59,7 @@ fi
 CHARTS=(
     "common_app" "dashboard" "dataset" "deployment" "front" "image" "monitoring" "notification"
     "option" "resource" "scheduler"
-    "user" "workspace" "alert_management" "ingress_management"
+    "user" "workspace" "alert_management" "ingress_management" "external_container"
 )
 
 # ================================================
