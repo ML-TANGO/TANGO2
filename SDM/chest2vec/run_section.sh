@@ -1,0 +1,13 @@
+python3 -m torch.distributed.run --nproc_per_node=4 --master_port=29510 stage3_section.py \
+  --pretrained lukeingawesome/chest2vec_0.6b_chest \
+  --use_chest2vec_loader \
+  --df sectioned.csv \
+  --out runs/stage3_ct_anatomy_0.6b_noinstruct \
+  --epochs 4 \
+  --per_device_bs 64 \
+  --max_len_query 512 \
+  --max_len_section 512 \
+  --output_dim 1024 \
+  --lr 1e-4 \
+  --findings_col findings \
+  --deepspeed deepspeed/ds_zero2_offload.json

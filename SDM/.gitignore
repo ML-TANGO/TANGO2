@@ -1,22 +1,37 @@
-# Jupyter Notebook files
-*.ipynb
+# Claude Code
+CLAUDE.md
 
-# Binary files
-*.bin
-
-# PyTorch model files
-*.pth
-*.pt
-
-# JSON files
-*.json
-
-# CSV files
-*.csv
-
-# Cache files
-*.cache
-cache/
+# Python cache
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
+.Python
+
+# Data files — all CSVs and large binaries everywhere
+*.csv
+/*.json
+*.npz
+*.nii
+*.nii.gz
+
+# Outputs
+runs/
+logs/
+checkpoints/
+*.pt
+*.pth
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Virtual environments
+venv/
+.env/
