@@ -36,16 +36,16 @@ from torch.cuda.amp import GradScaler, autocast
 from contextlib import nullcontext
 from tqdm import tqdm
 
-from .config import CTJEPAConfig
-from .model import CTJEPA
-from .losses import CTJEPALoss
-from .masking import MaskSampler, sample_masked_s2_indices
-from .data import create_dataloader, CTJEPADataset, MultiLabelProbeDataset
+from ..config import CTJEPAConfig
+from ..models.model import CTJEPA
+from ..losses.losses import CTJEPALoss
+from ..data.masking import MaskSampler, sample_masked_s2_indices
+from ..data.dataset import create_dataloader, CTJEPADataset, MultiLabelProbeDataset
 from .utils import (
     CollapseMonitor, CosineWarmupScheduler, TrainLogger,
     CheckpointManager, count_parameters,
 )
-from .validation import run_validation, run_phase_evaluation
+from ..evaluation.validation import run_validation, run_phase_evaluation
 
 
 def is_distributed():

@@ -4,7 +4,7 @@ CT-JEPA v2 Smoke Tests
 Verifies each component works with small synthetic tensors.
 No real data needed — uses random inputs with correct shapes.
 
-Run: python -m cepa.tests.test_smoke
+Run: python -m SDM.tests.test_smoke
 """
 
 import sys
@@ -39,11 +39,11 @@ def is_finite(t):
 
 def test_masking():
     print("\n=== Masking ===")
-    from cepa.masking import (
+    from SDM.data.masking import (
         sample_cuboid_mask, sample_slab_mask, sample_skip_slab_mask,
         sample_frequency_mask, MaskSampler, sample_masked_s2_indices,
     )
-    from cepa.config import CTJEPAConfig
+    from SDM.config import CTJEPAConfig
 
     N_S3 = 384
     grid = (6, 8, 8)
@@ -114,7 +114,7 @@ def test_masking():
 
 def test_losses():
     print("\n=== Losses ===")
-    from cepa.losses import JEPALoss, SigLIPLoss, SIGRegLoss, LocalContrastiveLoss, DecoderLoss
+    from SDM.losses.losses import JEPALoss, SigLIPLoss, SIGRegLoss, LocalContrastiveLoss, DecoderLoss
 
     B, N, D = 4, 100, 128
 
@@ -172,7 +172,7 @@ def test_losses():
 
 def test_blocks():
     print("\n=== Blocks ===")
-    from cepa.blocks import (
+    from SDM.models.blocks import (
         AdaLNZero, PatchEmbed3D, PatchMerge3D,
         FactorizedPosEmbed3D, FullPosEmbed3D, FFN, DropPath,
     )
@@ -232,7 +232,7 @@ def test_blocks():
 
 def test_predictors():
     print("\n=== Predictors ===")
-    from cepa.predictors import PredictorP3, PredictorP2, CrossStagePredictor, DecoderHead
+    from SDM.models.predictors import PredictorP3, PredictorP2, CrossStagePredictor, DecoderHead
 
     B, D = 2, 128
     predictor_dim = D // 2
@@ -331,7 +331,7 @@ def test_predictors():
 
 def test_ema():
     print("\n=== EMA Updater ===")
-    from cepa.model import EMAUpdater
+    from SDM.models.model import EMAUpdater
 
     ema = EMAUpdater(momentum_start=0.996, momentum_end=0.9999,
                      total_steps=1000, schedule="cosine")
@@ -367,7 +367,7 @@ def test_ema():
 
 def test_collapse_monitor():
     print("\n=== Collapse Monitor ===")
-    from cepa.utils import CollapseMonitor
+    from SDM.training.utils import CollapseMonitor
 
     monitor = CollapseMonitor()
 
@@ -395,7 +395,7 @@ def test_collapse_monitor():
 
 def test_scheduler():
     print("\n=== Cosine Warmup Scheduler ===")
-    from cepa.utils import CosineWarmupScheduler
+    from SDM.training.utils import CosineWarmupScheduler
 
     model = nn.Linear(10, 10)
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
@@ -427,8 +427,8 @@ def test_scheduler():
 
 def test_ctjepa_loss():
     print("\n=== CTJEPALoss ===")
-    from cepa.losses import CTJEPALoss
-    from cepa.config import CTJEPAConfig
+    from SDM.losses.losses import CTJEPALoss
+    from SDM.config import CTJEPAConfig
 
     config = CTJEPAConfig()
     loss_fn = CTJEPALoss(config)
@@ -456,9 +456,9 @@ def test_ctjepa_loss():
 
 def test_contrastive_alignment():
     print("\n=== Contrastive Alignment ===")
-    from cepa.losses import SigLIPLoss, CTJEPALoss
-    from cepa.encoder import AttentionalReadout, WindowProjectionHead
-    from cepa.config import CTJEPAConfig
+    from SDM.losses.losses import SigLIPLoss, CTJEPALoss
+    from SDM.models.encoder import AttentionalReadout, WindowProjectionHead
+    from SDM.config import CTJEPAConfig
 
     config = CTJEPAConfig()
     D = config.model.dim_s3   # 512 for base
@@ -540,7 +540,7 @@ def test_contrastive_alignment():
 
 def test_text_context_token():
     print("\n=== Text Context Token ===")
-    from cepa.predictors import PredictorP3
+    from SDM.models.predictors import PredictorP3
 
     B, D = 4, 128
     predictor_dim = D // 2
@@ -637,8 +637,8 @@ def test_align_proj():
 def test_text_encoder():
     print("\n=== TextEncoder (Chest2Vec — requires model weights, skipped if unavailable) ===")
     try:
-        from cepa.model import Chest2VecEncoder
-        from cepa.config import CTJEPAConfig
+        from SDM.models.model import Chest2VecEncoder
+        from SDM.config import CTJEPAConfig
 
         config = CTJEPAConfig()
         enc = Chest2VecEncoder(config, device="cuda")
@@ -661,7 +661,7 @@ def test_text_encoder():
 
 def test_grounding():
     print("\n=== Grounding ===")
-    from cepa.grounding import upsample_heatmap
+    from SDM.grounding.grounding import upsample_heatmap
 
     # upsample_heatmap
     heatmap = torch.randn(6, 8, 8)

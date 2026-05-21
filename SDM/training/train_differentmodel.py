@@ -25,14 +25,14 @@ if _merlin_dir not in sys.path:
     sys.path.insert(0, _merlin_dir)
 
 # ---- your chest2vec helpers (must be importable) ----
-from chest2vec import (
+from ..chest2vec import (
     Chest2Vec,
     encode_with_eos_ids,
     get_last_hidden_state,
     last_token_pool,
     build_qwen_query,
 )
-from chest2vec.eval_stage3_section import (
+from ..chest2vec.eval_stage3_section import (
     LatentDictSectionPooler,
     load_pooler,
 )

@@ -10,7 +10,7 @@ NPZ_ROOT="/data/preprocessed"
 EMB_DIR="./ct/cepa_embs"
 OUT_DIR="./linear_probe_output"
 
-# ---- Ensure cepa is importable ----
+# ---- Ensure SDM is importable ----
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export PYTHONPATH="${SCRIPT_DIR}/..:${PYTHONPATH:-}"
 
@@ -18,7 +18,7 @@ echo "=========================================="
 echo "Step 1: Extract embeddings (train + val)"
 echo "=========================================="
 
-python3 extract_embeddings.py \
+python3 -m SDM.evaluation.extract_embeddings \
     --checkpoint "$CHECKPOINT" \
     --csv_path "$CSV_PATH" \
     --npz_root "$NPZ_ROOT" \
@@ -36,7 +36,7 @@ echo "=========================================="
 echo "Step 2: Linear probing"
 echo "=========================================="
 
-python3 linear_probe.py \
+python3 -m SDM.evaluation.linear_probe \
     --emb_dir "$EMB_DIR" \
     --csv "$CSV_PATH" \
     --out_dir "$OUT_DIR" \

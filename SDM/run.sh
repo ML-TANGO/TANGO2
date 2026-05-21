@@ -11,7 +11,7 @@
 
 set -euo pipefail
 
-# ---- Ensure cepa is importable as a package ----
+# ---- Ensure SDM is importable as a package ----
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export PYTHONPATH="${SCRIPT_DIR}/..:${PYTHONPATH:-}"
 
@@ -114,10 +114,10 @@ if [ "$NUM_GPUS" -gt 1 ]; then
     torchrun \
         --standalone \
         --nproc_per_node=$NUM_GPUS \
-        -m cepa.train \
+        -m SDM.training.train \
         $TRAIN_ARGS
 else
     echo "Launching single-GPU training..."
-    python -m cepa.train \
+    python -m SDM.training.train \
         $TRAIN_ARGS
 fi

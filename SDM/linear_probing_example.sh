@@ -5,6 +5,10 @@ export HF_HOME=/model/huggingface
 export HF_TOKEN="${HF_TOKEN:?Set HF_TOKEN env var}"
 export CUDA_VISIBLE_DEVICES=0
 
+# ---- Ensure SDM is importable ----
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export PYTHONPATH="${SCRIPT_DIR}/..:${PYTHONPATH:-}"
+
 # ---- Paths ----
 CHECKPOINT="/model/airdrop/final_model/baseline/last.pt"
 CSV_PATH="./ct_rate_labels.csv"
@@ -17,7 +21,7 @@ OUT_DIR="./linear_probe_output"
 # echo "Step 1: Extract embeddings (train + val)"
 # echo "=========================================="
 
-python3 extract_embeddings.py \
+python3 -m SDM.evaluation.extract_embeddings \
     --checkpoint "$CHECKPOINT" \
     --csv_path "$CSV_PATH" \
     --npz_root "$NPZ_ROOT" \
@@ -34,7 +38,7 @@ echo "=========================================="
 echo "Step 2: Linear probing"
 echo "=========================================="
 
-# python3 linear_probe.py \
+# python3 -m SDM.evaluation.linear_probe \
 #     --emb_dir "$EMB_DIR" \
 #     --csv "$CSV_PATH" \
 #     --out_dir "$OUT_DIR" \
@@ -48,7 +52,7 @@ echo "=========================================="
 #     --threshold 0.5
 
 
-python3 linear_probe.py \
+python3 -m SDM.evaluation.linear_probe \
     --emb_dir "$EMB_DIR" \
     --csv "$CSV_PATH2" \
     --out_dir "$OUT_DIR" \

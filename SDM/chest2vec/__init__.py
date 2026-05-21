@@ -1,4 +1,4 @@
-from chest2vec.chest2vec import (
+from .chest2vec import (
     Chest2Vec,
     EmbedOutput,
     encode_with_eos_ids,

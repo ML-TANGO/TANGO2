@@ -28,12 +28,9 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
 from tqdm.auto import tqdm
 
-# Add parent to path so cepa is importable
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from cepa.config import CTJEPAConfig
-from cepa.encoder import HierarchicalEncoder
-from cepa.data import apply_window, compute_region_masks_s2
+from ..config import CTJEPAConfig
+from ..models.encoder import HierarchicalEncoder
+from ..data.dataset import apply_window, compute_region_masks_s2
 
 
 # ============================================================

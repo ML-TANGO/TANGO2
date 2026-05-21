@@ -21,19 +21,37 @@ The result is a CT encoder that captures both visual structure and clinical sema
 
 ## Project layout
 
-| File | Purpose |
-|------|---------|
-| `config.py` | Hyperparameters (volume, model, masking, loss, training) |
-| `encoder.py` | 3-stage hierarchical CT encoder |
-| `model.py` | Full CT-JEPA model (context + EMA target + predictors + text alignment) |
-| `predictors.py`, `blocks.py`, `masking.py`, `losses.py` | Core training components |
-| `data.py` | CT volume / report loading |
-| `train.py` | Pretraining loop |
-| `validation.py` | Linear probes, retrieval, feature-quality metrics |
-| `linear_probe.py` | Diagnosis fine-tuning (multi-label classification) |
-| `grounding.py`, `grounding_eval.py`, `grounding_head.py` | Phrase-grounding evaluation |
-| `chest2vec/` | Text encoder used for report conditioning |
-| `rexgrounding/` | ReXGroundingCT evaluation data |
+```
+SDM/
+├── config.py                   # all hyperparameters
+├── models/                     # architecture
+│   ├── blocks.py               # AdaLN-Zero, 3D attention, patch embed/merge, ConvNeXt3D, Swin3D
+│   ├── encoder.py              # 3-stage hierarchical CT encoder
+│   ├── predictors.py           # P3 / P2 / CrossStage / DecoderHead
+│   └── model.py                # full CT-JEPA orchestrator (context + EMA target + predictors)
+├── losses/
+│   └── losses.py               # 7-component loss stack (JEPA, SigLIP, SIGReg, ...)
+├── data/
+│   ├── dataset.py              # CT volume / report loading, HU windowing
+│   └── masking.py              # cuboid / slab / skip-slab / frequency masking
+├── training/
+│   ├── train.py                # pretraining loop (DDP, AMP, EMA, curriculum)
+│   ├── train_differentmodel.py # alternative training entry
+│   └── utils.py                # schedulers, logger, checkpoint manager, collapse monitor
+├── evaluation/
+│   ├── validation.py           # feature extraction, retrieval, feature-quality metrics
+│   ├── linear_probe.py         # diagnosis fine-tuning (multi-label classification)
+│   ├── linear_probe_merlin_example.py
+│   └── extract_embeddings.py
+├── grounding/
+│   ├── grounding.py            # PhraseGrounder + heatmap extraction
+│   ├── grounding_data.py       # ReXGroundingCT dataset loader
+│   ├── grounding_eval.py       # protocols A / B / C
+│   └── grounding_head.py       # text-conditioned segmentation head
+├── chest2vec/                  # frozen text encoder used for report conditioning
+├── rexgrounding/               # ReXGroundingCT evaluation data
+└── tests/
+```
 
 ## Installation
 
@@ -47,12 +65,20 @@ Requires `torch>=2.0`, `numpy`, `pandas`, `tqdm`, `scipy`. Optional: `matplotlib
 
 ### Pretrain the CT encoder
 
+Run from the repo root (`TANGO2/`) so `SDM` is importable as a package:
+
 ```bash
-python -m cepa.train \
+python -m SDM.training.train \
     --config base \
     --data_csv /path/to/metadata.csv \
     --data_root /path/to/npz_files/ \
     --output_dir ./runs/pretrain
+```
+
+Or use the launcher script (handles single/multi-GPU automatically):
+
+```bash
+bash SDM/run.sh --config base --data_csv ... --data_root ...
 ```
 
 Data: NPZ files with `ct` (float32, pre-windowed HU) and optional `totalseg` (uint16). The metadata CSV needs an `object_id` column and optionally `findings` (report text) and `split`.
@@ -60,13 +86,13 @@ Data: NPZ files with `ct` (float32, pre-windowed HU) and optional `totalseg` (ui
 ### Diagnosis / linear probe
 
 ```bash
-bash run_linear_probe.sh
+bash SDM/run_linear_probe.sh
 ```
 
 ### Grounding evaluation
 
 ```bash
-python -m cepa.grounding_eval \
+python -m SDM.grounding.grounding_eval \
     --checkpoint ./runs/pretrain/checkpoint_latest.pt \
     --data_dir /path/to/rexgrounding/ \
     --protocol a --split val

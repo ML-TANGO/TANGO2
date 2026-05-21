@@ -20,7 +20,7 @@ import json
 import os
 from typing import Dict, List, Optional, Tuple
 
-from .data import apply_window, compute_region_masks_s2, collate_fn as base_collate_fn, WINDOW_PARAMS
+from ..data.dataset import apply_window, compute_region_masks_s2, collate_fn as base_collate_fn, WINDOW_PARAMS
 
 
 class ReXGroundingDataset(Dataset):

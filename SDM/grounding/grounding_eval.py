@@ -37,12 +37,12 @@ from typing import Dict, List, Optional, Tuple
 from collections import defaultdict
 from scipy.ndimage import label, generate_binary_structure
 
-from .config import CTJEPAConfig
-from .model import CTJEPA
+from ..config import CTJEPAConfig
+from ..models.model import CTJEPA
 from .grounding import PhraseGrounder, extract_text_heatmap, causal_grounding, upsample_heatmap
 from .grounding_data import ReXGroundingDataset, create_grounding_dataloader
 from .grounding_head import GroundingHead, GroundingLoss
-from .data import apply_window
+from ..data.dataset import apply_window
 
 
 # ---------------------------------------------------------------------------
