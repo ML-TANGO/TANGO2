@@ -1,0 +1,43 @@
+@import '@src/styles/color.scss';
+
+.container {
+  font-family: SpoqaM;
+
+  .page-header-cont {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    padding-bottom: 16px;
+    margin-bottom: 24px;
+
+    .right-cont {
+      min-height: 36px;
+    }
+  }
+
+  .tab-container {
+    display: flex;
+    gap: 8px;
+
+    .tab {
+      box-sizing: border-box;
+      padding: 8px 16px;
+      color: $mono205;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+
+      &.selected {
+        color: $blue104;
+        border-bottom: 3px solid $blue104;
+      }
+    }
+  }
+
+  .gray-line {
+    width: 100%;
+    height: 1px;
+    background-color: $mono203;
+    margin-bottom: 25px;
+  }
+}

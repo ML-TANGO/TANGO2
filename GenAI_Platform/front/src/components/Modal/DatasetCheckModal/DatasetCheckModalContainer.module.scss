@@ -1,0 +1,129 @@
+@import '../modal.scss';
+
+.dataset-box {
+  margin-top: 5px;
+  padding: 24px;
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 3px 9px 0 rgba(18, 22, 25, 0.08),
+    0 2px 4px 1px rgba(18, 22, 25, 0.14);
+  z-index: 1;
+  width: 500px;
+  background-color: $mono200;
+  border-radius: 4px;
+  min-width: 250px;
+  .dataset-content-wrap {
+    display: flex;
+    flex-direction: column;
+    max-height: 310px;
+    height: auto;
+    background-color: $mono202;
+    border-radius: 1px;
+    padding: 16px;
+    margin-top: 24px;
+    overflow: auto;
+    box-sizing: border-box;
+    .dataset-content-message {
+      display: flex;
+      justify-content: center;
+      flex-direction: column;
+      align-items: center;
+      .dataset-content-line {
+        border-top: 1px solid $mono204;
+        margin-top: 20px;
+        width: calc(100% - 32px);
+        padding: 10px 20px;
+      }
+      .dataset-none-line {
+        margin-top: 10px;
+      }
+      .dataset-content-text {
+        white-space: pre-line;
+        font-size: 14px;
+        text-align: center;
+        padding-bottom: 8px;
+      }
+    }
+
+    .dataset-content {
+      display: flex;
+      align-items: center;
+      .dataset-content-test {
+        display: flex;
+        .file-wrap {
+          .file-box {
+            display: flex;
+            align-items: center;
+            height: 32px;
+            .icon {
+              width: 24px;
+              margin-right: 4px;
+            }
+            .folder-name {
+              font-size: 14px;
+            }
+            .category {
+              white-space: nowrap;
+              padding: 4px 10px 4px 10px;
+              background-color: $mono203;
+              color: $mono206;
+              font-size: 12px;
+              margin-left: 4px;
+              border-radius: 5px;
+            }
+            .parse-box {
+              margin-left: 4px;
+              color: $blue104;
+              padding: 0 5px 2px 5px;
+              border: 1px solid $blue104;
+              border-radius: 15px;
+              font-size: 11px;
+            }
+          }
+          .description {
+            margin: 6px 0;
+            font-size: 12px;
+            margin-left: 32px;
+            color: $mono205;
+            font-family: SpoqaR;
+          }
+        }
+        .dataset-content-border {
+          height: 10px;
+          width: 10px;
+          border: 2px solid $mono204;
+          border-right: none;
+          border-top: none;
+          border-bottom-left-radius: 5px;
+          margin: 5px 12px 5px 10px;
+        }
+      }
+      .dataset-content-border {
+        height: 10px;
+        width: 10px;
+        border: 2.9px solid $mono204;
+        border-right: none;
+        border-top: none;
+        border-bottom-left-radius: 5px;
+        margin-bottom: 9px;
+        margin-right: 13px;
+        margin-top: 5px;
+      }
+    }
+  }
+  .close-btn {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 12px;
+    grid-gap: 8px;
+  }
+}
+
+@media (max-width: 1400px) {
+  .dataset-box {
+    position: absolute;
+    width: 35vw;
+    top: 0;
+  }
+}

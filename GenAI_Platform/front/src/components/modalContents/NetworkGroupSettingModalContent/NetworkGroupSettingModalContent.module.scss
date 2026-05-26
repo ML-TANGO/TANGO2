@@ -1,0 +1,26 @@
+@import '@src/styles/color.scss';
+
+.title {
+  display: flex;
+  flex-direction: row;
+  margin-top: 0;
+  margin-bottom: 20px;
+  font-family: SpoqaB;
+  font-size: 20px;
+}
+.tab-box {
+  padding-right: 44px;
+}
+.modal-content {
+  padding: 0 44px 10px 0;
+  max-height: 65vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  .tab-title {
+    font-size: 24px;
+    font-family: SpoqaM;
+    color: $mono207;
+    margin: 20px 0;
+  }
+}

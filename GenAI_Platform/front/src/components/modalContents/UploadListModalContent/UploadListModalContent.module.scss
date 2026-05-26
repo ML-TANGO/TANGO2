@@ -1,0 +1,31 @@
+@import '@src/styles/color.scss';
+
+.upload-list-modal {
+  position: fixed;
+  bottom: 10px;
+  right: 10px;
+  z-index: 100;
+  width: 400px;
+  border-radius: 8px;
+  box-shadow: 0 3px 16px 0 rgba(0, 0, 0, 0.1);
+  background-color: $mono200;
+  .upload-list-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+    background-color: $mono205;
+    color: $mono201;
+    .info {
+      flex: 1;
+    }
+  }
+  .upload-group-list {
+    display: none;
+    max-height: 200px;
+    overflow-y: auto;
+    &.expand {
+      display: block;
+    }
+  }
+}

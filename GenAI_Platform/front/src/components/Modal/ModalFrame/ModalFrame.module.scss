@@ -1,0 +1,170 @@
+@import '@src/styles/color.scss';
+
+.shadow {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.6);
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  &.hide {
+    width: 0;
+    height: 0;
+    z-index: 0;
+  }
+}
+
+.modal {
+  display: flex;
+  flex-direction: column;
+  z-index: 100;
+  width: 780px;
+  max-width: 100%;
+  padding-left: 48px;
+  border-radius: 8px;
+  box-shadow: 0 3px 16px 0 rgba(0, 0, 0, 0.1);
+  background-color: $mono200;
+  box-sizing: border-box;
+  overflow: hidden;
+  opacity: 0;
+  transition: width 0.3s, height 0.3s, opacity 0.3s;
+  &.full {
+    width: 100% !important;
+    height: 100% !important;
+    max-height: 100vh;
+  }
+  &.hide {
+    position: fixed;
+    width: 280px !important;
+    height: 40px !important;
+    max-height: 40px;
+    padding: 0;
+    border-radius: 8px 8px 0 0;
+    top: calc(100% - 40px);
+    right: 48px;
+    background-color: $mono203;
+    box-shadow: 3px -2px 12px 0px rgba(0, 0, 0, 0.3);
+    .modal-handler {
+      position: absolute;
+    }
+  }
+  &.title {
+    padding: 36px 0 16px 44px;
+    font-family: SpoqaB;
+    font-weight: normal;
+  }
+  .modal-handler {
+    display: flex;
+    justify-content: flex-end;
+    flex-direction: row;
+    align-items: center;
+    position: relative;
+    top: 0px;
+    right: 0px;
+    height: 32px;
+    img {
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+      padding: 8px 12px;
+      opacity: 0.6;
+      &:hover {
+        background-color: $mono202;
+        opacity: 1;
+        &.close-icon {
+          background-color: #05b1a8;
+          filter: invert(100%);
+        }
+      }
+    }
+  }
+
+  .modal-header {
+    position: relative;
+    top: 0px;
+    left: 0px;
+    width: 100%;
+    height: 60px;
+    margin: 0;
+    box-sizing: border-box;
+    .header-title {
+      font-size: 18px;
+      font-family: SpoqaB;
+      color: $mono207;
+    }
+  }
+
+  .modal-title {
+    padding: 8px 16px;
+    color: $mono207;
+    width: calc(100% - 80px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 14px;
+    box-sizing: border-box;
+    cursor: default;
+  }
+
+  .modal-content {
+    position: relative;
+    &.full {
+      display: flex;
+      flex-direction: column;
+      > div {
+        max-height: 78vh;
+        // 미리보기, 로그 모달 등 일부 모달의 구조 때문에 추가
+        > article {
+          height: auto;
+          max-height: 76vh;
+          > img {
+            max-height: 75vh;
+          }
+        }
+      }
+    }
+  }
+  .modal-footer {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 24px 48px 24px 0;
+    margin-top: auto;
+    .right {
+      display: flex;
+      flex-direction: row;
+      justify-content: flex-end;
+      > button {
+        margin-left: 12px;
+      }
+    }
+    .notice-message {
+      font-family: SpoqaM;
+      font-size: 13px;
+      font-weight: 500;
+      color: $error-color;
+    }
+    .left {
+      display: flex;
+      flex-direction: row;
+      justify-content: flex-start;
+      > button {
+        margin-right: 12px;
+      }
+    }
+  }
+
+  .loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 60px;
+    height: 60px;
+  }
+}

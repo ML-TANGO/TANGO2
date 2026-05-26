@@ -1,0 +1,209 @@
+@import '@src/styles/color.scss';
+
+.gpu-node-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 40px;
+
+  .header {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    margin-bottom: 20px;
+
+    .title {
+      font-size: 16px;
+      font-family: SpoqaB;
+      color: #121619;
+    }
+
+    .condition {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+
+      .desc {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+
+        .circle {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+
+          &.not-use {
+            background-color: white;
+            border: 1px solid $blue104;
+          }
+
+          &.use {
+            background-color: white;
+            border: 1px solid $yellow304;
+          }
+
+          &.selected {
+            background-color: $blue104;
+          }
+        }
+      }
+
+      .not-use {
+        color: $blue104;
+      }
+      .use {
+        color: $yellow304;
+      }
+      .selected {
+        color: $blue104;
+      }
+    }
+  }
+
+  .empty-notice {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    padding-left: 12px;
+    width: 520px;
+    height: 40px;
+    border-radius: 2px;
+    background: rgba(222, 233, 255, 0.5);
+    font-size: 12px;
+    font-style: normal;
+    font-weight: 500;
+    color: $mono206;
+  }
+
+  .node-group {
+    display: grid;
+    grid-auto-flow: column;
+    grid-gap: 10px;
+    overflow-x: auto;
+    padding: 24px;
+    border-radius: 9px;
+    background-color: rgba($blue104, 0.16);
+
+    .node-list {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      border: 1px solid black;
+      padding: 24px 0px 0px;
+      border: 1px solid $mono205;
+      background-color: $mono200;
+      border-radius: 8px;
+
+      .node-name {
+        box-sizing: border-box;
+        position: absolute;
+        top: -12px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        color: $mono205;
+        background-color: $mono202;
+        min-width: 60px;
+        height: 24px;
+        font-size: 12px;
+        border-radius: 16px;
+        border: 1px solid $mono205;
+        font-family: SpoqaB;
+        padding: 0px 4px;
+      }
+
+      .gpu-list {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        overflow-y: auto;
+        max-height: 217px;
+        min-height: 217px;
+        width: 140px;
+
+        .gpu {
+          position: relative;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding-bottom: 2px;
+          min-width: 112px;
+          height: 20px;
+          font-size: 12px;
+          border-radius: 16px;
+          cursor: pointer;
+          overflow-x: visible;
+          font-family: SpoqaM;
+
+          &:hover::after {
+            box-sizing: border-box;
+            display: flex;
+            justify-content: center;
+            content: attr(data-gpu-name);
+            position: absolute;
+            left: 0px;
+            top: 26px;
+            padding: 4px;
+            padding-left: 2px;
+            padding-right: 4px;
+            align-items: center;
+            max-width: 138px;
+            min-width: 138px;
+            height: 24px;
+            white-space: nowrap;
+            background: $mono204;
+            color: $mono206;
+            border-radius: 8px;
+            z-index: 10;
+            font-size: 10px;
+            font-weight: 500;
+            transform: translateX(-13px);
+            font-family: SpoqaM;
+          }
+        }
+
+        .not-use {
+          color: $blue104;
+          background-color: $mono200;
+          border: 1px solid $blue104;
+        }
+
+        .use {
+          color: $yellow304;
+          background-color: $mono200;
+          border: 1px solid $yellow304;
+        }
+
+        .selected {
+          background-color: $blue104;
+          color: $mono200;
+          border: 1px solid $blue104;
+        }
+      }
+    }
+  }
+
+  .pod-gpu {
+    display: flex;
+    justify-content: flex-end;
+    gap: 16px;
+    font-size: 13px;
+    margin-top: 8px;
+
+    .desc-text {
+      color: $mono205;
+    }
+  }
+
+  .warning {
+    display: flex;
+    margin: 8px 0px 0px;
+    justify-content: flex-end;
+    color: $red502;
+    font-size: 12px;
+  }
+}

@@ -1,0 +1,14 @@
+@import '@src/styles/color.scss';
+
+.memo-wrap {
+  & > label {
+    display: flex;
+    justify-content: flex-end;
+    color: $mono203;
+    font-size: 14px;
+    margin-bottom: 8px;
+    & > div {
+      color: $mono203;
+    }
+  }
+}

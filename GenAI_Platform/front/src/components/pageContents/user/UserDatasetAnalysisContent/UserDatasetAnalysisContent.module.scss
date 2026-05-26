@@ -1,0 +1,18 @@
+@import '@src/styles/color.scss';
+
+.container {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  font-family: SpoqaB;
+
+  .title {
+    font-size: 24px;
+    line-height: 24px;
+    font-weight: 700;
+    color: $blue107;
+    padding-bottom: 16px;
+    border-bottom: 1px solid $mono203;
+  }
+}

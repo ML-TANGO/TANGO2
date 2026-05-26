@@ -1,0 +1,55 @@
+@import '@src/styles/color.scss';
+
+.node-pie-chart {
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  margin-top: 10px;
+  padding-left: 30px;
+
+  @media (max-width: 1600px) {
+    // align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+    padding-left: 30px;
+  }
+
+  .chart-container {
+    display: flex;
+    align-items: center;
+    .title {
+      font-family: SpoqaB;
+      font-size: 13px;
+      text-align: center;
+      color: $mono207;
+      white-space: nowrap;
+      transform: translateY(-10px);
+    }
+  }
+
+  .info {
+    display: flex;
+    gap: 4px;
+
+    .label {
+      display: flex;
+      gap: 10px;
+      flex-direction: column;
+      font-size: 14px;
+      font-style: normal;
+      font-weight: 500;
+      color: $mono205;
+    }
+
+    .detail {
+      display: flex;
+      gap: 10px;
+      flex-direction: column;
+      align-items: flex-start;
+      font-size: 14px;
+      font-style: normal;
+      font-weight: 700;
+      color: $mono207;
+    }
+  }
+}

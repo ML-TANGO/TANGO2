@@ -1,0 +1,94 @@
+@import '@src/styles/color.scss';
+
+.content {
+  width: 100%;
+  width: 302px;
+  height: 272px;
+  margin-bottom: 32px;
+  border: solid 1px $mono203;
+  border-radius: 4px;
+  overflow: hidden;
+  box-sizing: border-box;
+  .tab-menu {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-start;
+    height: 32px;
+    border-bottom: solid 1px $mono203;
+    background-color: $mono200;
+    box-sizing: border-box;
+    .menu-item {
+      display: flex;
+      align-items: center;
+      padding-left: 24px;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 14px;
+      color: #3e3e3e;
+      &.disabled {
+        color: $mono203;
+        cursor: not-allowed;
+      }
+    }
+  }
+  .inner-box {
+    display: block;
+    height: 240px;
+    margin-right: 2px;
+    overflow: auto;
+    .list {
+      display: flex;
+      flex-direction: column;
+      background-color: $mono200;
+      .item {
+        display: flex;
+        flex-direction: row;
+        &:nth-child(2n) {
+          background-color: $mono201;
+        }
+        .edit-btn {
+          display: flex;
+          align-items: center;
+          height: 40px;
+          padding: 0 14.5px;
+          color: $primary-color;
+          font-size: 13px;
+          font-family: SpoqaR;
+          cursor: pointer;
+          img {
+            width: 15px;
+            height: 15px;
+            margin-right: 6px;
+          }
+          &.disabled {
+            cursor: not-allowed;
+            opacity: 0.3;
+          }
+        }
+        .label {
+          font-size: 12px;
+          font-weight: 700;
+          line-height: 20px;
+          letter-spacing: -0.18px;
+          color: $mono205;
+          width: 132px;
+          padding: 10px 0 10px 24px;
+          box-sizing: border-box;
+          &.bold {
+            color: $mono206;
+          }
+        }
+        .value {
+          flex: 1;
+          color: #6a7076;
+          font-size: 14px;
+          font-weight: 500;
+          line-height: 20px;
+          letter-spacing: -0.21px;
+          padding: 10px 12px 10px 0;
+          word-break: break-word;
+        }
+      }
+    }
+  }
+}

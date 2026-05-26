@@ -1,0 +1,26 @@
+@import '@src/styles/color.scss';
+
+.label {
+  font-family: SpoqaM;
+  font-size: 18px;
+  color: $mono205;
+  margin-bottom: 32px;
+}
+.bar {
+  height: 1px;
+  background-color: $mono203;
+  margin-bottom: 32px;
+}
+
+.recommend {
+  font-family: SpoqaM;
+  font-size: 12px;
+  color: $blue104;
+  margin-bottom: 32px;
+}
+
+.warn {
+  font-family: SpoqaM;
+  font-size: 12px;
+  color: $red502;
+}

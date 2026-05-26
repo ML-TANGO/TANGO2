@@ -1,0 +1,28 @@
+@import '@src/styles/color.scss';
+
+.training-data {
+  height: 134px;
+
+  display: flex;
+  flex-direction: column;
+  .training-list {
+    flex: 1;
+    overflow-y: auto;
+    .training-item {
+      padding: 10px 16px;
+      background-color: $blue101;
+      border-radius: 7px;
+      margin-bottom: 8px;
+      font-size: 14px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+  }
+  .training-btn {
+    margin-top: 8px;
+    height: 30px;
+
+    gap: 16px;
+    display: flex;
+  }
+}

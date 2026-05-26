@@ -1,0 +1,96 @@
+@import '@src/styles/color.scss';
+
+.graph-cont {
+  padding-bottom: 32px;
+  border-bottom: 1px solid $mono203;
+  .menu {
+    display: flex;
+    margin-bottom: 16px;
+    .menu-item {
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      color: $mono208;
+      font-family: SpoqaM;
+      font-size: 14px;
+      font-weight: 500;
+      line-height: 14px;
+      cursor: pointer;
+      border: 1px solid $mono204;
+      border-right: none;
+      padding: 0 12px;
+      height: 26px;
+      &:first-child {
+        border-radius: 6px 0 0 6px;
+      }
+      &:last-child {
+        border-radius: 0 6px 6px 0;
+        border-right: 1px solid $mono204;
+      }
+
+      &.selected {
+        border: none;
+        border: 1px solid #2d76f8;
+        background-color: $blue101;
+        color: #2d76f8;
+      }
+    }
+  }
+  .chart-box {
+    height: 508px;
+    border-radius: 8px;
+    background-color: $mono200;
+    border: 1px solid $card-border-color;
+    padding: 24px 32px 0 32px;
+    box-sizing: border-box;
+    .title {
+      width: 332px;
+      height: 48px;
+      border: 1px solid $mono203;
+      border-radius: 10px;
+      padding: 0 16px 0 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-sizing: border-box;
+      cursor: pointer;
+      label {
+        height: 19px;
+        font-family: SpoqaM;
+        font-size: 16px;
+        color: $mono207;
+        margin-right: 8px;
+      }
+      .chart-hide-btn {
+        width: 24px;
+        height: 24px;
+        border: none;
+        border-radius: 8px;
+        background-color: transparent;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        img {
+          width: 16px;
+          height: 16px;
+          &.hide {
+            transform: rotate(180deg);
+          }
+        }
+      }
+    }
+  }
+}
+
+.no-response,
+.no-data {
+  height: 78px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  font-size: 14px;
+  font-family: SpoqaM;
+  color: $mono207;
+}

@@ -1,0 +1,19 @@
+@import '@src/styles/color.scss';
+
+.content {
+  .name-box {
+    .name {
+      color: $mono207;
+    }
+    .workspace {
+      margin-top: 4px;
+
+      color: $mono205;
+    }
+  }
+}
+
+.title {
+  display: flex;
+  justify-content: space-between;
+}

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="24" height="24" viewBox="0 0 24 24">
+    <defs>
+        <path id="wptz72luia" d="M20.094 18.5c.253 0 .467-.08.643-.238.175-.159.263-.352.263-.58V7.936c0-.228-.088-.422-.263-.58-.176-.159-.39-.238-.643-.238h-9l-1.075-1.294c-.085-.102-.19-.181-.316-.238-.127-.057-.26-.086-.4-.086H3.905c-.253 0-.467.08-.643.238-.175.159-.263.352-.263.58v11.364c0 .228.088.421.263.58.176.159.39.238.643.238h16.188z"/>
+    </defs>
+    <g fill="none" fill-rule="evenodd">
+        <g>
+            <g>
+                <g>
+                    <g>
+                        <g>
+                            <g>
+                                <g transform="translate(-583 -663) translate(375 144) translate(48 156) translate(144 257) translate(0 8) translate(0 88) translate(16 10)">
+                                    <path d="M0 0H24V24H0z" opacity=".2"/>
+                                    <mask id="qxwz6unmvb" fill="#ffffff">
+                                        <use xlink:href="#wptz72luia"/>
+                                    </mask>
+                                    <path fill="#747474" d="M0 0H24V24H0z" mask="url(#qxwz6unmvb)"/>
+                                </g>
+                            </g>
+                        </g>
+                    </g>
+                </g>
+            </g>
+        </g>
+    </g>
+</svg>

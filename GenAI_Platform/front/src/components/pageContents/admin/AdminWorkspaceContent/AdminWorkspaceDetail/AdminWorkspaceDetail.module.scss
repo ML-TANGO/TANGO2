@@ -1,0 +1,179 @@
+@import '@src/styles/color.scss';
+
+.detail {
+  padding: 32px;
+  background-color: $mono200;
+  .header {
+    border-bottom: 1px solid $mono203;
+    .title {
+      margin: 0 0 16px 0;
+      height: 31px;
+      font-family: SpoqaR;
+      font-size: 24px;
+      color: $blue107;
+      span:first-child {
+        font-size: 20px;
+        font-family: SpoqaB;
+        margin-right: 8px;
+      }
+      span:nth-child(2) {
+        font-family: SpoqaM;
+        font-size: 14px;
+      }
+    }
+    .desc {
+      font-family: SpoqaM;
+      font-size: 16px;
+      line-height: normal;
+      color: $mono205;
+    }
+  }
+  .usage-div {
+    padding: 16px 0;
+    display: flex;
+    flex-direction: row;
+    gap: 30px;
+    height: 136px;
+    border-bottom: 1px solid $mono203;
+
+    .desc-box {
+      flex: 1;
+      .label {
+        height: 18px;
+        font-family: SpoqaM;
+        font-size: 14px;
+        text-align: left;
+        color: $mono205;
+        display: inline-block;
+        margin-bottom: 8px;
+      }
+      .desc {
+        font-family: SpoqaM;
+        font-size: 14px;
+        text-align: left;
+        color: $mono207;
+        margin: 0;
+      }
+    }
+
+    .users {
+      flex: 1;
+      .label {
+        height: 18px;
+        font-family: SpoqaM;
+        font-size: 14px;
+        text-align: left;
+        color: $mono205;
+        display: inline-block;
+        margin-bottom: 8px;
+      }
+      .user-list {
+        font-family: SpoqaM;
+        font-size: 14px;
+        text-align: left;
+        color: $mono207;
+        margin: 0;
+      }
+    }
+    .usage-chart {
+      flex: 1;
+      display: flex;
+      flex-direction: row;
+      .label {
+        height: 18px;
+        font-family: SpoqaM;
+        font-size: 14px;
+        text-align: left;
+        color: $mono205;
+        display: inline-block;
+        margin-bottom: 25px;
+        width: 156px;
+      }
+      .usage {
+        height: 29px;
+        font-family: SpoqaM;
+        font-size: 24px;
+        text-align: left;
+        color: $mono207;
+        margin: 0;
+      }
+      .graph {
+        width: 120px;
+        height: 120px;
+        padding: 0 24px 0 12px;
+      }
+    }
+  }
+  .block {
+    background-color: $mono200;
+
+    padding-top: 32px;
+    display: flex;
+    flex-direction: row;
+
+    .more-info {
+      display: flex;
+      // flex-direction: column;
+      align-items: center;
+      gap: 16px;
+
+      flex: 1;
+      white-space: nowrap;
+      .border {
+        .label {
+          position: relative;
+          display: flex;
+          width: max-content;
+          flex-direction: row;
+          align-items: center;
+          margin: 6px 4px 6px 0;
+          font-family: SpoqaM;
+          font-size: 16px;
+          color: $blue104;
+          cursor: pointer;
+          .more {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: 4px;
+            width: 24px;
+            height: 24px;
+            border: none;
+            border-radius: 50%;
+            box-sizing: border-box;
+            background-color: transparent;
+            cursor: pointer;
+            &:hover {
+              background-color: $hover-bg-color;
+            }
+          }
+          &:hover::after {
+            content: attr(name);
+            position: absolute;
+            top: 0;
+            left: calc(100% + 4px);
+            width: max-content;
+            height: auto;
+            line-height: 1.5;
+            padding: 3px 6px;
+            background: $mono200;
+            font-size: 12px;
+            font-family: SpoqaR;
+            border-radius: 2px;
+            border: 1px solid $mono205;
+            color: $mono206;
+            text-align: center;
+            z-index: 100;
+          }
+        }
+      }
+
+      .count {
+        font-family: SpoqaB;
+        font-size: 16px;
+        height: 21px;
+        color: $mono207;
+      }
+    }
+  }
+}

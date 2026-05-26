@@ -1,0 +1,47 @@
+@import '@src/styles/color.scss';
+
+.donut {
+  position: relative;
+  .text-cont {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: center;
+
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    .percent-txt,
+    .datatype-txt {
+      color: $mono207;
+      font-family: SpoqaB;
+      font-size: 16px;
+      text-align: center;
+    }
+  }
+  .tooltip {
+    display: flex;
+    gap: 10px;
+    background-color: #fff;
+    border: 1px solid $blue101;
+    border-radius: 10px;
+    padding: 16px;
+    box-shadow: 0px 3px 12px 0px rgba(45, 118, 248, 0.06);
+    text-wrap: nowrap;
+    z-index: 300;
+    .name {
+      color: $mono207;
+      font-family: SpoqaB;
+      font-size: 14px;
+      line-height: 150%;
+    }
+    .size,
+    .status {
+      color: $mono207;
+      font-family: SpoqaM;
+      font-size: 14px;
+      line-height: 150%;
+    }
+  }
+}

@@ -1,0 +1,31 @@
+.dashboard-frame {
+  width: 100%;
+  border-radius: 16px;
+  border: 1px solid #dee9ff;
+  background-color: #fff;
+  box-shadow: 0px 3px 6px 0px rgba(45, 118, 248, 0.1);
+  box-sizing: border-box;
+  .title-cont {
+    height: 50px;
+    padding: 16px 24px;
+    border-bottom: 1px solid #dee9ff;
+    color: #121619;
+    font-family: SpoqaB;
+    font-size: 18px;
+    line-height: 18px;
+    box-sizing: border-box;
+  }
+  .content-cont {
+    height: calc(100% - 48px);
+    padding: 24px;
+  }
+  .outer-cont {
+    position: relative;
+    height: calc(100% - 50px);
+  }
+  .title-content-cont {
+    padding: 24px 24px 16px 24px;
+    height: calc(100% - 48px);
+    overflow-y: auto;
+  }
+}

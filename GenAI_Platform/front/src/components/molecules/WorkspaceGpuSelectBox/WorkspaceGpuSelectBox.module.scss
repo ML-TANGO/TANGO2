@@ -1,0 +1,71 @@
+@import '@src/styles/color.scss';
+
+.wrapper {
+  margin: 20px 0 24px;
+  padding: 34px 24px;
+  border-radius: 4px;
+  background-color: rgba($blue104, 0.08);
+  box-sizing: border-box;
+
+  .slider-title {
+    margin-bottom: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    .switch {
+      display: flex;
+      font-size: 12px;
+      align-items: center;
+      color: $mono206;
+
+      .switch-title {
+        padding-right: 7px;
+      }
+    }
+  }
+
+  .info {
+    font-size: 13px;
+    color: $mono207;
+    margin: 4px 0 12px;
+  }
+
+  .list-header {
+    display: flex;
+    align-items: center;
+    font-size: 14px;
+    color: $mono205;
+    border-bottom: 1px solid $mono203;
+    padding-bottom: 4px;
+    margin-bottom: 8px;
+
+    > div {
+      flex: 1;
+      margin: 0 8px;
+
+      &:first-child {
+        flex: 3.5;
+      }
+
+      &:last-child {
+        flex: 2;
+      }
+    }
+
+    .sub-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+  }
+
+  .list-body {
+    .empty-item {
+      color: $mono207;
+      text-align: center;
+      font-size: 14px;
+      margin-top: 20px;
+    }
+  }
+}

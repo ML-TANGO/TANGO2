@@ -1,0 +1,144 @@
+@import '@src/styles/color.scss';
+
+.container {
+  font-size: 14px;
+
+  .header {
+    box-sizing: border-box;
+    height: 46px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0px 16px;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+    border: 1px solid $mono203;
+
+    &.edit {
+      cursor: not-allowed;
+      background-color: $mono202;
+    }
+
+    &.data {
+      border-top: 0px;
+      border-radius: 0px;
+
+      &.close {
+        border-bottom-left-radius: 10px;
+        border-bottom-right-radius: 10px;
+      }
+    }
+
+    .left-side {
+      display: flex;
+      gap: 16px;
+    }
+
+    .type {
+      color: $mono205;
+      font-weight: 700;
+      width: 60px;
+    }
+
+    .text {
+      color: $mono207;
+    }
+
+    .place-holder {
+      color: $mono204;
+    }
+  }
+
+  .content-box {
+    border-left: 1px solid $mono203;
+    border-right: 1px solid $mono203;
+    border-bottom: 1px solid $mono203;
+
+    &.data {
+      &.open {
+        border-bottom-left-radius: 10px;
+        border-bottom-right-radius: 10px;
+      }
+    }
+
+    .data-search-box {
+      display: flex;
+      gap: 16px;
+      padding: 8px 16px;
+      background-color: $mono201;
+      border-bottom: 1px solid $mono203;
+    }
+
+    .input {
+      flex: 1;
+    }
+    .button-box {
+      // padding-left: 50px;
+      display: flex;
+      justify-content: flex-end;
+      // flex: 30%;
+      .button {
+        display: flex;
+        align-items: center;
+
+        .type-title {
+          font-size: 12px;
+          color: $mono204;
+          font-family: SpoqaB;
+          white-space: nowrap;
+          margin: 0 8px;
+        }
+      }
+    }
+
+    .data-box {
+      box-sizing: border-box;
+      max-height: 200px;
+      min-height: 200px;
+      overflow-y: auto;
+      padding: 8px 16px;
+
+      .data-content {
+        height: 38px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0px 16px;
+        border: 1px solid $mono203;
+        border-radius: 8px;
+        margin-bottom: 8px;
+
+        font-size: 14px;
+        font-style: normal;
+        font-weight: 500;
+        line-height: 14px;
+        cursor: pointer;
+        &:hover {
+          background-color: $mono201;
+        }
+
+        &.selected {
+          border: 1px solid $blue104;
+          color: $blue104;
+          background-color: $blue101;
+        }
+
+        .left-side {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          color: $mono205;
+
+          &.selected {
+            color: $blue104;
+          }
+        }
+
+        .right-side {
+          font-family: SpoqaM;
+          color: $mono204;
+        }
+      }
+    }
+  }
+}

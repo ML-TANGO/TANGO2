@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<!--[if lt IE 7]>      <html class="no-js lt-ie9 lt-ie8 lt-ie7"> <![endif]-->
+<!--[if IE 7]>         <html class="no-js lt-ie9 lt-ie8"> <![endif]-->
+<!--[if IE 8]>         <html class="no-js lt-ie9"> <![endif]-->
+<!--[if gt IE 8]><!-->
+<html class="no-js">
+  <!--<![endif]-->
+
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <title></title>
+    <meta name="description" content="" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/error/error.css" />
+  </head>
+
+  <body>
+    <!--[if lt IE 7]>
+      <p class="browsehappy">
+        You are using an <strong>outdated</strong> browser. Please
+        <a href="#">upgrade your browser</a> to improve your experience.
+      </p>
+    <![endif]-->
+    <div class="container">
+      <div class="logo"></div>
+      <div class="message-box">
+        <h2 class="title">
+          죄송합니다.<br />지금은 서비스
+          <span class="blue">점검 중</span> 입니다.
+        </h2>
+        <p class="content">
+          서비스 업데이트를 위해 임시 점검 중 입니다.<br />점검 중에는 서비스를
+          이용하실 수 없는 점 양해 부탁드립니다. 앞으로도 더 좋은 서비스 제공을
+          위해 늘 노력하는 조나단이 되겠습니다.
+        </p>
+        <div class="info">
+          점검 기간 : <span id="date"></span> ~ 점검 완료시 까지<br />
+          점검 중 문의 : info@acryl.ai
+        </div>
+        <a class="goback" href="javascript:history.back()">
+          <img src="/images/icon/ic-arrow-left-blue.svg" alt="<" />이전 페이지로
+          돌아가기
+        </a>
+      </div>
+    </div>
+  </body>
+</html>
+
+<script>
+  function getDateString() {
+    const days = ['일', '월', '화', '수', '목', '금', '토'];
+    const today = new Date();
+    const string = `${today.getMonth() + 1}월 ${today.getDate()}일 (${
+      days[today.getDay()]
+    })`;
+    return string;
+  }
+  document.getElementById('date').textContent = getDateString();
+</script>

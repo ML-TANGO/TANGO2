@@ -1,0 +1,197 @@
+@import '@src/styles/color.scss';
+
+.info-wrapper {
+  display: grid;
+  grid-template-rows: 1fr fit-content(100%);
+  height: 100%;
+  // gap: 24px;
+  word-wrap: break-word; /* 긴 텍스트 줄 바꿈 */
+  overflow-wrap: break-word; /* 최신 표준 */
+  white-space: normal; /* 줄 바꿈 허용 */
+  &.disabled {
+    gap: 24px;
+  }
+}
+
+.accel-cont {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  .accel-img-cont {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    img {
+      width: 64px;
+      height: 64px;
+    }
+    span {
+      font-family: SpoqaB;
+      font-size: 18px;
+      line-height: 18px;
+    }
+  }
+}
+
+.flex-32 {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.flex-16 {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.flex-row-16 {
+  display: flex;
+  gap: 16px;
+  .value {
+    margin: initial;
+    text-wrap: wrap;
+  }
+}
+
+.flex-8 {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.disabled {
+  background-color: $mono201;
+}
+
+.title {
+  margin: initial;
+  color: $mono207;
+  font-family: SpoqaB;
+  font-size: 18px;
+  line-height: 18px; /* 100% */
+}
+
+.label-cont {
+  display: flex;
+  gap: 8px;
+}
+
+.copy-img {
+  cursor: pointer;
+}
+
+.border {
+  width: 100%;
+  height: 1px;
+  background-color: $mono203;
+}
+
+.url-paragraph {
+  font-family: SpoqaM;
+  font-size: 14px;
+  line-height: 22px;
+
+  word-wrap: break-word; // 긴 단어를 줄바꿈
+  word-break: break-word; // 단어 단위로 줄바꿈
+  white-space: normal; // 텍스트를 기본 줄바꿈 규칙으로 설정
+}
+
+.label {
+  color: $mono205;
+  font-family: SpoqaM;
+  font-size: 14px;
+  line-height: 14px; /* 100% */
+}
+
+.value {
+  color: $mono207;
+  font-family: SpoqaM;
+  font-size: 14px;
+  line-height: 14px; /* 100% */
+  text-wrap: nowrap;
+}
+
+.button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background-color: initial;
+  cursor: pointer;
+
+  &:focus {
+    outline: 1px solid $blue104;
+    border-radius: 8px;
+    outline-offset: 1px;
+  }
+}
+
+.edit-cont {
+  text-wrap: nowrap;
+  .explain-cont {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    .left-cont {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+
+      img {
+        width: 16px;
+        height: 16px;
+      }
+    }
+  }
+}
+
+.desc-cont {
+  margin: initial;
+  color: $mono206;
+  font-family: SpoqaM;
+  font-size: 14px;
+  line-height: 22px; /* 157.143% */
+}
+
+.desc-length-txt {
+  display: flex;
+  justify-content: flex-end;
+  font-family: SpoqaM;
+  font-size: 12px;
+  line-height: 12px;
+  letter-spacing: -0.015em;
+}
+
+.stop-json-cont {
+  padding: 14px 16px;
+  border-radius: 9px;
+  border: 1px solid $mono204;
+  background: $mono202;
+  color: $mono204;
+  font-family: SpoqaM;
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.request-url-cont {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  .label-cont {
+    display: flex;
+    align-items: center;
+    .copy-img {
+      width: 16px;
+      height: 16px;
+    }
+  }
+  .url-paragraph {
+    color: $mono207;
+    font-family: SpoqaM;
+    font-size: 14px;
+    line-height: 22px;
+  }
+}

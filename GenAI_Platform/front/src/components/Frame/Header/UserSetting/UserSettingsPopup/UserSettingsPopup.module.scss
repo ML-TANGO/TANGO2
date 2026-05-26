@@ -1,0 +1,296 @@
+@import '@src/styles/color.scss';
+
+.popup {
+  position: absolute;
+  top: 48px;
+  right: 0px;
+  width: 390px;
+  z-index: 99;
+  border-radius: 8px;
+  box-shadow: 0 16px 40px 9px rgba(18, 22, 25, 0.2),
+    0 16px 26px -4px rgba(18, 22, 25, 0.26);
+  background-color: $mono200;
+  box-sizing: border-box;
+  overflow: hidden;
+  &.small {
+    width: 270px;
+    .manual-box {
+      height: 78px;
+      .manual-item {
+        .service-icon {
+          width: auto;
+          left: 78px;
+          bottom: 24px;
+          &.dna {
+            width: 46px;
+            left: 170px;
+          }
+        }
+      }
+    }
+  }
+  .top-box {
+    padding: 32px;
+    font-family: SpoqaM;
+    font-size: 16px;
+    color: $mono207;
+    display: flex;
+    flex-direction: row;
+    box-sizing: border-box;
+    .profile {
+      margin-right: 12px;
+      width: 78px;
+      height: 78px;
+      .user-image {
+        width: 78px;
+        height: 78px;
+        border-radius: 50%;
+        background-color: $mono202;
+      }
+      .user-initial {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        width: 78px;
+        height: 78px;
+        border-radius: 50%;
+        background-color: $mono202;
+        color: $mono205;
+        font-family: SpoqaB;
+        font-size: 36px;
+      }
+    }
+    .user-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      .hi-logout {
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+        height: 24px;
+        .hi {
+          margin-bottom: 6px;
+          height: 24px;
+          font-weight: 700;
+          font-size: 14px;
+        }
+        .logout-btn {
+          width: 52px;
+          height: 20px;
+          padding: 0;
+          color: $mono205;
+          font-size: 13px;
+          font-family: SpoqaM;
+          background-color: transparent;
+          border: none;
+          outline: none;
+          cursor: pointer;
+          text-align: left;
+
+          &:hover {
+            font-weight: 700;
+          }
+        }
+      }
+      .user-name {
+        margin-top: 10px;
+        height: 22px;
+        .name {
+          font-family: SpoqaB;
+        }
+        .sir {
+          margin-left: 4px;
+        }
+        .edit-btn {
+          width: 22px;
+          height: 22px;
+          padding: 8px;
+          border: none;
+          background-image: url(@src/static/images/icon/00-ic-basic-pen.svg);
+          background-repeat: no-repeat;
+          background-color: transparent;
+          background-size: 14px 14px;
+          margin-left: 8px;
+          cursor: pointer;
+          &:disabled {
+            opacity: 0.3;
+            cursor: default;
+          }
+        }
+      }
+      .dashboard-btn {
+        margin-top: 8px;
+        width: 156px;
+        height: 20px;
+        line-height: 20px;
+        padding: 0;
+        text-align: left;
+        color: $primary-color;
+        font-size: 14px;
+        font-family: SpoqaM;
+        text-decoration: underline;
+        background-image: url(@src/static/images/icon/00-ic-basic-arrow-03-right.svg);
+        background-repeat: no-repeat;
+        background-position: right;
+        background-color: transparent;
+        border: none;
+        outline: none;
+        cursor: pointer;
+      }
+
+      .password-btn {
+        margin-top: 55px;
+        height: 20px;
+        line-height: 20px;
+        padding: 0;
+        text-align: left;
+        color: $primary-color;
+        font-size: 13px;
+        font-family: SpoqaM;
+        background-color: transparent;
+        border: none;
+        outline: none;
+        cursor: pointer;
+
+        &:hover {
+          font-weight: 700;
+        }
+      }
+
+      .ssh-download-btn {
+        all: unset;
+        box-sizing: border-box;
+        width: 208px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        background-color: rgba(222, 233, 255, 0.5);
+        color: $blue104;
+        font-weight: 700;
+        font-size: 13px;
+        margin-top: 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        &:hover {
+          background: rgba(200, 219, 253, 0.5);
+        }
+      }
+    }
+  }
+  .manual-box {
+    height: 100px;
+    display: flex;
+    flex-direction: row;
+    padding-bottom: 36px;
+    .manual-item {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background-color: $blue107;
+      padding: 8px 16px;
+      border-right: 1px solid $blue101;
+      box-sizing: border-box;
+      cursor: pointer;
+      overflow: hidden;
+      &:last-child {
+        border-right: none;
+      }
+      &.disabled {
+        opacity: 0.1;
+        filter: grayscale(90%);
+        cursor: default;
+      }
+      &:hover:not(.disabled) {
+        .service-icon {
+          width: auto;
+          height: 52px;
+        }
+        .download-icon-box {
+          opacity: 0.6;
+        }
+      }
+      .service-manual {
+        height: 15px;
+        color: $blue101;
+        font-family: SpoqaM;
+        font-size: 12px;
+      }
+      .service-name {
+        color: $mono200;
+        font-family: SpoqaB;
+        font-size: 14px;
+      }
+      .service-icon {
+        width: auto;
+        height: 46px;
+        position: relative;
+        transition: height 0.5s;
+        left: 52px;
+        &.integration {
+          left: 32px;
+        }
+      }
+      .download-icon-box {
+        position: absolute;
+        width: calc(100% - 32px);
+        height: 62px;
+        display: flex;
+        align-items: flex-end;
+        justify-content: flex-start;
+        opacity: 0;
+        transition: opacity 0.5s;
+
+        .download-icon {
+          height: 28px;
+          margin-left: -6px;
+        }
+        .download-text {
+          font-size: 13px;
+          height: 28px;
+          line-height: 28px;
+        }
+      }
+    }
+  }
+  .list {
+    padding: 24px 0;
+    .link {
+      display: flex;
+      justify-content: flex-start;
+      padding: 18px 24px;
+      height: 24px;
+      cursor: pointer;
+      &:hover,
+      &:focus {
+        background-color: $hover-bg-color;
+      }
+      &.disabled {
+        opacity: 0.3;
+        cursor: default;
+      }
+      .icon {
+        margin-right: 12px;
+      }
+      .label {
+        color: $mono207;
+        font-size: 16px;
+        font-family: SpoqaM;
+        line-height: 24px;
+      }
+      .notification {
+        display: inline-block;
+        margin-bottom: 2px;
+        margin-left: 4px;
+        width: 8px;
+        height: 8px;
+        background-color: $red502;
+        border-radius: 50%;
+      }
+    }
+  }
+}

@@ -1,0 +1,225 @@
+@import '@src/styles/color.scss';
+
+.card {
+  position: relative;
+  min-width: 374px;
+  height: 344px;
+  border-radius: 10px;
+  border: 1px solid $mono203;
+  background-color: $mono200;
+  opacity: 1;
+  animation-name: fadeIn;
+  animation-iteration-count: 1;
+  animation-timing-function: ease-out;
+  animation-duration: 1s;
+  &.active,
+  &.running {
+    // border: 1px solid $blue104;
+    // border 회전 animation code
+    border: none;
+    z-index: 0;
+    overflow: hidden;
+    &::before {
+      content: '';
+      position: absolute;
+      z-index: -2;
+      left: -50%;
+      top: -50%;
+      width: 200%;
+      height: 200%;
+      background-color: $primary-color;
+      background-repeat: no-repeat;
+      background-size: 50% 50%, 50% 50%;
+      background-position: 0 0, 100% 0, 100% 100%, 0 100%;
+      background-image: linear-gradient($blue104, $blue102),
+        linear-gradient($blue101, $blue102), linear-gradient($blue102, $blue104),
+        linear-gradient($blue102, $blue101);
+      animation: rotate 2.5s linear infinite;
+    }
+    &::after {
+      content: '';
+      position: absolute;
+      z-index: -1;
+      left: 2px;
+      top: 2px;
+      width: calc(100% - 4px);
+      height: calc(100% - 4px);
+      background: white;
+      border-radius: 10px;
+    }
+    &.stop::before {
+      filter: grayscale(1);
+    }
+    @keyframes rotate {
+      100% {
+        transform: rotate(1turn);
+      }
+    }
+    cursor: pointer;
+    &:hover {
+      box-shadow: $card-hover-color;
+    }
+  }
+  .contents-box {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    .header {
+      margin: 24px 24px 0;
+      display: flex;
+      flex-direction: column;
+      border-bottom: 1px solid $mono203;
+      .type-status {
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 28px;
+        .type {
+          display: flex;
+          flex-direction: row;
+          align-items: center;
+
+          .type-icon {
+            width: 18px;
+            height: 18px;
+            margin-right: 4px;
+          }
+          .type-label {
+            height: 18px;
+            font-size: 14px;
+            color: $mono205;
+            &.active {
+              color: $blue104;
+            }
+          }
+        }
+      }
+      .creator {
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        line-height: 22px;
+        overflow: hidden;
+        color: $mono205;
+        margin-bottom: 4px;
+        font-size: 14px;
+      }
+      .service-name {
+        display: inline-block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        height: 29px;
+        line-height: 24px;
+        font-family: SpoqaB;
+        font-size: 24px;
+        margin-bottom: 4px;
+        color: $mono207;
+      }
+      .created-box {
+        display: flex;
+        flex-direction: row;
+        justify-content: flex-start;
+        align-items: center;
+        margin: 4px 0 8px 0;
+        font-size: 14px;
+        font-family: SpoqaR;
+        color: $mono205;
+        .created {
+          // margin: 0 0 0 2px;
+          line-height: 14px;
+          white-space: nowrap;
+          // font-size: 14px;
+          // padding-right: 6px;
+        }
+      }
+    }
+    .body {
+      margin: 0 30px 24px;
+      .description-box {
+        padding: 8px 0;
+        height: 102px;
+        box-sizing: border-box;
+        border-bottom: 1px solid $mono203;
+        .description {
+          width: 100%;
+
+          font-family: SpoqaM;
+          font-size: 14px;
+          color: $mono207;
+          line-height: 22px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: normal;
+          word-wrap: break-word;
+          display: -webkit-box;
+          -webkit-line-clamp: 3;
+          -webkit-box-orient: vertical;
+          box-sizing: border-box;
+        }
+      }
+      .detail-info {
+        width: 100%;
+        margin-top: 8px;
+        li {
+          display: flex;
+          flex-direction: column;
+          margin-bottom: 10px;
+
+          .label {
+            display: inline-block;
+            width: 100%;
+            font-family: SpoqaM;
+            line-height: 22px;
+            font-size: 14px;
+            color: $mono205;
+          }
+          .value {
+            width: 100%;
+            height: 18px;
+            font-family: SpoqaM;
+            font-size: 14px;
+            color: $mono207;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            margin-top: 8px;
+          }
+          &:last-child {
+            margin-bottom: 0;
+          }
+        }
+      }
+    }
+  }
+}
+@keyframes fadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+.custom-text {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  .icon {
+    width: 16px;
+    height: 16px;
+    &.gray {
+      opacity: 0.3;
+      filter: grayscale(1);
+    }
+  }
+  .cardType {
+    color: $mono204;
+    font-family: SpoqaM;
+    font-size: 16px;
+    line-height: 16px;
+    &.blue {
+      color: $blue104;
+    }
+  }
+}

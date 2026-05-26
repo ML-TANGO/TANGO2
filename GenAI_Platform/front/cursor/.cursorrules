@@ -1,0 +1,3 @@
+- 이 프로젝트는 Next.js 가 아닌 React 프로젝트이다.
+- 라우팅으로는 react-router-dom 을 활용하고있어.
+- JavaScript 문법을 사용하고있어.

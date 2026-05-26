@@ -1,0 +1,108 @@
+@import '@src/styles/color.scss';
+
+.footer {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  .flex-cont {
+    position: relative;
+    display: flex;
+    gap: 5px;
+    justify-content: flex-end;
+  }
+  .popup {
+    display: flex;
+    flex-direction: column;
+    font-size: 16px;
+    position: absolute;
+    padding: 14px 20px 10px 20px;
+    top: -124px;
+    right: 0px;
+    min-width: 284px !important;
+    z-index: 99;
+    border: 0.5px solid $blue101;
+    border-radius: 8px;
+    filter: drop-shadow(0px 3px 12px rgba(45, 118, 248, 0.06));
+    background-color: $mono200;
+    box-sizing: border-box;
+    overflow: hidden;
+    .info-box {
+      display: flex;
+      gap: 10px;
+      min-width: 310px;
+    }
+    .copy-cont {
+      position: relative;
+      display: flex;
+      align-items: center;
+      width: 218px;
+      padding-right: 20px;
+      height: 16px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      span {
+        display: inline-block;
+        margin-right: 15px;
+        color: $mono205;
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 12px;
+        margin-right: 4px;
+      }
+      p {
+        display: inline-block;
+        color: $mono207;
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 12px; /* 100% */
+        text-wrap: nowrap;
+        margin: initial;
+        overflow: hidden;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      img {
+        position: absolute;
+        right: 0;
+      }
+    }
+    .border {
+      width: 100%;
+      height: 1px;
+      background-color: $mono203;
+      margin: 4px 0 12px;
+    }
+    .connect-guide-cont {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 8px 16px;
+      cursor: pointer;
+      span {
+        color: $blue104;
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 12px; /* 100% */
+      }
+    }
+    &.small {
+      width: 270px;
+      .manual-box {
+        height: 78px;
+        .manual-item {
+          .service-icon {
+            width: auto;
+            left: 78px;
+            bottom: 24px;
+            &.dna {
+              width: 46px;
+              left: 170px;
+            }
+          }
+        }
+      }
+    }
+  }
+}

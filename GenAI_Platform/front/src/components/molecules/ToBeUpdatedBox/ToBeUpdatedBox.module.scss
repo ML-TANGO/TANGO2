@@ -1,0 +1,14 @@
+@import '@src/styles/color.scss';
+
+.box {
+  position: relative;
+  width: 100%;
+  height: calc(100vh - 252px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  .text {
+    font-size: 36px;
+    color: $mono207;
+  }
+}

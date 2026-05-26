@@ -1,0 +1,54 @@
+@import '@src/styles/color.scss';
+
+@mixin box-border {
+  border: 1px solid #c8dbfd;
+  border-radius: 16px;
+  box-shadow: 0px 3px 12px 0px rgba(45, 118, 248, 0.1);
+}
+
+.period-resource-graph-box {
+  display: flex;
+  flex-direction: column;
+  @include box-border;
+  background-color: white;
+
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 32px;
+
+    .left-content {
+      display: flex;
+      gap: 32px;
+
+      .title {
+        color: $mono207;
+        font-weight: 700;
+        font-size: 18px;
+      }
+
+      .option-box {
+        display: flex;
+      }
+    }
+
+    .right-content {
+      display: flex;
+      gap: 16px;
+    }
+  }
+
+  .graph-container {
+    display: flex;
+    flex-direction: column;
+    height: 350px;
+    border-top: 1px solid $mono203;
+
+    .period-section {
+      display: flex;
+      gap: 16px;
+      padding: 16px 32px;
+    }
+  }
+}

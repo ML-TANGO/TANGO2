@@ -1,0 +1,179 @@
+@import '@src/styles/color.scss';
+
+.card-cont {
+  // * 카드 초기화
+  all: unset;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  outline: none;
+
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  border: 1px solid $blue101;
+  background-color: #fff;
+  padding: 24px;
+  box-sizing: border-box;
+  cursor: pointer;
+
+  &:focus {
+    outline: 1px solid $blue104;
+    border-radius: 8px;
+    outline-offset: 1px;
+  }
+
+  &.active {
+    border: none;
+    z-index: 0;
+    overflow: hidden;
+    &::before {
+      content: '';
+      position: absolute;
+      z-index: -2;
+      left: -50%;
+      top: -50%;
+      width: 200%;
+      height: 200%;
+      background-color: $primary-color;
+      background-repeat: no-repeat;
+      background-size: 50% 50%, 50% 50%;
+      background-position: 0 0, 100% 0, 100% 100%, 0 100%;
+      background-image: linear-gradient($blue104, $blue102),
+        linear-gradient($blue101, $blue102), linear-gradient($blue102, $blue104),
+        linear-gradient($blue102, $blue101);
+      animation: rotate 2.5s linear infinite;
+    }
+    &::after {
+      content: '';
+      position: absolute;
+      z-index: -1;
+      left: 2px;
+      top: 2px;
+      width: calc(100% - 4px);
+      height: calc(100% - 4px);
+      background: white;
+      border-radius: 12px;
+    }
+    &.stop::before {
+      filter: grayscale(1);
+    }
+    @keyframes rotate {
+      100% {
+        transform: rotate(1turn);
+      }
+    }
+  }
+
+  .top-cont {
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    .owner-cont {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      .owner-txt {
+        color: $mono205;
+        font-family: SpoqaM;
+        font-size: 16px;
+        line-height: 16px;
+      }
+      img {
+        width: 16px;
+        height: 16px;
+      }
+    }
+    .btn-cont {
+      display: flex;
+      gap: 8px;
+      button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        width: 24px;
+        height: 24px;
+        border: none;
+        background-color: initial;
+        &:focus {
+          outline: 1px solid $blue104;
+          border-radius: 8px;
+          outline-offset: 1px;
+        }
+      }
+    }
+  }
+
+  .title {
+    font-family: SpoqaB;
+    line-height: 24px;
+    display: -webkit-box;
+    width: 100%;
+    margin: initial;
+    margin-bottom: 16px;
+    font-size: $mono207;
+    font-size: 24px;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .create-time-txt {
+    display: inline-block;
+    color: $mono205;
+    font-family: SpoqaM;
+    font-size: 14px;
+    line-height: 14px;
+    padding-bottom: 7px;
+    border-bottom: 1px solid $mono203;
+    margin-bottom: 8px;
+  }
+
+  .content {
+    height: 114px;
+    padding-bottom: 7px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid $mono203;
+
+    color: $mono207;
+    overflow-y: auto;
+    word-break: break-all;
+    font-family: SpoqaM;
+    font-size: 14px;
+    line-height: 22px;
+
+    &.noDesc {
+      color: $mono204;
+    }
+  }
+  .constructor-txt {
+    color: $mono205;
+    font-family: SpoqaM;
+    font-size: 14px;
+    line-height: 14px;
+  }
+  .update-cont {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    justify-content: space-between;
+    font-family: SpoqaM;
+    font-size: 14px;
+    line-height: 14px;
+    color: $mono205;
+
+    .update-label-txt {
+      color: $mono205;
+      font-family: SpoqaM;
+      font-size: 14px;
+      line-height: 22px;
+    }
+  }
+}

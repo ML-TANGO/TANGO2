@@ -1,0 +1,31 @@
+@import '@src/styles/color.scss';
+
+.container {
+  padding: 8px 0;
+  .content {
+    // margin-top: 24px;
+  }
+
+  .back-to-list {
+    margin-bottom: 12px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    width: max-content;
+
+    cursor: pointer;
+    .back-btn-image {
+      width: 16px;
+      height: 16px;
+    }
+    .back-btn-label {
+      font-size: 16px;
+      font-style: normal;
+      font-weight: 700;
+      line-height: 16px;
+      color: $mono208;
+      font-family: SpoqaB;
+      margin-left: 4px;
+    }
+  }
+}

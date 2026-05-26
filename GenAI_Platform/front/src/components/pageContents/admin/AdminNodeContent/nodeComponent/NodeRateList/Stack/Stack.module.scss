@@ -1,0 +1,41 @@
+@import '@src/styles/color.scss';
+
+.stack-wrap {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  .stack {
+    flex: 1;
+    position: relative;
+    height: 4px;
+    border-radius: 2px;
+    border: 1px solid $mono203;
+    background-color: $mono200;
+    overflow: hidden;
+    .fill {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 0;
+      height: 4px;
+      background-color: $primary-color;
+      transition: width 0.4s;
+      &.danger {
+        background-color: $error-color;
+      }
+      &.warn {
+        background-color: $caution-color;
+      }
+    }
+  }
+  .rate {
+    flex: 0 0 40px;
+    font-size: 12px;
+    color: $mono206;
+    padding-left: 6px;
+    padding-right: 8px;
+    .error {
+      color: $error-color;
+    }
+  }
+}

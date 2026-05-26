@@ -1,0 +1,82 @@
+@import '@src/styles/color.scss';
+
+.language-setting {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  width: 81px;
+  height: 20px;
+  background-color: transparent;
+  box-sizing: border-box;
+  margin-left: 12px;
+  cursor: pointer;
+  position: relative;
+  white-space: nowrap;
+  font-size: 11px;
+  font-family: SpoqaM;
+  color: $mono205;
+
+  .language-icon {
+    width: 20px;
+    height: 20px;
+    margin-right: 2px;
+  }
+  .language-selected {
+    width: 45px;
+  }
+  .arrow-icon {
+    width: 12px;
+    height: 12px;
+    margin-left: 2px;
+    transform: rotate(180deg);
+    &.open {
+      transform: rotate(0deg);
+    }
+  }
+  .options {
+    position: absolute;
+    bottom: 23px;
+    right: -1px;
+    margin: 0 0 4px 0;
+    border-radius: 4px;
+    box-shadow: 0 5px 20px 0 rgba(18, 22, 25, 0.16),
+      0 6px 6px -3px rgba(18, 22, 25, 0.22);
+    background-color: $mono200;
+    width: 81px;
+    padding: 8px 0;
+    z-index: 2;
+    box-sizing: border-box;
+    display: block;
+
+    .option_li {
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      width: 81px;
+      height: 24px;
+      padding: 4px 12px 3px 22px;
+      text-align: center;
+      cursor: pointer;
+      font-size: 11px;
+      font-family: SpoqaM;
+      color: $mono205;
+      box-sizing: border-box;
+
+      &:hover {
+        background-color: $hover-bg-color;
+      }
+
+      &.selected {
+        color: $primary-color;
+        &::before {
+          position: absolute;
+          left: 6px;
+          content: url(@src/static/images/icon/check.svg);
+          width: 12px;
+          height: 12px;
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,20 @@
+@import '@src/styles/color.scss';
+
+$padding-xlarge: 64px;
+$padding-large: 44px;
+$padding-primary: 36px;
+$padding-small: 20px;
+$padding-xsmall: 16px;
+$worker-list-height: 136px;
+
+@mixin box-area() {
+  border-radius: 4px;
+  border: 1px solid $card-border-color;
+  background-color: $mono200;
+}
+
+@mixin sort-center() {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}

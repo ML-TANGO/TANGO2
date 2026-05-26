@@ -1,0 +1,90 @@
+/** ================================================================================================
+ * Color Code
+ ================================================================================================ */
+
+// Dark Mode Blue
+$dark-blue100: #5089f0;
+$dark-blue101: #2d76f8;
+
+// Dark Mode Mono
+$dark-mono200: #ffffff;
+$dark-mono201: #c2c2c2;
+$dark-mono202: #828282;
+$dark-mono203: #53505b;
+$dark-mono204: #5f5f5f;
+$dark-mono205: #423f4a;
+$dark-mono206: #35323e;
+$dark-mono207: #25232a;
+$dark-mono208: #000000;
+
+// Dark Mode Yellow
+$dark-yellow301: #ffbc3b;
+
+// Dark Mode Red
+$dark-red501: #ff5656;
+$dark-red502: #de4747;
+
+// Dark Mode Lime
+$dark-lime601: #27d478;
+$dark-lime602: #0fa755;
+
+// Blue
+$blue100: #f5f7fb;
+$blue101: #dee9ff;
+$blue102: #c8dbfd;
+$blue103: #93baff;
+$blue104: #2d76f8;
+$blue105: #164abe;
+$blue106: #002f77;
+$blue107: #042659;
+$blue108: #3babff;
+$blue109: #fbfcff;
+
+// Mono
+$mono200: #ffffff;
+$mono201: #f9fafb;
+$mono202: #f0f0f0;
+$mono203: #dbdbdb;
+$mono204: #c1c1c1;
+$mono205: #747474;
+$mono206: #3e3e3e;
+$mono207: #121619;
+$mono208: #7e7e7f;
+$mono209: #d9d9d9;
+
+// Yellow
+$yellow301: #fff8d9;
+$yellow302: #ffea53;
+$yellow303: #ffc500;
+$yellow304: #ffab0e;
+
+// Orange
+$orange401: #fff0e4;
+$orange402: #ffab31;
+$orange403: #ff7a00;
+
+// Red
+$red501: #ffe6e5;
+$red502: #fa4e57;
+$red503: #d91a0c;
+
+// Lime
+$lime601: #e3fcee;
+$lime602: #02e366;
+$lime603: #00c775;
+$lime604: #439f6e;
+
+// Frequently used color
+$primary-color: $blue104;
+$background-color: $blue100;
+$title-color: $mono207;
+$normal-text-color: $mono207;
+$sub-text-color: $mono205;
+$placeholder-text-color: $mono204;
+$disable-color: $mono203;
+$error-color: $red502;
+$caution-color: $yellow303;
+$hover-bg-color: rgba($blue104, 0.08);
+$new-bg-color: $blue109;
+$card-border-color: $blue101;
+$card-hover-color: 0px 3px 12px rgba($blue104, 0.16);

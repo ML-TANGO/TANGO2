@@ -1,0 +1,60 @@
+@import '@src/styles/color.scss';
+
+.panel {
+  position: fixed;
+  top: 0px;
+  right: -400px;
+  background-color: $mono200;
+  width: 400px;
+  height: 100%;
+  box-shadow: -1px 0 9px 0 rgba($mono207, 0.08);
+  transition: right 0.7s;
+  box-sizing: border-box;
+  z-index: 4;
+  &.open {
+    right: 0;
+  }
+  .panel-header {
+    height: 40px;
+    text-align: right;
+    padding-top: 10px;
+    padding-right: 20px;
+    .close-btn {
+      border: none;
+      background: none;
+      cursor: pointer;
+    }
+  }
+  .panel-open-btn {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    top: 170px;
+    left: -40px;
+    width: 40px;
+    height: 40px;
+    background-color: $mono200;
+    border-radius: 4px 0 0 4px;
+    border-top: 1px solid $mono204;
+    border-left: 1px solid $mono204;
+    border-bottom: 1px solid $mono204;
+    cursor: pointer;
+    &.disabled {
+      background: $mono204;
+    }
+    &.active {
+      background: $primary-color;
+    }
+    img {
+      width: 25px;
+      height: 25px;
+    }
+  }
+
+  .content-box {
+    height: calc(100% - 50px);
+    box-sizing: border-box;
+    overflow-y: auto;
+  }
+}

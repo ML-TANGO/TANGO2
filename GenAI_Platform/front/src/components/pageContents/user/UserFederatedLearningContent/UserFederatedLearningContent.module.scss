@@ -1,0 +1,114 @@
+@import '@src/styles/color.scss';
+
+.content {
+  .title-box {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid $mono204;
+    padding-bottom: 8px;
+    margin-bottom: 40px;
+    .btn-box {
+      display: flex;
+      flex-direction: row;
+      grid-gap: 12px;
+    }
+  }
+  .fl-box {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    background-color: $mono200;
+    border: 1px solid $card-border-color;
+    border-radius: 12px;
+    .name-box {
+      padding: 28px 40px;
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      .icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 64px;
+        height: 64px;
+        border-radius: 8px;
+        box-sizing: border-box;
+        margin-right: 16px;
+        background-color: #000;
+        img {
+          width: 40px;
+          height: 40px;
+        }
+      }
+      .label {
+        font-family: SpoqaB;
+        font-size: 24px;
+        color: $mono207;
+      }
+    }
+    .info-box {
+      flex: 1;
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      border-left: 1px solid $card-border-color;
+      padding: 24px 40px;
+      grid-gap: 14px;
+      .info-list {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        padding: 0 40px 0 0;
+        min-width: 240px;
+        box-sizing: border-box;
+        li {
+          display: flex;
+          flex-direction: row;
+          align-items: flex-start;
+          line-height: 1;
+          margin-bottom: 14px;
+          &:last-child {
+            margin-bottom: 0;
+          }
+          .label {
+            font-size: 14px;
+            font-family: SpoqaM;
+            color: $mono205;
+            width: 88px;
+            margin-right: 24px;
+            white-space: nowrap;
+          }
+          .value {
+            flex: 1;
+            font-size: 14px;
+            font-family: SpoqaM;
+            color: $mono206;
+          }
+        }
+      }
+      .btn-box {
+        display: flex;
+        flex-direction: row;
+        button:not(last-child) {
+          margin-right: 12px;
+        }
+      }
+    }
+
+    @media (max-width: 573px) {
+      .info-box {
+        border-left: 0;
+        border-top: 1px solid $mono203;
+      }
+    }
+  }
+  .round-box {
+    display: flex;
+    margin-top: 30px;
+  }
+}

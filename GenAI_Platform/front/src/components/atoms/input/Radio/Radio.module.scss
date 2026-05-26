@@ -1,0 +1,109 @@
+@import '@src/styles/color.scss';
+
+.radio-box {
+  display: flex;
+  flex-direction: row;
+  // flex-wrap: wrap;
+  &.margin-item {
+    margin-top: 8px;
+  }
+  .radio-btn {
+    display: flex;
+    align-items: center;
+    margin-right: 24px;
+    cursor: pointer;
+    & > input[type='radio'],
+    & > input[type='radio']:checked {
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 100%;
+      margin: 0px;
+      margin-right: 8px;
+      vertical-align: bottom;
+    }
+    & > input[type='radio'] {
+      position: relative;
+      border: 1px solid $blue102;
+      cursor: pointer;
+    }
+    & > input[type='radio']:checked {
+      border: 1px solid $primary-color;
+      &:after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 9px;
+        height: 9px;
+        transform: translate(-50%, -50%);
+        background-color: $primary-color;
+        border-radius: 100%;
+      }
+
+      &:disabled {
+        &:after {
+          content: '';
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          width: 9px;
+          height: 9px;
+          transform: translate(-50%, -50%);
+          background-color: $mono204;
+          border-radius: 100%;
+        }
+      }
+    }
+    & > input[type='radio']:disabled {
+      background: $mono202 !important;
+      border-color: $mono204 !important;
+    }
+    &.disabled {
+      & > input {
+        background: $mono202 !important;
+        border-color: $mono204 !important;
+      }
+      & > span {
+        color: $mono204;
+      }
+    }
+    & > span {
+      display: inline-block;
+      font-size: 14px;
+      font-family: SpoqaM;
+      color: $mono207;
+      line-height: 1.2;
+      vertical-align: middle;
+      & > img {
+        vertical-align: middle;
+      }
+    }
+
+    .selected-label {
+      color: $blue104;
+    }
+
+    .readonly-selected-label {
+      color: #c1c1c1;
+    }
+
+    .label-icon {
+      vertical-align: middle;
+      width: 18px;
+      height: 18px;
+      margin-right: 6px;
+    }
+
+    .desc {
+      margin-left: 10px;
+      font-size: 12px;
+      &.recommand {
+        color: $blue104;
+      }
+      &.warning {
+        color: $mono206;
+      }
+    }
+  }
+}

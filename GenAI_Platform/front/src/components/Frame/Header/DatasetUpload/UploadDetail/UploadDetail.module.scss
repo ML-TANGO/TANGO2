@@ -1,0 +1,488 @@
+@import '@src/styles/color.scss';
+
+.detail-cont {
+  position: absolute;
+  top: 38px;
+  right: 4px;
+  width: 320px;
+  min-height: 260px;
+  // height: 320px;
+  z-index: 99;
+  border-radius: 8px;
+  box-shadow: 0 16px 40px 9px rgba(18, 22, 25, 0.2),
+    0 16px 26px -4px rgba(18, 22, 25, 0.26);
+  background-color: $mono200;
+  box-sizing: border-box;
+  &.small {
+    width: 320px;
+  }
+  .upload-header {
+    display: flex;
+    height: 46px;
+    padding: 16px 16px 16px 18px;
+    justify-content: space-between;
+    border-bottom: 1px solid #dbdbdb;
+    box-sizing: border-box;
+    cursor: default;
+    .upload-title {
+      color: #121619;
+      font-size: 16px;
+      margin: initial;
+      line-height: 14px;
+    }
+    .btn-list {
+      display: flex;
+      gap: 16px;
+      button {
+        border: none;
+        background-color: inherit;
+        font-size: 12px;
+        text-wrap: nowrap;
+        cursor: pointer;
+        line-height: 14px;
+        &:active {
+          font-weight: 700;
+        }
+      }
+      .read-btn {
+        color: #2d76f8;
+      }
+    }
+  }
+  // .upload-list {
+  //   display: flex;
+  //   flex-direction: column;
+  //   height: 204px;
+  //   font-family: SpoqaM;
+  //   font-size: 14px;
+  //   color: $mono207;
+  //   box-sizing: border-box;
+  //   overflow-y: scroll;
+  //   overflow-x: hidden;
+  //   margin-right: 2px;
+
+  //   .no-upload-cont {
+  //     height: 100%;
+  //     display: flex;
+  //     justify-content: center;
+  //     align-items: center;
+  //     .no-upload {
+  //       color: #747474;
+  //       font-size: 14px;
+  //       font-weight: 500;
+  //       line-height: 14px;
+  //       justify-content: center;
+  //       align-items: center;
+  //       text-align: center;
+  //     }
+  //   }
+  //   .upload-item {
+  //     width: 100%;
+
+  //     display: flex;
+  //     flex-direction: column;
+  //     align-items: center;
+
+  //     &:hover {
+  //       background-color: #f0f0f0;
+  //       outline: 1px solid #bdbdbd;
+  //       .border {
+  //         width: 0%;
+  //       }
+  //       .flex-cont .delete-btn {
+  //         display: inline-block !important;
+  //       }
+  //     }
+  //     .flex-cont {
+  //       width: 272px;
+  //       height: 101px;
+  //       gap: 8px;
+  //       position: relative;
+
+  //       box-sizing: border-box;
+  //       padding: 16px 0 10px 0;
+  //       cursor: pointer;
+  //       display: flex;
+  //       .dot {
+  //         width: 8px;
+  //         height: 8px;
+
+  //         border-radius: 50%;
+  //         margin-top: 8px;
+  //         &.read {
+  //           background-color: inherit;
+  //         }
+  //         &.completed {
+  //           background-color: $blue108;
+  //         }
+  //         &.error {
+  //           background-color: $red502;
+  //         }
+  //       }
+
+  //       &.loading {
+  //         opacity: 0.7;
+  //         cursor: not-allowed;
+  //       }
+  //       .contents-cont {
+  //         position: relative;
+  //         width: 227px;
+  //         .info {
+  //           .upload-name {
+  //             margin: initial;
+  //             font-size: 13px;
+  //             font-weight: 500;
+  //             line-height: 14px;
+  //             color: #121619;
+  //             margin-bottom: 4px;
+  //           }
+  //           .size {
+  //             font-size: 12px;
+  //             color: #747474;
+  //             line-height: 14px;
+  //           }
+  //         }
+  //         .progress {
+  //           // border: 1px solid red;
+  //           margin-top: 16px;
+
+  //           .progress-info {
+  //             margin-top: 4px;
+  //             // border: 1px solid black;
+  //             display: flex;
+  //             justify-content: space-between;
+  //             .item {
+  //               display: flex;
+  //               gap: 8px;
+  //               .title {
+  //                 color: $mono205;
+  //                 font-size: 12px;
+  //                 line-height: 12px;
+  //                 font-weight: 500;
+  //               }
+  //               .value {
+  //                 color: $mono207;
+  //                 font-size: 12px;
+  //                 line-height: 12px;
+  //                 font-weight: 500;
+  //                 &.error {
+  //                   color: $red502;
+  //                 }
+  //               }
+  //             }
+  //           }
+  //         }
+  //       }
+
+  //       .progress {
+  //         width: 100%;
+  //       }
+  //       .delete-btn {
+  //         display: none;
+  //         position: absolute;
+  //         right: -12px;
+  //         top: 50%;
+  //         transform: translateY(-50%);
+  //         font-size: 16px;
+  //       }
+  //       .loading-cont {
+  //         position: absolute;
+  //         top: 50%;
+  //         left: 99%;
+  //         transform: translate(-50%, -50%);
+  //       }
+  //     }
+  //     .border {
+  //       width: 80%;
+  //       height: 1px;
+  //       background-color: #dbdbdb;
+  //     }
+
+  //     &:last-child .border {
+  //       width: 0%;
+  //     }
+  //   }
+  // }
+
+  .dropbox-container {
+    display: flex;
+    flex-direction: column;
+    max-height: 438px;
+    font-family: SpoqaM;
+    font-size: 14px;
+    color: $mono207;
+    box-sizing: border-box;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-gutter: stable;
+    margin-right: 2px;
+
+    .no-upload-cont {
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      .no-upload {
+        color: #747474;
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 14px;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+      }
+    }
+    .dataset {
+      .dataset-name {
+        color: $mono207;
+        height: 46px;
+        // border-bottom: 1px solid #dbdbdb;
+        // ? open하면 border bottom 을 넣는걸로
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-left: 18px;
+        &.open {
+          border-bottom: 1px solid #dbdbdb;
+          // transition: border-bottom-color 0.3s ease; // 애니메이션 적용
+          .arrow-box {
+            transform: rotate(180deg);
+          }
+        }
+
+        .left {
+          display: flex;
+          align-items: center;
+          .circle {
+            align-items: center;
+            gap: 8px;
+            width: 24px;
+            height: 18px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-left: 8px;
+            &.red {
+              background-color: #fa4e57;
+              border-radius: 16px;
+            }
+            span {
+              font-size: 10px;
+              color: #fff;
+            }
+          }
+          .warning {
+            padding-top: 4px;
+            margin-left: 8px;
+          }
+        }
+      }
+      &:not(:first-child) {
+        .dataset-name {
+          border-top: 1px solid #dbdbdb;
+        }
+      }
+
+      .item-count {
+        // display: inline-flex;
+        // justify-content: center;
+        // align-items: center;
+        // width: 16px; // 동그라미의 크기
+        // height: 16px; // 동그라미의 크기
+        // border-radius: 50%; // 동그라미 모양으로 설정
+        // background: var(--502, #fa4e57); // 배경색
+        // color: white; // 숫자의 색상
+        // font-size: 11px; // 숫자 크기
+        // margin-left: 10px; // datasetName과의 간격
+        display: inline-flex;
+        justify-content: center;
+        align-items: center;
+        min-width: 16px; // 최소 너비 16px
+        height: 16px;
+        padding: 0 2px; // 숫자가 많아지면 좌우에 패딩을 추가
+        border-radius: 50%;
+        background: var(--502, #fa4e57);
+        color: white;
+        font-size: 12px;
+        margin-left: 10px;
+        font-family: SpoqaR;
+      }
+
+      .arrow-box {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease-in-out;
+        margin-right: 4px;
+        img {
+          width: 22px;
+          height: 22px;
+        }
+      }
+      .items-list {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease-in-out;
+        .upload-item {
+          width: 100%;
+
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+
+          &:hover {
+            background-color: #f0f0f0;
+            outline: 1px solid #bdbdbd;
+            .border {
+              width: 0%;
+            }
+            .flex-cont .delete-btn {
+              display: inline-block !important;
+            }
+          }
+          .flex-cont {
+            width: 272px;
+            height: 101px;
+            gap: 8px;
+            position: relative;
+
+            box-sizing: border-box;
+            padding: 16px 0 10px 0;
+            cursor: pointer;
+            display: flex;
+            .dot {
+              width: 8px;
+              height: 8px;
+
+              border-radius: 50%;
+              margin-top: 8px;
+              &.read {
+                background-color: inherit;
+              }
+              &.completed,
+              &.running {
+                background-color: $blue108;
+              }
+              &.error {
+                background-color: $red502;
+              }
+            }
+
+            &.loading {
+              opacity: 0.7;
+              cursor: not-allowed;
+            }
+            .contents-cont {
+              position: relative;
+              width: 227px;
+              .info {
+                .upload-name {
+                  margin: initial;
+                  font-size: 13px;
+                  font-weight: 500;
+                  line-height: 14px;
+                  color: #121619;
+                  margin-bottom: 4px;
+                  display: flex;
+                  align-items: center;
+                }
+                .size {
+                  font-size: 12px;
+                  color: #747474;
+                  line-height: 14px;
+                }
+              }
+              .progress {
+                // border: 1px solid red;
+                margin-top: 16px;
+
+                .progress-info {
+                  margin-top: 4px;
+                  // border: 1px solid black;
+                  display: flex;
+                  justify-content: space-between;
+                  .item {
+                    display: flex;
+                    gap: 8px;
+                    .title {
+                      color: $mono205;
+                      font-size: 12px;
+                      line-height: 12px;
+                      font-weight: 500;
+                    }
+                    .value {
+                      color: $mono207;
+                      font-size: 12px;
+                      line-height: 12px;
+                      font-weight: 500;
+                      &.error {
+                        color: $red502;
+                      }
+                    }
+                  }
+                }
+              }
+            }
+
+            .progress {
+              width: 100%;
+            }
+            .delete-btn {
+              display: none;
+              position: absolute;
+              right: -12px;
+              top: 50%;
+              transform: translateY(-50%);
+              font-size: 16px;
+            }
+            .loading-box {
+              display: flex;
+              align-items: center;
+              position: absolute;
+              top: 50%;
+              transform: translateY(-50%);
+              right: -12px;
+            }
+            .loading-cont {
+              position: absolute;
+              top: 50%;
+              left: 99%;
+              transform: translate(-50%, -50%);
+            }
+          }
+          .border {
+            width: 80%;
+            height: 1px;
+            background-color: #dbdbdb;
+          }
+
+          &:last-child .border {
+            width: 0%;
+          }
+        }
+        &.open {
+          max-height: 350px; // TODO : 적당한 높이 계산 필요
+          // overflow: visible;
+          // overflow-y: scroll;
+          overflow-y: auto;
+
+          &::-webkit-scrollbar {
+            display: none; // 크롬, 사파리에서 스크롤바 숨기기
+          }
+
+          -ms-overflow-style: none; // IE에서 스크롤바 숨기기
+          scrollbar-width: none; // Firefox에서 스크롤바 숨기기
+        }
+      }
+    }
+
+    .no-data {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      margin-top: 99px;
+      align-items: center;
+      justify-content: center;
+    }
+  }
+}

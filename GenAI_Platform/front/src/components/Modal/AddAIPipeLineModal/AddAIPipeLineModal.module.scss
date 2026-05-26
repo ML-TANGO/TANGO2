@@ -1,0 +1,45 @@
+@import '@src/styles/color.scss';
+
+.title {
+  margin: initial;
+  color: $mono207;
+  font-family: SpoqaB;
+  font-size: 14px;
+  line-height: 22px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid $mono203;
+}
+
+.contents {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-top: 24px;
+  p {
+    margin: initial;
+    color: #121619;
+    font-family: SpoqaM;
+    font-size: 14px;
+    line-height: 22px;
+  }
+}
+
+.user-box {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.preprocess-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+  div {
+    font-family: SpoqaB;
+    font-size: 16px;
+    font-style: normal;
+    font-weight: 700;
+    line-height: 16px;
+  }
+}

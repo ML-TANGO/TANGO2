@@ -1,0 +1,149 @@
+@import '@src/styles/color.scss';
+
+.detail {
+  padding: 32px;
+  background-color: $mono200;
+  .header {
+    border-bottom: 1px solid $mono203;
+    .title {
+      margin: 0 0 16px 0;
+      height: 31px;
+      font-family: SpoqaR;
+      font-size: 24px;
+      color: $blue107;
+      span:first-child {
+        font-size: 20px;
+        font-family: SpoqaB;
+        margin-right: 8px;
+      }
+      span:nth-child(2) {
+        font-family: SpoqaM;
+        font-size: 14px;
+      }
+    }
+    .desc {
+      font-family: SpoqaM;
+      font-size: 16px;
+      line-height: normal;
+      color: $mono205;
+    }
+  }
+  .table-title {
+    display: inline-block;
+    font-size: 18px;
+    color: $blue107;
+    font-family: SpoqaB;
+    margin-bottom: 8px;
+  }
+  .horizon-box {
+    display: flex;
+    flex-direction: row;
+    margin: 16px 0;
+
+    flex-wrap: wrap;
+  }
+  .box {
+    flex: 1;
+    min-width: 180px;
+    max-width: 25%;
+    font-family: SpoqaM;
+
+    &.two-column {
+      flex: 2;
+      max-width: 50%;
+    }
+    .label {
+      display: block;
+      font-family: SpoqaM;
+      font-size: 14px;
+      color: $mono205;
+      margin-bottom: 4px;
+    }
+    .value {
+      display: block;
+      font-size: 16px;
+      color: $mono207;
+      // width: 96%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+
+      &.user {
+        overflow: visible;
+        white-space: normal;
+      }
+      &:last-of-type {
+        overflow: visible;
+        text-overflow: initial;
+        white-space: normal;
+      }
+    }
+    .value-box {
+      display: flex;
+      align-items: center;
+      margin-top: -4px;
+      margin-bottom: 48px;
+
+      .value {
+        display: block;
+        // width: 100%;
+        font-size: 16px;
+        color: $mono207;
+        height: 28px;
+        line-height: 28px;
+      }
+      .btn {
+        width: 28px;
+        height: 28px;
+        border: none;
+        border-radius: 4px;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-color: transparent;
+        vertical-align: middle;
+
+        cursor: pointer;
+        &:hover {
+          background-color: $mono202;
+        }
+        &:disabled {
+          opacity: 0.3;
+          cursor: default;
+        }
+        &.copy-btn {
+          background-image: url(@src/static/images/icon/00-ic-basic-copy-o.svg);
+          margin: 0 0 2px 4px;
+        }
+        &.edit-btn {
+          background-image: url(@src/static/images/icon/00-ic-basic-pen.svg);
+          margin-left: 4px;
+        }
+      }
+    }
+  }
+  .config {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: wrap;
+    width: 100%;
+    overflow: visible;
+    justify-content: center;
+    gap: 16px;
+
+    .item {
+      display: flex;
+      flex-direction: row;
+      align-items: flex-start;
+      margin-right: 8px;
+      font-size: 14px;
+      font-family: SpoqaM;
+      color: $mono207;
+      margin-bottom: 8px;
+
+      .label {
+        color: $mono205;
+        margin-right: 4px;
+      }
+    }
+  }
+}

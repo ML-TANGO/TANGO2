@@ -1,0 +1,102 @@
+@import '@src/styles/color.scss';
+
+.bar {
+  overflow: hidden;
+  display: flex;
+  border-radius: 3px;
+}
+
+.progress-bar {
+  position: relative;
+  border-radius: 3px;
+  width: 100%;
+  // background-color: $progress-bar-background !important;
+  // background-color: $blue102 !important;
+  background-color: $mono209 !important;
+  margin-top: 2px;
+}
+
+.progress {
+  overflow: hidden;
+  // background: $progress-gage-background;
+  background: $blue108;
+  height: 4px;
+  border-radius: 2px;
+  position: relative;
+  border-radius: 3px;
+  transition: width 1.5s;
+  &.error {
+    background-color: $red502;
+  }
+}
+.full {
+  // background: $progress-full-background;
+  background: $blue104;
+  height: 4px;
+  border-radius: 2px;
+  position: relative;
+  border-radius: 3px;
+  transition: width 1.5s;
+}
+
+.progress-flow-bar {
+  position: absolute;
+  height: 99%;
+  width: 100%;
+  background: linear-gradient(
+    to right,
+    transparent 26%,
+    $blue102 44%,
+    transparent 65%
+  );
+  animation: slide 2s linear infinite;
+}
+
+.progress-pending:after {
+  content: '';
+  position: absolute;
+  top: 0px;
+  left: 0 !important;
+  bottom: 0 !important;
+  right: 0 !important;
+  background-image: linear-gradient(
+    -45deg,
+    $blue103 25%,
+    transparent 25%,
+    transparent 50%,
+    $blue104 50%,
+    $blue104 75%,
+    transparent 55%,
+    transparent
+  );
+  background-size: 23px 23px;
+}
+.loading-bar :after {
+  animation: load 1.5s linear infinite forwards;
+  &.first {
+    animation: load 1.5s linear infinite forwards;
+  }
+  &.second {
+    animation: load 2.5s linear infinite forwards;
+  }
+  &.third {
+    animation: load 3.5s linear infinite forwards;
+  }
+}
+@keyframes load {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 10px 100px;
+  }
+}
+
+@keyframes slide {
+  0% {
+    transform: translate(-100%);
+  }
+  100% {
+    transform: translate(100%);
+  }
+}

@@ -1,0 +1,328 @@
+@import '@src/styles/color.scss';
+
+.title {
+  font-family: SpoqaB;
+  color: $mono207;
+  font-size: 16px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 16px;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.score-box {
+  // border: 1px solid red;
+  margin-bottom: 32px;
+  .best-score {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    .target {
+      display: flex;
+      gap: 8px;
+    }
+    .score-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-style: normal;
+      font-weight: 500;
+      line-height: 14px;
+      .best-param {
+        color: $mono205;
+        font-family: SpoqaB;
+      }
+      .best-param-value {
+        color: $mono207;
+        font-family: SpoqaM;
+      }
+    }
+  }
+}
+.param-box {
+  background-color: $mono201;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  box-sizing: border-box;
+
+  .item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    .param {
+      color: $mono205;
+      font-family: SpoqaB;
+      font-size: 14px;
+      font-style: normal;
+      font-weight: 700;
+      line-height: 14px;
+    }
+    .setting-value {
+      display: flex;
+      gap: 4px;
+      font-size: 12px;
+      font-style: normal;
+      font-weight: 500;
+      line-height: 12px; /* 100% */
+      letter-spacing: -0.18px;
+      :first-child {
+        color: $mono205;
+      }
+      :last-child {
+        color: $mono207;
+      }
+    }
+  }
+}
+
+.best-score {
+  height: 76px;
+  padding: 16px;
+  box-sizing: border-box;
+  background-color: $mono201;
+  border-radius: 7px;
+}
+.hps-result-modal {
+  background-color: $mono200;
+  border-radius: 8px;
+
+  display: flex;
+  flex-direction: column;
+
+  // 모달 크기 조정 등은 프로젝트 스타일에 따라 세팅
+
+  /* 모달 헤더 영역 */
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+
+    h2 {
+      font-size: 20px;
+      font-family: SpoqaB;
+      color: $mono207;
+      margin: 0;
+    }
+
+    button {
+      // 예시로 버튼 스타일
+      min-width: 80px;
+      height: 32px;
+    }
+  }
+
+  /* 테이블 섹션 */
+  .table-section {
+    margin-bottom: 32px;
+
+    .sub-title {
+      font-family: SpoqaB;
+      font-size: 16px;
+      line-height: 1.38;
+      color: $mono207;
+      margin: 0 0 8px 0;
+    }
+
+    .table-wrap {
+      max-height: 400px;
+      overflow-y: auto;
+      scroll-behavior: smooth;
+
+      background-color: $mono200;
+      border-bottom: 1px solid $mono203;
+    }
+
+    .table {
+      width: 100%;
+      border-spacing: 0;
+      thead {
+        position: sticky;
+        top: 0;
+        background-color: $mono201;
+
+        tr {
+          th {
+            padding: 16px;
+            text-align: center;
+            font-family: SpoqaM;
+            font-size: 14px;
+            color: $mono207;
+
+            border-bottom: 1px solid $mono203;
+          }
+        }
+      }
+      tbody {
+        tr {
+          border-bottom: 1px solid $mono203;
+
+          cursor: pointer;
+
+          &:hover {
+            background-color: lighten($mono203, 5%);
+          }
+          &.selected {
+            background-color: $hover-bg-color; // 원하는 색상 지정
+          }
+          td {
+            padding: 16px 48px;
+            text-align: center;
+            font-family: SpoqaM;
+            font-size: 14px;
+            color: $mono207;
+            border-bottom: 1px solid $mono203;
+          }
+        }
+      }
+    }
+  }
+
+  /* 그래프 & 로그 섹션 */
+  .result-log {
+    display: flex;
+    flex-direction: column;
+
+    .chart {
+      // margin-bottom: 32px;
+
+      .sub-title {
+        height: 22px;
+        font-family: SpoqaB;
+        font-size: 16px;
+        line-height: 1.38;
+        color: $mono207;
+        margin-bottom: 8px;
+      }
+
+      /* 차트(AccuracyLossChart)가 들어갈 때 가이드라인 용도 */
+      .graph {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: $mono201;
+        border-radius: 7px;
+      }
+
+      .no-graph {
+        height: 54px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: $mono201;
+        font-family: SpoqaM;
+        font-size: 14px;
+        font-style: normal;
+        font-weight: 500;
+        line-height: 22px;
+        border-radius: 7px;
+      }
+    }
+
+    .log {
+      display: flex;
+      flex-direction: column;
+      margin-top: 8px;
+
+      .sub-title {
+        height: 22px;
+        font-family: SpoqaB;
+        font-size: 16px;
+        line-height: 1.38;
+        color: $mono207;
+        margin-bottom: 8px;
+      }
+
+      .log-data {
+        height: 400px;
+        padding: 16px;
+        box-sizing: border-box;
+        font-size: 14px;
+        font-style: normal;
+        font-weight: 500;
+        line-height: 22px;
+        font-family: SpoqaM;
+        border-radius: 7px;
+        background-color: $mono201;
+        white-space: pre-wrap;
+        word-break: break-word;
+
+        &.no-log {
+          width: 100%;
+
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+      }
+    }
+  }
+}
+
+.border {
+  height: 1px;
+  box-sizing: border-box;
+  width: 100%;
+  background-color: $mono203;
+  margin: 32px 0;
+}
+
+.arrow {
+  position: relative;
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  vertical-align: middle;
+}
+
+.arrow:before,
+.arrow:after {
+  border: 5px solid transparent;
+  content: '';
+  display: block;
+  height: 0;
+  position: absolute;
+  width: 0;
+  right: 0;
+  top: 50%;
+}
+
+.arrow:before {
+  border-bottom-color: $mono204;
+  margin-top: -11px;
+}
+.arrow:after {
+  border-top-color: $mono204;
+  margin-top: 3px;
+}
+
+.clicked {
+  // 정렬중인 컬럼 배경 or 텍스트 색상
+}
+
+.asc {
+  .arrow:before {
+    border-bottom-color: $mono205;
+  }
+  .arrow:after {
+    border-top-color: $mono204;
+  }
+}
+.desc {
+  .arrow:before {
+    border-bottom-color: $mono204;
+  }
+  .arrow:after {
+    border-top-color: $mono205;
+  }
+}
+.un-clicked {
+  // 미정렬 컬럼 표시
+}

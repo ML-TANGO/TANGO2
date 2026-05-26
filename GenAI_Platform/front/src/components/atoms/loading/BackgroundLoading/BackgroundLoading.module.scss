@@ -1,0 +1,36 @@
+@import '@src/styles/color.scss';
+
+.dim {
+  position: relative;
+  z-index: 9;
+  position: absolute;
+  top: 0px;
+  left: 0px;
+  width: 100%;
+  height: 100%;
+  background-color: rgba($mono207, 0.8);
+  .box {
+    position: absolute;
+    top: 45%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: $mono200;
+    .text {
+      color: $mono200;
+      font-size: 24px;
+    }
+  }
+}
+.loader {
+  display: inline-block;
+  animation: rotation 2s infinite linear;
+}
+@keyframes rotation {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(359deg);
+  }
+}
