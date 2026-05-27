@@ -1,0 +1,4256 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "Facilities",
+    "description": "# Overview\n설비(facilities)와 제품(projects)을 관리하기 위한 서비스로 다음과 같은 기능을 제공한다:\n- 제품 관리\n- 설비 관리\n- 설비 및 제품 제어 설정\n## 제품\n## 설비",
+    "version": "20251126-44568cb"
+  },
+  "tags": [
+    {
+      "name": "Facilities",
+      "description": "설비 관리"
+    },
+    {
+      "name": "Products",
+      "description": "제품 관리"
+    }
+  ],
+  "host": "devel.beymons.kr",
+  "basePath": "/api",
+  "schemes": [
+    "https"
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/facilities": {
+      "get": {
+        "summary": "설비 검색",
+        "operationId": "Facilities_SearchFacility",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/facilitiesSearchFacilityResponse"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googlerpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "order",
+            "description": " - facility_name_asc: 설비명 (오름차순)\n - facility_name_desc: 설비명 (내림차순)\n - site_id_asc: 현장 ID (오름차순)\n - site_id_desc: 현장 ID (내림차순)\n - site_name_asc: 현장 이름 (오름차순)\n - site_name_desc: 현장 이름 (내림차순)\n - group_id_asc: 설비 그룹 ID (오름차순)\n - group_id_desc: 설비 그룹 ID (내림차순)\n - group_name_asc: 설비 그룹 이름 (오름차순)\n - group_name_desc: 설비 그룹 이름 (내림차순)",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "facility_name_asc",
+                "facility_name_desc",
+                "site_id_asc",
+                "site_id_desc",
+                "site_name_asc",
+                "site_name_desc",
+                "group_id_asc",
+                "group_id_desc",
+                "group_name_asc",
+                "group_name_desc"
+              ]
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "limit",
+            "description": "응답으로 보내줄 레코드 수.\n지정하지 않거나 0인 경우 전체 레코드를 조회하지만,\n응답이 15초 이상 소요되는 경우 타임아웃 오류가 발생된다.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "offset",
+            "description": "페이지에서 표시되는 첫 레코드의 인덱스 (Default: 0)",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "search",
+            "description": "전체 검색\n\n검색 대상:\n- 설비명\n- 현장 ID (전방일치)\n- 현장명\n- 설비 그룹 ID (전방일치)\n- 설비 그룹 이름\n- 제품명\n- 제조사 ID (전방일치)\n- 모델 번호 (전방일치)\n- 일련 번호 (전방일치)",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "siteId",
+            "description": "현장 ID로 필터링",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "groupId",
+            "description": "설비 그룹 ID로 필터링 (siteId 필요)",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "description": "설비명으로 검색",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "manufactureId",
+            "description": "제조사 ID로 필터링",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "model",
+            "description": "모델 번호로 검색 (전방일치)",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "sn",
+            "description": "일련 번호로 검색 (전방일치)",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "Facilities"
+        ]
+      },
+      "post": {
+        "summary": "설비 등록",
+        "operationId": "Facilities_CreateFacility",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/facilitiesFacility"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "409": {
+            "description": "Returned when the resource already exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googlerpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "description": "설비에 대한 정보 관리",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/facilitiesFacility"}
+              ]
+            }
+          }
+        ],
+        "tags": [
+          "Facilities"
+        ]
+      }
+    },
+    "/facilities/{facilityId}": {
+      "get": {
+        "summary": "설비 정보 조회",
+        "operationId": "Facilities_Facilities",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/facilitiesFacilityResponse"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googlerpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "facilityId",
+            "description": "설비 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "Facilities"
+        ]
+      },
+      "delete": {
+        "summary": "설비 삭제",
+        "operationId": "Facilities_DeleteFacility",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googlerpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "facilityId",
+            "description": "설비 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "Facilities"
+        ]
+      },
+      "post": {
+        "summary": "설비 명령 전송",
+        "operationId": "Facilities_CommandFacility",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/facilitiesCommandFacilityResponse"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googlerpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "facilityId",
+            "description": "설비 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/FacilitiesCommandFacilityBody"}
+              ]
+            }
+          }
+        ],
+        "tags": [
+          "Facilities"
+        ]
+      },
+      "put": {
+        "summary": "설비 정보 수정",
+        "operationId": "Facilities_ReplaceFacility",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/facilitiesFacility"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googlerpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "facilityId",
+            "description": "설비 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/FacilitiesReplaceFacilityBody"}
+              ]
+            }
+          }
+        ],
+        "tags": [
+          "Facilities"
+        ]
+      }
+    },
+    "/facilities/{facilityId}/attributes": {
+      "patch": {
+        "summary": "사용자화 메타데이터 수정",
+        "operationId": "Facilities_UpdateFacility",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/facilitiesFacility"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googlerpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "facilityId",
+            "description": "설비 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "payload",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "tags": [
+          "Facilities"
+        ]
+      }
+    },
+    "/facilities/{facilityId}/controls": {
+      "get": {
+        "summary": "설비 제어 설정 조회",
+        "description": "controlId가 없는 경우 아직 설비 제어 설정이 안된 경우로\nPUT /facilities/{facility_id}/controls API를 호출하여 설정해야 한다.",
+        "operationId": "Facilities_ControlFacility",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/facilitiesControlFacilityResponse"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googlerpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "facilityId",
+            "description": "설비 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "controlId",
+            "description": "설비 제어 설정 ID",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "제어 설정"
+        ]
+      },
+      "post": {
+        "summary": "설비 제어 설정",
+        "operationId": "Facilities_SetControlFacility",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/facilitiesFacilityControl"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googlerpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "facilityId",
+            "description": "설비 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "create",
+            "description": "설비 고유 제어 설정 추가",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/SetControlFacilityRequestCustom"}
+              ]
+            }
+          },
+          {
+            "name": "controlId",
+            "description": "설비 제어 설정 ID",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "제어 설정"
+        ]
+      },
+      "put": {
+        "summary": "설비 제어 설정",
+        "operationId": "Facilities_SetControlFacility3",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/facilitiesFacilityControl"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googlerpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "facilityId",
+            "description": "설비 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "replace",
+            "description": "제품 설정 활용 사용자화",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/SetControlFacilityRequestReplace"}
+              ]
+            }
+          },
+          {
+            "name": "controlId",
+            "description": "설비 제어 설정 ID",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "제어 설정"
+        ]
+      }
+    },
+    "/facilities/{facilityId}/controls/{controlId}": {
+      "delete": {
+        "summary": "설비 제어 설정 삭제",
+        "operationId": "Facilities_DeleteControlFacility",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googlerpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "facilityId",
+            "description": "설비 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "controlId",
+            "description": "설비 제어 설정 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "제어 설정"
+        ]
+      },
+      "put": {
+        "summary": "설비 제어 설정",
+        "operationId": "Facilities_SetControlFacility2",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/facilitiesFacilityControl"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googlerpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "facilityId",
+            "description": "설비 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "controlId",
+            "description": "설비 제어 설정 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "update",
+            "description": "제어 설정 변경",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/SetControlFacilityRequestCustom"}
+              ]
+            }
+          }
+        ],
+        "tags": [
+          "제어 설정"
+        ]
+      }
+    },
+    "/facilities/{facilityId}/delete": {
+      "post": {
+        "summary": "설비 삭제",
+        "operationId": "Facilities_DeleteFacility2",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googlerpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "facilityId",
+            "description": "설비 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/FacilitiesDeleteFacilityBody"}
+              ]
+            }
+          }
+        ],
+        "tags": [
+          "Facilities"
+        ]
+      }
+    },
+    "/facilities/{facilityId}/devices": {
+      "get": {
+        "summary": "설비에 연결된 장치 조회",
+        "operationId": "Facilities_Devices",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/devicesSearchResponse"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googlerpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "facilityId",
+            "description": "설비 ID로 필터링",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "order",
+            "description": " - device_id_asc: 장치 ID 오름차순\n - device_id_desc: 장치 ID 내림차순\n - device_role_asc: 동작방식 오름차순\n - device_role_desc: 동작방식 내림차순\n - site_id_asc: 현장 ID 오름차순\n - site_id_desc: 현장 ID 내림차순\n - site_name_asc: 현장명 오름차순\n - site_name_desc: 현장명 내림차순",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "device_id_asc",
+                "device_id_desc",
+                "device_role_asc",
+                "device_role_desc",
+                "site_id_asc",
+                "site_id_desc",
+                "site_name_asc",
+                "site_name_desc"
+              ]
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "field",
+            "description": "조회 필드 선택 (default: ALL)\n\n - display_name: 장치 이름\n - description: 장치 설명\n - sensors: 센서 정보\n - location: 설치 위치\n - created_at: 생성 일시\n - created_by: 생성한 사용자 정보\n - updated_at: 마지막으로 수정된 일시\n - updated_by: 마지막으로 수정한 사용자 정보\n - site: 고객 정보",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "display_name",
+                "description",
+                "sensors",
+                "location",
+                "created_at",
+                "created_by",
+                "updated_at",
+                "updated_by",
+                "site"
+              ]
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "limit",
+            "description": "응답으로 보내줄 레코드 수.\n지정하지 않거나 0인 경우 전체 레코드를 조회하지만,\n응답이 15초 이상 소요되는 경우 타임아웃 오류가 발생된다.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "offset",
+            "description": "페이지에서 표시되는 첫 레코드의 인덱스 (Default: 0)",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "search",
+            "description": "전체 검색\n\n대상:\n- 장치 ID (전방일치)\n- 장치명\n- 장치 설명\n- 현장 ID (전방일치)\n- 현장명\n- 설비명",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "configId",
+            "description": "TODO: Config ID로 필터링",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "deviceId",
+            "description": "장치 ID로 필터링",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "siteId",
+            "description": "현장 ID로 필터링",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "sensorType",
+            "description": "센서 타입으로 필터링",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "role",
+            "description": "장치 종류로 필터링",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "GATEWAY",
+                "NODE",
+                "REPEATER",
+                "NODEGATEWAY"
+              ]
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "status",
+            "description": "장치 상태로 필터링\n\n - NORMAL: 정상 상태\n - TROUBLE: 장치 혹은 센서의 고장 상태\n - DISCARD: 폐기\n - NOT_RECEIVED: 데이터 미수신 상태\n - CAUTION: 주의\n - WARNING: 경고",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "NORMAL",
+                "TROUBLE",
+                "DISCARD",
+                "NOT_RECEIVED",
+                "CAUTION",
+                "WARNING"
+              ]
+            },
+            "collectionFormat": "multi"
+          }
+        ],
+        "tags": [
+          "장치 관리"
+        ]
+      },
+      "post": {
+        "summary": "설비에 장치 연결",
+        "operationId": "Facilities_Connect",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/facilitiesSensorsReponse"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when a device is not exists or has not been install to site",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googlerpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "facilityId",
+            "description": "설비 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/FacilitiesConnectBody"}
+              ]
+            }
+          }
+        ],
+        "tags": [
+          "장치 관리"
+        ]
+      }
+    },
+    "/facilities/{facilityId}/devices/{deviceId}": {
+      "delete": {
+        "summary": "설비에 연결된 장치 해제",
+        "operationId": "Facilities_Disconnect",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googlerpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "facilityId",
+            "description": "설비 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "deviceId",
+            "description": "장치 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "modbus",
+            "description": "모드버스 주소",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int64"
+          },
+          {
+            "name": "channel",
+            "description": "채널 번호(구: 프로브)",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "장치 관리"
+        ]
+      }
+    },
+    "/facilities/{facilityId}/histories": {
+      "get": {
+        "summary": "설비 이력 조회",
+        "operationId": "Facilities_FacilityHistories",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/facilitiesFacilityHistoryResponse"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googlerpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "facilityId",
+            "description": "설비 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "Facilities"
+        ]
+      }
+    },
+    "/facilities/{facilityId}/sensors": {
+      "get": {
+        "summary": "설비에 연결된 센서 조회",
+        "operationId": "Facilities_Sensors",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/facilitiesSensorsReponse"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googlerpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "facilityId",
+            "description": "설비 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "장치 관리"
+        ]
+      }
+    },
+    "/facilities/{facilityId}/stat": {
+      "get": {
+        "summary": "설비의 현재 상태(온/습도) 조회",
+        "operationId": "Facilities_Stat",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/facilitiesStatResponse"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googlerpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "facilityId",
+            "description": "설비 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "Facilities"
+        ]
+      }
+    },
+    "/facilities/{facilityId}/update": {
+      "post": {
+        "summary": "설비 정보 수정",
+        "operationId": "Facilities_ReplaceFacility2",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/facilitiesFacility"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googlerpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "facilityId",
+            "description": "설비 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/FacilitiesReplaceFacilityBody"}
+              ]
+            }
+          }
+        ],
+        "tags": [
+          "Facilities"
+        ]
+      }
+    },
+    "/products": {
+      "get": {
+        "summary": "제품 검색",
+        "operationId": "Products_SearchProduct",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/facilitiesSearchProductResponse"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googlerpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "order",
+            "description": " - manufacture_id_asc: 제조사 ID (오름차순)\n - manufacture_id_desc: 제조사 ID (내림차순)\n - manufacture_name_asc: 제조사 이름 (오름차순)\n - manufacture_name_desc: 제조사 이름 (내림차순)\n - model_number_asc: 모델 번호 (오름차순)\n - model_number_desc: 모델 번호 (내림차순)\n - product_name_asc: 제품명 (오름차순)\n - product_name_desc: 제품명 (내림차순)",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "manufacture_id_asc",
+                "manufacture_id_desc",
+                "manufacture_name_asc",
+                "manufacture_name_desc",
+                "model_number_asc",
+                "model_number_desc",
+                "product_name_asc",
+                "product_name_desc"
+              ]
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "limit",
+            "description": "응답으로 보내줄 레코드 수.\n지정하지 않거나 0인 경우 전체 레코드를 조회하지만,\n응답이 15초 이상 소요되는 경우 타임아웃 오류가 발생된다.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "offset",
+            "description": "페이지에서 표시되는 첫 레코드의 인덱스 (Default: 0)",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "search",
+            "description": "전체 검색\n\n검색 대상:\n- 제품명\n- 제조사명\n- 제조사 ID (전방일치)\n- 모델 번호 (전방일치)",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "manufactureId",
+            "description": "제조사 ID로 필터링",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "manufactureName",
+            "description": "제조사 이름으로 검색",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "model",
+            "description": "모델 번호",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "description": "제품명으로 검색",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "Products"
+        ]
+      }
+    },
+    "/products/{manufactureId}": {
+      "post": {
+        "summary": "제품 등록",
+        "description": "제조사 ID에 해당하는 사이트가 없는 경우 신규 시아트로 등록한다.",
+        "operationId": "Products_CreateProduct",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/facilitiesProduct"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "409": {
+            "description": "Returned when the resource already exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googlerpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "manufactureId",
+            "description": "제조사 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/ProductsCreateProductBody"}
+              ]
+            }
+          }
+        ],
+        "tags": [
+          "Products"
+        ]
+      }
+    },
+    "/products/{manufactureId}/{modelNumber}": {
+      "get": {
+        "summary": "제품 정보 조회",
+        "operationId": "Products_Products",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/facilitiesProduct"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googlerpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "manufactureId",
+            "description": "제조사 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "modelNumber",
+            "description": "모델 번호",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "Products"
+        ]
+      },
+      "delete": {
+        "summary": "제품 삭제",
+        "operationId": "Products_DeleteProduct",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googlerpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "manufactureId",
+            "description": "제조사 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "modelNumber",
+            "description": "모델 번호",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "Products"
+        ]
+      },
+      "put": {
+        "summary": "제품 정보 수정",
+        "operationId": "Products_ReplaceProduct",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/facilitiesProduct"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googlerpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "manufactureId",
+            "description": "제조사 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "modelNumber",
+            "description": "모델 번호",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/ProductsReplaceProductBody"}
+              ]
+            }
+          }
+        ],
+        "tags": [
+          "Products"
+        ]
+      }
+    },
+    "/products/{manufactureId}/{modelNumber}/attributes": {
+      "patch": {
+        "summary": "사용자화 메타데이터 수정",
+        "operationId": "Products_UpdateProduct",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/facilitiesProduct"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googlerpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "manufactureId",
+            "description": "제조사 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "modelNumber",
+            "description": "모델 번호",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "payload",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "tags": [
+          "Products"
+        ]
+      }
+    },
+    "/products/{manufactureId}/{modelNumber}/controls": {
+      "get": {
+        "summary": "제품 제어 설정 조회",
+        "operationId": "Products_ControlProduct",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/facilitiesControlProductResponse"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googlerpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "manufactureId",
+            "description": "제조사 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "modelNumber",
+            "description": "모델 번호",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "controlId",
+            "description": "제어 설정 ID",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "제어 설정"
+        ]
+      },
+      "post": {
+        "summary": "제품 제어 설정 추가",
+        "operationId": "Products_CreateControlProduct",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/facilitiesProductControl"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googlerpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "manufactureId",
+            "description": "제조사 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "modelNumber",
+            "description": "모델 번호",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/ProductsCreateControlProductBody"}
+              ]
+            }
+          }
+        ],
+        "tags": [
+          "제어 설정"
+        ]
+      }
+    },
+    "/products/{manufactureId}/{modelNumber}/controls/{controlId}": {
+      "delete": {
+        "summary": "제품 제어 설정 삭제",
+        "operationId": "Products_DeleteControlProduct",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googlerpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "manufactureId",
+            "description": "제조사 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "modelNumber",
+            "description": "모델 번호",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "controlId",
+            "description": "제어 설정 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "제어 설정"
+        ]
+      },
+      "put": {
+        "summary": "제품 제어 설정 변경",
+        "operationId": "Products_UpdateControlProduct",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/facilitiesProductControl"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googlerpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "manufactureId",
+            "description": "제조사 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "modelNumber",
+            "description": "모델 번호",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "controlId",
+            "description": "제어 설정 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/ProductsUpdateControlProductBody"}
+              ]
+            }
+          }
+        ],
+        "tags": [
+          "제어 설정"
+        ]
+      }
+    },
+    "/products/{manufactureId}/{modelNumber}/controls/{controlId}/delete": {
+      "post": {
+        "summary": "제품 제어 설정 삭제",
+        "operationId": "Products_DeleteControlProduct2",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googlerpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "manufactureId",
+            "description": "제조사 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "modelNumber",
+            "description": "모델 번호",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "controlId",
+            "description": "제어 설정 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/ProductsDeleteControlProductBody"}
+              ]
+            }
+          }
+        ],
+        "tags": [
+          "제어 설정"
+        ]
+      }
+    },
+    "/products/{manufactureId}/{modelNumber}/controls/{controlId}/setting": {
+      "post": {
+        "summary": "제품 제어 설정 변경",
+        "operationId": "Products_UpdateControlProduct2",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/facilitiesProductControl"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googlerpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "manufactureId",
+            "description": "제조사 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "modelNumber",
+            "description": "모델 번호",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "controlId",
+            "description": "제어 설정 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/ProductsUpdateControlProductBody"}
+              ]
+            }
+          }
+        ],
+        "tags": [
+          "제어 설정"
+        ]
+      }
+    },
+    "/products/{manufactureId}/{modelNumber}/delete": {
+      "post": {
+        "summary": "제품 삭제",
+        "operationId": "Products_DeleteProduct2",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googlerpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "manufactureId",
+            "description": "제조사 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "modelNumber",
+            "description": "모델 번호",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/ProductsDeleteProductBody"}
+              ]
+            }
+          }
+        ],
+        "tags": [
+          "Products"
+        ]
+      }
+    },
+    "/products/{manufactureId}/{modelNumber}/histories": {
+      "get": {
+        "summary": "제품 력 조회",
+        "operationId": "Products_ProductHistories",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/facilitiesProductHistoryResponse"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googlerpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "manufactureId",
+            "description": "제조사 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "modelNumber",
+            "description": "모델 번호",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "Products"
+        ]
+      }
+    },
+    "/products/{manufactureId}/{modelNumber}/update": {
+      "post": {
+        "summary": "제품 정보 수정",
+        "operationId": "Products_ReplaceProduct2",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/facilitiesProduct"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googlerpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "manufactureId",
+            "description": "제조사 ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "modelNumber",
+            "description": "모델 번호",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/ProductsReplaceProductBody"}
+              ]
+            }
+          }
+        ],
+        "tags": [
+          "Products"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "CommandFacilityRequestControl": {
+      "type": "object",
+      "properties": {
+        "controlId": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "설비 제어 ID",
+          "minItems": 1
+        },
+        "attributes": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Attribute"
+        }
+      }
+    },
+    "DeviceSite": {
+      "type": "object",
+      "properties": {
+        "siteId": {
+          "type": "string",
+          "title": "고객 ID",
+          "readOnly": true
+        },
+        "siteName": {
+          "type": "string",
+          "title": "고객 이름",
+          "readOnly": true
+        }
+      },
+      "title": "장치가 연결된 사이트 정보"
+    },
+    "FacilitiesCommandFacilityBody": {
+      "type": "object",
+      "properties": {
+        "control": {
+          "allOf": [
+            {"$ref": "#/definitions/CommandFacilityRequestControl"}
+          ],
+          "title": "설비 제어 명령"
+        }
+      }
+    },
+    "FacilitiesConnectBody": {
+      "type": "object",
+      "properties": {
+        "devices": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "allOf": [
+              {"$ref": "#/definitions/facilitiesConnectRequestDevice"}
+            ]
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "devices"
+      ]
+    },
+    "FacilitiesDeleteFacilityBody": {
+      "type": "object"
+    },
+    "FacilitiesReplaceFacilityBody": {
+      "type": "object",
+      "properties": {
+        "facilityName": {
+          "type": "string",
+          "title": "설비명",
+          "maxLength": 50,
+          "minLength": 2
+        },
+        "siteId": {
+          "type": "string",
+          "title": "현장 ID [변경 불가]"
+        },
+        "groupId": {
+          "type": "string",
+          "title": "그룹 ID [변경 불가]"
+        },
+        "latitude": {
+          "type": "number",
+          "format": "double",
+          "title": "설비 위치 (위도)"
+        },
+        "longitude": {
+          "type": "number",
+          "format": "double",
+          "title": "설비 위치 (경도)"
+        },
+        "altitude": {
+          "type": "number",
+          "format": "double",
+          "title": "설비 위치 (고도)"
+        },
+        "manufactureId": {
+          "type": "string",
+          "title": "제조사 ID [변경 불가]"
+        },
+        "modelNumber": {
+          "type": "string",
+          "title": "모델 번호 [변경 불가]"
+        },
+        "serialNumber": {
+          "type": "string",
+          "title": "일련 번호",
+          "maxLength": 100
+        },
+        "siteGroup": {
+          "type": "object",
+          "title": "현장 및 그룹 정보",
+          "readOnly": true
+        },
+        "product": {
+          "type": "object",
+          "title": "제품 정보",
+          "readOnly": true
+        },
+        "attributes": {
+          "type": "object",
+          "example": {
+            "\u003cATTRIBUTE\u003e": "\u003cVALUE\u003e"
+          },
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "특정 이름은 다른 의미를 가진다:\n- constructor_id: 시공사에 대한 ID로 등록된 정보가 있으면 constructor로 해당 정보를 포함한다.",
+          "title": "사용자화 메타데이터"
+        },
+        "status": {
+          "allOf": [
+            {"$ref": "#/definitions/facilitiesFacilityStatus"}
+          ],
+          "title": "설비 상태",
+          "readOnly": true
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "title": "설비 구축 일시"
+        },
+        "writable": {
+          "type": "boolean",
+          "title": "리소스에 대한 변경 권한 여부",
+          "readOnly": true
+        },
+        "related": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "allOf": [
+              {"$ref": "#/definitions/FacilityRelated"}
+            ]
+          },
+          "readOnly": true
+        }
+      },
+      "description": "설비에 대한 정보 관리",
+      "title": "Facility",
+      "required": [
+        "facilityName",
+        "siteId",
+        "groupId",
+        "manufactureId",
+        "modelNumber"
+      ]
+    },
+    "FacilityRelated": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "allOf": [
+            {"$ref": "#/definitions/FacilityRelatedKind"}
+          ]
+        },
+        "id": {
+          "type": "string",
+          "title": "ID"
+        },
+        "name": {
+          "type": "string",
+          "title": "이름"
+        },
+        "link": {
+          "type": "string",
+          "title": "관련 링크"
+        }
+      },
+      "title": "관련 정보"
+    },
+    "FacilityRelatedKind": {
+      "type": "string",
+      "enum": [
+        "unspecified",
+        "control",
+        "metric",
+        "subject"
+      ],
+      "default": "unspecified",
+      "description": "- unspecified: 정의되지 않음\n - control: 제어 장치\n - metric: 측정 장치\n - subject: 재배 작물",
+      "title": "분류"
+    },
+    "MetricDescriptorMetricKind": {
+      "type": "string",
+      "enum": [
+        "gauge",
+        "delta",
+        "cumulative"
+      ],
+      "default": "gauge",
+      "description": "MetricKind는 데이텨의 특징을 구분하는 필드로 gauge, delta, cumulative로 구분된다.\n\n - gauge: 측정 값\n - delta: 증분 값\n - cumulative: 누적 값"
+    },
+    "MetricDescriptorValueType": {
+      "type": "string",
+      "enum": [
+        "string",
+        "bool",
+        "int64",
+        "double"
+      ],
+      "default": "string",
+      "description": "ValueType은 데이터의 타입을 구분하는 필드로 이 필드를 참고하여 Metric 구조체의 값을 조회해야 한다.\n\n - string: text\n - bool: boolean\n - int64: integer\n - double: number"
+    },
+    "ProductsCreateControlProductBody": {
+      "type": "object",
+      "properties": {
+        "controlId": {
+          "type": "string",
+          "title": "제어 설정 ID",
+          "readOnly": true
+        },
+        "controlName": {
+          "type": "string",
+          "example": "1중 좌측 측창",
+          "title": "제어 이름",
+          "maxLength": 100
+        },
+        "modbus": {
+          "type": "integer",
+          "format": "int64",
+          "title": "연결된 Modbus 주소"
+        },
+        "sensorType": {
+          "type": "string",
+          "example": "agsmotor_green",
+          "title": "센서 타입",
+          "maxLength": 100,
+          "pattern": "^[a-z][a-z0-9_]*[a-z0-9]+$"
+        },
+        "sensorTypeName": {
+          "type": "string",
+          "title": "센서 타입 이름",
+          "readOnly": true
+        },
+        "command": {
+          "type": "string",
+          "example": "set_agsmotor_operation_req",
+          "title": "명령어",
+          "maxLength": 200,
+          "pattern": "^[a-z][a-z0-9_]*[a-z0-9]+$"
+        },
+        "payload": {
+          "type": "string",
+          "example": "{\"1\": {{.ratio}}}",
+          "description": "go template 문법을 사용하며 제어 명령에서 해당 값을 입력한다.",
+          "title": "제어 명령",
+          "maxLength": 1000
+        },
+        "channels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "관련 채널 번호",
+          "readOnly": true
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "title": "마지막 업데이트 일시",
+          "readOnly": true
+        }
+      },
+      "description": "제품에 제어 설정 관리",
+      "title": "ProductControl",
+      "required": [
+        "controlName",
+        "modbus",
+        "sensorType",
+        "command",
+        "payload"
+      ]
+    },
+    "ProductsCreateProductBody": {
+      "type": "object",
+      "properties": {
+        "modelNumber": {
+          "type": "string",
+          "title": "모델 번호",
+          "maxLength": 100,
+          "minLength": 2
+        },
+        "manufacture": {
+          "type": "object",
+          "title": "제조사 정보",
+          "readOnly": true
+        },
+        "productName": {
+          "type": "string",
+          "title": "제품명",
+          "maxLength": 200
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "title": "제품 출시 일시"
+        },
+        "attributes": {
+          "type": "object",
+          "example": {
+            "\u003cATTRIBUTE\u003e": "\u003cVALUE\u003e"
+          },
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "사용자화 메타데이터"
+        },
+        "writable": {
+          "type": "boolean",
+          "title": "리소스에 대한 변경 권한 여부",
+          "readOnly": true
+        }
+      },
+      "description": "설비에 대한 제품 정보를 관리",
+      "title": "Product",
+      "required": [
+        "modelNumber"
+      ]
+    },
+    "ProductsDeleteControlProductBody": {
+      "type": "object"
+    },
+    "ProductsDeleteProductBody": {
+      "type": "object"
+    },
+    "ProductsReplaceProductBody": {
+      "type": "object",
+      "properties": {
+        "manufacture": {
+          "type": "object",
+          "title": "제조사 정보",
+          "readOnly": true
+        },
+        "productName": {
+          "type": "string",
+          "title": "제품명",
+          "maxLength": 200
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "title": "제품 출시 일시"
+        },
+        "attributes": {
+          "type": "object",
+          "example": {
+            "\u003cATTRIBUTE\u003e": "\u003cVALUE\u003e"
+          },
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "사용자화 메타데이터"
+        },
+        "writable": {
+          "type": "boolean",
+          "title": "리소스에 대한 변경 권한 여부",
+          "readOnly": true
+        }
+      },
+      "description": "설비에 대한 제품 정보를 관리",
+      "title": "Product"
+    },
+    "ProductsUpdateControlProductBody": {
+      "type": "object",
+      "properties": {
+        "sensorType": {
+          "type": "string",
+          "example": "agsmotor_green2",
+          "title": "센서 타입",
+          "maxLength": 100,
+          "pattern": "^[a-z][a-z0-9_]*[a-z0-9]+$"
+        },
+        "command": {
+          "type": "string",
+          "example": "set_agsmotor_operation_req2",
+          "title": "명령어",
+          "maxLength": 200,
+          "pattern": "^[a-z][a-z0-9_]*[a-z0-9]+$"
+        },
+        "payload": {
+          "type": "string",
+          "example": "{\"2\": {{.ratio}}}",
+          "description": "go template 문법을 사용하며 제어 명령에서 해당 값을 입력한다.",
+          "title": "제어 명령",
+          "maxLength": 1000
+        }
+      },
+      "required": [
+        "sensorType",
+        "command",
+        "payload"
+      ]
+    },
+    "SetControlFacilityRequestCustom": {
+      "type": "object",
+      "properties": {
+        "controlName": {
+          "type": "string",
+          "example": "1중 좌측 측창",
+          "title": "제어 이름",
+          "maxLength": 100,
+          "minLength": 1
+        },
+        "deviceId": {
+          "type": "string",
+          "title": "관련 장치 ID",
+          "maxLength": 14
+        },
+        "modbus": {
+          "type": "integer",
+          "format": "int64",
+          "example": 1,
+          "title": "연결된 Modbus 주소",
+          "maximum": 255,
+          "minimum": 1
+        },
+        "sensorType": {
+          "type": "string",
+          "example": "agsmotor_green",
+          "title": "센서 타입",
+          "maxLength": 100,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_]*[a-z0-9]+$"
+        },
+        "command": {
+          "type": "string",
+          "example": "set_agsmotor_operation_req",
+          "title": "명령어",
+          "maxLength": 200,
+          "pattern": "^[a-z][a-z0-9_]*[a-z0-9]+$"
+        },
+        "payload": {
+          "type": "string",
+          "example": "{\"1\": {{.ratio}}}",
+          "description": "go template 문법을 사용하며 제어 명령에서 해당 값을 입력한다.",
+          "title": "제어 명령",
+          "maxLength": 1000,
+          "minLength": 2
+        }
+      },
+      "title": "설비 고유 제어 설정",
+      "required": [
+        "controlName",
+        "deviceId",
+        "modbus",
+        "sensorType",
+        "command",
+        "payload"
+      ]
+    },
+    "SetControlFacilityRequestReplace": {
+      "type": "object",
+      "properties": {
+        "pControlId": {
+          "type": "string",
+          "title": "제품 제어 설정 ID"
+        },
+        "controlName": {
+          "type": "string",
+          "example": "1중 좌측 측창",
+          "title": "제어 이름",
+          "maxLength": 100
+        },
+        "deviceId": {
+          "type": "string",
+          "title": "관련 장치 ID",
+          "maxLength": 14
+        },
+        "modbus": {
+          "type": "integer",
+          "format": "int64",
+          "example": 1,
+          "title": "연결된 Modbus 주소",
+          "maximum": 255,
+          "minimum": 1
+        },
+        "sensorType": {
+          "type": "string",
+          "example": "agsmotor_green",
+          "title": "센서 타입",
+          "maxLength": 100,
+          "pattern": "^([a-z][a-z0-9_]*[a-z0-9]+|)$"
+        },
+        "command": {
+          "type": "string",
+          "example": "set_agsmotor_operation_req",
+          "title": "명령어",
+          "maxLength": 200,
+          "pattern": "^([a-z][a-z0-9_]*[a-z0-9]+|)$"
+        },
+        "payload": {
+          "type": "string",
+          "example": "{\"1\": {{.ratio}}}",
+          "description": "go template 문법을 사용하며 제어 명령에서 해당 값을 입력한다.",
+          "title": "제어 명령",
+          "maxLength": 1000
+        }
+      },
+      "description": "빈값인 경우 제품 제어 설정 사용",
+      "title": "제품 설정의 값을 활용하여 일부 정보 수정",
+      "required": [
+        "pControlId",
+        "deviceId"
+      ]
+    },
+    "beymonsLocation": {
+      "type": "object",
+      "properties": {
+        "latitude": {
+          "type": "number",
+          "format": "double",
+          "title": "위도"
+        },
+        "longitude": {
+          "type": "number",
+          "format": "double",
+          "title": "경도"
+        },
+        "altitude": {
+          "type": "number",
+          "format": "double",
+          "title": "고도"
+        }
+      },
+      "description": "Location 모델은 위치 정보를 표현할 때 사용한다."
+    },
+    "devicesAttribute": {
+      "type": "string",
+      "enum": [
+        "display_name",
+        "description",
+        "sensors",
+        "location",
+        "created_at",
+        "created_by",
+        "updated_at",
+        "updated_by",
+        "site"
+      ],
+      "default": "display_name",
+      "description": "- display_name: 장치 이름\n - description: 장치 설명\n - sensors: 센서 정보\n - location: 설치 위치\n - created_at: 생성 일시\n - created_by: 생성한 사용자 정보\n - updated_at: 마지막으로 수정된 일시\n - updated_by: 마지막으로 수정한 사용자 정보\n - site: 고객 정보",
+      "title": "사용 가능한 속성"
+    },
+    "devicesDevice": {
+      "type": "object",
+      "properties": {
+        "deviceId": {
+          "type": "string",
+          "example": "T00000001",
+          "title": "Device ID",
+          "maxLength": 14,
+          "minLength": 2,
+          "pattern": "^[a-zA-Z0-9_-]+[a-zA-Z0-9]$"
+        },
+        "displayName": {
+          "type": "string",
+          "example": "테스트 노드",
+          "title": "device 이름",
+          "maxLength": 100
+        },
+        "description": {
+          "type": "string",
+          "title": "device 설명",
+          "maxLength": 1000
+        },
+        "deviceRole": {
+          "allOf": [
+            {"$ref": "#/definitions/devicesDeviceRole"}
+          ],
+          "example": "NODE",
+          "title": "device 동작 모드 [변경 불가]"
+        },
+        "status": {
+          "allOf": [
+            {"$ref": "#/definitions/devicesDeviceStatus"}
+          ],
+          "title": "device 상태",
+          "readOnly": true
+        },
+        "sensors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "allOf": [
+              {"$ref": "#/definitions/devicesSensor"}
+            ]
+          },
+          "title": "연결된 센서 목록 [변경 불가]"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "title": "등록 일시",
+          "readOnly": true
+        },
+        "createdBy": {
+          "type": "object",
+          "example": {
+            "email": "example@suredatalab.com",
+            "first_name": "길동",
+            "last_name": "홍",
+            "username": "example",
+            "name": "홍길동",
+            "user_id": "UUID_000010"
+          },
+          "title": "등록한 사용자 정보",
+          "readOnly": true
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "title": "마지막 변경 일시",
+          "readOnly": true
+        },
+        "updatedBy": {
+          "type": "object",
+          "example": {
+            "email": "example@suredatalab.com",
+            "first_name": "길동",
+            "last_name": "홍",
+            "username": "example",
+            "name": "홍길동",
+            "user_id": "UUID_000010"
+          },
+          "title": "마지막으로 변경한 사용자 정보",
+          "readOnly": true
+        },
+        "location": {
+          "allOf": [
+            {"$ref": "#/definitions/beymonsLocation"}
+          ],
+          "title": "장치가 설치된 위치",
+          "readOnly": true
+        },
+        "site": {
+          "allOf": [
+            {"$ref": "#/definitions/DeviceSite"}
+          ],
+          "readOnly": true
+        },
+        "writable": {
+          "type": "boolean",
+          "title": "리소스에 대한 변경 권한 여부",
+          "readOnly": true
+        }
+      },
+      "description": "BEYMONS 장치에 대한 메타데이터 관리",
+      "title": "Device",
+      "required": [
+        "deviceId",
+        "deviceRole"
+      ]
+    },
+    "devicesDeviceRole": {
+      "type": "string",
+      "enum": [
+        "GATEWAY",
+        "NODE",
+        "REPEATER",
+        "NODEGATEWAY"
+      ],
+      "default": "GATEWAY",
+      "title": "TODO: repeater 관련 Flag 설정 참조해서 수정"
+    },
+    "devicesDeviceStatus": {
+      "type": "string",
+      "enum": [
+        "NORMAL",
+        "TROUBLE",
+        "DISCARD",
+        "NOT_RECEIVED",
+        "CAUTION",
+        "WARNING"
+      ],
+      "default": "NORMAL",
+      "title": "- NORMAL: 정상 상태\n - TROUBLE: 장치 혹은 센서의 고장 상태\n - DISCARD: 폐기\n - NOT_RECEIVED: 데이터 미수신 상태\n - CAUTION: 주의\n - WARNING: 경고"
+    },
+    "devicesSearchRequestOrder": {
+      "type": "string",
+      "enum": [
+        "device_id_asc",
+        "device_id_desc",
+        "device_role_asc",
+        "device_role_desc",
+        "site_id_asc",
+        "site_id_desc",
+        "site_name_asc",
+        "site_name_desc"
+      ],
+      "default": "device_id_asc",
+      "description": "- device_id_asc: 장치 ID 오름차순\n - device_id_desc: 장치 ID 내림차순\n - device_role_asc: 동작방식 오름차순\n - device_role_desc: 동작방식 내림차순\n - site_id_asc: 현장 ID 오름차순\n - site_id_desc: 현장 ID 내림차순\n - site_name_asc: 현장명 오름차순\n - site_name_desc: 현장명 내림차순",
+      "title": "정렬"
+    },
+    "devicesSearchResponse": {
+      "type": "object",
+      "properties": {
+        "entities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "allOf": [
+              {"$ref": "#/definitions/devicesDevice"}
+            ]
+          }
+        },
+        "count": {
+          "type": "string",
+          "format": "uint64",
+          "title": "전체 데이터 수"
+        },
+        "link": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "관련 링크 (HATEOAS)"
+        }
+      }
+    },
+    "devicesSensor": {
+      "type": "object",
+      "properties": {
+        "sensorId": {
+          "type": "string",
+          "example": "UUID_000010",
+          "title": "Sensor ID",
+          "readOnly": true
+        },
+        "deviceId": {
+          "type": "string",
+          "example": "T00000001",
+          "title": "Device ID",
+          "readOnly": true
+        },
+        "channelId": {
+          "type": "integer",
+          "format": "int64",
+          "example": 1,
+          "title": "Modbus address (구: Channel ID)",
+          "maximum": 255,
+          "minimum": 1
+        },
+        "sensorType": {
+          "type": "string",
+          "example": "temperature",
+          "title": "센서 타입"
+        },
+        "displayName": {
+          "type": "string",
+          "example": "온도1",
+          "title": "센서 이름"
+        },
+        "description": {
+          "type": "string",
+          "example": "냉장고 뒤쪽에 부착",
+          "title": "센서 설명"
+        },
+        "latest": {
+          "type": "object",
+          "example": {
+            "1": {
+              "temp": 25.4,
+              "ts": 1717047881120
+            },
+            "2": {
+              "temp": 25.6,
+              "ts": 1717047881120
+            }
+          },
+          "title": "최근 수집한 데이터. 장치 조회 API에서만 포함",
+          "readOnly": true
+        },
+        "probes": {
+          "type": "integer",
+          "format": "int64",
+          "example": 1,
+          "title": "채널(구: 프로프) 개수",
+          "maximum": 63
+        },
+        "status": {
+          "allOf": [
+            {"$ref": "#/definitions/devicesDeviceStatus"}
+          ],
+          "example": "NORMAL",
+          "title": "센서 상태",
+          "readOnly": true
+        },
+        "facility": {
+          "allOf": [
+            {"$ref": "#/definitions/devicesSensorFacility"}
+          ],
+          "readOnly": true
+        }
+      },
+      "description": "장치에 연결된 센서 정보 관리",
+      "title": "Sensor",
+      "required": [
+        "channelId",
+        "sensorType"
+      ]
+    },
+    "devicesSensorFacility": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "title": "설비 ID",
+          "readOnly": true
+        },
+        "name": {
+          "type": "string",
+          "title": "설비 이름",
+          "readOnly": true
+        }
+      },
+      "title": "장치가 설비 정보"
+    },
+    "facilitiesCommandFacilityResponse": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "type": "integer",
+          "format": "int64",
+          "title": "명령이 적용된 리소스 수"
+        }
+      }
+    },
+    "facilitiesConnectRequestDevice": {
+      "type": "object",
+      "properties": {
+        "deviceId": {
+          "type": "string",
+          "title": "장치 ID"
+        },
+        "modbus": {
+          "type": "integer",
+          "format": "int64",
+          "example": 1,
+          "title": "모드버스 주소",
+          "maximum": 255,
+          "minimum": 1
+        },
+        "channel": {
+          "type": "integer",
+          "format": "int64",
+          "example": 1,
+          "title": "TODO: 채널 번호(구: 프로브)",
+          "maximum": 255
+        },
+        "description": {
+          "type": "string",
+          "title": "센서 설명",
+          "maxLength": 1000
+        }
+      },
+      "title": "연결할 장치 정보",
+      "required": [
+        "deviceId",
+        "modbus"
+      ]
+    },
+    "facilitiesControlFacilityResponse": {
+      "type": "object",
+      "properties": {
+        "entities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "allOf": [
+              {"$ref": "#/definitions/facilitiesFacilityControl"}
+            ]
+          }
+        }
+      }
+    },
+    "facilitiesControlProductResponse": {
+      "type": "object",
+      "properties": {
+        "entities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "allOf": [
+              {"$ref": "#/definitions/facilitiesProductControl"}
+            ]
+          }
+        }
+      }
+    },
+    "facilitiesFacility": {
+      "type": "object",
+      "properties": {
+        "facilityId": {
+          "type": "string",
+          "title": "설비 ID",
+          "readOnly": true
+        },
+        "facilityName": {
+          "type": "string",
+          "title": "설비명",
+          "maxLength": 50,
+          "minLength": 2
+        },
+        "siteId": {
+          "type": "string",
+          "title": "현장 ID [변경 불가]"
+        },
+        "groupId": {
+          "type": "string",
+          "title": "그룹 ID [변경 불가]"
+        },
+        "latitude": {
+          "type": "number",
+          "format": "double",
+          "title": "설비 위치 (위도)"
+        },
+        "longitude": {
+          "type": "number",
+          "format": "double",
+          "title": "설비 위치 (경도)"
+        },
+        "altitude": {
+          "type": "number",
+          "format": "double",
+          "title": "설비 위치 (고도)"
+        },
+        "manufactureId": {
+          "type": "string",
+          "title": "제조사 ID [변경 불가]"
+        },
+        "modelNumber": {
+          "type": "string",
+          "title": "모델 번호 [변경 불가]"
+        },
+        "serialNumber": {
+          "type": "string",
+          "title": "일련 번호",
+          "maxLength": 100
+        },
+        "siteGroup": {
+          "type": "object",
+          "title": "현장 및 그룹 정보",
+          "readOnly": true
+        },
+        "product": {
+          "type": "object",
+          "title": "제품 정보",
+          "readOnly": true
+        },
+        "attributes": {
+          "type": "object",
+          "example": {
+            "\u003cATTRIBUTE\u003e": "\u003cVALUE\u003e"
+          },
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "특정 이름은 다른 의미를 가진다:\n- constructor_id: 시공사에 대한 ID로 등록된 정보가 있으면 constructor로 해당 정보를 포함한다.",
+          "title": "사용자화 메타데이터"
+        },
+        "status": {
+          "allOf": [
+            {"$ref": "#/definitions/facilitiesFacilityStatus"}
+          ],
+          "title": "설비 상태",
+          "readOnly": true
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "title": "설비 구축 일시"
+        },
+        "writable": {
+          "type": "boolean",
+          "title": "리소스에 대한 변경 권한 여부",
+          "readOnly": true
+        },
+        "related": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "allOf": [
+              {"$ref": "#/definitions/FacilityRelated"}
+            ]
+          },
+          "readOnly": true
+        }
+      },
+      "description": "설비에 대한 정보 관리",
+      "title": "Facility",
+      "required": [
+        "facilityName",
+        "siteId",
+        "groupId",
+        "manufactureId",
+        "modelNumber"
+      ]
+    },
+    "facilitiesFacilityControl": {
+      "type": "object",
+      "properties": {
+        "controlId": {
+          "type": "string",
+          "title": "제어 설정 ID",
+          "readOnly": true
+        },
+        "facilityId": {
+          "type": "string",
+          "title": "설비 ID"
+        },
+        "pControlId": {
+          "type": "string",
+          "description": "빈 값인 경우 설비에만 적용된 제어 설정이며, 이러한 경우 다음 필드를 반드시 입력해야 한다:\n- control_name\n- modbus\n- sensor_type\n- command\n- payload",
+          "title": "제품 제어 설정 ID"
+        },
+        "controlName": {
+          "type": "string",
+          "example": "1중 좌측 측창",
+          "title": "제어 이름",
+          "maxLength": 100
+        },
+        "deviceId": {
+          "type": "string",
+          "title": "관련 장치 ID"
+        },
+        "deviceName": {
+          "type": "string",
+          "title": "장치 이름",
+          "readOnly": true
+        },
+        "modbus": {
+          "type": "integer",
+          "format": "int64",
+          "title": "연결된 Modbus 주소"
+        },
+        "sensorType": {
+          "type": "string",
+          "example": "agsmotor_green",
+          "title": "센서 타입",
+          "maxLength": 100,
+          "pattern": "^([a-z][a-z0-9_]*[a-z0-9]+|)$"
+        },
+        "sensorTypeName": {
+          "type": "string",
+          "title": "센서 타입 이름",
+          "readOnly": true
+        },
+        "command": {
+          "type": "string",
+          "example": "set_agsmotor_operation_req",
+          "title": "명령어",
+          "maxLength": 200,
+          "pattern": "^([a-z][a-z0-9_]*[a-z0-9]+|)$"
+        },
+        "payload": {
+          "type": "string",
+          "example": "{\"1\": {{.ratio}}}",
+          "description": "go template 문법을 사용하며 제어 명령에서 해당 값을 입력한다.",
+          "title": "제어 명령",
+          "maxLength": 1000
+        },
+        "channels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "관련 채널 번호",
+          "readOnly": true
+        },
+        "attributes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "제어 명령에서 포함해야 하는 필드",
+          "readOnly": true
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "title": "마지막 업데이트 일시",
+          "readOnly": true
+        }
+      },
+      "description": "설비에 제어 설정 관리",
+      "title": "FacilityControl",
+      "required": [
+        "facilityId",
+        "deviceId",
+        "command"
+      ]
+    },
+    "facilitiesFacilityHistory": {
+      "type": "object",
+      "properties": {
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "title": "이력 발생 일시"
+        },
+        "facilityId": {
+          "type": "string",
+          "title": "Facility ID"
+        },
+        "siteId": {
+          "type": "string",
+          "title": "현장 ID"
+        },
+        "action": {
+          "allOf": [
+            {"$ref": "#/definitions/facilitiesFacilityHistoryKind"}
+          ],
+          "title": "관리 이력 코드"
+        },
+        "createdUserId": {
+          "type": "string",
+          "title": "이력을 발생시킨 사용자 ID"
+        },
+        "createdName": {
+          "type": "string",
+          "title": "이력 발생 당시의 사용자 이름"
+        },
+        "createdBy": {
+          "type": "object",
+          "example": {
+            "email": "example@suredatalab.com",
+            "first_name": "길동",
+            "last_name": "홍",
+            "username": "example",
+            "name": "홍길동",
+            "user_id": "UUID_000010"
+          },
+          "title": "이력을 발생시킨 사용자 정보",
+          "readOnly": true
+        },
+        "details": {
+          "type": "object",
+          "title": "상세 이력",
+          "readOnly": true
+        }
+      },
+      "description": "Facility 모델의 이력을 관리한다.",
+      "title": "FacilityHistory"
+    },
+    "facilitiesFacilityHistoryKind": {
+      "type": "string",
+      "enum": [
+        "CREATED",
+        "UPDATED",
+        "DELETED",
+        "ATTACHED",
+        "DETACHED",
+        "STATUS",
+        "MIGRATED"
+      ],
+      "default": "CREATED",
+      "title": "- CREATED: 설비 등록\n - UPDATED: 설비 정보 수정\n - DELETED: 설비 폐기\n - ATTACHED: 장치 연결\n - DETACHED: 장치 연결 해제\n - STATUS: 설비 상태 변경\n - MIGRATED: 그룹 이전"
+    },
+    "facilitiesFacilityHistoryResponse": {
+      "type": "object",
+      "properties": {
+        "histories": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "allOf": [
+              {"$ref": "#/definitions/facilitiesFacilityHistory"}
+            ]
+          },
+          "title": "관리 이력"
+        }
+      }
+    },
+    "facilitiesFacilityResponse": {
+      "type": "object",
+      "properties": {
+        "facility": {
+          "allOf": [
+            {"$ref": "#/definitions/facilitiesFacility"}
+          ]
+        },
+        "link": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "관련 링크 (HATEOAS)"
+        }
+      }
+    },
+    "facilitiesFacilityStatus": {
+      "type": "string",
+      "enum": [
+        "NORMAL",
+        "ABNORMAL",
+        "DEGRADED",
+        "END_OF_LIFE",
+        "DOWN",
+        "MAINTENANCE",
+        "IDLE",
+        "DEFUNCT"
+      ],
+      "default": "NORMAL",
+      "description": "- NORMAL: 정상\n - ABNORMAL: 설비가 작동하고 있지만, 이상 신호가 감지된 상태\n - DEGRADED: 설비가 작동하고 있지만, 성능이 저하된 상태\n - END_OF_LIFE: 설비가 작동하고 있지만, 예측 수명이 끝난 상태\n - DOWN: 설비가 작동하지 않는 상태\n - MAINTENANCE: 설비가 수리 또는 점검을 위해 사용할 수 없는 상태\n - IDLE: 설비가 작동하지 않지만, 곧 사용될 예정인 상태\n - DEFUNCT: 설비를 더이상 사용하지 않는 상태 (교체 혹은 폐기)",
+      "title": "설비 상태"
+    },
+    "facilitiesProduct": {
+      "type": "object",
+      "properties": {
+        "manufactureId": {
+          "type": "string",
+          "title": "제조사 ID",
+          "maxLength": 50
+        },
+        "modelNumber": {
+          "type": "string",
+          "title": "모델 번호",
+          "maxLength": 100,
+          "minLength": 2
+        },
+        "manufacture": {
+          "type": "object",
+          "title": "제조사 정보",
+          "readOnly": true
+        },
+        "productName": {
+          "type": "string",
+          "title": "제품명",
+          "maxLength": 200
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "title": "제품 출시 일시"
+        },
+        "attributes": {
+          "type": "object",
+          "example": {
+            "\u003cATTRIBUTE\u003e": "\u003cVALUE\u003e"
+          },
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "사용자화 메타데이터"
+        },
+        "writable": {
+          "type": "boolean",
+          "title": "리소스에 대한 변경 권한 여부",
+          "readOnly": true
+        }
+      },
+      "description": "설비에 대한 제품 정보를 관리",
+      "title": "Product",
+      "required": [
+        "manufactureId",
+        "modelNumber"
+      ]
+    },
+    "facilitiesProductControl": {
+      "type": "object",
+      "properties": {
+        "controlId": {
+          "type": "string",
+          "title": "제어 설정 ID",
+          "readOnly": true
+        },
+        "manufactureId": {
+          "type": "string",
+          "title": "제조사 ID",
+          "maxLength": 50
+        },
+        "modelNumber": {
+          "type": "string",
+          "title": "모델 번호",
+          "maxLength": 100
+        },
+        "controlName": {
+          "type": "string",
+          "example": "1중 좌측 측창",
+          "title": "제어 이름",
+          "maxLength": 100
+        },
+        "modbus": {
+          "type": "integer",
+          "format": "int64",
+          "title": "연결된 Modbus 주소"
+        },
+        "sensorType": {
+          "type": "string",
+          "example": "agsmotor_green",
+          "title": "센서 타입",
+          "maxLength": 100,
+          "pattern": "^[a-z][a-z0-9_]*[a-z0-9]+$"
+        },
+        "sensorTypeName": {
+          "type": "string",
+          "title": "센서 타입 이름",
+          "readOnly": true
+        },
+        "command": {
+          "type": "string",
+          "example": "set_agsmotor_operation_req",
+          "title": "명령어",
+          "maxLength": 200,
+          "pattern": "^[a-z][a-z0-9_]*[a-z0-9]+$"
+        },
+        "payload": {
+          "type": "string",
+          "example": "{\"1\": {{.ratio}}}",
+          "description": "go template 문법을 사용하며 제어 명령에서 해당 값을 입력한다.",
+          "title": "제어 명령",
+          "maxLength": 1000
+        },
+        "channels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "관련 채널 번호",
+          "readOnly": true
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "title": "마지막 업데이트 일시",
+          "readOnly": true
+        }
+      },
+      "description": "제품에 제어 설정 관리",
+      "title": "ProductControl",
+      "required": [
+        "manufactureId",
+        "modelNumber",
+        "controlName",
+        "modbus",
+        "sensorType",
+        "command",
+        "payload"
+      ]
+    },
+    "facilitiesProductHistory": {
+      "type": "object",
+      "properties": {
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "title": "이력 발생 일시"
+        },
+        "manufactureId": {
+          "type": "string",
+          "title": "제조사 ID"
+        },
+        "modelNumber": {
+          "type": "string",
+          "title": "모델 번호"
+        },
+        "action": {
+          "allOf": [
+            {"$ref": "#/definitions/facilitiesProductHistoryKind"}
+          ],
+          "title": "관리 이력 코드"
+        },
+        "createdUserId": {
+          "type": "string",
+          "title": "이력을 발생시킨 사용자 ID"
+        },
+        "createdName": {
+          "type": "string",
+          "title": "이력 발생 당시의 사용자 이름"
+        },
+        "createdBy": {
+          "type": "object",
+          "example": {
+            "email": "example@suredatalab.com",
+            "first_name": "길동",
+            "last_name": "홍",
+            "username": "example",
+            "name": "홍길동",
+            "user_id": "UUID_000010"
+          },
+          "title": "이력을 발생시킨 사용자 정보",
+          "readOnly": true
+        },
+        "details": {
+          "type": "object",
+          "title": "상세 이력",
+          "readOnly": true
+        }
+      },
+      "description": "Product 모델의 이력을 관리한다.",
+      "title": "ProductHistory"
+    },
+    "facilitiesProductHistoryKind": {
+      "type": "string",
+      "enum": [
+        "CREATED",
+        "UPDATED",
+        "DELETED"
+      ],
+      "default": "CREATED",
+      "title": "- CREATED: 제품 등록\n - UPDATED: 제품 정보 수정\n - DELETED: 제품 삭제"
+    },
+    "facilitiesProductHistoryResponse": {
+      "type": "object",
+      "properties": {
+        "histories": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "allOf": [
+              {"$ref": "#/definitions/facilitiesProductHistory"}
+            ]
+          },
+          "title": "관리 이력"
+        }
+      }
+    },
+    "facilitiesSearchFacilityRequestOrder": {
+      "type": "string",
+      "enum": [
+        "facility_name_asc",
+        "facility_name_desc",
+        "site_id_asc",
+        "site_id_desc",
+        "site_name_asc",
+        "site_name_desc",
+        "group_id_asc",
+        "group_id_desc",
+        "group_name_asc",
+        "group_name_desc"
+      ],
+      "default": "facility_name_asc",
+      "description": "- facility_name_asc: 설비명 (오름차순)\n - facility_name_desc: 설비명 (내림차순)\n - site_id_asc: 현장 ID (오름차순)\n - site_id_desc: 현장 ID (내림차순)\n - site_name_asc: 현장 이름 (오름차순)\n - site_name_desc: 현장 이름 (내림차순)\n - group_id_asc: 설비 그룹 ID (오름차순)\n - group_id_desc: 설비 그룹 ID (내림차순)\n - group_name_asc: 설비 그룹 이름 (오름차순)\n - group_name_desc: 설비 그룹 이름 (내림차순)",
+      "title": "정렬 옵션"
+    },
+    "facilitiesSearchFacilityResponse": {
+      "type": "object",
+      "properties": {
+        "entities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "allOf": [
+              {"$ref": "#/definitions/facilitiesFacility"}
+            ]
+          }
+        },
+        "count": {
+          "type": "string",
+          "format": "uint64",
+          "title": "데이터의 총건수"
+        },
+        "link": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "관련 링크 (HATEOAS)"
+        }
+      }
+    },
+    "facilitiesSearchProductRequestOrder": {
+      "type": "string",
+      "enum": [
+        "manufacture_id_asc",
+        "manufacture_id_desc",
+        "manufacture_name_asc",
+        "manufacture_name_desc",
+        "model_number_asc",
+        "model_number_desc",
+        "product_name_asc",
+        "product_name_desc"
+      ],
+      "default": "manufacture_id_asc",
+      "description": "- manufacture_id_asc: 제조사 ID (오름차순)\n - manufacture_id_desc: 제조사 ID (내림차순)\n - manufacture_name_asc: 제조사 이름 (오름차순)\n - manufacture_name_desc: 제조사 이름 (내림차순)\n - model_number_asc: 모델 번호 (오름차순)\n - model_number_desc: 모델 번호 (내림차순)\n - product_name_asc: 제품명 (오름차순)\n - product_name_desc: 제품명 (내림차순)",
+      "title": "정렬 옵션"
+    },
+    "facilitiesSearchProductResponse": {
+      "type": "object",
+      "properties": {
+        "entities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "allOf": [
+              {"$ref": "#/definitions/facilitiesProduct"}
+            ]
+          }
+        },
+        "count": {
+          "type": "string",
+          "format": "uint64",
+          "title": "데이터의 총건수"
+        },
+        "link": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "관련 링크 (HATEOAS)"
+        }
+      }
+    },
+    "facilitiesSensorsReponse": {
+      "type": "object",
+      "properties": {
+        "entities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "allOf": [
+              {"$ref": "#/definitions/facilitiesSensorsReponseSensor"}
+            ]
+          }
+        }
+      }
+    },
+    "facilitiesSensorsReponseSensor": {
+      "type": "object",
+      "properties": {
+        "deviceId": {
+          "type": "string",
+          "title": "장치 ID"
+        },
+        "modbus": {
+          "type": "integer",
+          "format": "int64",
+          "title": "모드버스 주소"
+        },
+        "channel": {
+          "type": "integer",
+          "format": "int64",
+          "title": "채널 번호"
+        },
+        "sensorType": {
+          "type": "string",
+          "title": "센서 타입"
+        },
+        "sensorTypeName": {
+          "type": "string",
+          "title": "센서 타입 이름"
+        },
+        "description": {
+          "type": "string",
+          "title": "채널 및 프로브 설명"
+        }
+      }
+    },
+    "facilitiesStatResponse": {
+      "type": "object",
+      "properties": {
+        "stat": {
+          "type": "object",
+          "additionalProperties": {
+            "allOf": [
+              {"$ref": "#/definitions/typesMetric"}
+            ]
+          }
+        }
+      }
+    },
+    "googlerpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "allOf": [
+              {"$ref": "#/definitions/protobufAny"}
+            ]
+          }
+        }
+      }
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string",
+          "description": "A URL/resource name that uniquely identifies the type of the serialized\nprotocol buffer message. This string must contain at least\none \"/\" character. The last segment of the URL's path must represent\nthe fully qualified name of the type (as in\n`path/google.protobuf.Duration`). The name should be in a canonical form\n(e.g., leading \".\" is not accepted).\n\nIn practice, teams usually precompile into the binary all types that they\nexpect it to use in the context of Any. However, for URLs which use the\nscheme `http`, `https`, or no scheme, one can optionally set up a type\nserver that maps type URLs to message definitions as follows:\n\n* If no scheme is provided, `https` is assumed.\n* An HTTP GET on the URL must yield a [google.protobuf.Type][]\n  value in binary format, or produce an error.\n* Applications are allowed to cache lookup results based on the\n  URL, or have them precompiled into a binary to avoid any\n  lookup. Therefore, binary compatibility needs to be preserved\n  on changes to types. (Use versioned type names to manage\n  breaking changes.)\n\nNote: this functionality is not currently available in the official\nprotobuf release, and it is not used for type URLs beginning with\ntype.googleapis.com. As of May 2023, there are no widely used type server\nimplementations and no plans to implement one.\n\nSchemes other than `http`, `https` (or the empty scheme) might be\nused with implementation specific semantics."
+        }
+      },
+      "additionalProperties": {},
+      "description": "`Any` contains an arbitrary serialized protocol buffer message along with a\nURL that describes the type of the serialized message.\n\nProtobuf library provides support to pack/unpack Any values in the form\nof utility functions or additional generated methods of the Any type.\n\nExample 1: Pack and unpack a message in C++.\n\n    Foo foo = ...;\n    Any any;\n    any.PackFrom(foo);\n    ...\n    if (any.UnpackTo(\u0026foo)) {\n      ...\n    }\n\nExample 2: Pack and unpack a message in Java.\n\n    Foo foo = ...;\n    Any any = Any.pack(foo);\n    ...\n    if (any.is(Foo.class)) {\n      foo = any.unpack(Foo.class);\n    }\n    // or ...\n    if (any.isSameTypeAs(Foo.getDefaultInstance())) {\n      foo = any.unpack(Foo.getDefaultInstance());\n    }\n\n Example 3: Pack and unpack a message in Python.\n\n    foo = Foo(...)\n    any = Any()\n    any.Pack(foo)\n    ...\n    if any.Is(Foo.DESCRIPTOR):\n      any.Unpack(foo)\n      ...\n\n Example 4: Pack and unpack a message in Go\n\n     foo := \u0026pb.Foo{...}\n     any, err := anypb.New(foo)\n     if err != nil {\n       ...\n     }\n     ...\n     foo := \u0026pb.Foo{}\n     if err := any.UnmarshalTo(foo); err != nil {\n       ...\n     }\n\nThe pack methods provided by protobuf library will by default use\n'type.googleapis.com/full.type.name' as the type URL and the unpack\nmethods only use the fully qualified type name after the last '/'\nin the type URL, for example \"foo.bar.com/x/y.z\" will yield type\nname \"y.z\".\n\nJSON\n====\nThe JSON representation of an `Any` value uses the regular\nrepresentation of the deserialized, embedded message, with an\nadditional field `@type` which contains the type URL. Example:\n\n    package google.profile;\n    message Person {\n      string first_name = 1;\n      string last_name = 2;\n    }\n\n    {\n      \"@type\": \"type.googleapis.com/google.profile.Person\",\n      \"firstName\": \u003cstring\u003e,\n      \"lastName\": \u003cstring\u003e\n    }\n\nIf the embedded message type is well-known and has a custom JSON\nrepresentation, that representation will be embedded adding a field\n`value` which holds the custom JSON in addition to the `@type`\nfield. Example (for message [google.protobuf.Duration][]):\n\n    {\n      \"@type\": \"type.googleapis.com/google.protobuf.Duration\",\n      \"value\": \"1.212s\"\n    }"
+    },
+    "protobufNullValue": {
+      "type": "string",
+      "enum": [
+        "NULL_VALUE"
+      ],
+      "default": "NULL_VALUE",
+      "description": "`NullValue` is a singleton enumeration to represent the null value for the\n`Value` type union.\n\nThe JSON representation for `NullValue` is JSON `null`.\n\n - NULL_VALUE: Null value."
+    },
+    "typesMetric": {
+      "type": "object",
+      "properties": {
+        "ts": {
+          "type": "string",
+          "format": "date-time",
+          "title": "시간"
+        },
+        "value": {
+          "allOf": [
+            {"$ref": "#/definitions/protobufAny"}
+          ],
+          "title": "측정 값"
+        },
+        "descriptor": {
+          "allOf": [
+            {"$ref": "#/definitions/typesMetricDescriptor"}
+          ],
+          "title": "Descriptor"
+        }
+      },
+      "description": "Metric 모델은 측정 값을 표현하기 위한 모델이다.\n\nExample:\n``` json\n{\n  \"ts\": \"2019-11-01T10:00:00+0900\",\n  \"value\": \"한국전력공사 출자\"\n  \"descriptor_\": {\n    \"id\": \"history\",\n    \"displayName\": \"회사 연혁\",\n    \"metricKind\": \"gauge\",\n    \"valueType\": \"string\",\n  },\n}\n```"
+    },
+    "typesMetricDescriptor": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "title": "ID"
+        },
+        "displayName": {
+          "type": "string",
+          "title": "Display name"
+        },
+        "metricKind": {
+          "allOf": [
+            {"$ref": "#/definitions/MetricDescriptorMetricKind"}
+          ]
+        },
+        "valueType": {
+          "allOf": [
+            {"$ref": "#/definitions/MetricDescriptorValueType"}
+          ]
+        },
+        "unit": {
+          "type": "string",
+          "title": "값의 단위"
+        },
+        "description": {
+          "type": "string",
+          "title": "설명"
+        }
+      },
+      "description": "MetricDescriptor 모델은 측정 데이터에 대한 설명으로 데이터를 어떻게 다뤄야 하는지 기술되어 있다."
+    }
+  },
+  "securityDefinitions": {
+    "Keycloak": {
+      "type": "oauth2",
+      "flow": "accessCode",
+      "authorizationUrl": "https://keycloak.suredatalab.kr/realms/beymons/protocol/openid-connect/auth",
+      "tokenUrl": "https://keycloak.suredatalab.kr/realms/beymons/protocol/openid-connect/token"
+    }
+  },
+  "security": [
+    {
+      "Keycloak": []
+    }
+  ]
+}

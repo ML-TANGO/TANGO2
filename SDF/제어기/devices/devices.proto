@@ -1,0 +1,1025 @@
+syntax = "proto3";
+package devices;
+option go_package = "gitlab.suredatalab.kr/beymons/devices";
+
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+import "buf/validate/validate.proto";
+import "sdlmicro/middleware/annotations.proto";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+import "beymons/common/types.proto";
+
+import "command.proto";
+
+service Devices {
+	option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_tag) = {
+		description: "장치 관리"
+	};
+	option (sdlmicro.options.authorization) = {
+		admin_role: "device-admin"
+		roles: {
+			key: "create-device"
+			value: "장치 생성 권한"
+		}
+		roles: {
+			key: "query-devices"
+			value: "장치 검색 권한"
+		}
+		roles: {
+			key: "view-devices"
+			value: "장치 조회 권한"
+		}
+		roles: {
+			key: "manage-devices"
+			value: "장치 관리 권한"
+		}
+		roles: {
+			key: "device-admin"
+			value: "장치 관리자"
+		}
+	};
+
+	// 장치 등록
+	rpc CreateDevice(Device) returns (Device) {
+		option (google.api.http) = {
+			post: "/devices"
+			body: "*"
+		};
+		option (sdlmicro.options.method) = {
+			authorization: "create-device"
+			test_order: 3
+		};
+		option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+			responses: {
+				key: "409"
+				value: {
+					description: "Returned when the device is already exists"
+					schema: {
+						example: "null"
+					}
+				}
+			}
+		};
+	}
+
+	// 장치 검색
+	rpc Search(SearchRequest) returns (SearchResponse) {
+		option (google.api.http) = {get: "/devices"};
+		option (sdlmicro.options.method) = {
+			authorization: ["query-devices", "manage-devices"]
+			test_order: 4
+		};
+	}
+
+	// 장치 조회
+	rpc GetDevice(DeviceRequest) returns (DeviceResponse) {
+		option (google.api.http) = {get: "/devices/{device_id}"};
+		option (sdlmicro.options.method) = {
+			authorization: ["view-devices", "manage-devices"]
+			test_order: 5
+		};
+	}
+
+	// 장치 이력 조회
+	rpc Histories(DeviceRequest) returns (HistoryResponse) {
+		option (google.api.http) = {get: "/devices/{device_id}/histories"};
+		option (sdlmicro.options.method) = {
+			authorization: ["view-devices", "manage-devices"]
+		};
+	}
+
+	// 장치 정보 변경
+	rpc UpdateDevice(Device) returns (Device) {
+		option (google.api.http) = {
+			put: "/devices/{device_id}"
+			body: "*"
+		};
+		option (sdlmicro.options.method) = {
+			authorization: "manage-devices"
+			test_order: 6
+		};
+	}
+
+	// 장치로 명령 전송
+	rpc Command(CommandRequest) returns (google.protobuf.Struct) {
+		option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {tags: "제어"};
+		option (google.api.http) = {
+			post: "/devices/{device_id}/{command}"
+			body: "payload"
+			additional_bindings: {
+				patch: "/devices/{device_id}/{command}"
+				body: "*"
+			}
+			additional_bindings: {
+				post: "/devices/{device_id}/config"
+				body: "configure"
+			}
+			additional_bindings: {
+				post: "/devices/{device_id}/agsmotor"
+				body: "agsmotor"
+			}
+			additional_bindings: {
+				post: "/devices/{device_id}/agsmotor_mode"
+				body: "agsmotor_mode"
+			}
+		};
+		option (sdlmicro.options.method) = {
+			authorization: "manage-devices"
+			test_order: 9
+		};
+	}
+
+	// 명령 처리 상태 확인
+	rpc GetCommand(GetCommandRequest) returns (DeviceCommandHistory) {
+		option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {tags: "제어"};
+		option (google.api.http) = {get: "/devices/{device_id}/sequence/{sequence}"};
+		option (sdlmicro.options.method) = {
+			authorization: "manage-devices"
+			test_order: 10
+		};
+	};
+
+	// DEPRECATED: 하위 장치 연결
+	rpc AttachDevice(ChildDeviceRequest) returns (DeviceResponse) {
+		option (google.api.http) = {
+			post: "/devices/{device_id}/children"
+			body: "*"
+		};
+		option (sdlmicro.options.method) = {
+			authorization: "manage-devices"
+			test_order: 8
+		};
+	}
+
+	// DEPRECATED: 하위 장치 연결 해제
+	rpc DetachDevice(ChildDeviceRequest) returns (DeviceResponse) {
+		option (google.api.http) = {delete: "/devices/{device_id}/children/{children}"};
+		option (sdlmicro.options.method) = {
+			authorization: "manage-devices"
+			test_order: 80
+		};
+	}
+
+	// 장치 삭제
+	rpc DeleteDevice(DeviceRequest) returns (google.protobuf.Empty) {
+		option (google.api.http) = {delete: "/devices/{device_id}"};
+		option (sdlmicro.options.method) = {
+			test_order: 98
+		};
+	}
+
+	// 센서 정보 수정 및 추가
+	rpc AppendSensor(Sensor) returns (google.protobuf.Empty) {
+		option (google.api.http) = {
+			post: "/devices/{device_id}/sensors"
+			body: "*"
+			additional_bindings: {
+				put: "/devices/{device_id}/sensors/{sensor_id}"
+				body: "*"
+			}
+		};
+		option (sdlmicro.options.method) = {
+			test_order: 7
+		};
+	}
+
+	// 장치에서 센서 제거
+	rpc DeleteSensor(DeleteSensorRequest) returns (google.protobuf.Empty) {
+		option (google.api.http) = {delete: "/devices/{device_id}/sensors/{sensor_id}"};
+		option (sdlmicro.options.method) = {
+			test_order: 90
+		};
+	}
+
+	// 임계치 조회
+	rpc GetSensorLimit(GetLimitRequest) returns (GetLimitResponse) {
+		option (google.api.http) = {get: "/devices/{device_id}/sensors/{channel}/limits"};
+		option (sdlmicro.options.method) = {
+			authorization: "view-devices"
+			test_order: 12
+		};
+	}
+
+	// 임계치 설정
+	rpc SetSensorLimit(SetLimitRequest) returns (SensorLimit) {
+		option (google.api.http) = {
+			put: "/devices/{device_id}/sensors/{channel}/{attribute}"
+			body: "*"
+		};
+		option (sdlmicro.options.method) = {
+			authorization: "manage-devices"
+			test_order: 11
+		};
+	}
+
+	// 임계치 설정 해제
+	rpc DeleteSensorLimit(DeleteLimitRequest) returns (google.protobuf.Empty) {
+		option (google.api.http) = {delete: "/devices/{device_id}/sensors/{channel}/{attribute}"};
+		option (sdlmicro.options.method) = {
+			authorization: "manage-devices"
+			test_order: 13
+		};
+	}
+}
+
+message DeviceRequest {
+	string device_id = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+message DeviceResponse {
+	Device device = 1;
+
+	// 마지막으로 적용된 설정 값
+	google.protobuf.Struct params = 2;
+
+	// 관련 링크 (HATEOAS)
+	map<string, string> link = 3;
+
+	// 관련 장치
+	//
+	// - DEPRECATED: 하위 장치
+	// - TODO: 이 장치롤 통해 데이터를 전송한 장치
+	repeated Device related = 4;
+}
+
+// 사용 가능한 속성
+enum Attribute {
+	// 장치 이름
+	display_name = 0;
+	// 장치 설명
+	description = 1;
+	// 센서 정보
+	sensors = 2;
+	// 설치 위치
+	location = 3;
+	// 생성 일시
+	created_at = 4;
+	// 생성한 사용자 정보
+	created_by = 5;
+	// 마지막으로 수정된 일시
+	updated_at = 6;
+	// 마지막으로 수정한 사용자 정보
+	updated_by = 7;
+	// 고객 정보
+	site = 8;
+}
+
+message SearchRequest {
+	// 정렬
+	enum Order {
+		// 장치 ID 오름차순
+		device_id_asc = 0;
+		// 장치 ID 내림차순
+		device_id_desc = 1;
+		// 동작방식 오름차순
+		device_role_asc = 2;
+		// 동작방식 내림차순
+		device_role_desc = 3;
+		// 현장 ID 오름차순
+		site_id_asc = 4;
+		// 현장 ID 내림차순
+		site_id_desc = 5;
+		// 현장명 오름차순
+		site_name_asc = 6;
+		// 현장명 내림차순
+		site_name_desc = 7;
+	}
+	repeated Order order = 1 [(google.api.field_behavior) = OPTIONAL];
+
+	// 조회 필드 선택 (default: ALL)
+	repeated Attribute field = 2 [(google.api.field_behavior) = OPTIONAL];
+
+	// 응답으로 보내줄 레코드 수.
+	// 지정하지 않거나 0인 경우 전체 레코드를 조회하지만,
+	// 응답이 15초 이상 소요되는 경우 타임아웃 오류가 발생된다.
+	uint64 limit = 3 [(google.api.field_behavior) = OPTIONAL];
+
+	// 페이지에서 표시되는 첫 레코드의 인덱스 (Default: 0)
+	uint64 offset = 4 [(google.api.field_behavior) = OPTIONAL];
+
+	// 전체 검색
+	//
+	// 대상:
+	// - 장치 ID (전방일치)
+	// - 장치명
+	// - 장치 설명
+	// - 현장 ID (전방일치)
+	// - 현장명
+	// - 설비명
+	string search = 5 [(google.api.field_behavior) = OPTIONAL];
+
+	// TODO: Config ID로 필터링
+	string config_id = 6 [(google.api.field_behavior) = OPTIONAL];
+
+	// 장치 ID로 필터링
+	string device_id = 7 [(google.api.field_behavior) = OPTIONAL];
+
+	// 현장 ID로 필터링
+	string site_id = 8 [(google.api.field_behavior) = OPTIONAL];
+
+	// 설비 ID로 필터링
+	string facility_id = 9 [(google.api.field_behavior) = OPTIONAL];
+
+	// 센서 타입으로 필터링
+	repeated string sensor_type = 10 [(google.api.field_behavior) = OPTIONAL];
+
+	// 장치 종류로 필터링
+	repeated DeviceRole role = 11 [(google.api.field_behavior) = OPTIONAL];
+
+	// 장치 상태로 필터링
+	repeated DeviceStatus status = 12 [(google.api.field_behavior) = OPTIONAL];
+}
+
+message SearchResponse {
+	repeated Device entities = 1;
+
+	// 전체 데이터 수
+	uint64 count = 2;
+
+	// 관련 링크 (HATEOAS)
+	map<string, string> link = 3;
+}
+
+message HistoryResponse {
+	repeated DeviceHistory histories = 1;
+}
+
+message ChildDeviceRequest {
+	string device_id = 1;
+	repeated string children = 2;
+}
+
+message DeleteSensorRequest {
+	// Device ID
+	string device_id = 1;
+
+	// Sensor ID
+	string sensor_id = 2;
+}
+
+message GetLimitRequest {
+	// Device ID
+	string device_id = 1;
+
+	// Modbus address(구: Channel ID)
+	uint32 channel = 2;
+}
+
+message GetLimitResponse {
+	map<string, SensorLimit> limits = 1;
+}
+
+message SetLimitRequest {
+	option (buf.validate.message).cel = {
+		id: "normal_bound_constraint",
+		message: "normal_max must be greater than normal_min",
+		expression: "this.normal_max > this.normal_min"
+	};
+	option (buf.validate.message).cel = {
+		id: "caution_bound_constraint",
+		message: "caution_max must be greater than caution_min",
+		expression: "this.caution_max > this.caution_min"
+	};
+	option (buf.validate.message).cel = {
+		id: "lower_bound_constraint",
+		message: "normal_min must be greater than caution_min",
+		expression: "this.normal_min > this.caution_min"
+	};
+	option (buf.validate.message).cel = {
+		id: "upper_bound_constraint",
+		message: "caution_max must be greater than normal_max",
+		expression: "this.caution_max > this.normal_max"
+	};
+
+	// Device ID
+	string device_id = 1;
+
+	// Modbus address(구: Channel ID)
+	uint32 channel = 2;
+
+	// Attribute
+	string attribute = 3;
+
+	// 정상 범위 하한값
+	double normal_min = 4;
+
+	// 정상 범위 상한값
+	double normal_max = 5;
+
+	// 주의 범위 하한값
+	double caution_min = 6;
+
+	// 주의 범위 상한값
+	double caution_max = 7;
+}
+
+message DeleteLimitRequest {
+	// Device ID
+	string device_id = 1;
+
+	// Modbus address(구: Channel ID)
+	uint32 channel = 2;
+
+	// Attribute
+	string attribute = 3;
+}
+
+message GetCommandRequest {
+	// Device ID
+	string device_id = 1;
+	uint64 sequence = 2;
+}
+
+/*******************************************************************************
+ * Model
+ ******************************************************************************/
+
+// TODO: repeater 관련 Flag 설정 참조해서 수정
+enum DeviceRole {
+	GATEWAY = 0;
+
+	NODE = 1;
+
+	REPEATER = 2;
+
+	NODEGATEWAY = 3;
+}
+
+enum DeviceStatus {
+	// 정상 상태
+	NORMAL = 0;
+
+	// 장치 혹은 센서의 고장 상태
+	TROUBLE = 1;
+
+	// 폐기
+	DISCARD = 2;
+
+	// 데이터 미수신 상태
+	NOT_RECEIVED = 3;
+
+	// 주의
+	CAUTION = 4;
+
+	// 경고
+	WARNING = 5;
+}
+
+// Device
+//
+// BEYMONS 장치에 대한 메타데이터 관리
+message Device {
+	option (sdlmicro.options.model).indexes = {
+		id: "devices_display_name_idx"
+		fields: [
+			{name: "display_name"}
+		]
+		method: btree
+	};
+
+	// Device ID
+	string device_id = 1 [
+		(google.api.field_behavior) = REQUIRED,
+		(sdlmicro.options.orm) = {pg: ",type:varchar(14),pk,notnull"},
+		(buf.validate.field).string.min_len = 2,
+		(buf.validate.field).string.max_len = 14,
+		(buf.validate.field).string.pattern = "^[a-zA-Z0-9_-]+[a-zA-Z0-9]$",
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			pattern: "^[a-zA-Z0-9_-]+[a-zA-Z0-9]$"
+			min_length: 2
+			max_length: 14
+			example: '"T00000001"'
+		}
+	];
+
+	// device 이름
+	string display_name = 2 [
+		(google.api.field_behavior) = OPTIONAL,
+		(sdlmicro.options.orm) = {pg: ",type:varchar(100)"},
+		(buf.validate.field).string.max_len = 100,
+		(buf.validate.field).string.pattern = "^[^\n\t]*$",
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			max_length: 100
+			example: '"테스트 노드"'
+		}
+	];
+
+	// device 설명
+	string description = 3 [
+		(google.api.field_behavior) = OPTIONAL,
+		(sdlmicro.options.orm) = {pg: ",type:varchar(1000)"},
+		(buf.validate.field).string.max_len = 1000,
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			max_length: 1000
+		}
+	];
+
+	// device 동작 모드 [변경 불가]
+	DeviceRole device_role = 4 [
+		(google.api.field_behavior) = IMMUTABLE,
+		(google.api.field_behavior) = REQUIRED,
+		(sdlmicro.options.orm) = {pg: ",type:varchar(16),use_zero,notnull"},
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {example: '"NODE"'}
+	];
+
+	// device 상태
+	DeviceStatus status = 5 [
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(sdlmicro.options.orm) = {pg: ",type:varchar(16),notnull,use_zero"}
+	];
+
+	// 연결된 센서 목록 [변경 불가]
+	repeated Sensor sensors = 6 [
+		(google.api.field_behavior) = OPTIONAL,
+		(sdlmicro.options.orm) = {pg: ",rel:has-many"}
+	];
+
+	// 등록 일시
+	google.protobuf.Timestamp created_at = 7 [
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(sdlmicro.options.orm) = {pg: "-"}
+	];
+
+	// 등록한 사용자 정보
+	google.protobuf.Struct created_by = 8 [
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(sdlmicro.options.orm) = {pg: "-"},
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			read_only: true
+			example: '{"email": "example@suredatalab.com", "first_name": "길동", "last_name": "홍", "username": "example", "name": "홍길동", "user_id": "UUID_000001"}'
+		}
+	];
+
+	// 마지막 변경 일시
+	google.protobuf.Timestamp updated_at = 9 [
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(sdlmicro.options.orm) = {pg: "-"}
+	];
+
+	// 마지막으로 변경한 사용자 정보
+	google.protobuf.Struct updated_by = 10 [
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(sdlmicro.options.orm) = {pg: "-"},
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			read_only: true
+			example: '{"email": "example@suredatalab.com", "first_name": "길동", "last_name": "홍", "username": "example", "name": "홍길동", "user_id": "UUID_000001"}'
+		}
+	];
+
+	// 장치가 설치된 위치
+	beymons.Location location = 11 [
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(sdlmicro.options.orm) = {pg: "-"},
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {read_only: true}
+	];
+
+	// 장치가 연결된 사이트 정보
+	message Site {
+		// 고객 ID
+		string site_id = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
+		// 고객 이름
+		string site_name = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
+	}
+	Site site = 12 [
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(sdlmicro.options.orm) = {pg: "-"},
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {read_only: true}
+	];
+
+	// 리소스에 대한 변경 권한 여부
+	bool writable = 14 [
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(sdlmicro.options.orm) = {pg: "-"}
+	];
+}
+
+// DeviceRelation
+//
+// DEPRECATED: 장치 간의 연결 정보를 관리한다.
+message DeviceRelation {
+	option (sdlmicro.options.model) = {};
+
+	// Parent
+	string parent_id = 1 [
+		(sdlmicro.options.orm) = {pg: ",type:varchar(14),pk,notnull,join_fk:device_id,on_delete:CASCADE"}
+	];
+	Device parent = 5 [(sdlmicro.options.orm) = {pg: ",rel:has-one,fk:parent_id"}];
+
+	// Child
+	string child_id = 2 [
+		(sdlmicro.options.orm) = {pg: ",type:varchar(14),pk,notnull,join_fk:device_id,on_delete:CASCADE"}
+	];
+	Device child = 6 [(sdlmicro.options.orm) = {pg: ",rel:has-one,fk:child_id"}];
+
+	// 장치 연결 일시
+	google.protobuf.Timestamp created_at = 3 [
+		(sdlmicro.options.orm) = {pg: ",type:timestamptz,notnull,default:now()"}
+	];
+}
+
+// DeviceHistory
+//
+// 장치에 대한 이력 관리
+message DeviceHistory {
+	option (sdlmicro.options.model) = {
+		hypertable: {
+			time_column_name: "created_at"
+			chunk_time_interval: "1 week"
+			partitioning: {
+				partitioning_column: "device_id"
+				number_partitions: 10
+			}
+		}
+	};
+
+	// 이력 발생 일시
+	google.protobuf.Timestamp created_at = 1 [
+		(google.api.field_behavior) = IMMUTABLE,
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(sdlmicro.options.orm) = {pg: ",type:timestamptz,notnull,default:now()"}
+	];
+
+	// Device ID
+	string device_id = 2 [
+		(google.api.field_behavior) = IMMUTABLE,
+		(sdlmicro.options.orm) = {pg: ",type:varchar(14),notnull"}
+	];
+
+	// 관리 이력 코드
+	enum Kind {
+		// 생성
+		CREATE = 0;
+		// 정보 변경
+		UPDATE = 1;
+		// 삭제
+		DELETE = 2;
+		// 장치 상태
+		STATUS = 3;
+		// 명령 전송
+		COMMAND = 4;
+		// 장치 및 센서 연결
+		ATTACH = 5;
+		// 장치 및 센서 해제
+		DETACH = 6;
+		// 장치 설치
+		INSTALL = 7;
+		// 장치 해제
+		UNINSTALL = 8;
+	}
+	Kind action = 3 [
+		(google.api.field_behavior) = IMMUTABLE,
+		(sdlmicro.options.orm) = {pg: ",type:varchar(10),notnull,use_zero"}
+	];
+
+	// 이력을 발생시킨 사용자 ID
+	string created_user_id = 4 [
+		(google.api.field_behavior) = IMMUTABLE,
+		(sdlmicro.options.orm) = {pg: ",type:varchar(36),notnull"}
+	];
+
+	// 이력 발생 당시의 사용자 이름
+	string created_name = 5 [
+		(google.api.field_behavior) = INPUT_ONLY,
+		(google.api.field_behavior) = IMMUTABLE,
+		(sdlmicro.options.orm).pg = ",type:varchar(200),notnull,default:'Anonymous'"
+	];
+
+	// 이력을 발생시킨 사용자 정보
+	google.protobuf.Struct created_by = 6 [
+		(google.api.field_behavior) = IMMUTABLE,
+		(sdlmicro.options.orm) = {pg: "-"},
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			read_only: true
+			example: '{"email": "example@suredatalab.com", "first_name": "길동", "last_name": "홍", "username": "example", "name": "홍길동", "user_id": "UUID_000001"}'
+		}
+	];
+
+	// 상세 이력
+	//
+	// 관리 이력 코드에 따라 값의 형태가 달라지며
+	// ATTACH, DETACH, INSTALL, UNINSTALL 코드는 UPDATE와 동일한 구조를 사용한다. 
+	//
+	// Example:
+	// - STATUS: {"channel": 0, "status": "상태"}
+	// - UPDATE: {"속성명": {"origin": "기존 값", "change": "변경된 값"}}
+	// - ATTACH | DETACH: {"sensors": ["Sensor ID"]}
+	// - ATTACH | DETACH: {"parent": ["Device ID"]}
+	// - ATTACH | DETACH: {"children": ["Device ID"]}
+	// - INSTALL | UNINSTALL: {"sites": ["Site ID"]}
+	// - INSTALL | UNINSTALL: {"facilities": ["Facility ID"]}
+	// - COMMAND: {}
+	google.protobuf.Struct details = 7 [
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(sdlmicro.options.orm) = {pg: "-"},
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {read_only: true}
+	];
+}
+
+// DeviceUpdateHistory
+//
+// Device 모델의 변경 이력 관리
+message DeviceUpdateHistory {
+	option (sdlmicro.options.model) = {
+		hypertable: {
+			time_column_name: "created_at"
+			chunk_time_interval: "1 week"
+		}
+	};
+
+	// 이력 발생 일시
+	google.protobuf.Timestamp created_at = 1 [
+		(google.api.field_behavior) = IMMUTABLE,
+		(sdlmicro.options.orm) = {pg: ",type:timestamptz,notnull,default:now()"}
+	];
+
+	// Device ID
+	string device_id = 2 [
+		(google.api.field_behavior) = IMMUTABLE,
+		(sdlmicro.options.orm) = {pg: ",type:varchar(14),notnull"}
+	];
+
+	// 변경된 속성명
+	string attribute = 3 [(sdlmicro.options.orm) = {pg: ",type:varchar(50),notnull"}];
+
+	// 기존 값
+	string origin = 4 [(sdlmicro.options.orm) = {pg: ",type:varchar(4000)"}];
+
+	// 변경된 값
+	string change = 5 [(sdlmicro.options.orm) = {pg: ",type:varchar(4000)"}];
+}
+
+// DeviceStatusHistory
+//
+// 장치 상태 변경 이력
+message DeviceStatusHistory {
+	option (sdlmicro.options.model) = {
+		hypertable: {
+			time_column_name: "created_at"
+			chunk_time_interval: "1 week"
+			partitioning: {
+				partitioning_column: "device_id"
+				number_partitions: 10
+			}
+		}
+	};
+
+	// 이력 발생 일시
+	google.protobuf.Timestamp created_at = 1 [
+		(google.api.field_behavior) = IMMUTABLE,
+		(sdlmicro.options.orm) = {pg: ",type:timestamptz,notnull,default:now()"}
+	];
+
+	// Device ID
+	string device_id = 2 [
+		(google.api.field_behavior) = IMMUTABLE,
+		(sdlmicro.options.orm) = {pg: ",type:varchar(14),notnull"}
+	];
+
+	// 연결된 모드버스(구: 채널). 0(NULL)이 아닌 경우 센서의 상태
+	uint32 channel = 3;
+
+	// 장치 상태
+	DeviceStatus status = 4 [(sdlmicro.options.orm) = {pg: ",type:varchar(16),notnull,use_zero"}];
+
+	// 설명
+	string description = 5 [(sdlmicro.options.orm) = {pg: ",type:varchar(1000)"}];
+}
+
+// Sensor
+//
+// 장치에 연결된 센서 정보 관리
+message Sensor {
+	option (sdlmicro.options.model) = {
+		references: [
+			{
+				id: "sensors_device_id_fk"
+				model_name: "Device"
+				fields: "device_id"
+				on_delete: CASCADE
+			},
+			{
+				id: "sensors_sensor_type_fk"
+				model_name: "SensorType"
+				fields: "type_id"
+			}
+		]
+	};
+
+	// Sensor ID
+	string sensor_id = 1 [
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(google.api.field_behavior) = IMMUTABLE,
+		(sdlmicro.options.orm) = {pg: ",type:uuid,pk,default:gen_random_uuid()"},
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {example: '"UUID_000001"'}
+	];
+
+	// Device ID
+	string device_id = 2 [
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(sdlmicro.options.orm) = {
+			pg: ",type:varchar(14),notnull,unique:device_channel_id"
+			reference_id: "sensors_device_id_fk"
+		},
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {example: '"T00000001"'}
+	];
+
+	// Modbus address (구: Channel ID)
+	uint32 channel_id = 3 [
+		(google.api.field_behavior) = REQUIRED,
+		(buf.validate.field).uint32.gt = 0,
+		(buf.validate.field).uint32.lte = 255,
+		(sdlmicro.options.orm) = {pg: ",type:smallint,notnull,use_zero,unique:device_channel_id"},
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			minimum: 1
+			maximum: 255
+			example: '1'
+		}
+	];
+
+	// 센서 타입
+	string sensor_type = 4 [
+		(google.api.field_behavior) = REQUIRED,
+		(buf.validate.field).string.min_len = 2,
+		(sdlmicro.options.orm) = {
+			pg: ",type:varchar(16),notnull"
+			reference_id: "sensors_sensor_type_fk"
+		},
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {example: '"temperature"'}
+	];
+
+	// 센서 이름
+	string display_name = 5 [
+		(google.api.field_behavior) = OPTIONAL,
+		(buf.validate.field).string.max_len = 100,
+		(sdlmicro.options.orm) = {pg: ",type:varchar(100)"},
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {example: '"온도1"'}
+
+	];
+
+	// 센서 설명
+	string description = 6 [
+		(google.api.field_behavior) = OPTIONAL,
+		(buf.validate.field).string.max_len = 1000,
+		(sdlmicro.options.orm) = {pg: ",type:varchar(1000)"},
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {example: '"냉장고 뒤쪽에 부착"'}
+
+	];
+
+	// 최근 수집한 데이터. 장치 조회 API에서만 포함
+	google.protobuf.Struct latest = 7 [
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(sdlmicro.options.orm) = {pg: "-"},
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {example: '{"1": {"temp": 25.4, "ts": 1717047881120 }, "2": {"temp": 25.6, "ts": 1717047881120}}'}
+	];
+
+	// 채널(구: 프로프) 개수
+	uint32 probes = 8 [
+		(google.api.field_behavior) = OPTIONAL,
+		(sdlmicro.options.orm) = {pg: ",type:smallint"},
+		(buf.validate.field).uint32.lte = 63,
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			maximum: 63
+			example: '1'
+		}
+	];
+
+	// 센서 상태
+	DeviceStatus status = 9 [
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(sdlmicro.options.orm) = {pg: ",type:varchar(16),notnull,use_zero"},
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {example: '"NORMAL"'}
+	];
+
+	// 장치가 설비 정보
+	message Facility {
+		// 설비 ID
+		string id = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
+		// 설비 이름
+		string name = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
+	}
+	Facility facility = 10 [
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(sdlmicro.options.orm) = {pg: "-"},
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {read_only: true}
+	];
+}
+
+// DeviceCommandHistory
+//
+// 서버와 장치간 요청된 명령에 대한 이력을 관리한다.
+message DeviceCommandHistory {
+	option (sdlmicro.options.model) = {
+		hypertable: {
+			time_column_name: "created_at"
+			chunk_time_interval: "1 week"
+			partitioning: {
+				partitioning_column: "device_id"
+				number_partitions: 10
+			}
+		}
+	};
+
+	// 명령이 수신된 일시
+	google.protobuf.Timestamp created_at = 1 [
+		(google.api.field_behavior) = IMMUTABLE,
+		(sdlmicro.options.orm) = {pg: ",type:timestamptz,notnull,default:now()"}
+	];
+
+	// Gateway ID
+	string device_id = 2 [(sdlmicro.options.orm) = {pg: ",type:varchar(14),notnull"}];
+
+	enum Direction {
+		upstream = 0;
+		downstream = 1;
+	}
+	Direction direction = 3 [(sdlmicro.options.orm) = {pg: ",type:varchar(10),use_zero,notnull"}];
+
+	string command = 4 [(sdlmicro.options.orm) = {pg: ",type:varchar(30),notnull"}];
+
+	// Sequence
+	uint64 sequence = 5 [(sdlmicro.options.orm) = {pg: ",notnull,use_zero"}];
+
+	// Operand
+	string payload = 6 [(sdlmicro.options.orm) = {pg: ",type:jsonb,json_use_number,notnull"}];
+
+	enum Status {
+		// 처리 중
+		PROCESSING = 0;
+		// 성공
+		SUCCESS = 1;
+		// 실패
+		FALLURE = 2;
+		// 타임아웃
+		TIMEOUT = 3;
+		// 정의되지 않은 명령
+		UNKNOWN = 4;
+	}
+	Status status = 7 [(sdlmicro.options.orm) = {pg: ",type:varchar(10),use_zero,notnull"}];
+
+	// 응답 시간
+	google.protobuf.Timestamp responded_at = 8 [(sdlmicro.options.orm) = {pg: ",type:timestamptz"}];
+
+	// 응답 내용
+	string response = 9 [(sdlmicro.options.orm) = {pg: ",type:jsonb,json_use_number"}];
+
+	string error = 10;
+}
+
+// SensorLimit
+//
+// 센서로부터 수집된 데이터에 대한 임계치를 관리한다.
+message SensorLimit {
+	option (sdlmicro.options.model).references = {
+		id: "sensor_limits_device_id_fk"
+		model_name: "Device"
+		fields: "device_id"
+		on_delete: CASCADE
+	};
+
+	// Device ID
+	string device_id = 1 [
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(sdlmicro.options.orm) = {
+			pg: ",type:varchar(14),pk,notnull"
+			reference_id: "sensor_limits_device_id_fk"
+		},
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {example: '"UUID_000001"'}
+	];
+
+	// Modbus address(구: Channel ID)
+	uint32 channel = 2 [
+		(sdlmicro.options.orm).pg = ",pk,notnull",
+		(buf.validate.field).uint32.gt = 0,
+		(buf.validate.field).uint32.lte = 255
+	];
+
+	// 데이터 속성명
+	string attribute = 3 [
+		(sdlmicro.options.orm) = {pg: ",type:varchar(50),pk,notnull"},
+		(buf.validate.field).string.max_len = 50,
+		(buf.validate.field).string.pattern = "^[a-z][a-z0-9_]*[a-z0-9]$",
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {example: '"temp"'}
+	];
+
+	// 정상 범위 하한값
+	double normal_min = 4 [(sdlmicro.options.orm) = {pg: ",use_zero,notnull"}];
+
+	// 정상 범위 상한값
+	double normal_max = 5 [(sdlmicro.options.orm) = {pg: ",use_zero,notnull"}];
+
+	// 주의 범위 하한값
+	double caution_min = 6 [(sdlmicro.options.orm) = {pg: ",use_zero,notnull"}];
+
+	// 주의 범위 상한값
+	double caution_max = 7 [(sdlmicro.options.orm) = {pg: ",use_zero,notnull"}];
+
+	// 설정 시간
+	google.protobuf.Timestamp created_at = 8 [
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(sdlmicro.options.orm) = {pg: ",type:timestamptz,notnull,default:now()"}
+	];
+}

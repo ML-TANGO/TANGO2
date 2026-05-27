@@ -1,0 +1,25 @@
+# 데이터베이스 설정
+database:
+  host: ${DB_HOST}
+  port: ${DB_PORT}
+  username: ${DB_USERNAME}
+  password: REDACTED
+  database_name: ${DB_NAME}
+
+# # 기상청 API 설정
+# weather_api:
+#   base_url: "http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0"
+#   service_key: ${WEATHER_API_SERVICE_KEY}
+#   timeout: 30
+
+# 로깅 설정
+logging:
+  level: INFO
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file_path: logs/app.log
+
+# 데이터 처리 설정
+# processing:
+#   batch_size: 1000
+#   max_retries: 3
+#   retry_delay: 1

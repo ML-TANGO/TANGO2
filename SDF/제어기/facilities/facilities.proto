@@ -1,0 +1,1384 @@
+syntax = "proto3";
+package facilities;
+option go_package = "gitlab.suredatalab.kr/beymons/facilities";
+
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+import "buf/validate/validate.proto";
+import "sdlmicro/middleware/annotations.proto";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+import "sdlmicro/types/metric.proto";
+import "google/protobuf/wrappers.proto";
+import "devices.proto";
+
+service Facilities {
+	option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_tag) = {
+		description: "설비 관리"
+	};
+	option (sdlmicro.options.authorization) = {
+		admin_role: "facility-admin"
+		roles: {
+			key: "create-facility"
+			value: "설비 생성 권한"
+		}
+		roles: {
+			key: "query-facilities"
+			value: "설비 검색 권한"
+		}
+		roles: {
+			key: "view-facilities"
+			value: "설비 조회 권한"
+		}
+		roles: {
+			key: "manage-facilities"
+			value: "설비 관리 권한"
+		}
+		roles: {
+			key: "facility-admin"
+			value: "설비/제품 관리자"
+		}
+	};
+
+	// 설비 검색
+	rpc SearchFacility(SearchFacilityRequest) returns (SearchFacilityResponse) {
+		option (google.api.http) = {get: "/facilities"};
+		option (sdlmicro.options.method) = {
+			authorization: ["query-facilities", "manage-facilities"]
+			test_order: 11
+		};
+	}
+
+	// 설비 등록
+	rpc CreateFacility(Facility) returns (Facility) {
+		option (google.api.http) = {
+			post: "/facilities"
+			body: "*"
+		};
+		option (sdlmicro.options.method) = {
+			authorization: "create-facility"
+			test_order: 10
+		};
+		option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+			responses: {
+				key: "409"
+				value: {
+					description: "Returned when the resource already exist."
+					schema: {
+						example: "null"
+					}
+				}
+			}
+		};
+	}
+
+	// 설비 정보 조회
+	rpc Facilities(FacilityRequest) returns (FacilityResponse) {
+		option (google.api.http) = {get: "/facilities/{facility_id}"};
+		option (sdlmicro.options.method) = {
+			authorization: ["view-facilities", "manage-facilities"]
+			test_order: 14
+		};
+	}
+
+	// 설비 이력 조회
+	rpc FacilityHistories(FacilityRequest) returns (FacilityHistoryResponse) {
+		option (google.api.http) = {get: "/facilities/{facility_id}/histories"};
+		option (sdlmicro.options.method) = {
+			authorization: ["view-facilities", "manage-facilities"]
+		};
+	}
+
+	// 설비 정보 수정
+	rpc ReplaceFacility(Facility) returns (Facility) {
+		option (google.api.http) = {
+			put: "/facilities/{facility_id}"
+			body: "*"
+			additional_bindings: {
+				post: "/facilities/{facility_id}/update"
+				body: "*"
+			}
+		};
+		option (sdlmicro.options.method) = {
+			authorization: "manage-facilities"
+			test_order: 12
+		};
+	}
+
+	// 사용자화 메타데이터 수정
+	rpc UpdateFacility(UpdateFacilityRequest) returns (Facility) {
+		option (google.api.http) = {
+			patch: "/facilities/{facility_id}/attributes"
+			body: "payload"
+		};
+		option (sdlmicro.options.method) = {
+			authorization: "manage-facilities"
+			test_order: 13
+		};
+	}
+
+	// 설비 명령 전송
+	rpc CommandFacility(CommandFacilityRequest) returns (CommandFacilityResponse) {
+		option (google.api.http) = {
+			post: "/facilities/{facility_id}"
+			body: "*"
+		};
+		option (sdlmicro.options.method) = {
+			authorization: "manage-facilities"
+			test_order: 35
+		};
+	}
+
+	// 설비 삭제
+	rpc DeleteFacility(FacilityRequest) returns (google.protobuf.Empty) {
+		option (google.api.http) = {
+			delete: "/facilities/{facility_id}"
+			additional_bindings: {
+				post: "/facilities/{facility_id}/delete"
+				body: "*"
+			}
+		};
+		option (sdlmicro.options.method) = {
+			authorization: "manage-facilities"
+			test_order: 98
+		};
+	}
+
+	// 설비의 현재 상태(온/습도) 조회 
+	rpc Stat(FacilityRequest) returns (StatResponse) {
+		option (google.api.http) = {get: "/facilities/{facility_id}/stat"};
+		option (sdlmicro.options.method) = {
+			authorization: "view-facilities"
+			test_order: 24
+		};
+	}
+
+	/***************************************************************************
+	 * 장치 관리
+	 **************************************************************************/
+
+	// 설비에 연결된 장치 조회
+	rpc Devices(devices.SearchRequest) returns (devices.SearchResponse) {
+		option (google.api.http) = {get: "/facilities/{facility_id}/devices"};
+		option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {tags: "장치 관리"};
+		option (sdlmicro.options.method) = {
+			authorization: "view-facilities"
+			test_order: 22
+		};
+	}
+
+	// 설비에 장치 연결
+	rpc Connect(ConnectRequest) returns (SensorsReponse) {
+		option (google.api.http) = {
+			post: "/facilities/{facility_id}/devices"
+			body: "*"
+		};
+		option (sdlmicro.options.method) = {
+			authorization: "manage-facilities"
+			test_order: 21
+		};
+		option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+			tags: "장치 관리"
+			responses: {
+				key: "404"
+				value: {
+					description: "Returned when a device is not exists or has not been install to site"
+					schema: {
+						example: "null"
+					}
+				}
+			}
+		};
+	}
+
+	// 설비에 연결된 장치 해제
+	rpc Disconnect(DisconnectRequest) returns (google.protobuf.Empty) {
+		option (google.api.http) = {delete: "/facilities/{facility_id}/devices/{device_id}"};
+		option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {tags: "장치 관리"};
+		option (sdlmicro.options.method) = {
+			authorization: "manage-facilities"
+			test_order: 90
+		};
+	}
+
+	// 설비에 연결된 센서 조회
+	rpc Sensors(FacilityRequest) returns (SensorsReponse) {
+		option (google.api.http) = {get: "/facilities/{facility_id}/sensors"};
+		option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {tags: "장치 관리"};
+		option (sdlmicro.options.method) = {
+			authorization: "view-facilities"
+			test_order: 23
+		};
+	}
+
+	/***************************************************************************
+	 * 제어 설정 관리
+	 **************************************************************************/
+
+	// 설비 제어 설정
+	rpc SetControlFacility(SetControlFacilityRequest) returns (FacilityControl) {
+		option (google.api.http) = {
+			post: "/facilities/{facility_id}/controls"
+			body: "create"
+			additional_bindings: {
+				put: "/facilities/{facility_id}/controls/{control_id}"
+				body: "update"
+			}
+			additional_bindings: {
+				put: "/facilities/{facility_id}/controls"
+				body: "replace"
+			}
+		};
+		option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {tags: "제어 설정"};
+		option (sdlmicro.options.method) = {
+			authorization: "manage-facilities"
+			test_order: 33
+		};
+	}
+
+	// 설비 제어 설정 조회
+	//
+	// controlId가 없는 경우 아직 설비 제어 설정이 안된 경우로
+	// PUT /facilities/{facility_id}/controls API를 호출하여 설정해야 한다.
+	rpc ControlFacility(ControlFacilityRequest) returns (ControlFacilityResponse) {
+		option (google.api.http) = {get: "/facilities/{facility_id}/controls"};
+		option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {tags: "제어 설정"};
+		option (sdlmicro.options.method) = {
+			authorization: "view-facilities"
+			test_order: 34
+		};
+	}
+
+	// 설비 제어 설정 삭제
+	rpc DeleteControlFacility(ControlFacilityRequest) returns (google.protobuf.Empty) {
+		option (google.api.http) = {delete: "/facilities/{facility_id}/controls/{control_id}"};
+		option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {tags: "제어 설정"};
+		option (sdlmicro.options.method) = {
+			authorization: "manage-facilities"
+			test_order: 96
+		};
+	}
+}
+
+message FacilityRequest {
+	// 설비 ID
+	string facility_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message FacilityResponse {
+	Facility facility = 1;
+
+	reserved 2;
+
+	// 관련 링크 (HATEOAS)
+	map<string, string> link = 3;
+}
+
+message SearchFacilityRequest {
+	// 정렬 옵션
+	enum Order {
+		// 설비명 (오름차순)
+		facility_name_asc = 0;
+		// 설비명 (내림차순)
+		facility_name_desc = 1;
+		// 현장 ID (오름차순)
+		site_id_asc = 2;
+		// 현장 ID (내림차순)
+		site_id_desc = 3;
+		// 현장 이름 (오름차순)
+		site_name_asc = 4;
+		// 현장 이름 (내림차순)
+		site_name_desc = 5;
+		// 설비 그룹 ID (오름차순)
+		group_id_asc = 6;
+		// 설비 그룹 ID (내림차순)
+		group_id_desc = 7;
+		// 설비 그룹 이름 (오름차순)
+		group_name_asc = 8;
+		// 설비 그룹 이름 (내림차순)
+		group_name_desc = 9;
+	}
+	repeated Order order = 1 [(google.api.field_behavior) = OPTIONAL];
+
+	// 응답으로 보내줄 레코드 수.
+	// 지정하지 않거나 0인 경우 전체 레코드를 조회하지만,
+	// 응답이 15초 이상 소요되는 경우 타임아웃 오류가 발생된다.
+	uint64 limit = 2 [(google.api.field_behavior) = OPTIONAL];
+
+	// 페이지에서 표시되는 첫 레코드의 인덱스 (Default: 0)
+	uint64 offset = 3 [(google.api.field_behavior) = OPTIONAL];
+
+	// 전체 검색
+	//
+	// 검색 대상:
+	// - 설비명
+	// - 현장 ID (전방일치)
+	// - 현장명
+	// - 설비 그룹 ID (전방일치)
+	// - 설비 그룹 이름
+	// - 제품명
+	// - 제조사 ID (전방일치)
+	// - 모델 번호 (전방일치)
+	// - 일련 번호 (전방일치)
+	string search = 4 [(google.api.field_behavior) = OPTIONAL];
+
+	// 현장 ID로 필터링
+	string site_id = 5 [(google.api.field_behavior) = OPTIONAL];
+
+	// 설비 그룹 ID로 필터링 (siteId 필요)
+	string group_id = 6 [(google.api.field_behavior) = OPTIONAL];
+
+	// 설비명으로 검색
+	string name = 7 [(google.api.field_behavior) = OPTIONAL];
+
+	// 제조사 ID로 필터링
+	repeated string manufacture_id = 8 [(google.api.field_behavior) = OPTIONAL];
+
+	// 모델 번호로 검색 (전방일치)
+	string model = 9 [(google.api.field_behavior) = OPTIONAL];
+
+	// 일련 번호로 검색 (전방일치)
+	string sn = 10 [(google.api.field_behavior) = OPTIONAL];
+}
+
+message SearchFacilityResponse {
+	repeated Facility entities = 1;
+
+	// 데이터의 총건수
+	uint64 count = 2;
+
+	// 관련 링크 (HATEOAS)
+	map<string, string> link = 3;
+}
+
+message UpdateFacilityRequest {
+	// 설비 ID
+	string facility_id = 1 [(buf.validate.field).string.uuid = true];
+
+	map<string, string> payload = 2 [
+		(google.api.field_behavior) = REQUIRED,
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			example: '{"description": "value"}'
+		}
+	];
+}
+
+message FacilityHistoryResponse {
+	// 관리 이력
+	repeated FacilityHistory histories = 2;
+}
+
+message CommandFacilityRequest {
+	// 설비 ID
+	string facility_id = 1 [(buf.validate.field).string.uuid = true];
+
+	oneof command {
+		option (buf.validate.oneof).required = true;
+
+		// 설비 제어 명령
+		Control control = 2;
+	}
+
+	message Control {
+		// 설비 제어 ID
+		repeated string control_id = 1 [
+			(buf.validate.field).repeated.min_items = 1,
+			(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+				min_items: 1
+			}
+		];
+
+		// Attribute
+		map<string, string> attributes = 2;
+	}
+}
+
+message CommandFacilityResponse {
+	// 명령이 적용된 리소스 수
+	uint32 count = 1;
+}
+
+message ConnectRequest {
+	// 설비 ID
+	string facility_id = 1 [(buf.validate.field).string.uuid = true];
+
+	// 연결할 장치 정보
+	message Device {
+		// 장치 ID
+		string device_id = 1 [(google.api.field_behavior) = REQUIRED];
+
+		// 모드버스 주소
+		uint32 modbus = 2 [
+			(google.api.field_behavior) = REQUIRED,
+			(buf.validate.field).uint32.gt = 0,
+			(buf.validate.field).uint32.lte = 255,
+			(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+				minimum: 1
+				maximum: 255
+				example: '1'
+			}
+		];
+
+		// TODO: 채널 번호(구: 프로브)
+		uint32 channel = 3 [
+			(google.api.field_behavior) = OPTIONAL,
+			(buf.validate.field).uint32.lte = 255,
+			(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+				maximum: 255
+				example: '1'
+			}
+		];
+
+		// 센서 설명
+		string description = 4 [
+			(google.api.field_behavior) = OPTIONAL,
+			(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+				max_length: 1000
+			}
+		];
+	}
+	repeated Device devices = 2 [
+		(google.api.field_behavior) = REQUIRED,
+		(buf.validate.field).repeated.min_items = 1,
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			min_items: 1
+		}
+	];
+}
+
+message DisconnectRequest {
+	// 설비 ID
+	string facility_id = 1 [(buf.validate.field).string.uuid = true];
+
+	// 장치 ID
+	string device_id = 2 [
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			max_length: 14
+		}
+	];
+
+	// 모드버스 주소
+	uint32 modbus = 3 [
+		(google.api.field_behavior) = OPTIONAL,
+		(buf.validate.field).uint32.lte = 255,
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			maximum: 255
+			example: '1'
+		}
+	];
+
+	// 채널 번호(구: 프로브)
+	uint32 channel = 4 [
+		(google.api.field_behavior) = OPTIONAL,
+		(buf.validate.field).uint32.lte = 255,
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			maximum: 255
+			example: '1'
+		}
+	];
+}
+
+message SensorsReponse {
+	message Sensor {
+		// 장치 ID
+		string device_id = 1;
+		// 모드버스 주소
+		uint32 modbus = 2;
+		// 채널 번호
+		uint32 channel = 3;
+		// 센서 타입
+		string sensor_type = 4;
+		// 센서 타입 이름
+		string sensor_type_name = 5;
+		// 채널 및 프로브 설명
+		string description = 6;
+	}
+	repeated Sensor entities = 1;
+}
+
+message SetControlFacilityRequest {
+	// 설비 ID
+	string facility_id = 1 [(buf.validate.field).string.uuid = true];
+
+	// 설비 제어 설정 ID
+	string control_id = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
+
+
+	oneof payload {
+		option (buf.validate.oneof).required = true;
+
+		// 설비 고유 제어 설정 추가
+		Custom create = 3;
+
+		// 제품 설정 활용 사용자화
+		Replace replace = 4;
+
+		// 제어 설정 변경
+		Custom update = 5;
+	}
+
+	// 제품 설정의 값을 활용하여 일부 정보 수정
+	//
+	// 빈값인 경우 제품 제어 설정 사용
+	message Replace {
+		// 제품 제어 설정 ID
+		string p_control_id = 1 [
+			(google.api.field_behavior) = REQUIRED,
+			(buf.validate.field).string.uuid = true
+		];
+
+		// 제어 이름
+		string control_name = 2 [
+			(google.api.field_behavior) = OPTIONAL,
+			(buf.validate.field).string.max_len = 100,
+			(buf.validate.field).string.not_in = "\t",
+			(buf.validate.field).string.not_in = "\n",
+			(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+				max_length: 100
+				example: '"1중 좌측 측창"'
+			}
+		];
+
+		// 관련 장치 ID
+		string device_id = 3 [
+			(google.api.field_behavior) = REQUIRED,
+			(buf.validate.field).string.min_len = 1,
+			(buf.validate.field).string.max_len = 14,
+			(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+				max_length: 14
+			}
+		];
+
+		// 연결된 Modbus 주소
+		uint32 modbus = 4 [
+			(google.api.field_behavior) = OPTIONAL,
+			(buf.validate.field).uint32.gt = 0,
+			(buf.validate.field).uint32.lte = 255,
+			(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+				minimum: 1
+				maximum: 255
+				example: '1'
+			}
+		];
+
+		// 센서 타입
+		string sensor_type = 5 [
+			(google.api.field_behavior) = OPTIONAL,
+			(buf.validate.field).string.max_len = 100,
+			(buf.validate.field).string.pattern = "^([a-z][a-z0-9_]*[a-z0-9]+|)$",
+			(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+	            pattern: "^([a-z][a-z0-9_]*[a-z0-9]+|)$"
+				max_length: 100
+				example: '"agsmotor_green"'
+			}
+		];
+
+		// 명령어
+		string command = 6 [
+			(google.api.field_behavior) = OPTIONAL,
+			(buf.validate.field).string.max_len = 200,
+			(buf.validate.field).string.pattern = "^([a-z][a-z0-9_]*[a-z0-9]+|)$",
+			(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+	            pattern: "^([a-z][a-z0-9_]*[a-z0-9]+|)$"
+				max_length: 200
+				example: '"set_agsmotor_operation_req"'
+			}
+		];
+
+		// 제어 명령
+		//
+		// go template 문법을 사용하며 제어 명령에서 해당 값을 입력한다.
+		string payload = 7 [
+			(google.api.field_behavior) = OPTIONAL,
+			(buf.validate.field).string.max_len = 100,
+			(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+				example: '"{\\"1\\": {{.ratio}}}"'
+				max_length: 1000
+			}
+		];
+	}
+
+	// 설비 고유 제어 설정
+	message Custom {
+		// 제어 이름
+		string control_name = 2 [
+			(google.api.field_behavior) = REQUIRED,
+			(buf.validate.field).string.min_len = 1,
+			(buf.validate.field).string.max_len = 100,
+			(buf.validate.field).string.not_in = "\t",
+			(buf.validate.field).string.not_in = "\n",
+			(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+				min_length: 1
+				max_length: 100
+				example: '"1중 좌측 측창"'
+			}
+		];
+
+		// 관련 장치 ID
+		string device_id = 3 [
+			(google.api.field_behavior) = REQUIRED,
+			(buf.validate.field).string.min_len = 1,
+			(buf.validate.field).string.max_len = 14,
+			(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+				max_length: 14
+			}
+		];
+
+		// 연결된 Modbus 주소
+		uint32 modbus = 4 [
+			(google.api.field_behavior) = REQUIRED,
+			(buf.validate.field).uint32.gt = 0,
+			(buf.validate.field).uint32.lte = 255,
+			(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+				minimum: 1
+				maximum: 255
+				example: '1'
+			}
+		];
+
+		// 센서 타입
+		string sensor_type = 5 [
+			(google.api.field_behavior) = REQUIRED,
+			(buf.validate.field).string.min_len = 1,
+			(buf.validate.field).string.max_len = 100,
+			(buf.validate.field).string.pattern = "^[a-z][a-z0-9_]*[a-z0-9]+$",
+			(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+	            pattern: "^[a-z][a-z0-9_]*[a-z0-9]+$"
+				min_length: 1
+				max_length: 100
+				example: '"agsmotor_green"'
+			}
+		];
+
+		// 명령어
+		string command = 6 [
+			(google.api.field_behavior) = REQUIRED,
+			(buf.validate.field).string.min_len = 1,
+			(buf.validate.field).string.max_len = 200,
+			(buf.validate.field).string.pattern = "^[a-z][a-z0-9_]*[a-z0-9]+$",
+			(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+	            pattern: "^[a-z][a-z0-9_]*[a-z0-9]+$"
+				max_length: 200
+				example: '"set_agsmotor_operation_req"'
+			}
+		];
+
+		// 제어 명령
+		//
+		// go template 문법을 사용하며 제어 명령에서 해당 값을 입력한다.
+		string payload = 7 [
+			(google.api.field_behavior) = REQUIRED,
+			(buf.validate.field).string.min_len = 2,
+			(buf.validate.field).string.max_len = 100,
+			(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+				min_length: 2
+				max_length: 1000
+				example: '"{\\"1\\": {{.ratio}}}"'
+			}
+		];
+	}
+};
+
+message ControlFacilityRequest {
+	// 설비 ID
+	string facility_id = 1 [(buf.validate.field).string.uuid = true];
+
+	// 설비 제어 설정 ID
+	string control_id = 2;
+};
+
+message ControlFacilityResponse {
+	repeated FacilityControl entities = 1;
+};
+
+
+message StatResponse {
+	map<string, sdlmicro.types.Metric> stat = 1;
+}
+
+/*******************************************************************************
+ * Model
+ ******************************************************************************/
+
+// 설비 상태
+enum FacilityStatus {
+	// 정상
+	NORMAL = 0;
+	// 설비가 작동하고 있지만, 이상 신호가 감지된 상태
+	ABNORMAL = 1;
+	// 설비가 작동하고 있지만, 성능이 저하된 상태
+	DEGRADED = 2;
+	// 설비가 작동하고 있지만, 예측 수명이 끝난 상태
+	END_OF_LIFE = 3;
+	// 설비가 작동하지 않는 상태
+	DOWN = 4;
+	// 설비가 수리 또는 점검을 위해 사용할 수 없는 상태
+	MAINTENANCE = 5;
+	// 설비가 작동하지 않지만, 곧 사용될 예정인 상태
+	IDLE = 6;
+	// 설비를 더이상 사용하지 않는 상태 (교체 혹은 폐기)
+	DEFUNCT = 7;
+}
+
+// Facility
+//
+// 설비에 대한 정보 관리
+message Facility {
+	option (sdlmicro.options.model) = {};
+	option (sdlmicro.options.model).references = {
+		id: "facilities_site_id_group_id_fkey"
+		model_name: "Group"
+		fields: ["site_id", "group_id"]
+	};
+	option (sdlmicro.options.model).references = {
+		id: "facilities_manufacture_id_model_number_fk"
+		model_name: "Product"
+		fields: ["manufacture_id", "model_number"]
+	};
+	option (sdlmicro.options.model).indexes = {
+		id: "facilities_facility_name_site_id_idx"
+		fields: [
+			{name: "facility_name"},
+			{name: "site_id"}
+		]
+	};
+
+	// 설비 ID
+	string facility_id = 1 [
+		(sdlmicro.options.orm).pg = ",type:uuid,pk,notnull,default:gen_random_uuid()",
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(google.api.field_behavior) = IMMUTABLE
+	];
+
+	// 설비명
+	string facility_name = 2 [
+		(sdlmicro.options.orm).pg = ",type:varchar(200),notnull",
+		(google.api.field_behavior) = REQUIRED,
+		(buf.validate.field).string.min_len = 2,
+		(buf.validate.field).string.max_len = 200,
+		(buf.validate.field).string.not_in = "\t",
+		(buf.validate.field).string.not_in = "\n",
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			min_length: 2
+			max_length: 50
+		}
+	];
+
+	// 현장 ID [변경 불가]
+	string site_id = 3 [
+		(sdlmicro.options.orm).pg = ",type:varchar(50),notnull",
+		(sdlmicro.options.orm).reference_id = "facilities_site_id_group_id_fkey",
+		(google.api.field_behavior) = IMMUTABLE,
+		(google.api.field_behavior) = REQUIRED
+	];
+
+	// 그룹 ID [변경 불가]
+	string group_id = 4 [
+		(sdlmicro.options.orm).pg = ",type:varchar(50),notnull",
+		(sdlmicro.options.orm).reference_id = "facilities_site_id_group_id_fkey",
+		(google.api.field_behavior) = IMMUTABLE,
+		(google.api.field_behavior) = REQUIRED
+	];
+
+	// 설비 위치 (위도)
+	double latitude = 5 [(google.api.field_behavior) = OPTIONAL];
+	// 설비 위치 (경도)
+	double longitude = 6 [(google.api.field_behavior) = OPTIONAL];
+	// 설비 위치 (고도)
+	double altitude = 7 [(google.api.field_behavior) = OPTIONAL];
+
+	// 제조사 ID [변경 불가]
+	string manufacture_id = 8 [
+		(sdlmicro.options.orm).pg = ",type:varchar(50),notnull",
+		(sdlmicro.options.orm).reference_id = "facilities_manufacture_id_model_number_fk",
+		(buf.validate.field).string.min_len = 1,
+		(google.api.field_behavior) = IMMUTABLE,
+		(google.api.field_behavior) = REQUIRED
+	];
+
+	// 모델 번호 [변경 불가]
+	string model_number = 9 [
+		(sdlmicro.options.orm).pg = ",type:varchar(100),notnull",
+		(sdlmicro.options.orm).reference_id = "facilities_manufacture_id_model_number_fk",
+		(buf.validate.field).string.min_len = 1,
+		(google.api.field_behavior) = IMMUTABLE,
+		(google.api.field_behavior) = REQUIRED
+	];
+
+	// 일련 번호
+	string serial_number = 10 [
+		(sdlmicro.options.orm).pg = ",type:varchar(100)",
+		(google.api.field_behavior) = OPTIONAL,
+		(buf.validate.field).string.max_len = 100,
+		(buf.validate.field).string.not_in = "\t",
+		(buf.validate.field).string.not_in = "\n",
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			max_length: 100
+		}
+	];
+
+	// 현장 및 그룹 정보
+	google.protobuf.Struct site_group = 11 [
+		(sdlmicro.options.orm).pg = "-",
+		(google.api.field_behavior) = OUTPUT_ONLY
+	];
+
+	// 제품 정보
+	google.protobuf.Struct product = 12 [
+		(sdlmicro.options.orm).pg = "-",
+		(google.api.field_behavior) = OUTPUT_ONLY
+	];
+
+	// 사용자화 메타데이터
+	//
+	// 특정 이름은 다른 의미를 가진다:
+	// - constructor_id: 시공사에 대한 ID로 등록된 정보가 있으면 constructor로 해당 정보를 포함한다.
+	map<string, string> attributes  = 13 [
+		(sdlmicro.options.orm).pg = "-",
+		(google.api.field_behavior) = OPTIONAL,
+        (buf.validate.field).map.keys = {
+            string: {
+                min_len: 3
+                max_len: 100
+                pattern: "^[a-z][a-z0-9_]+[a-z0-9]$"
+            }
+        },
+        (buf.validate.field).map.values = {
+            string: {
+                min_len: 1
+                max_len: 200
+            }
+        },
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			example: '{"<ATTRIBUTE>": "<VALUE>"}'
+		}
+	];
+
+	// 설비 상태
+	FacilityStatus status = 14 [
+		(sdlmicro.options.orm).pg = ",type:varchar(15),use_zero,notnull",
+		(google.api.field_behavior) = OUTPUT_ONLY
+	];
+
+	// 설비 구축 일시
+	google.protobuf.Timestamp created_at = 15 [
+		(sdlmicro.options.orm).pg = ",type:timestamptz,notnull,default:now()",
+		(google.api.field_behavior) = OPTIONAL
+	];
+
+	// 리소스에 대한 변경 권한 여부
+	bool writable = 16 [
+		(sdlmicro.options.orm).pg = "-",
+		(google.api.field_behavior) = OUTPUT_ONLY
+	];
+
+	// 관련 정보
+	message Related {
+		// 분류
+		enum Kind {
+			// 정의되지 않음
+			unspecified = 0;
+			// 제어 장치
+			control = 1;
+			// 측정 장치
+			metric = 2;
+			// 재배 작물
+			subject = 3;
+		}
+		Kind kind = 1;
+		// ID
+		string id = 2;
+		// 이름
+		string name = 3;
+		// 관련 링크
+		string link = 4;
+	}
+	repeated Related related = 17 [
+		(sdlmicro.options.orm).pg = "-",
+		(google.api.field_behavior) = OUTPUT_ONLY
+	];
+
+	// 설비 상태
+	//
+	// 설비에 연결된 센서로부터 수신된 데이터로 정보를 제공하며,
+	// 같은 종류로 여러 센서가 연결된 경우 평균값으로 계산된다.
+}
+
+// FacilityAttribute
+//
+// 설비에 대한 추가 정보를 관리한다.
+message FacilityAttribute {
+	option (sdlmicro.options.model).references = {
+		id: "facility_attributes_facility_id_fk"
+		model_name: "Facility"
+		fields: "facility_id"
+		on_delete: CASCADE
+	};
+	option (sdlmicro.options.model).indexes = {
+		id: "facility_attributes_facility_id_attribute_key"
+		fields: [
+			{name: "facility_id"},
+			{name: "attribute"}
+		]
+		unique: true
+	};
+
+	// 설비 ID
+	string facility_id = 1 [
+		(sdlmicro.options.orm).pg = ",type:uuid,pk,notnull",
+		(sdlmicro.options.orm).reference_id = "facility_attributes_facility_id_fk"
+	];
+
+	// 속성명
+	string attribute = 2 [
+		(sdlmicro.options.orm).pg = ",type:varchar(100),pk,notnull"
+	];
+
+	// 값
+	string value = 3 [
+		(sdlmicro.options.orm).pg = ",type:varchar,notnull"
+	];
+
+	// 마지막 업데이트 일시
+	google.protobuf.Timestamp updated_at = 4 [
+		(sdlmicro.options.orm).pg = ",type:timestamptz,notnull,default:now()",
+		(google.api.field_behavior) = OUTPUT_ONLY
+	];
+}
+
+// FacilityDevice
+//
+// 설비에 연결된 장치 정보
+message FacilityDevice {
+	option (sdlmicro.options.model).references = {
+		id: "facility_devices_facility_id_fkey"
+		model_name: "Facility"
+		fields: "facility_id"
+		on_delete: CASCADE
+	};
+	option (sdlmicro.options.model).references = {
+		id: "facility_devices_site_id_device_id_fkey"
+		model_name: "SiteDevice"
+		fields: ["site_id", "device_id"]
+		on_delete: CASCADE
+	};
+
+	// 설비 ID
+	string facility_id = 1 [
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(sdlmicro.options.orm).pg = ",type:uuid,notnull",
+		(sdlmicro.options.orm).reference_id = "facility_devices_facility_id_fkey"
+	];
+
+	// 현장 ID
+	string site_id = 2 [
+		(google.api.field_behavior) = REQUIRED,
+		(sdlmicro.options.orm).pg = ",type:varchar(50),notnull",
+		(sdlmicro.options.orm).reference_id = "facility_devices_site_id_device_id_fkey"
+	];
+
+	// 장치 ID
+	string device_id = 3 [
+		(google.api.field_behavior) = REQUIRED,
+		(sdlmicro.options.orm).pg = ",type:varchar(14),notnull",
+		(sdlmicro.options.orm).reference_id = "facility_devices_site_id_device_id_fkey"
+	];
+
+	// 연결 일시
+	google.protobuf.Timestamp created_at = 4 [
+		(sdlmicro.options.orm).pg = ",type:timestamptz,notnull,default:now()",
+		(google.api.field_behavior) = OUTPUT_ONLY
+	];
+
+	// 모드버스 주소 (구: 채널)
+	uint32 modbus = 5 [
+		(sdlmicro.options.orm).pg = ",type:smallint",
+		(google.api.field_behavior) = OPTIONAL
+	];
+
+	// 채널 번호 (구: 프로브)
+	uint32 channel = 6 [
+		(sdlmicro.options.orm).pg = ",type:smallint",
+		(google.api.field_behavior) = OPTIONAL
+	];
+
+	// 센서 및 프로브 설명
+	string description = 7 [
+		(sdlmicro.options.orm).pg = ",type:varchar(1000)",
+		(google.api.field_behavior) = OPTIONAL
+	];
+}
+
+// FacilityHistory
+//
+// Facility 모델의 이력을 관리한다.
+message FacilityHistory {
+	option (sdlmicro.options.model).hypertable = {
+		time_column_name: "created_at"
+		chunk_time_interval: "1 week"
+		partitioning: {
+			partitioning_column: "site_id"
+			number_partitions: 10
+		}
+	};
+
+	// 이력 발생 일시
+	google.protobuf.Timestamp created_at = 1 [
+		(sdlmicro.options.orm).pg = ",type:timestamptz,notnull,default:now()",
+		(google.api.field_behavior) = IMMUTABLE
+	];
+
+	// Facility ID
+	string facility_id = 2 [
+		(sdlmicro.options.orm).pg = ",type:uuid,notnull",
+		(google.api.field_behavior) = IMMUTABLE
+	];
+
+	// 현장 ID
+	string site_id = 3 [(sdlmicro.options.orm).pg = ",type:varchar(50),notnull"];
+
+	enum Kind {
+		// 설비 등록
+		CREATED = 0;
+		// 설비 정보 수정
+		UPDATED = 1;
+		// 설비 폐기
+		DELETED = 2;
+		// 장치 연결
+		ATTACHED = 3;
+		// 장치 연결 해제
+		DETACHED = 4;
+		// 설비 상태 변경
+		STATUS = 5;
+		// 그룹 이전
+		MIGRATED = 6;
+	}
+	// 관리 이력 코드
+	Kind action = 4 [
+		(sdlmicro.options.orm).pg = ",type:varchar(8),notnull,use_zero",
+		(google.api.field_behavior) = IMMUTABLE
+	];
+
+	// 이력을 발생시킨 사용자 ID
+	string created_user_id = 5 [
+		(sdlmicro.options.orm).pg = ",type:varchar(36),notnull",
+		(google.api.field_behavior) = IMMUTABLE
+	];
+
+	// 이력 발생 당시의 사용자 이름
+	string created_name = 6 [
+		(google.api.field_behavior) = INPUT_ONLY,
+		(google.api.field_behavior) = IMMUTABLE,
+		(sdlmicro.options.orm).pg = ",type:varchar(200),notnull,default:'Anonymous'"
+	];
+
+	// 이력을 발생시킨 사용자 정보
+	google.protobuf.Struct created_by = 7 [
+		(sdlmicro.options.orm).pg = "-",
+		(google.api.field_behavior) = IMMUTABLE,
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			read_only: true
+			example: '{"email": "example@suredatalab.com", "first_name": "길동", "last_name": "홍", "username": "example", "name": "홍길동", "user_id": "UUID_000001"}'
+		}
+	];
+
+	// 상세 이력
+	google.protobuf.Struct details = 8 [
+		(sdlmicro.options.orm).pg = "-",
+		(google.api.field_behavior) = OUTPUT_ONLY
+	];
+}
+
+// FacilityUpdateHistory
+//
+// Facility 모델의 변경 이력을 관리한다.
+message FacilityUpdateHistory {
+	option (sdlmicro.options.model).hypertable = {
+		time_column_name: "created_at"
+		chunk_time_interval: "1 week"
+		partitioning: {
+			partitioning_column: "site_id"
+			number_partitions: 10
+		}
+	};
+
+	// 이력 발생 일시
+	google.protobuf.Timestamp created_at = 1 [
+		(sdlmicro.options.orm).pg = ",type:timestamptz,notnull,default:now()"
+	];
+
+	// Facility ID
+	string facility_id = 2 [
+		(sdlmicro.options.orm).pg = ",type:uuid,notnull"
+	];
+
+	// 현장 ID
+	string site_id = 3 [
+		(sdlmicro.options.orm).pg = ",type:varchar(50),notnull"
+	];
+
+	// 기존 값
+	string origin = 4 [
+		(sdlmicro.options.orm).pg = ",type:jsonb"
+	];
+
+	// 변경된 값
+	string change = 5 [
+		(sdlmicro.options.orm).pg = ",type:jsonb"
+	];
+}
+
+// FacilityStatusHistory
+//
+// 설비의 상태 변경 이력을 관리한다.
+message FacilityStatusHistory {
+	option (sdlmicro.options.model).hypertable = {
+		time_column_name: "created_at"
+		chunk_time_interval: "1 week"
+		partitioning: {
+			partitioning_column: "site_id"
+			number_partitions: 10
+		}
+	};
+
+	// 이력 발생 일시
+	google.protobuf.Timestamp created_at = 1 [
+		(sdlmicro.options.orm).pg = ",type:timestamptz,notnull,default:now()"
+	];
+
+	// Facility ID
+	string facility_id = 2 [
+		(sdlmicro.options.orm).pg = ",type:uuid,notnull"
+	];
+
+	// 현장 ID
+	string site_id = 3 [
+		(sdlmicro.options.orm).pg = ",type:varchar(50),notnull"
+	];
+
+	// 설비 상태
+	FacilityStatus status = 4 [
+		(sdlmicro.options.orm).pg = ",type:varchar(15),use_zero,notnull"
+	];
+
+	// 상태 변경 원인
+	string reason = 9 [
+		(sdlmicro.options.orm).pg = ",type:varchar(1000)"
+	];
+}
+
+
+// FacilityControl
+//
+// 설비에 제어 설정 관리
+message FacilityControl {
+	option (sdlmicro.options.model).references = {
+		id: "facility_controls_facility_id_fkey"
+		model_name: "Facility"
+		fields: "facility_id"
+		on_delete: CASCADE
+	};
+	option (sdlmicro.options.model).references = {
+		id: "facility_controls_device_id_fkey"
+		model_name: "Device"
+		fields: "device_id"
+		on_delete: SET_NULL
+	};
+	option (sdlmicro.options.model).references = {
+		id: "facility_controls_p_control_id_fkey"
+		model_name: "ProductControl"
+		fields: "control_id"
+	};
+	option (sdlmicro.options.model).references = {
+		id: "facility_controls_sensor_type_fkey"
+		model_name: "SensorType"
+		fields: "type_id"
+	};
+
+	// 제어 설정 ID
+	string control_id = 1 [
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(google.api.field_behavior) = IMMUTABLE,
+		(sdlmicro.options.orm).pg = ",type:uuid,pk,notnull,default:gen_random_uuid()"
+	];
+
+	// 설비 ID
+	string facility_id = 2 [
+		(google.api.field_behavior) = REQUIRED,
+		(google.api.field_behavior) = IMMUTABLE,
+		(buf.validate.field).string.uuid = true,
+		(sdlmicro.options.orm).pg = ",type:uuid,notnull",
+		(sdlmicro.options.orm).reference_id = "facility_controls_facility_id_fkey"
+	];
+
+	// 제품 제어 설정 ID
+	//
+	// 빈 값인 경우 설비에만 적용된 제어 설정이며, 이러한 경우 다음 필드를 반드시 입력해야 한다:
+	// - control_name
+	// - modbus
+	// - sensor_type
+	// - command
+	// - payload
+	string p_control_id = 3 [
+		(google.api.field_behavior) = OPTIONAL,
+		(google.api.field_behavior) = IMMUTABLE,
+		(buf.validate.field).string.uuid = true,
+		(sdlmicro.options.orm).pg = ",type:uuid",
+		(sdlmicro.options.orm).reference_id = "facility_controls_p_control_id_fkey"
+	];
+
+	// 제어 이름
+	string control_name = 4 [
+		(google.api.field_behavior) = OPTIONAL,
+		(sdlmicro.options.orm).pg = ",type:varchar(100)",
+		(buf.validate.field).string.max_len = 100,
+		(buf.validate.field).string.not_in = "\t",
+		(buf.validate.field).string.not_in = "\n",
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			max_length: 100
+			example: '"1중 좌측 측창"'
+		}
+	];
+
+	// 관련 장치 ID
+	string device_id = 5 [
+		(google.api.field_behavior) = REQUIRED,
+		(sdlmicro.options.orm).pg = ",type:varchar(14),notnull",
+		(sdlmicro.options.orm).reference_id = "facility_controls_device_id_fkey"
+	];
+
+	// 장치 이름
+	string device_name = 6 [
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(sdlmicro.options.orm).pg = "-"
+	];
+
+	// 연결된 Modbus 주소
+	uint32 modbus = 7 [
+		(google.api.field_behavior) = OPTIONAL,
+		(sdlmicro.options.orm).pg = ",type:integer"
+	];
+
+	// 센서 타입
+	string sensor_type = 8 [
+		(google.api.field_behavior) = OPTIONAL,
+		(sdlmicro.options.orm).pg = ",type:varchar(100)",
+		(sdlmicro.options.orm).reference_id = "facility_controls_sensor_type_fkey",
+		(buf.validate.field).string.pattern = "^([a-z][a-z0-9_]*[a-z0-9]+|)$",
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+            pattern: "^([a-z][a-z0-9_]*[a-z0-9]+|)$"
+			max_length: 100
+			example: '"agsmotor_green"'
+		}
+	];
+
+	// 센서 타입 이름
+	string sensor_type_name = 9 [
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(sdlmicro.options.orm).pg = "-"
+	];
+
+	// 명령어
+	string command = 10 [
+		(google.api.field_behavior) = REQUIRED,
+		(sdlmicro.options.orm).pg = ",type:varchar(200)",
+		(buf.validate.field).string.pattern = "^([a-z][a-z0-9_]*[a-z0-9]+|)$",
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+            pattern: "^([a-z][a-z0-9_]*[a-z0-9]+|)$"
+			max_length: 200
+			example: '"set_agsmotor_operation_req"'
+		}
+	];
+
+	// 제어 명령
+	//
+	// go template 문법을 사용하며 제어 명령에서 해당 값을 입력한다.
+	string payload = 11 [
+		(google.api.field_behavior) = OPTIONAL,
+		(sdlmicro.options.orm).pg = ",type:varchar(1000)",
+		(buf.validate.field).string.min_len = 2,
+		(buf.validate.field).string.max_len = 100,
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			example: '"{\\"1\\": {{.ratio}}}"'
+			max_length: 1000
+		}
+	];
+
+	// 관련 채널 번호
+	repeated string channels = 12 [
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(sdlmicro.options.orm).pg = "-"
+	];
+
+	// 제어 명령에서 포함해야 하는 필드
+	repeated string attributes = 13 [
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(sdlmicro.options.orm).pg = "-"
+	];
+
+	// 마지막 업데이트 일시
+	google.protobuf.Timestamp updated_at = 14 [
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(sdlmicro.options.orm).pg = ",type:timestamptz,notnull,default:now()"
+	];
+}
+
+// FacilityCommandHistory
+//
+// 설비 제어 명령 이력
+message FacilityCommandHistory {
+	option (sdlmicro.options.model).hypertable = {
+		time_column_name: "created_at"
+		chunk_time_interval: "1 week"
+	};
+
+	// 이력 발생 일시
+	google.protobuf.Timestamp created_at = 1 [
+		(sdlmicro.options.orm).pg = ",type:timestamptz,notnull,default:now()"
+	];
+
+	// Facility ID
+	string facility_id = 2 [
+		(sdlmicro.options.orm).pg = ",type:uuid,notnull"
+	];
+
+	// 제어 설정 ID
+	string control_id = 3 [
+		(sdlmicro.options.orm).pg = ",type:varchar(50),notnull"
+	];
+
+	// 장치 ID
+	string device_id = 4 [(sdlmicro.options.orm) = {pg: ",type:varchar(14),notnull"}];
+
+	// Sequence
+	uint64 sequence = 5 [(sdlmicro.options.orm) = {pg: ",notnull,use_zero"}];
+
+	// 명령어
+	string command = 6 [
+		(google.api.field_behavior) = REQUIRED,
+		(sdlmicro.options.orm).pg = ",type:varchar(200)",
+		(buf.validate.field).string.pattern = "^([a-z][a-z0-9_]*[a-z0-9]+|)$",
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+            pattern: "^([a-z][a-z0-9_]*[a-z0-9]+|)$"
+			max_length: 200
+			example: '"set_agsmotor_operation_req"'
+		}
+	];
+
+	// 제어 명령
+	//
+	// go template 문법을 사용하며 제어 명령에서 해당 값을 입력한다.
+	string payload = 7 [
+		(google.api.field_behavior) = OPTIONAL,
+		(sdlmicro.options.orm).pg = ",type:varchar(1000)",
+		(buf.validate.field).string.min_len = 2,
+		(buf.validate.field).string.max_len = 100,
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			example: '"{\\"1\\": {{.ratio}}}"'
+			max_length: 1000
+		}
+	];
+}

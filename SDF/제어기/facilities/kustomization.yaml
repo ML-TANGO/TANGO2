@@ -1,0 +1,15 @@
+resources:
+- deployment.yaml
+- service.yaml
+- virtualservice.yaml
+
+configMapGenerator:
+- name: facilities-proxy
+  files:
+    - envoy-proxy/envoy.yaml
+    - envoy-proxy/proto.pb
+- name: facilities-swagger
+  files:
+    - swagger.json
+- name: facilities-config
+  literals:
