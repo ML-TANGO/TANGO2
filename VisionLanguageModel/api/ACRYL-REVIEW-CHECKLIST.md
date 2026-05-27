@@ -2,8 +2,7 @@
 
 > **작성일**: 2026-05-20  
 > **대상**: `yvvyee/eva-vlm-backend` Docker 이미지 및 API 코드  
-> **리뷰 출처**: 아크릴 1차 회신 (`ETRI-SDS-VLM-attachments/01-SDS-VLM-detail-for-ETRI.md`)  
-> **검증 환경**: 아크릴 측 K8s 클러스터 (RTX A6000 × 2, jonathan-system-3 네임스페이스)
+> **리뷰 출처**: 아크릴 1차 회신 (`ETRI-SDS-VLM-attachments/01-SDS-VLM-detail-for-ETRI.md`)
 
 ---
 
