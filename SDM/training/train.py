@@ -1,557 +1,778 @@
-import json
-import logging
-import math
+"""
+CT-JEPA v2 Training Script
+============================
+Full training loop with:
+- Configurable local block type (transformer/swin/convnext)
+- Mixed masking with curriculum
+- EMA target encoder updates
+- Multi-component loss with scheduling
+- Comprehensive logging (JSONL + WandB)
+- Collapse monitoring with auto-halt
+- Validation: linear probe, retrieval, feature quality, t-SNE
+- Phase transition evaluation
+- Gradient accumulation + mixed precision
+- Checkpointing
+- Multi-GPU training via DDP (torchrun)
+
+Usage:
+    # Single GPU
+    python -m cepa.train --data_csv cepa/final_ct2.csv --data_root /data/preprocessed
+
+    # Multi-GPU (DDP, 5 GPUs)
+    torchrun --nproc_per_node=5 -m cepa.train --data_csv cepa/final_ct2.csv --data_root /data/preprocessed
+"""
+
 import os
+import sys
+import argparse
 import time
-import gc
-from tqdm import tqdm
-import numpy as np
+from datetime import timedelta
 import torch
-import torch.nn as nn
-from torch import inf
-import torch.nn.functional as F
 import torch.distributed as dist
-try:
-    import wandb
-except ImportError:
-    wandb = None
-from .distributed import is_master
-from .precision import get_autocast
-from .utils import save_file
-from .loss import SigLipLoss
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.utils.data.distributed import DistributedSampler
+import numpy as np
+from torch.cuda.amp import GradScaler, autocast
+from contextlib import nullcontext
+from tqdm import tqdm
 
-def get_cast_dtype(precision):
-    """Get the cast dtype for the given precision."""
-    if precision == "amp" or precision == "fp16":
-        return torch.float16
-    elif precision == "bf16":
-        return torch.bfloat16
-    else:
-        return torch.float32
-
-# Create a nuclear logging filter to block ALL DeepSpeed messages
-class DeepSpeedFilter(logging.Filter):
-    def filter(self, record):
-        # Block anything from deepspeed or containing specific timing keywords
-        if (hasattr(record, 'name') and 'deepspeed' in record.name.lower()) or \
-           (hasattr(record, 'msg') and isinstance(record.msg, str) and 
-            ('time (ms)' in record.msg or 'optimizer_' in record.msg or 
-             'bwd_' in record.msg or '_microstep' in record.msg)):
-            return False
-        return True
-
-# Apply the filter to the root logger to catch ALL log messages
-root_logger = logging.getLogger()
-root_logger.addFilter(DeepSpeedFilter())
-
-# Also silence specific loggers for good measure
-for logger_name in ['deepspeed', 'deepspeed.comm', 'deepspeed.runtime', 
-                   'deepspeed.runtime.engine', 'deepspeed.runtime.zero', 'deepspeed.utils']:
-    logger = logging.getLogger(logger_name)
-    logger.setLevel(logging.CRITICAL)
-    logger.propagate = False  # Prevent propagation to parent loggers
-
-# Completely monkey-patch the DeepSpeed logging function as a last resort
-try:
-    import deepspeed
-    def completely_silent_log_dist(*args, **kwargs):
-        return None
-    deepspeed.utils.logging.log_dist = completely_silent_log_dist
-except ImportError:
-    pass
-
-class AverageMeter(object):
-    """Computes and stores the average and current value"""
-    def __init__(self):
-        self.reset()
-
-    def reset(self):
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
-
-    def update(self, val, n=1):
-        self.val = val
-        self.sum += val * n
-        self.count += n
-        self.avg = self.sum / self.count
+from ..config import CTJEPAConfig
+from ..models.model import CTJEPA
+from ..losses.losses import CTJEPALoss
+from ..data.masking import MaskSampler, sample_masked_s2_indices
+from ..data.dataset import create_dataloader, CTJEPADataset, MultiLabelProbeDataset
+from .utils import (
+    CollapseMonitor, CosineWarmupScheduler, TrainLogger,
+    CheckpointManager, count_parameters,
+)
+from ..evaluation.validation import run_validation, run_phase_evaluation
 
 
-def unwrap_model(model):
-    if hasattr(model, 'module'):
-        return model.module
-    else:
-        return model
+def is_distributed():
+    """Check if running in distributed mode (launched via torchrun)."""
+    return dist.is_available() and dist.is_initialized()
 
 
-def get_grad_norm_(parameters, norm_type: float = 2.0) -> torch.Tensor:
-    if isinstance(parameters, torch.Tensor):
-        parameters = [parameters]
-    parameters = [p for p in parameters if p.grad is not None]
-    norm_type = float(norm_type)
-    if len(parameters) == 0:
-        return torch.tensor(0.)
-    
-    # Safe access to grad after filtering
-    first_grad = parameters[0].grad
-    if first_grad is None:
-        return torch.tensor(0.)
-    device = first_grad.device
-    
-    if norm_type == inf:
-        # Convert generator to list for max function
-        norms = []
-        for p in parameters:
-            if p.grad is not None:
-                norms.append(p.grad.detach().abs().max().to(device))
-        total_norm = norms[0] if len(norms) == 1 else torch.stack(norms).max()
-    else:
-        grad_norms = []
-        for p in parameters:
-            if p.grad is not None:
-                grad_norms.append(torch.norm(p.grad.detach(), norm_type).to(device))
-        total_norm = torch.norm(torch.stack(grad_norms), norm_type)
-    return total_norm.to(dtype=torch.float32)
+def get_rank():
+    return dist.get_rank() if is_distributed() else 0
 
-def train_one_epoch(model, tokenizer, data, epoch, optimizer, scaler, scheduler, args, tb_writer=None):
-    device = torch.device(args.device)
-    autocast = get_autocast(args.precision)
-    cast_dtype = get_cast_dtype(args.precision)
 
-    ## Should update to SigLIP Loss
-    loss = SigLipLoss(
-        cache_labels=True,
-        rank=args.rank,
-        world_size=args.world_size,
-        bidir=True,
-        use_horovod=False,
+def get_world_size():
+    return dist.get_world_size() if is_distributed() else 1
+
+
+def is_main_process():
+    return get_rank() == 0
+
+
+def setup_distributed():
+    """Initialize distributed process group if launched via torchrun."""
+    if 'RANK' not in os.environ:
+        return  # Not a torchrun launch, single-GPU mode
+
+    dist.init_process_group(backend='nccl', timeout=timedelta(hours=1))
+    local_rank = int(os.environ['LOCAL_RANK'])
+    torch.cuda.set_device(local_rank)
+
+
+def cleanup_distributed():
+    """Clean up distributed process group."""
+    if is_distributed():
+        dist.destroy_process_group()
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="CT-JEPA v2 Training")
+
+    # Architecture
+    parser.add_argument('--config', type=str, default='base', choices=['small', 'base', 'large'])
+    parser.add_argument('--local_block_type', type=str, default='transformer',
+                        choices=['transformer', 'swin', 'convnext'])
+
+    # Data
+    parser.add_argument('--data_csv', type=str, default='cepa/final_ct2.csv')
+    parser.add_argument('--data_root', type=str, default='/data/preprocessed')
+    parser.add_argument('--img_col', type=str, default='object_id')
+    parser.add_argument('--text_col', type=str, default='findings')
+    parser.add_argument('--split_col', type=str, default='split')
+
+    # Training
+    parser.add_argument('--output_dir', type=str, default='./runs/ctjepa_v2')
+    parser.add_argument('--epochs', type=int, default=None)
+    parser.add_argument('--batch_size', type=int, default=None)
+    parser.add_argument('--grad_accum', type=int, default=None)
+    parser.add_argument('--lr', type=float, default=None)
+    parser.add_argument('--resume', type=str, default=None)
+    parser.add_argument('--device', type=str, default='cuda')
+    parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--debug', action='store_true')
+
+    # Logging
+    parser.add_argument('--wandb_project', type=str, default='ctjepa-v2')
+    parser.add_argument('--wandb_run', type=str, default=None)
+    parser.add_argument('--no_wandb', action='store_true')
+
+    # Validation
+    parser.add_argument('--val_probe_csv', type=str, default=None,
+                        help='Labeled CSV for linear probe evaluation')
+    parser.add_argument('--val_probe_label_col', type=str, default='label')
+    parser.add_argument('--validate_only', action='store_true',
+                        help='Skip training, run validation only (requires --resume)')
+
+    return parser.parse_args()
+
+
+def setup_config(args) -> CTJEPAConfig:
+    config = CTJEPAConfig()
+    config.model.variant = args.config
+    config.model.local_block_type = args.local_block_type
+
+    # Data paths
+    config.data.csv_path = args.data_csv
+    config.data.data_root = args.data_root
+    config.data.img_col = args.img_col
+    config.data.text_col = args.text_col
+    config.data.split_col = args.split_col
+
+    if args.epochs is not None:
+        config.training.total_epochs = args.epochs
+    if args.batch_size is not None:
+        config.training.batch_size = args.batch_size
+    if args.grad_accum is not None:
+        config.training.grad_accumulation_steps = args.grad_accum
+    if args.lr is not None:
+        config.training.base_lr = args.lr
+
+    # Wandb
+    config.validation.use_wandb = not args.no_wandb
+    config.validation.wandb_project = args.wandb_project
+    config.validation.wandb_run_name = args.wandb_run
+
+    # Linear probe
+    if args.val_probe_csv:
+        config.validation.probe_csv = args.val_probe_csv
+        config.validation.probe_label_col = args.val_probe_label_col
+
+    if args.debug:
+        config.training.total_epochs = 2
+        config.training.log_interval = 1
+        config.training.save_interval = 1
+        config.validation.eval_interval = 1
+        config.validation.visualization_interval = 1
+        config.validation.linear_probe_interval = 1
+        config.validation.use_wandb = False
+
+    return config
+
+
+def set_seed(seed: int, rank: int = 0):
+    """Set random seeds. Offset by rank so each GPU gets different data augmentation."""
+    torch.manual_seed(seed + rank)
+    torch.cuda.manual_seed_all(seed + rank)
+    np.random.seed(seed + rank)
+
+
+@torch.no_grad()
+def prepare_batch_masks(batch, mask_sampler, config, epoch, device):
+    B = batch['volume'].shape[0]
+
+    visible_masks, masked_indices, mask_results = mask_sampler.sample_batch(
+        batch_size=B,
+        epoch=epoch,
+        total_epochs=config.training.total_epochs,
     )
 
-    data['train'].set_epoch(epoch)  # set epoch in process safe manner via sampler or shared_epoch
-    dataloader = data['train'].dataloader
-    num_batches_per_epoch = dataloader.num_batches
-    sample_digits = math.ceil(math.log(dataloader.num_samples + 1, 10))
+    masked_s2_list = []
+    for b in range(B):
+        s2_idx = sample_masked_s2_indices(
+            visible_masks[b],
+            num_samples=config.model.detail_num_sampled,
+        )
+        masked_s2_list.append(s2_idx)
+    masked_s2 = torch.stack(masked_s2_list)
 
-    loss_m = AverageMeter()
-    loss_clip_m = AverageMeter()
-    loss_scaler = AverageMeter()
-    grad_norm_m = AverageMeter()
-    batch_time_m = AverageMeter()
-    data_time_m = AverageMeter()
-    end = time.time()
-    
-    for i, batch in tqdm(
-        enumerate(dataloader), 
-        total=num_batches_per_epoch,
-        desc=f"Epoch {epoch}/{args.epochs}",
-        unit="batch",
-        bar_format="{l_bar}{bar:20}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}{postfix}]",
-        colour="green",
-        leave=False,
-        dynamic_ncols=True
-    ):
-        step = num_batches_per_epoch * epoch + i
-        
-        if not args.skip_scheduler:
-            scheduler(step)
+    return {
+        'visible_mask_s3': visible_masks.to(device),
+        'masked_indices_s3': masked_indices.to(device),
+        'masked_s2_indices': masked_s2.to(device),
+        'mask_families': [r.family for r in mask_results],
+        'mask_ratios': [r.mask_ratio for r in mask_results],
+    }
 
-        # Handle different data formats (CXR vs CT)
-        if len(batch) == 5:  # CXR format: prev_images, cur_images, captions, oids, labels
-            prev_images, cur_images, captions, oids, labels = batch
-            prev_images = prev_images.to(device=device, dtype=cast_dtype, non_blocking=True)
-            cur_images = cur_images.to(device=device, dtype=cast_dtype, non_blocking=True)
-        elif len(batch) == 2:  # CT format: images, texts
-            images, captions = batch
-            # For CT, we don't have prev/cur images, so use the same image for both
-            cur_images = images.to(device=device, dtype=cast_dtype, non_blocking=True)
-            prev_images = cur_images  # Use same image as placeholder
-            oids = [f"ct_sample_{i}" for i in range(len(images))]
-            labels = [0] * len(images)  # Placeholder labels
-        else:
-            raise ValueError(f"Unexpected batch format with {len(batch)} items")
-        
-        data_time_m.update(time.time() - end)
-        if args.enable_deepspeed:
-            model.zero_grad()
-            model.micro_steps = 0
-        else:
-            optimizer.zero_grad()
-    
-        with autocast():
-            # For Merlin model with ImageEmbedding=True, we only pass the current images
-            # The model expects only image input, not text input
-            image_features = model.visual(cur_images)
-            
-            captions = captions.to(device)
-            # Get text features and ensure consistent dtype
-            # Handle both regular captions and tokenized captions with embed_mask
-            if isinstance(captions, dict) and 'embed_mask' in captions:
-                # Tokenized captions with embed_mask for LLM2Vec
-                text_features = model.text.model(captions)
+
+def train_one_epoch(model, loss_fn, optimizer, scheduler, scaler, dataloader,
+                    mask_sampler, config, epoch, device, logger, collapse_monitor,
+                    global_step, raw_model=None):
+    """
+    Single epoch training with comprehensive step-level logging.
+    Supports both single-GPU and DDP multi-GPU training.
+
+    Args:
+        raw_model: unwrapped model (without DDP wrapper) for EMA updates and collapse checks.
+                   If None, assumes model is not wrapped.
+    """
+    model.train()
+    tc = config.training
+    vc = config.validation
+    accumulation_steps = tc.grad_accumulation_steps
+    batch_size = tc.batch_size
+    should_halt = False
+    rank0 = is_main_process()
+
+    if raw_model is None:
+        raw_model = model
+
+    epoch_losses = {}
+    epoch_start = time.time()
+    mask_family_counts = {}
+
+    pbar = tqdm(
+        dataloader,
+        desc=f"Epoch {epoch}",
+        disable=not rank0,
+        dynamic_ncols=True,
+    )
+    for batch_idx, batch in enumerate(pbar):
+        step_start = time.time()
+
+        volume = batch['volume'].to(device)
+        window_id = batch['window_id'].to(device)
+        region_masks_s2 = batch['region_masks_s2'].to(device) if batch['region_masks_s2'] is not None else None
+        texts = batch.get('texts')  # List[Optional[str]]
+
+        mask_data = prepare_batch_masks(batch, mask_sampler, config, epoch, device)
+
+        amp_ctx = autocast(dtype=torch.bfloat16) if tc.mixed_precision else nullcontext()
+
+        # Use no_sync for accumulation steps (skip all-reduce until optimizer step)
+        is_accumulation_step = ((batch_idx + 1) % accumulation_steps != 0)
+        sync_ctx = model.no_sync() if (is_distributed() and is_accumulation_step and hasattr(model, 'no_sync')) else nullcontext()
+
+        with sync_ctx:
+            with amp_ctx:
+                outputs = model(
+                    volume=volume,
+                    window_id=window_id,
+                    visible_mask_s3=mask_data['visible_mask_s3'],
+                    masked_indices_s3=mask_data['masked_indices_s3'],
+                    region_masks_s2=region_masks_s2,
+                    texts=texts,
+                    masked_s2_indices=mask_data['masked_s2_indices'],
+                    epoch=epoch,
+                )
+
+                losses = loss_fn(outputs, epoch)
+                loss = losses['total'] / accumulation_steps
+
+            if tc.mixed_precision:
+                scaler.scale(loss).backward()
             else:
-                # Regular captions - tokenize them
-                text_features = model.text.model(captions)
-            # Explicitly cast to the same dtype as image_features
-            text_features = model.text.projection(text_features.to(dtype=cast_dtype))
-            
-            # Apply vision projection if available (to match text features dimension)
-            if hasattr(model, 'vision_projection') and model.vision_projection is not None:
-                image_features = model.vision_projection(image_features)
-            
-            # Normalize embeddings before calculating SigLip loss
-            image_features = F.normalize(image_features, dim=-1)
-            text_features = F.normalize(text_features, dim=-1)
-            
-            # Just use the loss value without capturing accuracy metrics
-            total_loss = loss(image_features, text_features, model.logit_scale, model.logit_bias)
+                loss.backward()
 
-        # If using distributed training, gather the loss from all GPUs
-        if args.world_size > 1:
-            loss_list = [torch.zeros_like(total_loss) for _ in range(args.world_size)]
-            dist.all_gather(loss_list, total_loss)
-            loss_list = torch.stack(loss_list)
-        else:
-            loss_list = torch.tensor([total_loss])
- 
-        loss_list_isnan = torch.isnan(loss_list).any()
-        loss_list_isinf = torch.isinf(loss_list).any()
-        if loss_list_isnan or loss_list_isinf:
-            logging.info(f" ==================== loss_isnan = {loss_list_isnan},  loss_isinf = {loss_list_isinf} ==================== ")
+        # Track mask families for curriculum verification
+        for fam in mask_data['mask_families']:
+            mask_family_counts[fam] = mask_family_counts.get(fam, 0) + 1
 
-        if scaler is not None:
-            scaler.scale(total_loss).backward()
-            if args.grad_clip_norm is not None:
+        if (batch_idx + 1) % accumulation_steps == 0:
+            if tc.mixed_precision:
                 scaler.unscale_(optimizer)
-                torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip_norm, norm_type=2.0)
-            
+
+            grad_norm = torch.nn.utils.clip_grad_norm_(
+                raw_model.parameters(), tc.grad_clip_norm
+            )
+
+            if tc.mixed_precision:
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                optimizer.step()
+
+            optimizer.zero_grad()
+            momentum = raw_model.update_target_encoder()
+            current_lr = scheduler.step()
+            global_step += 1
+
+            step_time = time.time() - step_start
+
+            # Update progress bar every optimizer step
+            if rank0:
+                pbar.set_postfix(
+                    loss=f"{losses['total'].item():.4f}",
+                    lr=f"{current_lr:.2e}",
+                    step=global_step,
+                )
+
+            # --------------------------------------------------------
+            # Step-level logging (every log_interval, rank 0 only)
+            # --------------------------------------------------------
+            if rank0 and global_step % tc.log_interval == 0:
+                metrics = {
+                    # All loss components
+                    'loss/total': losses['total'].item(),
+                }
+                for k, v in losses.items():
+                    if k != 'total' and isinstance(v, torch.Tensor):
+                        metrics[f'loss/{k}'] = v.item()
+
+                # Optimization
+                metrics['optim/lr'] = current_lr
+                metrics['optim/grad_norm'] = grad_norm.item() if isinstance(grad_norm, torch.Tensor) else grad_norm
+                metrics['optim/ema_momentum'] = momentum
+
+                # Masking
+                metrics['mask/family'] = mask_data['mask_families'][0]
+                metrics['mask/ratio'] = np.mean(mask_data['mask_ratios'])
+
+                # Throughput
+                world_size = get_world_size()
+                metrics['perf/step_time_sec'] = step_time
+                metrics['perf/samples_per_sec'] = (batch_size * world_size) / max(step_time, 1e-6)
+
+                logger.log(metrics, global_step, epoch)
+                logger.print_metrics(metrics, global_step, epoch)
+
+            # --------------------------------------------------------
+            # Collapse monitoring (every collapse_check_interval, rank 0 only)
+            # --------------------------------------------------------
+            if rank0 and global_step % vc.collapse_check_interval == 0:
+                with torch.no_grad():
+                    # Core embedding health
+                    collapse_metrics = collapse_monitor.check(
+                        outputs['s3_embeddings'], name='s3'
+                    )
+
+                    # Prediction quality
+                    pred_metrics = collapse_monitor.check_predictions(
+                        outputs['pred_s3'], outputs['target_s3'],
+                        outputs.get('valid_mask_s3'),
+                    )
+                    collapse_metrics.update(pred_metrics)
+
+                    # Conditioning activity
+                    cond_metrics = collapse_monitor.check_conditioning(raw_model, window_id)
+                    collapse_metrics.update(cond_metrics)
+
+                    logger.log(collapse_metrics, global_step, epoch)
+
+                    # Log histograms
+                    logger.log_histogram('health/s3_embed_std_distribution',
+                                         outputs['s3_embeddings'].std(dim=-1).flatten(),
+                                         global_step)
+
+                    severity = collapse_metrics.get('health/s3_severity', 'ok')
+
+                    if severity == 'WARNING':
+                        print(f"\n  WARNING: Potential collapse at step {global_step}")
+                        print(f"    Std min: {collapse_metrics['health/s3_embed_std_min']:.2e}")
+                        print(f"    Rank ratio: {collapse_metrics['health/s3_rank_ratio']:.4f}")
+                        print(f"    Pred-target cosine: {collapse_metrics.get('health/pred_target_cosine', 0):.4f}\n")
+
+                    elif severity == 'HALT':
+                        print(f"\n  COLLAPSE DETECTED at step {global_step}! Halting training.")
+                        print(f"    Std min: {collapse_metrics['health/s3_embed_std_min']:.2e}")
+                        print(f"    Rank ratio: {collapse_metrics['health/s3_rank_ratio']:.4f}")
+                        should_halt = True
+                        break
+
+        # Track losses
+        for k, v in losses.items():
+            if isinstance(v, torch.Tensor):
+                if k not in epoch_losses:
+                    epoch_losses[k] = []
+                epoch_losses[k].append(v.item())
+
+    pbar.close()
+
+    # Flush tail batches: if accumulated gradients remain, step the optimizer
+    if (batch_idx + 1) % accumulation_steps != 0 and not should_halt:
+        if tc.mixed_precision:
+            scaler.unscale_(optimizer)
+
+        grad_norm = torch.nn.utils.clip_grad_norm_(
+            raw_model.parameters(), tc.grad_clip_norm
+        )
+
+        if tc.mixed_precision:
             scaler.step(optimizer)
             scaler.update()
-        elif args.enable_deepspeed:
-            model.backward(total_loss)
-            model.step()
         else:
-            total_loss.backward()
-            if args.grad_clip_norm is not None:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip_norm, norm_type=2.0)
             optimizer.step()
 
-        batch_time_m.update(time.time() - end)
-        end = time.time()
-        batch_count = i + 1
-        
-        if is_master(args) and (i % args.log_every_n_steps == 0 or batch_count == num_batches_per_epoch):
-            batch_size = len(cur_images)
-            num_samples = batch_count * batch_size * args.world_size
-            samples_per_epoch = dataloader.num_samples
-            percent_complete = 100.0 * batch_count / num_batches_per_epoch
+        optimizer.zero_grad()
+        momentum = raw_model.update_target_encoder()
+        current_lr = scheduler.step()
+        global_step += 1
 
-            # NOTE loss is coarsely sampled, just master node and per log update
-            loss_m.update(total_loss.item(), batch_size)
-            # For SigLip, we don't have separate clip_loss or accuracy metrics
-            # so we'll use the same total_loss for both
-            loss_clip_m.update(total_loss.item(), batch_size)
+    # Broadcast halt decision so all ranks stop together
+    if is_distributed():
+        halt_tensor = torch.tensor([1 if should_halt else 0], device=device)
+        dist.all_reduce(halt_tensor, op=dist.ReduceOp.MAX)
+        should_halt = halt_tensor.item() > 0
 
-            loss_scale_value = model.logit_scale.item()
-            grad_nrom = get_grad_norm_(model.parameters())
-            loss_scaler.update(loss_scale_value, batch_size)
-            grad_norm_m.update(grad_nrom, batch_size)
+    # End-of-epoch summary (rank 0 only)
+    epoch_time = time.time() - epoch_start
+    if rank0:
+        summary = {f'epoch/avg_{k}': np.mean(v) for k, v in epoch_losses.items()}
+        summary['epoch/time_seconds'] = epoch_time
+        summary['epoch/samples_per_sec'] = len(dataloader.dataset) / max(epoch_time, 1)
 
-            index_visual, index_text = 0, 0
-            for i, v in enumerate(optimizer.param_groups):
-                if v['group'] == 'visual' and v['lr_scale'] == 1.0:
-                    index_visual = i
-                if v['group'] == 'text' and v['lr_scale'] == 1.0:
-                    index_text = i
+        # Mask family distribution for this epoch
+        total_masks = sum(mask_family_counts.values())
+        for fam, count in mask_family_counts.items():
+            summary[f'epoch/mask_pct_{fam}'] = count / max(total_masks, 1)
 
-            logging.info(
-                f"Global Steps: {step + 1} "
-                f"Train Epoch: {epoch} [{num_samples:>{sample_digits}}/{samples_per_epoch} ({percent_complete:.0f}%)] "
-                f"Loss: {loss_m.val:#.5g} ({loss_m.avg:#.4g}) "
-                f"Loss(SigLip): {loss_clip_m.val:#.5g} ({loss_clip_m.avg:#.4g}) "
-                f"Grad Norm: {grad_norm_m.val:#.5g} ({grad_norm_m.avg:#.4g}) "
-                f"Loss Scaler: {loss_scaler.val:#.5g} ({loss_scaler.avg:#.4g}) "
-                f"LR: {optimizer.param_groups[0]['lr']:5f} "
-                f"LR_visual: {optimizer.param_groups[index_visual]['lr']:5f} "
-                f"LR_text: {optimizer.param_groups[index_text]['lr']:5f} "
-                f"Logit Scale: {model.logit_scale.item():.3f} "
-                f"Logit Bias: {model.logit_bias.item():.3f} "
-                f"Data (t): {data_time_m.avg:.3f} "
-                f"Batch (t): {batch_time_m.avg:.3f}, {args.batch_size*args.world_size / batch_time_m.val:#g}/s"
-            )
-            
-            # Save train loss / etc. Using non avg meter values as loggers have their own smoothing
-            log_data = {
-                "loss": loss_m.val,
-                "loss_siglip": total_loss.item(),  # Use the total loss
-                "loss_scaler": loss_scaler.val,
-                "grad_nrom": grad_norm_m.val,
-                "scale": model.logit_scale.item(),
-                "bias": model.logit_bias.item(),
-                "lr": optimizer.param_groups[0]["lr"],
-                "lr_visual": optimizer.param_groups[index_visual]["lr"],
-                "lr_text": optimizer.param_groups[index_text]["lr"],
-                "data_time": data_time_m.val,
-                "batch_time": batch_time_m.val,
-                "samples_per_scond": args.batch_size*args.world_size / batch_time_m.val,
-            }
+        logger.log(summary, global_step, epoch)
 
-            for name, val in log_data.items():
-                name = "train/" + name
-                if tb_writer is not None:
-                    tb_writer.add_scalar(name, val, step)
-                if args.wandb:
-                    assert wandb is not None, 'Please install wandb.'
-                    wandb.log({name: val, 'step': step})
+        print(f"\n{'='*60}")
+        print(f"Epoch {epoch} | Time: {epoch_time:.1f}s | "
+              f"Avg loss: {np.mean(epoch_losses.get('total', [0])):.6f} | "
+              f"Samples/s: {summary['epoch/samples_per_sec']:.1f}")
+        loss_parts = []
+        for k in ['jepa3', 'jepa2', 'sigreg', 'align', 'cross_stage', 'decoder', 'local_contrast']:
+            if k in epoch_losses:
+                loss_parts.append(f"{k}={np.mean(epoch_losses[k]):.4f}")
+        if loss_parts:
+            print(f"  Losses: {' | '.join(loss_parts)}")
+        mask_parts = [f"{fam}={count/max(total_masks,1)*100:.0f}%" for fam, count in sorted(mask_family_counts.items())]
+        if mask_parts:
+            print(f"  Masks: {' | '.join(mask_parts)}")
+        print(f"{'='*60}\n")
 
-            # resetting batch / data time meters per log window
-            batch_time_m.reset()
-            data_time_m.reset()
-        
-        eval_point = int(num_batches_per_epoch/2)
-        if step>0 and eval_point > 0 and step%eval_point ==0:
-            if any(v in data for v in ('val', 'imagenet-val', 'imagenet-v2')):
-                torch.cuda.empty_cache()
-                model.train()
+    return global_step, should_halt
 
-def evaluate(model, tokenizer, data, epoch, args, tb_writer=None):
-    metrics = {}
-    if not is_master(args):
-        return metrics
-    device = torch.device(args.device)
-    model.eval()
 
-    autocast = get_autocast(args.precision)
-    cast_dtype = get_cast_dtype(args.precision)
-    if 'val' in data and (args.val_frequency and ((epoch % args.val_frequency) == 0 \
-        or epoch==-1 or epoch == args.epochs)):
-        dataloader = data['val'].dataloader
-        num_samples = 0
-        samples_per_val = dataloader.num_samples
+def main():
+    args = parse_args()
 
-        # FIXME this does not scale past small eval datasets
-        # all_image_features @ all_text_features will blow up memory and compute very quickly
-        cumulative_loss = 0.0
-        all_image_features, all_text_features = [], []
-        logit_scale = model.logit_scale
-        total_oids = []
-        with torch.no_grad():
-            for i, batch in enumerate(dataloader):
-                # Handle different data formats (CXR vs CT)
-                if len(batch) == 5:  # CXR format: prev_images, cur_images, captions, oids, labels
-                    prev_images, cur_images, captions, oids, labels = batch
-                    prev_images = prev_images.to(device=device, dtype=cast_dtype, non_blocking=True)
-                    cur_images = cur_images.to(device=device, dtype=cast_dtype, non_blocking=True)
-                elif len(batch) == 2:  # CT format: images, texts
-                    images, captions = batch
-                    # For CT, we don't have prev/cur images, so use the same image for both
-                    cur_images = images.to(device=device, dtype=cast_dtype, non_blocking=True)
-                    prev_images = cur_images  # Use same image as placeholder
-                    oids = [f"ct_sample_{i}" for i in range(len(images))]
-                    labels = [0] * len(images)  # Placeholder labels
-                else:
-                    raise ValueError(f"Unexpected batch format with {len(batch)} items")
-                
-                # Check if captions is a dictionary (tokenizer output) or a tensor
-                captions = captions.to(device)
-                
-                with autocast():
-                    # For Merlin model with ImageEmbedding=True, we only pass the current images
-                    image_features = model.visual(cur_images)
-                    # Handle both regular captions and tokenized captions with embed_mask
-                    if isinstance(captions, dict) and 'embed_mask' in captions:
-                        # Tokenized captions with embed_mask for LLM2Vec
-                        text_features = model.text.model.forward(captions)
-                    else:
-                        # Regular captions - tokenize them
-                        text_features = model.text.model.forward(captions)
-                    text_features = model.text.projection(text_features.to(dtype=cast_dtype))
-                    
-                    # Apply vision projection if available (to match text features dimension)
-                    if hasattr(model, 'vision_projection') and model.vision_projection is not None:
-                        image_features = model.vision_projection(image_features)
-                    
-                    # Normalize embeddings before calculating SigLip loss
-                    image_features = F.normalize(image_features, dim=-1)
-                    text_features = F.normalize(text_features, dim=-1)
-                    
-                    all_image_features.append(image_features.cpu())
-                    all_text_features.append(text_features.cpu())
-                    
-                    # Create SigLip loss for evaluation
-                    siglip_eval_loss = SigLipLoss(
-                        cache_labels=True,
-                        rank=0,  # For evaluation
-                        world_size=1,  # For evaluation
-                        bidir=True,
-                        use_horovod=False,
-                    )
-                    
-                    # Calculate SigLip loss
-                    batch_size = cur_images.shape[0]
-                    total_loss = siglip_eval_loss(image_features, text_features, logit_scale.mean(), model.logit_bias)
+    # ---- Distributed setup ----
+    setup_distributed()
+    rank = get_rank()
+    world_size = get_world_size()
+    rank0 = is_main_process()
 
-                cumulative_loss += total_loss * batch_size
-                num_samples += batch_size
-                if is_master(args) and (i % 100) == 0:
-                    logging.info(
-                        f"Eval Epoch: {epoch} [{num_samples} / {samples_per_val}]\t"
-                        f"Loss: {cumulative_loss / num_samples:.6f}\t")
-                total_oids.extend(oids)
+    set_seed(args.seed, rank)
 
-            val_metrics = get_metrics(
-                image_features=torch.cat(all_image_features),
-                text_features=torch.cat(all_text_features),
-                logit_scale=logit_scale.cpu(),
-                epoch=epoch,
-                oids=total_oids,
-                logit_bias=model.logit_bias,
-            )
-            loss = cumulative_loss / num_samples
-            metrics.update(
-                {**val_metrics, "val_loss": loss, "epoch": epoch, "num_samples": num_samples}
-            )
+    config = setup_config(args)
 
-    if not metrics:
-        return metrics
+    # Set device: use LOCAL_RANK for multi-GPU, fallback to args.device
+    if is_distributed():
+        local_rank = int(os.environ['LOCAL_RANK'])
+        device = torch.device(f'cuda:{local_rank}')
+    else:
+        device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
 
-    logging.info(
-        f"Eval Epoch: {epoch} "
-        + "\t".join([f"{k}: {round(float(v), 4):.4f}" for k, v in metrics.items()])
+    # ---- Print config (rank 0 only) ----
+    if rank0:
+        print("=" * 60)
+        print("CT-JEPA v2 Training")
+        print("=" * 60)
+        print(f"Variant: {config.model.variant}")
+        print(f"Local block type: {config.model.local_block_type}")
+        print(f"Device: {device}")
+        print(f"World size: {world_size}")
+        print(f"Epochs: {config.training.total_epochs}")
+        print(f"Batch size per GPU: {config.training.batch_size}")
+        print(f"Grad accumulation: {config.training.grad_accumulation_steps}")
+        print(f"Effective batch: {config.training.batch_size * config.training.grad_accumulation_steps * world_size}")
+        print(f"WandB: {'enabled' if config.validation.use_wandb else 'disabled'}")
+        print()
+
+    # ---- Build model ----
+    if rank0:
+        print("Building model...")
+    raw_model = CTJEPA(config).to(device)
+
+    if rank0:
+        param_info = count_parameters(raw_model)
+        print(f"Total parameters: {param_info['total_params_M']:.1f}M")
+        print(f"Trainable parameters: {param_info['trainable_params_M']:.1f}M")
+        print()
+
+    # Wrap with DDP if distributed
+    if is_distributed():
+        model = DDP(raw_model, device_ids=[local_rank], gradient_as_bucket_view=False)
+    else:
+        model = raw_model
+
+    # ---- Create dataloaders ----
+    if rank0:
+        print("Creating dataloaders...")
+
+    # Build datasets once, reuse for sampler + dataloader
+    train_dataset = CTJEPADataset(
+        csv_path=config.data.csv_path, data_root=config.data.data_root,
+        img_col=config.data.img_col, text_col=config.data.text_col,
+        split_col=config.data.split_col, split="train",
+        has_reports=config.text.use_text, max_text_len=config.text.text_max_tokens,
+    )
+    val_dataset = CTJEPADataset(
+        csv_path=config.data.csv_path, data_root=config.data.data_root,
+        img_col=config.data.img_col, text_col=config.data.text_col,
+        split_col=config.data.split_col, split="val",
+        has_reports=config.text.use_text, max_text_len=config.text.text_max_tokens,
     )
 
-    if args.save_logs:
-        for name, val in metrics.items():
-            if tb_writer is not None:
-                tb_writer.add_scalar(f"val/{name}", val, epoch)
+    train_sampler = None
+    if is_distributed():
+        train_sampler = DistributedSampler(
+            train_dataset, num_replicas=world_size, rank=rank,
+            shuffle=True, drop_last=True,
+        )
 
-        # Convert tensor values to Python scalars for JSON serialization
-        serializable_metrics = {}
-        for k, v in metrics.items():
-            if torch.is_tensor(v):
-                serializable_metrics[k] = float(v.detach().cpu())
+    train_loader = create_dataloader(config, is_train=True, split="train",
+                                     sampler=train_sampler, dataset=train_dataset)
+    # Validation only runs on rank 0 — no DistributedSampler needed (full dataset)
+    val_loader = create_dataloader(config, is_train=False, split="val",
+                                   dataset=val_dataset)
+    steps_per_epoch = len(train_loader) // config.training.grad_accumulation_steps
+
+    # Build labeled dataset for linear probe if configured
+    labeled_dataset = None
+    if config.validation.probe_csv:
+        try:
+            labeled_dataset = MultiLabelProbeDataset(
+                csv_path=config.validation.probe_csv,
+                data_root=config.data.data_root,
+                img_col=config.data.img_col,
+                split_col=config.data.split_col,
+                split="val",
+            )
+            if rank0:
+                print(f"Linear probe dataset: {len(labeled_dataset)} samples, "
+                      f"{labeled_dataset.num_classes} classes")
+        except Exception as e:
+            if rank0:
+                print(f"Warning: Failed to create probe dataset: {e}")
+
+    if rank0:
+        print(f"Train set: {len(train_loader.dataset)} samples")
+        print(f"Val set: {len(val_loader.dataset)} samples")
+        print(f"Steps per epoch: {steps_per_epoch}")
+        print()
+
+    # ---- Loss, optimizer, scheduler ----
+    loss_fn = CTJEPALoss(config).to(device)
+
+    param_groups = raw_model.get_param_groups(
+        config.training.base_lr, config.training.weight_decay
+    )
+    optimizer = torch.optim.AdamW(param_groups)
+
+    scheduler = CosineWarmupScheduler(
+        optimizer=optimizer,
+        base_lr=config.training.base_lr,
+        min_lr=config.training.min_lr,
+        warmup_epochs=config.training.warmup_epochs,
+        total_epochs=config.training.total_epochs,
+        steps_per_epoch=steps_per_epoch,
+    )
+
+    total_steps = config.training.total_epochs * steps_per_epoch
+    raw_model.ema.total_steps = total_steps
+
+    scaler = GradScaler() if config.training.mixed_precision else None
+    mask_sampler = MaskSampler(config)
+
+    collapse_monitor = CollapseMonitor(
+        std_threshold=config.training.collapse_std_threshold,
+        warn_threshold=config.validation.collapse_warn_threshold,
+        halt_threshold=config.validation.collapse_halt_threshold,
+    )
+
+    # ---- Logger & checkpoints ----
+    os.makedirs(args.output_dir, exist_ok=True)
+
+    wandb_config = {
+        'variant': config.model.variant,
+        'local_block_type': config.model.local_block_type,
+        'total_params_M': count_parameters(raw_model)['total_params_M'],
+        'batch_size_per_gpu': config.training.batch_size,
+        'grad_accum': config.training.grad_accumulation_steps,
+        'world_size': world_size,
+        'effective_batch': config.training.batch_size * config.training.grad_accumulation_steps * world_size,
+        'lr': config.training.base_lr,
+        'epochs': config.training.total_epochs,
+        'train_samples': len(train_loader.dataset),
+        'val_samples': len(val_loader.dataset),
+    }
+
+    # Only rank 0 initializes WandB and writes logs
+    logger = TrainLogger(
+        log_dir=os.path.join(args.output_dir, 'logs'),
+        experiment_name=f"ctjepa_v2_{config.model.variant}_{config.model.local_block_type}",
+        use_wandb=config.validation.use_wandb and rank0,
+        wandb_project=config.validation.wandb_project,
+        wandb_run_name=config.validation.wandb_run_name,
+        wandb_config=wandb_config,
+    )
+
+    ckpt_manager = CheckpointManager(
+        save_dir=os.path.join(args.output_dir, 'checkpoints'),
+    )
+
+    # ---- Resume ----
+    start_epoch = 0
+    global_step = 0
+    if args.resume:
+        if rank0:
+            print(f"Resuming from {args.resume}...")
+        state = ckpt_manager.load(args.resume, raw_model, optimizer, scheduler)
+        start_epoch = state['epoch'] + 1
+        global_step = state['step']
+        if rank0:
+            print(f"Resumed at epoch {start_epoch}, step {global_step}")
+
+    # ---- Validate-only mode ----
+    if args.validate_only:
+        if not args.resume:
+            print("ERROR: --validate_only requires --resume <checkpoint_path>")
+            sys.exit(1)
+        if rank0:
+            print("\nRunning validation only (skipping training)...\n")
+            run_validation(
+                model=raw_model,
+                val_loader=val_loader,
+                config=config,
+                device=device,
+                epoch=start_epoch - 1,  # epoch from checkpoint
+                global_step=global_step,
+                logger=logger,
+                output_dir=args.output_dir,
+                mask_sampler=mask_sampler,
+                labeled_dataset=labeled_dataset,
+            )
+        logger.finish()
+        cleanup_distributed()
+        return
+
+    # ---- Phase transition epochs ----
+    phase_epochs = set(config.validation.phase_transition_epochs)
+
+    # ---- Training loop ----
+    if rank0:
+        print("\nStarting training...\n")
+
+    for epoch in range(start_epoch, config.training.total_epochs):
+        # Set epoch on distributed sampler for proper shuffling
+        if train_sampler is not None:
+            train_sampler.set_epoch(epoch)
+
+        if rank0:
+            progress = epoch / config.training.total_epochs
+            if progress < 0.3:
+                phase = "Phase 1: Foundation (cuboid-heavy, no text)"
+            elif progress < 0.65:
+                phase = "Phase 2: Expansion (balanced masking, text enabled)"
             else:
-                serializable_metrics[k] = v
-        
-        with open(os.path.join(args.checkpoint_path, "results.jsonl"), "a+") as f:
-            f.write(json.dumps(serializable_metrics))
-            f.write("\n")
+                phase = "Phase 3: Refinement (hard masking, full objectives)"
+            print(f"  {phase}")
 
-    if args.wandb:
-        assert wandb is not None, 'Please install wandb.'
-        for name, val in metrics.items():
-            # Convert tensor values to Python scalars for wandb logging
-            if torch.is_tensor(val):
-                wandb.log({f"val/{name}": float(val.detach().cpu()), 'epoch': epoch})
-            else:
-                wandb.log({f"val/{name}": val, 'epoch': epoch})
+        # ---- Train one epoch ----
+        global_step, should_halt = train_one_epoch(
+            model=model,
+            loss_fn=loss_fn,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            scaler=scaler,
+            dataloader=train_loader,
+            mask_sampler=mask_sampler,
+            config=config,
+            epoch=epoch,
+            device=device,
+            logger=logger,
+            collapse_monitor=collapse_monitor,
+            global_step=global_step,
+            raw_model=raw_model,
+        )
 
-    return metrics
-
-def get_metrics(image_features, text_features, logit_scale, epoch, oids=None, logit_bias=None):
-    metrics = {}
-    # Normalize embeddings for retrieval metrics calculation
-    image_features = F.normalize(image_features, dim=-1)
-    text_features = F.normalize(text_features, dim=-1)
-    
-    # Compute similarity matrices using both logit_scale and logit_bias like in training loss
-    logits_per_image = (image_features @ text_features.t()).detach().cpu()
-    
-    if logit_scale is not None:
-        logits_per_image = logit_scale * logits_per_image
-    
-    if logit_bias is not None:
-        logits_per_image = logits_per_image + logit_bias.cpu()
-        
-    logits_per_text = logits_per_image.t().detach().cpu()
-
-    logits = {"image_to_text": logits_per_image, "text_to_image": logits_per_text}
-    ground_truth = torch.arange(len(text_features)).view(-1, 1)
-
-    for name, logit in logits.items():
-        ranking = torch.argsort(logit, descending=True)
-        preds = torch.where(ranking == ground_truth)[1]
-        preds = preds.detach().cpu().numpy()
-        metrics[f"{name}_mean_rank"] = preds.mean() + 1
-        metrics[f"{name}_median_rank"] = np.floor(np.median(preds)) + 1
-        for k in [1, 5, 10]:
-            metrics[f"{name}_R@{k}"] = np.mean(preds < k)
-
-    return metrics
-
-def extract_features(model, data, args, device):
-    
-    img_emb_folder = args.img_emb_path
-    text_emb_folder = args.text_emb_path
-
-    save_interval = args.save_interval if args.save_interval else 100
-    all_features = []
-    feature_info = {}
-
-    model.eval()
-    cast_dtype = get_cast_dtype(args.precision)
-    if 'val' in data:
-        dataloader = data['val'].dataloader
-        num_samples = 0
-        samples_per_val = dataloader.num_samples
-        
-        all_image_features = []
-        all_text_features = []
-        with torch.no_grad():
-            for i, batch in enumerate(dataloader):
-                idx = i+1
-
-                images, texts, oids = batch
-
-                images = images.to(device=device, dtype=cast_dtype, non_blocking=True)
-                texts = texts.to(device=device, non_blocking=True)
-
-                image_features, text_features = model(images, texts)
-
-                all_image_features.append(image_features)
-                all_text_features.append(text_features)
-
-                batch_size = images.shape[0]
-                num_samples += batch_size
-                logging.info(
-                    f"Extract RANK: {args.rank} [{num_samples} / {samples_per_val}]"
+        # ---- Auto-halt on collapse ----
+        if should_halt:
+            if rank0:
+                print("  Saving emergency checkpoint before halt...")
+                ckpt_manager.save(
+                    model=raw_model, optimizer=optimizer, scheduler=scheduler,
+                    epoch=epoch, step=global_step, loss=0.0,
+                    ema_momentum=raw_model.ema.get_momentum(),
+                    extra={'halt_reason': 'collapse'},
                 )
+            if is_distributed():
+                dist.barrier()
+            break
 
-                if idx % save_interval == 0:
+        # ---- Checkpoint (rank 0 only) ----
+        if rank0 and (epoch + 1) % config.training.save_interval == 0:
+            ckpt_path = ckpt_manager.save(
+                model=raw_model,
+                optimizer=optimizer,
+                scheduler=scheduler,
+                epoch=epoch,
+                step=global_step,
+                loss=0.0,
+                ema_momentum=raw_model.ema.get_momentum(),
+            )
+            print(f"  Checkpoint saved: {ckpt_path}")
 
-                    img_feat = np.concatenate(all_image_features)
-                    text_feat = np.concatenate(all_text_features)
-                    
+        # ---- Validation (rank 0 only) ----
+        if rank0 and (epoch + 1) % config.validation.eval_interval == 0:
+            run_validation(
+                model=raw_model,
+                val_loader=val_loader,
+                config=config,
+                device=device,
+                epoch=epoch,
+                global_step=global_step,
+                logger=logger,
+                output_dir=args.output_dir,
+                mask_sampler=mask_sampler,
+                labeled_dataset=labeled_dataset,
+            )
 
-                    split = "%08d" % (idx//save_interval)
-                    out_img_feat_file = (
-                        f"{img_emb_folder}/rank{args.rank}_img_emb_{split}.npy"
-                    )
-                    out_text_feat_file = (
-                        f"{text_emb_folder}/rank{args.rank}_text_emb_{split}.npy"
-                    )
+        # ---- Phase transition evaluation (rank 0 only) ----
+        if rank0 and epoch in phase_epochs:
+            run_phase_evaluation(
+                model=raw_model,
+                val_loader=val_loader,
+                config=config,
+                device=device,
+                epoch=epoch,
+                global_step=global_step,
+                logger=logger,
+                ckpt_manager=ckpt_manager,
+                mask_sampler=mask_sampler,
+            )
 
-                    save_file(img_feat, out_img_feat_file)
-                    save_file(text_feat, out_text_feat_file)
+        if is_distributed():
+            dist.barrier()
 
-                    
-                    all_image_features = []
-                    all_text_features = []
+    # ---- Save final model (rank 0 only) ----
+    if rank0:
+        print("\n  Training complete!")
 
-            if len(all_image_features) > 0:
-                img_feat = np.concatenate(all_image_features)
-                text_feat = np.concatenate(all_text_features)
+        final_path = os.path.join(args.output_dir, 'ctjepa_v2_final.pt')
+        torch.save({
+            'config': config,
+            'context_encoder': raw_model.context_encoder.state_dict(),
+            'target_encoder': raw_model.target_encoder.state_dict(),
+        }, final_path)
+        print(f"Final model saved to {final_path}")
 
-                split = "%08d" % ((idx//save_interval)+1)
-                out_img_feat_file = (
-                    f"{img_emb_folder}/rank{args.rank}_img_emb_{split}.npy"
-                )
-                out_text_feat_file = (
-                    f"{text_emb_folder}/rank{args.rank}_text_emb_{split}.npy"
-                )
+        # Final validation
+        run_validation(
+            model=raw_model,
+            val_loader=val_loader,
+            config=config,
+            device=device,
+            epoch=config.training.total_epochs - 1,
+            global_step=global_step,
+            logger=logger,
+            output_dir=args.output_dir,
+            mask_sampler=mask_sampler,
+            labeled_dataset=labeled_dataset,
+        )
 
-                save_file(img_feat, out_img_feat_file)
-                save_file(text_feat, out_text_feat_file)
-    
-    if dist.is_initialized():
-        dist.barrier()
+    logger.finish()
+    cleanup_distributed()
+
+
+if __name__ == '__main__':
+    main()
