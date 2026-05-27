@@ -1,0 +1,37 @@
+@import '@src/styles/color.scss';
+
+.tooltip-wrapper {
+  display: flex;
+  flex-direction: column;
+  opacity: 1;
+  z-index: 9999;
+  width: 100%;
+  position: relative;
+
+  .header {
+    border-bottom: 1px solid $mono204;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+    font-weight: bold;
+    color: $mono207;
+    font-family: SpoqaB;
+    font-size: 14px;
+    line-height: 22px;
+  }
+
+  .item {
+    display: flex;
+    padding: 4px 0;
+
+    span:first-child {
+      display: inline-block;
+      font-weight: bold;
+      color: $dark-mono206;
+      min-width: 50px;
+    }
+
+    span {
+      white-space: nowrap;
+    }
+  }
+}

@@ -1,0 +1,23 @@
+@import '@src/styles/color.scss';
+
+.input-group {
+  .create-title-cont {
+    position: relative;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    .text {
+      color: $mono207;
+      font-family: SpoqaB;
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 16px;
+    }
+  }
+}
+
+.flex-cont {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 32px;
+}

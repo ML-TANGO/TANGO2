@@ -1,0 +1,16 @@
+@import '@src/styles/color.scss';
+
+.label {
+  display: inline-block;
+  width: 36px;
+  height: 18px;
+  margin-right: 6px;
+  line-height: 18px;
+  border: 1.8px solid $mono205;
+  border-radius: 15px;
+  color: $mono205;
+  text-align: center;
+  vertical-align: middle;
+  font-size: 10px;
+  font-weight: bold;
+}

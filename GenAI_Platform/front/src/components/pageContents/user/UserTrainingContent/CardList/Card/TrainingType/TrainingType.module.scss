@@ -1,0 +1,16 @@
+@import '@src/styles/color.scss';
+
+.type {
+  display: inline-block;
+  .type-icon {
+    width: 18px;
+    height: 18px;
+    margin-right: 4px;
+    vertical-align: bottom;
+  }
+  .type-label {
+    height: 18px;
+    font-size: 14px;
+    color: $mono210;
+  }
+}

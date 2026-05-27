@@ -1,0 +1,16 @@
+@import '@src/styles/color.scss';
+
+.stack-cont {
+  display: flex;
+  width: 100%;
+  height: 6px;
+  border-radius: 2px;
+  border: 0.5px solid $mono203;
+  background: #fff;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.empty-stack {
+  background-color: #fff; /* 하얀색으로 남은 부분 처리 */
+  height: 20px;
+}

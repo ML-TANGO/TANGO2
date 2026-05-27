@@ -1,0 +1,95 @@
+@import '@src/styles/color.scss';
+
+.detail {
+  padding: 48px;
+  .header {
+    margin: 0 40px 24px;
+    .title {
+      margin: 0;
+      height: 31px;
+      font-family: SpoqaM;
+      font-size: 24px;
+      font-weight: 500;
+      color: $mono207;
+    }
+  }
+  .horizon-box {
+    display: flex;
+    margin: 0 40px 24px;
+    .box {
+      width: calc(23% - 24px);
+      margin-right: 18px;
+      &:first-child {
+        width: 31%;
+      }
+      .label {
+        display: block;
+        font-family: SpoqaM;
+        font-size: 16px;
+        font-weight: 500;
+        color: $mono205;
+      }
+      .value {
+        display: block;
+        font-family: SpoqaB;
+        font-size: 16px;
+        color: $mono207;
+      }
+    }
+  }
+  .block {
+    padding: 24px 40px 30px;
+    margin-bottom: 24px;
+    background-color: $mono200;
+    .block-title {
+      font-family: SpoqaM;
+      font-size: 18px;
+      font-weight: 500;
+      color: $mono207;
+      margin-top: 0;
+    }
+    .info-table {
+      width: 100%;
+      border-collapse: collapse;
+      th {
+        padding: 0 12px 14px 0;
+        text-align: left;
+        border-bottom: 1px solid $mono205;
+        font-family: SpoqaM;
+        font-size: 16px;
+        font-weight: 500;
+        color: $mono205;
+      }
+      td {
+        padding: 12px 12px 0 0;
+        font-family: SpoqaB;
+        font-size: 16px;
+        color: $mono207;
+      }
+    }
+
+    .info-list {
+      display: flex;
+      flex-direction: row;
+      flex-wrap: wrap;
+      .list-item {
+        margin-right: 24px;
+        width: calc(25% - 24px);
+        .label {
+          display: inline-block;
+          margin-bottom: 4px;
+          height: 21px;
+          font-family: SpoqaM;
+          font-size: 16px;
+          color: $mono205;
+        }
+        .value {
+          font-family: SpoqaB;
+          font-size: 16px;
+          height: 21px;
+          color: $mono207;
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,22 @@
+@import '@src/styles/color.scss';
+
+.result-video {
+  width: 100%;
+  margin-bottom: 20px;
+  .title {
+    font-family: SpoqaB;
+    font-size: 16px;
+    color: $mono207;
+    display: block;
+    padding-bottom: 12px;
+  }
+  .image {
+    max-width: 100%;
+    height: auto;
+    cursor: pointer;
+  }
+  .video {
+    max-width: 100%;
+    height: auto;
+  }
+}

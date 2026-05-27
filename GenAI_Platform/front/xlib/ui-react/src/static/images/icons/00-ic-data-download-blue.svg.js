@@ -1,0 +1,5 @@
+var img = "data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='48' height='48' viewBox='0 0 48 48'%3e %3cdefs%3e %3cpath id='rjacmwctpa' d='M24 31l10-11.68h-6.68v-10h-6.64v10H14L24 31zm13.32 6.68V31H34v3.32H14V31h-3.32v6.68h26.64z'/%3e %3c/defs%3e %3cg fill='none' fill-rule='evenodd'%3e %3cg%3e %3cpath d='M0 0H48V48H0z' opacity='.2'/%3e %3cmask id='5arwp007lb' fill='white'%3e %3cuse xlink:href='%23rjacmwctpa'/%3e %3c/mask%3e %3cpath fill='%232d76f8' d='M0 0H48V48H0z' mask='url(%235arwp007lb)'/%3e %3c/g%3e %3c/g%3e%3c/svg%3e";
+  var IconDownloadBlue = img;
+
+export { IconDownloadBlue as default };
+//# sourceMappingURL=00-ic-data-download-blue.svg.js.map

@@ -1,0 +1,51 @@
+@import '@src/styles/color.scss';
+
+.container {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0px 12px;
+  border-radius: 16px;
+  gap: 6px;
+  font-size: 14px;
+  background-color: $blue101;
+  height: 28px;
+
+  .name {
+    color: $blue104;
+  }
+}
+
+.tool-tip {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  .cost-box {
+    display: flex;
+    gap: 8px;
+    font-size: 12px;
+
+    .title {
+      font-weight: 700;
+    }
+  }
+
+  .middle-line {
+    width: 100%;
+    height: 1px;
+    background-color: white;
+  }
+
+  .detail-info {
+    display: flex;
+    gap: 8px;
+    font-size: 12px;
+
+    .value {
+      font-weight: 700;
+    }
+  }
+}

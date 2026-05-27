@@ -1,0 +1,41 @@
+@import '@src/styles/color.scss';
+
+.wrapper {
+  &.column {
+    display: block;
+  }
+
+  &.bg-box {
+    padding: 24px;
+    background: $hover-bg-color;
+    border-radius: 4px;
+  }
+
+  &.row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    column-gap: 8px;
+    &.bg-box {
+      padding: 16px 16px 16px 24px;
+    }
+
+    label {
+      margin-bottom: 0;
+    }
+
+    div {
+      flex: 1;
+    }
+  }
+}
+
+.error-msg {
+  color: $error-color;
+  display: block;
+  height: 48px;
+  box-sizing: border-box;
+  padding: 4px 0 0 0;
+  font-size: 14px;
+  font-weight: 500;
+}

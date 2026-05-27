@@ -1,0 +1,106 @@
+@import '@src/styles/color.scss';
+
+.frame {
+  position: relative;
+  width: 100%;
+  min-width: 400px;
+  height: 100%;
+  overflow-x: hidden;
+  background-color: $new-bg-color;
+  .header {
+    height: 64px;
+  }
+  .wrapper {
+    display: flex;
+    height: calc(100% - 64px);
+
+    .content {
+      height: 100%;
+      overflow-y: auto;
+      .page-content {
+        padding: 28px 48px !important;
+        min-height: calc(100% - 70px);
+        background-color: $new-bg-color;
+        box-sizing: border-box;
+      }
+    }
+    .footer {
+      height: 70px;
+    }
+    &.contract {
+      .side-nav {
+        width: 64px;
+        transition: width 0.7s;
+      }
+      .content {
+        width: calc(100% - 64px);
+        transition: width 0.7s;
+        &.no-nav {
+          width: 100%;
+          transition: none;
+        }
+      }
+    }
+
+    &.expand {
+      .side-nav {
+        width: 184px;
+        transition: width 0.7s;
+      }
+      .content {
+        &.no-nav {
+          width: 100%;
+          transition: none;
+        }
+        width: calc(100% - 184px);
+        transition: width 0.7s;
+      }
+    }
+  }
+}
+
+@media (max-width: 1023px) {
+  .frame {
+    .wrapper {
+      position: relative;
+      .side-nav {
+        position: absolute;
+        top: 0;
+        height: 100%;
+      }
+      & > .content .page-content {
+        padding: 24px 24px 22px 24px !important;
+        min-height: calc(100% - 76px);
+        background-color: $mono200;
+        box-sizing: border-box;
+      }
+    }
+
+    .wrapper.expand {
+      .side-nav {
+        position: absolute;
+        top: 0;
+        left: 0;
+        height: 100%;
+        width: 184px;
+        transition: left 0.7s;
+      }
+      .content {
+        width: 100%;
+        transition: none;
+      }
+    }
+    .wrapper.contract {
+      .side-nav {
+        position: absolute;
+        width: 184px;
+        left: -184px;
+        transition: left 0.7s;
+      }
+      .content {
+        width: 100%;
+        transition: none;
+      }
+    }
+  }
+}

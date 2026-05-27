@@ -1,0 +1,45 @@
+@import '@src/styles/color.scss';
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+
+  .desc {
+    font-size: 15px;
+    color: $mono207;
+  }
+
+  .time-box {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+
+    .radio-container {
+      display: flex;
+      align-items: center;
+    }
+  }
+
+  .option-box {
+    display: flex;
+    flex-direction: column;
+    gap: 18x;
+
+    .option {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+
+      .checkbox {
+        width: 16px;
+        height: 16px;
+      }
+
+      .price-option-label {
+        font-size: 15px;
+        color: $mono207;
+      }
+    }
+  }
+}

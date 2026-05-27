@@ -1,0 +1,55 @@
+@import '@src/components/Modal/modal.scss';
+
+.radio-wrap {
+  margin-bottom: 20px;
+  .label {
+    .label-right-item {
+      display: flex;
+      align-items: center;
+      font-family: SpoqaM;
+      margin-left: 8px;
+
+      color: #3e3e3e;
+      font-size: 14px;
+      font-weight: 500;
+      line-height: 100%; /* 12px */
+      letter-spacing: -0.24px;
+    }
+  }
+}
+
+.textarea-wrap {
+  .label {
+    .optional-txt {
+      font-family: SpoqaM;
+      display: inline-block;
+      color: #747474;
+      font-size: 14px;
+      font-weight: 500;
+      line-height: 200%;
+      margin-left: 8px;
+    }
+  }
+  .text-length-box {
+    color: #dbdbdb;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 16px;
+  }
+}
+
+.upload-option-box {
+  margin-top: 24px;
+}
+
+.input-group-title {
+  display: flex;
+  align-items: center;
+  font-size: 24px;
+  font-family: SpoqaM !important;
+}
+
+.error {
+  font-family: SpoqaM;
+  font-size: 13px;
+}

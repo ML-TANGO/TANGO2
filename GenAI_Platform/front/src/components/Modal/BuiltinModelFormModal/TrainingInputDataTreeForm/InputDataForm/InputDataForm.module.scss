@@ -1,0 +1,118 @@
+@import '@src/styles/color.scss';
+
+.input-item-container {
+  border-bottom: 1px solid $mono204;
+
+  &:last-child {
+    margin-bottom: 12px;
+  }
+
+  .float-box {
+    padding: 14px 16px 14px 12px;
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+    &:not(.open) {
+      cursor: pointer;
+    }
+    &.open,
+    &:hover {
+      background: $blue101;
+    }
+    .depth {
+      display: flex;
+      justify-content: center;
+      width: 32px;
+      &.open {
+        cursor: pointer;
+      }
+      img {
+        width: 24px;
+        height: 24px;
+      }
+    }
+    .type {
+      width: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      img {
+        height: 24px;
+      }
+    }
+    .text-wrap {
+      flex: 1;
+      position: relative;
+      .error-message {
+        position: absolute;
+        padding: 4px;
+        font-size: 12px;
+        color: $error-color;
+        font-family: SpoqaR;
+        line-height: 1.2;
+      }
+    }
+    .name {
+      flex: 1;
+      padding-left: 4px;
+      font-size: 14px;
+      color: $mono207;
+      line-height: 1.2;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+
+      &.error {
+        color: $error-color;
+      }
+    }
+    .chip-box {
+      display: flex;
+      flex-direction: row;
+      justify-content: flex-end;
+      margin-right: 4px;
+      margin-left: 10px;
+      &.root {
+        margin-right: 44px;
+      }
+      .chip {
+        display: block;
+        align-items: center;
+        height: 24px;
+        width: auto;
+        max-width: 100px;
+        box-sizing: border-box;
+        border-radius: 4px;
+        padding: 6px 10px;
+        line-height: 1;
+        font-size: 12px;
+        font-family: SpoqaR;
+        color: $mono206;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        margin-left: 8px;
+        &.argparse {
+          background-color: $blue102;
+        }
+        &.category {
+          background-color: $mono203;
+        }
+      }
+    }
+  }
+
+  .input-item-box {
+    background: $blue101;
+    padding: 14px 16px;
+    .input-item {
+      position: relative;
+      margin-bottom: 24px;
+    }
+
+    .add-btn-box {
+      display: flex;
+      flex-direction: row;
+    }
+  }
+}

@@ -1,0 +1,67 @@
+@import '@src/styles/color.scss';
+
+.container {
+  box-sizing: border-box;
+  padding: 24px;
+  border: 1px solid $blue102;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+
+  .title {
+    font-size: 14px;
+    font-family: SpoqaB;
+    margin-bottom: 16px;
+    font-weight: 700;
+    line-height: 14px;
+  }
+  .type {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    .label {
+      display: flex;
+      gap: 8px;
+      font-size: 14px;
+      font-family: SpoqaB;
+      color: $mono205;
+      font-weight: 500;
+      line-height: 14px;
+
+      .instance {
+        color: $mono205;
+        font-weight: 700;
+        line-height: 14px;
+      }
+    }
+  }
+  .border {
+    height: 1px;
+    background-color: $mono203;
+    margin: 0;
+    padding: 0;
+    display: block;
+    box-sizing: border-box;
+  }
+
+  .gpu-box {
+    display: flex;
+    justify-content: space-between;
+    font-size: 14px;
+    color: $mono207;
+    font-weight: 500;
+    line-height: 14px;
+
+    .label {
+      display: flex;
+      gap: 8px;
+      font-family: SpoqaM;
+
+      > div:first-child {
+        color: $mono205;
+      }
+    }
+  }
+}

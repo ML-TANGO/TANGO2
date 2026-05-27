@@ -1,0 +1,102 @@
+@import '@src/styles/color.scss';
+
+.container {
+  border: 1px solid #dbdbdb;
+  border-radius: 10px;
+  max-height: 340px;
+  overflow-x: hidden;
+  min-width: 560px;
+
+  .border {
+    width: 100%;
+    height: 1px;
+    background-color: #dbdbdb;
+  }
+
+  .search-content {
+    display: flex;
+    background-color: $mono201;
+    justify-content: space-between;
+    align-items: center;
+    // padding: 0 24px;
+    padding: 8px 16px;
+    height: 32px;
+
+    border-bottom: 1px solid $mono203;
+    border-top: 1px solid $mono203;
+    .input {
+      flex: 50%;
+    }
+    .button-box {
+      padding-left: 50px;
+      flex: 30%;
+      .button {
+        display: flex;
+        align-items: center;
+
+        .type-title {
+          font-size: 12px;
+          color: $mono204;
+          font-family: SpoqaB;
+          white-space: nowrap;
+          margin: 0 8px;
+        }
+      }
+    }
+  }
+  .list-content {
+    background-color: $mono200;
+    height: 200px;
+    padding: 8px 16px;
+    box-sizing: border-box;
+    overflow-y: auto;
+
+    .list {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border: 1px solid #dbdbdb;
+      padding: 0 16px;
+      height: 38px;
+      box-sizing: border-box;
+      border-radius: 8px;
+      margin-bottom: 8px;
+
+      &:hover {
+        cursor: pointer;
+      }
+      &.selected {
+        border: 1px solid $blue104;
+        background-color: rgba(222, 233, 255, 0.5);
+        color: $blue104;
+      }
+      .left {
+        .name-icon {
+          margin-left: 8px;
+          transform: translate(-2px, 1px);
+          width: 16px;
+          height: 16px;
+          background-image: url(@src/static/images/icon/00-ic-deploy-selected-file.svg);
+        }
+      }
+      &:last-child {
+        margin-bottom: 0;
+      }
+      .left {
+        display: flex;
+        align-items: center;
+        color: $mono205;
+        font-size: 14px;
+        img {
+          width: 16px;
+          height: 16px;
+          margin-right: 8px;
+        }
+      }
+      .user {
+        color: $mono204;
+        font-size: 14px;
+      }
+    }
+  }
+}

@@ -1,0 +1,20 @@
+@import '@src/styles/color.scss';
+
+.chip {
+  display: inline-block;
+  padding: 0 10px;
+  height: 24px;
+  line-height: 24px;
+  border-radius: 12px;
+  font-size: 14px;
+  color: $mono200;
+  background-color: $mono205;
+  .remove-btn {
+    margin-left: 6px;
+    background-color: transparent;
+    padding: 0;
+    border: none;
+    vertical-align: middle;
+    cursor: pointer;
+  }
+}

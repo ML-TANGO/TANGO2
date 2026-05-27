@@ -1,0 +1,157 @@
+@import '@src/styles/color.scss';
+
+.detail-cont {
+  position: absolute;
+  top: 38px;
+  right: 4px;
+  width: 320px;
+  height: 260px;
+  z-index: 99;
+  border-radius: 8px;
+  box-shadow: 0 16px 40px 9px rgba(18, 22, 25, 0.2),
+    0 16px 26px -4px rgba(18, 22, 25, 0.26);
+  background-color: $mono200;
+  box-sizing: border-box;
+  &.small {
+    width: 320px;
+  }
+  .alarm-header {
+    display: flex;
+    height: 46px;
+    padding: 16px 16px 16px 18px;
+    justify-content: space-between;
+    border-bottom: 1px solid #dbdbdb;
+    box-sizing: border-box;
+    cursor: default;
+    .alarm-title {
+      color: #121619;
+      font-size: 16px;
+      margin: initial;
+      line-height: 14px;
+    }
+    .btn-list {
+      display: flex;
+      gap: 16px;
+      button {
+        border: none;
+        background-color: inherit;
+        font-size: 12px;
+        text-wrap: nowrap;
+        cursor: pointer;
+        line-height: 14px;
+        &:active {
+          font-weight: 700;
+        }
+      }
+      .read-btn {
+        color: #2d76f8;
+      }
+    }
+  }
+  .alarm-list {
+    display: flex;
+    flex-direction: column;
+    height: 204px;
+    font-family: SpoqaM;
+    font-size: 14px;
+    color: $mono207;
+    box-sizing: border-box;
+    overflow-y: scroll;
+    overflow-x: hidden;
+    margin-right: 2px;
+    .no-alarm-cont {
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      .no-alarm {
+        color: #747474;
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 14px;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+      }
+    }
+    .alarm-item {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      &:hover {
+        background-color: #f0f0f0;
+        outline: 1px solid #bdbdbd;
+        .border {
+          width: 0%;
+        }
+        .flex-cont .delete-btn {
+          display: inline-block !important;
+        }
+      }
+      .flex-cont {
+        width: 272px;
+        gap: 8px;
+        position: relative;
+        padding: 16px 0 10px 0;
+        cursor: pointer;
+        display: flex;
+        .dot {
+          width: 8px;
+          height: 8px;
+          background-color: #2d76f8;
+          border-radius: 50%;
+          margin-top: 8px;
+          &.read {
+            background-color: inherit;
+          }
+        }
+
+        &.loading {
+          opacity: 0.7;
+          cursor: not-allowed;
+        }
+        .contents-cont {
+          position: relative;
+          width: 227px;
+          .alarm-message {
+            margin: initial;
+            font-size: 13px;
+            font-weight: 500;
+            line-height: 16px;
+            color: #121619;
+            margin-bottom: 8px;
+          }
+          .time-txt {
+            font-size: 12px;
+            color: #747474;
+            line-height: 14px;
+          }
+        }
+        .delete-btn {
+          display: none;
+          position: absolute;
+          right: -12px;
+          top: 50%;
+          transform: translateY(-50%);
+          font-size: 16px;
+        }
+        .loading-cont {
+          position: absolute;
+          top: 50%;
+          left: 99%;
+          transform: translate(-50%, -50%);
+        }
+      }
+      .border {
+        width: 80%;
+        height: 1px;
+        background-color: #dbdbdb;
+      }
+
+      &:last-child .border {
+        width: 0%;
+      }
+    }
+  }
+}

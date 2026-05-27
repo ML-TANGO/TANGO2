@@ -1,0 +1,77 @@
+@import '../DeployWorkerRunning.module.scss';
+
+@mixin install-animation() {
+  top: 7px;
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: $primary-color;
+  animation-timing-function: cubic-bezier(0, 2, 2, 0);
+  &:nth-child(1) {
+    left: 2px;
+    animation: installing-animation1 0.6s infinite;
+  }
+  &:nth-child(2) {
+    left: 2px;
+    animation: installing-animation2 0.6s infinite;
+  }
+  &:nth-child(3) {
+    left: 8px;
+    animation: installing-animation2 0.6s infinite;
+  }
+  &:nth-child(4) {
+    left: 14px;
+    animation: installing-animation3 0.6s infinite;
+  }
+}
+
+@keyframes installing-animation1 {
+  0% {
+    transform: scale(0);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes installing-animation3 {
+  0% {
+    transform: scale(1);
+  }
+  100% {
+    transform: scale(0);
+  }
+}
+@keyframes installing-animation2 {
+  0% {
+    transform: translate(0, 0);
+  }
+  100% {
+    transform: translate(6px, 0);
+  }
+}
+
+.worker-info-box {
+  align-items: center;
+  width: 100%;
+  transition: 0.3s;
+  &.hover:hover {
+    border-radius: 16px;
+    box-shadow: $card-hover-color;
+    cursor: pointer;
+  }
+}
+
+.line-container {
+  box-sizing: border-box;
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+  padding-right: 20px;
+
+  .middle-line {
+    width: 95%;
+    height: 1px;
+    background-color: $blue102;
+  }
+}

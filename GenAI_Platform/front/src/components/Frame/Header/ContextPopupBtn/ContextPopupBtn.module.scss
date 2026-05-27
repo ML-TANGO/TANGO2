@@ -1,0 +1,59 @@
+@import '@src/styles/color.scss';
+
+.btn {
+  position: relative;
+  height: 48px;
+  padding: 15px 14px;
+  display: flex;
+  align-items: center;
+  font-family: SpoqaB;
+  font-weight: 500;
+  font-size: 14px;
+  color: $mono200;
+  margin: 0;
+  border: none;
+  background-color: transparent;
+  box-sizing: none;
+  overflow: hidden;
+  cursor: pointer;
+  .arrow {
+    margin-left: 8px;
+  }
+  &:hover,
+  &.active {
+    background-color: $blue107;
+    border-radius: 4px;
+  }
+  &:after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 5px;
+    height: 5px;
+    background: rgba($mono202, 0.2);
+    opacity: 0;
+    border-radius: 100%;
+    transform: scale(1, 1) translate(-50%);
+    transform-origin: 50% 50%;
+  }
+  @keyframes ripple {
+    0% {
+      transform: scale(0, 0);
+      opacity: 1;
+    }
+    20% {
+      transform: scale(25, 25);
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+      transform: scale(40, 40);
+    }
+  }
+
+  &:hover:not(:disabled)::after,
+  &:focus:not(:active)::after {
+    animation: ripple 1s ease-out;
+  }
+}

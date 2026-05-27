@@ -1,0 +1,25 @@
+@import '@src/styles/color.scss';
+
+.title {
+  margin: initial;
+  color: $mono207;
+  font-family: SpoqaB;
+  font-size: 14px;
+  line-height: 22px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid $mono203;
+}
+
+.contents {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-top: 24px;
+  p {
+    margin: initial;
+    color: #121619;
+    font-family: SpoqaM;
+    font-size: 14px;
+    line-height: 22px;
+  }
+}

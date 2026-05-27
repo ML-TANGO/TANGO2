@@ -1,0 +1,58 @@
+@import '@src/styles/color.scss';
+
+.search-cont {
+  min-width: 200px;
+  border: 1px solid $mono203;
+  border-radius: 16px;
+  .search-input-cont {
+    padding: 8px;
+    background-color: $mono201;
+    border-radius: 16px 16px 0 0;
+    border-bottom: 1px solid $mono203;
+    height: 56px;
+    box-sizing: border-box;
+  }
+  .input-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    height: 464px;
+    box-sizing: border-box;
+    padding: 8px;
+    overflow-y: auto;
+    .input-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border: 1px solid $mono203;
+      border-radius: 10px;
+      box-sizing: border-box;
+      min-height: 40px;
+      padding: 12px;
+      overflow: hidden;
+      white-space: nowrap;
+      cursor: pointer;
+      span {
+        display: inline-block;
+        align-items: center;
+        width: 142px;
+        color: $mono205;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-family: SpoqaM;
+        font-size: 14px;
+        line-height: 14px; /* 100% */
+      }
+      img {
+        width: 16px;
+        height: 16px;
+      }
+      &.checked {
+        border: 1px solid $blue104;
+        span {
+          color: $blue104;
+        }
+      }
+    }
+  }
+}

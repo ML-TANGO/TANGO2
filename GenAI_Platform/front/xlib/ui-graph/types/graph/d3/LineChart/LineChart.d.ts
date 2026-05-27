@@ -1,0 +1,55 @@
+import * as d3 from 'd3';
+import { LineChartParam, LineChartSeriesType, UpdateOptionType } from './LineChartTypes';
+export declare class LineChart {
+    data: any;
+    eleId: string;
+    width: number;
+    height: number;
+    legend: boolean;
+    scaleType?: string;
+    xTickFormat?: any;
+    xAxisMaxTicks?: number;
+    yAxisMaxTicks?: number;
+    tooltip?: any;
+    isResponsive?: boolean;
+    margin?: {
+        top?: number;
+        right?: number;
+        bottom?: number;
+        left?: number;
+    };
+    series: any;
+    xAxis?: d3.Selection<SVGGElement, any, HTMLElement, any>;
+    yAxisArr: any[];
+    xScale?: any;
+    legendEle?: any;
+    chart?: d3.Selection<SVGCircleElement, any, HTMLElement, any>;
+    chartSvg?: any;
+    tooltipLine?: any;
+    boxForTooltipMove?: any;
+    tooltipInfo: any;
+    constructor({ eleId, width, height, isResponsive, legend, scaleType, xTickFormat: _xTickFormat, xAxisMaxTicks: _xAxisMaxTicks, yAxisMaxTicks: _yAxisMaxTicks, tooltip, }: Partial<LineChartParam>);
+    init(data?: any): void;
+    updateOption({ width, height, isResponsive, legend, xTickFormat, xAxisMaxTicks, }: UpdateOptionType): void;
+    addSeries(item: any): void;
+    setSeries(seriesArr: LineChartSeriesType[]): void;
+    draw(): void;
+    renderXAxis(d: any, w: any, h: any, xTarget: any): void;
+    renderYAxisAndPath(series: any, d: any, h: any): void;
+    renderYAxis(yAxis: any, xPos: any, align: any, yScale: any, color: string): void;
+    renderPath(s: any, yScale: any, data: any): void;
+    renderLegend: (ele: any, series: any) => void;
+    getChartAreaInfo(series: any): {
+        w: number;
+        h: number;
+        leftXPos: number;
+        rightXPos: number;
+        xTarget: any;
+    };
+    renderTooltip(w: number, h: number, xTarget: any): void;
+    drawTooltip: (w: number, h: number, xTarget: any) => void;
+    getViewWidth(): number;
+    getViewHeight(): number;
+    getTick(data: any): any;
+}
+export default LineChart;

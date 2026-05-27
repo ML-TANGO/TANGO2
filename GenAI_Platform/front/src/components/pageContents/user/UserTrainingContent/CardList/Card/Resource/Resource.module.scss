@@ -1,0 +1,38 @@
+@import '@src/styles/color.scss';
+
+.resource {
+  .item-box {
+    display: flex;
+    flex-direction: column;
+    padding: 0 16px 16px;
+    width: max-content;
+    max-width: 290px;
+    box-sizing: border-box;
+    cursor: default;
+    .label-count {
+      font-size: 12px;
+      font-family: SpoqaB;
+      margin-bottom: 12px;
+      color: $mono206;
+      margin-top: 20px;
+      span {
+        margin-right: 4px;
+      }
+    }
+    .config-list {
+      li {
+        font-size: 12px;
+        font-family: SpoqaR;
+        color: $mono205;
+        line-height: 1.2;
+        margin-bottom: 12px;
+        &:last-child {
+          margin-bottom: 0px;
+        }
+      }
+    }
+  }
+  &.disabled {
+    pointer-events: none;
+  }
+}

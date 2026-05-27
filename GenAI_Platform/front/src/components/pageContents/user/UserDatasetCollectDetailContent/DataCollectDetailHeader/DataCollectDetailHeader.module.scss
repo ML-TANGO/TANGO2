@@ -1,0 +1,62 @@
+@import '@src/styles/color.scss';
+
+.header-cont {
+  .back-btn {
+    border: none;
+    background-color: initial;
+    padding: initial;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    margin-bottom: 24px;
+    img {
+      width: 16px;
+      height: 16px;
+    }
+    span {
+      color: $mono208;
+      font-family: SpoqaB;
+      font-size: 16px;
+      line-height: 16px;
+    }
+  }
+  .title-wrapper {
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 32px;
+    .title-cont {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      .title {
+        margin: initial;
+        color: $blue107;
+        font-family: SpoqaB;
+        font-size: 24px;
+        line-height: 100%;
+      }
+      span {
+        color: #747474;
+        font-family: SpoqaM;
+        font-size: 18px;
+        line-height: 18px;
+      }
+    }
+  }
+}
+
+.flex-cont {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  .message {
+    color: $red502;
+    font-family: SpoqaM;
+    font-size: 14px;
+    line-height: 14px;
+    margin: initial;
+  }
+}

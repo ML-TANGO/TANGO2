@@ -1,0 +1,223 @@
+@import '@src/styles/color.scss';
+.hps-box {
+  .hps-input-box {
+    padding: 0 24px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid $mono203;
+    border-top: 1px solid $mono203;
+    &.readOnly {
+      cursor: default;
+      background-color: $mono202 !important;
+      .arrow-train {
+        opacity: 0.3;
+      }
+    }
+    &.editable {
+      cursor: pointer;
+    }
+    .title {
+      color: $mono205;
+      font-size: 14px;
+      min-width: 120px;
+    }
+    .hps-info {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      .hps-no {
+        color: $mono206;
+        font-size: 14px;
+        font-family: SpoqaB;
+      }
+    }
+    &.closed {
+      background-color: $blue100;
+    }
+    &.open {
+      border-top: 1px solid $mono203;
+    }
+    .arrow-train {
+      display: flex;
+      align-items: center;
+    }
+  }
+
+  .result-table {
+    width: 100%;
+    margin-right: 24px;
+    margin-bottom: 20px;
+    padding: 0px 24px 20px 24px;
+    box-sizing: border-box;
+    .table-wrap {
+      max-height: 400px;
+      overflow-y: auto;
+      scroll-behavior: smooth;
+    }
+    .loading-wrap {
+      height: 120px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      font-size: 14px;
+      font-family: SpoqaM;
+      color: $mono205;
+      border-radius: 8px;
+      background: $mono202;
+    }
+    .table {
+      display: block;
+      font-size: 14px;
+      thead,
+      tbody,
+      tr,
+      td,
+      th {
+        display: block;
+      }
+
+      thead {
+        tr {
+          display: flex;
+          height: 46px;
+          th {
+            flex: 1 0 160px;
+            height: 100%;
+            padding: 0px 5px;
+            word-break: break-all;
+            text-align: right;
+            color: $mono207;
+            box-sizing: border-box;
+
+            span {
+              display: flex;
+              justify-content: flex-end;
+              align-items: center;
+              height: 100%;
+            }
+            &.id {
+              flex: 0 0 50px;
+              position: sticky;
+              .number {
+                font-size: 12px;
+              }
+            }
+            &.target {
+              width: 180px;
+            }
+          }
+        }
+      }
+
+      tbody {
+        tr {
+          display: flex;
+          cursor: pointer;
+          &:hover > td {
+            background-color: $blue100;
+          }
+          &.selected > td {
+            background-color: $hover-bg-color;
+          }
+          &.init > td {
+            border-top: 2px solid $primary-color;
+          }
+          &.search-record > td {
+            background-color: $hover-bg-color;
+          }
+
+          td {
+            flex: 1 0 160px;
+            word-break: break-all;
+            padding: 10px;
+            color: $mono207;
+            box-sizing: border-box;
+            text-align: right;
+
+            &.id {
+              flex: 0 0 50px;
+              text-align: center;
+              font-family: SpoqaB;
+            }
+            &.target {
+              width: 180px;
+            }
+          }
+        }
+      }
+      .tbody-wrap {
+        max-height: 380px;
+        overflow-y: scroll;
+        overflow-x: scroll;
+        .selected {
+          background-color: $blue100;
+        }
+        .disabled {
+          opacity: 0.3;
+          pointer-events: none;
+        }
+      }
+      .arrow {
+        position: relative;
+        display: inline-block;
+        width: 18px;
+        height: 18px;
+        vertical-align: middle;
+        cursor: pointer;
+      }
+
+      .arrow:before,
+      .arrow:after {
+        border: 5px solid transparent;
+        content: '';
+        display: block;
+        height: 0;
+        right: 0px;
+        top: 50%;
+        position: absolute;
+        width: 0;
+      }
+      .arrow:before {
+        border-bottom-color: $mono204;
+        margin-top: -11px;
+      }
+      .arrow:after {
+        border-top-color: $mono204;
+        margin-top: 3px;
+      }
+
+      .id-wrap {
+        display: flex;
+        position: absolute;
+        align-items: center;
+        width: 55px;
+        height: 100%;
+        justify-content: center;
+        cursor: pointer;
+      }
+
+      .clicked {
+        cursor: pointer;
+        .desc {
+          .arrow:before {
+            border-bottom-color: $mono205;
+          }
+          .arrow:after {
+            border-top-color: $mono204;
+          }
+        }
+        .asc {
+          .arrow:before {
+            border-bottom-color: $mono204;
+          }
+          .arrow:after {
+            border-top-color: $mono205;
+          }
+        }
+      }
+    }
+  }
+}

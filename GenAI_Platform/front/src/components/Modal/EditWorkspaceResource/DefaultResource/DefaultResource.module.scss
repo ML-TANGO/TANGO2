@@ -1,0 +1,44 @@
+@import '@src/styles/color.scss';
+
+.cont {
+  border-radius: 12px;
+  border: 1px solid $mono203;
+  .first-header-cont,
+  .second-header-cont {
+    padding: 16px;
+    color: $mono207;
+    font-family: SpoqaB;
+    font-size: 14px;
+    line-height: 14px;
+    border-bottom: 1px solid $mono203;
+  }
+  .first-body-cont,
+  .second-body-cont {
+    .title {
+      padding: 16px;
+      color: $mono207;
+      margin: initial;
+      font-family: SpoqaB;
+      font-size: 13px;
+      line-height: 13px;
+    }
+    .flex-row {
+      display: flex;
+      gap: 16px;
+      padding: 0 16px;
+      &:last-child {
+        padding-bottom: 32px;
+        border-bottom: 1px solid $mono203;
+      }
+    }
+  }
+
+  .second-body-cont {
+    .flex-row {
+      &:last-child {
+        padding-bottom: 16px;
+        border-bottom: none;
+      }
+    }
+  }
+}

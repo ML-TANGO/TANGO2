@@ -1,0 +1,116 @@
+@import '@src/styles/color.scss';
+
+@mixin textarea($height, $fontSize, $borderRadius) {
+  display: block;
+  position: relative;
+  transition: width 0.7s;
+  box-sizing: border-box;
+
+  .text-length-box {
+    position: absolute;
+    top: -20px;
+    right: 0px;
+    font-family: SpoqaM;
+    font-size: 12px;
+    color: $mono207;
+    .text-length {
+      color: $primary-color;
+    }
+  }
+
+  .close-btn {
+    display: none;
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    transform: translateY(-50%);
+    padding: 0px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  & > textarea {
+    width: 100%;
+    padding: 11px 2.5em 11px 0.94118em;
+    box-sizing: border-box;
+    line-height: 1.3em;
+    font-size: 16px;
+    transition-property: border-color, height, padding-right, color;
+    transition-duration: 0.2s, 0s;
+    outline: none;
+    background: $mono200;
+    vertical-align: middle;
+    color: $normal-text-color;
+    font-family: SpoqaR;
+    border-radius: $borderRadius;
+    border: 1px solid $mono204;
+    resize: none;
+    &.dark {
+      background: transparent;
+      color: $mono200;
+    }
+    &.fold {
+      padding-left: 2.5em !important;
+      padding-right: 1.35em !important;
+    }
+    &.lowercase {
+      &::placeholder {
+        text-transform: none;
+      }
+      text-transform: lowercase;
+    }
+    &:active,
+    &:focus {
+      border: 1px solid $primary-color;
+      .close-btn {
+        display: block;
+      }
+    }
+    &::placeholder {
+      color: $placeholder-text-color;
+    }
+    &:read-only {
+      border: 1px solid $mono204 !important;
+      padding: 11px 2.5em 11px 0.94118em;
+      color: $mono205;
+      background-color: $mono202;
+      border-color: $mono204 !important;
+    }
+    &:disabled {
+      border: 1px solid $mono204 !important;
+      padding: 11px 2.5em 11px 0.94118em;
+      color: $mono203;
+      background-color: $mono202;
+      border-color: $mono204 !important;
+    }
+  }
+  &.focus {
+    .close-btn {
+      display: block;
+      width: 24px;
+      height: 24px;
+    }
+  }
+  &.error > textarea {
+    border: 1px solid $red502;
+  }
+}
+
+.fb {
+  &.input {
+    @include textarea(44px, 16px, 4px);
+    &.large {
+      @include textarea(44px, 14px, 4px);
+    }
+    &.medium {
+      @include textarea(36px, 14px, 4px);
+    }
+    &.small {
+      @include textarea(30px, 14px, 4px);
+    }
+    &.x-small {
+      @include textarea(30px, 12px, 4px);
+    }
+  }
+}

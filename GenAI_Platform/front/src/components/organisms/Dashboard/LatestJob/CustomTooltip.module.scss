@@ -1,0 +1,29 @@
+@import '@src/styles/color.scss';
+
+.container {
+  position: relative;
+  display: flex;
+  align-items: center;
+
+  .content-box {
+    position: absolute;
+    box-sizing: border-box;
+    left: 0;
+    padding: 20px;
+    width: 340px;
+    height: 180px;
+    overflow-y: auto;
+    background-color: white;
+    box-shadow: rgba(0, 0, 0, 0.24) 0px 3px 8px;
+    border-radius: 10px;
+    z-index: 10;
+
+    &.down {
+      top: 20px;
+    }
+
+    &.up {
+      top: -180px;
+    }
+  }
+}

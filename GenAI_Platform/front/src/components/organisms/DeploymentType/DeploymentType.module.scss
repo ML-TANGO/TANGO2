@@ -1,0 +1,103 @@
+@import '@src/styles/color.scss';
+
+@mixin deploymentBox() {
+  display: flex;
+}
+.row {
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  .title-label {
+    font-family: SpoqaB;
+  }
+  .back-btn-box {
+    display: flex;
+    align-items: center;
+    .back-title {
+      color: $mono205;
+      font-size: 12px;
+    }
+  }
+
+  .api-deploy-btn {
+    font-size: 14px;
+    color: $blue104;
+    font-family: SpoqaB;
+
+    cursor: pointer;
+    &:hover {
+      opacity: 0.8;
+    }
+  }
+}
+
+.container {
+  margin-right: 1px;
+  margin-bottom: 48px;
+  .type-box {
+    display: grid;
+    // grid-template-columns: repeat(2, 1fr);
+    // grid-template-rows: repeat(2, 141px);
+    grid-template-columns: repeat(2, 1fr);
+
+    row-gap: 12px;
+    column-gap: 12px;
+    & > .type {
+      height: 93px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background-color: $mono201;
+      border: 1px solid $mono201;
+      border-radius: 4px;
+      padding: 24px;
+
+      .title-box {
+        display: flex;
+        justify-content: flex-start;
+        align-items: center;
+
+        width: 100%;
+        .image {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          border: 1px solid $mono203;
+          width: 48px;
+          height: 48px;
+          border-radius: 4px;
+        }
+        .title {
+          margin-left: 12px;
+          color: $mono206;
+          font-size: 16px;
+          font-family: SpoqaM;
+        }
+      }
+      .desc {
+        width: 100%;
+        display: flex;
+        justify-content: flex-start;
+        line-height: 21px;
+        font-family: SpoqaR;
+        color: $mono208;
+        font-size: 12px;
+        margin-top: 9px;
+      }
+    }
+    & :hover {
+      border-color: $blue102;
+      cursor: pointer;
+      .title-box {
+        .image {
+          border-color: $blue104;
+          & > img {
+            filter: invert(51%) sepia(92%) saturate(5065%) hue-rotate(208deg)
+              brightness(101%) contrast(94%);
+          }
+        }
+      }
+    }
+  }
+}

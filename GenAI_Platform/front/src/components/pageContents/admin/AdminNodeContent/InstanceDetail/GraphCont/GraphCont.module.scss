@@ -1,0 +1,154 @@
+@import '@src/styles/color.scss';
+
+.node-pie-chart {
+  width: 100%;
+  min-width: 520px;
+  border: 1px solid $blue101;
+  border-radius: 16px;
+  background-color: #fff;
+  .title {
+    margin: initial;
+    padding: 16px 32px;
+    font-family: SpoqaB;
+    font-size: 14px;
+    border-bottom: 1px solid $blue101;
+    text-align: left;
+    white-space: nowrap;
+    color: $blue107;
+    font-family: SpoqaB;
+    font-size: 20px;
+    line-height: 20px;
+  }
+
+  .content-cont {
+    display: flex;
+    flex-grow: 1;
+    align-items: center;
+    gap: 32px;
+    padding: 48px;
+
+    .chart-cont {
+      position: relative;
+      width: 160px;
+      height: 160px;
+      .percent-txt {
+        font-family: SpoqaB;
+        font-size: 20px;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+      }
+
+      .tooltip {
+        display: flex;
+        flex-direction: column;
+        border-radius: 10px;
+        border: 0.5px solid $blue101;
+        box-shadow: 0px 3px 12px 0px rgba(45, 118, 248, 0.06);
+        padding: 24px;
+        background-color: #fff;
+        text-wrap: nowrap;
+        .header {
+          display: flex;
+          align-items: flex-end;
+          gap: 3px;
+          padding-bottom: 8px;
+          margin-bottom: 16px;
+          border-bottom: 1px solid #dbdbdb;
+          line-height: 12px;
+          .instance-name-txt {
+            color: $mono207;
+            font-family: SpoqaB;
+            font-size: 14px;
+          }
+          .value {
+            display: inline-block;
+            width: 33px;
+            text-align: center;
+          }
+          span {
+            font-family: SpoqaM;
+            font-size: 12px;
+            color: $mono205;
+          }
+        }
+        .content {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          .flex-row {
+            display: flex;
+            gap: 15px;
+            font-family: SpoqaM;
+            font-size: 14px;
+            .label {
+              display: inline-block;
+              width: 37px;
+              color: $mono205;
+            }
+            .value {
+              color: $mono207;
+            }
+          }
+        }
+      }
+    }
+    .label-cont {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      box-sizing: border-box;
+      .row {
+        display: flex;
+        align-items: center;
+        text-wrap: nowrap;
+        .circle {
+          width: 12px;
+          height: 12px;
+          border-radius: 50%;
+          margin-right: 8px;
+        }
+        .name {
+          display: inline-block;
+          overflow: hidden;
+          white-space: nowrap;
+          text-overflow: ellipsis;
+          width: 120px;
+          color: $mono205;
+          font-family: SpoqaB;
+          font-size: 14px;
+          line-height: 14px;
+          margin-right: 16px;
+        }
+        .count {
+          color: $mono207;
+          font-family: SpoqaB;
+          font-size: 16px;
+          margin-right: 16px;
+        }
+        .percent {
+          color: $mono205;
+          font-family: SpoqaM;
+          font-size: 14px;
+          line-height: 14px;
+        }
+      }
+    }
+  }
+}
+
+@media (max-width: 1024px) {
+  .node-pie-chart {
+    min-width: auto;
+    justify-content: center;
+    flex-grow: 1;
+    .content-cont {
+      flex-wrap: wrap;
+      justify-content: center;
+      flex-grow: 1;
+      padding: 48px 34px;
+      overflow-y: auto;
+    }
+  }
+}

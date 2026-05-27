@@ -1,0 +1,33 @@
+@import '@src/styles/color.scss';
+
+.progress-item {
+  border-bottom: 1px solid $mono202;
+  padding: 20px;
+  .progress-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 20px;
+    font-size: 12px;
+    .rate {
+      flex: 0 0 40px;
+    }
+    .name {
+      flex: 1;
+      word-break: keep-all;
+      white-space: nowrap;
+      overflow-x: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+  .progress {
+    width: 100%;
+    height: 4px;
+    background: $mono202;
+    overflow: hidden;
+    .bar {
+      height: 100%;
+      background: $blue108;
+    }
+  }
+}

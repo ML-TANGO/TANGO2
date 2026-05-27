@@ -1,0 +1,32 @@
+@import '@src/styles/color.scss';
+
+.content-cont {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  width: 100%;
+  min-height: 36px;
+  .btn-cont {
+    margin-right: 24px;
+    .btn-label-cont {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      color: $blue104;
+      font-family: SpoqaM;
+      .plus-txt {
+        font-size: 16px;
+      }
+      .label-txt {
+        font-size: 14px;
+      }
+    }
+  }
+  .dot-line {
+    background-image: radial-gradient(circle, $mono203 8px, transparent 1px);
+    background-size: 8px 22px; /* 점의 크기 및 간격 조절 */
+    height: 4px; /* 점선의 높이 설정 */
+    width: 100%; /* 너비를 100%로 설정하여 긴 점선 생성 */
+    margin: 24px 0;
+  }
+}

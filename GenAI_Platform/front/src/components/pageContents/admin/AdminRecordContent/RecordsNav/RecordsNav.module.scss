@@ -1,0 +1,60 @@
+@import '@src/styles/color.scss';
+
+.nav-box {
+  z-index: 3;
+  min-width: 580px;
+  width: 100%;
+  box-sizing: border-box;
+  transition: left 0.7s;
+  &.expand {
+    left: 276px;
+  }
+
+  .nav {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+    border-bottom: 1px solid $mono203;
+    .nav-item {
+      &:hover {
+        background-color: $hover-bg-color;
+        a > .stick {
+          background-color: transparent;
+        }
+      }
+      a {
+        display: inline-block;
+        box-sizing: border-box;
+        text-decoration: none;
+        .link-name {
+          display: block;
+          font-size: 16px;
+          font-family: SpoqaM;
+          font-weight: 500;
+          line-height: 1.31;
+          color: $mono205;
+          padding: 14px 24px 10px;
+          white-space: nowrap;
+        }
+        .stick {
+          display: block;
+          height: 2px;
+          border-radius: 2px;
+          background-color: $new-bg-color;
+        }
+        &.active {
+          .link-name {
+            font-family: SpoqaM;
+            font-weight: 700;
+            color: $primary-color;
+            padding: 14px 24px 10px;
+          }
+          .stick {
+            background-color: $primary-color;
+          }
+        }
+      }
+    }
+  }
+}
