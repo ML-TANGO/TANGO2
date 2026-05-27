@@ -21,7 +21,7 @@ import torch
 from PIL import Image
 
 # ── Parse arguments ───────────────────────────────────────────────────────────
-parser = argparse.ArgumentParser(description="VisionLanguageModelV2 load test")
+parser = argparse.ArgumentParser(description="VisionLanguageModel load test")
 parser.add_argument("--vision", default="openai/clip-vit-large-patch14-336",
                     help="Vision encoder model name/path")
 parser.add_argument("--llm",    default="/home/ywlee/Llama-3.1-8B-Instruct",

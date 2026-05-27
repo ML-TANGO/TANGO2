@@ -1,4 +1,4 @@
-# VisionLanguageModelV2
+# EVA: ETRI Vessel Agent (SDS-VLM)
 
 선박 자율항행 지원을 위한 Vision-Language Model (VLM) 구현입니다.  
 CLIP 비전 인코더와 Llama 3.1 / Qwen3 언어 모델을 MLP 프로젝터로 연결하는 LLaVA 구조이며,  
@@ -15,11 +15,11 @@ SDS(Software-defined Ship) 해상 도메인 데이터셋에 특화된 학습 파
 5. [데이터셋 준비](#5-데이터셋-준비)
 6. [동작 확인 (로드 테스트)](#6-동작-확인-로드-테스트)
 7. [학습 파이프라인](#7-학습-파이프라인)
-8. [추론 테스트](#8-추론-테스트)
-9. [데모 웹 앱](#9-데모-웹-앱)
-10. [프로젝트 구조](#10-프로젝트-구조)
-11. [W&B 학습 모니터링](#11-wb-학습-모니터링)
-12. [자주 발생하는 문제](#12-자주-발생하는-문제)
+8. [GAA — Geometric Attention Alignment](#8-gaa--geometric-attention-alignment)
+9. [추론 테스트](#9-추론-테스트)
+10. [데모 웹 앱](#10-데모-웹-앱)
+11. [프로젝트 구조](#11-프로젝트-구조)
+12. [W&B 학습 모니터링](#12-wb-학습-모니터링)
 
 ---
 
@@ -41,7 +41,7 @@ SDS(Software-defined Ship) 해상 도메인 데이터셋에 특화된 학습 파
 텍스트 출력 (해상상황묘사, 항해조력메시지 등)
 ```
 
-### 4단계 학습 파이프라인
+### 학습 파이프라인
 
 | 단계 | 스크립트 | 데이터 | 학습 대상 | 고정 | 목적 |
 |------|---------|--------|-----------|------|------|
@@ -49,8 +49,10 @@ SDS(Software-defined Ship) 해상 도메인 데이터셋에 특화된 학습 파
 | Phase 2 | `train_lora.sh` | CC3M 595K | Projector + LLM(LoRA) | CLIP | 일반 시각-언어 파인튜닝 |
 | Phase 3 | `train_lora_marine.sh` | LLaMarine 54K (텍스트 전용) | LLM(LoRA) 계속학습 | 전부 | 해양 도메인 지식 주입 |
 | Phase 4 | `train_lora_sds.sh` | SDS 100개 (이미지+텍스트) | Projector + LLM(LoRA) 계속학습 | CLIP | SDS 태스크 특화 |
+| Phase 4-GAA | `train_lora_gaa.sh` | SDS 100개 + BBox | CLIP + Projector + LLM(LoRA) | — | GAA 기하 어텐션 정렬 |
 
-> Phase 3는 이미지 없이 텍스트만 사용하므로 Vision Encoder / Projector를 로드하지 않습니다.
+> Phase 3는 이미지 없이 텍스트만 사용하므로 Vision Encoder / Projector를 로드하지 않습니다.  
+> Phase 4-GAA는 Phase 4와 동일한 SDS 데이터를 사용하되 바운딩 박스 어노테이션이 추가로 필요합니다. 자세한 내용은 [§8 GAA](#8-gaa--geometric-attention-alignment)를 참조하세요.
 
 ---
 
@@ -67,34 +69,26 @@ SDS(Software-defined Ship) 해상 도메인 데이터셋에 특화된 학습 파
 
 ## 3. 가상환경 구성
 
-### 3-1. Miniconda 설치
+### 3-1. Miniforge 설치
 
 이미 설치되어 있으면 건너뜁니다.
 
 ```bash
-wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
-bash Miniconda3-latest-Linux-x86_64.sh -b -p $HOME/miniconda3
-$HOME/miniconda3/bin/conda init bash   # 또는 zsh
+wget "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh"
+bash Miniforge3-$(uname)-$(uname -m).sh -b -p $HOME/miniforge3
+$HOME/miniforge3/bin/conda init bash   # 또는 zsh
 source ~/.bashrc
 ```
 
-### 3-2. 채널 설정 — `defaults` 반드시 제거
+### 3-2. 채널 설정 확인
 
 > **중요: 라이센스 문제**  
 > Anaconda 기본 채널(`defaults`)은 상업적 환경에서 유료입니다.  
 > 연구·기관 환경에서는 반드시 `defaults`를 삭제하고 아래 무료 채널만 사용하십시오.
 
 ```bash
-conda config --remove channels defaults
-
-conda config --add channels conda-forge
-conda config --add channels pytorch
-conda config --add channels nvidia
-
-# 확인 (defaults가 없어야 함)
+# Miniforge 는 conda-forge 를 기본 채널로 사용함
 conda config --show channels
-
-# <USER_HOME>/.condarc 파일에서 직접 수정하는 것도 가능
 ```
 
 올바른 출력:
@@ -108,15 +102,14 @@ channels:
 ### 3-3. 가상환경 생성
 
 ```bash
-conda create -n eva python=3.11 -y
+conda create -n eva python=3.11 pip -y
 conda activate eva
 ```
 
 ### 3-4. PyTorch 설치 (CUDA 12.8)
 
 ```bash
-conda install pytorch torchvision torchaudio pytorch-cuda=12.8 \
-    -c pytorch -c nvidia -y
+pip install torch==2.11.0 torchvision --index-url https://download.pytorch.org/whl/cu128
 ```
 
 설치 확인:
@@ -159,8 +152,12 @@ CLIP은 `transformers`가 Hugging Face Hub에서 자동 다운로드합니다.
 ### 언어 모델 (로컬 다운로드 필요)
 
 ```bash
+# Hugging Face - Access Token 을 사용하여 로그인 필요
+hf auth login
+```
+
+```
 # Llama 3.1 8B Instruct (HF 계정 + Meta 라이센스 동의 필요)
-hf login
 hf download meta-llama/Llama-3.1-8B-Instruct \
     --local-dir ~/Llama-3.1-8B-Instruct
 
@@ -262,9 +259,18 @@ data/
 학습 전 모델 구조와 forward pass가 정상인지 확인합니다.
 
 ```bash
-PYTHON=$HOME/miniconda3/envs/eva/bin/python
+PYTHON=$HOME/miniforge3/envs/eva/bin/python
 
-$PYTHON load_test.py                                          # 기본 (CLIP + Llama)
+# 스크립트 파라미터 정의
+$PYTHON load_test.py  \
+    --vision \        # 비전 모델 경로
+    --llm \           # 언어 모델 경로
+    --device \        # CPU, 또는 GPU
+    --dtype \         # 데이터 타입
+    --generate \      # 텍스트 응답 생성 유무
+    --test_image      # 테스트 이미지 경로
+
+# 사용 예시
 $PYTHON load_test.py --generate                               # 텍스트 생성까지
 $PYTHON load_test.py --test_image /path/to/image.png --generate
 ```
@@ -353,7 +359,7 @@ bash scripts/train_lora_marine.sh
 ```bash
 LLM_MODEL="/path/to/Llama-3.1-8B-Instruct"
 LORA_PATH="checkpoints/clip_llama31_lora"          # 이어받을 LoRA
-DATA_PATH="/path/to/llamarine-sft/data/train-*.parquet" # 54,657개
+DATA_PATH="/path/to/llamarine-sft/data/train-00000-of-00001.parquet" # 54,657개
 OUTPUT_DIR="checkpoints/clip_llama31_lora_marine"
 BATCH_SIZE=2
 GRAD_ACCUM=8
@@ -371,7 +377,7 @@ NUM_EPOCHS=1
 > python train_text_lora.py \
 >     --llm_model /path/to/Llama-3.1-8B-Instruct \
 >     --lora_path checkpoints/clip_llama31_lora \
->     --data_path /path/to/train.parquet \
+>     --data_path /path/to/llamarine-sft/data/train-00000-of-00001.parquet \
 >     --output_dir checkpoints/clip_llama31_lora_marine \
 >     --num_epochs 1 --batch_size 2 --grad_accum 8
 > ```
@@ -432,8 +438,8 @@ $PYTHON train.py \
     --train_type projector \
     --vision_model openai/clip-vit-large-patch14-336 \
     --llm_model /path/to/Llama-3.1-8B-Instruct \
-    --data_path /path/to/chat.json \
-    --image_dir /path/to/images \
+    --data_path /path/to/LLaVA-CC3M-Pretrain-595K/chat.json \
+    --image_dir /path/to/LLaVA-CC3M-Pretrain-595K/images \
     --output_dir checkpoints/my_projector \
     --num_epochs 1 --batch_size 8 --grad_accum 4
 
@@ -441,8 +447,8 @@ $PYTHON train.py \
 $PYTHON train.py \
     --train_type lora \
     --projector_path checkpoints/my_projector/projector.bin \
-    --data_path /path/to/chat.json \
-    --image_dir /path/to/images \
+    --data_path /path/to/LLaVA-CC3M-Pretrain-595K/chat.json \
+    --image_dir /path/to/LLaVA-CC3M-Pretrain-595K/images \
     --output_dir checkpoints/my_lora \
     --num_epochs 3 --batch_size 4 --lora_r 128 --lora_alpha 256
 
@@ -452,30 +458,80 @@ $PYTHON train.py \
     --projector_path checkpoints/my_lora/projector.bin \
     --resume_lora_path checkpoints/my_lora \
     --data_path data/sds_train_en.json \
-    --image_dir /path/to/SDS/dataset \
+    --image_dir /path/to/SDS/dataset/20260227 \
     --output_dir checkpoints/my_sds_lora \
     --num_epochs 10 --batch_size 1 --grad_accum 2
 ```
 
 주요 `train.py` 인수:
 
-| 인수 | 설명 |
-|------|------|
-| `--train_type` | `projector` / `lora` / `full` |
-| `--projector_path` | Phase 1 결과 projector.bin 경로 |
-| `--resume_lora_path` | 기존 LoRA 디렉토리 (이어받기, Phase 2b/3용) |
+| 인수 | 설명                                |
+|------|-----------------------------------|
+| `--train_type` | `projector` / `lora` / `full`     |
+| `--projector_path` | Phase 1 결과 projector.bin 경로       |
+| `--resume_lora_path` | 기존 LoRA 디렉토리 (이어받기, Phase 2/3/4용) |
 | `--lora_r` / `--lora_alpha` | LoRA rank / alpha (기본: 128 / 256) |
-| `--max_steps` | epoch 대신 step 수로 조기 종료 |
-| `--wandb_project` | W&B 프로젝트명 (생략 시 비활성화) |
+| `--max_steps` | epoch 대신 step 수로 조기 종료            |
+| `--wandb_project` | W&B 프로젝트명 (생략 시 비활성화)             |
 
 ---
 
-## 8. 추론 테스트
+## 8. GAA — Geometric Attention Alignment
+
+CLIP 비전 인코더의 CLS 어텐션이 배경에 집중되는 문제를 바운딩 박스 특권 정보로 억제하는 학습 기법입니다.  
+추론 시에는 바운딩 박스를 사용하지 않아 기존 VLM과 완전히 호환됩니다.
+
+> 상세 알고리즘 및 수식은 [`gaa/README.md`](gaa/README.md)를 참조하세요.
+
+### 데이터 준비
+
+```bash
+# SDS 에피소드 → GAA chat.json (bboxes 필드 포함)
+python gaa/sds_reformat.py \
+    --dataset_dir /path/to/SDS/dataset/20260227 \
+    --output      data/sds_gaa_en.json \
+    --lang        en
+```
+
+### 학습 (단일 GPU)
+
+```bash
+conda activate eva
+
+CUDA_VISIBLE_DEVICES=0 python gaa/train_gaa.py \
+    --llm_model        /path/to/Llama-3.1-8B-Instruct \
+    --projector_path   /path/to/checkpoints/clip_llama31_lora_marine/projector.bin \
+    --resume_lora_path /path/to/checkpoints/clip_llama31_lora_marine \
+    --data_path        data/sds_gaa_en.json \
+    --image_dir        /path/to/SDS/dataset/20260227 \
+    --output_dir       checkpoints/gaa_sds_en \
+    --num_epochs 1 --batch_size 1 --grad_accum 16 \
+    --lora_r 16 --lora_alpha 32 \
+    --geo_loss_weight 0.5 --geo_tau 0.5 \
+    --dtype bfloat16
+```
+
+> 소규모 데이터셋(100개)에서는 `--num_epochs 1`, `--lora_r 16` 권장 (과적합 방지).
+
+### Baseline vs GAA 비교
+
+```bash
+python gaa/compare_models.py \
+    --baseline  checkpoints/clip_llama31_lora_marine_sds_lora_en \
+    --gaa_model checkpoints/gaa_sds_en \
+    --data_path data/sds_gaa_en.json \
+    --image_dir /path/to/SDS/dataset/20260227 \
+    --num_samples 10
+```
+
+---
+
+## 9. 추론 테스트
 
 학습된 체크포인트로 단일 이미지 추론을 실행합니다.
 
 ```bash
-PYTHON=$HOME/miniconda3/envs/eva/bin/python
+PYTHON=$HOME/miniforge3/envs/eva/bin/python
 CKPT="checkpoints/sds_lora_en"
 
 $PYTHON test.py \
@@ -505,7 +561,7 @@ Based on the camera image and AIS data provided, describe the current maritime s
 
 ---
 
-## 9. 데모 웹 앱
+## 10. 데모 웹 앱
 
 SDS 데이터셋을 탐색하고 모델 추론 결과를 채팅 형태로 확인하는 Gradio 앱입니다.
 
@@ -550,7 +606,7 @@ python demo/app.py --share
 
 ---
 
-## 10. 프로젝트 구조
+## 11. 프로젝트 구조
 
 ```
 VisionLanguageModel/
@@ -565,25 +621,37 @@ VisionLanguageModel/
 ├── data/
 │   ├── dataset.py             # LLaVADataset, DataCollatorForVLM
 │   ├── __init__.py
-│   ├── sds_train_en.json      # SDS 영문 학습 데이터 (100개) ← prepare_sds_dataset.py 생성
-│   ├── sds_train_ko.json      # SDS 한글 학습 데이터 (100개)
-│   └── sds_train_ko_compact.json  # SDS 한글 간결 (100개)
+│   ├── sds_train_en.json          # SDS 영문 학습 데이터 (100개) ← prepare_sds_dataset.py
+│   ├── sds_train_ko.json          # SDS 한글 학습 데이터 (100개)
+│   ├── sds_train_ko_compact.json  # SDS 한글 간결 (100개)
+│   ├── sds_gaa_en.json            # SDS GAA 영문 (bboxes 포함) ← gaa/sds_reformat.py
+│   └── sds_gaa_ko.json            # SDS GAA 한글 (bboxes 포함)
 │
 ├── scripts/
 │   ├── prepare_sds_dataset.py # SDS → LLaVA JSON 변환 (3가지 시나리오)
 │   ├── train_projector.sh     # Phase 1: Projector 사전학습
-│   ├── train_lora.sh          # Phase 2a: CC3M LoRA 파인튜닝
-│   ├── train_lora_marine.sh   # Phase 2b: LLaMarine 텍스트 전용 LoRA 계속학습
-│   ├── train_lora_sds.sh      # Phase 3: SDS 도메인 LoRA 파인튜닝 (3 시나리오)
+│   ├── train_lora.sh          # Phase 2: CC3M LoRA 파인튜닝
+│   ├── train_lora_marine.sh   # Phase 3: LLaMarine 텍스트 전용 LoRA 계속학습
+│   ├── train_lora_sds.sh      # Phase 4: SDS 도메인 LoRA 파인튜닝 (3 시나리오)
+│   ├── train_lora_gaa.sh      # Phase 4-GAA: GAA 멀티 GPU 학습 (DeepSpeed)
 │   ├── zero2.json             # DeepSpeed ZeRO-2 설정
 │   └── zero3.json             # DeepSpeed ZeRO-3 설정
+│
+├── gaa/
+│   ├── geometric_loss.py      # GAA 알고리즘 구현 (기하 마스크 + 손실)
+│   ├── gaa_dataset.py         # GAADataset / GAADataCollator (bboxes 필드)
+│   ├── gaa_trainer.py         # GAATrainer (L_SFT + λ·L_geo)
+│   ├── train_gaa.py           # GAA 학습 진입점 (Phase 4-GAA)
+│   ├── sds_reformat.py        # SDS 에피소드 → GAA chat.json 변환
+│   ├── compare_models.py      # Baseline vs GAA 나란히 비교
+│   └── README.md              # GAA 알고리즘 상세 설명
 │
 ├── demo/
 │   ├── app.py                 # Gradio 데모 앱
 │   └── run.sh                 # 데모 실행 스크립트
 │
-├── train.py                   # 이미지+텍스트 학습 진입점 (Phase 1/2a/3)
-├── train_text_lora.py         # 텍스트 전용 LoRA 학습 진입점 (Phase 2b)
+├── train.py                   # 이미지+텍스트 학습 진입점 (Phase 1/2/4)
+├── train_text_lora.py         # 텍스트 전용 LoRA 학습 진입점 (Phase 3)
 ├── test.py                    # 단일 이미지 추론 테스트
 ├── load_test.py               # 아키텍처·forward pass 검증
 ├── model_summary.py           # 모델 구조 출력 + W&B 로깅
@@ -607,7 +675,7 @@ LoRA 체크포인트에는 다음 파일이 포함되어야 VLM 전체를 구동
 
 ---
 
-## 11. W&B 학습 모니터링
+## 12. W&B 학습 모니터링
 
 모든 학습 스크립트에 `--wandb_project vlm-v2`가 기본 설정되어 있습니다.
 

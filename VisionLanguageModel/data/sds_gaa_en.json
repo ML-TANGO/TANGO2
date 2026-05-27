@@ -1,0 +1,2202 @@
+[
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-0dL1k060Ox",
+    "image": "tango_sds-unity-llm-20260226-v0.3-0dL1k060Ox/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.454585 Lon:127.731907 | Speed:17.5kt Heading:140.6° | Size:93m × 28m Draft:3.0m\n- Nearby vessel (ID:1) | Lat:34.446715 Lon:127.735849 | Speed:20.1kt Heading:114.6° | Size:134m × 24m Draft:4.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "With a crossing target detected on radar on the starboard bow in dawn fog, immediately reduce to safe speed (Rule 6) and sound fog signals per Rule 35 in accordance with Rule 19. Continuously calculate the target's CPA and TCPA through radar plotting, and if risk of collision is confirmed, avoid altering course to port and secure a safe passing distance by altering course to starboard or reducing speed."
+      }
+    ],
+    "bboxes": [
+      [
+        0.507691,
+        0.294669,
+        0.720152,
+        0.538588
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-0dLhkqLMw",
+    "image": "tango_sds-unity-llm-20260226-v0.3-0dLhkqLMw/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.377160 Lon:127.754502 | Speed:24.6kt Heading:263.6° | Size:97m × 20m Draft:3.0m\n- Nearby vessel (ID:1) | Lat:34.378553 Lon:127.747088 | Speed:15.9kt Heading:252.2° | Size:95m × 18m Draft:5.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is an Overtaking Situation with the target vessel ahead. In accordance with COLREG Rule 13, own vessel must keep clear of the overtaken vessel until finally past and clear. Due to rain-reduced visibility, enhance radar surveillance and maintain safe speed per Rule 19, and alter course sufficiently to port or starboard to maintain a CPA of at least 1 nautical mile while safely overtaking."
+      }
+    ],
+    "bboxes": [
+      [
+        0.579539,
+        0.375076,
+        0.681923,
+        0.516862
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-0dzraEavMx",
+    "image": "tango_sds-unity-llm-20260226-v0.3-0dzraEavMx/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.963010 Lon:127.643884 | Speed:16.0kt Heading:349.0° | Size:84m × 25m Draft:5.0m\n- Nearby vessel (ID:1) | Lat:34.968410 Lon:127.639978 | Speed:17.2kt Heading:9.8° | Size:100m × 21m Draft:3.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Crossing Situation with the target vessel on the port side. In accordance with COLREG Rule 17, own vessel is the stand-on vessel and shall maintain present course and speed. If the target vessel fails to take appropriate give-way action, sound the attention signal (five or more short blasts). If collision becomes imminent, take cooperative action such as altering course to starboard."
+      }
+    ],
+    "bboxes": [
+      [
+        0.221975,
+        0.37482,
+        0.337005,
+        0.517236
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-0p0rtLzOH",
+    "image": "tango_sds-unity-llm-20260226-v0.3-0p0rtLzOH/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.322954 Lon:127.389455 | Speed:17.1kt Heading:263.1° | Size:113m × 22m Draft:6.0m\n- Nearby vessel (ID:1) | Lat:34.322860 Lon:127.381657 | Speed:20.9kt Heading:76.7° | Size:101m × 18m Draft:5.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Head-on Situation with the target vessel approaching from directly ahead. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port. If the target's intentions are unclear, sound the attention signal (five or more short blasts) without delay, and continuously monitor the target's bearing change while maintaining a minimum CPA of 1 nautical mile until the risk of collision has been eliminated."
+      }
+    ],
+    "bboxes": [
+      [
+        0.457448,
+        0.209956,
+        0.621131,
+        0.597417
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-0pvAkDzMx",
+    "image": "tango_sds-unity-llm-20260226-v0.3-0pvAkDzMx/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.360275 Lon:127.704030 | Speed:19.7kt Heading:78.9° | Size:89m × 16m Draft:6.0m\n- Nearby vessel (ID:1) | Lat:34.362023 Lon:127.712967 | Speed:10.0kt Heading:79.6° | Size:125m × 17m Draft:3.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is an Overtaking Situation where own vessel is overtaking the target. In accordance with COLREG Rule 13, own vessel is the give-way vessel and must maintain sufficient safe passing distance (CPA of at least 1 nautical mile) without impeding the target's course. Take particular care not to cross ahead or approach too closely to avoid ship-to-ship interaction effects, and maintain vigilance until the overtaking maneuver is fully completed."
+      }
+    ],
+    "bboxes": [
+      [
+        0.420369,
+        0.391995,
+        0.455501,
+        0.495582
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-H-FMrdbSdY",
+    "image": "tango_sds-unity-llm-20260226-v0.3-H-FMrdbSdY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.688700 Lon:127.095396 | Speed:21.2kt Heading:190.2° | Size:115m × 26m Draft:5.0m\n- Nearby vessel (ID:1) | Lat:35.678975 Lon:127.094210 | Speed:8.5kt Heading:186.8° | Size:122m × 15m Draft:3.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is an Overtaking Situation. In accordance with COLREG Rule 13, the overtaking vessel shall keep clear of the overtaken vessel until finally past and clear. Given the significant speed difference, alter course early to port or starboard to maintain a CPA of at least 1 nautical mile, and maintain vigilant lookout until the overtaking maneuver is complete."
+      }
+    ],
+    "bboxes": [
+      [
+        0.408232,
+        0.403832,
+        0.433091,
+        0.480753
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-H-F_rRP2ZY",
+    "image": "tango_sds-unity-llm-20260226-v0.3-H-F_rRP2ZY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.468330 Lon:128.204930 | Speed:19.3kt Heading:255.0° | Size:128m × 16m Draft:5.0m\n- Nearby vessel (ID:1) | Lat:34.465157 Lon:128.196504 | Speed:21.4kt Heading:65.2° | Size:94m × 28m Draft:4.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Head-on Situation. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port. If the target's intentions are unclear, sound the attention signal (five or more short blasts) without delay, and maintain a minimum CPA of 1 nautical mile."
+      }
+    ],
+    "bboxes": [
+      [
+        0.361527,
+        0.391906,
+        0.395406,
+        0.495785
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-H-LCr1yoZY",
+    "image": "tango_sds-unity-llm-20260226-v0.3-H-LCr1yoZY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.880645 Lon:127.961797 | Speed:15.4kt Heading:88.3° | Size:112m × 19m Draft:3.0m\n- Nearby vessel (ID:1) | Lat:35.883034 Lon:127.968774 | Speed:18.2kt Heading:109.2° | Size:113m × 16m Draft:4.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Crossing Situation with the target on the port side. In accordance with COLREG Rule 17, own vessel is the stand-on vessel and must maintain present course and speed. If the target fails to take avoiding action, sound the attention signal and alter course to starboard if collision becomes imminent."
+      }
+    ],
+    "bboxes": [
+      [
+        0.201904,
+        0.372032,
+        0.32493,
+        0.520735
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-H-i0H5CZb",
+    "image": "tango_sds-unity-llm-20260226-v0.3-H-i0H5CZb/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.397316 Lon:127.895884 | Speed:25.0kt Heading:172.4° | Size:83m × 22m Draft:4.0m\n- Nearby vessel (ID:1) | Lat:35.391802 Lon:127.897445 | Speed:21.0kt Heading:352.1° | Size:148m × 21m Draft:3.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "In a Head-on Situation during twilight due to sunset, in accordance with COLREG Rule 14, immediately alter course substantially to starboard to pass port-to-port. Confirm the target's navigation lights (masthead lights, sidelights) and continuously observe the bearing until the risk of collision has been eliminated."
+      }
+    ],
+    "bboxes": [
+      [
+        0.381259,
+        0.372032,
+        0.435579,
+        0.520731
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-H-iCrVyEZV",
+    "image": "tango_sds-unity-llm-20260226-v0.3-H-iCrVyEZV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.824557 Lon:128.499295 | Speed:17.6kt Heading:195.6° | Size:92m × 24m Draft:4.0m\n- Nearby vessel (ID:1) | Lat:34.817861 Lon:128.499185 | Speed:21.4kt Heading:229.5° | Size:109m × 29m Draft:3.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "With a crossing target detected on radar on the port bow in extremely restricted visibility, immediately reduce to safe speed (Rule 6) per Rule 19 and sound fog signals per Rule 35. Avoid altering course to port per Rule 19(d)(i). Alter course to starboard or reduce speed to ensure a CPA of at least 1 nautical mile."
+      }
+    ],
+    "bboxes": [
+      [
+        0.163356,
+        0.237709,
+        0.452182,
+        0.578591
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-H-q0xT_mP",
+    "image": "tango_sds-unity-llm-20260226-v0.3-H-q0xT_mP/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.067342 Lon:128.422945 | Speed:22.3kt Heading:285.3° | Size:109m × 22m Draft:3.0m\n- Nearby vessel (ID:1) | Lat:35.066684 Lon:128.414743 | Speed:18.0kt Heading:321.3° | Size:131m × 18m Draft:4.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Crossing Situation with the target vessel on the port side. In accordance with COLREG Rule 17, own vessel is the stand-on vessel and must maintain present course and speed. However, if the target fails to take appropriate avoiding action and the risk of collision (decreasing CPA) is detected, immediately sound the attention signal (five or more short blasts), and if collision becomes imminent, take cooperative action by altering course to starboard while avoiding a port turn."
+      }
+    ],
+    "bboxes": [
+      [
+        0.084412,
+        0.230208,
+        0.41398,
+        0.58386
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-HHF0HRj_mY",
+    "image": "tango_sds-unity-llm-20260226-v0.3-HHF0HRj_mY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.462973 Lon:128.341791 | Speed:24.7kt Heading:9.7° | Size:125m × 24m Draft:5.0m\n- Nearby vessel (ID:1) | Lat:35.470605 Lon:128.342842 | Speed:15.0kt Heading:181.7° | Size:107m × 24m Draft:3.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "Under restricted visibility due to dense fog with the risk of a Head-on encounter, immediately reduce to safe speed and sound fog signals in accordance with COLREG Rule 19. As the target is approaching from dead ahead on radar, alter course substantially to starboard with sufficient time margin to avoid any close-quarters situation."
+      }
+    ],
+    "bboxes": [
+      [
+        0.400991,
+        0.269626,
+        0.486467,
+        0.555805
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-HHF0xWgSmY",
+    "image": "tango_sds-unity-llm-20260226-v0.3-HHF0xWgSmY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.134594 Lon:128.699634 | Speed:22.7kt Heading:9.7° | Size:148m × 17m Draft:5.0m\n- Nearby vessel (ID:1) | Lat:35.142227 Lon:128.705846 | Speed:23.5kt Heading:198.4° | Size:119m × 26m Draft:6.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Head-on Situation. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port. With a combined closing speed of approximately 46 knots, execute early and decisive course alteration and maintain a CPA of at least 1 nautical mile."
+      }
+    ],
+    "bboxes": [
+      [
+        0.61909,
+        0.317653,
+        0.73414,
+        0.525102
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-HHFC-EdY",
+    "image": "tango_sds-unity-llm-20260226-v0.3-HHFC-EdY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.167848 Lon:128.236516 | Speed:23.8kt Heading:224.7° | Size:145m × 16m Draft:4.0m\n- Nearby vessel (ID:1) | Lat:35.165727 Lon:128.230365 | Speed:16.6kt Heading:210.2° | Size:109m × 15m Draft:4.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is an Overtaking Situation with the target vessel ahead. In accordance with COLREG Rule 13, own vessel must keep clear of the overtaken vessel until finally past and clear. Due to rain-reduced visibility, maintain safe speed and continuously monitor the target's distance via radar per Rule 19, and alter course sufficiently to starboard to maintain a CPA of at least 1 nautical mile while safely overtaking."
+      }
+    ],
+    "bboxes": [
+      [
+        0.546668,
+        0.177647,
+        0.87233,
+        0.6266
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-HHFCrI7SdP",
+    "image": "tango_sds-unity-llm-20260226-v0.3-HHFCrI7SdP/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.569997 Lon:128.019916 | Speed:20.5kt Heading:126.0° | Size:97m × 20m Draft:6.0m\n- Nearby vessel (ID:1) | Lat:34.563524 Lon:128.025741 | Speed:23.1kt Heading:303.8° | Size:142m × 26m Draft:5.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Head-on Situation. In accordance with COLREG Rule 14, alter course to starboard by at least 30 degrees. With dense fog severely restricting visibility, immediately reduce to safe speed per Rule 6, comply with Rule 19 restricted visibility procedures, and sound fog signals per Rule 35 (one prolonged blast at intervals of no more than 2 minutes). Monitor CPA by radar plotting and ensure a minimum CPA of 1 nautical mile."
+      }
+    ],
+    "bboxes": [
+      [
+        0.575066,
+        0.393186,
+        0.636284,
+        0.494179
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-HHFCrMjEmP",
+    "image": "tango_sds-unity-llm-20260226-v0.3-HHFCrMjEmP/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.763064 Lon:127.965549 | Speed:23.0kt Heading:14.2° | Size:134m × 21m Draft:6.0m\n- Nearby vessel (ID:1) | Lat:34.769928 Lon:127.968042 | Speed:10.6kt Heading:17.8° | Size:80m × 22m Draft:7.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is an Overtaking Situation. In accordance with COLREG Rule 13, own vessel must maintain sufficient safe passing distance (CPA of at least 1 nautical mile) without impeding the target's course. Take care to avoid ship-to-ship interaction, and maintain vigilance until overtaking is fully completed."
+      }
+    ],
+    "bboxes": [
+      [
+        0.43957,
+        0.291401,
+        0.511519,
+        0.544158
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-HHLCHmjMdP",
+    "image": "tango_sds-unity-llm-20260226-v0.3-HHLCHmjMdP/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.225458 Lon:127.743420 | Speed:18.6kt Heading:289.4° | Size:98m × 25m Draft:4.0m\n- Nearby vessel (ID:1) | Lat:34.230657 Lon:127.735384 | Speed:22.8kt Heading:258.1° | Size:107m × 23m Draft:5.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "Under restricted visibility with a crossing collision risk, immediately reduce speed, sound fog signals, and continue radar plotting in accordance with COLREG Rule 19. As the target is positioned on the starboard bow, alter course to starboard to keep clear and maintain a safe distance (CPA of at least 1 nautical mile)."
+      }
+    ],
+    "bboxes": [
+      [
+        0.528911,
+        0.313626,
+        0.724107,
+        0.528039
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-HHi0xdoZV",
+    "image": "tango_sds-unity-llm-20260226-v0.3-HHi0xdoZV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.840606 Lon:127.499015 | Speed:18.7kt Heading:1.2° | Size:140m × 29m Draft:3.0m\n- Nearby vessel (ID:1) | Lat:34.847420 Lon:127.501823 | Speed:19.5kt Heading:178.0° | Size:139m × 16m Draft:3.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Head-on Situation. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port. With nearly exact reciprocal courses, take early and clear avoiding action. In the low-light sunset environment, actively utilize radar and AIS to ensure a CPA of at least 1 nautical mile."
+      }
+    ],
+    "bboxes": [
+      [
+        0.573188,
+        0.38647,
+        0.644582,
+        0.502608
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-HHqC-Q5omb",
+    "image": "tango_sds-unity-llm-20260226-v0.3-HHqC-Q5omb/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.088568 Lon:128.411243 | Speed:23.9kt Heading:133.0° | Size:88m × 21m Draft:3.0m\n- Nearby vessel (ID:1) | Lat:34.085760 Lon:128.421025 | Speed:19.6kt Heading:177.2° | Size:85m × 28m Draft:4.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "With a crossing target detected on radar on the port bow in dawn fog, immediately reduce to safe speed (Rule 6) and sound fog signals per Rule 35 in accordance with Rule 19. As required by Rule 19(d)(i), avoid altering course to port for a vessel forward of the beam, and monitor CPA trends through radar plotting. If risk of collision exists, alter course to starboard or reduce speed to secure a safe passing distance."
+      }
+    ],
+    "bboxes": [
+      [
+        0.106503,
+        0.292371,
+        0.376909,
+        0.540195
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-HHqM-pCdb",
+    "image": "tango_sds-unity-llm-20260226-v0.3-HHqM-pCdb/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.893395 Lon:127.747139 | Speed:19.2kt Heading:226.6° | Size:86m × 27m Draft:7.0m\n- Nearby vessel (ID:1) | Lat:34.887204 Lon:127.739256 | Speed:8.6kt Heading:229.8° | Size:102m × 21m Draft:5.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is an Overtaking Situation where own vessel is overtaking the target. In accordance with COLREG Rule 13, own vessel is the give-way vessel and must maintain sufficient safe passing distance (CPA of at least 1 nautical mile) without impeding the target's course. Take particular care not to cross ahead or approach too closely to avoid ship-to-ship interaction effects, and maintain vigilance until the overtaking maneuver is fully completed."
+      }
+    ],
+    "bboxes": [
+      [
+        0.421912,
+        0.330735,
+        0.476673,
+        0.515645
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-HHq_-Wy0eV",
+    "image": "tango_sds-unity-llm-20260226-v0.3-HHq_-Wy0eV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.069645 Lon:128.436477 | Speed:23.2kt Heading:219.2° | Size:136m × 18m Draft:3.0m\n- Nearby vessel (ID:1) | Lat:34.063119 Lon:128.433302 | Speed:16.1kt Heading:242.0° | Size:101m × 20m Draft:4.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is an Overtaking Situation with the target vessel ahead. In accordance with COLREG Rule 13, own vessel must keep clear of the overtaken vessel until finally past and clear. Due to reduced visibility from rain, enhance radar surveillance and maintain safe speed per Rule 19, and alter course sufficiently to maintain a CPA of at least 1 nautical mile while safely overtaking."
+      }
+    ],
+    "bboxes": [
+      [
+        0.153658,
+        0.245146,
+        0.414744,
+        0.573368
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-HHq_HNyMmY",
+    "image": "tango_sds-unity-llm-20260226-v0.3-HHq_HNyMmY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.243984 Lon:128.815220 | Speed:16.3kt Heading:132.7° | Size:108m × 26m Draft:3.0m\n- Nearby vessel (ID:1) | Lat:35.240677 Lon:128.820960 | Speed:9.2kt Heading:129.9° | Size:109m × 15m Draft:3.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "Under restricted visibility due to dense fog while overtaking the target ahead, immediately reduce to safe speed and sound fog signals in accordance with COLREG Rules 19 and 35, while enhancing radar surveillance. Even if the target is confirmed on radar, maintain sufficient passing distance to avoid any close-quarters situation."
+      }
+    ],
+    "bboxes": [
+      [
+        0.322773,
+        0.228952,
+        0.431331,
+        0.589409
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-HrLC-wOCmP",
+    "image": "tango_sds-unity-llm-20260226-v0.3-HrLC-wOCmP/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.141472 Lon:127.232301 | Speed:23.3kt Heading:346.7° | Size:144m × 19m Draft:7.0m\n- Nearby vessel (ID:1) | Lat:35.148600 Lon:127.227976 | Speed:23.7kt Heading:168.3° | Size:90m × 27m Draft:6.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Head-on Situation with the target vessel approaching from directly ahead. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port with the target vessel. Due to reduced visibility from rain, enhance radar surveillance per Rule 19, sound the attention signal (five or more short blasts) if the target's intentions are unclear, and maintain a minimum CPA of 1 nautical mile."
+      }
+    ],
+    "bboxes": [
+      [
+        0.255699,
+        0.273622,
+        0.396873,
+        0.553012
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-Hri_r72eY",
+    "image": "tango_sds-unity-llm-20260226-v0.3-Hri_r72eY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.790225 Lon:127.042020 | Speed:15.7kt Heading:114.2° | Size:88m × 25m Draft:6.0m\n- Nearby vessel (ID:1) | Lat:34.789591 Lon:127.053930 | Speed:24.2kt Heading:291.2° | Size:85m × 26m Draft:5.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Head-on Situation. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port. Due to reduced visibility from sunset twilight, monitor the target's masthead and sidelights to identify approach direction early, and utilize radar and AIS to ensure a CPA of at least 1 nautical mile. Sound the attention signal (five or more short blasts) if the target's intentions are unclear."
+      }
+    ],
+    "bboxes": [
+      [
+        0.202794,
+        0.310557,
+        0.333164,
+        0.527214
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-HxL0Hzj_ZY",
+    "image": "tango_sds-unity-llm-20260226-v0.3-HxL0Hzj_ZY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.813827 Lon:127.001474 | Speed:24.1kt Heading:210.3° | Size:138m × 19m Draft:7.0m\n- Nearby vessel (ID:1) | Lat:34.806869 Lon:127.000530 | Speed:15.2kt Heading:29.8° | Size:122m × 23m Draft:4.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "Under restricted visibility due to dense fog with the risk of a Head-on encounter, immediately reduce to safe speed and sound fog signals in accordance with COLREG Rule 19. As the target is approaching from dead ahead on radar, alter course substantially to starboard with sufficient time margin to avoid any close-quarters situation."
+      }
+    ],
+    "bboxes": [
+      [
+        0.199602,
+        0.381875,
+        0.286303,
+        0.508379
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-Hxi0xXgCZY",
+    "image": "tango_sds-unity-llm-20260226-v0.3-Hxi0xXgCZY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.571615 Lon:128.850962 | Speed:20.0kt Heading:181.0° | Size:104m × 15m Draft:7.0m\n- Nearby vessel (ID:1) | Lat:34.562910 Lon:128.846340 | Speed:20.6kt Heading:351.9° | Size:105m × 15m Draft:5.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "Under restricted visibility due to dense fog with the risk of a Head-on encounter, immediately reduce to safe speed and sound fog signals in accordance with COLREG Rule 19. As the target is approaching from dead ahead on radar, alter course substantially to starboard with sufficient time margin to avoid any close-quarters situation."
+      }
+    ],
+    "bboxes": [
+      [
+        0.582123,
+        0.30097,
+        0.773052,
+        0.533913
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-HxiC-rg2ZP",
+    "image": "tango_sds-unity-llm-20260226-v0.3-HxiC-rg2ZP/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.751046 Lon:127.774297 | Speed:19.7kt Heading:79.4° | Size:139m × 28m Draft:4.0m\n- Nearby vessel (ID:1) | Lat:34.751044 Lon:127.780829 | Speed:15.3kt Heading:266.7° | Size:114m × 23m Draft:3.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Head-on Situation. In accordance with COLREG Rule 14, alter course substantially to starboard to pass port-to-port. Due to extremely restricted visibility, immediately reduce to safe speed (Rule 6) per Rule 19 and sound fog signals per Rule 35. Alter course to starboard by at least 30 degrees early to ensure a CPA of at least 1 nautical mile."
+      }
+    ],
+    "bboxes": [
+      [
+        0.508492,
+        0.188212,
+        0.632557,
+        0.618859
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-Hxq0xjgSmb",
+    "image": "tango_sds-unity-llm-20260226-v0.3-Hxq0xjgSmb/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.634074 Lon:127.979544 | Speed:22.0kt Heading:193.4° | Size:123m × 27m Draft:7.0m\n- Nearby vessel (ID:1) | Lat:34.627230 Lon:127.978301 | Speed:15.9kt Heading:16.1° | Size:103m × 25m Draft:4.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Head-on Situation. In accordance with Rule 14, alter course substantially to starboard. Due to extremely restricted visibility, immediately reduce speed to safe speed (Rule 6) per Rule 19 and sound fog signals per Rule 35. Monitor CPA via radar plotting, alter course to starboard by at least 30 degrees, and ensure a CPA of at least 1 nautical mile. Port alteration is strictly prohibited."
+      }
+    ],
+    "bboxes": [
+      [
+        0.355348,
+        0.278916,
+        0.451606,
+        0.553176
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-HxqCxMMdP",
+    "image": "tango_sds-unity-llm-20260226-v0.3-HxqCxMMdP/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.596606 Lon:128.586378 | Speed:20.2kt Heading:4.8° | Size:132m × 21m Draft:6.0m\n- Nearby vessel (ID:1) | Lat:35.604057 Lon:128.584482 | Speed:23.4kt Heading:29.4° | Size:81m × 23m Draft:6.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "In a Crossing Situation during sunset with the target vessel on the starboard bow, in accordance with COLREG Rule 15, own vessel is the give-way vessel and must keep clear of the target. Avoid crossing ahead by altering course to starboard or reducing speed, and identify the target's navigation lights while passing safely astern."
+      }
+    ],
+    "bboxes": [
+      [
+        0.179445,
+        0.268801,
+        0.416525,
+        0.55676
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-LCLAkPzMx",
+    "image": "tango_sds-unity-llm-20260226-v0.3-LCLAkPzMx/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.341927 Lon:127.669742 | Speed:21.3kt Heading:58.7° | Size:96m × 27m Draft:7.0m\n- Nearby vessel (ID:1) | Lat:35.343274 Lon:127.677950 | Speed:24.0kt Heading:245.5° | Size:122m × 19m Draft:7.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Head-on Situation with the target vessel approaching from directly ahead. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port. Due to rain-reduced visibility, enhance radar surveillance per Rule 19, and sound the attention signal (five or more short blasts) if the target's intentions are unclear. Maintain a minimum CPA of 1 nautical mile while continuously monitoring the target's bearing change."
+      }
+    ],
+    "bboxes": [
+      [
+        0.572276,
+        0.21084,
+        0.761634,
+        0.596786
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-LCzraxa0I7",
+    "image": "tango_sds-unity-llm-20260226-v0.3-LCzraxa0I7/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.783277 Lon:128.005277 | Speed:21.4kt Heading:163.2° | Size:135m × 28m Draft:3.0m\n- Nearby vessel (ID:1) | Lat:34.776519 Lon:128.005039 | Speed:19.1kt Heading:140.6° | Size:107m × 24m Draft:3.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "With an overtaking situation detected on radar in dawn fog with restricted visibility, immediately reduce to safe speed (Rule 6) and sound fog signals of one prolonged blast at two-minute intervals per Rule 35 in accordance with Rule 19. Continuously monitor the target's CPA through radar plotting, and ensure a CPA of at least 1 nautical mile before passing. Alter course to pass at a safe distance, and be prepared to reduce speed further if the situation develops unfavorably."
+      }
+    ],
+    "bboxes": [
+      [
+        0.569401,
+        0.381152,
+        0.673357,
+        0.509281
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-LWLAaO6zB7",
+    "image": "tango_sds-unity-llm-20260226-v0.3-LWLAaO6zB7/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.290147 Lon:128.541590 | Speed:15.7kt Heading:250.9° | Size:83m × 28m Draft:7.0m\n- Nearby vessel (ID:1) | Lat:34.285756 Lon:128.534871 | Speed:21.9kt Heading:289.9° | Size:84m × 22m Draft:5.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Crossing Situation with the target vessel on the port side. In accordance with COLREG Rule 17, own vessel is the stand-on vessel and must maintain present course and speed. If the target fails to take appropriate avoiding action, immediately sound the attention signal (five or more short blasts), and if collision becomes imminent, take cooperative action by altering course to starboard."
+      }
+    ],
+    "bboxes": [
+      [
+        0.233109,
+        0.384475,
+        0.343324,
+        0.505106
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-LWLr6R6vBH",
+    "image": "tango_sds-unity-llm-20260226-v0.3-LWLr6R6vBH/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.961302 Lon:128.737584 | Speed:24.6kt Heading:6.9° | Size:126m × 15m Draft:3.0m\n- Nearby vessel (ID:1) | Lat:35.968089 Lon:128.743064 | Speed:17.5kt Heading:182.5° | Size:100m × 17m Draft:5.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "With own vessel navigating at a high speed of approximately 24.6 knots and a head-on target detected on radar in extremely restricted dawn fog visibility, immediately reduce speed substantially to safe speed (Rule 6) and keep engines ready in accordance with Rule 19. Sound fog signals per Rule 35, and continuously monitor the target through radar plotting. If risk of collision is confirmed, alter course to starboard by a substantial angle early to secure a safe CPA. Avoid altering course to port. Speed reduction is the top priority given the currently excessive speed."
+      }
+    ],
+    "bboxes": [
+      [
+        0.616208,
+        0.29103,
+        0.813607,
+        0.544393
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-Ld01aGzOw",
+    "image": "tango_sds-unity-llm-20260226-v0.3-Ld01aGzOw/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.140661 Lon:127.680748 | Speed:21.9kt Heading:314.1° | Size:90m × 22m Draft:4.0m\n- Nearby vessel (ID:1) | Lat:35.147082 Lon:127.673541 | Speed:10.4kt Heading:315.6° | Size:147m × 23m Draft:3.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is an Overtaking Situation with the target vessel ahead. In accordance with COLREG Rule 13, own vessel must keep clear of the overtaken vessel until finally past and clear. Due to rain-reduced visibility, maintain safe speed and continuously monitor the target via radar per Rule 19, and alter course sufficiently to starboard to maintain a CPA of at least 1 nautical mile while safely overtaking."
+      }
+    ],
+    "bboxes": [
+      [
+        0.456741,
+        0.307643,
+        0.522246,
+        0.529478
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-Lp0rka0Ow",
+    "image": "tango_sds-unity-llm-20260226-v0.3-Lp0rka0Ow/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.925457 Lon:127.183250 | Speed:23.7kt Heading:106.2° | Size:124m × 16m Draft:3.0m\n- Nearby vessel (ID:1) | Lat:35.922389 Lon:127.192390 | Speed:11.1kt Heading:110.7° | Size:125m × 18m Draft:7.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "While overtaking the target during sunset with reduced visibility, in accordance with COLREG Rule 13, own vessel is the give-way vessel and must maintain sufficient passing distance (CPA of at least 1 nautical mile) without impeding the target's course. Continuously observe the target's sternlight and pass safely."
+      }
+    ],
+    "bboxes": [
+      [
+        0.478252,
+        0.28951,
+        0.552955,
+        0.542211
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-r-FMxiySZb",
+    "image": "tango_sds-unity-llm-20260226-v0.3-r-FMxiySZb/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.360782 Lon:128.063119 | Speed:18.9kt Heading:181.1° | Size:89m × 23m Draft:7.0m\n- Nearby vessel (ID:1) | Lat:35.354574 Lon:128.064322 | Speed:16.0kt Heading:9.8° | Size:143m × 22m Draft:3.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Head-on Situation. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port. Sound the attention signal if the target's intentions are unclear, and maintain a CPA of at least 1 nautical mile."
+      }
+    ],
+    "bboxes": [
+      [
+        0.264187,
+        0.248137,
+        0.430531,
+        0.575459
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-r-LMr6MdV",
+    "image": "tango_sds-unity-llm-20260226-v0.3-r-LMr6MdV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.264353 Lon:128.374835 | Speed:21.0kt Heading:295.2° | Size:85m × 26m Draft:6.0m\n- Nearby vessel (ID:1) | Lat:34.264587 Lon:128.365182 | Speed:20.4kt Heading:328.4° | Size:134m × 29m Draft:6.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "In a Crossing Situation during sunset with the target vessel on the starboard bow, in accordance with COLREG Rule 15, own vessel is the give-way vessel and must keep clear of the target. Avoid crossing ahead by altering course to starboard or reducing speed, and identify the target's navigation lights while passing safely astern."
+      }
+    ],
+    "bboxes": [
+      [
+        0.119671,
+        0.297549,
+        0.355205,
+        0.539691
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-r-i0-dCdP",
+    "image": "tango_sds-unity-llm-20260226-v0.3-r-i0-dCdP/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.110556 Lon:128.623744 | Speed:20.3kt Heading:162.7° | Size:139m × 21m Draft:6.0m\n- Nearby vessel (ID:1) | Lat:35.101156 Lon:128.625231 | Speed:17.5kt Heading:344.9° | Size:105m × 20m Draft:4.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "In a Head-on Situation during twilight due to sunset, in accordance with COLREG Rule 14, immediately alter course substantially to starboard to pass port-to-port. Confirm the target's navigation lights (masthead lights, sidelights) and continuously observe the bearing until the risk of collision has been eliminated."
+      }
+    ],
+    "bboxes": [
+      [
+        0.521766,
+        0.402372,
+        0.556061,
+        0.482643
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-r-i0-kEmV",
+    "image": "tango_sds-unity-llm-20260226-v0.3-r-i0-kEmV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.923610 Lon:128.926822 | Speed:18.8kt Heading:296.2° | Size:93m × 17m Draft:4.0m\n- Nearby vessel (ID:1) | Lat:35.926924 Lon:128.920484 | Speed:10.4kt Heading:296.9° | Size:131m × 24m Draft:7.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is an Overtaking Situation. In accordance with COLREG Rule 13, own vessel must keep clear of the overtaken vessel until finally past and clear. In the low-light sunset environment, monitor the target's sternlight to confirm approach direction, and alter course sufficiently to port or starboard to maintain a CPA of at least 1 nautical mile while safely overtaking."
+      }
+    ],
+    "bboxes": [
+      [
+        0.490461,
+        0.377291,
+        0.542858,
+        0.514008
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-r-qMraEdY",
+    "image": "tango_sds-unity-llm-20260226-v0.3-r-qMraEdY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.403029 Lon:127.137939 | Speed:24.2kt Heading:164.9° | Size:111m × 22m Draft:6.0m\n- Nearby vessel (ID:1) | Lat:35.394003 Lon:127.138890 | Speed:12.0kt Heading:165.4° | Size:124m × 21m Draft:5.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is an Overtaking Situation. In accordance with Rule 13, keep clear of the target. Due to extremely restricted visibility, immediately reduce speed substantially to safe speed (Rule 6) per Rule 19. Sound fog signals per Rule 35, monitor CPA via radar plotting, and maintain a CPA of at least 1 nautical mile while safely overtaking."
+      }
+    ],
+    "bboxes": [
+      [
+        0.522369,
+        0.400137,
+        0.561088,
+        0.485375
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-r-q_-6jCZb",
+    "image": "tango_sds-unity-llm-20260226-v0.3-r-q_-6jCZb/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.529863 Lon:128.260933 | Speed:16.4kt Heading:338.8° | Size:121m × 24m Draft:7.0m\n- Nearby vessel (ID:1) | Lat:34.537580 Lon:128.259968 | Speed:23.6kt Heading:167.5° | Size:108m × 17m Draft:5.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "Under restricted visibility due to dense fog with the risk of a Head-on encounter, immediately reduce to safe speed and sound fog signals in accordance with COLREG Rule 19. As the target is approaching from dead ahead on radar, alter course substantially to starboard with sufficient time margin to avoid any close-quarters situation."
+      }
+    ],
+    "bboxes": [
+      [
+        0.548411,
+        0.262685,
+        0.660567,
+        0.560658
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rHF0-MYoeV",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rHF0-MYoeV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.409970 Lon:127.241989 | Speed:23.6kt Heading:164.6° | Size:92m × 22m Draft:7.0m\n- Nearby vessel (ID:1) | Lat:35.404754 Lon:127.247306 | Speed:16.8kt Heading:197.8° | Size:117m × 20m Draft:7.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Crossing Situation with the target vessel on the port side. In accordance with COLREG Rule 17, own vessel is the stand-on vessel and shall maintain present course and speed. If the target vessel fails to take appropriate give-way action, sound the attention signal (five or more short blasts). If collision becomes imminent, take cooperative action such as altering course to starboard."
+      }
+    ],
+    "bboxes": [
+      [
+        0.173144,
+        0.378671,
+        0.299046,
+        0.512396
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rHF0rCg_dY",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rHF0rCg_dY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.774155 Lon:127.101314 | Speed:15.2kt Heading:181.0° | Size:100m × 19m Draft:3.0m\n- Nearby vessel (ID:1) | Lat:34.766611 Lon:127.103557 | Speed:21.8kt Heading:0.5° | Size:147m × 17m Draft:7.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "Under restricted visibility due to dense fog with the risk of a Head-on encounter, immediately reduce to safe speed and sound fog signals in accordance with COLREG Rule 19. As the target is approaching from dead ahead on radar, alter course substantially to starboard with sufficient time margin to avoid any close-quarters situation."
+      }
+    ],
+    "bboxes": [
+      [
+        0.236273,
+        0.265509,
+        0.383898,
+        0.558675
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rHiCrRMZY",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rHiCrRMZY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.434031 Lon:128.979843 | Speed:18.7kt Heading:348.9° | Size:129m × 27m Draft:5.0m\n- Nearby vessel (ID:1) | Lat:35.440890 Lon:128.978953 | Speed:8.0kt Heading:352.5° | Size:115m × 16m Draft:4.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is an Overtaking Situation where own vessel is overtaking the target. In accordance with COLREG Rule 13, own vessel is the give-way vessel and must maintain sufficient safe passing distance (CPA of at least 1 nautical mile) without impeding the target's course. Take particular care not to cross ahead or approach too closely to avoid ship-to-ship interaction effects, and maintain vigilance until the overtaking maneuver is fully completed."
+      }
+    ],
+    "bboxes": [
+      [
+        0.482585,
+        0.386044,
+        0.520404,
+        0.50306
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rHqCxUhMmY",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rHqCxUhMmY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.522081 Lon:128.601400 | Speed:16.0kt Heading:314.1° | Size:94m × 28m Draft:7.0m\n- Nearby vessel (ID:1) | Lat:34.529014 Lon:128.596553 | Speed:21.1kt Heading:125.8° | Size:141m × 27m Draft:7.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Head-on Situation with the target vessel approaching from directly ahead. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port. If the target's intentions are unclear, sound the attention signal (five or more short blasts) without delay, and continuously monitor the target's bearing change while maintaining a minimum CPA of 1 nautical mile until the risk of collision has been eliminated."
+      }
+    ],
+    "bboxes": [
+      [
+        0.527573,
+        0.27061,
+        0.713995,
+        0.555121
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rrFCxT7SdP",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rrFCxT7SdP/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.825361 Lon:128.165436 | Speed:20.1kt Heading:249.7° | Size:149m × 21m Draft:4.0m\n- Nearby vessel (ID:1) | Lat:34.821679 Lon:128.160456 | Speed:18.1kt Heading:59.8° | Size:143m × 19m Draft:6.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "With a head-on target detected on radar on the port bow in extremely restricted dawn fog visibility, immediately reduce to safe speed (Rule 6) and keep engines ready in accordance with Rule 19. Sound fog signals of one prolonged blast at two-minute intervals per Rule 35, and continuously monitor the target through radar plotting. Alter course to starboard by a substantial angle to secure a safe CPA. Altering course to port must be avoided."
+      }
+    ],
+    "bboxes": [
+      [
+        0.214568,
+        0.362539,
+        0.301624,
+        0.532663
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rrL0-ESeb",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rrL0-ESeb/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.616908 Lon:127.475132 | Speed:16.8kt Heading:286.9° | Size:86m × 17m Draft:5.0m\n- Nearby vessel (ID:1) | Lat:34.620939 Lon:127.469478 | Speed:20.4kt Heading:104.1° | Size:97m × 24m Draft:7.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Head-on Situation. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port. In the low-light sunset environment, monitor the target's masthead and sidelights, and utilize radar and AIS to ensure a CPA of at least 1 nautical mile."
+      }
+    ],
+    "bboxes": [
+      [
+        0.578248,
+        0.147475,
+        0.915104,
+        0.640886
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rrL0xHSZV",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rrL0xHSZV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.728365 Lon:128.198470 | Speed:22.4kt Heading:89.6° | Size:126m × 21m Draft:4.0m\n- Nearby vessel (ID:1) | Lat:35.726013 Lon:128.205330 | Speed:20.3kt Heading:267.3° | Size:109m × 18m Draft:7.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Head-on Situation. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port. With a combined closing speed of approximately 43 knots, execute early and decisive course alteration. In the low-light sunset environment, actively utilize radar and AIS to ensure a CPA of at least 1 nautical mile."
+      }
+    ],
+    "bboxes": [
+      [
+        0.583158,
+        0.211675,
+        0.840067,
+        0.601872
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rriCrV0Zb",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rriCrV0Zb/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.277926 Lon:127.307566 | Speed:24.6kt Heading:9.9° | Size:105m × 25m Draft:5.0m\n- Nearby vessel (ID:1) | Lat:34.286371 Lon:127.310787 | Speed:10.8kt Heading:8.7° | Size:104m × 17m Draft:3.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "While overtaking the target during sunset with reduced visibility, in accordance with COLREG Rule 13, own vessel is the give-way vessel and must maintain sufficient passing distance (CPA of at least 1 nautical mile) without impeding the target's course. Continuously observe the target's sternlight and pass safely."
+      }
+    ],
+    "bboxes": [
+      [
+        0.501549,
+        0.399422,
+        0.539336,
+        0.486277
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rrq0rXhEZV",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rrq0rXhEZV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.949209 Lon:128.778199 | Speed:16.7kt Heading:212.0° | Size:86m × 18m Draft:7.0m\n- Nearby vessel (ID:1) | Lat:35.945823 Lon:128.772373 | Speed:23.2kt Heading:186.5° | Size:135m × 17m Draft:3.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Crossing Situation with the target on the starboard side. In accordance with COLREG Rule 15, own vessel is the give-way vessel. Alter course to starboard by at least 30 degrees early to pass astern of the target and maintain a CPA of at least 1 nautical mile."
+      }
+    ],
+    "bboxes": [
+      [
+        0.533511,
+        0.207355,
+        0.859332,
+        0.605063
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rrqCrpy2ZP",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rrqCrpy2ZP/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.935719 Lon:127.581117 | Speed:17.6kt Heading:12.1° | Size:122m × 24m Draft:3.0m\n- Nearby vessel (ID:1) | Lat:35.942268 Lon:127.580049 | Speed:20.5kt Heading:28.3° | Size:94m × 25m Draft:6.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Crossing Situation with the target on the port side. In accordance with COLREG Rule 17, own vessel is the stand-on vessel and must maintain course and speed. Sound the attention signal if the target fails to act, and alter course to starboard if collision becomes imminent."
+      }
+    ],
+    "bboxes": [
+      [
+        0.230449,
+        0.378876,
+        0.333694,
+        0.512127
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rrq_-7VEmb",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rrq_-7VEmb/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.281349 Lon:127.539085 | Speed:20.4kt Heading:33.7° | Size:113m × 25m Draft:3.0m\n- Nearby vessel (ID:1) | Lat:34.286486 Lon:127.548264 | Speed:24.0kt Heading:214.2° | Size:134m × 23m Draft:4.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "With a high-speed head-on target detected on radar in extremely restricted dawn fog visibility, immediately reduce speed substantially to safe speed (Rule 6) and keep engines ready in accordance with Rule 19. Sound fog signals per Rule 35, and urgently calculate CPA and TCPA through radar plotting. With a combined closing speed exceeding 44 knots, immediately execute a substantial starboard course alteration to ensure sufficient safe distance. Altering course to port is strictly prohibited."
+      }
+    ],
+    "bboxes": [
+      [
+        0.618118,
+        0.398175,
+        0.677422,
+        0.487914
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rrq_ruhSeY",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rrq_ruhSeY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.060783 Lon:128.384244 | Speed:20.1kt Heading:268.4° | Size:134m × 23m Draft:6.0m\n- Nearby vessel (ID:1) | Lat:35.061558 Lon:128.373387 | Speed:23.4kt Heading:87.3° | Size:149m × 16m Draft:6.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Head-on Situation. In accordance with Rule 14, alter course substantially to starboard. Due to extremely restricted visibility, immediately reduce speed substantially to safe speed (Rule 6) per Rule 19 and sound fog signals per Rule 35. Alter course to starboard by at least 30 degrees as early as possible to ensure a CPA of at least 1 nautical mile. Port alteration is strictly prohibited."
+      }
+    ],
+    "bboxes": [
+      [
+        0.478986,
+        0.304031,
+        0.5659,
+        0.531768
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rxF0-tKSmY",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rxF0-tKSmY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.647637 Lon:127.694154 | Speed:16.9kt Heading:316.1° | Size:133m × 24m Draft:5.0m\n- Nearby vessel (ID:1) | Lat:34.649909 Lon:127.687677 | Speed:16.3kt Heading:329.4° | Size:126m × 19m Draft:3.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is an Overtaking Situation. In accordance with COLREG Rule 13, own vessel as the overtaking vessel must keep clear of the overtaken vessel until finally past and well clear. As rainfall is reducing visibility, reduce to a safe speed per Rule 6 and comply with Rule 19 for restricted visibility navigation. Maintain continuous surveillance utilizing radar and AIS, and alter course with sufficient passing distance to ensure a CPA of 1 nautical mile or more."
+      }
+    ],
+    "bboxes": [
+      [
+        0.057222,
+        0.202208,
+        0.358171,
+        0.608804
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rxFMrOhCeV",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rxFMrOhCeV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.891959 Lon:127.270210 | Speed:19.6kt Heading:103.2° | Size:125m × 18m Draft:5.0m\n- Nearby vessel (ID:1) | Lat:35.890673 Lon:127.280677 | Speed:10.3kt Heading:100.9° | Size:89m × 19m Draft:4.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is an Overtaking Situation where own vessel is overtaking the target. In accordance with COLREG Rule 13, own vessel is the give-way vessel and must maintain sufficient safe passing distance (CPA of at least 1 nautical mile) without impeding the target's course. Take particular care not to cross ahead or approach too closely to avoid ship-to-ship interaction effects, and maintain vigilance until the overtaking maneuver is fully completed."
+      }
+    ],
+    "bboxes": [
+      [
+        0.387645,
+        0.323979,
+        0.443888,
+        0.520545
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rxF_xHVSmY",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rxF_xHVSmY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.075683 Lon:128.472152 | Speed:18.6kt Heading:5.5° | Size:98m × 22m Draft:6.0m\n- Nearby vessel (ID:1) | Lat:35.083890 Lon:128.470635 | Speed:21.9kt Heading:182.9° | Size:111m × 27m Draft:6.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Head-on Situation. In accordance with COLREG Rule 14, both vessels shall alter course to starboard by at least 30 degrees to pass port-to-port. With a combined closing speed of approximately 40 knots, take early and decisive action to ensure a minimum CPA of 1 nautical mile. If the target's intentions are unclear, sound the attention signal (five or more short blasts) without delay."
+      }
+    ],
+    "bboxes": [
+      [
+        0.261782,
+        0.28303,
+        0.383034,
+        0.54644
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rxL0HiPEmY",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rxL0HiPEmY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.849079 Lon:128.814183 | Speed:22.1kt Heading:3.0° | Size:99m × 17m Draft:5.0m\n- Nearby vessel (ID:1) | Lat:35.856740 Lon:128.811637 | Speed:17.6kt Heading:38.4° | Size:94m × 16m Draft:7.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Crossing Situation with the target vessel on the port side. In accordance with COLREG Rule 17, own vessel is the stand-on vessel and must maintain present course and speed. If the target fails to take appropriate avoiding action, immediately sound the attention signal (five or more short blasts), and if collision becomes imminent, take cooperative action by altering course to starboard."
+      }
+    ],
+    "bboxes": [
+      [
+        0.185998,
+        0.304126,
+        0.398504,
+        0.534922
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rxLMx2KomY",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rxLMx2KomY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.460649 Lon:127.219712 | Speed:20.4kt Heading:70.7° | Size:139m × 20m Draft:6.0m\n- Nearby vessel (ID:1) | Lat:34.461934 Lon:127.230227 | Speed:18.1kt Heading:248.8° | Size:90m × 26m Draft:4.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Head-on Situation. In accordance with COLREG Rule 14, both vessels must alter course to starboard to pass port to port. As extreme glare from direct sunrise ahead renders forward visual observation nearly impossible, maintain systematic lookout relying primarily on radar and AIS as required by Rule 5, and reduce to a safe speed per Rule 6. Take early action to alter course to starboard by at least 30 degrees to ensure a CPA of 1 nautical mile or more."
+      }
+    ],
+    "bboxes": [
+      [
+        0.510154,
+        0.32281,
+        0.601863,
+        0.521371
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rxL_rqgCmY",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rxL_rqgCmY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.389507 Lon:128.713663 | Speed:24.7kt Heading:222.3° | Size:99m × 21m Draft:4.0m\n- Nearby vessel (ID:1) | Lat:35.385450 Lon:128.707420 | Speed:22.3kt Heading:37.8° | Size:136m × 23m Draft:7.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "Under restricted visibility due to dense fog with the risk of a Head-on encounter, immediately reduce to safe speed and sound fog signals in accordance with COLREG Rule 19. As the target is approaching from dead ahead on radar, alter course substantially to starboard with sufficient time margin to avoid any close-quarters situation."
+      }
+    ],
+    "bboxes": [
+      [
+        0.48097,
+        0.21177,
+        0.654656,
+        0.596147
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rxiCxTh0db",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rxiCxTh0db/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.610820 Lon:127.592767 | Speed:15.6kt Heading:51.7° | Size:102m × 28m Draft:5.0m\n- Nearby vessel (ID:1) | Lat:35.614667 Lon:127.597962 | Speed:7.3kt Heading:51.3° | Size:148m × 22m Draft:5.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is an Overtaking Situation with the target vessel ahead. In accordance with COLREG Rule 13, own vessel must keep clear of the overtaken vessel until finally past and clear. Due to reduced visibility from rain, utilize radar per Rule 19 to continuously monitor distance to the target, and alter course sufficiently to port or starboard to maintain a CPA of at least 1 nautical mile while safely overtaking."
+      }
+    ],
+    "bboxes": [
+      [
+        0.358394,
+        0.230561,
+        0.46067,
+        0.588261
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rxi_xv2ZV",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rxi_xv2ZV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.498274 Lon:128.853636 | Speed:17.6kt Heading:23.9° | Size:106m × 16m Draft:5.0m\n- Nearby vessel (ID:1) | Lat:34.506216 Lon:128.858770 | Speed:8.9kt Heading:19.5° | Size:107m × 21m Draft:7.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is an Overtaking Situation. In accordance with COLREG Rule 13, own vessel must keep clear of the target. Due to severely restricted visibility from sunset, rain and fog, immediately reduce to safe speed (Rule 6) per Rule 19. Sound fog signals per Rule 35 and continuously monitor CPA via radar plotting. Maintain a CPA of at least 1 nautical mile while safely overtaking."
+      }
+    ],
+    "bboxes": [
+      [
+        0.45756,
+        0.3128,
+        0.540101,
+        0.525854
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rxq0xF_eb",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rxq0xF_eb/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.141266 Lon:128.538551 | Speed:24.3kt Heading:230.5° | Size:95m × 17m Draft:6.0m\n- Nearby vessel (ID:1) | Lat:34.136503 Lon:128.531968 | Speed:11.9kt Heading:234.8° | Size:95m × 23m Draft:6.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is an Overtaking Situation where own vessel is overtaking the target. In accordance with COLREG Rule 13, own vessel is the give-way vessel and must maintain sufficient safe passing distance (CPA of at least 1 nautical mile) without impeding the target's course. Take particular care not to cross ahead or approach too closely to avoid ship-to-ship interaction effects, and maintain vigilance until the overtaking maneuver is fully completed."
+      }
+    ],
+    "bboxes": [
+      [
+        0.420661,
+        0.389241,
+        0.462242,
+        0.499047
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-rxqM-f2mb",
+    "image": "tango_sds-unity-llm-20260226-v0.3-rxqM-f2mb/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.920175 Lon:127.036241 | Speed:24.2kt Heading:58.2° | Size:93m × 20m Draft:3.0m\n- Nearby vessel (ID:1) | Lat:35.924055 Lon:127.045270 | Speed:10.2kt Heading:57.9° | Size:144m × 28m Draft:4.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is an Overtaking Situation. In accordance with Rule 13, keep clear of the target. Due to extremely restricted visibility, immediately reduce speed substantially to safe speed (Rule 6) per Rule 19. Sound fog signals per Rule 35, monitor CPA via radar plotting, and maintain a CPA of at least 1 nautical mile."
+      }
+    ],
+    "bboxes": [
+      [
+        0.473502,
+        0.396546,
+        0.507188,
+        0.489874
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-vC0AaMzMx",
+    "image": "tango_sds-unity-llm-20260226-v0.3-vC0AaMzMx/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.127002 Lon:128.098120 | Speed:23.0kt Heading:239.4° | Size:139m × 18m Draft:7.0m\n- Nearby vessel (ID:1) | Lat:34.121304 Lon:128.093651 | Speed:22.4kt Heading:53.8° | Size:107m × 16m Draft:5.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Head-on Situation with the target vessel approaching from directly ahead. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port. Due to rain-reduced visibility, enhance radar surveillance per Rule 19, and sound the attention signal (five or more short blasts) if the target's intentions are unclear. Maintain a minimum CPA of 1 nautical mile while continuously monitoring the relative bearing change."
+      }
+    ],
+    "bboxes": [
+      [
+        0.022735,
+        0.187195,
+        0.299051,
+        0.613252
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-vCzr65vIx",
+    "image": "tango_sds-unity-llm-20260226-v0.3-vCzr65vIx/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.622494 Lon:128.294197 | Speed:24.4kt Heading:114.1° | Size:148m × 15m Draft:7.0m\n- Nearby vessel (ID:1) | Lat:34.620945 Lon:128.301230 | Speed:12.5kt Heading:116.2° | Size:136m × 23m Draft:3.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is an Overtaking Situation. In accordance with COLREG Rule 13, own vessel as the overtaking vessel must keep clear of the overtaken vessel until finally past and well clear. As sunrise glare may impair visual observation, maintain continuous surveillance utilizing radar and AIS as required by Rule 5. Alter course to port or starboard with sufficient passing distance to ensure a CPA of 1 nautical mile or more."
+      }
+    ],
+    "bboxes": [
+      [
+        0.2937,
+        0.242361,
+        0.428873,
+        0.579708
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-vW016W6LBx",
+    "image": "tango_sds-unity-llm-20260226-v0.3-vW016W6LBx/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.848813 Lon:127.585375 | Speed:22.8kt Heading:193.2° | Size:80m × 23m Draft:5.0m\n- Nearby vessel (ID:1) | Lat:35.843342 Lon:127.583072 | Speed:9.4kt Heading:190.2° | Size:110m × 16m Draft:7.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is an Overtaking Situation. In accordance with COLREG Rule 13, own vessel as the overtaking vessel must keep clear of the overtaken vessel until finally past and well clear. As rainfall is reducing visibility, reduce to a safe speed per Rule 6 and comply with Rule 19 for restricted visibility navigation. Maintain continuous surveillance utilizing radar and AIS, and alter course with sufficient passing distance to ensure a CPA of 1 nautical mile or more."
+      }
+    ],
+    "bboxes": [
+      [
+        0.456413,
+        0.188888,
+        0.605324,
+        0.612863
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-vd01arvI7",
+    "image": "tango_sds-unity-llm-20260226-v0.3-vd01arvI7/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.381140 Lon:127.127510 | Speed:15.5kt Heading:195.3° | Size:113m × 19m Draft:5.0m\n- Nearby vessel (ID:1) | Lat:34.373847 Lon:127.128015 | Speed:21.1kt Heading:228.4° | Size:82m × 22m Draft:4.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Crossing Situation with the target vessel on the port side. In accordance with COLREG Rule 17, own vessel is the stand-on vessel and must maintain present course and speed. If the target fails to take appropriate avoiding action, immediately sound the attention signal (five or more short blasts), and if collision becomes imminent, take cooperative action by altering course to starboard."
+      }
+    ],
+    "bboxes": [
+      [
+        0.165007,
+        0.28585,
+        0.398674,
+        0.548161
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-vdLA60Bx",
+    "image": "tango_sds-unity-llm-20260226-v0.3-vdLA60Bx/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.124078 Lon:127.011632 | Speed:15.3kt Heading:137.3° | Size:145m × 26m Draft:6.0m\n- Nearby vessel (ID:1) | Lat:34.116992 Lon:127.015611 | Speed:15.3kt Heading:88.2° | Size:85m × 19m Draft:7.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "In a Crossing Situation during sunset with the target vessel on the port side, in accordance with COLREG Rule 17, own vessel is the stand-on vessel and must maintain present course and speed. However, if the target's lights are approaching without avoiding action, immediately sound the attention signal (with light signals), and if collision becomes imminent, take cooperative action by altering course to starboard."
+      }
+    ],
+    "bboxes": [
+      [
+        0.502877,
+        0.306005,
+        0.729331,
+        0.533552
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-vpLhasvOH",
+    "image": "tango_sds-unity-llm-20260226-v0.3-vpLhasvOH/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.382360 Lon:127.223304 | Speed:21.2kt Heading:67.4° | Size:99m × 15m Draft:4.0m\n- Nearby vessel (ID:1) | Lat:34.386643 Lon:127.228712 | Speed:15.4kt Heading:242.7° | Size:137m × 15m Draft:7.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Head-on Situation. In accordance with COLREG Rule 14, alter course substantially to starboard to pass port-to-port. Due to extremely restricted visibility, immediately reduce to safe speed (Rule 6) per Rule 19 and sound fog signals per Rule 35. Monitor CPA via radar plotting and alter course to starboard by at least 30 degrees to ensure a CPA of at least 1 nautical mile."
+      }
+    ],
+    "bboxes": [
+      [
+        0.140773,
+        0.225301,
+        0.33414,
+        0.592002
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-vpz1aVvB7",
+    "image": "tango_sds-unity-llm-20260226-v0.3-vpz1aVvB7/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.149134 Lon:127.246785 | Speed:21.7kt Heading:271.8° | Size:116m × 19m Draft:3.0m\n- Nearby vessel (ID:1) | Lat:34.152091 Lon:127.237728 | Speed:24.3kt Heading:206.6° | Size:96m × 21m Draft:3.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Crossing Situation with the target on the starboard side. In accordance with COLREG Rule 15, own vessel is the give-way vessel. With both vessels at high speed, alter course to starboard by at least 30 degrees early to pass astern of the target and maintain a CPA of at least 1 nautical mile. Actively utilize radar and AIS in the low-light sunset environment."
+      }
+    ],
+    "bboxes": [
+      [
+        0.514177,
+        0.316351,
+        0.745878,
+        0.526051
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-x-FCHX7SdP",
+    "image": "tango_sds-unity-llm-20260226-v0.3-x-FCHX7SdP/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.562340 Lon:127.088757 | Speed:20.2kt Heading:145.2° | Size:126m × 22m Draft:5.0m\n- Nearby vessel (ID:1) | Lat:35.553881 Lon:127.095202 | Speed:22.2kt Heading:319.2° | Size:90m × 22m Draft:7.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "With a head-on target detected on radar in dawn fog with restricted visibility, immediately reduce to safe speed (Rule 6) and keep engines ready for immediate maneuvering in accordance with COLREG Rule 19. Sound fog signals of one prolonged blast at intervals of not more than two minutes as required by Rule 35, and continuously monitor the target through radar plotting. If risk of collision is confirmed, alter course to starboard by a substantial margin in ample time. A port turn is strictly prohibited in a head-on situation."
+      }
+    ],
+    "bboxes": [
+      [
+        0.455085,
+        0.342738,
+        0.519778,
+        0.506943
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-x-L0rg0eV",
+    "image": "tango_sds-unity-llm-20260226-v0.3-x-L0rg0eV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.550525 Lon:127.023306 | Speed:22.1kt Heading:131.6° | Size:108m × 28m Draft:3.0m\n- Nearby vessel (ID:1) | Lat:35.546419 Lon:127.029830 | Speed:11.8kt Heading:127.2° | Size:141m × 15m Draft:6.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "While overtaking the target during sunset with deteriorating visibility, in accordance with COLREG Rule 13, own vessel is the give-way vessel and must identify the target's sternlight while maintaining sufficient safe distance. Take care not to impede the target's course during overtaking, and enhance vigilance until the maneuver is completed."
+      }
+    ],
+    "bboxes": [
+      [
+        0.377572,
+        0.244449,
+        0.474312,
+        0.57386
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-x-LMHUYSmV",
+    "image": "tango_sds-unity-llm-20260226-v0.3-x-LMHUYSmV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.304999 Lon:127.558701 | Speed:16.9kt Heading:208.4° | Size:114m × 29m Draft:5.0m\n- Nearby vessel (ID:1) | Lat:35.296532 Lon:127.557760 | Speed:23.8kt Heading:260.0° | Size:132m × 23m Draft:7.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "With a high-speed crossing target detected on radar on the port bow in dawn fog, immediately reduce to safe speed (Rule 6) and sound fog signals per Rule 35 in accordance with Rule 19. As required by Rule 19(d)(i), avoid altering course to port for a vessel forward of the beam, and continuously calculate CPA through radar plotting. If risk of collision exists, secure a safe passing distance by altering course to starboard or substantially reducing speed."
+      }
+    ],
+    "bboxes": [
+      [
+        0.207163,
+        0.39432,
+        0.30349,
+        0.492752
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-x-LMrwgodY",
+    "image": "tango_sds-unity-llm-20260226-v0.3-x-LMrwgodY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.814031 Lon:128.359699 | Speed:24.4kt Heading:91.8° | Size:129m × 22m Draft:3.0m\n- Nearby vessel (ID:1) | Lat:35.816033 Lon:128.367137 | Speed:23.4kt Heading:120.0° | Size:119m × 19m Draft:4.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "With a crossing target detected on radar in extremely restricted visibility, immediately reduce to safe speed (Rule 6) per Rule 19 and sound fog signals per Rule 35. As required by Rule 19(d)(i), avoid altering course to port for a vessel forward of the beam. Alter course to starboard or reduce speed to ensure a CPA of at least 1 nautical mile."
+      }
+    ],
+    "bboxes": [
+      [
+        0.078498,
+        0.205364,
+        0.413539,
+        0.601312
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-x-iCr17EdY",
+    "image": "tango_sds-unity-llm-20260226-v0.3-x-iCr17EdY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.063218 Lon:127.815228 | Speed:19.1kt Heading:345.7° | Size:139m × 24m Draft:4.0m\n- Nearby vessel (ID:1) | Lat:35.069099 Lon:127.816541 | Speed:15.4kt Heading:160.5° | Size:127m × 18m Draft:5.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Head-on Situation. In accordance with COLREG Rule 14, both vessels must alter course to starboard to pass port to port. The sunrise glare from the starboard side may delay identification of the other vessel, so actively utilize radar and AIS to detect the target early as required by Rule 5, and alter course to starboard by at least 30 degrees to ensure a CPA of 1 nautical mile or more."
+      }
+    ],
+    "bboxes": [
+      [
+        0.627006,
+        0.368571,
+        0.744177,
+        0.52508
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-x-iCxfjEmY",
+    "image": "tango_sds-unity-llm-20260226-v0.3-x-iCxfjEmY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.117519 Lon:127.816904 | Speed:23.4kt Heading:244.7° | Size:123m × 16m Draft:4.0m\n- Nearby vessel (ID:1) | Lat:35.113337 Lon:127.811408 | Speed:24.5kt Heading:274.0° | Size:82m × 26m Draft:7.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Crossing Situation with the target on the port side. In accordance with COLREG Rule 17, own vessel is the stand-on vessel and must maintain course and speed. Sound the attention signal if the target fails to act, and alter course to starboard if collision becomes imminent."
+      }
+    ],
+    "bboxes": [
+      [
+        0.103466,
+        0.198152,
+        0.435128,
+        0.606372
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-x-q_HMZV",
+    "image": "tango_sds-unity-llm-20260226-v0.3-x-q_HMZV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.432540 Lon:127.126419 | Speed:20.1kt Heading:21.0° | Size:127m × 19m Draft:5.0m\n- Nearby vessel (ID:1) | Lat:35.439548 Lon:127.126561 | Speed:20.5kt Heading:59.6° | Size:130m × 22m Draft:3.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "In a Crossing Situation during twilight with restricted visibility due to sunset, the target vessel is on the starboard side. In accordance with COLREG Rule 15, own vessel is the give-way vessel and must keep clear of the target. Identify the target's navigation lights (red/green) visually, and alter course substantially to starboard or reduce speed to pass safely astern (CPA of at least 1 nautical mile)."
+      }
+    ],
+    "bboxes": [
+      [
+        0.137374,
+        0.276257,
+        0.397138,
+        0.555108
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-xHL0rLEmb",
+    "image": "tango_sds-unity-llm-20260226-v0.3-xHL0rLEmb/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.316073 Lon:128.036343 | Speed:18.0kt Heading:83.3° | Size:106m × 29m Draft:7.0m\n- Nearby vessel (ID:1) | Lat:35.316030 Lon:128.042659 | Speed:20.2kt Heading:267.6° | Size:139m × 21m Draft:4.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Head-on Situation. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port. In sunset twilight, confirm the target's navigation lights early and actively utilize radar and AIS to ensure a CPA of at least 1 nautical mile. Sound the attention signal (five or more short blasts) if the target's intentions are unclear."
+      }
+    ],
+    "bboxes": [
+      [
+        0.49479,
+        0.362678,
+        0.551564,
+        0.532486
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-xHLC-KyomP",
+    "image": "tango_sds-unity-llm-20260226-v0.3-xHLC-KyomP/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.130269 Lon:127.500994 | Speed:18.5kt Heading:101.0° | Size:122m × 29m Draft:4.0m\n- Nearby vessel (ID:1) | Lat:35.126383 Lon:127.509261 | Speed:18.8kt Heading:52.7° | Size:122m × 19m Draft:5.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "With a crossing target detected on radar in extremely restricted visibility, immediately reduce to safe speed (Rule 6) per Rule 19 and sound fog signals per Rule 35. Avoid altering course to port per Rule 19(d)(i). Alter course to starboard or reduce speed to ensure a CPA of at least 1 nautical mile."
+      }
+    ],
+    "bboxes": [
+      [
+        0.510888,
+        0.304317,
+        0.741319,
+        0.534779
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-xHLM-rh0db",
+    "image": "tango_sds-unity-llm-20260226-v0.3-xHLM-rh0db/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.132032 Lon:127.192666 | Speed:23.1kt Heading:309.7° | Size:144m × 28m Draft:7.0m\n- Nearby vessel (ID:1) | Lat:34.136421 Lon:127.183956 | Speed:12.4kt Heading:313.9° | Size:146m × 26m Draft:3.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "Under restricted visibility due to dense fog while overtaking the target ahead, immediately reduce to safe speed and sound fog signals in accordance with COLREG Rules 19 and 35, while enhancing radar surveillance. Even if the target is confirmed on radar, maintain sufficient passing distance to avoid any close-quarters situation."
+      }
+    ],
+    "bboxes": [
+      [
+        0.32419,
+        0.299396,
+        0.431607,
+        0.535271
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-xHqCxgg_eP",
+    "image": "tango_sds-unity-llm-20260226-v0.3-xHqCxgg_eP/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.558716 Lon:128.755330 | Speed:19.0kt Heading:67.0° | Size:133m × 22m Draft:5.0m\n- Nearby vessel (ID:1) | Lat:34.559067 Lon:128.765348 | Speed:24.5kt Heading:13.5° | Size:85m × 22m Draft:7.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Crossing Situation with the target vessel on the starboard bow. In accordance with COLREG Rule 15, own vessel is the give-way vessel and must avoid crossing ahead of the target by making a substantial alteration of course to starboard or reducing speed to pass safely astern. Action must be taken early and positively, and the target's bearing change must be closely monitored until a minimum CPA of 1 nautical mile is secured."
+      }
+    ],
+    "bboxes": [
+      [
+        0.527094,
+        0.314348,
+        0.74986,
+        0.527508
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-xrLM-P5EZY",
+    "image": "tango_sds-unity-llm-20260226-v0.3-xrLM-P5EZY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.448593 Lon:127.178653 | Speed:21.6kt Heading:351.1° | Size:142m × 19m Draft:4.0m\n- Nearby vessel (ID:1) | Lat:35.457465 Lon:127.178764 | Speed:17.0kt Heading:164.4° | Size:135m × 22m Draft:7.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Head-on Situation. In accordance with COLREG Rule 14, both vessels must alter course to starboard to pass port to port. As the combined closing speed is approximately 39 knots, take early action to alter course to starboard by at least 30 degrees and ensure a CPA of 1 nautical mile or more. The low sunrise sun on the starboard side may impair visual observation, so actively utilize radar and AIS as required by Rule 5."
+      }
+    ],
+    "bboxes": [
+      [
+        0.512936,
+        0.39951,
+        0.559426,
+        0.486236
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-xrL_HbK_ZV",
+    "image": "tango_sds-unity-llm-20260226-v0.3-xrL_HbK_ZV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.669224 Lon:127.447193 | Speed:17.6kt Heading:81.9° | Size:81m × 18m Draft:7.0m\n- Nearby vessel (ID:1) | Lat:34.673214 Lon:127.456577 | Speed:16.2kt Heading:153.7° | Size:143m × 19m Draft:4.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Crossing Situation with the target vessel on the port side. In accordance with COLREG Rule 17, own vessel is the stand-on vessel and must maintain present course and speed. Due to rain-reduced visibility, enhance radar surveillance per Rule 19. If the target fails to take appropriate avoiding action and CPA decreases below 1 nautical mile, sound the attention signal (five or more short blasts), and if collision becomes imminent, alter course to starboard to avoid."
+      }
+    ],
+    "bboxes": [
+      [
+        0.186174,
+        0.330373,
+        0.397543,
+        0.51589
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-xrq0HzbEmV",
+    "image": "tango_sds-unity-llm-20260226-v0.3-xrq0HzbEmV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.315687 Lon:128.330845 | Speed:21.5kt Heading:62.2° | Size:145m × 20m Draft:4.0m\n- Nearby vessel (ID:1) | Lat:35.318565 Lon:128.339511 | Speed:10.1kt Heading:58.1° | Size:115m × 19m Draft:3.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is an Overtaking Situation. In accordance with COLREG Rule 13, the overtaking vessel shall keep clear of the overtaken vessel until finally past and clear. Alter course to port or starboard sufficiently to maintain a CPA of at least 1 nautical mile, and maintain vigilant lookout until the overtaking maneuver is complete."
+      }
+    ],
+    "bboxes": [
+      [
+        0.483232,
+        0.392093,
+        0.528603,
+        0.495471
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-xrq0rboZV",
+    "image": "tango_sds-unity-llm-20260226-v0.3-xrq0rboZV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.369921 Lon:127.031317 | Speed:17.1kt Heading:60.6° | Size:137m × 16m Draft:6.0m\n- Nearby vessel (ID:1) | Lat:34.372945 Lon:127.040069 | Speed:19.5kt Heading:247.3° | Size:85m × 15m Draft:4.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Head-on Situation. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port. In the low-light post-sunset environment, monitor the target's navigation lights to determine its course early, and actively utilize radar and AIS to ensure a CPA of at least 1 nautical mile."
+      }
+    ],
+    "bboxes": [
+      [
+        0.480709,
+        0.304439,
+        0.546534,
+        0.534676
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-xrq_-kPoZV",
+    "image": "tango_sds-unity-llm-20260226-v0.3-xrq_-kPoZV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.513832 Lon:127.767916 | Speed:17.1kt Heading:85.4° | Size:95m × 17m Draft:6.0m\n- Nearby vessel (ID:1) | Lat:35.515227 Lon:127.776532 | Speed:15.2kt Heading:264.2° | Size:120m × 27m Draft:3.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Head-on Situation. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port. If the target's intentions are unclear, sound the attention signal (five or more short blasts) without delay, and maintain a minimum CPA of 1 nautical mile."
+      }
+    ],
+    "bboxes": [
+      [
+        0.348555,
+        0.286351,
+        0.433758,
+        0.547784
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-xrq_HBhoZb",
+    "image": "tango_sds-unity-llm-20260226-v0.3-xrq_HBhoZb/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.882463 Lon:128.760800 | Speed:20.1kt Heading:199.0° | Size:107m × 21m Draft:3.0m\n- Nearby vessel (ID:1) | Lat:34.875495 Lon:128.754709 | Speed:23.6kt Heading:166.3° | Size:94m × 28m Draft:5.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Crossing Situation with the target on the starboard side. In accordance with COLREG Rule 15, own vessel is the give-way vessel. Alter course to starboard by at least 30 degrees early to maintain a CPA of at least 1 nautical mile."
+      }
+    ],
+    "bboxes": [
+      [
+        0.514507,
+        0.318419,
+        0.700034,
+        0.52457
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-xxFCxogMeY",
+    "image": "tango_sds-unity-llm-20260226-v0.3-xxFCxogMeY/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.327161 Lon:128.423836 | Speed:17.7kt Heading:39.5° | Size:117m × 23m Draft:5.0m\n- Nearby vessel (ID:1) | Lat:35.330249 Lon:128.431176 | Speed:16.6kt Heading:11.8° | Size:122m × 29m Draft:3.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "Under restricted visibility due to dense fog while overtaking the target ahead, own vessel is the give-way vessel per COLREG Rule 13 and must not impede the target's course. Immediately reduce to safe speed per Rule 19, sound fog signals per Rule 35, and enhance radar surveillance. Maintain a CPA of at least 1 nautical mile while safely overtaking."
+      }
+    ],
+    "bboxes": [
+      [
+        0.548917,
+        0.256161,
+        0.827396,
+        0.569675
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-xxL0HxMZb",
+    "image": "tango_sds-unity-llm-20260226-v0.3-xxL0HxMZb/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.378518 Lon:128.978870 | Speed:17.1kt Heading:19.1° | Size:84m × 24m Draft:5.0m\n- Nearby vessel (ID:1) | Lat:35.385388 Lon:128.979253 | Speed:19.2kt Heading:36.1° | Size:110m × 18m Draft:6.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "In a Crossing Situation during sunset with the target vessel on the starboard bow, in accordance with COLREG Rule 15, own vessel is the give-way vessel and must keep clear of the target. Avoid crossing ahead by altering course to starboard or reducing speed, and identify the target's navigation lights while passing safely astern."
+      }
+    ],
+    "bboxes": [
+      [
+        0.19323,
+        0.271214,
+        0.397594,
+        0.558779
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-xxiCxM7oZb",
+    "image": "tango_sds-unity-llm-20260226-v0.3-xxiCxM7oZb/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.033093 Lon:128.467287 | Speed:22.5kt Heading:229.0° | Size:131m × 18m Draft:4.0m\n- Nearby vessel (ID:1) | Lat:35.029086 Lon:128.461376 | Speed:19.4kt Heading:45.5° | Size:123m × 15m Draft:6.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Head-on Situation. In accordance with COLREG Rule 14, both vessels must alter course to starboard to pass port to port. With a combined closing speed of approximately 42 knots, take early and substantial action to alter course to starboard by at least 30 degrees to ensure a CPA of 1 nautical mile or more. As the target is approaching from the direction of sunrise backlight, actively utilize radar and AIS as required by Rule 5."
+      }
+    ],
+    "bboxes": [
+      [
+        0.435987,
+        0.254034,
+        0.529626,
+        0.571195
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-xxiCxqOomb",
+    "image": "tango_sds-unity-llm-20260226-v0.3-xxiCxqOomb/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.796274 Lon:128.822620 | Speed:16.0kt Heading:58.6° | Size:124m × 19m Draft:7.0m\n- Nearby vessel (ID:1) | Lat:34.800129 Lon:128.832510 | Speed:21.7kt Heading:242.9° | Size:124m × 25m Draft:3.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "With a head-on target detected on radar in severely restricted dawn fog visibility, immediately reduce to safe speed (Rule 6) and keep engines ready in accordance with Rule 19. Sound fog signals of one prolonged blast at two-minute intervals per Rule 35, and continuously calculate the target's CPA and TCPA through radar plotting. If risk of collision is determined, alter course to starboard by a substantial angle early. Altering course to port must be avoided."
+      }
+    ],
+    "bboxes": [
+      [
+        0.483127,
+        0.328396,
+        0.537259,
+        0.517322
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-xxi_-x50ZP",
+    "image": "tango_sds-unity-llm-20260226-v0.3-xxi_-x50ZP/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.876003 Lon:127.079460 | Speed:23.3kt Heading:151.3° | Size:90m × 25m Draft:3.0m\n- Nearby vessel (ID:1) | Lat:35.868236 Lon:127.083576 | Speed:12.5kt Heading:151.4° | Size:146m × 20m Draft:4.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is an Overtaking Situation with the target vessel on the identical course ahead. In accordance with COLREG Rule 13, own vessel must keep clear of the overtaken vessel until finally past and clear. During rain, enhance radar surveillance and maintain safe speed per Rule 19, and alter course sufficiently to port or starboard to maintain a CPA of at least 1 nautical mile while safely overtaking."
+      }
+    ],
+    "bboxes": [
+      [
+        0.47467,
+        0.321758,
+        0.541073,
+        0.522159
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-xxi_xoyEdV",
+    "image": "tango_sds-unity-llm-20260226-v0.3-xxi_xoyEdV/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.171958 Lon:127.277550 | Speed:19.3kt Heading:203.4° | Size:115m × 26m Draft:5.0m\n- Nearby vessel (ID:1) | Lat:35.164441 Lon:127.273659 | Speed:9.3kt Heading:200.0° | Size:146m × 21m Draft:5.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is an Overtaking Situation. In accordance with COLREG Rule 13, own vessel must maintain sufficient safe passing distance (CPA of at least 1 nautical mile). Maintain vigilance until overtaking is fully completed."
+      }
+    ],
+    "bboxes": [
+      [
+        0.429919,
+        0.316367,
+        0.48952,
+        0.526053
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-xxqMxOKEmP",
+    "image": "tango_sds-unity-llm-20260226-v0.3-xxqMxOKEmP/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.240480 Lon:127.735534 | Speed:15.8kt Heading:79.6° | Size:80m × 26m Draft:5.0m\n- Nearby vessel (ID:1) | Lat:34.243836 Lon:127.743389 | Speed:16.2kt Heading:98.0° | Size:135m × 27m Draft:4.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Crossing Situation with the target vessel on the starboard side. In accordance with COLREG Rule 15, own vessel is the give-way vessel and must take action to avoid crossing ahead of the target by altering course to starboard or reducing speed. As forward visibility is extremely limited by direct sunrise glare, strengthen surveillance using radar and AIS as required by Rule 5, and alter course to starboard by at least 30 degrees to ensure a CPA of 1 nautical mile or more."
+      }
+    ],
+    "bboxes": [
+      [
+        0.172624,
+        0.256308,
+        0.406789,
+        0.565534
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-zCzh6o0O7",
+    "image": "tango_sds-unity-llm-20260226-v0.3-zCzh6o0O7/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.057271 Lon:127.495112 | Speed:18.8kt Heading:145.2° | Size:90m × 28m Draft:4.0m\n- Nearby vessel (ID:1) | Lat:34.050144 Lon:127.496928 | Speed:21.9kt Heading:116.6° | Size:132m × 29m Draft:3.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Crossing Situation with the target on the starboard side. In accordance with COLREG Rule 15, own vessel is the give-way vessel and must avoid crossing ahead of the target by altering course to starboard or reducing speed. In sunset low-light conditions, monitor the target's green sidelight, alter course to starboard by at least 30 degrees early to pass astern of the target, and maintain a CPA of at least 1 nautical mile."
+      }
+    ],
+    "bboxes": [
+      [
+        0.551819,
+        0.277468,
+        0.803971,
+        0.554237
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-zW01axLOw",
+    "image": "tango_sds-unity-llm-20260226-v0.3-zW01axLOw/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.559175 Lon:128.485330 | Speed:19.8kt Heading:63.4° | Size:93m × 24m Draft:4.0m\n- Nearby vessel (ID:1) | Lat:34.560087 Lon:128.495431 | Speed:17.9kt Heading:250.3° | Size:111m × 28m Draft:6.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Head-on Situation with the target vessel approaching from directly ahead. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port. If the target's intentions are unclear, sound the attention signal (five or more short blasts) without delay, and continuously monitor the target's bearing change while maintaining a minimum CPA of 1 nautical mile until the risk of collision has been eliminated."
+      }
+    ],
+    "bboxes": [
+      [
+        0.605392,
+        0.394156,
+        0.658677,
+        0.49296
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-zWL16t60Bw",
+    "image": "tango_sds-unity-llm-20260226-v0.3-zWL16t60Bw/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.605158 Lon:128.908246 | Speed:23.9kt Heading:236.1° | Size:143m × 23m Draft:7.0m\n- Nearby vessel (ID:1) | Lat:35.600705 Lon:128.900645 | Speed:13.7kt Heading:237.8° | Size:129m × 20m Draft:5.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is an Overtaking Situation. In accordance with COLREG Rule 13, own vessel as the overtaking vessel must keep clear of the overtaken vessel until finally past and well clear. Water surface reflections from the sunrise astern may impair identification of the target vessel's hull at distance ahead, so maintain continuous surveillance utilizing radar and AIS as required by Rule 5. Alter course to port or starboard maintaining sufficient passing distance to ensure a CPA of 1 nautical mile or more."
+      }
+    ],
+    "bboxes": [
+      [
+        0.392913,
+        0.279949,
+        0.471967,
+        0.548926
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-zWLh6_LI7",
+    "image": "tango_sds-unity-llm-20260226-v0.3-zWLh6_LI7/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.097162 Lon:128.279054 | Speed:21.7kt Heading:12.1° | Size:98m × 18m Draft:3.0m\n- Nearby vessel (ID:1) | Lat:35.106503 Lon:128.281748 | Speed:9.1kt Heading:12.9° | Size:85m × 25m Draft:7.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is an Overtaking Situation. In accordance with COLREG Rule 13, own vessel as the overtaking vessel must keep clear of the overtaken vessel until finally past and well clear. As the starboard side sunrise glare may affect visual observation, maintain continuous surveillance utilizing radar and AIS as required by Rule 5. Alter course to port or starboard with sufficient passing distance to ensure a CPA of 1 nautical mile or more."
+      }
+    ],
+    "bboxes": [
+      [
+        0.455013,
+        0.403261,
+        0.480238,
+        0.481462
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-zWzAtqkLOH",
+    "image": "tango_sds-unity-llm-20260226-v0.3-zWzAtqkLOH/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:35.408557 Lon:128.519062 | Speed:21.0kt Heading:31.7° | Size:143m × 22m Draft:4.0m\n- Nearby vessel (ID:1) | Lat:35.416136 Lon:128.525212 | Speed:20.7kt Heading:211.9° | Size:124m × 29m Draft:5.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Head-on Situation. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port. If the target's intentions are unclear, sound the attention signal (five or more short blasts) without delay, and maintain a minimum CPA of 1 nautical mile."
+      }
+    ],
+    "bboxes": [
+      [
+        0.459515,
+        0.401264,
+        0.486264,
+        0.484036
+      ]
+    ]
+  },
+  {
+    "id": "tango_sds-unity-llm-20260226-v0.3-zdvAaKvBw",
+    "image": "tango_sds-unity-llm-20260226-v0.3-zdvAaKvBw/input_image.png",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\n[Vessel AIS Information]\n- Own vessel (ID:0) | Lat:34.932325 Lon:127.932691 | Speed:19.2kt Heading:135.7° | Size:149m × 21m Draft:6.0m\n- Nearby vessel (ID:1) | Lat:34.928059 Lon:127.942294 | Speed:15.4kt Heading:319.0° | Size:89m × 22m Draft:4.0m\n\nAnalyze collision risk with nearby vessels and advise on navigation actions."
+      },
+      {
+        "from": "gpt",
+        "value": "This is a Head-on Situation. In accordance with COLREG Rule 14, immediately alter course to starboard by at least 30 degrees to pass port-to-port. In sunset twilight, monitor the target's navigation lights and utilize radar and AIS to ensure a CPA of at least 1 nautical mile."
+      }
+    ],
+    "bboxes": [
+      [
+        0.216939,
+        0.296431,
+        0.367303,
+        0.537087
+      ]
+    ]
+  }
+]

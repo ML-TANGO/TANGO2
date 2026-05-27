@@ -359,7 +359,15 @@ def main():
     collator = DataCollatorForVLM(pad_token_id=tokenizer.pad_token_id)
 
     # ── Training arguments ─────────────────────────────────────────────────────
-    report_to = "wandb" if args.wandb_project else "none"
+    # TensorBoard는 항상 출력 (플랫폼 대시보드 자동 연동).
+    # W&B는 --wandb_project 지정 시 추가로 활성화. 두 backend 공존 가능.
+    report_to: list[str] = []
+    if args.wandb_project:
+        report_to.append("wandb")
+    if not getattr(args, "no_tensorboard", False):
+        report_to.append("tensorboard")
+    if not report_to:
+        report_to = "none"
 
     training_args = TrainingArguments(
         output_dir=args.output_dir,

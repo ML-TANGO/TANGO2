@@ -1,0 +1,21 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Values.metadata.pod_name }}-ingress
+  namespace: {{ .Values.metadata.namespace }}
+  annotations:
+    konghq.com/preserve-host: "false"
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+  - http:
+      paths:
+      - path: {{ .Values.ingress.path }}
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ .Values.metadata.pod_name }}-backend-svc
+            port:
+              number: {{ .Values.service.backend.port }}
+{{- end }}
