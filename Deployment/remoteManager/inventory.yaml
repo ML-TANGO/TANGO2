@@ -1,0 +1,12 @@
+nodes:
+  # node-51:
+  #   host: tcp://10.0.2.51:2380
+  #   timeoutSec: 30
+  
+  node-52:
+    host: tcp://10.0.2.52:2380
+    timeoutSec: 30
+
+  node-53:
+    host: tcp://10.0.2.53:2380
+    timeoutSec: 30
