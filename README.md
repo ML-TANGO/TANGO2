@@ -28,15 +28,15 @@ It aims to develop automatic neural network generation and deployment framework 
 
 This repository is a collection of individual modules that satisfy the overall workflow as illustrated in the above figure. The source tree is organized into three top-level pillars, each with its own architectural style:
 
-- **`LLMOps/`** — the core TANGO 2 platform, organized along **MSA (microservice architecture)** principles. Each subdirectory under `apps/` contains an isolated component container with a minimal REST API; component developers work only inside their own subdirectory and publish APIs that the platform orchestrates.
-- **`Field_Test/`** — domain field demonstrations (SDF, SDM, SDS). These are proof-of-concept codebases that exercise the platform in real industry settings.
-- **`Runtime_System/`** — edge / on-device runtime components (optimization, parallel inference, runtime engine, remote node management) that sit outside the platform cluster and target deployment hardware.
+- **LLMOps** — the core TANGO 2 platform, organized along **MSA (microservice architecture)** principles. Each subdirectory under `apps/` contains an isolated component container with a minimal REST API; component developers work only inside their own subdirectory and publish APIs that the platform orchestrates.
+- **Field_Test** — domain field demonstrations (SDF, SDM, SDS). These are proof-of-concept codebases that exercise the platform in real industry settings.
+- **Runtime_System** — edge / on-device runtime components (optimization, parallel inference, runtime engine, remote node management) that sit outside the platform cluster and target deployment hardware.
 
 ### Where to start
 
-- **Install or deploy the platform?** See [`LLMOps/devops/INSTALL.md`](LLMOps/devops/INSTALL.md) (Kubernetes Helm charts and install scripts).
-- **Explore a domain demonstration?** See the per-domain READMEs under [`Field_Test/`](Field_Test) — [SDF](Field_Test/SDF/README.md), [SDM](Field_Test/SDM/README.md), [SDS](Field_Test/SDS/README.md).
-- **Deploy a trained model to a target device?** See [`Runtime_System/`](Runtime_System) for optimization, parallel inference, runtime engine, and remote node management.
+- **Install or deploy the platform** - See [`LLMOps/devops/INSTALL.md`](LLMOps/devops/INSTALL.md) (Kubernetes Helm charts and install scripts).
+- **Explore a domain demonstration** - See the per-domain READMEs under [`Field_Test/`](Field_Test) — [SDF](Field_Test/SDF/README.md), [SDM](Field_Test/SDM/README.md), [SDS](Field_Test/SDS/README.md).
+- **Deploy a trained model to a target device** - See [`Runtime_System/`](Runtime_System) for optimization, parallel inference, runtime engine, and remote node management.
 
 ```bash
 TANGO2
@@ -80,10 +80,10 @@ Field demonstrations of TANGO2 across three SDx domains.
 
 #### SDF [[View Details]](Field_Test/SDF/README.md)
 
-├── 원시데이터 수집기 [[View Details]](Field_Test/SDF/원시데이터%20수집기/README.md)
-├── 원천데이터 생성기 [[View Details]](Field_Test/SDF/원천데이터%20생성기/README.md)
-├── 제어기
-└── LAM 학습,추론
+├── 원시데이터 수집기 [[View Details]](Field_Test/SDF/원시데이터%20수집기/README.md)<br>
+├── 원천데이터 생성기 [[View Details]](Field_Test/SDF/원천데이터%20생성기/README.md)<br>
+├── 제어기<br>
+└── LAM 학습,추론<br>
 
 <p align="center">
 <img width="1280" align="center" alt="SDF" src="docs/sdf.png" /></p>
@@ -92,15 +92,15 @@ Field demonstrations of TANGO2 across three SDx domains.
 
 #### SDM [[View Details]](Field_Test/SDM/README.md)
 
-├── chest2vec
-├── models
-├── training 
-├── losses 
-├── evaluation 
-├── grounding 
-├── rexgrounding 
-├── data 
-└── tests
+├── chest2vec<br>
+├── models<br>
+├── training<br>
+├── losses<br>
+├── evaluation<br>
+├── grounding<br>
+├── rexgrounding<br>
+├── data<br>
+└── tests<br>
 
 <p align="center">
 <img width="1280" align="center" alt="SDM" src="docs/sdm.png" /></p>
@@ -109,10 +109,10 @@ Field demonstrations of TANGO2 across three SDx domains.
 
 #### SDS [[View Details]](Field_Test/SDS/README.md)
 
-├── Data_Revision
-├── dataset [[View Details]](Field_Test/SDS/dataset/README.md)
-├── simulator [[View Details]](Field_Test/SDS/simulator/README.md)
-└── VisionLanguageModel [[View Details]](Field_Test/SDS/VisionLanguageModel/README.md)
+├── Data_Revision<br>
+├── dataset [[View Details]](Field_Test/SDS/dataset/README.md)<br>
+├── simulator [[View Details]](Field_Test/SDS/simulator/README.md)<br>
+└── VisionLanguageModel [[View Details]](Field_Test/SDS/VisionLanguageModel/README.md)<br>
 
 <p align="center">
 <img width="1280" align="center" alt="SDS" src="docs/sds.png" /></p>
@@ -124,27 +124,27 @@ Field demonstrations of TANGO2 across three SDx domains.
 
 Integrated LLMOps platform covering microservices (`apps/`), Kubernetes infra (`devops/`), the web frontend (`front/`) and shared libraries (`libs/`).
 
-├── Data_Augmentation [[View Details]](LLMOps/Data_Augmentation/README.md)
-│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── fewshot_prompting [[View Details]](LLMOps/Data_Augmentation/fewshot_prompting/README.md)
-├── Evaluation [[View Details]](LLMOps/Evaluation/README.md)
-│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── Intent_Detection
-├── apps — microservices (dashboard, dataset, deployment, monitoring, llm_model, llm_playground, …)
-├── bundles [[View Details]](LLMOps/bundles/README.md)
-├── devops — Kubernetes Helm charts and install scripts ([INSTALL.md](LLMOps/devops/INSTALL.md))
-├── docs [[View Details]](LLMOps/docs/README.md)
-├── front [[View Details]](LLMOps/front/README.md)
-└── libs — shared libraries (`fb_bin`, `fb_image`, `fb_logger`)
+├── Data_Augmentation [[View Details]](LLMOps/Data_Augmentation/README.md)<br>
+│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── fewshot_prompting [[View Details]](LLMOps/Data_Augmentation/fewshot_prompting/README.md)<br>
+├── Evaluation [[View Details]](LLMOps/Evaluation/README.md)<br>
+│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── Intent_Detection<br>
+├── apps — microservices (dashboard, dataset, deployment, monitoring, llm_model, llm_playground, …)<br>
+├── bundles [[View Details]](LLMOps/bundles/README.md)<br>
+├── devops — Kubernetes Helm charts and install scripts ([INSTALL.md](LLMOps/devops/INSTALL.md))<br>
+├── docs [[View Details]](LLMOps/docs/README.md)<br>
+├── front [[View Details]](LLMOps/front/README.md)<br>
+└── libs — shared libraries (`fb_bin`, `fb_image`, `fb_logger`)<br>
 
 ### Runtime_System
 Edge/device-side runtime stack for model optimization, parallel inference, runtime engine and remote node management.
 
-├── Optimization [[View Details]](Runtime_System/Optimization/README.md)
-├── Parallell_Inference [[View Details]](Runtime_System/Parallell_Inference/README.md)
-├── Runtime_Engine [[View Details]](Runtime_System/Runtime_Engine/README.md)
-│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── Timestamp [[View Details]](Runtime_System/Runtime_Engine/Timestamp/README.md)
-│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── kernel_source
-│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── monitoring [[View Details]](Runtime_System/Runtime_Engine/monitoring/README.md)
-└── remoteManager [[View Details]](Runtime_System/remoteManager/README.md)
+├── Optimization [[View Details]](Runtime_System/Optimization/README.md)<br>
+├── Parallell_Inference [[View Details]](Runtime_System/Parallell_Inference/README.md)<br>
+├── Runtime_Engine [[View Details]](Runtime_System/Runtime_Engine/README.md)<br>
+│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── Timestamp [[View Details]](Runtime_System/Runtime_Engine/Timestamp/README.md)<br>
+│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── kernel_source<br>
+│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── monitoring [[View Details]](Runtime_System/Runtime_Engine/monitoring/README.md)<br>
+└── remoteManager [[View Details]](Runtime_System/remoteManager/README.md)<br>
 
 ---
 
@@ -153,7 +153,7 @@ __TANGO Community__ is an <ins>Artificial Intelligence(AI) democratization</ins>
 Our community holds an annual conference to share our achievements and broaden our technological horizons.
 [_<ins>Feel free to join our fully open community!</ins>_](http://tangoai.or.kr)
 
-### TANGO on Media
+## TANGO on Media
 #### Youtube
 - [TANGO, 노코드 신경망 자동생성 통합개발 프레임워크의 품질 관리](https://www.youtube.com/watch?v=jrJCXAPKJn8)
 - [성공하는 SW기업을 위한 AI, SW개발도구 'TANGO')](https://youtube.com/watch?v=IwyHOl3WjWQ&feature=youtu.be)
