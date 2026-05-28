@@ -1,0 +1,10 @@
+accelerate==1.13.0
+datasets==4.8.4
+pandas==3.0.2
+peft==0.19.1
+PyYAML==6.0.3
+safetensors==0.7.0
+tokenizers==0.22.2
+tqdm==4.67.3
+transformers==5.5.4
+trl==1.2.0

@@ -1,0 +1,8 @@
+trl==0.7.9 
+peft==0.5.0 
+datasets
+torch
+transformers==4.31.0 
+vllm
+typing_extensions==4.4.0
+flash_attn

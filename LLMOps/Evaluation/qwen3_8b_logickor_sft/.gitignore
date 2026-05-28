@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Local env/secrets
+.env
+*.env
+.env.*
+
+# Large/local artifacts
+data/*
+models/*
+runs/*
+generated/*
+evaluated/*
+results/*
+logs/*
+
+# Keep directory placeholders
+!data/.gitkeep
+!models/.gitkeep
+!runs/.gitkeep
+!generated/.gitkeep
+!evaluated/.gitkeep
+!results/.gitkeep
