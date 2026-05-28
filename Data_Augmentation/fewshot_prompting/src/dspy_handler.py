@@ -1,22 +1,27 @@
 import dspy
+import os
+import re
 from dspy.teleprompt import BootstrapFewShot, BootstrapFewShotWithRandomSearch, MIPROv2
+from src.ollama_manager import is_model_vlm
 try:
     from bert_score import BERTScorer
 except ImportError:
     BERTScorer = None
 
 class GenerateResponse(dspy.Signature):
-    """Generate a response based on a given query, following the provided examples."""
+    """Generate a response based on a given query and optional image, following the provided examples."""
 
     query = dspy.InputField(desc="The user's query.")
+    image = dspy.InputField(desc="Optional image input.", required=False)
     response = dspy.OutputField(desc="The generated response.")
 
 class ConversationalSignature(dspy.Signature):
-    """Given a chat history and a query, generate a response."""
-    __doc__ = "Given a chat history and a query, generate a response."
+    """Given a chat history, a query, and an optional image, generate a response."""
+    __doc__ = "Given a chat history, a query, and an optional image, generate a response."
 
     chat_history = dspy.InputField(desc="The past conversation history, as a string.")
     query = dspy.InputField(desc="The user's current query.")
+    image = dspy.InputField(desc="Optional image input.", required=False)
     response = dspy.OutputField(desc="The model's response.")
 
 
@@ -85,14 +90,41 @@ def jaccard_metric(example, pred, trace=None):
 def convert_examples(example_data, is_conversational=False):
     """
     Converts a list of dictionaries (from pandas) into a list of dspy.Example objects.
+    Extracts images from query if present in '[image: path]' format.
     """
     dspy_examples = []
+    image_pattern = r'\[image:\s*(.*?)\]'
+    
     for eg in example_data:
-        example = dspy.Example(query=eg['query'], response=eg['response'])
+        query_text = eg['query']
+        # 이미지 태그 추출 및 텍스트 정제
+        found_images = re.findall(image_pattern, query_text)
+        clean_query = re.sub(image_pattern, '', query_text).strip()
+        
+        dspy_image = None
+        if found_images:
+            img_path = found_images[0].strip()
+            if os.path.exists(img_path):
+                try:
+                    dspy_image = dspy.Image.from_file(img_path)
+                except Exception as e:
+                    print(f"Error loading image {img_path} for example: {e}")
+        
         if is_conversational:
-            dspy_examples.append(example.with_inputs("query", "chat_history"))
+            example = dspy.Example(
+                query=clean_query, 
+                chat_history=eg.get('chat_history', ""), 
+                image=dspy_image, 
+                response=eg['response']
+            )
+            dspy_examples.append(example.with_inputs("query", "chat_history", "image"))
         else:
-            dspy_examples.append(example.with_inputs("query"))
+            example = dspy.Example(
+                query=clean_query, 
+                image=dspy_image, 
+                response=eg['response']
+            )
+            dspy_examples.append(example.with_inputs("query", "image"))
     return dspy_examples
 
 def compile_program(model_name, optimizer_name, examples, metric_name="bert_score", backend="ollama", backend_url="http://localhost:11434", max_bootstrapped_demos=6, is_conversational=False, mipro_auto_level='light'):
@@ -119,6 +151,39 @@ def compile_program(model_name, optimizer_name, examples, metric_name="bert_scor
     # 2. Convert pandas examples to dspy.Example
     trainset = convert_examples(examples, is_conversational=is_conversational)
 
+    # [DEBUG] VLM 및 데이터 확인 (컴파일 단계에서만 출력)
+    print("\n" + "-"*30)
+    print(f"[DSPy Compilation Debug]")
+    print(f" - Model: {model_name} ({backend.upper()})")
+    
+    # 통합 함수를 이용한 정밀한 VLM 여부 판단 (구조적 분석)
+    vllm_model_path = None
+    if backend == 'vllm':
+        # main.py 또는 config에서 전달된 model_path 정보가 필요할 수 있으나,
+        # 여기서는 model_name 자체가 경로일 수 있으므로 그대로 전달
+        vllm_model_path = model_name 
+
+    has_vision = is_model_vlm(
+        model_name, 
+        backend=backend, 
+        backend_url=backend_url, 
+        model_path=vllm_model_path
+    )
+
+    print(f" - Vision Component Detected: {'YES' if has_vision else 'NO (Text-only)'}")
+    
+    # 데이터셋 내 이미지 포함 여부 확인
+    image_count = sum(1 for ex in trainset if getattr(ex, 'image', None) is not None)
+    print(f" - Multimodal Data: Found {image_count} examples with images out of {len(trainset)} total.")
+    
+    if image_count > 0 and not has_vision:
+        print(f" - WARNING: Multimodal data provided, but model architecture does not show vision support!")
+    elif image_count > 0 and has_vision:
+        print(f" - Status: VLM optimization mode ACTIVATED.")
+    else:
+        print(f" - Status: Text-only optimization mode.")
+    print("-"*30 + "\n")
+
     # 3. Define the DSPy program based on mode
     if is_conversational:
         class ConversationalCoT(dspy.Module):
@@ -126,8 +191,8 @@ def compile_program(model_name, optimizer_name, examples, metric_name="bert_scor
                 super().__init__()
                 self.prog = dspy.ChainOfThought(ConversationalSignature)
 
-            def forward(self, query, chat_history=""):
-                return self.prog(query=query, chat_history=chat_history)
+            def forward(self, query, chat_history="", image=None):
+                return self.prog(query=query, chat_history=chat_history, image=image)
         program_to_compile = ConversationalCoT()
     else:
         class CoT(dspy.Module):
@@ -135,8 +200,8 @@ def compile_program(model_name, optimizer_name, examples, metric_name="bert_scor
                 super().__init__()
                 self.prog = dspy.ChainOfThought(GenerateResponse)
 
-            def forward(self, query):
-                return self.prog(query=query)
+            def forward(self, query, image=None):
+                return self.prog(query=query, image=image)
         program_to_compile = CoT()
 
 

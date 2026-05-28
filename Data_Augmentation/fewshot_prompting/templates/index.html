@@ -52,7 +52,10 @@
         <div id="chat-window">
             <!-- Chat messages will be appended here -->
         </div>
-        <div id="input-area" class="d-flex">
+        <div id="image-preview-container" class="d-flex flex-wrap gap-2 mb-2"></div>
+        <div id="input-area" class="d-flex align-items-end">
+            <input type="file" id="image-input" class="d-none" accept="image/*" multiple onchange="handleImageSelect(event)">
+            <button class="btn btn-outline-secondary me-2" onclick="document.getElementById('image-input').click()">🖼️</button>
             <textarea id="query" class="form-control me-2" rows="2" placeholder="Enter your query here..."></textarea>
             <button class="btn btn-primary" onclick="sendQuery()">
                 <span id="button-text">Send</span>
@@ -108,25 +111,91 @@
             }
         }
 
-        function sendQueryConversational(query) {
+        let selectedImages = [];
+
+        function handleImageSelect(event) {
+            const files = Array.from(event.target.files);
+            files.forEach(file => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    selectedImages.push(e.target.result);
+                    renderImagePreviews();
+                };
+                reader.readAsDataURL(file);
+            });
+            event.target.value = ''; // Reset input
+        }
+
+        function renderImagePreviews() {
+            const container = document.getElementById('image-preview-container');
+            container.innerHTML = '';
+            selectedImages.forEach((img, index) => {
+                const div = document.createElement('div');
+                div.className = 'position-relative';
+                div.innerHTML = `
+                    <img src="${img}" style="height: 60px; border-radius: 5px; border: 1px solid #ddd;">
+                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" 
+                          style="cursor: pointer;" onclick="removeImage(${index})">&times;</span>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function removeImage(index) {
+            selectedImages.splice(index, 1);
+            renderImagePreviews();
+        }
+
+        async function sendQueryConversational(query) {
             setUIState(true);
             appendMessage(query, 'user');
             const modelMessageDiv = appendMessage('', 'model');
-            // Use the robust, standard EventSource API
             const basePath = window.location.pathname.replace(/\/$/, '');
-            const evtSource = new EventSource(`${basePath}/query_stream?query=${encodeURIComponent(query)}`);
-            evtSource.onmessage = function(event) {
-                // The browser's EventSource reconstructs the message, joining data fields with newlines.
-                modelMessageDiv.textContent = event.data;
-                chatWindow.scrollTop = chatWindow.scrollHeight;
-            };
-            evtSource.onerror = function(err) {
-                // The 'error' event fires when the connection is closed by the server,
-                // or if a real error occurs.
-                console.error("EventSource failed or connection closed.", err);
-                evtSource.close();
-                setUIState(false); // Re-enable UI when the stream is finished or fails.
-            };
+            
+            try {
+                const response = await fetch(`${basePath}/query_stream`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: query, images: selectedImages })
+                });
+
+                if (!response.ok) throw new Error('Network response was not ok');
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = "";
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop(); // Keep partial line in buffer
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const jsonStr = line.substring(6);
+                                if (!jsonStr.trim()) continue;
+                                const data = JSON.parse(jsonStr);
+                                if (data.chunk) {
+                                    modelMessageDiv.textContent += data.chunk;
+                                    chatWindow.scrollTop = chatWindow.scrollHeight;
+                                }
+                            } catch (e) {
+                                console.error("Error parsing JSON chunk:", e, line);
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                modelMessageDiv.textContent = `Error: ${error.message}`;
+            } finally {
+                selectedImages = [];
+                renderImagePreviews();
+                setUIState(false);
+            }
         }
 
         function sendQuery() {
