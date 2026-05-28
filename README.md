@@ -29,14 +29,14 @@ It aims to develop automatic neural network generation and deployment framework 
 This repository is a collection of individual modules that satisfy the overall workflow as illustrated in the above figure. The source tree is organized into three top-level pillars, each with its own architectural style:
 
 - **LLMOps** — the core TANGO 2 platform, organized along **MSA (microservice architecture)** principles. Each subdirectory under `apps/` contains an isolated component container with a minimal REST API; component developers work only inside their own subdirectory and publish APIs that the platform orchestrates.
-- **Field_Test** — domain field demonstrations (SDF, SDM, SDS). These are proof-of-concept codebases that exercise the platform in real industry settings.
 - **Runtime_System** — edge / on-device runtime components (optimization, parallel inference, runtime engine, remote node management) that sit outside the platform cluster and target deployment hardware.
+- **Field_Test** — domain field demonstrations (SDF, SDM, SDS). These are proof-of-concept codebases that exercise the platform in real industry settings.
 
 ### Where to start
 
 - **Install or deploy the platform** - See [`LLMOps/devops/INSTALL.md`](LLMOps/devops/INSTALL.md) (Kubernetes Helm charts and install scripts).
-- **Explore a domain demonstration** - See the per-domain READMEs under [`Field_Test/`](Field_Test) — [SDF](Field_Test/SDF/README.md), [SDM](Field_Test/SDM/README.md), [SDS](Field_Test/SDS/README.md).
 - **Deploy a trained model to a target device** - See [`Runtime_System/`](Runtime_System) for optimization, parallel inference, runtime engine, and remote node management.
+- **Explore a domain demonstration** - See the per-domain READMEs under [`Field_Test/`](Field_Test) — [SDF](Field_Test/SDF/README.md), [SDM](Field_Test/SDM/README.md), [SDS](Field_Test/SDS/README.md).
 
 ```bash
 TANGO2
@@ -90,7 +90,7 @@ Integrated LLMOps platform covering microservices (`apps/`), Kubernetes infra (`
 ├── front [[View Details]](LLMOps/front/README.md)<br>
 └── libs — shared libraries (`fb_bin`, `fb_image`, `fb_logger`)<br>
 
-### Runtime_System
+### Runtime_System [[View Details]](Runtime_System/README.md)
 Edge/device-side runtime stack for model optimization, parallel inference, runtime engine and remote node management.
 
 ├── Optimization [[View Details]](Runtime_System/Optimization/README.md)<br>
@@ -157,7 +157,7 @@ Our community holds an annual conference to share our achievements and broaden o
 
 ## License
 
-This project is released under the terms in [`LICENSE.md`](LICENSE.md) (한국어: [`LICENSE_ko.md`](LICENSE_ko.md)).
+This project is released under the terms in [`LICENSE.md`](LICENSE.md) (한국어 버전: [`LICENSE_ko.md`](LICENSE_ko.md)).
 
 ## Acknowledgement <a name="ack"></a>
 
