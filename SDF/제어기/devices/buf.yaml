@@ -1,0 +1,21 @@
+version: v2
+lint:
+  use:
+    - DEFAULT
+breaking:
+  use:
+    - FILE
+deps:
+  - buf.build/googleapis/googleapis
+  - buf.build/grpc-ecosystem/grpc-gateway
+  - buf.build/bufbuild/protovalidate
+modules:
+  - path: .
+    excludes:
+      - vendor
+  - path: vendor/gitlab.suredatalab.kr
+    includes:
+      - vendor/gitlab.suredatalab.kr/sdlmicro/middleware
+      - vendor/gitlab.suredatalab.kr/sdlmicro/types
+      - vendor/gitlab.suredatalab.kr/beymons/common
+      - vendor/gitlab.suredatalab.kr/services/metadata

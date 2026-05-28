@@ -1,0 +1,305 @@
+syntax = "proto3";
+package devices;
+option go_package = "gitlab.suredatalab.kr/beymons/devices";
+
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+import "buf/validate/validate.proto";
+import "sdlmicro/middleware/annotations.proto";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+import "services/metadata/metadata.proto";
+
+service SensorTypes {
+	option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_tag) = {
+		description: "센서 타입 관리"
+	};
+	option (sdlmicro.options.authorization) = {
+		admin_role: "device-admin"
+		roles: {
+			key: "create-sensor-type"
+			value: "생성 권한"
+		}
+		roles: {
+			key: "query-sensor-types"
+			value: "검색 권한"
+		}
+		roles: {
+			key: "manage-sensor-types"
+			value: "관리 권한"
+		}
+	};
+
+	// 센서 타입 검색
+	rpc SearchType(SearchTypeRequest) returns (SearchTypeResponse) {
+		option (google.api.http) = {
+			get: "/sensor-types"
+			additional_bindings: {get: "/sensor-types/{type_id}"}
+		};
+		option (sdlmicro.options.method) = {
+			authorization: ["query-sensor-types", "manage-sensor-types"]
+			test_order: 2
+		};
+	}
+
+	// 센서 타입 생성
+	rpc CreateType(SensorType) returns (SensorType) {
+		option (google.api.http) = {
+			post: "/sensor-types"
+			body: "*"
+		};
+		option (sdlmicro.options.method) = {
+			authorization: "create-sensor-type"
+			test_order: 1
+		};
+		option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+			responses: {
+				key: "409"
+				value: {
+					description: "Returned when the sensor type is already exists"
+					schema: {
+						example: "null"
+					}
+				}
+			}
+		};
+	}
+
+	// 삭제
+	rpc DeleteType(SensorTypeRequest) returns (google.protobuf.Empty) {
+		option (google.api.http) = {delete: "/sensor-types/{type_id}"};
+		option (sdlmicro.options.method) = {
+			authorization: "manage-sensor-types"
+			test_order: 99
+		};
+	}
+}
+
+message SensorTypeRequest {
+	string type_id = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+message SearchTypeRequest {
+	// 사용 가능한 속성
+	enum Attribute {
+		// ID (Default)
+		sensor_type_id = 0;
+		// 센서 타입 이름
+		type_name = 1;
+		// 속성
+		attributes = 2;
+		// 설명
+		description = 3;
+		// 생성 일시
+		created_at = 4;
+		// 생성한 사용자 정보
+		created_by = 5;
+	}
+
+	// 오름차순으로 정렬
+	repeated Attribute asc = 1 [(google.api.field_behavior) = OPTIONAL];
+
+	// 내림차순으로 정렬
+	repeated Attribute desc = 2 [(google.api.field_behavior) = OPTIONAL];
+
+	// 조회 필드 선택 (default: ALL)
+	repeated Attribute field = 3 [(google.api.field_behavior) = OPTIONAL];
+
+	// 응답으로 보내줄 레코드 수.
+	// 지정하지 않거나 0인 경우 전체 레코드를 조회하지만,
+	// 응답이 15초 이상 소요되는 경우 타임아웃 오류가 발생된다.
+	uint64 limit = 4 [(google.api.field_behavior) = OPTIONAL];
+
+	// 페이지에서 표시되는 첫 레코드의 인덱스 (Default: 0)
+	uint64 offset = 5 [(google.api.field_behavior) = OPTIONAL];
+
+	// 전체 검색 (type_id, type_name, description)
+	string search = 6 [(google.api.field_behavior) = OPTIONAL];
+
+	// 센서 타입 ID로 검색
+	string type_id = 7 [(google.api.field_behavior) = OPTIONAL];
+}
+
+message SearchTypeResponse {
+	repeated SensorType entities = 1;
+
+	// 데이터의 총건수
+	uint64 count = 2;
+
+	// 관련 링크 (HATEOAS)
+	map<string, string> link = 3;
+}
+
+/*******************************************************************************
+ * Model
+ ******************************************************************************/
+
+// SensorType
+//
+// 센서 타입 관리
+message SensorType {
+	option (sdlmicro.options.model) = {};
+
+	// SensorType ID
+	string type_id = 1 [
+		(google.api.field_behavior) = REQUIRED,
+		(google.api.field_behavior) = IMMUTABLE,
+		(sdlmicro.options.orm) = {pg: ",type:varchar(16),pk,notnull"},
+		(buf.validate.field).string.min_len = 2,
+		(buf.validate.field).string.max_len = 16,
+		(buf.validate.field).string.pattern = "^[a-z][a-z0-9_]*[a-z0-9]$",
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			min_length: 2
+			max_length: 16
+			pattern: "^[a-z][a-z0-9_]*[a-z0-9]$"
+			example: '"temperature"'
+		}
+	];
+
+	// 타입 이름
+	string type_name = 2 [
+		(google.api.field_behavior) = OPTIONAL,
+		(sdlmicro.options.orm) = {pg: ",type:varchar(50)"},
+		(buf.validate.field).string.max_len = 50,
+		(buf.validate.field).string.pattern = "^[^\n\t]*$",
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			max_length: 50
+			example: '"온도 센서"'
+		}
+	];
+
+	// 센서 내에 다수의 채널을 가질 수 있는지 여부
+	bool multi_probe = 3 [(sdlmicro.options.orm) = {pg: ",notnull,default:FALSE"}];
+
+	// 타입 설명
+	string description = 4 [
+		(google.api.field_behavior) = OPTIONAL,
+		(sdlmicro.options.orm) = {pg: ",type:varchar(1000)"},
+		(buf.validate.field).string.max_len = 1000,
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			max_length: 1000
+			example: '"온도만 수집하는 센서"'
+		}
+	];
+
+	// 생성 일시
+	google.protobuf.Timestamp created_at = 5 [
+		(google.api.field_behavior) = IMMUTABLE,
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(sdlmicro.options.orm) = {pg: ",type:timestamptz,notnull,default:now()"}
+	];
+
+	// 생성한 사용자 ID
+	string created_user_id = 6 [
+		(google.api.field_behavior) = IMMUTABLE,
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(sdlmicro.options.orm) = {pg: ",type:varchar(36),notnull"}
+	];
+	// 타입을 생성한 사용자 정보
+	google.protobuf.Struct created_by = 7 [
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(sdlmicro.options.orm) = {pg: "-"},
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			read_only: true
+			example: '{"email": "example@suredatalab.com", "first_name": "길동", "last_name": "홍", "username": "example", "name": "홍길동", "user_id": "UUID_000001"}'
+		}
+	];
+
+	// 속성
+	repeated SensorTypeAttribute attributes = 8 [
+		(google.api.field_behavior) = REQUIRED,
+		(sdlmicro.options.orm) = {pg: "-"},
+		(buf.validate.field).repeated.min_items = 1
+	];
+
+	// 리소스에 대한 변경 권한 여부
+	bool writable = 9 [
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(sdlmicro.options.orm) = {pg: "-"}
+	];
+}
+
+// SensorTypeAttribute
+//
+// 센서 타입에서 사용하는 속성을 관리
+message SensorTypeAttribute {
+	option (sdlmicro.options.model) = {
+		references: {
+			id: "sensor_type_attributes_type_id_fk"
+			model_name: "SensorType"
+			fields: "type_id"
+			on_delete: CASCADE
+		}
+	};
+
+	// type_id
+	string type_id = 1 [
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(sdlmicro.options.orm) = {
+			pg: ",type:varchar(16),unique:relation,notnull"
+			reference_id: "sensor_type_attributes_type_id_fk"
+		},
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {example: '"temperature"'}
+	];
+
+	// 데이터 속성명
+	string attribute = 2 [
+		(google.api.field_behavior) = IMMUTABLE,
+		(sdlmicro.options.orm) = {pg: ",type:varchar(50),unique:relation,notnull"},
+		(buf.validate.field).string.min_len = 1,
+		(buf.validate.field).string.max_len = 50,
+		(buf.validate.field).string.pattern = "^[a-z][a-z0-9_]*$",
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			pattern: "^[a-z][a-z0-9_]*$"
+			min_length: 1
+			max_length: 50
+			example: '"temp"'
+		}
+	];
+
+	// 단위
+	string unit = 3 [
+		(google.api.field_behavior) = OPTIONAL,
+		(sdlmicro.options.orm) = {pg: ",type:varchar(50)"},
+		(buf.validate.field).string.max_len = 50,
+		(buf.validate.field).string.pattern = "^[^\n\t]*$",
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			max_length: 50
+			example: '"℃"'
+		}
+	];
+
+	// 수신된 데이터의 타입
+	metadata.MetadataSchemaAttribute.Type type = 4 [
+		(google.api.field_behavior) = INPUT_ONLY,
+		(sdlmicro.options.orm) = {pg: "-"},
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {example: '"real"'}
+	];
+
+	// 타입이 text인 경우 최대 길이
+	uint32 length = 5 [
+		(google.api.field_behavior) = INPUT_ONLY,
+		(sdlmicro.options.orm) = {pg: "-"}
+	];
+
+	// 원본 데이터를 관리하는 테이블에서의 타입
+	string type_name = 6 [
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(sdlmicro.options.orm) = {pg: ",type:varchar(20),notnull"},
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {example: '"real"'}
+	];
+
+	// 설명
+	string description = 7 [
+		(google.api.field_behavior) = OPTIONAL,
+		(sdlmicro.options.orm) = {pg: ",type:varchar(1000)"},
+		(buf.validate.field).string.max_len = 1000,
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			max_length: 1000
+			example: '"온도"'
+		}
+	];
+}

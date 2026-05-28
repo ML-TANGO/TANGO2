@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devices
+  labels:
+    framework: sdlmicro
+    mqtt: mosquitto
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: devices
+      framework: sdlmicro
+  template:
+    metadata:
+      labels:
+        app: devices
+        framework: sdlmicro
+    spec:
+      imagePullSecrets:
+        - name: regcred
+      containers:
+      - name: devices
+        image: registry.suredatalab.kr/beymons/devices:latest
+        resources:
+          limits:
+            cpu: 100m
+            memory: 200Mi
+        ports:
+          - containerPort: 50251
+          - containerPort: 9011
+        envFrom:
+          - secretRef:
+              name: openid-connect
+          - configMapRef:
+              name: devices-config
+        env:
+        - name: ZIPKIN_ENDPOINT
+          value: http://zipkin.istio-system:9411/api/v2/spans
+        volumeMounts: []
+      - name: proxy
+        image: envoyproxy/envoy:v1.32-latest
+        resources:
+          limits: # 1000 requests/sec
+            cpu: 350m
+            memory: 100Mi
+        ports:
+          - containerPort: 5000
+          - containerPort: 9901
+        volumeMounts:
+        - name: envoy-config
+          mountPath: "/etc/envoy"
+          readOnly: true
+      volumes:
+      - name: envoy-config
+        configMap:
+          name: devices-proxy

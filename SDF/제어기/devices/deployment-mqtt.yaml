@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devices-mqtt
+  labels:
+    framework: sdlmicro
+    mqtt: mosquitto
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: devices-mqtt
+      framework: sdlmicro
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: devices-mqtt
+        framework: sdlmicro
+    spec:
+      imagePullSecrets:
+        - name: regcred
+      containers:
+      - name: devices-mqtt
+        image: registry.suredatalab.kr/beymons/devices/mqtt:latest
+        resources:
+          limits:
+            cpu: 300m
+            memory: 200Mi
+        envFrom:
+          - configMapRef:
+              name: devices-config
+        env: []
+        volumeMounts: []
+      volumes: []

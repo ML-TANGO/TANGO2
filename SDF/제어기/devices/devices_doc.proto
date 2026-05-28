@@ -1,0 +1,129 @@
+syntax = "proto3";
+package devices;
+option go_package = "gitlab.suredatalab.kr/beymons/devices;devices";
+
+import "protoc-gen-openapiv2/options/annotations.proto";
+
+option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
+	info: {
+		title: "장치 관리 서비스"
+		description:
+			"BEYMONS의 장치를 관리하는 서비스로 다음과 같은 기능을 제공한다:"
+			"\n"
+			" - 장치 메타데이터 관리\n"
+			" - 센서 타입 관리\n"
+			" - 장치 설정 관리\n"
+			"\n"
+			"## 장치 메타데이터 관리"
+			"\n"
+			"장치는 게이트웨이(GATEWAY)와 노드(NODE)가 있으며 노드에만 센서를 설정할 수 있다. "
+			"센서를 설정할 때 채널 ID는 1번부터 9999번까지 사용할 수 있으며,"
+			"채널마다 다른 타입의 센서를 설정할 수 있다."
+			"\n"
+			"## 센서 타입 관리"
+			"\n"
+			"센서 타입으로 등록되지 않으면 데이터를 수신하더라도 처리할 수 없으며, "
+			"데이터를 조회할 때 센서 타입의 메타데이터가 활용된다. "
+			"센서 타입에 multi_probe가 설정되어 있으면 센서에 연결된 다수의 채널(probe) 정보를 처리할 수 있으며, "
+			"데이터는 채널(probe)별로 기록된다. "
+	}
+	schemes: HTTPS
+	host: "devel.beymons.kr"
+	base_path: "/api"
+	consumes: "application/json"
+	produces: "application/json"
+	security_definitions: {
+		security: {
+			key: "Keycloak"
+			value: {
+				type: TYPE_OAUTH2
+				flow: FLOW_ACCESS_CODE
+				authorization_url: "https://keycloak.suredatalab.kr/realms/beymons/protocol/openid-connect/auth"
+				token_url: "https://keycloak.suredatalab.kr/realms/beymons/protocol/openid-connect/token"
+			}
+		}
+	}
+	security: [
+		{
+			security_requirement: {
+				key: "Keycloak"
+				value: {
+					scope: []
+				}
+			}
+		}
+	]
+	responses: {
+		key: "401"
+		value: {
+			description: "Returned when the user does not sign-in."
+			schema: {
+				example: "null"
+			}
+			headers: {
+				key: "grpc-status"
+				value: {
+					description: "gRPC error code"
+				}
+			}
+			headers: {
+				key: "grpc-message"
+				value: {
+					description: "gRPC error message"
+				}
+			}
+		}
+	}
+	responses: {
+		key: "403"
+		value: {
+			description: "Returned when the user does not have permission to access the resource."
+			schema: {
+				example: "null"
+			}
+			headers: {
+				key: "grpc-status"
+				value: {
+					description: "gRPC error code"
+				}
+			}
+			headers: {
+				key: "grpc-message"
+				value: {
+					description: "gRPC error message"
+				}
+			}
+		}
+	}
+	responses: {
+		key: "404"
+		value: {
+			description: "Returned when the resource does not exist."
+			schema: {
+				example: "null"
+			}
+			headers: {
+				key: "grpc-status"
+				value: {
+					description: "gRPC error code"
+					default: "111"
+				}
+			}
+			headers: {
+				key: "grpc-message"
+				value: {
+					description: "gRPC error message"
+				}
+			}
+		}
+	}
+	responses: {
+		key: "default"
+		value: {
+			description: "An unexpected error response"
+			schema: {
+				example: "null"
+			}
+		}
+	}
+};

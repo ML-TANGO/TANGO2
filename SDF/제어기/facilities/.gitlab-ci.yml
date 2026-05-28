@@ -1,0 +1,165 @@
+image: golang:1.24
+
+include:
+  - project: 'sdlmicro/middleware'
+    file: '.buildkit.gitlab-ci.yml'
+
+stages:
+  - prerequisite
+  - test
+  - deploy
+
+cache: &global_cache
+  key:
+    files:
+      - go.mod
+      - go.sum
+  paths:
+    - vendor
+
+dependency:
+  stage: prerequisite
+  cache:
+    <<: *global_cache
+  before_script:
+    - git config --global url."https://REDACTED@gitlab.suredatalab.kr/".insteadOf "https://gitlab.suredatalab.kr/"
+    - go env -w GOPRIVATE="gitlab.suredatalab.kr/*"
+  script:
+    - go mod vendor
+  only:
+    refs:
+      - main
+      - merge_requests
+      - /^v[0-9]+\.[0-9]+\.[0-9]+$/
+      - /^v[0-9]+\.[0-9]+-rc[0-9]+$/
+
+initialize:
+  stage: prerequisite
+  image: alpine/psql:16.3
+  when: always
+  variables:
+    PGPASSWORD: ${DB_PASSWD}
+  script:
+    - psql -h ${DB_HOST} -U ${DB_USER} -d ${DB_NAME} -c "CREATE SCHEMA \"$CI_COMMIT_SHORT_SHA\""
+  only:
+    - main
+    - merge_requests
+
+go test:
+  stage: test
+  needs: ["initialize"]
+  cache:
+    <<: *global_cache
+    policy: pull
+  coverage: '/^total:[\t ]+\(statements\)[\t ]+(\d+\.\d+)%/'
+  variables:
+    SEARCH_PATH: $CI_COMMIT_SHORT_SHA
+    MQTT_CERT_FILE: $beymons_crt
+    MQTT_PRIVATE_KEY_FILE: $beymons_key
+  before_script:
+    - go install gotest.tools/gotestsum@latest
+    - go install github.com/boumenot/gocover-cobertura@latest
+  script:
+    - gotestsum --junitfile junit.xml --format testname -- -race -coverprofile=coverage.txt -covermode atomic ./...
+    - cat coverage.txt | grep -v "pb.go" > coverage.out
+  after_script:
+    - go tool cover -func=coverage.out
+    - gocover-cobertura -ignore-gen-files < coverage.txt > coverage.xml
+  only:
+    - main
+    - merge_requests
+  artifacts:
+    when: always
+    reports:
+      junit: junit.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+
+go lint:
+  stage: test
+  image: registry.gitlab.com/gitlab-org/gitlab-build-images:golangci-lint-alpine
+  allow_failure: true
+  script:
+    - wget https://gitlab.com/gitlab-org/security-products/ci-templates/-/raw/master/.golangci.yml
+    - golangci-lint run --verbose --out-format code-climate:codequality.json,colored-line-number
+  only:
+    - main
+    - merge_requests
+  artifacts:
+    when: always
+    reports:
+      codequality: codequality.json
+
+gosec:
+  stage: test
+  allow_failure: true
+  before_script:
+    - go install github.com/securego/gosec/v2/cmd/gosec@latest
+  script:
+    - gosec -nosec -exclude-dir test -exclude-generated -fmt=sarif -out=results.sarif ./...
+  only:
+    - main
+    - merge_requests
+  artifacts:
+    when: always
+    reports:
+      sast: results.sarif
+
+clean:
+  stage: test
+  needs: ["go test"]
+  image: alpine/psql:16.3
+  when: always
+  variables:
+    PGPASSWORD: ${DB_PASSWD}
+  script:
+    - psql -h ${DB_HOST} -U ${DB_USER} -d ${DB_NAME} -c "DROP SCHEMA \"$CI_COMMIT_SHORT_SHA\" CASCADE"
+  only:
+    - main
+    - merge_requests
+
+deploy:development:
+  stage: deploy
+  needs: ["go test"]
+  image: moby/buildkit:v0.12.4-rootless
+  cache:
+    <<: *global_cache
+    policy: pull
+  before_script:
+    - sed -i.bak -r "s/fmt.Println\([^\n]+\)$/fmt.Println\(\"${CI_COMMIT_SHORT_SHA}\"\)/g" cmd/version.go
+    - !reference [.buildkit, before_script]
+  script:
+    - !reference [.buildkit, script]
+  only:
+    - main
+
+deploy:production:
+  stage: deploy
+  image: moby/buildkit:v0.12.4-rootless
+  variables:
+    BUILD_IMAGE_NAME: ${CI_REGISTRY_IMAGE}:${CI_COMMIT_TAG}
+  cache:
+    <<: *global_cache
+    policy: pull
+  before_script:
+    - sed -i.bak -r "s/fmt.Println\([^\n]+\)$/fmt.Println\(\"${CI_COMMIT_TAG}\"\)/g" cmd/version.go
+    - !reference [.buildkit, before_script]
+  script:
+    - !reference [.buildkit, script]
+  after_script:
+    - awk -v nlines=2 '/build:/ {for (i=0; i<nlines; i++) {getline}; next} 1' docker-compose.yaml > docker-compose.yaml.temp
+    - mv -f docker-compose.yaml.temp docker-compose.yaml
+  only:
+    - /^v[0-9]+\.[0-9]+\.[0-9]+$/
+    - /^v[0-9]+\.[0-9]+-rc[0-9]+$/
+  except:
+    - branches
+  artifacts:
+    untracked: false
+    paths:
+      - README.md
+      - envoy-proxy
+      - facilities.proto
+      - docker-compose.yaml
+      - manifest.yaml

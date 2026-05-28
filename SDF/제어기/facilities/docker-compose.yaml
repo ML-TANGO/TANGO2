@@ -1,0 +1,30 @@
+version: "3.8"
+
+networks:
+  default:
+    name: ${COMPOSE_PROJECT_NAME:-sdl}
+    external: true
+
+services:
+  facilities-proxy:
+    image: envoyproxy/envoy:v1.32-latest
+    restart: always
+    expose:
+      - "5000"
+      - "9011"
+    volumes:
+      - ./envoy-proxy:/etc/envoy:ro
+
+  facilities:
+    image: registry.suredatalab.kr/beymons/facilities:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - facilities-proxy
+    restart: always
+    environment:
+      - SECURE_MODE=${SECURE_MODE:-enforce}
+      - ISSUER=https://keycloak.suredatalab.kr/realms/${COMPOSE_PROJECT_NAME:-sdl}
+      - ZIPKIN_ENDPOINT=${ZIPKIN_ENDPOINT:-http://zipkin:9411/api/v2/spans}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
