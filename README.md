@@ -105,10 +105,6 @@ Edge/device-side runtime stack for model optimization, parallel inference, runti
 Field demonstrations of TANGO2 across three SDx domains.
 
 #### SDF [[View Details]](Field_Test/SDF/README.md)
-├── 원시데이터 수집기 [[View Details]](Field_Test/SDF/원시데이터%20수집기/README.md)<br>
-├── 원천데이터 생성기 [[View Details]](Field_Test/SDF/원천데이터%20생성기/README.md)<br>
-├── 제어기<br>
-└── LAM 학습,추론<br>
 
 <p align="center">
 <img width="1280" align="center" alt="SDF" src="docs/sdf.png" /></p>
@@ -116,15 +112,6 @@ Field demonstrations of TANGO2 across three SDx domains.
 **Software Defined Farming**: To advance smart farms, we are building a system based on artificial intelligence (LLM, LAM) and verifying intelligent SDF through continuous learning of AI models.
 
 #### SDM [[View Details]](Field_Test/SDM/README.md)
-├── chest2vec<br>
-├── models<br>
-├── training<br>
-├── losses<br>
-├── evaluation<br>
-├── grounding<br>
-├── rexgrounding<br>
-├── data<br>
-└── tests<br>
 
 <p align="center">
 <img width="1280" align="center" alt="SDM" src="docs/sdm.png" /></p>
@@ -132,10 +119,6 @@ Field demonstrations of TANGO2 across three SDx domains.
 **Software Defined Medicine**: We developed a Software Defined Medicine (SDM) system based on a medical domain-specific, multimodal (chest CT-interpretation) artificial intelligence (Large Vision-Language Model) and demonstrated it in a hospital.
 
 #### SDS [[View Details]](Field_Test/SDS/README.md)
-├── Data_Revision<br>
-├── dataset [[View Details]](Field_Test/SDS/dataset/README.md)<br>
-├── simulator [[View Details]](Field_Test/SDS/simulator/README.md)<br>
-└── VisionLanguageModel [[View Details]](Field_Test/SDS/VisionLanguageModel/README.md)<br>
 
 <p align="center">
 <img width="1280" align="center" alt="SDS" src="docs/sds.png" /></p>
