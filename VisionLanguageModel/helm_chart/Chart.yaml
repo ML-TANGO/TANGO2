@@ -1,0 +1,9 @@
+apiVersion: v2
+name: eva-vlm
+description: |
+  에바(Eva) — 해양 도메인 특화 Vision-Language Model MSA 서비스.
+  선박 카메라 이미지와 AIS 데이터를 입력받아 해상상황묘사 및 COLREG 기반
+  항해조력메시지를 생성하는 추론 API를 Tango GenAI Platform에 탑재합니다.
+type: application
+version: 1.0.0
+appVersion: "1.0.0"

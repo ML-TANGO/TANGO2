@@ -1,0 +1,3727 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "장치 관리 서비스",
+    "description": "BEYMONS의 장치를 관리하는 서비스로 다음과 같은 기능을 제공한다:\n - 장치 메타데이터 관리\n - 센서 타입 관리\n - 장치 설정 관리\n\n## 장치 메타데이터 관리\n장치는 게이트웨이(GATEWAY)와 노드(NODE)가 있으며 노드에만 센서를 설정할 수 있다. 센서를 설정할 때 채널 ID는 1번부터 9999번까지 사용할 수 있으며,채널마다 다른 타입의 센서를 설정할 수 있다.\n## 센서 타입 관리\n센서 타입으로 등록되지 않으면 데이터를 수신하더라도 처리할 수 없으며, 데이터를 조회할 때 센서 타입의 메타데이터가 활용된다. 센서 타입에 multi_probe가 설정되어 있으면 센서에 연결된 다수의 채널(probe) 정보를 처리할 수 있으며, 데이터는 채널(probe)별로 기록된다. ",
+    "version": "20260205-cdbcdb6"
+  },
+  "tags": [
+    {
+      "name": "Devices",
+      "description": "장치 관리"
+    },
+    {
+      "name": "DeviceConfigs",
+      "description": "장치 설정 관리"
+    },
+    {
+      "name": "SensorTypes",
+      "description": "센서 타입 관리"
+    }
+  ],
+  "host": "devel.beymons.kr",
+  "basePath": "/api",
+  "schemes": [
+    "https"
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/device-configs": {
+      "get": {
+        "summary": "[TODO] 설정 조회",
+        "operationId": "DeviceConfigs_SearchConfig",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/devicesSearchConfigResponse"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googleRpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "asc",
+            "description": "오름차순으로 정렬\n\n - device_config_id: ID (Default)\n - display_name: 설정 이름\n - description: 설명\n - created_at: 생성된 일시\n - created_by: 생성한 사용자 정보\n - params: 설정값\n - tags: 태그",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "device_config_id",
+                "display_name",
+                "description",
+                "created_at",
+                "created_by",
+                "params",
+                "tags"
+              ]
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "desc",
+            "description": "내림차순으로 정렬\n\n - device_config_id: ID (Default)\n - display_name: 설정 이름\n - description: 설명\n - created_at: 생성된 일시\n - created_by: 생성한 사용자 정보\n - params: 설정값\n - tags: 태그",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "device_config_id",
+                "display_name",
+                "description",
+                "created_at",
+                "created_by",
+                "params",
+                "tags"
+              ]
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "limit",
+            "description": "응답으로 보내줄 레코드 수.\n지정하지 않거나 0인 경우 전체 레코드를 조회하지만,\n응답이 15초 이상 소요되는 경우 타임아웃 오류가 발생된다.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "offset",
+            "description": "페이지에서 표시되는 첫 레코드의 인덱스 (Default: 0)",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "search",
+            "description": "전체 검색",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "configId",
+            "description": "Config ID로 검색",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "DeviceConfigs"
+        ]
+      },
+      "post": {
+        "summary": "[TODO] 장치 설정 생성",
+        "operationId": "DeviceConfigs_CreateConfig",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/devicesDeviceConfig"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "409": {
+            "description": "Returned when the device config set is already exists",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googleRpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "description": "장치 설정을 관리한다.",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/devicesDeviceConfig"}
+              ]
+            }
+          }
+        ],
+        "tags": [
+          "DeviceConfigs"
+        ]
+      }
+    },
+    "/device-configs/{configId}": {
+      "get": {
+        "summary": "[TODO] 설정 조회",
+        "operationId": "DeviceConfigs_SearchConfig2",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/devicesSearchConfigResponse"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googleRpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "configId",
+            "description": "Config ID로 검색",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "asc",
+            "description": "오름차순으로 정렬\n\n - device_config_id: ID (Default)\n - display_name: 설정 이름\n - description: 설명\n - created_at: 생성된 일시\n - created_by: 생성한 사용자 정보\n - params: 설정값\n - tags: 태그",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "device_config_id",
+                "display_name",
+                "description",
+                "created_at",
+                "created_by",
+                "params",
+                "tags"
+              ]
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "desc",
+            "description": "내림차순으로 정렬\n\n - device_config_id: ID (Default)\n - display_name: 설정 이름\n - description: 설명\n - created_at: 생성된 일시\n - created_by: 생성한 사용자 정보\n - params: 설정값\n - tags: 태그",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "device_config_id",
+                "display_name",
+                "description",
+                "created_at",
+                "created_by",
+                "params",
+                "tags"
+              ]
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "limit",
+            "description": "응답으로 보내줄 레코드 수.\n지정하지 않거나 0인 경우 전체 레코드를 조회하지만,\n응답이 15초 이상 소요되는 경우 타임아웃 오류가 발생된다.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "offset",
+            "description": "페이지에서 표시되는 첫 레코드의 인덱스 (Default: 0)",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "search",
+            "description": "전체 검색",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "DeviceConfigs"
+        ]
+      },
+      "delete": {
+        "summary": "[TODO] 장치 설정 삭제",
+        "description": "이 설정을 사용하는 장치가 있으면 삭제 불가",
+        "operationId": "DeviceConfigs_DeleteConfig",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googleRpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "configId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "DeviceConfigs"
+        ]
+      }
+    },
+    "/device-configs/{configId}/devices": {
+      "get": {
+        "summary": "[TODO] 설정이 적용된 장치 목록",
+        "operationId": "DeviceConfigs_ListDevice",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/devicesSearchResponse"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googleRpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "configId",
+            "description": "TODO: Config ID로 필터링",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "order",
+            "description": " - device_id_asc: 장치 ID 오름차순\n - device_id_desc: 장치 ID 내림차순\n - device_role_asc: 동작방식 오름차순\n - device_role_desc: 동작방식 내림차순\n - site_id_asc: 현장 ID 오름차순\n - site_id_desc: 현장 ID 내림차순\n - site_name_asc: 현장명 오름차순\n - site_name_desc: 현장명 내림차순",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "device_id_asc",
+                "device_id_desc",
+                "device_role_asc",
+                "device_role_desc",
+                "site_id_asc",
+                "site_id_desc",
+                "site_name_asc",
+                "site_name_desc"
+              ]
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "field",
+            "description": "조회 필드 선택 (default: ALL)\n\n - display_name: 장치 이름\n - description: 장치 설명\n - sensors: 센서 정보\n - location: 설치 위치\n - created_at: 생성 일시\n - created_by: 생성한 사용자 정보\n - updated_at: 마지막으로 수정된 일시\n - updated_by: 마지막으로 수정한 사용자 정보\n - site: 고객 정보",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "display_name",
+                "description",
+                "sensors",
+                "location",
+                "created_at",
+                "created_by",
+                "updated_at",
+                "updated_by",
+                "site"
+              ]
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "limit",
+            "description": "응답으로 보내줄 레코드 수.\n지정하지 않거나 0인 경우 전체 레코드를 조회하지만,\n응답이 15초 이상 소요되는 경우 타임아웃 오류가 발생된다.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "offset",
+            "description": "페이지에서 표시되는 첫 레코드의 인덱스 (Default: 0)",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "search",
+            "description": "전체 검색\n\n대상:\n- 장치 ID (전방일치)\n- 장치명\n- 장치 설명\n- 현장 ID (전방일치)\n- 현장명\n- 설비명",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "deviceId",
+            "description": "장치 ID로 필터링",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "siteId",
+            "description": "현장 ID로 필터링",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "facilityId",
+            "description": "설비 ID로 필터링",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "sensorType",
+            "description": "센서 타입으로 필터링",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "role",
+            "description": "장치 종류로 필터링",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "GATEWAY",
+                "NODE",
+                "REPEATER",
+                "NODEGATEWAY"
+              ]
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "status",
+            "description": "장치 상태로 필터링\n\n - NORMAL: 정상 상태\n - TROUBLE: 장치 혹은 센서의 고장 상태\n - DISCARD: 폐기\n - NOT_RECEIVED: 데이터 미수신 상태\n - CAUTION: 주의\n - WARNING: 경고",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "NORMAL",
+                "TROUBLE",
+                "DISCARD",
+                "NOT_RECEIVED",
+                "CAUTION",
+                "WARNING"
+              ]
+            },
+            "collectionFormat": "multi"
+          }
+        ],
+        "tags": [
+          "DeviceConfigs"
+        ]
+      }
+    },
+    "/devices": {
+      "get": {
+        "summary": "장치 검색",
+        "operationId": "Devices_Search",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/devicesSearchResponse"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googleRpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "order",
+            "description": " - device_id_asc: 장치 ID 오름차순\n - device_id_desc: 장치 ID 내림차순\n - device_role_asc: 동작방식 오름차순\n - device_role_desc: 동작방식 내림차순\n - site_id_asc: 현장 ID 오름차순\n - site_id_desc: 현장 ID 내림차순\n - site_name_asc: 현장명 오름차순\n - site_name_desc: 현장명 내림차순",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "device_id_asc",
+                "device_id_desc",
+                "device_role_asc",
+                "device_role_desc",
+                "site_id_asc",
+                "site_id_desc",
+                "site_name_asc",
+                "site_name_desc"
+              ]
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "field",
+            "description": "조회 필드 선택 (default: ALL)\n\n - display_name: 장치 이름\n - description: 장치 설명\n - sensors: 센서 정보\n - location: 설치 위치\n - created_at: 생성 일시\n - created_by: 생성한 사용자 정보\n - updated_at: 마지막으로 수정된 일시\n - updated_by: 마지막으로 수정한 사용자 정보\n - site: 고객 정보",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "display_name",
+                "description",
+                "sensors",
+                "location",
+                "created_at",
+                "created_by",
+                "updated_at",
+                "updated_by",
+                "site"
+              ]
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "limit",
+            "description": "응답으로 보내줄 레코드 수.\n지정하지 않거나 0인 경우 전체 레코드를 조회하지만,\n응답이 15초 이상 소요되는 경우 타임아웃 오류가 발생된다.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "offset",
+            "description": "페이지에서 표시되는 첫 레코드의 인덱스 (Default: 0)",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "search",
+            "description": "전체 검색\n\n대상:\n- 장치 ID (전방일치)\n- 장치명\n- 장치 설명\n- 현장 ID (전방일치)\n- 현장명\n- 설비명",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "configId",
+            "description": "TODO: Config ID로 필터링",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "deviceId",
+            "description": "장치 ID로 필터링",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "siteId",
+            "description": "현장 ID로 필터링",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "facilityId",
+            "description": "설비 ID로 필터링",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "sensorType",
+            "description": "센서 타입으로 필터링",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "role",
+            "description": "장치 종류로 필터링",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "GATEWAY",
+                "NODE",
+                "REPEATER",
+                "NODEGATEWAY"
+              ]
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "status",
+            "description": "장치 상태로 필터링\n\n - NORMAL: 정상 상태\n - TROUBLE: 장치 혹은 센서의 고장 상태\n - DISCARD: 폐기\n - NOT_RECEIVED: 데이터 미수신 상태\n - CAUTION: 주의\n - WARNING: 경고",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "NORMAL",
+                "TROUBLE",
+                "DISCARD",
+                "NOT_RECEIVED",
+                "CAUTION",
+                "WARNING"
+              ]
+            },
+            "collectionFormat": "multi"
+          }
+        ],
+        "tags": [
+          "Devices"
+        ]
+      },
+      "post": {
+        "summary": "장치 등록",
+        "operationId": "Devices_CreateDevice",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/devicesDevice"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "409": {
+            "description": "Returned when the device is already exists",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googleRpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "description": "BEYMONS 장치에 대한 메타데이터 관리",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/devicesDevice"}
+              ]
+            }
+          }
+        ],
+        "tags": [
+          "Devices"
+        ]
+      }
+    },
+    "/devices/{deviceId}": {
+      "get": {
+        "summary": "장치 조회",
+        "operationId": "Devices_GetDevice",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/devicesDeviceResponse"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googleRpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "Devices"
+        ]
+      },
+      "delete": {
+        "summary": "장치 삭제",
+        "operationId": "Devices_DeleteDevice",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googleRpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "Devices"
+        ]
+      },
+      "put": {
+        "summary": "장치 정보 변경",
+        "operationId": "Devices_UpdateDevice",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/devicesDevice"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googleRpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "description": "Device ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/DevicesUpdateDeviceBody"}
+              ]
+            }
+          }
+        ],
+        "tags": [
+          "Devices"
+        ]
+      }
+    },
+    "/devices/{deviceId}/agsmotor": {
+      "post": {
+        "summary": "장치로 명령 전송",
+        "operationId": "Devices_Command4",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object"
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googleRpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "description": "최종 목적지",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "agsmotor",
+            "description": "agsmotor 제어",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/CommandRequestAgsMotorRequest"}
+              ]
+            }
+          },
+          {
+            "name": "command",
+            "description": "명령어\n\n - set_agsmotor_operation_req: AGS 개폐기 제어모듈 동작 명령\n - set_mc_switch_req: 마그네트 스위치 제어",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "unspecified",
+              "set_agsmotor_operation_req",
+              "set_mc_switch_req"
+            ],
+            "default": "unspecified"
+          },
+          {
+            "name": "sequence",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "noWait",
+            "description": "응답을 기다리지 않음",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "tags": [
+          "제어"
+        ]
+      }
+    },
+    "/devices/{deviceId}/agsmotor_mode": {
+      "post": {
+        "summary": "장치로 명령 전송",
+        "operationId": "Devices_Command5",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object"
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googleRpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "description": "최종 목적지",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "agsmotorMode",
+            "description": "AGS 개폐기 제어모듈 동작 모드 변경",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/CommandRequestAgsMotorMode"}
+              ]
+            }
+          },
+          {
+            "name": "command",
+            "description": "명령어\n\n - set_agsmotor_operation_req: AGS 개폐기 제어모듈 동작 명령\n - set_mc_switch_req: 마그네트 스위치 제어",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "unspecified",
+              "set_agsmotor_operation_req",
+              "set_mc_switch_req"
+            ],
+            "default": "unspecified"
+          },
+          {
+            "name": "sequence",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "noWait",
+            "description": "응답을 기다리지 않음",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "tags": [
+          "제어"
+        ]
+      }
+    },
+    "/devices/{deviceId}/children": {
+      "post": {
+        "summary": "DEPRECATED: 하위 장치 연결",
+        "operationId": "Devices_AttachDevice",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/devicesDeviceResponse"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googleRpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/DevicesAttachDeviceBody"}
+              ]
+            }
+          }
+        ],
+        "tags": [
+          "Devices"
+        ]
+      }
+    },
+    "/devices/{deviceId}/children/{children}": {
+      "delete": {
+        "summary": "DEPRECATED: 하위 장치 연결 해제",
+        "operationId": "Devices_DetachDevice",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/devicesDeviceResponse"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googleRpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "children",
+            "in": "path",
+            "required": true,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "csv",
+            "minItems": 1
+          }
+        ],
+        "tags": [
+          "Devices"
+        ]
+      }
+    },
+    "/devices/{deviceId}/config": {
+      "post": {
+        "summary": "장치로 명령 전송",
+        "operationId": "Devices_Command3",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object"
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googleRpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "description": "최종 목적지",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "configure",
+            "description": "TODO: 설정 변경",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/devicesCommandRequestConfigRequest"}
+              ]
+            }
+          },
+          {
+            "name": "command",
+            "description": "명령어\n\n - set_agsmotor_operation_req: AGS 개폐기 제어모듈 동작 명령\n - set_mc_switch_req: 마그네트 스위치 제어",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "unspecified",
+              "set_agsmotor_operation_req",
+              "set_mc_switch_req"
+            ],
+            "default": "unspecified"
+          },
+          {
+            "name": "sequence",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "noWait",
+            "description": "응답을 기다리지 않음",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "tags": [
+          "제어"
+        ]
+      }
+    },
+    "/devices/{deviceId}/histories": {
+      "get": {
+        "summary": "장치 이력 조회",
+        "operationId": "Devices_Histories",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/devicesHistoryResponse"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googleRpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "Devices"
+        ]
+      }
+    },
+    "/devices/{deviceId}/sensors": {
+      "post": {
+        "summary": "센서 정보 수정 및 추가",
+        "operationId": "Devices_AppendSensor",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googleRpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "description": "Device ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/DevicesAppendSensorBody"}
+              ]
+            }
+          }
+        ],
+        "tags": [
+          "Devices"
+        ]
+      }
+    },
+    "/devices/{deviceId}/sensors/{channel}/limits": {
+      "get": {
+        "summary": "임계치 조회",
+        "operationId": "Devices_GetSensorLimit",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/devicesGetLimitResponse"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googleRpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "description": "Device ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "channel",
+            "description": "Modbus address(구: Channel ID)",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "Devices"
+        ]
+      }
+    },
+    "/devices/{deviceId}/sensors/{channel}/{attribute}": {
+      "delete": {
+        "summary": "임계치 설정 해제",
+        "operationId": "Devices_DeleteSensorLimit",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googleRpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "description": "Device ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "channel",
+            "description": "Modbus address(구: Channel ID)",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "format": "int64"
+          },
+          {
+            "name": "attribute",
+            "description": "Attribute",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "Devices"
+        ]
+      },
+      "put": {
+        "summary": "임계치 설정",
+        "operationId": "Devices_SetSensorLimit",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/devicesSensorLimit"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googleRpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "description": "Device ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "channel",
+            "description": "Modbus address(구: Channel ID)",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "format": "int64"
+          },
+          {
+            "name": "attribute",
+            "description": "Attribute",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/DevicesSetSensorLimitBody"}
+              ]
+            }
+          }
+        ],
+        "tags": [
+          "Devices"
+        ]
+      }
+    },
+    "/devices/{deviceId}/sensors/{sensorId}": {
+      "delete": {
+        "summary": "장치에서 센서 제거",
+        "operationId": "Devices_DeleteSensor",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googleRpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "description": "Device ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "sensorId",
+            "description": "Sensor ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "Devices"
+        ]
+      },
+      "put": {
+        "summary": "센서 정보 수정 및 추가",
+        "operationId": "Devices_AppendSensor2",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googleRpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "description": "Device ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "sensorId",
+            "description": "Sensor ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/DevicesAppendSensorBody"}
+              ]
+            }
+          }
+        ],
+        "tags": [
+          "Devices"
+        ]
+      }
+    },
+    "/devices/{deviceId}/sequence/{sequence}": {
+      "get": {
+        "summary": "명령 처리 상태 확인",
+        "operationId": "Devices_GetCommand",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/devicesDeviceCommandHistory"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googleRpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "description": "Device ID",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "sequence",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "uint64"
+          }
+        ],
+        "tags": [
+          "제어"
+        ]
+      }
+    },
+    "/devices/{deviceId}/{command}": {
+      "post": {
+        "summary": "장치로 명령 전송",
+        "operationId": "Devices_Command",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object"
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googleRpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "description": "최종 목적지",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "command",
+            "description": "명령어",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "enum": [
+              "unspecified",
+              "set_agsmotor_operation_req",
+              "set_mc_switch_req"
+            ]
+          },
+          {
+            "name": "payload",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object"
+            }
+          },
+          {
+            "name": "sequence",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "noWait",
+            "description": "응답을 기다리지 않음",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "tags": [
+          "제어"
+        ]
+      },
+      "patch": {
+        "summary": "장치로 명령 전송",
+        "operationId": "Devices_Command2",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object"
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googleRpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "description": "최종 목적지",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "command",
+            "description": "명령어",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "enum": [
+              "unspecified",
+              "set_agsmotor_operation_req",
+              "set_mc_switch_req"
+            ]
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/devicesDevicesCommandBody"}
+              ]
+            }
+          }
+        ],
+        "tags": [
+          "제어"
+        ]
+      }
+    },
+    "/sensor-types": {
+      "get": {
+        "summary": "센서 타입 검색",
+        "operationId": "SensorTypes_SearchType",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/devicesSearchTypeResponse"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googleRpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "asc",
+            "description": "오름차순으로 정렬\n\n - sensor_type_id: ID (Default)\n - type_name: 센서 타입 이름\n - attributes: 속성\n - description: 설명\n - created_at: 생성 일시\n - created_by: 생성한 사용자 정보",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "sensor_type_id",
+                "type_name",
+                "attributes",
+                "description",
+                "created_at",
+                "created_by"
+              ]
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "desc",
+            "description": "내림차순으로 정렬\n\n - sensor_type_id: ID (Default)\n - type_name: 센서 타입 이름\n - attributes: 속성\n - description: 설명\n - created_at: 생성 일시\n - created_by: 생성한 사용자 정보",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "sensor_type_id",
+                "type_name",
+                "attributes",
+                "description",
+                "created_at",
+                "created_by"
+              ]
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "field",
+            "description": "조회 필드 선택 (default: ALL)\n\n - sensor_type_id: ID (Default)\n - type_name: 센서 타입 이름\n - attributes: 속성\n - description: 설명\n - created_at: 생성 일시\n - created_by: 생성한 사용자 정보",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "sensor_type_id",
+                "type_name",
+                "attributes",
+                "description",
+                "created_at",
+                "created_by"
+              ]
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "limit",
+            "description": "응답으로 보내줄 레코드 수.\n지정하지 않거나 0인 경우 전체 레코드를 조회하지만,\n응답이 15초 이상 소요되는 경우 타임아웃 오류가 발생된다.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "offset",
+            "description": "페이지에서 표시되는 첫 레코드의 인덱스 (Default: 0)",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "search",
+            "description": "전체 검색 (type_id, type_name, description)",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "typeId",
+            "description": "센서 타입 ID로 검색",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SensorTypes"
+        ]
+      },
+      "post": {
+        "summary": "센서 타입 생성",
+        "operationId": "SensorTypes_CreateType",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/devicesSensorType"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "409": {
+            "description": "Returned when the sensor type is already exists",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googleRpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "description": "센서 타입 관리",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/devicesSensorType"}
+              ]
+            }
+          }
+        ],
+        "tags": [
+          "SensorTypes"
+        ]
+      }
+    },
+    "/sensor-types/{typeId}": {
+      "get": {
+        "summary": "센서 타입 검색",
+        "operationId": "SensorTypes_SearchType2",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/devicesSearchTypeResponse"}
+              ]
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googleRpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "typeId",
+            "description": "센서 타입 ID로 검색",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "asc",
+            "description": "오름차순으로 정렬\n\n - sensor_type_id: ID (Default)\n - type_name: 센서 타입 이름\n - attributes: 속성\n - description: 설명\n - created_at: 생성 일시\n - created_by: 생성한 사용자 정보",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "sensor_type_id",
+                "type_name",
+                "attributes",
+                "description",
+                "created_at",
+                "created_by"
+              ]
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "desc",
+            "description": "내림차순으로 정렬\n\n - sensor_type_id: ID (Default)\n - type_name: 센서 타입 이름\n - attributes: 속성\n - description: 설명\n - created_at: 생성 일시\n - created_by: 생성한 사용자 정보",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "sensor_type_id",
+                "type_name",
+                "attributes",
+                "description",
+                "created_at",
+                "created_by"
+              ]
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "field",
+            "description": "조회 필드 선택 (default: ALL)\n\n - sensor_type_id: ID (Default)\n - type_name: 센서 타입 이름\n - attributes: 속성\n - description: 설명\n - created_at: 생성 일시\n - created_by: 생성한 사용자 정보",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "sensor_type_id",
+                "type_name",
+                "attributes",
+                "description",
+                "created_at",
+                "created_by"
+              ]
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "limit",
+            "description": "응답으로 보내줄 레코드 수.\n지정하지 않거나 0인 경우 전체 레코드를 조회하지만,\n응답이 15초 이상 소요되는 경우 타임아웃 오류가 발생된다.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "offset",
+            "description": "페이지에서 표시되는 첫 레코드의 인덱스 (Default: 0)",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "search",
+            "description": "전체 검색 (type_id, type_name, description)",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SensorTypes"
+        ]
+      },
+      "delete": {
+        "summary": "삭제",
+        "operationId": "SensorTypes_DeleteType",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "401": {
+            "description": "Returned when the user does not sign-in.",
+            "schema": {
+              "example": null
+            }
+          },
+          "403": {
+            "description": "Returned when the user does not have permission to access the resource.",
+            "schema": {
+              "example": null
+            }
+          },
+          "404": {
+            "description": "Returned when the resource does not exist.",
+            "schema": {
+              "example": null
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "allOf": [
+                {"$ref": "#/definitions/googleRpcStatus"}
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "typeId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SensorTypes"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "AgsMotorModeMode": {
+      "type": "string",
+      "enum": [
+        "unknown",
+        "beymons_auto",
+        "beymons_remote"
+      ],
+      "default": "unknown"
+    },
+    "AgsMotorRequestAction": {
+      "type": "string",
+      "enum": [
+        "stop",
+        "open",
+        "close"
+      ],
+      "default": "stop"
+    },
+    "AgsMotorRequestChannel": {
+      "type": "object",
+      "properties": {
+        "probe": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "CommandRequestAgsMotorMode": {
+      "type": "object",
+      "properties": {
+        "address": {
+          "type": "object",
+          "additionalProperties": {
+            "allOf": [
+              {"$ref": "#/definitions/AgsMotorModeMode"}
+            ]
+          }
+        }
+      },
+      "title": "AGS 개폐기 제어모듈 동작 모드 변경 명령"
+    },
+    "CommandRequestAgsMotorRequest": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "allOf": [
+            {"$ref": "#/definitions/AgsMotorRequestAction"}
+          ]
+        },
+        "channels": {
+          "type": "object",
+          "example": {
+            "1": {
+              "probe": {
+                "1": true,
+                "2": true,
+                "3": true
+              }
+            }
+          },
+          "additionalProperties": {
+            "allOf": [
+              {"$ref": "#/definitions/AgsMotorRequestChannel"}
+            ]
+          }
+        },
+        "period": {
+          "type": "integer",
+          "format": "int64"
+        }
+      },
+      "title": "비닐하우스 자동개폐기 제어 명령"
+    },
+    "DeviceCommandHistoryDirection": {
+      "type": "string",
+      "enum": [
+        "upstream",
+        "downstream"
+      ],
+      "default": "upstream"
+    },
+    "DeviceHistoryKind": {
+      "type": "string",
+      "enum": [
+        "CREATE",
+        "UPDATE",
+        "DELETE",
+        "STATUS",
+        "COMMAND",
+        "ATTACH",
+        "DETACH",
+        "INSTALL",
+        "UNINSTALL"
+      ],
+      "default": "CREATE",
+      "description": "- CREATE: 생성\n - UPDATE: 정보 변경\n - DELETE: 삭제\n - STATUS: 장치 상태\n - COMMAND: 명령 전송\n - ATTACH: 장치 및 센서 연결\n - DETACH: 장치 및 센서 해제\n - INSTALL: 장치 설치\n - UNINSTALL: 장치 해제",
+      "title": "관리 이력 코드"
+    },
+    "DeviceSite": {
+      "type": "object",
+      "properties": {
+        "siteId": {
+          "type": "string",
+          "title": "고객 ID",
+          "readOnly": true
+        },
+        "siteName": {
+          "type": "string",
+          "title": "고객 이름",
+          "readOnly": true
+        }
+      },
+      "title": "장치가 연결된 사이트 정보"
+    },
+    "DevicesAppendSensorBody": {
+      "type": "object",
+      "properties": {
+        "channelId": {
+          "type": "integer",
+          "format": "int64",
+          "example": 1,
+          "title": "Modbus address (구: Channel ID)",
+          "maximum": 255,
+          "minimum": 1
+        },
+        "sensorType": {
+          "type": "string",
+          "example": "temperature",
+          "title": "센서 타입"
+        },
+        "displayName": {
+          "type": "string",
+          "example": "온도1",
+          "title": "센서 이름"
+        },
+        "description": {
+          "type": "string",
+          "example": "냉장고 뒤쪽에 부착",
+          "title": "센서 설명"
+        },
+        "latest": {
+          "type": "object",
+          "example": {
+            "1": {
+              "temp": 25.4,
+              "ts": 1717047881120
+            },
+            "2": {
+              "temp": 25.6,
+              "ts": 1717047881120
+            }
+          },
+          "title": "최근 수집한 데이터. 장치 조회 API에서만 포함",
+          "readOnly": true
+        },
+        "probes": {
+          "type": "integer",
+          "format": "int64",
+          "example": 1,
+          "title": "채널(구: 프로프) 개수",
+          "maximum": 63
+        },
+        "status": {
+          "allOf": [
+            {"$ref": "#/definitions/devicesDeviceStatus"}
+          ],
+          "example": "NORMAL",
+          "title": "센서 상태",
+          "readOnly": true
+        },
+        "facility": {
+          "allOf": [
+            {"$ref": "#/definitions/SensorFacility"}
+          ],
+          "readOnly": true
+        }
+      },
+      "description": "장치에 연결된 센서 정보 관리",
+      "title": "Sensor",
+      "required": [
+        "channelId",
+        "sensorType"
+      ]
+    },
+    "DevicesAttachDeviceBody": {
+      "type": "object",
+      "properties": {
+        "children": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "DevicesSetSensorLimitBody": {
+      "type": "object",
+      "properties": {
+        "normalMin": {
+          "type": "number",
+          "format": "double",
+          "title": "정상 범위 하한값"
+        },
+        "normalMax": {
+          "type": "number",
+          "format": "double",
+          "title": "정상 범위 상한값"
+        },
+        "cautionMin": {
+          "type": "number",
+          "format": "double",
+          "title": "주의 범위 하한값"
+        },
+        "cautionMax": {
+          "type": "number",
+          "format": "double",
+          "title": "주의 범위 상한값"
+        }
+      }
+    },
+    "DevicesUpdateDeviceBody": {
+      "type": "object",
+      "properties": {
+        "displayName": {
+          "type": "string",
+          "example": "테스트 노드",
+          "title": "device 이름",
+          "maxLength": 100
+        },
+        "description": {
+          "type": "string",
+          "title": "device 설명",
+          "maxLength": 1000
+        },
+        "deviceRole": {
+          "allOf": [
+            {"$ref": "#/definitions/devicesDeviceRole"}
+          ],
+          "example": "NODE",
+          "title": "device 동작 모드 [변경 불가]"
+        },
+        "status": {
+          "allOf": [
+            {"$ref": "#/definitions/devicesDeviceStatus"}
+          ],
+          "title": "device 상태",
+          "readOnly": true
+        },
+        "sensors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "allOf": [
+              {"$ref": "#/definitions/devicesSensor"}
+            ]
+          },
+          "title": "연결된 센서 목록 [변경 불가]"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "title": "등록 일시",
+          "readOnly": true
+        },
+        "createdBy": {
+          "type": "object",
+          "example": {
+            "email": "example@suredatalab.com",
+            "first_name": "길동",
+            "last_name": "홍",
+            "username": "example",
+            "name": "홍길동",
+            "user_id": "UUID_000010"
+          },
+          "title": "등록한 사용자 정보",
+          "readOnly": true
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "title": "마지막 변경 일시",
+          "readOnly": true
+        },
+        "updatedBy": {
+          "type": "object",
+          "example": {
+            "email": "example@suredatalab.com",
+            "first_name": "길동",
+            "last_name": "홍",
+            "username": "example",
+            "name": "홍길동",
+            "user_id": "UUID_000010"
+          },
+          "title": "마지막으로 변경한 사용자 정보",
+          "readOnly": true
+        },
+        "location": {
+          "allOf": [
+            {"$ref": "#/definitions/beymonsLocation"}
+          ],
+          "title": "장치가 설치된 위치",
+          "readOnly": true
+        },
+        "site": {
+          "allOf": [
+            {"$ref": "#/definitions/DeviceSite"}
+          ],
+          "readOnly": true
+        },
+        "writable": {
+          "type": "boolean",
+          "title": "리소스에 대한 변경 권한 여부",
+          "readOnly": true
+        }
+      },
+      "description": "BEYMONS 장치에 대한 메타데이터 관리",
+      "title": "Device",
+      "required": [
+        "deviceRole"
+      ]
+    },
+    "SearchRequestOrder": {
+      "type": "string",
+      "enum": [
+        "device_id_asc",
+        "device_id_desc",
+        "device_role_asc",
+        "device_role_desc",
+        "site_id_asc",
+        "site_id_desc",
+        "site_name_asc",
+        "site_name_desc"
+      ],
+      "default": "device_id_asc",
+      "description": "- device_id_asc: 장치 ID 오름차순\n - device_id_desc: 장치 ID 내림차순\n - device_role_asc: 동작방식 오름차순\n - device_role_desc: 동작방식 내림차순\n - site_id_asc: 현장 ID 오름차순\n - site_id_desc: 현장 ID 내림차순\n - site_name_asc: 현장명 오름차순\n - site_name_desc: 현장명 내림차순",
+      "title": "정렬"
+    },
+    "SensorFacility": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "title": "설비 ID",
+          "readOnly": true
+        },
+        "name": {
+          "type": "string",
+          "title": "설비 이름",
+          "readOnly": true
+        }
+      },
+      "title": "장치가 설비 정보"
+    },
+    "beymonsLocation": {
+      "type": "object",
+      "properties": {
+        "latitude": {
+          "type": "number",
+          "format": "double",
+          "title": "위도"
+        },
+        "longitude": {
+          "type": "number",
+          "format": "double",
+          "title": "경도"
+        },
+        "altitude": {
+          "type": "number",
+          "format": "double",
+          "title": "고도"
+        }
+      },
+      "description": "Location 모델은 위치 정보를 표현할 때 사용한다."
+    },
+    "devicesAttribute": {
+      "type": "string",
+      "enum": [
+        "display_name",
+        "description",
+        "sensors",
+        "location",
+        "created_at",
+        "created_by",
+        "updated_at",
+        "updated_by",
+        "site"
+      ],
+      "default": "display_name",
+      "description": "- display_name: 장치 이름\n - description: 장치 설명\n - sensors: 센서 정보\n - location: 설치 위치\n - created_at: 생성 일시\n - created_by: 생성한 사용자 정보\n - updated_at: 마지막으로 수정된 일시\n - updated_by: 마지막으로 수정한 사용자 정보\n - site: 고객 정보",
+      "title": "사용 가능한 속성"
+    },
+    "devicesCommandRequestCommand": {
+      "type": "string",
+      "enum": [
+        "unspecified",
+        "set_agsmotor_operation_req",
+        "set_mc_switch_req"
+      ],
+      "default": "unspecified",
+      "title": "- set_agsmotor_operation_req: AGS 개폐기 제어모듈 동작 명령\n - set_mc_switch_req: 마그네트 스위치 제어"
+    },
+    "devicesCommandRequestConfigRequest": {
+      "type": "object",
+      "properties": {
+        "gateway": {
+          "type": "string",
+          "title": "게이트웨이에 설정할 Config ID"
+        },
+        "nodes": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "노드에 설정할 Config ID"
+        }
+      },
+      "title": "장치 설정 명령"
+    },
+    "devicesDevice": {
+      "type": "object",
+      "properties": {
+        "deviceId": {
+          "type": "string",
+          "example": "T00000001",
+          "title": "Device ID",
+          "maxLength": 14,
+          "minLength": 2,
+          "pattern": "^[a-zA-Z0-9_-]+[a-zA-Z0-9]$"
+        },
+        "displayName": {
+          "type": "string",
+          "example": "테스트 노드",
+          "title": "device 이름",
+          "maxLength": 100
+        },
+        "description": {
+          "type": "string",
+          "title": "device 설명",
+          "maxLength": 1000
+        },
+        "deviceRole": {
+          "allOf": [
+            {"$ref": "#/definitions/devicesDeviceRole"}
+          ],
+          "example": "NODE",
+          "title": "device 동작 모드 [변경 불가]"
+        },
+        "status": {
+          "allOf": [
+            {"$ref": "#/definitions/devicesDeviceStatus"}
+          ],
+          "title": "device 상태",
+          "readOnly": true
+        },
+        "sensors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "allOf": [
+              {"$ref": "#/definitions/devicesSensor"}
+            ]
+          },
+          "title": "연결된 센서 목록 [변경 불가]"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "title": "등록 일시",
+          "readOnly": true
+        },
+        "createdBy": {
+          "type": "object",
+          "example": {
+            "email": "example@suredatalab.com",
+            "first_name": "길동",
+            "last_name": "홍",
+            "username": "example",
+            "name": "홍길동",
+            "user_id": "UUID_000010"
+          },
+          "title": "등록한 사용자 정보",
+          "readOnly": true
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "title": "마지막 변경 일시",
+          "readOnly": true
+        },
+        "updatedBy": {
+          "type": "object",
+          "example": {
+            "email": "example@suredatalab.com",
+            "first_name": "길동",
+            "last_name": "홍",
+            "username": "example",
+            "name": "홍길동",
+            "user_id": "UUID_000010"
+          },
+          "title": "마지막으로 변경한 사용자 정보",
+          "readOnly": true
+        },
+        "location": {
+          "allOf": [
+            {"$ref": "#/definitions/beymonsLocation"}
+          ],
+          "title": "장치가 설치된 위치",
+          "readOnly": true
+        },
+        "site": {
+          "allOf": [
+            {"$ref": "#/definitions/DeviceSite"}
+          ],
+          "readOnly": true
+        },
+        "writable": {
+          "type": "boolean",
+          "title": "리소스에 대한 변경 권한 여부",
+          "readOnly": true
+        }
+      },
+      "description": "BEYMONS 장치에 대한 메타데이터 관리",
+      "title": "Device",
+      "required": [
+        "deviceId",
+        "deviceRole"
+      ]
+    },
+    "devicesDeviceCommandHistory": {
+      "type": "object",
+      "properties": {
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "title": "명령이 수신된 일시"
+        },
+        "deviceId": {
+          "type": "string",
+          "title": "Gateway ID"
+        },
+        "direction": {
+          "allOf": [
+            {"$ref": "#/definitions/DeviceCommandHistoryDirection"}
+          ]
+        },
+        "command": {
+          "type": "string"
+        },
+        "sequence": {
+          "type": "string",
+          "format": "uint64",
+          "title": "Sequence"
+        },
+        "payload": {
+          "type": "string",
+          "title": "Operand"
+        },
+        "status": {
+          "allOf": [
+            {"$ref": "#/definitions/devicesDeviceCommandHistoryStatus"}
+          ]
+        },
+        "respondedAt": {
+          "type": "string",
+          "format": "date-time",
+          "title": "응답 시간"
+        },
+        "response": {
+          "type": "string",
+          "title": "응답 내용"
+        },
+        "error": {
+          "type": "string"
+        }
+      },
+      "description": "서버와 장치간 요청된 명령에 대한 이력을 관리한다.",
+      "title": "DeviceCommandHistory"
+    },
+    "devicesDeviceCommandHistoryStatus": {
+      "type": "string",
+      "enum": [
+        "PROCESSING",
+        "SUCCESS",
+        "FALLURE",
+        "TIMEOUT",
+        "UNKNOWN"
+      ],
+      "default": "PROCESSING",
+      "title": "- PROCESSING: 처리 중\n - SUCCESS: 성공\n - FALLURE: 실패\n - TIMEOUT: 타임아웃\n - UNKNOWN: 정의되지 않은 명령"
+    },
+    "devicesDeviceConfig": {
+      "type": "object",
+      "properties": {
+        "configId": {
+          "type": "string",
+          "example": "example",
+          "title": "DeviceConfig ID",
+          "readOnly": true,
+          "maxLength": 50,
+          "minLength": 2,
+          "pattern": "^[a-z][a-z0-9_-]*[a-z0-9]$"
+        },
+        "displayName": {
+          "type": "string",
+          "example": "샘플",
+          "title": "장치 설정 이름",
+          "maxLength": 100
+        },
+        "description": {
+          "type": "string",
+          "title": "설명",
+          "maxLength": 1000
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "title": "생성 일시",
+          "readOnly": true
+        },
+        "createdUserId": {
+          "type": "string",
+          "title": "생성한 사용자 ID",
+          "readOnly": true
+        },
+        "createdBy": {
+          "type": "object",
+          "example": {
+            "email": "example@suredatalab.com",
+            "first_name": "길동",
+            "last_name": "홍",
+            "username": "example",
+            "name": "홍길동",
+            "user_id": "UUID_000010"
+          },
+          "title": "생성한 사용자 정보",
+          "readOnly": true
+        },
+        "params": {
+          "type": "object",
+          "example": {},
+          "title": "설정값"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "allOf": [
+              {"$ref": "#/definitions/sdlmicroTypesTag"}
+            ]
+          },
+          "title": "태그",
+          "readOnly": true
+        },
+        "writable": {
+          "type": "boolean",
+          "title": "리소스에 대한 변경 권한 여부",
+          "readOnly": true
+        }
+      },
+      "description": "장치 설정을 관리한다.",
+      "title": "DeviceConfig",
+      "required": [
+        "params"
+      ]
+    },
+    "devicesDeviceHistory": {
+      "type": "object",
+      "properties": {
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "title": "이력 발생 일시",
+          "readOnly": true
+        },
+        "deviceId": {
+          "type": "string",
+          "title": "Device ID"
+        },
+        "action": {
+          "allOf": [
+            {"$ref": "#/definitions/DeviceHistoryKind"}
+          ]
+        },
+        "createdUserId": {
+          "type": "string",
+          "title": "이력을 발생시킨 사용자 ID"
+        },
+        "createdName": {
+          "type": "string",
+          "title": "이력 발생 당시의 사용자 이름"
+        },
+        "createdBy": {
+          "type": "object",
+          "example": {
+            "email": "example@suredatalab.com",
+            "first_name": "길동",
+            "last_name": "홍",
+            "username": "example",
+            "name": "홍길동",
+            "user_id": "UUID_000010"
+          },
+          "title": "이력을 발생시킨 사용자 정보",
+          "readOnly": true
+        },
+        "details": {
+          "type": "object",
+          "description": "관리 이력 코드에 따라 값의 형태가 달라지며\nATTACH, DETACH, INSTALL, UNINSTALL 코드는 UPDATE와 동일한 구조를 사용한다. \n\nExample:\n- STATUS: {\"channel\": 0, \"status\": \"상태\"}\n- UPDATE: {\"속성명\": {\"origin\": \"기존 값\", \"change\": \"변경된 값\"}}\n- ATTACH | DETACH: {\"sensors\": [\"Sensor ID\"]}\n- ATTACH | DETACH: {\"parent\": [\"Device ID\"]}\n- ATTACH | DETACH: {\"children\": [\"Device ID\"]}\n- INSTALL | UNINSTALL: {\"sites\": [\"Site ID\"]}\n- INSTALL | UNINSTALL: {\"facilities\": [\"Facility ID\"]}\n- COMMAND: {}",
+          "title": "상세 이력",
+          "readOnly": true
+        }
+      },
+      "description": "장치에 대한 이력 관리",
+      "title": "DeviceHistory"
+    },
+    "devicesDeviceResponse": {
+      "type": "object",
+      "properties": {
+        "device": {
+          "allOf": [
+            {"$ref": "#/definitions/devicesDevice"}
+          ]
+        },
+        "params": {
+          "type": "object",
+          "title": "마지막으로 적용된 설정 값"
+        },
+        "link": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "관련 링크 (HATEOAS)"
+        },
+        "related": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "allOf": [
+              {"$ref": "#/definitions/devicesDevice"}
+            ]
+          },
+          "description": "- DEPRECATED: 하위 장치\n- TODO: 이 장치롤 통해 데이터를 전송한 장치",
+          "title": "관련 장치"
+        }
+      }
+    },
+    "devicesDeviceRole": {
+      "type": "string",
+      "enum": [
+        "GATEWAY",
+        "NODE",
+        "REPEATER",
+        "NODEGATEWAY"
+      ],
+      "default": "GATEWAY",
+      "title": "TODO: repeater 관련 Flag 설정 참조해서 수정"
+    },
+    "devicesDeviceStatus": {
+      "type": "string",
+      "enum": [
+        "NORMAL",
+        "TROUBLE",
+        "DISCARD",
+        "NOT_RECEIVED",
+        "CAUTION",
+        "WARNING"
+      ],
+      "default": "NORMAL",
+      "title": "- NORMAL: 정상 상태\n - TROUBLE: 장치 혹은 센서의 고장 상태\n - DISCARD: 폐기\n - NOT_RECEIVED: 데이터 미수신 상태\n - CAUTION: 주의\n - WARNING: 경고"
+    },
+    "devicesDevicesCommandBody": {
+      "type": "object",
+      "properties": {
+        "sequence": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "noWait": {
+          "type": "boolean",
+          "title": "응답을 기다리지 않음"
+        },
+        "configure": {
+          "allOf": [
+            {"$ref": "#/definitions/devicesCommandRequestConfigRequest"}
+          ],
+          "title": "TODO: 설정 변경"
+        },
+        "agsmotor": {
+          "allOf": [
+            {"$ref": "#/definitions/CommandRequestAgsMotorRequest"}
+          ],
+          "title": "agsmotor 제어"
+        },
+        "agsmotorMode": {
+          "allOf": [
+            {"$ref": "#/definitions/CommandRequestAgsMotorMode"}
+          ],
+          "title": "AGS 개폐기 제어모듈 동작 모드 변경"
+        },
+        "payload": {
+          "type": "object"
+        }
+      }
+    },
+    "devicesGetLimitResponse": {
+      "type": "object",
+      "properties": {
+        "limits": {
+          "type": "object",
+          "additionalProperties": {
+            "allOf": [
+              {"$ref": "#/definitions/devicesSensorLimit"}
+            ]
+          }
+        }
+      }
+    },
+    "devicesHistoryResponse": {
+      "type": "object",
+      "properties": {
+        "histories": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "allOf": [
+              {"$ref": "#/definitions/devicesDeviceHistory"}
+            ]
+          }
+        }
+      }
+    },
+    "devicesSearchConfigRequestAttribute": {
+      "type": "string",
+      "enum": [
+        "device_config_id",
+        "display_name",
+        "description",
+        "created_at",
+        "created_by",
+        "params",
+        "tags"
+      ],
+      "default": "device_config_id",
+      "description": "- device_config_id: ID (Default)\n - display_name: 설정 이름\n - description: 설명\n - created_at: 생성된 일시\n - created_by: 생성한 사용자 정보\n - params: 설정값\n - tags: 태그",
+      "title": "사용 가능한 속성"
+    },
+    "devicesSearchConfigResponse": {
+      "type": "object",
+      "properties": {
+        "entities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "allOf": [
+              {"$ref": "#/definitions/devicesDeviceConfig"}
+            ]
+          }
+        },
+        "count": {
+          "type": "string",
+          "format": "uint64",
+          "title": "데이터의 총건수"
+        },
+        "link": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "관련 링크 (HATEOAS)"
+        }
+      }
+    },
+    "devicesSearchResponse": {
+      "type": "object",
+      "properties": {
+        "entities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "allOf": [
+              {"$ref": "#/definitions/devicesDevice"}
+            ]
+          }
+        },
+        "count": {
+          "type": "string",
+          "format": "uint64",
+          "title": "전체 데이터 수"
+        },
+        "link": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "관련 링크 (HATEOAS)"
+        }
+      }
+    },
+    "devicesSearchTypeRequestAttribute": {
+      "type": "string",
+      "enum": [
+        "sensor_type_id",
+        "type_name",
+        "attributes",
+        "description",
+        "created_at",
+        "created_by"
+      ],
+      "default": "sensor_type_id",
+      "description": "- sensor_type_id: ID (Default)\n - type_name: 센서 타입 이름\n - attributes: 속성\n - description: 설명\n - created_at: 생성 일시\n - created_by: 생성한 사용자 정보",
+      "title": "사용 가능한 속성"
+    },
+    "devicesSearchTypeResponse": {
+      "type": "object",
+      "properties": {
+        "entities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "allOf": [
+              {"$ref": "#/definitions/devicesSensorType"}
+            ]
+          }
+        },
+        "count": {
+          "type": "string",
+          "format": "uint64",
+          "title": "데이터의 총건수"
+        },
+        "link": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "관련 링크 (HATEOAS)"
+        }
+      }
+    },
+    "devicesSensor": {
+      "type": "object",
+      "properties": {
+        "sensorId": {
+          "type": "string",
+          "example": "UUID_000010",
+          "title": "Sensor ID",
+          "readOnly": true
+        },
+        "deviceId": {
+          "type": "string",
+          "example": "T00000001",
+          "title": "Device ID",
+          "readOnly": true
+        },
+        "channelId": {
+          "type": "integer",
+          "format": "int64",
+          "example": 1,
+          "title": "Modbus address (구: Channel ID)",
+          "maximum": 255,
+          "minimum": 1
+        },
+        "sensorType": {
+          "type": "string",
+          "example": "temperature",
+          "title": "센서 타입"
+        },
+        "displayName": {
+          "type": "string",
+          "example": "온도1",
+          "title": "센서 이름"
+        },
+        "description": {
+          "type": "string",
+          "example": "냉장고 뒤쪽에 부착",
+          "title": "센서 설명"
+        },
+        "latest": {
+          "type": "object",
+          "example": {
+            "1": {
+              "temp": 25.4,
+              "ts": 1717047881120
+            },
+            "2": {
+              "temp": 25.6,
+              "ts": 1717047881120
+            }
+          },
+          "title": "최근 수집한 데이터. 장치 조회 API에서만 포함",
+          "readOnly": true
+        },
+        "probes": {
+          "type": "integer",
+          "format": "int64",
+          "example": 1,
+          "title": "채널(구: 프로프) 개수",
+          "maximum": 63
+        },
+        "status": {
+          "allOf": [
+            {"$ref": "#/definitions/devicesDeviceStatus"}
+          ],
+          "example": "NORMAL",
+          "title": "센서 상태",
+          "readOnly": true
+        },
+        "facility": {
+          "allOf": [
+            {"$ref": "#/definitions/SensorFacility"}
+          ],
+          "readOnly": true
+        }
+      },
+      "description": "장치에 연결된 센서 정보 관리",
+      "title": "Sensor",
+      "required": [
+        "channelId",
+        "sensorType"
+      ]
+    },
+    "devicesSensorLimit": {
+      "type": "object",
+      "properties": {
+        "deviceId": {
+          "type": "string",
+          "example": "UUID_000010",
+          "title": "Device ID",
+          "readOnly": true
+        },
+        "channel": {
+          "type": "integer",
+          "format": "int64",
+          "title": "Modbus address(구: Channel ID)"
+        },
+        "attribute": {
+          "type": "string",
+          "example": "temp",
+          "title": "데이터 속성명"
+        },
+        "normalMin": {
+          "type": "number",
+          "format": "double",
+          "title": "정상 범위 하한값"
+        },
+        "normalMax": {
+          "type": "number",
+          "format": "double",
+          "title": "정상 범위 상한값"
+        },
+        "cautionMin": {
+          "type": "number",
+          "format": "double",
+          "title": "주의 범위 하한값"
+        },
+        "cautionMax": {
+          "type": "number",
+          "format": "double",
+          "title": "주의 범위 상한값"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "title": "설정 시간",
+          "readOnly": true
+        }
+      },
+      "description": "센서로부터 수집된 데이터에 대한 임계치를 관리한다.",
+      "title": "SensorLimit"
+    },
+    "devicesSensorType": {
+      "type": "object",
+      "properties": {
+        "typeId": {
+          "type": "string",
+          "example": "temperature",
+          "title": "SensorType ID",
+          "maxLength": 16,
+          "minLength": 2,
+          "pattern": "^[a-z][a-z0-9_]*[a-z0-9]$"
+        },
+        "typeName": {
+          "type": "string",
+          "example": "온도 센서",
+          "title": "타입 이름",
+          "maxLength": 50
+        },
+        "multiProbe": {
+          "type": "boolean",
+          "title": "센서 내에 다수의 채널을 가질 수 있는지 여부"
+        },
+        "description": {
+          "type": "string",
+          "example": "온도만 수집하는 센서",
+          "title": "타입 설명",
+          "maxLength": 1000
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "title": "생성 일시",
+          "readOnly": true
+        },
+        "createdUserId": {
+          "type": "string",
+          "title": "생성한 사용자 ID",
+          "readOnly": true
+        },
+        "createdBy": {
+          "type": "object",
+          "example": {
+            "email": "example@suredatalab.com",
+            "first_name": "길동",
+            "last_name": "홍",
+            "username": "example",
+            "name": "홍길동",
+            "user_id": "UUID_000010"
+          },
+          "title": "타입을 생성한 사용자 정보",
+          "readOnly": true
+        },
+        "attributes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "allOf": [
+              {"$ref": "#/definitions/devicesSensorTypeAttribute"}
+            ]
+          },
+          "title": "속성"
+        },
+        "writable": {
+          "type": "boolean",
+          "title": "리소스에 대한 변경 권한 여부",
+          "readOnly": true
+        }
+      },
+      "description": "센서 타입 관리",
+      "title": "SensorType",
+      "required": [
+        "typeId",
+        "attributes"
+      ]
+    },
+    "devicesSensorTypeAttribute": {
+      "type": "object",
+      "properties": {
+        "typeId": {
+          "type": "string",
+          "example": "temperature",
+          "title": "type_id",
+          "readOnly": true
+        },
+        "attribute": {
+          "type": "string",
+          "example": "temp",
+          "title": "데이터 속성명",
+          "maxLength": 50,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "unit": {
+          "type": "string",
+          "example": "℃",
+          "title": "단위",
+          "maxLength": 50
+        },
+        "type": {
+          "allOf": [
+            {"$ref": "#/definitions/metadataMetadataSchemaAttributeType"}
+          ],
+          "example": "real",
+          "title": "수신된 데이터의 타입"
+        },
+        "length": {
+          "type": "integer",
+          "format": "int64",
+          "title": "타입이 text인 경우 최대 길이"
+        },
+        "typeName": {
+          "type": "string",
+          "example": "real",
+          "title": "원본 데이터를 관리하는 테이블에서의 타입",
+          "readOnly": true
+        },
+        "description": {
+          "type": "string",
+          "example": "온도",
+          "title": "설명",
+          "maxLength": 1000
+        }
+      },
+      "description": "센서 타입에서 사용하는 속성을 관리",
+      "title": "SensorTypeAttribute"
+    },
+    "googleRpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "allOf": [
+              {"$ref": "#/definitions/protobufAny"}
+            ]
+          }
+        }
+      }
+    },
+    "metadataMetadataSchemaAttributeType": {
+      "type": "string",
+      "enum": [
+        "bytea",
+        "smallint",
+        "integer",
+        "bigint",
+        "real",
+        "double_precision",
+        "boolean",
+        "text",
+        "jsonb",
+        "timestamptz",
+        "inet",
+        "cidr",
+        "uuid"
+      ],
+      "default": "bytea",
+      "description": "- bytea: []byte\n - smallint: int8, uint8, int16\n - integer: uint16, int32\n - bigint: uint32, int64, int, uint, uint64\n - real: float32\n - double_precision: float64\n - boolean: bool\n - text: string\n - jsonb: struct, map, array\n - timestamptz: time.Time\n - inet: net.IP\n - cidr: net.IPNet\n - uuid: string",
+      "title": "Attribute Type"
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string",
+          "description": "A URL/resource name that uniquely identifies the type of the serialized\nprotocol buffer message. This string must contain at least\none \"/\" character. The last segment of the URL's path must represent\nthe fully qualified name of the type (as in\n`path/google.protobuf.Duration`). The name should be in a canonical form\n(e.g., leading \".\" is not accepted).\n\nIn practice, teams usually precompile into the binary all types that they\nexpect it to use in the context of Any. However, for URLs which use the\nscheme `http`, `https`, or no scheme, one can optionally set up a type\nserver that maps type URLs to message definitions as follows:\n\n* If no scheme is provided, `https` is assumed.\n* An HTTP GET on the URL must yield a [google.protobuf.Type][]\n  value in binary format, or produce an error.\n* Applications are allowed to cache lookup results based on the\n  URL, or have them precompiled into a binary to avoid any\n  lookup. Therefore, binary compatibility needs to be preserved\n  on changes to types. (Use versioned type names to manage\n  breaking changes.)\n\nNote: this functionality is not currently available in the official\nprotobuf release, and it is not used for type URLs beginning with\ntype.googleapis.com. As of May 2023, there are no widely used type server\nimplementations and no plans to implement one.\n\nSchemes other than `http`, `https` (or the empty scheme) might be\nused with implementation specific semantics."
+        }
+      },
+      "additionalProperties": {},
+      "description": "`Any` contains an arbitrary serialized protocol buffer message along with a\nURL that describes the type of the serialized message.\n\nProtobuf library provides support to pack/unpack Any values in the form\nof utility functions or additional generated methods of the Any type.\n\nExample 1: Pack and unpack a message in C++.\n\n    Foo foo = ...;\n    Any any;\n    any.PackFrom(foo);\n    ...\n    if (any.UnpackTo(\u0026foo)) {\n      ...\n    }\n\nExample 2: Pack and unpack a message in Java.\n\n    Foo foo = ...;\n    Any any = Any.pack(foo);\n    ...\n    if (any.is(Foo.class)) {\n      foo = any.unpack(Foo.class);\n    }\n    // or ...\n    if (any.isSameTypeAs(Foo.getDefaultInstance())) {\n      foo = any.unpack(Foo.getDefaultInstance());\n    }\n\n Example 3: Pack and unpack a message in Python.\n\n    foo = Foo(...)\n    any = Any()\n    any.Pack(foo)\n    ...\n    if any.Is(Foo.DESCRIPTOR):\n      any.Unpack(foo)\n      ...\n\n Example 4: Pack and unpack a message in Go\n\n     foo := \u0026pb.Foo{...}\n     any, err := anypb.New(foo)\n     if err != nil {\n       ...\n     }\n     ...\n     foo := \u0026pb.Foo{}\n     if err := any.UnmarshalTo(foo); err != nil {\n       ...\n     }\n\nThe pack methods provided by protobuf library will by default use\n'type.googleapis.com/full.type.name' as the type URL and the unpack\nmethods only use the fully qualified type name after the last '/'\nin the type URL, for example \"foo.bar.com/x/y.z\" will yield type\nname \"y.z\".\n\nJSON\n====\nThe JSON representation of an `Any` value uses the regular\nrepresentation of the deserialized, embedded message, with an\nadditional field `@type` which contains the type URL. Example:\n\n    package google.profile;\n    message Person {\n      string first_name = 1;\n      string last_name = 2;\n    }\n\n    {\n      \"@type\": \"type.googleapis.com/google.profile.Person\",\n      \"firstName\": \u003cstring\u003e,\n      \"lastName\": \u003cstring\u003e\n    }\n\nIf the embedded message type is well-known and has a custom JSON\nrepresentation, that representation will be embedded adding a field\n`value` which holds the custom JSON in addition to the `@type`\nfield. Example (for message [google.protobuf.Duration][]):\n\n    {\n      \"@type\": \"type.googleapis.com/google.protobuf.Duration\",\n      \"value\": \"1.212s\"\n    }"
+    },
+    "protobufNullValue": {
+      "type": "string",
+      "enum": [
+        "NULL_VALUE"
+      ],
+      "default": "NULL_VALUE",
+      "description": "`NullValue` is a singleton enumeration to represent the null value for the\n`Value` type union.\n\nThe JSON representation for `NullValue` is JSON `null`.\n\n - NULL_VALUE: Null value."
+    },
+    "sdlmicroTypesTag": {
+      "type": "object",
+      "properties": {
+        "tagId": {
+          "type": "string",
+          "format": "uint64",
+          "title": "ID"
+        },
+        "title": {
+          "type": "string",
+          "title": "제목"
+        },
+        "description": {
+          "type": "string",
+          "title": "설명"
+        },
+        "color": {
+          "type": "string",
+          "title": "색상 (RGB)"
+        }
+      },
+      "description": "Tag 모델은 태그 정보를 표현할 때 사용한다."
+    }
+  },
+  "securityDefinitions": {
+    "Keycloak": {
+      "type": "oauth2",
+      "flow": "accessCode",
+      "authorizationUrl": "https://keycloak.suredatalab.kr/realms/beymons/protocol/openid-connect/auth",
+      "tokenUrl": "https://keycloak.suredatalab.kr/realms/beymons/protocol/openid-connect/token"
+    }
+  },
+  "security": [
+    {
+      "Keycloak": []
+    }
+  ]
+}

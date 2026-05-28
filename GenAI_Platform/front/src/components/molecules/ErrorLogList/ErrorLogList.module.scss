@@ -1,0 +1,11 @@
+.error-log-list {
+  max-height: 300px;
+  overflow-y: auto;
+  .error-log {
+    display: flex;
+    gap: 20px;
+    border-bottom: 1px solid #ececec;
+    padding: 10px 20px;
+    font-size: 12px;
+  }
+}

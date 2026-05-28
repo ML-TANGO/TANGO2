@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="20" height="20" viewBox="0 0 20 20">
+    <defs>
+        <path id="laqjaprbqa" d="M11.75 5c1.105 0 2 .895 2 2v7.667c0 1.104-.895 2-2 2H6.583c-1.104 0-2-.896-2-2V7c0-1.105.896-2 2-2h5.167zm1.583-2.083c1.35 0 2.45 1.1 2.499 2.478l.001.097v9.28c0 .356-.28.645-.625.645-.325 0-.592-.256-.622-.582l-.003-.062V5.492c0-.686-.52-1.246-1.176-1.285l-.074-.003H7.292c-.346 0-.625-.288-.625-.644 0-.334.248-.61.564-.64l.06-.003h6.042zM11.5 6.25H6.833c-.513 0-.935.386-.993.883l-.007.117v7.167c0 .513.386.935.884.993l.116.007H11.5c.513 0 .936-.386.993-.884l.007-.116V7.25c0-.552-.448-1-1-1z"/>
+    </defs>
+    <g fill="none" fill-rule="evenodd">
+        <g>
+            <g>
+                <g>
+                    <g transform="translate(-1370.000000, -1364.000000) translate(1274.000000, 1348.000000) translate(0.000000, 8.000000) translate(96.000000, 8.000000)">
+                        <path d="M0 0H20V20H0z" opacity=".2"/>
+                        <mask id="zya93ondbb" fill="#ffffff">
+                            <use xlink:href="#laqjaprbqa"/>
+                        </mask>
+                        <use fill="#D8D8D8" xlink:href="#laqjaprbqa"/>
+                        <path fill="#747474" d="M0 0H20V20H0z" mask="url(#zya93ondbb)"/>
+                    </g>
+                </g>
+            </g>
+        </g>
+    </g>
+</svg>

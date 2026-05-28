@@ -1,0 +1,189 @@
+@import '@src/styles/color.scss';
+
+.box {
+  display: flex;
+  gap: 24px;
+
+  .left {
+    max-width: 402px;
+    flex: 30%;
+    flex-basis: 30%;
+    // max-width: 30%;
+    margin-top: 16px;
+    display: flex;
+    flex-direction: column;
+    min-height: 821px;
+
+    &.disabled {
+      opacity: 0.5;
+    }
+    .accel-cont {
+      display: flex;
+      align-items: center;
+
+      gap: 16px;
+      border: 1px solid $blue102;
+      border-radius: 16px;
+      padding: 24px;
+      box-sizing: border-box;
+      height: 112px;
+      margin-bottom: 24px;
+      .accel-img-cont {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        img {
+          width: 64px;
+          height: 64px;
+        }
+        span {
+          font-family: SpoqaB;
+          font-size: 18px;
+          line-height: 18px;
+        }
+      }
+    }
+    .left-top {
+      height: 100%;
+      border: 1px solid $blue102;
+      border-radius: 16px;
+      padding: 24px;
+      box-sizing: border-box;
+
+      .model-box {
+        //  타이틀
+        margin-bottom: 32px;
+        font-size: 14px;
+        font-family: SpoqaM;
+        .model-name {
+          color: $mono207;
+        }
+        .name {
+          font-family: SpoqaM;
+          font-size: 14px;
+          color: $mono207;
+          font-family: SpoqaM;
+
+          margin-bottom: 32px;
+          &:last-child {
+            margin-bottom: 0;
+          }
+          .model-box {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            .model {
+              color: $mono205;
+              font-size: 14px;
+            }
+          }
+        }
+      }
+    }
+    .training-data-box {
+      // 학습 데이터
+      margin-bottom: 32px;
+    }
+
+    .type-box {
+      // border: 1px solid red;
+      display: flex;
+
+      flex-direction: column;
+      box-sizing: border-box;
+
+      .border {
+        border: 1px solid $mono203;
+        margin: 16px 0px;
+      }
+
+      .range-checkbox {
+        display: flex;
+        justify-content: space-between;
+        font-family: SpoqaM;
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 14px;
+        &.disabled {
+          cursor: not-allowed;
+        }
+      }
+    }
+
+    .resource-box {
+      // height: 100%;
+      margin-top: 24px;
+      border: 1px solid $blue102;
+      padding: 24px;
+      border-radius: 16px;
+      display: flex;
+      flex-direction: column;
+      font-size: 14px;
+
+      gap: 16px;
+      white-space: nowrap;
+    }
+  }
+
+  .right {
+    // border: 1px solid $blue102;
+    // padding: 24px;
+    // border-radius: 16px;
+    margin-top: 16px;
+    min-height: 821px;
+    // background-color: $blue100;
+    flex: 70%;
+  }
+
+  @media screen and (max-width: 1024px) {
+    flex-direction: column;
+    .left {
+      max-width: none;
+    }
+    .right {
+      margin-top: 0;
+    }
+  }
+}
+
+.title {
+  color: $mono205;
+  font-size: 14px;
+  font-family: SpoqaM;
+  margin-bottom: 16px;
+}
+
+.btn-list {
+  display: flex;
+  // max-width: 400px;
+  align-items: center;
+  justify-content: flex-end;
+  .message {
+    margin-right: 16px;
+    font-size: 14px;
+    font-family: SpoqaM;
+    white-space: nowrap;
+
+    &.error {
+    }
+    &.pending {
+    }
+    &.installing {
+    }
+    &.running {
+      color: $lime603;
+    }
+  }
+
+  .btn {
+    display: flex;
+    gap: 16px;
+  }
+}
+
+.flex-16 {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}

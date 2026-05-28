@@ -1,0 +1,276 @@
+syntax = "proto3";
+package devices;
+option go_package = "gitlab.suredatalab.kr/beymons/devices";
+
+import "google/api/field_behavior.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+import "buf/validate/validate.proto";
+
+import "google/protobuf/any.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/struct.proto";
+
+enum RequestCode {
+	unknown = 0;
+	// 인증서 조회
+	get_certificate_req = 1;
+	// 시간 조회
+	get_time_req = 2;
+	// 최근 데이터 조회
+	get_latest_value_req = 3;
+	// REMOVED: 릴레이 제어
+	set_relay_req = 4;
+	// REMOVED: GW에 쌓인 데이터 전송 요청
+	get_data_req = 5;
+	// 설정 조회
+	get_config_req = 6;
+	// 장치 설정
+	set_config_req = 7;
+	// 상태 보고
+	set_status_req = 8;
+	// 비닐하우스 자동개폐기 제어 명령
+	set_agsmotor_req = 9;
+	// AGS 개폐기 제어모듈 동작 완료 보고 명령
+	set_ags_action_req = 10;
+	// 모터 동작 이상 명령
+	set_ags_warn_req = 11;
+	// AGS 개폐기 제어모듈 동작 모드 변경 명령
+	set_agsmotor_mode_req = 12;
+	// AGS 개폐기 제어모듈 동작 명령
+	set_agsmotor_operation_req = 13;
+	// AGS 개폐기 제어모듈 에러 보고
+	set_agsmotor_error_req = 14;
+	// 마그네트 스위치 제어
+	set_mc_switch_req = 15;
+}
+
+enum ResponseCode {
+	unspecified = 0;
+	// 인증서 조회 응답
+	get_certificate_resp = 1;
+	// 시간 조회 응답
+	get_time_resp = 2;
+	// 최근 데이터 조회 응답
+	get_latest_value_resp = 3;
+	// REMOVED: 릴레이 제어 응답
+	set_relay_resp = 4;
+	// REMOVED: GW에 쌓인 데이터 전송 요청 응답
+	get_data_resp = 5;
+	// 설정 조회 응답
+	get_config_resp = 6;
+	// 장치 설정 응답
+	set_config_resp = 7;
+	// 상태 보고 응답
+	set_status_resp = 8;
+	// 비닐하우스 자동개폐기 제어 명령 응답
+	set_agsmotor_resp = 9;
+	// AGS 개폐기 제어모듈 동작 완료 보고 응답
+	set_ags_action_resp = 10;
+	// 모터 동작 이상 응답
+	set_ags_warn_resp = 11;
+	// AGS 개폐기 제어모듈 동작 모드 변경 응답
+	set_agsmotor_mode_resp = 12;
+	// AGS 개폐기 제어모듈 동작 응답
+	set_agsmotor_operation_resp = 13;
+	// AGS 개폐기 제어모듈 에러 보고 응답
+	set_agsmotor_error_resp = 14;
+	// 마그네트 스위치 제어 응답
+	set_mc_switch_resp = 15;
+}
+
+message CommandRequest {
+	enum Command {
+		unspecified = 0;
+		// AGS 개폐기 제어모듈 동작 명령
+		set_agsmotor_operation_req = 1;
+		// 마그네트 스위치 제어
+		set_mc_switch_req = 2;
+	}
+
+	// 최종 목적지
+	string device_id = 1;
+
+	// 명령어
+	Command command = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
+
+	uint64 sequence = 3 [(google.api.field_behavior) = OPTIONAL];
+
+	// 응답을 기다리지 않음
+	bool no_wait = 4;
+
+	// Operand
+	oneof operand {
+		option (buf.validate.oneof).required = true;
+		// TODO: 설정 변경
+		ConfigRequest configure = 5;
+		// agsmotor 제어
+		AgsMotorRequest agsmotor = 6;
+		// AGS 개폐기 제어모듈 동작 모드 변경
+		AgsMotorMode agsmotor_mode = 7;
+
+		google.protobuf.Struct payload = 8;
+	}
+
+	// 장치 설정 명령
+	message ConfigRequest {
+		// 게이트웨이에 설정할 Config ID
+		string gateway = 1;
+		// 노드에 설정할 Config ID
+		map<string, string> nodes = 2;
+	}
+
+	// 비닐하우스 자동개폐기 제어 명령
+	message AgsMotorRequest {
+		message Channel {
+			map<uint32, bool> probe = 1 [
+				(buf.validate.field).map.min_pairs = 1,
+				(buf.validate.field).map.max_pairs = 255,
+				(buf.validate.field).map.keys = {
+					uint32: {
+						gt: 0
+						lte: 255,
+					}
+				}
+			];
+		}
+
+		enum Action {
+			stop  = 0;
+			open = 1;
+			close = 2;
+		}
+		Action action = 1;
+		map<uint32, Channel> channels = 2 [
+			(buf.validate.field).map.min_pairs = 1,
+			(buf.validate.field).map.keys = {
+				uint32: {
+					gt: 0
+					lt: 100,
+				}
+			},
+			(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {example: '{"1": {"probe": {"1": true, "2": true, "3": true}}}'}
+		];
+		uint32 period = 3;
+	}
+
+	// AGS 개폐기 제어모듈 동작 모드 변경 명령
+	message AgsMotorMode {
+		enum Mode {
+			unknown = 0;
+			beymons_auto = 1;
+			beymons_remote = 2;
+		}
+		map<uint32, Mode> address = 1 [
+			(buf.validate.field).map.min_pairs = 1,
+			(buf.validate.field).map.keys = {
+				uint32: {
+					gt: 0
+					lte: 255,
+				}
+			},
+			(buf.validate.field).map.values = {
+				enum: {
+					not_in: 0
+				}
+			}
+		];
+	}
+}
+
+message Command {
+	string command = 1;
+	uint64 sequence = 2 [json_name = "seq"];
+
+	oneof opcode {
+		RequestCode request = 3;
+		ResponseCode response = 4;
+	}
+
+	string site_id = 5;
+
+	string gateway_id = 6;
+
+	bool downstream = 7;
+
+	string origin = 8;
+
+	google.protobuf.Any payload = 9;
+
+	// Beymons 응용 형태
+	string kind = 10;
+}
+
+/*******************************************************************************
+ * Request
+ ******************************************************************************/
+
+message GetDataRequest {
+	RequestCode command = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
+	uint64 seq = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
+	string response_topic = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
+	string node_id = 4 [
+		json_name = "node_id",
+		(google.api.field_behavior) = OUTPUT_ONLY
+	];
+	repeated string channels = 5;
+}
+
+message GetConfigRequest {
+	RequestCode command = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
+	uint64 seq = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
+	string response_topic = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
+	repeated string nodes = 4 [(google.api.field_behavior) = REQUIRED];
+}
+
+message SetConfigRequest {
+	RequestCode command = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
+	uint64 seq = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
+	string response_topic = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
+	google.protobuf.Struct gateway = 4;
+	map<string, google.protobuf.Struct> nodes = 5;
+}
+
+message SetStatusRequest {
+	RequestCode command = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
+	uint64 seq = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
+	string response_topic = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
+	map<string, google.protobuf.Struct> nodes = 4;
+}
+
+/*******************************************************************************
+ * Response
+ ******************************************************************************/
+
+message CommandResponse {
+	ResponseCode command = 1;
+	uint64 seq = 2;
+	uint32 status = 3;
+}
+
+message GetCertificateResponse {
+	ResponseCode command = 1;
+	uint64 seq = 2;
+	string root_ca = 3;
+	string public_key = 4;
+	string cert = 5;
+}
+
+message GetTimeResponse {
+	ResponseCode command = 1;
+	uint64 seq = 2;
+	uint64 ts = 3;
+	string timezone = 4;
+}
+
+message GetConfigResponse {
+	ResponseCode command = 1;
+	uint64 seq = 2;
+	google.protobuf.Struct nodes = 3;
+}
+
+message SetConfigResponse {
+	ResponseCode command = 1;
+	uint64 seq = 2;
+	uint32 gateway = 3;
+	map<string, uint32> nodes = 4;
+}

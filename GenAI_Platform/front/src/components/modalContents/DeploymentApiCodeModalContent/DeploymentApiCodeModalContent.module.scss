@@ -1,0 +1,25 @@
+@import '@src/components/Modal/modal.scss';
+
+.modal-content {
+  .row {
+    margin-bottom: 20px;
+    &.margin-bottom-32 {
+      margin-bottom: 32px;
+    }
+    &.margin-bottom-34 {
+      margin-bottom: 34px;
+    }
+    .input-label {
+      display: inline-block;
+      font-size: 16px;
+      font-family: SpoqaB;
+      color: $mono207;
+      margin-bottom: 8px;
+      .optional {
+        color: $mono205;
+        font-size: 16px;
+        font-family: SpoqaM;
+      }
+    }
+  }
+}

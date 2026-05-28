@@ -1,0 +1,26 @@
+@import '@src/styles/color.scss';
+
+.footer {
+  position: relative;
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  padding: 32px 0px;
+
+  .button {
+    display: flex;
+    transform: translateX(-48px);
+  }
+
+  .error-message {
+    display: flex;
+    align-items: center;
+    font-size: 14px;
+    font-weight: 500;
+    color: $error-color;
+    transform: translateX(48px);
+    // position: absolute;
+    // left: 0px;
+  }
+}

@@ -1,0 +1,51 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: devices-service
+  labels:
+    framework: sdlmicro
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - default
+  http:
+  - name: devices
+    match:
+    - uri:
+        exact: /api/devices
+    - uri:
+        prefix: /api/devices/
+    rewrite:
+      uri: /devices/
+    route:
+    - destination:
+        host: devices
+        port:
+          number: 80
+  - name: device-configs
+    match:
+    - uri:
+        exact: /api/device-configs
+    - uri:
+        prefix: /api/device-configs/
+    rewrite:
+      uri: /device-configs/
+    route:
+    - destination:
+        host: devices
+        port:
+          number: 80
+  - name: sensor-types
+    match:
+    - uri:
+        exact: /api/sensor-types
+    - uri:
+        prefix: /api/sensor-types/
+    rewrite:
+      uri: /sensor-types/
+    route:
+    - destination:
+        host: devices
+        port:
+          number: 80

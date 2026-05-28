@@ -1,0 +1,82 @@
+{
+  "gpu_model_status": [
+    {
+      "total": 2,
+      "used": 1,
+      "aval": 1,
+      "type": "general",
+      "gpu_info": {
+        "cuda_cores": "3584",
+        "computer_capability": "6.1",
+        "architecture": "Pascal"
+      },
+      "node_list": [
+        {
+          "name": "jf-node-02",
+          "model": "NVIDIA-GeForce-GTX-1080-Ti",
+          "memory": "11178-MiB",
+          "total": 2,
+          "used": 1,
+          "aval": 1,
+          "queue": 0,
+          "resource_info": {
+            "cpu_model": "11th Gen Intel(R) Core(TM) i5-11400 @ 2.60GHz",
+            "cpu_total": 12,
+            "cpu_limits": 12.0,
+            "cpu_limits/total": 1.0,
+            "cpu_total-limits": 0.0,
+            "cpu_limit_per_pod": 0,
+            "cpu_limit_per_gpu": 12,
+            "memory_total": 62.71,
+            "memory_limits": 62.0,
+            "memory_limits/total": 0.99,
+            "memory_total-limits": 0.7100000000000009,
+            "memory_limit_per_pod": 0,
+            "memory_limit_per_gpu": 62
+          }
+        }
+      ],
+      "model": "NVIDIA-GeForce-GTX-1080-Ti",
+      "queue": 0
+    },
+    {
+      "total": 2,
+      "used": 1,
+      "aval": 1,
+      "type": "general",
+      "gpu_info": {
+        "cuda_cores": "1792",
+        "computer_capability": "8.6",
+        "architecture": "Ampere"
+      },
+      "node_list": [
+        {
+          "name": "jf-node-06",
+          "model": "NVIDIA-GeForce-RTX-3060",
+          "memory": "12051-MiB",
+          "total": 2,
+          "used": 1,
+          "aval": 1,
+          "queue": 0,
+          "resource_info": {
+            "cpu_model": "Intel(R) Core(TM) i9-10900X CPU @ 3.70GHz",
+            "cpu_total": 20,
+            "cpu_limits": 80.0,
+            "cpu_limits/total": 4.0,
+            "cpu_total-limits": -60.0,
+            "cpu_limit_per_pod": 20,
+            "cpu_limit_per_gpu": 20,
+            "memory_total": 62.53,
+            "memory_limits": 244.0,
+            "memory_limits/total": 3.9,
+            "memory_total-limits": -181.47,
+            "memory_limit_per_pod": 61,
+            "memory_limit_per_gpu": 61
+          }
+        }
+      ],
+      "model": "NVIDIA-GeForce-RTX-3060",
+      "queue": 0
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+@import '@src/styles/color.scss';
+
+.popup-container {
+  z-index: 4;
+  position: absolute;
+  top: 48px;
+  border-radius: 4px;
+  box-shadow: 0 3px 9px 0 rgba(18, 22, 25, 0.08),
+    0 2px 4px 1px rgba(18, 22, 25, 0.14);
+  background-color: $mono200;
+  &.right {
+    right: 0;
+  }
+  &.left {
+    left: 0;
+  }
+}

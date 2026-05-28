@@ -1,0 +1,29 @@
+@import '../UserTestContent.module.scss';
+
+.input-analysis {
+  flex: 1;
+  box-sizing: border-box;
+  margin-bottom: 36px;
+  .file-browse {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    .file-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+  .canvas-box {
+    display: flex;
+    align-items: center;
+    margin-bottom: 12px;
+    border-radius: 4px;
+    border: solid 1px $mono204;
+    background-color: $mono202;
+    &.input-image {
+      border: none;
+      background-color: transparent;
+    }
+  }
+}

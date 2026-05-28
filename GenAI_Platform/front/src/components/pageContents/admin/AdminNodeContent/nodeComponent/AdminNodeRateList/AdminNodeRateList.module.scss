@@ -1,0 +1,113 @@
+@import '@src/styles/color.scss';
+
+.table {
+  position: relative;
+  width: 100%;
+  height: 311px;
+  border: 1px solid $blue101;
+  border-radius: 16px;
+  box-sizing: border-box;
+  overflow: hidden;
+  background-color: #fff;
+  .scroll-cont {
+    width: 100%;
+    height: 100%;
+    overflow-x: auto;
+    .thead,
+    .tbody {
+      width: 100%;
+      min-height: 35px;
+      .tr {
+        display: flex;
+        align-items: center;
+        box-sizing: border-box;
+        color: $mono206;
+        font-size: 12px;
+        text-wrap: nowrap;
+        .td {
+          display: flex;
+          align-items: center;
+          font-size: 14px;
+          font-family: SpoqaB;
+          color: #747474;
+          padding-right: 55px;
+          padding: 16px 0;
+          border-bottom: 1px solid $blue101;
+          background-color: #fff;
+
+          &:first-child {
+            padding-left: 32px;
+          }
+          &:last-child {
+            padding-right: 16px;
+          }
+          .border {
+            width: 100%;
+            height: 1px;
+            background-color: #dbdbdb;
+          }
+
+          &.flex-cont {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+          }
+
+          &.cursor {
+            cursor: pointer;
+          }
+        }
+      }
+      .nodata {
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+    }
+    .thead {
+      position: absolute;
+      top: 0;
+      z-index: 10;
+      overflow-x: hidden;
+    }
+
+    .tbody {
+      height: 256px;
+      padding-top: 52px;
+      position: relative;
+      background-color: #fff;
+      .tr {
+        &.click {
+          cursor: pointer;
+        }
+        .td {
+          height: 87px;
+          font-family: SpoqaM;
+          font-size: 14px;
+          color: $mono207;
+          span,
+          p {
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+          }
+        }
+      }
+      .no-data {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        background-color: #fff;
+      }
+      .spinner-cont {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+      }
+    }
+  }
+}

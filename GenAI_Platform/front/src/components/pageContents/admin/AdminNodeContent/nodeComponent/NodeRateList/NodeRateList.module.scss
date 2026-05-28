@@ -1,0 +1,74 @@
+@import '@src/styles/color.scss';
+
+.node-rate-list {
+  height: 100%;
+}
+.title {
+  display: flex;
+  height: 50px;
+  box-sizing: border-box;
+  align-items: center;
+  padding: 0 19px;
+  border-bottom: 1px solid $card-border-color;
+  margin: 0;
+  font-family: SpoqaB;
+  font-size: 14px;
+  color: $mono205;
+  & > div {
+    flex: 1;
+  }
+}
+
+.table {
+  width: 100%;
+  height: 100%;
+  overflow-x: auto;
+  .thead {
+    min-height: 35px;
+    .tr {
+      display: flex;
+      align-items: center;
+      padding: 10px 0px;
+      box-sizing: border-box;
+      color: $mono206;
+      font-size: 12px;
+    }
+  }
+  .tbody {
+    height: calc(100% - 50px);
+    overflow: auto;
+    .tr {
+      display: flex;
+      align-items: center;
+      height: 52px;
+      padding: 10px 0px;
+      padding-left: 20px;
+      box-sizing: border-box;
+      border-bottom: 1px solid $blue101;
+
+      &:last-child {
+        border-bottom: none;
+      }
+      .td {
+        .name {
+          font-size: 14px;
+          font-style: normal;
+          font-weight: 500;
+        }
+      }
+
+      & > span {
+        display: block;
+        flex: 1;
+      }
+    }
+    .no-data {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      font-size: 12px;
+    }
+  }
+}

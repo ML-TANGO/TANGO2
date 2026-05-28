@@ -1,0 +1,96 @@
+@import '@src/styles/color.scss';
+
+.content {
+  flex: 1;
+  position: relative;
+  // padding: 20px 22px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border-radius: 8px;
+
+  // border: 1px solid $card-border-color;
+  // background-color: $mono200;
+  // cursor: pointer;
+
+  // &:hover {
+  //   box-shadow: $card-hover-color;
+  //   .arrow {
+  //     display: block;
+  //   }
+  // }
+  .title {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    .icon {
+      width: 24px;
+      height: 24px;
+      margin-right: 8px;
+    }
+    .name {
+      font-family: SpoqaM;
+      font-size: 20px;
+      color: $mono205;
+      white-space: nowrap;
+    }
+  }
+  .arrow {
+    display: none;
+    position: absolute;
+    right: 16px;
+    width: 28px;
+    height: 28px;
+  }
+  .count {
+    flex: 1;
+    display: flex;
+    flex-direction: row;
+    margin-top: 4px;
+    align-items: flex-end;
+    justify-content: flex-end;
+
+    .total {
+      display: inline-block;
+      height: 44px;
+      font-family: SpoqaM;
+      font-size: 24px;
+      letter-spacing: 0.1px;
+      color: $mono207;
+    }
+    .variation {
+      height: 20px;
+      font-family: SpoqaM;
+      font-size: 14px;
+      &.up {
+        color: $lime603;
+        &::before {
+          content: url(@src/static/images/icon/ic-up-green.png);
+          vertical-align: middle;
+        }
+      }
+      &.down {
+        color: $red502;
+        &::before {
+          content: url(@src/static/images/icon/ic-down-red.png);
+          vertical-align: middle;
+        }
+      }
+      &.zero {
+        display: none;
+      }
+    }
+  }
+}
+
+@media (max-width: 1366px) {
+  .content {
+    padding: 20px 16px;
+    .title {
+      .name {
+        line-height: 1.25;
+      }
+    }
+  }
+}

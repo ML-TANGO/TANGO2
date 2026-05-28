@@ -1,0 +1,126 @@
+@import '@src/styles/color.scss';
+
+.status {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 8px;
+  border-radius: 15px;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: SpoqaM !important;
+  background-color: $mono202;
+  cursor: default;
+  &.small {
+    width: 64px;
+    height: 18px;
+    border-radius: 9px;
+    font-size: 10px;
+    line-height: 1.5;
+  }
+  &.large {
+    width: 120px;
+    height: 40px;
+    border-radius: 20px;
+    font-size: 16px;
+    line-height: 1.5;
+  }
+  &.medium-long {
+    width: 130px;
+    height: 30px;
+    border-radius: 15px;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  &.help {
+    cursor: help;
+  }
+
+  &.running,
+  &.trainingRunning,
+  &.deploymentRunning,
+  &.active,
+  &.working,
+  &.serviceActive,
+  &.flActive,
+  &.clientTraining,
+  &.aggregation,
+  &.broadcasting,
+  &.ready,
+  &.attached {
+    color: $lime603 !important;
+    background-color: $lime601;
+  }
+  &.pending,
+  &.reserved,
+  &.installing,
+  &.scheduling,
+  &.projectPending,
+  &.workspacePending,
+  &.attaching {
+    color: $yellow303 !important;
+    background-color: $yellow301;
+    cursor: wait !important;
+  }
+  &.complete,
+  &.done,
+  &.stop,
+  &.detached {
+    color: $mono205 !important;
+    background-color: $mono202;
+  }
+  &.expired,
+  &.fail,
+  &.disconnecting,
+  &.failed,
+  &.error {
+    color: $red502 !important;
+    background-color: $red501;
+  }
+  &.unknown {
+    color: $orange402 !important;
+    background-color: $orange401;
+  }
+
+  &.dark {
+    color: $mono200 !important;
+    &.running,
+    &.trainingRunning,
+    &.deploymentRunning,
+    &.active,
+    &.serviceActive,
+    &.flActive,
+    &.clientTraining,
+    &.aggregation,
+    &.broadcasting,
+    &.ready,
+    &.attached {
+      background-color: $lime603;
+    }
+    &.pending,
+    &.reserved,
+    &.installing,
+    &.attaching,
+    &.scheduling,
+    &.deleting {
+      background-color: $yellow303;
+      cursor: wait !important;
+    }
+    &.complete,
+    &.done,
+    &.stop,
+    &.detached {
+      background-color: $mono204;
+    }
+    &.expired,
+    &.fail,
+    &.failed,
+    &.error {
+      background-color: $red502;
+    }
+    &.unknown {
+      background-color: $orange402;
+    }
+  }
+}

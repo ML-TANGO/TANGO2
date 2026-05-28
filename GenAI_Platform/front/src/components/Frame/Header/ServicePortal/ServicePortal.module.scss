@@ -1,0 +1,60 @@
+@import '@src/styles/color.scss';
+
+.service-portal {
+  position: relative;
+  .box {
+    padding: 24px;
+    &.service {
+      padding-bottom: 0;
+    }
+    .title {
+      margin: 0 0 10px 0;
+      font-size: 12px;
+      color: $mono205;
+    }
+  }
+  .list {
+    display: grid;
+    grid-template-columns: repeat(3, 100px);
+    grid-column-gap: 8px;
+    grid-row-gap: 8px;
+    .service-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      padding: 20px;
+      border-radius: 8px;
+      border: none;
+      background-color: $mono200;
+      cursor: pointer;
+      .logo {
+        &.service {
+          height: 54px;
+        }
+        &.site {
+          height: 10px;
+          &.Jonathan {
+            height: 8px;
+          }
+        }
+      }
+      &.selected {
+        background-color: rgba($primary-color, 0.04);
+        .label {
+          color: $mono200;
+        }
+        &:hover {
+          background-color: rgba($primary-color, 0.04);
+        }
+      }
+      &:hover:not(:disabled) {
+        background-color: rgba($primary-color, 0.04);
+      }
+      &:disabled {
+        opacity: 0.2;
+        cursor: default;
+      }
+    }
+  }
+}

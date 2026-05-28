@@ -1,0 +1,111 @@
+@import '../DeployWorkerRunning.module.scss';
+
+.new-worker-setting {
+  border-radius: 16px;
+  border: 1px solid $blue101;
+  display: flex;
+  background-color: $mono200;
+  height: 272px;
+
+  .left-side {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+
+    flex: 0.8;
+    padding: 32px;
+
+    .btn-wrap {
+      display: flex;
+      gap: 10px;
+      &.no-custom {
+        justify-content: flex-end;
+      }
+
+      .deploy-btn {
+        all: unset;
+        box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 130px;
+        height: 40px;
+        padding: 0px 20px;
+        border-radius: 4px;
+        box-shadow: 0px 3px 6px 0px rgba(45, 118, 248, 0.1);
+        cursor: pointer;
+
+        &.setting {
+          justify-content: center;
+        }
+
+        .text {
+          color: $blue104;
+          font-size: 16px;
+          font-style: normal;
+          font-weight: 700;
+        }
+      }
+    }
+
+    .title {
+      font-size: 24px;
+      color: $blue104;
+      font-weight: 700;
+      font-style: normal;
+    }
+  }
+
+  .middle-line {
+    width: 1px;
+    height: 100%;
+    background-color: $blue101;
+    margin-right: 32px;
+  }
+
+  .setting-wrap {
+    flex: 4;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    padding-top: 32px;
+
+    li {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      font-size: 16px;
+      font-style: normal;
+      max-width: 300px;
+      min-height: 46px;
+
+      .label {
+        color: $mono205;
+      }
+
+      .content {
+        // white-space: normal;
+        word-break: break-all;
+        font-weight: 700;
+        .model-type {
+          display: flex;
+          flex-direction: column;
+          .model-title {
+          }
+          .border {
+            height: 1px;
+            box-sizing: border-box;
+            background-color: $mono203;
+
+            width: 100%;
+            margin: 8px 0px;
+          }
+          .model-type-value {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+          }
+        }
+      }
+    }
+  }
+}

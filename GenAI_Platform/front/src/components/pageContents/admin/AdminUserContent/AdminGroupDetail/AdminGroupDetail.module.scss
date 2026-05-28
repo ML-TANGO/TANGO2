@@ -1,0 +1,52 @@
+@import '@src/styles/color.scss';
+
+.detail {
+  padding: 32px;
+  background-color: $mono200;
+  .header {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+    border-bottom: 1px solid $mono203;
+    padding-bottom: 16px;
+    margin-bottom: 16px;
+    .id-txt {
+      color: $blue107;
+      font-family: SpoqaB;
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 20px;
+    }
+    .title-txt {
+      color: $blue107;
+      font-family: SpoqaM;
+      font-size: 14px;
+      font-weight: 500;
+      line-height: 14px;
+    }
+  }
+
+  .desc {
+    margin: initial;
+    margin-bottom: 32px;
+    font-family: SpoqaM;
+    font-size: 14px;
+  }
+
+  .user-list-txt {
+    display: inline-block;
+    color: $mono205;
+    font-family: SpoqaM;
+    font-size: 14px;
+    line-height: 14px;
+    margin-bottom: 8px;
+  }
+
+  .user-list-cont {
+    padding: 12px 16px;
+    border: 1px solid $mono203;
+    border-radius: 16px;
+    height: 120px;
+    overflow-y: auto;
+  }
+}

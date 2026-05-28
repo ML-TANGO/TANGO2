@@ -1,0 +1,19 @@
+.row {
+  margin-bottom: 32px;
+  &.grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+}
+
+.trash-btn,
+.edit-btn {
+  border: none;
+  background-color: inherit;
+  cursor: pointer;
+  img {
+    width: 16px;
+    height: 16px;
+  }
+}

@@ -1,0 +1,19 @@
+.stack-part-cont {
+  display: inline-block;
+  height: 20px;
+}
+.tooltip {
+  position: relative;
+  background-color: #042659;
+  z-index: 99999;
+}
+
+.tooltip-box {
+  .top {
+    display: flex;
+    gap: 8px;
+  }
+  .bottom {
+    display: flex;
+  }
+}

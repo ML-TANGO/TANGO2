@@ -1,0 +1,266 @@
+@import '@src/styles/color.scss';
+
+@mixin ellipse() {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  word-break: break-all;
+}
+
+@mixin description() {
+  max-height: max-content;
+  background: $mono202;
+  border-width: 0px 1px 1px 1px;
+  border-style: solid;
+  border-color: $blue102;
+  border-radius: 0px 0px 2px 2px;
+  transition: all 0.5s;
+  opacity: 1;
+  overflow: hidden;
+
+  & > div {
+    display: block;
+    & > p {
+      margin: 0px;
+    }
+  }
+}
+.main-container {
+  width: 100%;
+  margin: 0px 0px 8px 0px;
+  .container {
+    width: 100%;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    height: 48px;
+    background: $blue100;
+    border-width: 1px 1px 1px 1px;
+    border-style: solid;
+    border-color: $blue100;
+    border-radius: 2px;
+    box-sizing: border-box;
+    padding-right: 8px;
+    // contain: content;
+    cursor: pointer;
+    .title-container {
+      width: calc(100% - 78px);
+      display: flex;
+      flex-direction: row;
+      justify-content: flex-start;
+      align-items: center;
+      padding: 12px 10px 12px 12px;
+      font-family: SpoqaB;
+      font-size: 14px;
+      color: $mono206;
+    }
+    .sub-container {
+      width: 100%;
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+      .title {
+        min-width: 100px;
+        height: 20px;
+        padding-right: 8px;
+        @include ellipse();
+        .name {
+          font-family: SpoqaB;
+          font-size: 14px;
+          color: $mono206;
+        }
+        .error {
+          padding-right: 4px;
+          img {
+            height: 18px;
+            vertical-align: middle;
+          }
+          .error-list {
+            li {
+              list-style: disc;
+              margin-left: 20px;
+            }
+          }
+        }
+        .description {
+          font-family: SpoqaM;
+          font-size: 13px;
+          color: $mono205;
+          padding-left: 8px;
+        }
+      }
+      .user {
+        @include ellipse();
+        flex-shrink: 0;
+        font-family: SpoqaM;
+        font-size: 13px;
+        color: $mono205;
+        width: 80px;
+      }
+    }
+    .button-container {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: flex-start;
+      width: 60px;
+      grid-gap: 12px;
+      .modify-btn,
+      .delete-btn {
+        width: 20px;
+        img {
+          width: 20px;
+        }
+      }
+    }
+  }
+}
+.description-active {
+  border-color: $blue102 !important;
+  border-width: 1px 1px 0px 1px !important;
+  border-radius: 2px 2px 0px 0px !important;
+  .title-container > .sub-container > .title > .name {
+    color: $blue104 !important;
+  }
+}
+.active {
+  border-width: 1px 1px 1px 1px !important;
+  border-color: $blue102 !important;
+  border-radius: 2px 2px 0px 0px;
+  .title-container > .sub-container > .title > .name {
+    color: $blue104 !important;
+  }
+}
+
+.template-active {
+  border-color: $blue102 !important;
+  border-radius: 2px 2px 0px 0px !important;
+  .title-container > .sub-container > .title > .name {
+    color: $blue104 !important;
+  }
+}
+.inactive-description {
+  max-height: 0px;
+  transition: max-height 0 linear;
+  border-color: $blue102;
+  & > div {
+    display: none;
+    & > p {
+      margin: 0px;
+    }
+  }
+}
+.group-description {
+  @include description();
+  .description {
+    font-size: 12px;
+    padding: 12px 16px;
+  }
+}
+.template-description {
+  @include description();
+}
+.detail-container {
+  margin: 0px;
+  padding: 12px 16px;
+  .description {
+    margin-bottom: 16px;
+    font-size: 12px;
+  }
+  & > div {
+    display: flex;
+    align-items: flex-start;
+    font-family: spoqaM;
+    padding: 8px 0;
+    .title {
+      margin: 0;
+      word-break: break-all;
+      font-size: 12px;
+      color: $mono205;
+      min-width: 90px;
+    }
+    .contents {
+      display: flex;
+      align-items: center;
+      margin: 0;
+      font-size: 12px;
+      color: $mono206;
+      word-break: break-all;
+      .model {
+        margin: 0 5px;
+      }
+    }
+    .model-ckpt {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    .env-contents {
+      flex-direction: column;
+      display: block;
+      .key-value {
+        display: inline-block;
+        margin-right: 12px;
+        .value {
+          padding-left: 6px;
+        }
+      }
+    }
+
+    .json-title-box {
+      width: 100%;
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      font-family: SpoqaM;
+
+      .button {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        color: $blue104;
+        padding: 4px 12px;
+        border-radius: 4px;
+        .label {
+          cursor: pointer;
+        }
+        .icon {
+          width: 24px;
+          height: 24px;
+        }
+        &:hover {
+          background-color: $blue101;
+          cursor: pointer;
+        }
+      }
+    }
+  }
+
+  .error {
+    display: flex;
+    align-items: center;
+    font-size: 12px;
+    color: $red502;
+    margin-left: 90px;
+    img {
+      padding-right: 2px;
+    }
+  }
+
+  .jsonType-contents {
+    margin-top: -8px;
+    min-height: 60px;
+    > div {
+      width: 100%;
+      height: 100%;
+    }
+  }
+}
+
+.disable-image {
+  opacity: 0.3;
+}

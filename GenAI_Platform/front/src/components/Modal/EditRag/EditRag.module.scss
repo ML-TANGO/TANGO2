@@ -1,0 +1,21 @@
+@import '../modal.scss';
+.row {
+  margin-bottom: 32px;
+
+  .radio {
+    margin-bottom: 32px;
+  }
+}
+
+.model {
+  height: 300px;
+}
+
+.bottom-box {
+  display: flex;
+  margin-top: 32px;
+
+  .content {
+    flex: 1;
+  }
+}

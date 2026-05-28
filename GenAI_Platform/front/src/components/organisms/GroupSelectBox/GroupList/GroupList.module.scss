@@ -1,0 +1,45 @@
+@import '@src/styles/color.scss';
+
+.clicked-group {
+  border: 1px solid $blue102 !important;
+  .name-desc {
+    .name {
+      color: $blue104 !important;
+    }
+  }
+}
+.group-list {
+  display: flex;
+  border: 1px solid $mono201;
+  flex-direction: row;
+  align-items: center;
+  padding: 12px;
+  background: $mono201;
+  border-radius: 2px;
+  margin-top: 8px;
+  height: 42px;
+  box-sizing: border-box;
+  overflow: hidden;
+  white-space: nowrap;
+  .name-desc {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: $mono205;
+    .name {
+      color: $mono206;
+      font-size: 14px;
+      font-family: SpoqaB;
+      padding-right: 2px;
+    }
+    .desc {
+      font-size: 12px;
+      margin-left: 8px;
+      font-family: SpoqaM;
+    }
+  }
+  &:hover {
+    border: 1px solid $blue102;
+    cursor: pointer;
+  }
+}

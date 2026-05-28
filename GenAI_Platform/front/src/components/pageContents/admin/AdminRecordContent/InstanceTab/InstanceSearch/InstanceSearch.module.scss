@@ -1,0 +1,37 @@
+@import '@src/styles/color.scss';
+
+.search-cont {
+  width: calc(50% - 16px);
+  min-width: 580px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 33px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+  .title {
+    color: $blue107;
+    font-family: SpoqaB;
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 20px;
+    margin: initial;
+    text-wrap: nowrap;
+  }
+  .flex-cont {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    .line {
+      width: 1px;
+      height: 32px;
+      background-color: $mono203;
+    }
+  }
+}
+
+@media (max-width: 1560px) {
+  .search-cont {
+    gap: 12px;
+  }
+}

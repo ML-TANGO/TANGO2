@@ -1,0 +1,1 @@
+{"version":3,"file":"sparse.js","sources":["../../../../../../../../modules/d3-selection/src/selection/sparse.js"],"sourcesContent":["export default function(update) {\n  return new Array(update.length);\n}\n"],"names":[],"mappings":"AAAe,eAAQ,CAAC,MAAM,EAAE;AAChC,EAAE,OAAO,IAAI,KAAK,CAAC,MAAM,CAAC,MAAM,CAAC,CAAC;AAClC;;;;"}

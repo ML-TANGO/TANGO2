@@ -1,0 +1,134 @@
+@import '@src/styles/color.scss';
+
+.content {
+  min-height: 300px;
+  .title-fliter {
+    z-index: 1;
+    position: sticky;
+    top: 0;
+    left: 0;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    border-bottom: 1px solid $mono203;
+    padding: 8px 0;
+    backdrop-filter: blur(10px);
+    > div {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: flex-end;
+      grid-gap: 8px;
+      .btn-box {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        > div {
+          margin: 0;
+        }
+      }
+      .search-box {
+        display: flex;
+        flex-direction: row;
+        .filter-sort {
+          display: flex;
+          flex-direction: row;
+          height: 36px;
+
+          & > div:first-child {
+            width: 190px;
+          }
+        }
+      }
+    }
+  }
+  &.loading-wrapper {
+    height: calc(100vh - 213px);
+
+    .loading-box {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      height: 100%;
+    }
+  }
+  .card-box {
+    margin-top: 20px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-column-gap: 30px;
+    grid-row-gap: 30px;
+    justify-content: space-between;
+    align-items: center;
+    @media (max-width: 1724px) {
+      grid-template-columns: repeat(3, 1fr);
+    }
+    @media (max-width: 1424px) {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    @media (max-width: 768px) {
+      grid-template-columns: repeat(1, 1fr);
+    }
+  }
+
+  .no-response {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 50vh;
+    font-size: 14px;
+    color: $mono207;
+  }
+
+  .no-data {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 50vh;
+    .message {
+      margin-bottom: 16px;
+      text-align: center;
+      font-size: 14px;
+      font-family: SpoqaM;
+      line-height: 1.71;
+      color: $mono205;
+      white-space: pre;
+      span {
+        padding-right: 5px;
+        .highlight {
+          font-family: SpoqaB;
+          color: $mono207;
+          display: inline-block;
+          padding: 0 5px;
+        }
+      }
+    }
+    .go-to-btn {
+      padding: 9px 14px;
+      height: 36px;
+      background-color: transparent;
+      color: $primary-color;
+      font-family: SpoqaB;
+      font-size: 14px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      white-space: nowrap;
+      img {
+        vertical-align: sub;
+      }
+      &:hover:not(:disabled) {
+        background-color: $hover-bg-color;
+      }
+      &:disabled {
+        opacity: 0.2;
+        cursor: not-allowed;
+      }
+    }
+  }
+}

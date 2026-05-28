@@ -1,0 +1,64 @@
+@import '../modal.scss';
+.row {
+  .radio {
+    margin-bottom: 32px;
+  }
+}
+
+.model {
+  height: 300px;
+}
+
+.message {
+  color: $mono206;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.border {
+  background-color: $mono203;
+  height: 1px;
+  margin: 16px 0;
+  box-sizing: border-box;
+}
+
+.file-wrapper {
+  max-height: 300px;
+  overflow-y: auto;
+  display: flex;
+  // max-width: 360px;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px;
+
+  .file-item {
+    font-size: 12px;
+    font-style: normal;
+    font-weight: 500;
+    line-height: 14px;
+    font-family: SpoqaM;
+    color: $mono207;
+    display: flex;
+    align-items: center;
+    img {
+      margin-left: 4px;
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+  }
+}
+
+.rag-docs {
+  display: flex;
+  align-items: center;
+  .size-message {
+    font-size: 12px;
+    font-style: normal;
+    font-weight: 500;
+    line-height: 14px;
+    font-family: SpoqaM;
+    color: $red502;
+    margin-left: 8px;
+  }
+}

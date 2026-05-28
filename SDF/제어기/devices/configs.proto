@@ -1,0 +1,274 @@
+syntax = "proto3";
+package devices;
+option go_package = "gitlab.suredatalab.kr/beymons/devices";
+
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+import "buf/validate/validate.proto";
+import "sdlmicro/middleware/annotations.proto";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+import "sdlmicro/types/tag.proto";
+
+import "devices.proto";
+
+service DeviceConfigs {
+	option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_tag) = {
+		description: "장치 설정 관리"
+	};
+	option (sdlmicro.options.authorization) = {
+		admin_role: "device-admin"
+		roles: {
+			key: "create-device-config"
+			value: "장치 설정 생성 권한"
+		}
+		roles: {
+			key: "query-device-configs"
+			value: "장치 설정 검색 권한"
+		}
+		roles: {
+			key: "manage-device-configs"
+			value: "장치 설정 관리 권한"
+		}
+	};
+
+	// [TODO] 설정 조회
+	rpc SearchConfig(SearchConfigRequest) returns (SearchConfigResponse) {
+		option (google.api.http) = {
+			get: "/device-configs"
+			additional_bindings: {get: "/device-configs/{config_id}"}
+		};
+		option (sdlmicro.options.method) = {
+			authorization: ["query-device-configs", "manage-device-configs"]
+		};
+	}
+
+	// [TODO] 장치 설정 생성
+	rpc CreateConfig(DeviceConfig) returns (DeviceConfig) {
+		option (google.api.http) = {
+			post: "/device-configs"
+			body: "*"
+		};
+		option (sdlmicro.options.method) = {authorization: "create-device-config"};
+		option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+			responses: {
+				key: "409"
+				value: {
+					description: "Returned when the device config set is already exists"
+					schema: {
+						example: "null"
+					}
+				}
+			}
+		};
+	}
+
+	// [TODO] 설정이 적용된 장치 목록
+	rpc ListDevice(SearchRequest) returns (SearchResponse) {
+		option (google.api.http) = {get: "/device-configs/{config_id}/devices"};
+		option (sdlmicro.options.method) = {authorization: "create-device-config"};
+	}
+
+	// [TODO] 장치 설정 삭제
+	//
+	// 이 설정을 사용하는 장치가 있으면 삭제 불가
+	rpc DeleteConfig(ConfigRequest) returns (google.protobuf.Empty) {
+		option (google.api.http) = {delete: "/device-configs/{config_id}"};
+		option (sdlmicro.options.method) = {
+			authorization: "manage-device-configs"
+		};
+	}
+}
+
+message ConfigRequest {
+	string config_id = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+
+message SearchConfigRequest {
+	// 사용 가능한 속성
+	enum Attribute {
+		// ID (Default)
+		device_config_id = 0;
+		// 설정 이름
+		display_name = 1;
+		// 설명
+		description = 2;
+		// 생성된 일시
+		created_at = 3;
+		// 생성한 사용자 정보
+		created_by = 4;
+		// 설정값
+		params = 5;
+		// 태그
+		tags = 6;
+	}
+
+	// 오름차순으로 정렬
+	repeated Attribute asc = 1 [(google.api.field_behavior) = OPTIONAL];
+
+	// 내림차순으로 정렬
+	repeated Attribute desc = 2 [(google.api.field_behavior) = OPTIONAL];
+
+	// 응답으로 보내줄 레코드 수.
+	// 지정하지 않거나 0인 경우 전체 레코드를 조회하지만,
+	// 응답이 15초 이상 소요되는 경우 타임아웃 오류가 발생된다.
+	uint64 limit = 3 [(google.api.field_behavior) = OPTIONAL];
+
+	// 페이지에서 표시되는 첫 레코드의 인덱스 (Default: 0)
+	uint64 offset = 4 [(google.api.field_behavior) = OPTIONAL];
+
+	// 전체 검색
+	string search = 5 [(google.api.field_behavior) = OPTIONAL];
+
+	// Config ID로 검색
+	string config_id = 6 [(google.api.field_behavior) = OPTIONAL];
+}
+
+message SearchConfigResponse {
+	repeated DeviceConfig entities = 1;
+
+	// 데이터의 총건수
+	uint64 count = 2;
+
+	// 관련 링크 (HATEOAS)
+	map<string, string> link = 3;
+}
+
+message ConfigureRequest {
+	string config_id = 1;
+
+	repeated string devices = 2 [
+		(google.api.field_behavior) = REQUIRED,
+		(buf.validate.field).repeated.unique = true,
+		(buf.validate.field).repeated.min_items = 1
+	];
+}
+
+/*******************************************************************************
+ * Model
+ ******************************************************************************/
+
+// DeviceConfig
+//
+// 장치 설정을 관리한다.
+message DeviceConfig {
+	option (sdlmicro.options.model) = {};
+
+	// DeviceConfig ID
+	string config_id = 1 [
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(google.api.field_behavior) = IMMUTABLE,
+		(sdlmicro.options.orm) = {pg: ",type:varchar(50),pk,notnull"},
+		(buf.validate.field).string.min_len = 2,
+		(buf.validate.field).string.max_len = 50,
+		(buf.validate.field).string.pattern = "^[a-z][a-z0-9_-]*[a-z0-9]$",
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			pattern: "^[a-z][a-z0-9_-]*[a-z0-9]$"
+			min_length: 2
+			max_length: 50
+			example: '"example"'
+		}
+	];
+
+	// 장치 설정 이름
+	string display_name = 2 [
+		(google.api.field_behavior) = OPTIONAL,
+		(sdlmicro.options.orm) = {pg: ",type:varchar(100)"},
+		(buf.validate.field).string.max_len = 100,
+		(buf.validate.field).string.pattern = "^[^\n\t]*$",
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			max_length: 100
+			example: '"샘플"'
+		}
+	];
+
+	// 설명
+	string description = 3 [
+		(google.api.field_behavior) = OPTIONAL,
+		(sdlmicro.options.orm) = {pg: ",type:varchar(1000)"},
+		(buf.validate.field).string.max_len = 1000,
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			max_length: 1000
+		}
+	];
+
+	// 생성 일시
+	google.protobuf.Timestamp created_at = 4 [
+		(google.api.field_behavior) = IMMUTABLE,
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(sdlmicro.options.orm) = {pg: ",type:timestamptz,notnull,default:now()"}
+	];
+
+	// 생성한 사용자 ID
+	string created_user_id = 5 [
+		(google.api.field_behavior) = IMMUTABLE,
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(sdlmicro.options.orm) = {pg: ",type:varchar(36),notnull"}
+	];
+
+	// 생성한 사용자 정보
+	google.protobuf.Struct created_by = 6 [
+		(google.api.field_behavior) = OPTIONAL,
+		(sdlmicro.options.orm) = {pg: "-"},
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			read_only: true
+			example: '{"email": "example@suredatalab.com", "first_name": "길동", "last_name": "홍", "username": "example", "name": "홍길동", "user_id": "UUID_000001"}'
+		}
+	];
+
+	// 설정값
+	google.protobuf.Struct params = 7 [
+		(google.api.field_behavior) = REQUIRED,
+		(google.api.field_behavior) = IMMUTABLE,
+		(sdlmicro.options.orm) = {pg: ",type:jsonb,notnull"},
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			example: '{}'
+		}
+	];
+
+	// 태그
+	repeated sdlmicro.types.Tag tags = 8 [
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(sdlmicro.options.orm) = {pg: "-"}
+	];
+
+	// 리소스에 대한 변경 권한 여부
+	bool writable = 9 [
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(sdlmicro.options.orm) = {pg: "-"}
+	];
+}
+
+// DeviceConfigLink
+//
+// 설정이 적용된 장치를 관리한다.
+message DeviceConfigLink {
+	option (sdlmicro.options.model) = {
+		references: {
+			id: "device_config_links_device_id_fkey"
+			model_name: "Device"
+			fields: "device_id"
+		}
+	};
+
+	// 장치 ID
+	string device_id = 1 [
+		(sdlmicro.options.orm) = {
+			pg: ",type:varchar(14),pk,notnull"
+			reference_id: "device_config_links_device_id_fkey"
+		}
+	];
+
+	// 설정 ID
+	string config_id = 2 [
+		(sdlmicro.options.orm) = {pg: ",type:varchar(50),notnull,join_fk:config_id,on_delete:RESTRICT"}
+	];
+	DeviceConfig config = 4 [(sdlmicro.options.orm) = {pg: ",rel:has-one,fk:config_id"}];
+
+	// 설정이 적용된 일시
+	google.protobuf.Timestamp created_at = 3 [(sdlmicro.options.orm) = {pg: ",type:timestamptz,notnull,default:now()"}];
+}

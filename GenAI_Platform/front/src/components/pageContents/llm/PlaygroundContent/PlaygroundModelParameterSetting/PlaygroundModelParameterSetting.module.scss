@@ -1,0 +1,34 @@
+@import '@src/styles/color.scss';
+
+.flex-32 {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 32px;
+  .title {
+    margin: initial;
+    color: $mono207;
+    font-family: SpoqaB;
+    font-size: 18px;
+    line-height: 18px; /* 100% */
+  }
+}
+
+.empty-cont {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: calc(100% - 42px);
+  .txt {
+    margin: initial;
+    color: $mono204;
+    font-family: SpoqaM;
+    font-size: 14px;
+    line-height: 14px;
+  }
+}

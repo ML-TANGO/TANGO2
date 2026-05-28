@@ -1,0 +1,45 @@
+@import '@src/styles/color.scss';
+
+.node-stack-bar-chart {
+  height: 100%;
+  .chart-item {
+    height: 50%;
+    padding: 16px 20px;
+    box-sizing: border-box;
+    .title {
+      color: $mono207;
+      font-size: 13px;
+      margin: 0 0 19px 0;
+      font-family: SpoqaB;
+    }
+    &:first-child {
+      border-bottom: 1px solid $card-border-color;
+    }
+    .stack-chart {
+      .stack-info {
+        display: flex;
+        justify-content: space-between;
+        font-size: 13px;
+        margin-bottom: 13px;
+      }
+      .stack {
+        position: relative;
+        width: 100%;
+        background-color: $mono202;
+        border-radius: 4px;
+        height: 24px;
+        overflow: hidden;
+        .fill {
+          position: absolute;
+          top: 0;
+          left: 0;
+          display: inline-block;
+          width: 0;
+          height: 100%;
+          background-color: $primary-color;
+          transition: width 0.4s;
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,58 @@
+@import '@src/styles/color.scss';
+
+.name-box {
+  width: 100%;
+  height: 28px;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  align-items: center;
+  .name-cont {
+    height: 100%;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .tooltip-cont {
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  .tool-name {
+    font-family: SpoqaB;
+    font-size: 20px;
+    font-weight: normal;
+    color: $mono207;
+    border-bottom: 1px solid transparent;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    box-sizing: border-box;
+    &.edit {
+      border-bottom: 1px solid $mono204;
+      overflow: hidden;
+      text-overflow: initial;
+      white-space: normal;
+    }
+  }
+  .popup-wrap {
+    display: none;
+  }
+}
+.running-message {
+  height: 22px;
+  margin: initial;
+  margin-bottom: 40px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 22px; /* 183.333% */
+}
+.explanation {
+  height: 44px;
+  font-size: 14px;
+  line-height: 22px;
+  color: $mono205;
+  font-weight: 500;
+  margin-bottom: 16px;
+}

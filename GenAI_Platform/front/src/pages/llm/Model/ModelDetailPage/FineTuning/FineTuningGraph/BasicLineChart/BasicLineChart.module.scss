@@ -1,0 +1,53 @@
+@import '@src/styles/color.scss';
+
+.container {
+  border: 1px solid $blue102;
+  border-radius: 12px;
+  background-color: $mono200;
+  height: 523px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  .title {
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    color: $mono205;
+    font-family: SpoqaM;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 14px;
+
+    .name {
+      font-size: 16px;
+      font-family: SpoqaB;
+      color: $mono207;
+      font-style: normal;
+      font-weight: 700;
+      line-height: 16px;
+      margin-bottom: 24px;
+    }
+  }
+  .graph {
+    // padding: 0;
+    // width: 100%;
+    // min-height: 320px;
+    flex: 1;
+    width: 100%;
+  }
+  .step {
+    margin-top: 24px;
+    font-family: SpoqaR;
+    font-size: 14px;
+    color: $mono205;
+    font-weight: 500;
+    line-height: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    padding: 0 24px;
+  }
+}

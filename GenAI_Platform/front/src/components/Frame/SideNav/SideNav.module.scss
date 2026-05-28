@@ -1,0 +1,65 @@
+@import '@src/styles/color.scss';
+
+.gnb {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background-color: #f4f6fa;
+  z-index: 4;
+  top: 0;
+
+  .nav {
+    height: calc(100% - 76px);
+  }
+
+  .nav-footer {
+    height: 76px;
+  }
+
+  .fold-box {
+    position: absolute;
+    top: 0;
+    right: -24px;
+    width: 24px;
+    height: 100%;
+    background-color: $hover-bg-color;
+    cursor: pointer;
+    opacity: 0;
+    &:hover {
+      opacity: 1;
+    }
+    &:after {
+      position: absolute;
+      top: 50%;
+      left: 6px;
+      transform: translateY(-50%);
+      content: '';
+      display: inline-block;
+      width: 0;
+      height: 0;
+      border-style: solid;
+      border-width: 10px;
+      border-color: transparent transparent transparent $primary-color;
+    }
+    &.open:after {
+      border-color: transparent $primary-color transparent transparent;
+      left: -4px;
+    }
+  }
+
+  &:hover {
+    .fold-box {
+      opacity: 1;
+    }
+  }
+}
+
+@media (max-width: 1023px) {
+  .gnb {
+    .fold-box {
+      display: none;
+    }
+  }
+}

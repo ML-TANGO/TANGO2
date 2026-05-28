@@ -1,0 +1,22 @@
+.info-cont {
+  display: grid;
+  grid-template-columns: 402fr 1214fr;
+  gap: 24px;
+}
+
+@media (min-width: 768px) and (max-width: 1199px) {
+  .info-cont {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+}
+
+/* 모바일 */
+@media (max-width: 767px) {
+  .info-cont {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+}

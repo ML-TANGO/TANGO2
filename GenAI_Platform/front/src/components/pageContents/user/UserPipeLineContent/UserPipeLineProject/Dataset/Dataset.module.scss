@@ -1,0 +1,123 @@
+@import '@src/styles/color.scss';
+
+.dataset-cont {
+  display: flex;
+  flex-direction: column;
+  .accordion-cont {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    text-wrap: nowrap;
+    margin-bottom: 16px;
+    .dataset-title {
+      margin: initial;
+      color: $mono205;
+      font-family: SpoqaB;
+      font-size: 20px;
+      line-height: 20px;
+    }
+    .dropdown-cont {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      width: 100%;
+    }
+    .accordion-btn {
+      display: flex;
+      align-items: center;
+      justify-items: center;
+      border: none;
+      background-color: initial;
+      border: 1px solid $mono203;
+      border-radius: 9px;
+      width: 36px;
+      height: 36px;
+      cursor: pointer;
+      .reverse {
+        transform: scaleY(-1);
+      }
+    }
+  }
+  .dataset-body-cont {
+    display: flex;
+    justify-content: space-between;
+    gap: 24px;
+    border-radius: 16px;
+    border: 1px solid $blue102;
+    background-color: #fff;
+    padding: 24px;
+    margin-left: 131px;
+    overflow: hidden;
+    box-sizing: border-box;
+    .column-cont {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+    }
+
+    .row-cont {
+      width: 100%;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+    }
+
+    .label-cont {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      .label {
+        color: $mono205;
+        font-family: SpoqaM;
+        font-size: 14px;
+        line-height: 14px; /* 100% */
+      }
+      .value {
+        color: $mono207;
+        font-family: SpoqaM;
+        font-size: 14px;
+        line-height: 14px; /* 100% */
+      }
+    }
+
+    .right-cont {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      .header {
+        color: $mono205;
+        font-family: SpoqaM;
+        font-size: 14px;
+        line-height: 14px; /* 100% */
+        padding-bottom: 15px;
+        border-bottom: 1px solid $mono203;
+      }
+      .data-list {
+        height: 100%;
+        overflow-y: auto;
+        .data-item {
+          display: flex;
+          justify-content: space-between;
+          height: 36px;
+          padding: 11px 12px;
+          border-bottom: 1px solid $mono203;
+          box-sizing: border-box;
+          text-wrap: nowrap;
+          .data-name-txt {
+            color: $mono207;
+            font-family: SpoqaM;
+            font-size: 14px;
+            line-height: 14px;
+          }
+          .data-size-txt {
+            color: $mono205;
+            font-family: SpoqaM;
+            font-size: 14px;
+            line-height: 14px; /* 100% */
+          }
+        }
+      }
+    }
+  }
+}

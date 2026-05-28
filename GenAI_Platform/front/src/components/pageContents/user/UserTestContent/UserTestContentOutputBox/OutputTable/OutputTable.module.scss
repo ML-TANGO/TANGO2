@@ -1,0 +1,35 @@
+@import '@src/styles/color.scss';
+
+.table {
+  font-family: SpoqaM;
+  font-size: 16px;
+  width: 100%;
+  border-collapse: collapse;
+  border-top: 3px solid $primary-color;
+  background-color: $mono200;
+  color: $mono207;
+  box-sizing: border-box;
+  th {
+    color: $primary-color;
+    background: $hover-bg-color;
+    text-align: center;
+  }
+  th,
+  td {
+    padding: 10px 16px;
+    border: 1px solid $mono203;
+    text-align: center;
+  }
+  th:first-child,
+  td:first-child {
+    border-left: 0;
+  }
+  th:last-child,
+  td:last-child {
+    border-right: 0;
+  }
+  .rowspan {
+    max-width: 250px;
+    word-break: keep-all;
+  }
+}

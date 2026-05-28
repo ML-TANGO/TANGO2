@@ -1,0 +1,822 @@
+syntax = "proto3";
+package facilities;
+option go_package = "gitlab.suredatalab.kr/beymons/facilities";
+
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+import "buf/validate/validate.proto";
+import "sdlmicro/middleware/annotations.proto";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+service Products {
+	option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_tag) = {
+		description: "제품 관리"
+	};
+	option (sdlmicro.options.authorization) = {
+		admin_role: "facility-admin"
+		roles: {
+			key: "create-product"
+			value: "제품 생성 권한"
+		}
+		roles: {
+			key: "query-products"
+			value: "제품 검색 권한"
+		}
+		roles: {
+			key: "view-products"
+			value: "제품 조회 권한"
+		}
+		roles: {
+			key: "manage-products"
+			value: "제품 관리 권한"
+		}
+	};
+
+	// 제품 검색
+	rpc SearchProduct(SearchProductRequest) returns (SearchProductResponse) {
+		option (google.api.http) = {get: "/products"};
+		option (sdlmicro.options.method) = {
+			authorization: ["query-products", "manage-products"]
+			test_order: 2
+		};
+	}
+
+	// 제품 등록
+	//
+	// 제조사 ID에 해당하는 사이트가 없는 경우 신규 시아트로 등록한다.
+	rpc CreateProduct(Product) returns (Product) {
+		option (google.api.http) = {
+			post: "/products/{manufacture_id}"
+			body: "*"
+		};
+		option (sdlmicro.options.method) = {
+			authorization: "create-product"
+			test_order: 1
+		};
+		option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+			responses: {
+				key: "409"
+				value: {
+					description: "Returned when the resource already exist."
+					schema: {
+						example: "null"
+					}
+				}
+			}
+		};
+	}
+
+	// 제품 정보 조회
+	rpc Products(ProductRequest) returns (Product) {
+		option (google.api.http) = {get: "/products/{manufacture_id}/{model_number}"};
+		option (sdlmicro.options.method) = {
+			authorization: ["view-products", "manage-products"]
+			test_order: 5
+		};
+	}
+
+	// 제품 력 조회
+	rpc ProductHistories(ProductRequest) returns (ProductHistoryResponse) {
+		option (google.api.http) = {get: "/products/{manufacture_id}/{model_number}/histories"};
+		option (sdlmicro.options.method) = {
+			authorization: ["view-products", "manage-products"]
+		};
+	}
+
+	// 제품 정보 수정
+	rpc ReplaceProduct(Product) returns (Product) {
+		option (google.api.http) = {
+			put: "/products/{manufacture_id}/{model_number}"
+			body: "*"
+			additional_bindings: {
+				post: "/products/{manufacture_id}/{model_number}/update"
+				body: "*"
+			}
+		};
+		option (sdlmicro.options.method) = {
+			authorization: "manage-products"
+			test_order: 3
+		};
+	}
+
+	// 사용자화 메타데이터 수정
+	rpc UpdateProduct(UpdateProductRequest) returns (Product) {
+		option (google.api.http) = {
+			patch: "/products/{manufacture_id}/{model_number}/attributes"
+			body: "payload"
+		};
+		option (sdlmicro.options.method) = {
+			authorization: "manage-products"
+			test_order: 4
+		};
+	}
+
+	// 제품 삭제
+	rpc DeleteProduct(ProductRequest) returns (google.protobuf.Empty) {
+		option (google.api.http) = {
+			delete: "/products/{manufacture_id}/{model_number}"
+			additional_bindings: {
+				post: "/products/{manufacture_id}/{model_number}/delete"
+				body: "*"
+			}
+		};
+		option (sdlmicro.options.method) = {
+			authorization: "manage-products"
+			test_order: 99
+		};
+	}
+
+	/***************************************************************************
+	 * 제어 설정 관리
+	 **************************************************************************/
+
+	// 제품 제어 설정 추가
+	rpc CreateControlProduct(ProductControl) returns (ProductControl) {
+		option (google.api.http) = {
+			post: "/products/{manufacture_id}/{model_number}/controls"
+			body: "*"
+		};
+		option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {tags: "제어 설정"};
+		option (sdlmicro.options.method) = {
+			authorization: "manage-products"
+			test_order: 30
+		};
+	}
+
+	// 제품 제어 설정 변경
+	rpc UpdateControlProduct(UpdateControlProductRequest) returns (ProductControl) {
+		option (google.api.http) = {
+			put: "/products/{manufacture_id}/{model_number}/controls/{control_id}"
+			body: "*"
+			additional_bindings: {
+				post: "/products/{manufacture_id}/{model_number}/controls/{control_id}/setting"
+				body: "*"
+			}
+		};
+		option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {tags: "제어 설정"};
+		option (sdlmicro.options.method) = {
+			authorization: "manage-products"
+			test_order: 31
+		};
+	}
+
+	// 제품 제어 설정 조회
+	rpc ControlProduct(ControlProductRequest) returns (ControlProductResponse) {
+		option (google.api.http) = {get: "/products/{manufacture_id}/{model_number}/controls"};
+		option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {tags: "제어 설정"};
+		option (sdlmicro.options.method) = {
+			authorization: ["view-products", "view-facilities"]
+			test_order: 32
+		};
+	}
+
+	// 제품 제어 설정 삭제
+	rpc DeleteControlProduct(ControlProductRequest) returns (google.protobuf.Empty) {
+		option (google.api.http) = {
+			delete: "/products/{manufacture_id}/{model_number}/controls/{control_id}"
+			additional_bindings: {
+				post: "/products/{manufacture_id}/{model_number}/controls/{control_id}/delete"
+				body: "*"
+			}
+		};
+		option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {tags: "제어 설정"};
+		option (sdlmicro.options.method) = {
+			authorization: "manage-products"
+			test_order: 97
+		};
+	}
+}
+
+message ProductRequest {
+	// 제조사 ID
+	string manufacture_id = 1 [
+		(google.api.field_behavior) = REQUIRED,
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			max_length: 50
+		}
+	];
+
+	// 모델 번호
+	string model_number = 2 [
+		(google.api.field_behavior) = REQUIRED,
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			max_length: 100
+		}
+	];
+}
+
+message SearchProductRequest {
+	// 정렬 옵션
+	enum Order {
+		// 제조사 ID (오름차순)
+		manufacture_id_asc = 0;
+		// 제조사 ID (내림차순)
+		manufacture_id_desc = 1;
+		// 제조사 이름 (오름차순)
+		manufacture_name_asc = 2;
+		// 제조사 이름 (내림차순)
+		manufacture_name_desc = 3;
+		// 모델 번호 (오름차순)
+		model_number_asc = 4;
+		// 모델 번호 (내림차순)
+		model_number_desc = 5;
+		// 제품명 (오름차순)
+		product_name_asc = 6;
+		// 제품명 (내림차순)
+		product_name_desc = 7;
+	}
+	repeated Order order = 1 [(google.api.field_behavior) = OPTIONAL];
+
+	// 응답으로 보내줄 레코드 수.
+	// 지정하지 않거나 0인 경우 전체 레코드를 조회하지만,
+	// 응답이 15초 이상 소요되는 경우 타임아웃 오류가 발생된다.
+	uint64 limit = 2 [(google.api.field_behavior) = OPTIONAL];
+
+	// 페이지에서 표시되는 첫 레코드의 인덱스 (Default: 0)
+	uint64 offset = 3 [(google.api.field_behavior) = OPTIONAL];
+
+	// 전체 검색
+	//
+	// 검색 대상:
+	// - 제품명
+	// - 제조사명
+	// - 제조사 ID (전방일치)
+	// - 모델 번호 (전방일치)
+	string search = 4 [(google.api.field_behavior) = OPTIONAL];
+
+	// 제조사 ID로 필터링
+	string manufacture_id = 5 [
+		(google.api.field_behavior) = OPTIONAL,
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			max_length: 50
+		}
+	];
+
+	// 제조사 이름으로 검색
+	string manufacture_name = 6 [(google.api.field_behavior) = OPTIONAL];
+
+	// 모델 번호
+	string model = 7 [
+		(google.api.field_behavior) = OPTIONAL,
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			max_length: 100
+		}
+	];
+
+	// 제품명으로 검색
+	string name = 9 [
+		(google.api.field_behavior) = OPTIONAL,
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			max_length: 200
+		}
+	];
+}
+
+message SearchProductResponse {
+	repeated Product entities = 1;
+
+	// 데이터의 총건수
+	uint64 count = 2;
+
+	// 관련 링크 (HATEOAS)
+	map<string, string> link = 3;
+}
+
+message UpdateProductRequest {
+	// 제조사 ID
+	string manufacture_id = 1 [
+		(google.api.field_behavior) = REQUIRED,
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			max_length: 50
+		}
+	];
+
+	// 모델 번호
+	string model_number = 2 [
+		(google.api.field_behavior) = REQUIRED,
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			max_length: 100
+		}
+	];
+
+	map<string, string> payload = 3 [
+		(google.api.field_behavior) = REQUIRED,
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			example: '{"description": "value"}'
+		}
+	];
+}
+
+message ProductHistoryResponse {
+	// 관리 이력
+	repeated ProductHistory histories = 2;
+}
+
+message CommandProductRequest {
+	// 제조사 ID
+	string manufacture_id = 1 [
+		(google.api.field_behavior) = REQUIRED,
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			max_length: 50
+		}
+	];
+
+	// 모델 번호
+	string model_number = 2 [
+		(google.api.field_behavior) = REQUIRED,
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			max_length: 100
+		}
+	];
+
+	oneof command {
+		option (buf.validate.oneof).required = true;
+
+		// 삭제 명령
+		bool delete = 3;
+	}
+}
+
+message CommandProductResponse {
+	// 명령이 적용된 리소스 수
+	uint32 count = 1;
+}
+
+message UpdateControlProductRequest {
+	// 제조사 ID
+	string manufacture_id = 1 [
+		(google.api.field_behavior) = REQUIRED,
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			max_length: 50
+		}
+	];
+
+	// 모델 번호
+	string model_number = 2 [
+		(google.api.field_behavior) = REQUIRED,
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			max_length: 100
+		}
+	];
+
+	// 제어 설정 ID
+	string control_id = 3 [
+		(google.api.field_behavior) = REQUIRED,
+		(buf.validate.field).string.uuid = true
+	];
+
+	// 센서 타입
+	string sensor_type = 4 [
+		(google.api.field_behavior) = REQUIRED,
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			pattern: "^[a-z][a-z0-9_]*[a-z0-9]+$"
+			max_length: 100
+			example: '"agsmotor_green2"'
+		}
+	];
+
+	// 명령어
+	string command = 5 [
+		(google.api.field_behavior) = REQUIRED,
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			pattern: "^[a-z][a-z0-9_]*[a-z0-9]+$"
+			max_length: 200
+			example: '"set_agsmotor_operation_req2"'
+		}
+	];
+
+	// 제어 명령
+	//
+	// go template 문법을 사용하며 제어 명령에서 해당 값을 입력한다.
+	string payload = 6 [
+		(google.api.field_behavior) = REQUIRED,
+		(buf.validate.field).string.min_len = 2,
+		(buf.validate.field).string.max_len = 1000,
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			example: '"{\\"2\\": {{.ratio}}}"'
+			max_length: 1000
+		}
+	];
+}
+
+message ControlProductRequest {
+	// 제조사 ID
+	string manufacture_id = 1 [
+		(google.api.field_behavior) = REQUIRED,
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			max_length: 50
+		}
+	];
+
+	// 모델 번호
+	string model_number = 2 [
+		(google.api.field_behavior) = REQUIRED,
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			max_length: 100
+		}
+	];
+
+	// 제어 설정 ID
+	string control_id = 3;
+}
+
+message ControlProductResponse {
+	repeated ProductControl entities = 1;
+}
+
+/*******************************************************************************
+ * Model
+ ******************************************************************************/
+
+// Product
+//
+// 설비에 대한 제품 정보를 관리
+message Product {
+	option (sdlmicro.options.model).references = {
+		id: "products_manufacture_id_fk"
+		model_name: "Site"
+		fields: "site_id"
+	};
+
+	// 제조사 ID
+	string manufacture_id = 1 [
+		(google.api.field_behavior) = REQUIRED,
+		(sdlmicro.options.orm).pg = ",type:varchar(50),notnull,pk",
+		(sdlmicro.options.orm).reference_id = "products_manufacture_id_fk",
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			max_length: 50
+		}
+	];
+
+	// 모델 번호
+	string model_number = 2 [
+		(google.api.field_behavior) = REQUIRED,
+		(sdlmicro.options.orm).pg = ",type:varchar(100),notnull,pk",
+		(buf.validate.field).string.min_len = 2,
+		(buf.validate.field).string.max_len = 100,
+		(buf.validate.field).string.not_in = "\t",
+		(buf.validate.field).string.not_in = "\n",
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			min_length: 2
+			max_length: 100
+		}
+	];
+
+	// 제조사 정보
+	google.protobuf.Struct manufacture = 3 [
+		(sdlmicro.options.orm).pg = "-",
+		(google.api.field_behavior) = OUTPUT_ONLY
+	];
+
+	// 제품명
+	string product_name = 4 [
+		(sdlmicro.options.orm).pg = ",type:varchar(200)",
+		(google.api.field_behavior) = OPTIONAL,
+		(buf.validate.field).string.max_len = 200,
+		(buf.validate.field).string.not_in = "\t",
+		(buf.validate.field).string.not_in = "\n",
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			max_length: 200
+		}
+	];
+
+	// 제품 출시 일시
+	google.protobuf.Timestamp created_at = 5 [
+		(sdlmicro.options.orm).pg = ",type:timestamptz,notnull,default:now()",
+		(google.api.field_behavior) = OPTIONAL
+	];
+
+	// 사용자화 메타데이터
+	map<string, string> attributes  = 6 [
+		(sdlmicro.options.orm).pg = "-",
+		(google.api.field_behavior) = OPTIONAL,
+        (buf.validate.field).map.keys = {
+            string: {
+                min_len: 3
+                max_len: 100
+                pattern: "^[a-z][a-z0-9_]*[a-z0-9]+$"
+            }
+        },
+        (buf.validate.field).map.values = {
+            string: {
+                min_len: 1
+                max_len: 200
+            }
+        },
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			example: '{"<ATTRIBUTE>": "<VALUE>"}'
+		}
+	];
+
+	// 리소스에 대한 변경 권한 여부
+	bool writable = 7 [
+		(sdlmicro.options.orm).pg = "-",
+		(google.api.field_behavior) = OUTPUT_ONLY
+	];
+}
+
+// ProductAttribute
+//
+// 제품에 대한 추가 정보를 관리한다.
+message ProductAttribute {
+	option (sdlmicro.options.model).references = {
+		id: "product_attributes_manufacture_id_model_number_fk"
+		model_name: "Product"
+		fields: ["manufacture_id", "model_number"]
+		on_delete: CASCADE
+	};
+	option (sdlmicro.options.model).indexes = {
+		id: "product_attributes_manufacture_id_model_number_attribute_key"
+		fields: [
+			{name: "manufacture_id"},
+			{name: "model_number"},
+			{name: "attribute"}
+		]
+		unique: true
+	};
+
+	// 제조사 ID
+	string manufacture_id = 1 [
+		(sdlmicro.options.orm).pg = ",type:varchar(50),pk,notnull",
+		(sdlmicro.options.orm).reference_id = "product_attributes_manufacture_id_model_number_fk"
+	];
+
+	// 모델 번호
+	string model_number = 2 [
+		(sdlmicro.options.orm).pg = ",type:varchar(100),pk,notnull",
+		(sdlmicro.options.orm).reference_id = "product_attributes_manufacture_id_model_number_fk"
+	];
+
+	// 속성명
+	string attribute = 3 [
+		(sdlmicro.options.orm).pg = ",type:varchar(100),pk,notnull"
+	];
+
+	// 값
+	string value = 4 [
+		(sdlmicro.options.orm).pg = ",type:varchar(200),notnull"
+	];
+
+
+	// 마지막 업데이트 일시
+	google.protobuf.Timestamp updated_at = 5 [
+		(sdlmicro.options.orm).pg = ",type:timestamptz,notnull,default:now()",
+		(google.api.field_behavior) = OUTPUT_ONLY
+	];
+}
+
+// ProductHistory
+//
+// Product 모델의 이력을 관리한다.
+message ProductHistory {
+	option (sdlmicro.options.model).hypertable = {
+		time_column_name: "created_at"
+		chunk_time_interval: "1 week"
+		partitioning: {
+			partitioning_column: "manufacture_id"
+			number_partitions: 10
+		}
+	};
+
+	// 이력 발생 일시
+	google.protobuf.Timestamp created_at = 1 [
+		(sdlmicro.options.orm).pg = ",type:timestamptz,notnull,default:now()",
+		(google.api.field_behavior) = IMMUTABLE
+	];
+
+	// 제조사 ID
+	string manufacture_id = 2 [
+		(sdlmicro.options.orm).pg = ",type:varchar(50),notnull",
+		(google.api.field_behavior) = IMMUTABLE
+	];
+
+	// 모델 번호
+	string model_number = 3 [
+		(sdlmicro.options.orm).pg = ",type:varchar(100),notnull",
+		(google.api.field_behavior) = IMMUTABLE
+	];
+
+	enum Kind {
+		// 제품 등록
+		CREATED = 0;
+		// 제품 정보 수정
+		UPDATED = 1;
+		// 제품 삭제
+		DELETED = 2;
+	}
+	// 관리 이력 코드
+	Kind action = 4 [
+		(sdlmicro.options.orm).pg = ",type:varchar(7),notnull,use_zero",
+		(google.api.field_behavior) = IMMUTABLE
+	];
+
+	// 이력을 발생시킨 사용자 ID
+	string created_user_id = 5 [
+		(sdlmicro.options.orm).pg = ",type:varchar(36),notnull",
+		(google.api.field_behavior) = IMMUTABLE
+	];
+
+	// 이력 발생 당시의 사용자 이름
+	string created_name = 6 [
+		(google.api.field_behavior) = INPUT_ONLY,
+		(google.api.field_behavior) = IMMUTABLE,
+		(sdlmicro.options.orm).pg = ",type:varchar(200),notnull,default:'Anonymous'"
+	];
+
+	// 이력을 발생시킨 사용자 정보
+	google.protobuf.Struct created_by = 7 [
+		(sdlmicro.options.orm).pg = "-",
+		(google.api.field_behavior) = IMMUTABLE,
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			read_only: true
+			example: '{"email": "example@suredatalab.com", "first_name": "길동", "last_name": "홍", "username": "example", "name": "홍길동", "user_id": "UUID_000001"}'
+		}
+	];
+
+	// 상세 이력
+	google.protobuf.Struct details = 8 [
+		(sdlmicro.options.orm).pg = "-",
+		(google.api.field_behavior) = OUTPUT_ONLY
+	];
+}
+
+// ProductUpdateHistory
+//
+// Product 모델의 변경 이력을 관리한다.
+message ProductUpdateHistory {
+	option (sdlmicro.options.model).hypertable = {
+		time_column_name: "created_at"
+		chunk_time_interval: "1 week"
+		partitioning: {
+			partitioning_column: "manufacture_id"
+			number_partitions: 10
+		}
+	};
+
+	// 이력 발생 일시
+	google.protobuf.Timestamp created_at = 1 [
+		(sdlmicro.options.orm).pg = ",type:timestamptz,notnull,default:now()"
+	];
+
+	// 제조사 ID
+	string manufacture_id = 2 [
+		(sdlmicro.options.orm).pg = ",type:varchar(50),notnull"
+	];
+
+	// 모델 번호
+	string model_number = 3 [
+		(sdlmicro.options.orm).pg = ",type:varchar(100),notnull"
+	];
+
+	// 기존 값
+	string origin = 4 [
+		(sdlmicro.options.orm).pg = ",type:jsonb"
+	];
+
+	// 변경된 값
+	string change = 5 [
+		(sdlmicro.options.orm).pg = ",type:jsonb"
+	];
+}
+
+// ProductControl
+//
+// 제품에 제어 설정 관리
+message ProductControl {
+	option (sdlmicro.options.model).references = {
+		id: "product_controls_manufacture_id_model_number_fkey"
+		model_name: "Product"
+		fields: ["manufacture_id", "model_number"]
+		on_delete: CASCADE
+	};
+	option (sdlmicro.options.model).references = {
+		id: "product_controls_sensor_type_fkey"
+		model_name: "SensorType"
+		fields: "type_id"
+	};
+	option (sdlmicro.options.model).indexes = {
+		id: "product_controls_manufacture_id_model_number_control_name_modbus_key"
+		fields: [
+			{name: "manufacture_id"},
+			{name: "model_number"},
+			{name: "control_name"},
+			{name: "modbus"}
+		]
+		unique: true
+	};
+
+	// 제어 설정 ID
+	string control_id = 1 [
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(google.api.field_behavior) = IMMUTABLE,
+		(sdlmicro.options.orm).pg = ",type:uuid,pk,notnull,default:gen_random_uuid()"
+	];
+
+	// 제조사 ID
+	string manufacture_id = 2 [
+		(google.api.field_behavior) = REQUIRED,
+		(google.api.field_behavior) = IMMUTABLE,
+		(sdlmicro.options.orm).pg = ",type:varchar(50),notnull",
+		(sdlmicro.options.orm).reference_id = "product_controls_manufacture_id_model_number_fkey",
+		(buf.validate.field).string.min_len = 1,
+		(buf.validate.field).string.max_len = 50,
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			max_length: 50
+		}
+	];
+
+	// 모델 번호
+	string model_number = 3 [
+		(google.api.field_behavior) = REQUIRED,
+		(google.api.field_behavior) = IMMUTABLE,
+		(sdlmicro.options.orm).pg = ",type:varchar(100),notnull",
+		(sdlmicro.options.orm).reference_id = "product_controls_manufacture_id_model_number_fkey",
+		(buf.validate.field).string.min_len = 1,
+		(buf.validate.field).string.max_len = 100,
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			max_length: 100
+		}
+	];
+
+	// 제어 이름
+	string control_name = 4 [
+		(google.api.field_behavior) = REQUIRED,
+		(google.api.field_behavior) = IMMUTABLE,
+		(sdlmicro.options.orm).pg = ",type:varchar(100),notnull",
+		(buf.validate.field).string.min_len = 1,
+		(buf.validate.field).string.max_len = 100,
+		(buf.validate.field).string.not_in = "\t",
+		(buf.validate.field).string.not_in = "\n",
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			max_length: 100
+			example: '"1중 좌측 측창"'
+		}
+	];
+
+	// 연결된 Modbus 주소
+	uint32 modbus = 5 [
+		(google.api.field_behavior) = REQUIRED,
+		(sdlmicro.options.orm).pg = ",type:integer,notnull"
+	];
+
+	// 센서 타입
+	string sensor_type = 6 [
+		(google.api.field_behavior) = REQUIRED,
+		(sdlmicro.options.orm).pg = ",type:varchar(100),notnull",
+		(sdlmicro.options.orm).reference_id = "product_controls_sensor_type_fkey",
+		(buf.validate.field).string.pattern = "^[a-z][a-z0-9_]*[a-z0-9]+$",
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+            pattern: "^[a-z][a-z0-9_]*[a-z0-9]+$"
+			max_length: 100
+			example: '"agsmotor_green"'
+		}
+	];
+
+	// 센서 타입 이름
+	string sensor_type_name = 7 [
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(sdlmicro.options.orm).pg = "-"
+	];
+
+	// 명령어
+	string command = 8 [
+		(google.api.field_behavior) = REQUIRED,
+		(sdlmicro.options.orm).pg = ",type:varchar(200),notnull",
+		(buf.validate.field).string.pattern = "^[a-z][a-z0-9_]*[a-z0-9]+$",
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+            pattern: "^[a-z][a-z0-9_]*[a-z0-9]+$"
+			max_length: 200
+			example: '"set_agsmotor_operation_req"'
+		}
+	];
+
+	// 제어 명령
+	//
+	// go template 문법을 사용하며 제어 명령에서 해당 값을 입력한다.
+	string payload = 9 [
+		(google.api.field_behavior) = REQUIRED,
+		(sdlmicro.options.orm).pg = ",type:varchar(1000),notnull",
+		(buf.validate.field).string.min_len = 2,
+		(buf.validate.field).string.max_len = 100,
+		(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+			example: '"{\\"1\\": {{.ratio}}}"'
+			max_length: 1000
+		}
+	];
+
+	// 관련 채널 번호
+	repeated string channels = 10 [
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(sdlmicro.options.orm).pg = "-"
+	];
+
+	// 마지막 업데이트 일시
+	google.protobuf.Timestamp updated_at = 11 [
+		(google.api.field_behavior) = OUTPUT_ONLY,
+		(sdlmicro.options.orm).pg = ",type:timestamptz,notnull,default:now()"
+	];
+}

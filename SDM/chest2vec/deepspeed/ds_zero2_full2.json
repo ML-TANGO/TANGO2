@@ -1,0 +1,13 @@
+{
+    "bf16": { "enabled": true },
+    "zero_optimization": {
+        "stage": 2,
+        "overlap_comm": true,
+        "contiguous_gradients": true,
+        "reduce_bucket_size": 50000000
+    },
+    "gradient_clipping": 1.0,
+    "train_micro_batch_size_per_gpu": 8,
+    "wall_clock_breakdown": false
+}
+

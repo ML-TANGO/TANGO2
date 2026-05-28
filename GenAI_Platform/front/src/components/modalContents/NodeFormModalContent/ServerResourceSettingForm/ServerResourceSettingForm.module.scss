@@ -1,0 +1,49 @@
+@import '@src/styles/color.scss';
+
+.input-group-title {
+  font-size: 20px;
+  font-weight: 500;
+  color: $mono207;
+  margin-top: 0px;
+  margin-bottom: 24px;
+}
+
+.inner-box {
+  padding: 20px 24px;
+  margin-bottom: 30px;
+  border-radius: 4px;
+  background-color: rgba($blue104, 0.08);
+  .box-title {
+    margin-bottom: 16px;
+    font-size: 16px;
+    font-family: SpoqaB;
+  }
+}
+
+.row {
+  font-family: SpoqaB;
+  .slider-box {
+    margin-top: 16px;
+    .slider-title {
+      font-size: 14px;
+      padding-left: 0px;
+      font-family: SpoqaM;
+    }
+    .slider-gage {
+      display: flex;
+      padding: 0px 5px 0px 5px;
+      .slider-input {
+        margin-left: 55px;
+        flex: 20%;
+        display: flex;
+        justify-content: space-between;
+        .percent {
+          height: 36px;
+          margin-left: 6px;
+          display: flex;
+          align-items: center;
+        }
+      }
+    }
+  }
+}

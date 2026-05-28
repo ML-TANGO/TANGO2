@@ -1,0 +1,97 @@
+@import '@src/styles/color.scss';
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  height: 100%;
+  padding: 0 7.5vw 0 5.5vw;
+  box-sizing: border-box;
+
+  .service-logo {
+    width: 17.5vw;
+    margin-bottom: 48px;
+  }
+
+  .partner-service-logo {
+    width: auto;
+    height: 2.1vh;
+    &.dgtp {
+      height: 2.5vh;
+    }
+  }
+
+  .partner-title {
+    height: auto;
+    font-family: SpoqaB;
+    font-size: 4vh;
+    margin-bottom: 30px;
+  }
+
+  span.welcome-title {
+    font-family: SpoqaB;
+    font-size: 3vw;
+    line-height: 1;
+    color: $mono207;
+    margin-bottom: 24px;
+  }
+
+  span.welcome-sub-title {
+    display: inline-block;
+    font-family: SpoqaL;
+    font-size: 1.48vw;
+    line-height: 1;
+    color: $mono205;
+    margin-bottom: 60px;
+  }
+
+  span.welcome-des {
+    font-family: SpoqaM;
+    font-size: 1em;
+    color: $mono205;
+    line-height: 1.56;
+  }
+
+  @media (max-width: 768px) {
+    display: block;
+    padding: 0 30px;
+
+    .service-logo {
+      width: 70vw;
+      margin: 80px 0;
+      box-sizing: border-box;
+    }
+    span.welcome-title {
+      display: block;
+      margin-bottom: 12px;
+      font-size: 4.1vw;
+    }
+    span.welcome-sub-title {
+      display: block;
+      margin-bottom: 20px;
+      font-size: 3.3vw;
+    }
+  }
+
+  @media (max-width: 480px) {
+    display: block;
+    padding: 0 30px;
+
+    .service-logo {
+      width: 100%;
+      margin: 60px 0;
+      box-sizing: border-box;
+    }
+    span.welcome-title {
+      display: block;
+      margin-bottom: 12px;
+      font-size: 1em;
+    }
+    span.welcome-sub-title {
+      display: block;
+      margin-bottom: 20px;
+      font-size: 0.9em;
+    }
+  }
+}

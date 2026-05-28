@@ -1,0 +1,38 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: facilities-service
+  labels:
+    framework: sdlmicro
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - default
+  http:
+  - name: facilities
+    match:
+    - uri:
+        exact: /api/facilities
+    - uri:
+        prefix: /api/facilities/
+    rewrite:
+      uri: /facilities/
+    route:
+    - destination:
+        host: facilities
+        port:
+          number: 80
+  - name: products
+    match:
+    - uri:
+        exact: /api/products
+    - uri:
+        prefix: /api/products/
+    rewrite:
+      uri: /products/
+    route:
+    - destination:
+        host: facilities
+        port:
+          number: 80

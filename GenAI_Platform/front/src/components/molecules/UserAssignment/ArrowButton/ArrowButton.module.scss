@@ -1,0 +1,16 @@
+.arrow-btn {
+  justify-items: center;
+  align-content: center;
+  width: 36px;
+  height: 36px;
+  background-color: #747474;
+  border: 1px solid #747474;
+  border-radius: 4px;
+  color: #fff;
+  padding: initial;
+  > img {
+    width: 26px;
+    height: 26px;
+    color: #ffffff;
+  }
+}

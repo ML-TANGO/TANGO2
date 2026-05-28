@@ -1,0 +1,13 @@
+version: v2
+plugins:
+  - remote: buf.build/protocolbuffers/go
+    out: .
+    opt: paths=source_relative
+  - remote: buf.build/grpc/go
+    out: .
+    opt: paths=source_relative
+inputs:
+  - proto_file: sensor_types.proto
+  - proto_file: devices.proto
+  - proto_file: command.proto
+  - proto_file: configs.proto

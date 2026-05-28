@@ -1,0 +1,99 @@
+@import '@src/styles/color.scss';
+
+@mixin center-flex {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: SpoqaM;
+  font-size: 14px;
+  box-sizing: border-box;
+  height: 100%;
+  position: absolute;
+}
+
+.container {
+  border: 1px solid $blue102;
+  padding: 16px 24px 24px 24px;
+  border-radius: 16px;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  // background-color: $blue100;
+  position: relative;
+
+  &.padding-24 {
+    padding: 24px;
+  }
+
+  .time-message {
+    font-size: 14px;
+    font-style: normal;
+    font-weight: 500;
+    line-height: 14px;
+    color: $blue104;
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 16px;
+    gap: 16px;
+    .time {
+      color: $mono205;
+    }
+  }
+  &.error {
+    border-color: $red502;
+    background-color: $mono200;
+  }
+  &.running {
+    background-color: $blue100;
+  }
+
+  .pending-container {
+    @include center-flex;
+    color: $orange403;
+  }
+
+  .no-data {
+    @include center-flex;
+    color: $red502;
+  }
+
+  .loading {
+    @include center-flex;
+  }
+  .running-container {
+    @include center-flex;
+    flex-direction: column;
+    gap: 16px;
+    .message {
+      color: $lime603;
+    }
+    .progress {
+      color: $mono205;
+    }
+  }
+
+  .error-container {
+    @include center-flex;
+    color: $red502;
+    gap: 8px;
+  }
+
+  .message {
+    @include center-flex;
+    color: $red502;
+  }
+
+  .graph-box {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+
+    @media screen and (max-width: 841px) {
+      grid-template-columns: 1fr;
+    }
+  }
+  @media screen and (max-width: 1024px) {
+    min-height: 902px;
+  }
+}

@@ -1,0 +1,424 @@
+@import '@src/styles/color.scss';
+
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-width: 340px;
+  padding: 20px 24px;
+  box-sizing: border-box;
+  border-radius: 10px;
+  background-color: $mono200;
+  border: 1px solid $mono204;
+  cursor: pointer;
+  &:hover {
+    box-shadow: $card-hover-color;
+  }
+
+  &.disabled {
+    outline: none;
+    overflow: hidden;
+  }
+
+  &.running,
+  &.pending,
+  &.shceduling,
+  &.installing {
+    // border: 1px solid $blue104;
+    // border 회전 animation code
+    border: none;
+    z-index: 0;
+    overflow: hidden;
+    &::before {
+      content: '';
+      position: absolute;
+      z-index: -2;
+      left: -50%;
+      top: -50%;
+      width: 200%;
+      height: 200%;
+      background-color: $primary-color;
+      background-repeat: no-repeat;
+      background-size: 50% 50%, 50% 50%;
+      background-position: 0 0, 100% 0, 100% 100%, 0 100%;
+      background-image: linear-gradient($blue104, $blue102),
+        linear-gradient($blue101, $blue102), linear-gradient($blue102, $blue104),
+        linear-gradient($blue102, $blue101);
+      animation: rotate 2.5s linear infinite;
+    }
+    &::after {
+      content: '';
+      position: absolute;
+      z-index: -1;
+      left: 2px;
+      top: 2px;
+      width: calc(100% - 4px);
+      height: calc(100% - 4px);
+      background: white;
+      border-radius: 10px;
+    }
+    &.stop::before {
+      filter: grayscale(1);
+    }
+    @keyframes rotate {
+      100% {
+        transform: rotate(1turn);
+      }
+    }
+  }
+}
+
+.dim {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: $mono200;
+  opacity: 0.7;
+  cursor: default;
+  z-index: 30;
+  border-radius: 10px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  flex: 0;
+  .training-type {
+    flex: 1;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    .active-status {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      --border-width: 2px;
+      border-radius: 8px;
+      box-sizing: border-box;
+      color: $blue104;
+      &:not(.active) {
+        color: $mono205;
+
+        .type-icon {
+          opacity: 0.3;
+          filter: grayscale(1);
+        }
+      }
+      .type-icon {
+        width: 24px;
+        height: 24px;
+        &.built-in {
+          width: 20px;
+        }
+      }
+
+      // &.stop,
+      &.not-allowed {
+        // border: 2px solid $mono204;
+        .type-icon {
+          filter: grayscale(1);
+          opacity: 0.5;
+        }
+      }
+
+      &.active {
+        // 1) 배경이 숨쉬는 active 표시
+        // animation: moveGradient 4s alternate infinite;
+        // background: linear-gradient(
+        //   60deg,
+        //   rgba($blue104, 0.7),
+        //   rgba($blue104, 0.4),
+        //   rgba($blue104, 0.1),
+        //   rgba($blue104, 0.01)
+        // );
+        // background-size: 300% 300%;
+        // background-position: 0 50%;
+        // @keyframes moveGradient {
+        //   50% {
+        //     background-position: 100% 50%;
+        //   }
+        // }
+      }
+    }
+    .model-name {
+      flex: 1;
+      margin-left: 8px;
+      color: $mono205;
+      font-size: 14px;
+      font-family: SpoqaM;
+      .deleted {
+        display: flex;
+        align-items: center;
+        color: $error-color;
+        background-color: rgba($red501, 0.6);
+        padding: 4px 8px;
+        border-radius: 2px;
+        margin-right: 8px;
+        line-height: 1.2;
+        font-family: SpoqaM;
+        img {
+          margin-right: 4px;
+          width: 20px;
+          height: 20px;
+        }
+      }
+    }
+  }
+  .custom-text {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    .icon {
+      width: 16px;
+      height: 16px;
+      &.gray {
+        opacity: 0.3;
+        filter: grayscale(1);
+      }
+    }
+    .cardType {
+      color: $mono204;
+      font-family: SpoqaM;
+      font-size: 16px;
+      line-height: 16px;
+      &.blue {
+        color: $blue104;
+      }
+    }
+  }
+  .popup-wrap {
+    flex: 0;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    grid-gap: 4px;
+
+    .delete-icon {
+      position: relative;
+      padding: 3px 4px 0px;
+      border-radius: 4px;
+
+      &:hover {
+        background: $mono203;
+      }
+    }
+
+    .active-bookmark {
+      width: 24px;
+      height: 24px;
+      position: relative;
+      display: inline-block;
+
+      &:hover::after {
+        content: attr(name);
+        position: absolute;
+        top: 30px;
+        right: 0;
+        width: max-content;
+        height: auto;
+        line-height: 1.5;
+        padding: 3px 6px;
+        background: $mono200;
+        font-size: 12px;
+        // font-family: SpoqaR;
+        border-radius: 2px;
+        border: 1px solid $mono205;
+        color: $mono206;
+        text-align: center;
+        z-index: 100;
+      }
+    }
+
+    .bookmark {
+      position: relative;
+      display: inline-block;
+      width: 24px;
+      height: 24px;
+      background-position: 50%;
+      background-image: url(@src/static/images/icon/00-ic-basic-bookmark.svg);
+      background-size: 24px 24px;
+      &:hover {
+        background-image: url(@src/static/images/icon/00-ic-basic-bookmark-o-blue.svg);
+      }
+      &.marked {
+        background-image: url(@src/static/images/icon/00-ic-basic-bookmark-blue.svg);
+      }
+      &:hover::after {
+        content: attr(name);
+        position: absolute;
+        top: 30px;
+        right: 0;
+        width: max-content;
+        height: auto;
+        line-height: 1.5;
+        padding: 3px 6px;
+        background: $mono200;
+        font-size: 12px;
+        // font-family: SpoqaR;
+        border-radius: 2px;
+        border: 1px solid $mono205;
+        color: $mono206;
+        text-align: center;
+        z-index: 100;
+      }
+    }
+  }
+}
+
+.training-info {
+  flex: 1;
+  margin-top: 18px;
+  // margin-bottom: 22px;
+  .creator-auth {
+    height: 13px;
+    .creator {
+      color: $mono205;
+      font-size: 13px;
+    }
+    .auth {
+      margin-left: 4px;
+      & > img {
+        vertical-align: bottom;
+      }
+    }
+  }
+  .model-name {
+    display: inline-flex;
+    align-items: center;
+    color: $mono205;
+    font-size: 14px;
+    height: 14px;
+    padding-left: 8px;
+    margin-left: 8px;
+    border-left: 2px solid $mono205;
+  }
+  .training-name-box {
+    height: 58px;
+    margin: 8px 0 0 0;
+    .training-name {
+      display: inline;
+      line-height: 1.42;
+      word-break: break-all;
+      font-size: 24px;
+      font-family: SpoqaB;
+      color: $mono207;
+      vertical-align: middle;
+    }
+  }
+  .instance-box {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+
+    .line {
+      width: 100%;
+      height: 1px;
+      background-color: $mono203;
+    }
+
+    .inner-box {
+      flex: 1;
+      word-break: break-all;
+      font-size: 14px;
+      // font-family: SpoqaR;
+      color: $mono207;
+      display: flex;
+      flex-direction: column;
+
+      // border: 1px solid blue;
+      .title {
+        color: $mono205;
+        margin-bottom: 4px;
+      }
+      .name {
+        // padding-left: 12px;
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 3;
+        white-space: normal;
+        line-height: 1.5;
+      }
+      .configuration-box {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 14px;
+
+        .empty-instance {
+          color: $red502;
+          font-style: normal;
+          font-weight: 500;
+          margin-top: 34px;
+        }
+
+        .configuration {
+          height: 22px;
+          display: flex;
+          align-items: center;
+          gap: 2px;
+          font-size: 14px;
+
+          .resource {
+            font-weight: 700;
+          }
+
+          div:first-of-type {
+            width: 45px;
+            white-space: nowrap;
+            flex-shrink: 0;
+          }
+          div:last-of-type {
+            // flex: 1;
+            // font-size: 12px;
+            max-width: 141px;
+
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 1;
+            white-space: normal;
+            flex-grow: 1;
+            @media (min-width: 1920px) {
+              max-width: calc(100% - 45px);
+            }
+          }
+        }
+      }
+    }
+  }
+  .training-desc {
+    font-family: SpoqaM;
+    font-size: 14px;
+    color: $mono205;
+    margin: 0;
+    display: -webkit-box;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+    line-height: 1.5em;
+    max-height: 3em;
+    word-break: break-all;
+  }
+}
+
+.training-status {
+  flex: 0;
+
+  .btn-box {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    margin-top: 16px;
+  }
+}

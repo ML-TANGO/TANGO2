@@ -1,0 +1,51 @@
+@import '../modal.scss';
+
+.row {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+
+  .price-container {
+    position: relative;
+    display: flex;
+
+    .unit {
+      position: absolute;
+      right: 16px;
+      top: 9px;
+      font-family: SpoqaM;
+      color: $mono205;
+      font-size: 14px;
+    }
+
+    .price-input {
+      box-sizing: border-box;
+      flex: 1;
+      padding: 12px;
+      padding-right: 30px;
+      border-radius: 8px;
+      border: 1px solid $mono203;
+      font-family: SpoqaM;
+      font-size: 14px;
+      height: 36px;
+
+      &::-webkit-outer-spin-button,
+      &::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+
+      &:focus,
+      &.blue-border {
+        border: 1px solid $blue104;
+      }
+
+      &::placeholder {
+        text-align: left;
+        color: $mono204;
+        font-family: SpoqaM;
+      }
+    }
+  }
+}
