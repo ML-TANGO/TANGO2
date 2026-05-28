@@ -21,114 +21,130 @@ It aims to develop automatic neural network generation and deployment framework 
 
 ---
 
-## Specification
+## Project Layout
 
 <p align="center">
 <img width="1280" alt="flow" src="docs/workflow.png" align="center" /></p>
 
-This repository is a collection of individual modules that satisfy the overall workflow as illustrated in the above figure.
+This repository is a collection of individual modules that satisfy the overall workflow as illustrated in the above figure. The source tree is organized into three top-level pillars, each with its own architectural style:
 
-The source tree is organized with the MSA (microservice architecture) principles: each subdirectory contains component container source code. 
-Due to the separation of source directory, component container developers just only work on their own isolated subdirectory and publish minimal REST API to serve project manager container's service request.
+- **`LLMOps/`** — the core TANGO 2 platform, organized along **MSA (microservice architecture)** principles. Each subdirectory under `apps/` contains an isolated component container with a minimal REST API; component developers work only inside their own subdirectory and publish APIs that the platform orchestrates.
+- **`Field_Test/`** — domain field demonstrations (SDF, SDM, SDS). These are proof-of-concept codebases that exercise the platform in real industry settings.
+- **`Runtime_System/`** — edge / on-device runtime components (optimization, parallel inference, runtime engine, remote node management) that sit outside the platform cluster and target deployment hardware.
+
+### Where to start
+
+- **Install or deploy the platform?** See [`LLMOps/devops/INSTALL.md`](LLMOps/devops/INSTALL.md) (Kubernetes Helm charts and install scripts).
+- **Explore a domain demonstration?** See the per-domain READMEs under [`Field_Test/`](Field_Test) — [SDF](Field_Test/SDF/README.md), [SDM](Field_Test/SDM/README.md), [SDS](Field_Test/SDS/README.md).
+- **Deploy a trained model to a target device?** See [`Runtime_System/`](Runtime_System) for optimization, parallel inference, runtime engine, and remote node management.
 
 ```bash
 TANGO2
-   ├── Data_Augmentation
-   │   └── fewshot_prompting 
+   ├── Field_Test
+   │   ├── SDF
+   │   │   ├── 원시데이터 수집기
+   │   │   ├── 원천데이터 생성기
+   │   │   ├── 제어기
+   │   │   └── LAM 학습,추론
+   │   ├── SDM
+   │   └── SDS
+   │       ├── Data_Revision
+   │       ├── dataset
+   │       ├── simulator
+   │       └── VisionLanguageModel
    │
-   ├── Deployment
-   │   ├── Optimization
-   │   ├── Runtime_Engine
-   │   │   ├── Timestamp
-   │   │   ├── kernel_source
-   │   │   └── monitoring
-   │   └── remoteManager
+   ├── LLMOps
+   │   ├── Data_Augmentation
+   │   │   └── fewshot_prompting
+   │   ├── Evaluation
+   │   │   └── Intent_Detection
+   │   ├── apps
+   │   ├── bundles
+   │   ├── devops
+   │   ├── docs
+   │   ├── front
+   │   └── libs
    │
-   ├── GenAI_Platform
-   │
-   ├── Learning
-   │   └── Intent_Detection
-   │
-   ├── SDF
-   │   ├── data-collect-service
-   │   ├── data
-   │   └── model/fine_tuned_xlm_lora
-   │
-   ├── SDM
-   │
-   └── SDS
-       ├── Data_Revision
-       ├── dataset
-       └── simulator
+   └── Runtime_System
+       ├── Optimization
+       ├── Parallell_Inference
+       ├── Runtime_Engine
+       │   ├── Timestamp
+       │   ├── kernel_source
+       │   └── monitoring
+       └── remoteManager
 ```
 
-### Data_Augmentation
-[[View Details]](Data_Augmentation/README.md)
+### Field_Test
+Field demonstrations of TANGO2 across three SDx domains.
 
-└── fewshot_prompting [[View Details]](Data_Augmentation/fewshot_prompting/README.md)
+#### SDF [[View Details]](Field_Test/SDF/README.md)
 
-
-### Deployment
-[[View Details]](Deployment/README.md)
-
-├── Optimization [[View Details]](Deployment/Optimization/README.md)
-
-├── Runtime_Engine [[View Details]](Deployment/Runtime_Engine/README.md)
-
-│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── Timestamp [[View Details]](Deployment/Runtime_Engine/Timestamp/README.md)
-
-│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── kernel_source [[View Details]](Deployment/Runtime_Engine/kernel_source/README.md)
-
-│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── monitoring [[View Details]](Deployment/Runtime_Engine/monitoring/README.md)
-
-└── remoteManager [[View Details]](Deployment/remoteManager/README.md)
-
-
-### GenAI_Platform 
-[[View Details]](GenAI_Platform/README.md)
-
-
-### Learning 
-[[View Details]](Learning/README.md)
-
-└── Intent_Detection [View Details]
-
-
-### SDF 
-[[View Details]](SDF/README.md)
-
-├── data-collect-service [[View Details]](SDF/data-collect-service/README.md)
-
-├── data [View Details]
-
-└── model/fine_tuned_xlm_lora [[View Details]](SDF/model/fine_tuned_xlm_lora/README.md)
+├── 원시데이터 수집기 [[View Details]](Field_Test/SDF/원시데이터%20수집기/README.md)
+├── 원천데이터 생성기 [[View Details]](Field_Test/SDF/원천데이터%20생성기/README.md)
+├── 제어기
+└── LAM 학습,추론
 
 <p align="center">
 <img width="1280" align="center" alt="SDF" src="docs/sdf.png" /></p>
 
 **Software Defined Farming**: To advance smart farms, we are building a system based on artificial intelligence (LLM, LAM) and verifying intelligent SDF through continuous learning of AI models.
 
-### SDM
-[[View Details]](SDM/README.md)
+#### SDM [[View Details]](Field_Test/SDM/README.md)
+
+├── chest2vec
+├── models
+├── training 
+├── losses 
+├── evaluation 
+├── grounding 
+├── rexgrounding 
+├── data 
+└── tests
 
 <p align="center">
 <img width="1280" align="center" alt="SDM" src="docs/sdm.png" /></p>
 
 **Software Defined Medicine**: We developed a Software Defined Medicine (SDM) system based on a medical domain-specific, multimodal (chest CT-interpretation) artificial intelligence (Large Vision-Language Model) and demonstrated it in a hospital.
 
-### SDS 
-[[View Details]](SDS/README.md)
+#### SDS [[View Details]](Field_Test/SDS/README.md)
 
-├── Data_Revision [View Details]
-
-├── dataset [[View Details]](SDS/dataset/README.md) [[View Details]](SDS/dataset/20250922/README.md)
-
-└── simulator [[View Details]](SDS/simulator/README.md)
+├── Data_Revision
+├── dataset [[View Details]](Field_Test/SDS/dataset/README.md)
+├── simulator [[View Details]](Field_Test/SDS/simulator/README.md)
+└── VisionLanguageModel [[View Details]](Field_Test/SDS/VisionLanguageModel/README.md)
 
 <p align="center">
 <img width="1280" align="center" alt="SDS" src="docs/sds.png" /></p>
 
 **Software Defined Ship**: Going beyond the development of perception-centered AI agents using existing sensor fusion technology, we demonstrate that they understand and describe situations based on detected surrounding objects and environmental information, and make navigation decisions appropriate to the situation based on navigation rules.
+
+### LLMOps
+[[View Details]](LLMOps/README.md)
+
+Integrated LLMOps platform covering microservices (`apps/`), Kubernetes infra (`devops/`), the web frontend (`front/`) and shared libraries (`libs/`).
+
+├── Data_Augmentation [[View Details]](LLMOps/Data_Augmentation/README.md)
+│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── fewshot_prompting [[View Details]](LLMOps/Data_Augmentation/fewshot_prompting/README.md)
+├── Evaluation [[View Details]](LLMOps/Evaluation/README.md)
+│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── Intent_Detection
+├── apps — microservices (dashboard, dataset, deployment, monitoring, llm_model, llm_playground, …)
+├── bundles [[View Details]](LLMOps/bundles/README.md)
+├── devops — Kubernetes Helm charts and install scripts ([INSTALL.md](LLMOps/devops/INSTALL.md))
+├── docs [[View Details]](LLMOps/docs/README.md)
+├── front [[View Details]](LLMOps/front/README.md)
+└── libs — shared libraries (`fb_bin`, `fb_image`, `fb_logger`)
+
+### Runtime_System
+Edge/device-side runtime stack for model optimization, parallel inference, runtime engine and remote node management.
+
+├── Optimization [[View Details]](Runtime_System/Optimization/README.md)
+├── Parallell_Inference [[View Details]](Runtime_System/Parallell_Inference/README.md)
+├── Runtime_Engine [[View Details]](Runtime_System/Runtime_Engine/README.md)
+│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── Timestamp [[View Details]](Runtime_System/Runtime_Engine/Timestamp/README.md)
+│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── kernel_source
+│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── monitoring [[View Details]](Runtime_System/Runtime_Engine/monitoring/README.md)
+└── remoteManager [[View Details]](Runtime_System/remoteManager/README.md)
 
 ---
 
@@ -140,9 +156,11 @@ Our community holds an annual conference to share our achievements and broaden o
 ### TANGO on Media
 #### Youtube
 - [TANGO, 노코드 신경망 자동생성 통합개발 프레임워크의 품질 관리](https://www.youtube.com/watch?v=jrJCXAPKJn8)
-- [성공하는 SW기업을 위한 AI, SW개발도구 'TANGO')](youtube.com/watch?v=IwyHOl3WjWQ&feature=youtu.be)
+- [성공하는 SW기업을 위한 AI, SW개발도구 'TANGO')](https://youtube.com/watch?v=IwyHOl3WjWQ&feature=youtu.be)
 
 #### Article
+- [[2026] ETRI releases no-code machine learning development tools (EurekAlert)](https://www.eurekalert.org/news-releases/1111295)
+- [[2026] No-code machine learning development tools (TechXplore)](https://techxplore.com/news/2026-01-code-machine-tools.html)
 - [[2025] “AI 지식 없어도 한 번에”ETRI, 노코드 기계학습 도구 공개](https://www.edaily.co.kr/News/Read?newsId=01466166642361784&mediaCodeNo=257&OutLnkChk=Y)
 - [[2025] ETRI, 노코드 기계학습 개발도구 공개…“AI·SW지식 부족해도 한번 실행 OK”](https://www.edaily.co.kr/News/Read?newsId=01466166642361784&mediaCodeNo=257&OutLnkChk=Y)
 - [[2025] “AI·SW지식 없어도 OK” ETRI, 노코드 기계학습 개발도구 공개](https://biz.heraldcorp.com/article/10606733?ref=naver)
@@ -158,9 +176,13 @@ Our community holds an annual conference to share our achievements and broaden o
     
 ---
 
+#### License
+
+This project is released under the terms in [`LICENSE.md`](LICENSE.md) (한국어: [`LICENSE_ko.md`](LICENSE_ko.md)).
+
 #### Acknowledgement <a name="ack"></a>
 
-This proejct was supported by [_Institute of Information & Communications Technology Planning & Evaluation (IITP)_](https://www.iitp.kr/) grant funded by the [_Ministry of Science and Information Communication Technology (MSIT)_](https://www.msit.go.kr/), Republic of Korea (**No. RS-2025-25442867**, _Development of a Generative AI-Supported System Software Framework for Optimal Execution of SDx Intelligent Services_).
+This project was supported by [_Institute of Information & Communications Technology Planning & Evaluation (IITP)_](https://www.iitp.kr/) grant funded by the [_Ministry of Science and Information Communication Technology (MSIT)_](https://www.msit.go.kr/), Republic of Korea (**No. RS-2025-25442867**, _Development of a Generative AI-Supported System Software Framework for Optimal Execution of SDx Intelligent Services_).
 
 ---
 
