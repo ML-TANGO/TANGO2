@@ -119,8 +119,7 @@ Field demonstrations of TANGO2 across three SDx domains.
 
 **Software Defined Ship**: Going beyond the development of perception-centered AI agents using existing sensor fusion technology, we demonstrate that they understand and describe situations based on detected surrounding objects and environmental information, and make navigation decisions appropriate to the situation based on navigation rules.
 
-### LLMOps
-[[View Details]](LLMOps/README.md)
+### LLMOps [[View Details]](LLMOps/README.md)
 
 Integrated LLMOps platform covering microservices (`apps/`), Kubernetes infra (`devops/`), the web frontend (`front/`) and shared libraries (`libs/`).
 
@@ -148,7 +147,7 @@ Edge/device-side runtime stack for model optimization, parallel inference, runti
 
 ---
 
-## [TANGO Community](http://tangoai.or.kr)
+## TANGO Community
 __TANGO Community__ is an <ins>Artificial Intelligence(AI) democratization</ins> platform designed to allow anyone to easily enter the world of AI.
 Our community holds an annual conference to share our achievements and broaden our technological horizons.
 [_<ins>Feel free to join our fully open community!</ins>_](http://tangoai.or.kr)
@@ -176,11 +175,11 @@ Our community holds an annual conference to share our achievements and broaden o
     
 ---
 
-#### License
+## License
 
 This project is released under the terms in [`LICENSE.md`](LICENSE.md) (한국어: [`LICENSE_ko.md`](LICENSE_ko.md)).
 
-#### Acknowledgement <a name="ack"></a>
+## Acknowledgement <a name="ack"></a>
 
 This project was supported by [_Institute of Information & Communications Technology Planning & Evaluation (IITP)_](https://www.iitp.kr/) grant funded by the [_Ministry of Science and Information Communication Technology (MSIT)_](https://www.msit.go.kr/), Republic of Korea (**No. RS-2025-25442867**, _Development of a Generative AI-Supported System Software Framework for Optimal Execution of SDx Intelligent Services_).
 
