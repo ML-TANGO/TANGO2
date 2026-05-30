@@ -150,8 +150,8 @@ async def sse(request : Request):
                     for stream, messages in msgs:
                         for msg_id, data in messages:
                             # 메시지를 처리
-                            data["not_read_count"] = await get_noti_not_read_count(user_id) 
-                            yield f"data: {data}\n\n"
+                            data["not_read_count"] = await get_noti_not_read_count(user_id)
+                            yield f"data: {json.dumps(data)}\n\n"
                             # 메시지 처리가 완료되면 ACK
                             await redis_client.xack(USER_ALERT_CHANNEL.format(user_id), "mygroup", msg_id)
                             await redis_client.xdel(USER_ALERT_CHANNEL.format(user_id), msg_id)

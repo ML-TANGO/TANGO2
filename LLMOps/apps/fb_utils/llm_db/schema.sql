@@ -247,3 +247,4 @@ CREATE TABLE IF NOT EXISTS `user_prompt` (
     CONSTRAINT FOREIGN KEY (`prompt_id`) REFERENCES `jonathan_llm`.`prompt` (`id`) ON UPDATE CASCADE ON DELETE CASCADE,
     CONSTRAINT FOREIGN KEY (`user_id`) REFERENCES `msa_jfb`.`user` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
 );
+
