@@ -160,6 +160,7 @@ config:
     [INPUT]
         Name tail
         Path /var/log/containers/*.log
+        Exclude_Path /var/log/containers/*_network-operator_*.log
         multiline.parser cri, docker, multiline-custom, multiline-python-trace
         Tag kube.*
         Buffer_Max_Size 10MB
