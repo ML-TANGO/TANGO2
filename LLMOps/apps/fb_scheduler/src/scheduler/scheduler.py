@@ -262,11 +262,21 @@ def acked(err, msg):
         print("Message produced: %s" % (str(msg)))
 
 def try_json_deserializer(data):
+    """Kafka message → dict. tombstone / 빈 페이로드 / 디코드 실패 시 None.
+
+    이전 구현은 except 안에서 같은 `json.loads(data)` 를 또 호출해 traceback
+    raise → consumer reinitialize 무한 loop. fix: graceful None 반환 후
+    caller 에서 skip.
+    """
+    if data is None or data == b"" or data == "":
+        return None
     try:
-        return json.loads(data.decode('utf-8'))
-    except (json.JSONDecodeError, AttributeError):
-        print("디코드 오류", file=sys.stderr)
+        if isinstance(data, (bytes, bytearray)):
+            return json.loads(data.decode("utf-8"))
         return json.loads(data)
+    except (json.JSONDecodeError, AttributeError, UnicodeDecodeError) as e:
+        print(f"디코드 오류 (skip): {e}", file=sys.stderr)
+        return None
 
 def get_gpu_auto_select(gpu_count: int, pod_count: int, gpu_data: list):
     # 결과를 저장할 리스트
@@ -422,6 +432,11 @@ def kafka_consume_msgs(consumer, kafka_admin, redis_client, type_id_map):
         
         for msg in msgs:
             pod_info = try_json_deserializer(msg.value())
+            if pod_info is None:
+                # tombstone / 디코드 실패 — skip 후 다음 메시지 처리 (consumer
+                # 재초기화 loop 방지)
+                logging.info("kafka message decode failed or empty, skipping")
+                continue
             logging.info(f"[kafka polled msg] pod_info: {json.dumps(pod_info, ensure_ascii=False)}")
             # 메시지에서 workspace_id 추출
             ws_id = pod_info.get("workspace_id") or pod_info.get("metadata_workspace_id")
