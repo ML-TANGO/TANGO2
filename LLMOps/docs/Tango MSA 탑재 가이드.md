@@ -695,7 +695,7 @@ POST /run
 >
 > 학습·추론·배포처럼 **GPU/PVC 자원이 필요하고 비동기 long-running job 형태**로 동작하는 도메인 API는, 본 가이드의 기본 contract(`/health`, `/info`, `/run`)와는 별개로 플랫폼이 별도 표준 spec을 제공합니다.
 >
-> → `docs/external-container-spec.md` (SP-1 외부 컨테이너 계약 v2)
+> → `examples/hello-plugin/external-container-spec.md` (SP-1 외부 컨테이너 계약 v2)
 >
 > 이 spec 은 **manifest 기반 endpoint 정의(협력기관 URL 자유 유지), 워크스페이스 PVC 마운트 표준, job lifecycle, response shape**(`status` enum / `job_id` / `progress` / `result` / `error` 필드 구조)을 명시합니다. 해당 도메인 서비스 탑재 시 이 spec 을 우선 참조해 주시기 바랍니다.
 >

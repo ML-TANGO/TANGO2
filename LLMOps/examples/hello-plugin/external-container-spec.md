@@ -43,7 +43,7 @@ TANGO2 GenAI 플랫폼이 **외부 협력기관**이 제공하는 ML 컨테이�
 | Layer | 문서 | 적용 범위 | 강제 강도 |
 |---|---|---|---|
 | **기본 contract** | `docs/Tango MSA 탑재 가이드.md` | 모든 외부 MSA 공통: `/health`, `/info`, `/run`, 공통 헤더, 표준 에러 코드, helm chart 작성법, `acryl.ai/appType: user` 어노테이션 | 항상 적용 |
-| **도메인 contract** (본 spec) | `docs/external-container-spec.md` (SP-1 v2) | 학습·추론·배포 등 **GPU/PVC 자원이 필요하고 비동기 long-running job 형태**로 동작하는 도메인 | 해당 도메인 서비스에 한해 추가 적용 |
+| **도메인 contract** (본 spec) | `examples/hello-plugin/external-container-spec.md` (SP-1 v2) | 학습·추론·배포 등 **GPU/PVC 자원이 필요하고 비동기 long-running job 형태**로 동작하는 도메인 | 해당 도메인 서비스에 한해 추가 적용 |
 
 **원칙 (이 spec 의 핵심 가정)**:
 
@@ -78,8 +78,10 @@ TANGO2 GenAI 플랫폼이 **외부 협력기관**이 제공하는 ML 컨테이�
 | `/dataset/{DATASET_NAME}` | RO | 입력 데이터셋 (단일) | A, B, C |
 | `/model` | RW | 입력/출력 모델 (학습 컨테이너 lifecycle) | B, C, D |
 | `/built_in_checkpoint` | RO | 베이스 체크포인트 (있을 때) | C |
+| `/models/checkpoints` | RO | commit_models — infer: 로드할 체크포인트 / train: 이전 phase artifact (projector·LoRA resume) | B(infer), C |
 | `/tmp_model` | RW | 학습 중간 산출물 | C |
 | `/logs` | RW | TensorBoard events | B, C |
+| `/hf-cache` | RO | 클러스터 공유 HuggingFace 캐시 (operator 가 사전 다운로드; `HF_HOME=/hf-cache` 로 offline cache hit) | B, C |
 | **`/input`** | **RO** | scheduler가 launch 직전 작성하는 launch input (params.json 등) | A, B, C, D |
 | **`/output`** | RW (write-only artifact) | 컨테이너 산출물 (dataset/metrics/model/logs/artifacts) | A, B, D |
 
@@ -130,7 +132,27 @@ JF_PORT=8000                  # HTTP 서버 listen port (sync/async 컨테이너
 # === 외부 자격증명 (manifest secrets.required 기반, 환경변수 주입) ===
 # 협력기관이 manifest에 신고한 자격증명을 운영자가 helm `--set spec.containers.env.{NAME}={VALUE}` 으로 주입
 # 예: OPENAI_API_KEY, WANDB_API_KEY 등 — 1차년도 HF 토큰 패턴과 동일
+
+# === 분산/멀티GPU (학습 컨테이너, SP-Ext) ===
+NVIDIA_VISIBLE_DEVICES=<uuid1>[,<uuid2>,...]  # 플랫폼이 instance gpu_count 만큼 한 노드에서 claim 한 GPU UUID. 개수 = 할당 GPU 수
+RANK=0                        # 단일 프로세스 기본값 (launcher 사용 시 process 별 override)
+WORLD_SIZE=<gpu_count>        # = 할당 GPU 수
+LOCAL_RANK=0
+LOCAL_WORLD_SIZE=<gpu_count>
+MASTER_ADDR=localhost         # 단일노드 기준
+MASTER_PORT=29500
 ```
+
+#### 분산학습 / 멀티GPU 컨벤션 (학습 컨테이너 — SP-Ext, 2026-05-29)
+
+플랫폼은 워크스페이스 instance 의 `gpu_count` 만큼 GPU 를 **한 노드에서** 할당하고 그 UUID 들을 `NVIDIA_VISIBLE_DEVICES` 로 주입한다. 컨테이너는 다음 두 가지를 **반드시** 지켜야 단일노드 멀티GPU 학습이 정상 동작한다:
+
+1. **launcher**: 가시 GPU 수 N(= `NVIDIA_VISIBLE_DEVICES` 의 UUID 개수)이 2 이상이면 학습 스크립트를 단일 `python` 이 아니라 `torchrun --standalone --nproc_per_node=N` (또는 `deepspeed --num_gpus=N`) 로 실행해 N 프로세스를 띄울 것. 단일 `python` 으로 호출하면 GPU 1장만 사용(나머지 idle).
+2. **teardown**: 학습 종료(저장 포함) 후 **모든 rank** 가 `dist.barrier()` → `dist.destroy_process_group()` 를 호출할 것. rank-0 만 체크포인트를 저장하고 동기화 없이 종료하면 비-main rank 가 NCCL collective desync 로 무한 hang → job 이 terminal 에 못 가고 GPU 미회수. (단일 GPU 면 무해하나 멀티GPU 에서 필수.)
+
+> 멀티노드(노드 2개+) 분산학습은 v1 비대상 — 협력기관과 별도 협의. 현재 플랫폼 external 기본 지원 범위는 **단일노드 멀티GPU 까지**. 내부 LLM 파인튜닝은 노드당 pod + rank-0 deepspeed + RDMA/RoCE 로 멀티노드를 지원하나, 외부 컨테이너가 동등 기능을 가지려면 (a) 플랫폼 멀티-pod 차트 + (b) 컨테이너의 SSH/hostfile/deepspeed-multinode 둘 다 필요.
+
+> **라이브러리/CUDA 버전**: 컨테이너 base 의 torch/CUDA 는 배포 클러스터 GPU driver 와 호환되어야 한다. 운영 측이 클러스터 driver 에 맞춰 base 를 선택/조정한다 (예: driver CUDA 12.9 클러스터에서 cu128 빌드 torch 가 `cuda.is_available()==False` 로 init 실패 → cu124 base 사용). §7.1 참조.
 
 #### 컨테이너 코드 예시 — 환경변수 사용
 
@@ -333,6 +355,33 @@ livenessProbe:                         # 진짜 deadlock/crash만 검출
 - URL 정책: §5.4 와 동일 — `/jobs/{job_id}/cancel` 권장, manifest 의
   cancel 필드로 자체 URL 명시 가능.
 
+### 5.6 `/deploy` (hybrid pair 전용, POST, 선택)
+
+학습(train) manifest 와 추론(infer) manifest 를 **hybrid pair** (같은
+`service_family`) 로 묶는 패턴에서, 학습 완료 → 플랫폼 auto-commit 후
+**실행 중인 infer pod 의 로드 체크포인트를 새 commit 으로 swap** 하는 엔드포인트.
+
+- 입력: `{ "checkpoint_path": "/models/checkpoints/<commit>", "params": {...} }`
+- 출력: 200 OK + `{ "status": "deployed", "active_checkpoint": "..." }`
+- **trigger 정책 (2026-05-29 확정)**: **사용자가 명시적으로 호출**한다 (학습 완료
+  시 자동 chain 하지 않음). 이는 기존 deployment 패턴과 일치 — 내부 LLM 도
+  학습→commit 후 serving(배포)은 사용자가 별도로 명시 실행하며, 실행 중 deployment
+  는 새 commit 이 생겨도 자동 갱신되지 않는다. 외부 hybrid pair 도 동일:
+  학습완료 → auto-commit(자동) → 사용자가 `/deploy` 명시 호출로 swap.
+  (학습완료→commit→자동 deploy 의 auto-chain 은 향후 별도 SP 로 검토.)
+- 플랫폼 경로: `POST /api/external/deploy` (BFF) → fb_external_container →
+  adapter → partner pod `/deploy`. `infer_job_id` 미지정 시 `service_family`
+  기준 자동 매칭.
+
+### 5.7 `/models` (infer 컨테이너, GET, 선택)
+
+현재 로드된 모델 + 사용 가능한 체크포인트 목록 반환. 운영/디버깅용.
+
+```json
+{ "active_checkpoint": "/models/checkpoints/<commit>",
+  "available": ["/models/checkpoints/<c1>", "/models/checkpoints/<c2>"] }
+```
+
 ---
 
 ## 6. `manifest.yaml`
@@ -473,6 +522,9 @@ spec:
 
 ```dockerfile
 # 권장 베이스 이미지: NVIDIA CUDA + Python (Ubuntu 22.04)
+# ⚠️ CUDA/torch 버전은 배포 클러스터 GPU driver 와 호환되는 것으로. 운영 측이
+#    클러스터에 맞춰 조정한다 (예: driver CUDA 12.9 에서 cu128 torch init 실패
+#    → cu124 base). 자세한 건 §3.2 "라이브러리/CUDA 버전" 참조.
 FROM nvidia/cuda:12.1.0-devel-ubuntu22.04
 
 # Non-root user 생성 (UID 1000 = securityContext 표준과 일치)
@@ -603,6 +655,17 @@ manifest의 `resources` 기반 K8s `requests` + `limits` 자동 설정.
 
 플랫폼이 manifest.apiVersion 식별 후 호환 layer 제공 가능 (v1 manifest를 v2 내부 형식으로 자동 변환).
 
+### 9.5 개정 이력 (v1 내 보강 — backward compatible)
+
+apiVersion 은 `v1` 유지. 아래는 cluster 탑재/검증을 통해 보강된 항목 (기존 v1 컨테이너와 호환):
+
+- **2026-05-29 (SP-Ext 탑재 검증)**:
+  - §3.2 분산/멀티GPU 환경변수 + 단일노드 멀티GPU 컨벤션(launcher `torchrun --nproc_per_node=N` + teardown `barrier`/`destroy_process_group`) 추가. 멀티노드는 별도 협의.
+  - §3.2 라이브러리/CUDA 버전 = 클러스터 driver 호환 (운영 측 조정) 명시.
+  - §5.6 `/deploy` (hybrid pair, **명시 trigger**) + §5.7 `/models` 추가.
+  - §3.1 infer commit_models(`/models/checkpoints`) + `/hf-cache` mount 명시.
+  - 표준 endpoint: `/jobs/{id}` GET + `/jobs/{id}/cancel` POST (SP-1 v2 §5.3) — 1.1.0 협력기관 반영 확인.
+
 ---
 
 ## 10. 인증 (Future — v1 비대상)
@@ -624,7 +687,7 @@ FastAPI + Pydantic 기반 권장 (1차년도 플랫폼 패턴과 일관, OpenAPI
 ## 12. 외부 협력기관 5단계 통합 가이드
 
 ```
-1. 인터페이스 spec 확인     → docs/external-container-spec.md (본 문서)
+1. 인터페이스 spec 확인     → examples/hello-plugin/external-container-spec.md (본 문서)
 2. 이미지 빌드             → examples/hello-plugin/Dockerfile + run.sh 샘플 (SP-12, 별도 작성 예정)
 3. registry push           → registry.jonathan.acryl.ai/external/{name}:{version}
 4. 플랫폼 plugin 등록      → manifest.yaml 작성 + 플랫폼 운영자에게 제출

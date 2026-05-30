@@ -1,7 +1,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # eva-vlm-infer.yaml — SDS-VLM 추론 서비스 manifest (sync, 영구 배포)
 #
-# 스펙: docs/external-container-spec.md (SP-1 외부 컨테이너 계약 v2)
+# 스펙: examples/hello-plugin/external-container-spec.md (SP-1 외부 컨테이너 계약 v2)
 # 짝:  eva-vlm-train.yaml — 같은 이미지, 학습 lifecycle (async)
 #
 # 배포 형태: 워크스페이스당 1 pod 영구 상주 (1 ws = 1 GPU 점유)

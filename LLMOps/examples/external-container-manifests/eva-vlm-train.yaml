@@ -1,7 +1,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # eva-vlm-train.yaml — SDS-VLM 4-phase 파인튜닝 학습 manifest (async, 1회 lifecycle)
 #
-# 스펙: docs/external-container-spec.md (SP-1 외부 컨테이너 계약 v2)
+# 스펙: examples/hello-plugin/external-container-spec.md (SP-1 외부 컨테이너 계약 v2)
 # 짝:  eva-vlm-infer.yaml — 같은 이미지, 추론 영구 배포 (sync)
 #
 # 배포 형태: 학습 launch 시마다 새 pod 생성 → 완료 후 종료 (job lifecycle).

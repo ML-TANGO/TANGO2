@@ -1,6 +1,6 @@
 # External Container Manifest 예시 (SP-1 v2)
 
-본 디렉토리는 `docs/external-container-spec.md` (SP-1 외부 컨테이너 계약 v2) 의
+본 디렉토리는 `examples/hello-plugin/external-container-spec.md` (SP-1 외부 컨테이너 계약 v2) 의
 **Hybrid 컨테이너 사례** manifest 작성 양식을 보여주는 참고용 예시입니다.
 
 ## 파일
@@ -15,7 +15,7 @@
 
 ## 관련 문서
 
-- `docs/external-container-spec.md` — SP-1 v2 contract 전문 (§6 manifest schema)
+- `examples/hello-plugin/external-container-spec.md` — SP-1 v2 contract 전문 (§6 manifest schema)
 - `docs/Tango MSA 탑재 가이드.md` — 기본 contract (`/health`, `/info`, `/run`)
 - `docs/adr/0003-external-service-onboarding-pattern.md` — MSA 컨테이너 표준 결정
 - `docs/superpowers/reviews/2026-05-12-ETRI-SDS-VLM-API-review.md` §11 — 회신 메일

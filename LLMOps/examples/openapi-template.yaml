@@ -1,5 +1,5 @@
 # 외부 컨테이너 OpenAPI 템플릿 (출발점)
-# spec: docs/external-container-spec.md (v1, tango.acryl.ai/v1)
+# spec: examples/hello-plugin/external-container-spec.md (v1, tango.acryl.ai/v1)
 #
 # 협력기관은 본 템플릿을 복사 후 자기 컨테이너에 맞게 수정:
 #   - info.title / info.version / info.description
