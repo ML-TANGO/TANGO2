@@ -22,6 +22,10 @@ from utils.crypt import front_cipher
 from utils import llm_deployment
 from utils.redis import get_redis_client_async
 from utils.workspace_resource import get_workspace_instance_total_info
+from utils.external_client import (
+    start_infer_job, cancel_infer_job, run_inference, get_job_status,
+    get_paired_manifest, ExternalInferError,
+)
 
 # TODO status
 async def get_playground_list(workspace_id, user_id):
@@ -113,13 +117,24 @@ async def delete_playground(id_list):
             if playground_deployment_info is None:
                 continue
             playground_deployment_info = json.loads(playground_deployment_info)
+
+            # External partner job 이 살아있으면 cancel 먼저 — 그러지 않으면
+            # helm release / partner pod 가 orphan 으로 남는다 (codex High-1).
+            external_job_id = playground_deployment_info.get("external_job_id")
+            if external_job_id:
+                try:
+                    await cancel_infer_job(external_job_id)
+                except ExternalInferError:
+                    # BFF 404 (이미 정리됨) 등은 무시 — best-effort cleanup
+                    traceback.print_exc()
+
             playground_deployment_id = playground_deployment_info.get("deployment_playground_id")
             playground_embedding_id = playground_deployment_info.get("deployment_embedding_id")
             playground_reranker_id = playground_deployment_info.get("deployment_reranker_id")
             deployment_ids = [x for x in [playground_deployment_id, playground_embedding_id, playground_reranker_id] if x]
             db.delete_deployments(deployment_ids=deployment_ids)
-        
-        # playground 삭제        
+
+        # playground 삭제
         res = await db.delete_playground(id_list=id_list)
         return True if res else False
     except:
@@ -157,6 +172,37 @@ async def get_playground_status(playground_id):
         if playground_deployment_info is None: #정보 없을경우 세팅도 안된 상태
             return result
         playground_deployment_info = json.loads(playground_deployment_info)
+
+        # ── External 분기 ────────────────────────────────────────────
+        # external_job_id 있으면 일반 deployment_worker_list/redis 경로 안 탐.
+        # BFF GET /jobs/{id} 의 pod_ready 가 model load 완료 신호 (partner /health
+        # 200 OK). model load 중에는 init_deployment=True (배포는 시작) +
+        # status='installing' → frontend 의 Test 버튼은 disabled 유지. ready 면
+        # status='running' 으로 전환.
+        external_job_id = playground_deployment_info.get("external_job_id")
+        if external_job_id:
+            try:
+                job_detail = await get_job_status(external_job_id)
+                # job record 가 살아있으면 배포는 시작됨 → init_deployment=True
+                result["init_deployment"] = True
+                if job_detail.get("pod_ready"):
+                    result["status"] = TYPE.KUBE_POD_STATUS_RUNNING
+                else:
+                    result["status"] = TYPE.KUBE_POD_STATUS_INSTALLING
+            except ExternalInferError as e:
+                # BFF 가 404 (job 없음 / cancel 됨) → stop 으로 환원
+                if getattr(e, "status_code", 0) == 404:
+                    result["status"] = TYPE.KUBE_POD_STATUS_STOP
+                    result["init_deployment"] = False
+                else:
+                    # BFF 불안정 — 보수적으로 installing 유지 (test 차단)
+                    result["status"] = TYPE.KUBE_POD_STATUS_INSTALLING
+                    result["init_deployment"] = True
+            except Exception:
+                traceback.print_exc()
+                result["status"] = TYPE.KUBE_POD_STATUS_INSTALLING
+                result["init_deployment"] = True
+            return result
 
         # deployment init
         # deployment_init = playground_deployment_info.get("deployment_init")
@@ -419,7 +465,21 @@ async def get_playground(playground_id):
                 result['model']["model_allm_commit_name"] = db_commit_info.get("name") if db_commit_info else None
                 result['model']["model_allm_commit_id"] = db_commit_info.get("id") if db_commit_info else None
 
-                model_info = model.get("model_info", {}) 
+                # External 모델 분기 (Test 모달 ExternalTestCom / Deploy 모달 embedding·reranker
+                # UI 숨김) 의 isExternal 신호. commit 의 model_id 로 모델 행 조회해서
+                # training_type 노출.
+                result['model']["training_type"] = ""
+                if db_commit_info:
+                    _model_id = db_commit_info.get("model_id")
+                    if _model_id:
+                        try:
+                            _model_row = await db.get_model(model_id=int(_model_id))
+                            if _model_row:
+                                result['model']["training_type"] = _model_row.get("training_type") or ""
+                        except Exception:
+                            traceback.print_exc()
+
+                model_info = model.get("model_info", {})
                 result['model']["commit"] = model_info.get("commit")
                 result['model']["access"] = model_info.get("access")
                 result['model']["create_datetime"] = model_info.get("create_datetime")
@@ -634,6 +694,9 @@ async def get_playground_model_list(workspace_id, model_name, is_mine, user_name
                     "id" : item.get("id"),
                     "name" : item.get("name"),
                     "owner" : item.get("create_user_name"),
+                    "training_type" : item.get("training_type") or "",
+                    "external_manifest_name" : item.get("external_manifest_name") or "",
+                    "external_manifest_version" : item.get("external_manifest_version") or "",
                 })
         except:
             pass
@@ -807,6 +870,12 @@ async def start_playground(user_name, playground_id,
             deployment_playground_id = playground_deployment_info.get("deployment_playground_id")
             deployment_embedding_id = playground_deployment_info.get("deployment_embedding_id")
             deployment_reranker_id = playground_deployment_info.get("deployment_reranker_id")
+
+            # codex High-1: 기존 external_job_id 가 있는데 restart=False 인
+            # 경로로 새 start 가 호출되면, 옛 job 의 helm release 가 orphan 으로
+            # 남는다. restart=True 가 아니더라도 항상 stop 으로 정리.
+            if not restart and playground_deployment_info.get("external_job_id"):
+                await stop_playground(playground_id=playground_id)
         else:
             # deployment info가 없다는건, deployment_run이 없다는 의미 -> 세팅이 안되어 있다
             # deployment_run은 update_playground에서 무조건 세팅함
@@ -819,7 +888,100 @@ async def start_playground(user_name, playground_id,
         playground_instance_id = model_instance_id
         playground_instance_count = model_instance_count
         playground_gpu_count = model_gpu_count
-        
+
+        # =============================================================================
+        # External partner container 분기 — internal helm 배포 대신 BFF /jobs launch
+        # =============================================================================
+        playground_model_info = playground_info.get("model")
+        playground_model_allm_id = None
+        if playground_model_info:
+            try:
+                model_json = json.loads(playground_model_info)
+                playground_model_allm_id = model_json.get("model_allm_id")
+            except Exception:
+                traceback.print_exc()
+
+        if playground_model_allm_id:
+            try:
+                model_row = await db.get_model(model_id=int(playground_model_allm_id))
+            except Exception:
+                traceback.print_exc()
+                model_row = None
+            if model_row and model_row.get("training_type") == "external":
+                manifest_name = model_row.get("external_manifest_name")
+                manifest_version = model_row.get("external_manifest_version")
+                # codex Med-2: playground 는 추론용 — model 의 manifest 가
+                # train 이면 BFF 의 manifest registry 에서 paired infer 를
+                # lookup. 이전엔 ``-train``→``-infer`` + ``1.0.0-acryl-patched-v4``
+                # 가 hardcode 돼 있어 다른 partner / 다른 version 에선 404 났음.
+                if manifest_name and manifest_version:
+                    try:
+                        paired = await get_paired_manifest(manifest_name, manifest_version)
+                    except Exception:
+                        traceback.print_exc()
+                        paired = None
+                    if paired and paired.get("job_type") == "inference":
+                        manifest_name = paired["name"]
+                        manifest_version = paired["version"]
+                workspace_id = playground_info.get("workspace_id")
+                gpu_count = playground_gpu_count or 1
+
+                # ── EVA_CHECKPOINT_PATH 동적 주입 ────────────────────────
+                # 우선순위: (1) playground 의 model_allm_commit_id (사용자가
+                # 명시적으로 선택한 checkpoint 버전), (2) model.latest_commit_id
+                # (선택 안 했을 때만 fallback). 플랫폼의 핵심 기능 — commit 별
+                # 버전 비교 테스트 — 을 존중.
+                env_overrides = {}
+                selected_commit_id = model_json.get("model_allm_commit_id")
+                # JSON 의 string "69" 또는 int 69 모두 처리
+                target_commit_id = None
+                try:
+                    if selected_commit_id not in (None, "", "null"):
+                        target_commit_id = int(selected_commit_id)
+                except (TypeError, ValueError):
+                    pass
+                if not target_commit_id:
+                    target_commit_id = model_row.get("latest_commit_id")
+
+                if target_commit_id:
+                    try:
+                        commit_row = await db.get_commit_model(commit_id=int(target_commit_id))
+                        commit_name = commit_row.get("name") if commit_row else None
+                        if commit_name:
+                            env_overrides["EVA_CHECKPOINT_PATH"] = (
+                                f"/models/checkpoints/{commit_name}"
+                            )
+                    except Exception:
+                        traceback.print_exc()
+
+                try:
+                    job_resp = await start_infer_job(
+                        manifest_name=manifest_name,
+                        manifest_version=manifest_version,
+                        workspace_id=int(workspace_id),
+                        platform_model_id=int(playground_model_allm_id),
+                        params={"_base_model": {"name": model_row.get("name") or "external"}},
+                        gpu_count=int(gpu_count),
+                        env_overrides=env_overrides if env_overrides else None,
+                    )
+                except ExternalInferError as e:
+                    traceback.print_exc()
+                    raise Exception(f"External partner start failed [{e.status_code}]: {e}")
+
+                external_job_id = job_resp.get("job_id")
+                if not external_job_id:
+                    raise Exception(f"External /jobs returned no job_id: {job_resp}")
+
+                playground_deployment = json.dumps({
+                    "deployment_playground_id": None,
+                    "deployment_embedding_id": None,
+                    "deployment_reranker_id": None,
+                    "deployment_run": playground_deployment_run,
+                    "external_job_id": external_job_id,
+                })
+                await db.update_playground(playground_id=playground_id, deployment=playground_deployment)
+                return True
+
         # =============================================================================
         # 배포 생성
         # =============================================================================
@@ -999,6 +1161,17 @@ async def stop_playground(playground_id):
         playground_deployment_info = playground_info.get("deployment")
         if playground_deployment_info is not None:
             playground_deployment_info = json.loads(playground_deployment_info)
+
+            # External partner container 분기 — helm 없이 BFF cancel
+            external_job_id = playground_deployment_info.get("external_job_id")
+            if external_job_id:
+                try:
+                    await cancel_infer_job(external_job_id)
+                except ExternalInferError:
+                    traceback.print_exc()
+                await db.delete_playground_test(playground_id)
+                return True
+
             deployment_playground_id = playground_deployment_info.get("deployment_playground_id")
             deployment_embedding_id = playground_deployment_info.get("deployment_embedding_id")
             deployment_reranker_id = playground_deployment_info.get("deployment_reranker_id")
@@ -1179,9 +1352,10 @@ async def get_test_download(playground_id):
         traceback.print_exc()
         return None
 
-async def playground_test(playground_id, test_type, test_dataset_id, test_dataset_filename, test_question, session_id=None, network_load=0):
+async def playground_test(playground_id, test_type, test_dataset_id, test_dataset_filename, test_question, session_id=None, network_load=0, external_payload: dict = None):
     """
     network_load: 없음 0, 저 1, 중 2, 고3
+    external_payload: external partner container 분기 시 /run body params (image_base64, ais_rows 등)
     """
     result = None
     message = None
@@ -1190,12 +1364,35 @@ async def playground_test(playground_id, test_type, test_dataset_id, test_datase
         playground_info = await db.get_playground(playground_id=playground_id)
         if playground_info is None:
             raise Exception("Not Exist Playground")
-        
+
         playground_deployment_info = playground_info.get("deployment")
         if playground_deployment_info is None:
             raise Exception("Not Exist Playground Deployment")
         playground_deployment_info = json.loads(playground_deployment_info)
         deployment_playground_id = playground_deployment_info.get("deployment_playground_id")
+        external_job_id = playground_deployment_info.get("external_job_id")
+
+        # ── External partner container 분기 ─────────────────────────────
+        if external_job_id:
+            payload = external_payload or {}
+            if not payload.get("image_base64"):
+                raise Exception("external_payload.image_base64 is required")
+            ais_rows = payload.get("ais_rows") or []
+            if not ais_rows or not any(
+                int(r.get("my_ship", 0)) == 1 for r in ais_rows if isinstance(r, dict)
+            ):
+                raise Exception("external_payload.ais_rows must contain at least one row with my_ship=1")
+            try:
+                raw = await run_inference(external_job_id, params=payload)
+            except ExternalInferError as e:
+                traceback.print_exc()
+                raise Exception(f"External inference failed [{e.status_code}]: {e}")
+            outer = raw.get("result") if isinstance(raw, dict) else None
+            inner = outer.get("result") if isinstance(outer, dict) and isinstance(outer.get("result"), dict) else outer
+            if not isinstance(inner, dict):
+                inner = {}
+            text = inner.get("text", "")
+            return [{"output": text, "result": inner}], message
         
         # 테스트 url
         deployment_info = db.get_deployment(deployment_id=deployment_playground_id)

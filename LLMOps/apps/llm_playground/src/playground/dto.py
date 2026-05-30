@@ -124,6 +124,13 @@ class PlaygroundTestInput(BaseModel):
     test_question: Optional[str] = None
     session_id: Optional[str] = None
     network_load: Optional[int] = Field(default=0, description="없음 0, 저 1, 중 2, 고3")
+    external_payload: Optional[dict] = Field(
+        default=None,
+        description=(
+            "External partner container 호출 시 /run body 의 params 로 그대로 전달. "
+            "image_base64, ais_rows 등 partner 전용 필드. None 이면 internal 분기."
+        ),
+    )
 
 
 ######################KAFKA##########################

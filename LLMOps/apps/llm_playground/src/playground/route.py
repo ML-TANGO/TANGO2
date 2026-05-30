@@ -511,7 +511,8 @@ async def post_test(body: dto.PlaygroundTestInput):
         res, message = await svc.playground_test(playground_id=body.playground_id, test_type=body.test_type,
                                         test_dataset_id=body.test_dataset_id, test_dataset_filename=body.test_dataset_filename,
                                         test_question=body.test_question, session_id=body.session_id,
-                                        network_load=body.network_load)
+                                        network_load=body.network_load,
+                                        external_payload=body.external_payload)
         return response(status=1, result=res, message=message)
     except Exception as e:
         traceback.print_exc()
