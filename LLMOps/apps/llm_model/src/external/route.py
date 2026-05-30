@@ -289,6 +289,22 @@ async def _build_time_payload(
     }, new_last
 
 
+def _contained_path(base: str, *parts: str) -> Optional[str]:
+    """``base`` 아래로 ``parts`` 를 join 하되, 최종 realpath 가 ``base`` 밖이면 None.
+
+    output_subdir(/run launch 시 사용자 입력) · job_id(URL path) 등 사용자 영향
+    값이 path 에 들어가므로 ``..`` traversal 로 main_root 밖(예: /etc) 파일을
+    읽는 것을 차단한다. 탈출 시도·NUL·비정상 경로는 None → 호출부가 건너뛴다.
+    """
+    import os
+    try:
+        base_real = os.path.realpath(base)
+        full = os.path.realpath(os.path.join(base, *parts))
+    except (OSError, ValueError):
+        return None
+    return full if full == base_real or full.startswith(base_real + os.sep) else None
+
+
 async def _resolve_events_runs_dirs(job_id: str, detail: Optional[dict]) -> list[str]:
     """Return candidate `runs/` directories with TensorBoard events.
 
@@ -315,9 +331,10 @@ async def _resolve_events_runs_dirs(job_id: str, detail: Optional[dict]) -> list
                     main_root = PATH.JF_MAIN_STORAGE_PATH.format(
                         STORAGE_NAME=ws["main_storage_name"], WORKSPACE_NAME=ws["name"],
                     )
-                    candidate_bases.append(
-                        f"{main_root}/jobs/{job_id}/output/{output_subdir}/runs"
-                    )
+                    cand = _contained_path(
+                        main_root, "jobs", job_id, "output", output_subdir, "runs")
+                    if cand:
+                        candidate_bases.append(cand)
             except Exception:
                 logger.exception("sse-graph: ws lookup (active) failed for %s", workspace_id)
 
@@ -338,9 +355,11 @@ async def _resolve_events_runs_dirs(job_id: str, detail: Optional[dict]) -> list
                     main_root = PATH.JF_MAIN_STORAGE_PATH.format(
                         STORAGE_NAME=ws["main_storage_name"], WORKSPACE_NAME=ws["name"],
                     )
-                    candidate_bases.append(
-                        f"{main_root}/models/{m['name']}/commit_models/{commit_row['name']}/runs"
-                    )
+                    cand = _contained_path(
+                        main_root, "models", m["name"], "commit_models",
+                        commit_row["name"], "runs")
+                    if cand:
+                        candidate_bases.append(cand)
     except Exception:
         logger.exception("sse-graph: commit_models fallback lookup failed for %s", job_id)
 
@@ -765,8 +784,9 @@ async def _resolve_train_log_path(job_id: str, detail: Optional[dict]) -> Option
                     main_root = PATH.JF_MAIN_STORAGE_PATH.format(
                         STORAGE_NAME=ws["main_storage_name"], WORKSPACE_NAME=ws["name"],
                     )
-                    p = f"{main_root}/jobs/{job_id}/output/{output_subdir}/train.log"
-                    if os.path.exists(p):
+                    p = _contained_path(
+                        main_root, "jobs", job_id, "output", output_subdir, "train.log")
+                    if p and os.path.exists(p):
                         return p
             except Exception:
                 logger.exception("system-log: ws lookup (active) failed")
@@ -788,11 +808,10 @@ async def _resolve_train_log_path(job_id: str, detail: Optional[dict]) -> Option
                     main_root = PATH.JF_MAIN_STORAGE_PATH.format(
                         STORAGE_NAME=ws["main_storage_name"], WORKSPACE_NAME=ws["name"],
                     )
-                    p = (
-                        f"{main_root}/models/{m['name']}/commit_models/"
-                        f"{commit_row['name']}/train.log"
-                    )
-                    if os.path.exists(p):
+                    p = _contained_path(
+                        main_root, "models", m["name"], "commit_models",
+                        commit_row["name"], "train.log")
+                    if p and os.path.exists(p):
                         return p
     except Exception:
         logger.exception("system-log: commit fallback failed")
