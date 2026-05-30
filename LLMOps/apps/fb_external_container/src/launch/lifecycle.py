@@ -1,4 +1,4 @@
-"""External job lifecycle — in-memory tracking + adapter polling.
+"""External job lifecycle — adapter polling + (optional) DB-backed persistence.
 
 JobTracker owns three things per running job:
 1. A JobRecord with the current normalized status.
@@ -7,8 +7,11 @@ JobTracker owns three things per running job:
 3. The teardown path (scheduler.uninstall + task cancel) so terminal
    states release K8s resources.
 
-State is in-memory only — SP-Ext.3 replaces ``self._jobs`` with a
-DB-backed table without changing this interface.
+SP-Ext.3: a ``JobStateRepository`` can be wired in via ``__init__`` to
+persist active records (insert at start, update on transitions, delete at
+terminal). When ``repository`` is None the tracker falls back to in-memory
+only (dev / mock mode). The in-memory ``self._jobs`` dict remains the
+authoritative runtime view; DB is a write-through mirror for recovery.
 """
 
 from __future__ import annotations
@@ -34,6 +37,7 @@ from normalize import (
     is_terminal,
 )
 
+from .repository import JobStateRepository, JobStateSnapshot
 from .trigger import SchedulerClient, SchedulerError
 
 logger = logging.getLogger(__name__)
@@ -120,6 +124,9 @@ def _build_pod_info_dict(
     raw_params: dict[str, Any],
     namespace: str,
     gpu_count_override: int | None = None,
+    env_overrides: dict[str, str] | None = None,
+    platform_model_id: int | None = None,
+    instance_id: int | None = None,
 ) -> dict[str, Any]:
     """Build the JSON body that fb_scheduler's /external/launch expects.
 
@@ -195,8 +202,39 @@ def _build_pod_info_dict(
         "labels": {
             "workspace_id": str(workspace_id),
             "job_id": job_id,
+            # fb_monitoring 의 insert_gpu_usage 가 pod_type='fine_tuning'
+            # 분기에서 label_model_id 를 access. 없으면 KeyError 로 workspace.
+            # SP-Ext.4 M6: platform_model_id 없을 때 ""(빈 문자열) 로 두면
+            # fb_dashboard 의 model_pod 루프가 workspace_pods[fine_tuning][""]
+            # 단일 키를 동시 train 끼리 덮어써 GPU/리소스 합산 누락. job_id
+            # fallback 으로 unique 키 보장 (dashboard 는 이 키로 per-pod 집계만
+            # 하고 model 이름 lookup 실패는 graceful skip). 실무상 train 은
+            # 항상 platform_model_id 가 있으나 방어적 처리.
+            "model_id": str(platform_model_id) if platform_model_id else job_id,
+            # SP-Ext.4 Codex #1 fix: external infer pod 이 chart 에서
+            # pod_type=deployment 로 매핑되는데 monitoring_service.py:2116
+            # 가 workspace_pods[DEPLOYMENT_TYPE][label_deployment_id]
+            # [label_deployment_worker_id] indexing → 두 라벨 없으면 KeyError
+            # workspace_usage tick 전체 crash. internal deployment_llm 의
+            # _label.tpl 의 labels.deployment template 와 동형 (deployment_id +
+            # deployment_worker_id 모두 박음). external 은 deployment 개념이
+            # 없으니 job_id 와 pod_name 으로 unique key 구성.
+            "deployment_id": job_id,
+            "deployment_worker_id": pod_name,
+            # PROJECT 분기 (line 1720~) 의 label_project_id / project_item_id /
+            # work_func_type 도 같은 위험 — external 은 project 분기 안 타니까
+            # (chart 가 pod_type 을 deployment/fine_tuning/tool 셋으로만 매핑)
+            # 빈 값으로 박을 필요 없음.
+            # SP-Ext.4 instance graph fix: frontend FINETUNING_SETTING 모달이
+            # 보낸 instance_id 를 label 로 전달 → fb_dashboard 의
+            # get_workspace_instance_used 가 instance_status[instance_id]
+            # [fine_tuning][model_id] 로 attribute → instance 그래프에 external
+            # 학습 표시 (workspace resource bar 와 일치). None 이면 fb_scheduler
+            # 가 allocated node 로 fallback 해석 (단일 instance workspace).
+            "instance_id": str(instance_id) if instance_id else "",
         },
         "env": dict(spec.env or {}),
+        "env_overrides": dict(env_overrides or {}),
         "secrets": {},
         "jf_env": {
             "JF_ITEM_ID": job_id,
@@ -242,6 +280,10 @@ class JobRecord:
     auto_commit_fired: bool = False
     # GPU 수 (auto commit metadata 용; manifest default 또는 override).
     effective_gpu: int = 0
+    # codex Med-1: partner /health 가 한 번이라도 200 응답한 적 있는지.
+    # poll loop 의 _wait_until_ready 가 True 로 set. 이후 GET /jobs/{id}
+    # 가 매 호출마다 비싼 partner /health probe (timeout 300s 가능) 안 함.
+    pod_ready: bool = False
 
     def update_result(self, **fields: Any) -> None:
         # Pydantic models are immutable by convention; replace, don't mutate.
@@ -259,10 +301,14 @@ class JobTracker:
         scheduler: SchedulerClient,
         http_client: httpx.AsyncClient,
         poll_interval: float = 5.0,
+        repository: Optional[JobStateRepository] = None,
     ) -> None:
         self.scheduler = scheduler
         self.http_client = http_client
         self.poll_interval = poll_interval
+        # SP-Ext.3: None 이면 in-memory only (dev / mock). 실 운영은 lifespan
+        # 이 aiomysql pool 로 repository 를 만들어 주입.
+        self.repository = repository
         self._jobs: dict[str, JobRecord] = {}
         self._lock = asyncio.Lock()
 
@@ -285,6 +331,7 @@ class JobTracker:
         gpu_count: int | None = None,
         platform_model_id: int | None = None,
         output_subdir: str | None = None,
+        env_overrides: dict[str, str] | None = None,
     ) -> str:
         """Launch an external container and start the polling task.
 
@@ -334,7 +381,21 @@ class JobTracker:
         pod_info_dict = _build_pod_info_dict(
             manifest, workspace_id, job_id, params, namespace,
             gpu_count_override=gpu_count,
+            env_overrides=env_overrides,
+            platform_model_id=platform_model_id,
+            instance_id=instance_id,
         )
+
+        # codex #73-(a): provisional row 먼저 — scheduler.launch 와
+        # _repo_insert 사이의 crash 가 helm release 를 orphan 으로 만들지
+        # 않도록 순서 뒤집기. crash 가 launch 도 못 부르고 죽으면 row 만
+        # 남고 (recovery 가 helm release 없음 → drop) helm 은 만들어진 적
+        # 없음. launch 후 crash 면 row + release 둘 다 있음 → recovery 가
+        # polling 재개. 두 케이스 모두 일관된 invariant: row 가 있으면
+        # release 도 (있어야) 있다 — 또는 곧 cleanup 된다.
+        async with self._lock:
+            self._jobs[job_id] = record
+        await self._repo_insert(record)
 
         try:
             await self.scheduler.launch(pod_info_dict)
@@ -344,12 +405,10 @@ class JobTracker:
                 status=ExternalContainerStatus.FAILED,
                 error=ExternalJobError(code="E_SCHEDULER_LAUNCH", message=str(e)),
             )
-            async with self._lock:
-                self._jobs[job_id] = record
+            # provisional row 정리 — helm release 도 못 만들어졌으니
+            # recovery 가 잡을 게 없다. row 만 지움.
+            await self._repo_delete(record)
             return job_id
-
-        async with self._lock:
-            self._jobs[job_id] = record
 
         record.poll_task = asyncio.create_task(self._poll_loop(job_id))
         return job_id
@@ -373,16 +432,17 @@ class JobTracker:
         return True
 
     async def shutdown(self, drain_seconds: float = 10.0) -> None:
-        """Cancel every running poll task and run their cleanup before
-        returning to the lifespan's `finally` block.
+        """Cancel every poll task; preserve partner pods + DB rows.
 
-        SP-Ext review MEDIUM #C4: ``_poll_loop`` only re-raises on
-        ``CancelledError`` — it does not run ``_cleanup`` from the cancel
-        path. So cancelling poll tasks alone leaves helm releases up. We
-        kick off ``_cleanup`` directly here, in parallel to cancelling the
-        poll task, then await both. ``_cleanup`` is idempotent
-        (``scheduler.uninstall`` treats "release not found" as success), so
-        racing with the poll loop's own terminal cleanup is safe.
+        SP-Ext.3: BFF 의 graceful 종료 (rollout / SIGTERM) 시 in-flight 한
+        partner job 의 ``helm release`` 와 ``external_job_state`` row 를
+        ``_cleanup`` 하지 않는다. 다음 BFF process 의 ``startup_recovery()``
+        가 그 row 로 polling 재개해야 함. ``_cleanup`` 호출은 SP-Ext.3 이전의
+        의도된 동작이었지만, recovery 도입 후 정상 종료 시 cleanup 은
+        recovery 자체를 무력화한다.
+
+        Hard crash (kill -9, OOM, node 죽음) 의 경우 이 shutdown 가 못
+        호출돼도 row 가 남아 자동 recovery 됨 — invariant 동일.
         """
         active = [
             r for r in self._jobs.values()
@@ -391,27 +451,26 @@ class JobTracker:
         if not active:
             return
 
-        cleanup_tasks = [
-            asyncio.create_task(
-                self._cleanup(record, ExternalContainerStatus.CANCELLED)
-            )
-            for record in active
-        ]
         for record in active:
             record.poll_task.cancel()
 
-        all_tasks = [r.poll_task for r in active] + cleanup_tasks
+        poll_tasks = [r.poll_task for r in active]
         try:
             await asyncio.wait_for(
-                asyncio.gather(*all_tasks, return_exceptions=True),
+                asyncio.gather(*poll_tasks, return_exceptions=True),
                 timeout=drain_seconds,
             )
         except asyncio.TimeoutError:
             logger.warning(
-                "shutdown timed out after %.1fs while draining %d poll tasks; "
-                "some helm releases may need manual cleanup",
+                "shutdown timed out after %.1fs while cancelling %d poll task(s)",
                 drain_seconds, len(active),
             )
+
+        logger.info(
+            "shutdown: %d active job(s) preserved for recovery "
+            "(helm release + DB row left in place)",
+            len(active),
+        )
 
     # ── Polling task ────────────────────────────────────────────────────
 
@@ -419,7 +478,12 @@ class JobTracker:
         record = self._jobs[job_id]
         AdapterCls = get_adapter_class(record.manifest.metadata.name)
         adapter = AdapterCls(record.manifest, record.service_url, self.http_client)
-        deadline = time.monotonic() + record.timeout_seconds
+        # SP-Ext.3 (Codex review): startup recovery 후에도 timeout 의미 유지.
+        # started_at 으로부터의 elapsed 를 빼서 남은 시간만 새 deadline 으로.
+        # 첫 launch 시엔 elapsed ≈ 0 이라 timeout_seconds 와 사실상 동일.
+        elapsed = (_utcnow() - record.started_at).total_seconds()
+        remaining = max(0.0, record.timeout_seconds - elapsed)
+        deadline = time.monotonic() + remaining
 
         try:
             await self._wait_until_ready(record, adapter, deadline)
@@ -466,6 +530,7 @@ class JobTracker:
                 logger.debug("health probe error for %s: %s", record.job_id, e)
                 continue
             if healthy:
+                record.pod_ready = True
                 logger.info("pod %s is ready", record.job_id)
                 return
         # Startup timeout.
@@ -483,6 +548,17 @@ class JobTracker:
         if record.manifest.spec.execution_mode == "sync":
             record.update_result(status=ExternalContainerStatus.RUNNING)
             return
+        # SP-Ext.3: recovery 후 이미 start_job 통과한 record 면 partner_job_id
+        # 가 채워져 있다. 중복 호출은 partner 가 새 job 만들거나 409 반환.
+        # 그냥 RUNNING 표시 유지하고 polling 으로 직행.
+        if record.partner_job_id:
+            record.update_result(status=ExternalContainerStatus.RUNNING)
+            logger.info(
+                "skipping start_job for %s — partner_job_id already set (%s); "
+                "startup recovery path",
+                record.job_id, record.partner_job_id,
+            )
+            return
         config = ExternalJobConfig(
             manifest_name=record.manifest.metadata.name,
             manifest_version=record.manifest.metadata.version,
@@ -494,6 +570,11 @@ class JobTracker:
             partner_id = await adapter.start_job(config)
             record.partner_job_id = partner_id
             record.update_result(status=ExternalContainerStatus.RUNNING)
+            # SP-Ext.3: partner id 와 status 변경을 persist. _drive_until_terminal
+            # 안 매 poll 마다 update 하지는 않음 (DB write 부담) — status 가
+            # transition 될 때만 persist 한다.
+            await self._repo_update_partner(record)
+            await self._repo_update_status(record)
             logger.info(
                 "started partner job %s for platform %s",
                 partner_id, record.job_id,
@@ -526,14 +607,46 @@ class JobTracker:
                 record.job_id,
             )
             return
+        # SP-Ext.4 H4: pod 이 죽었는데(crash/삭제/node 이탈) DB row 만 남은 경우
+        # — 특히 startup_recovery 가 K8s 존재 확인 없이 무조건 poll 재개하므로
+        # — 기존엔 get_status 실패를 무한 backoff 하며 full timeout(학습은
+        # 200000s)까지 bu;방치했다 (DB active / Redis free / K8s 없음 3중 불일치).
+        # 연속 실패가 임계치를 넘으면 pod 소실로 간주, 즉시 FAILED + cleanup
+        # 하여 orphan helm/GPU/row 를 회수한다. 일시적 blip 은 임계치 미만에서
+        # 성공 시 카운터 리셋되어 false-drop 없음.
+        consecutive_failures = 0
+        max_consecutive_failures = 12  # ~12 * poll_interval 연속 unreachable
         while time.monotonic() < deadline:
             await asyncio.sleep(self.poll_interval)
             try:
                 r = await adapter.get_status(record.partner_job_id)
             except Exception:
-                logger.exception("poll failed for %s; backing off", record.job_id)
+                consecutive_failures += 1
+                logger.warning(
+                    "poll failed for %s (%d/%d consecutive); backing off",
+                    record.job_id, consecutive_failures, max_consecutive_failures,
+                )
+                if consecutive_failures >= max_consecutive_failures:
+                    logger.error(
+                        "job %s unreachable for %d consecutive polls — pod "
+                        "presumed gone; marking FAILED + cleanup",
+                        record.job_id, consecutive_failures,
+                    )
+                    await self._cleanup(
+                        record,
+                        ExternalContainerStatus.FAILED,
+                        error=ExternalJobError(
+                            code="E_POD_UNREACHABLE",
+                            message=(
+                                f"partner job {record.partner_job_id} unreachable "
+                                f"for {consecutive_failures} consecutive polls"
+                            ),
+                        ),
+                    )
+                    return
                 await asyncio.sleep(self.poll_interval)
                 continue
+            consecutive_failures = 0  # 성공 시 리셋 — transient blip false-drop 방지
             record.result = r
             if is_terminal(r.status):
                 logger.info(
@@ -582,8 +695,13 @@ class JobTracker:
         # uninstall 보다 *먼저* 시도해야 partner pod NFS 결과물이 아직 살아
         # 있다 (혹시 pod 가 임시 emptyDir 일 때 안전). 단 idempotent —
         # auto_commit_fired guard 로 1회만.
+        # SP-Ext.4 M7: job_type 명시 게이트 추가. commit 은 학습 산출물 대상
+        # 이므로 train/batch 만 — infer(deployment) 가 우연히 COMPLETED +
+        # platform_model_id 를 갖더라도 commit 오발 방지. (현재 infer 는
+        # CANCELLED 로만 종료돼 COMPLETED 게이트에 안 걸리지만 방어적 명시.)
         if (
             terminal_status is ExternalContainerStatus.COMPLETED
+            and record.manifest.spec.job_type in ("train", "batch")
             and not record.auto_commit_fired
             and record.platform_model_id
             and record.output_subdir
@@ -607,6 +725,207 @@ class JobTracker:
                 "scheduler uninstall failed for %s (%s): %s",
                 record.job_id, record.helm_release, e,
             )
+
+        # SP-Ext.3: terminal 도달 — row 삭제 (active 만 남기는 invariant).
+        # uninstall 결과와 무관하게 항상 시도. delete 실패는 log 만, helm
+        # release 가 이미 빠진 상태라 orphan row 는 다음 BFF startup 의
+        # recovery 에서 "K8s 에 release 없음" 으로 정리되도록 추후 설계.
+        await self._repo_delete(record)
+
+    # ── SP-Ext.3 repository helpers (best-effort, never raise) ──────────
+
+    def _db_persist(self, record: JobRecord) -> bool:
+        """이 record 를 external_job_state 에 persist 할지 여부.
+
+        SP-Ext.4 C3: sync infer (execution_mode=sync) 는 Kong ingress 로
+        노출되는 long-running 서빙 pod 으로, async 학습과 달리 terminal 전이가
+        없다. 이전엔 sync 도 _repo_insert 로 'pending' row 를 박았지만
+        RUNNING/terminal 전이가 없어 row 가 영구 pending 으로 잔존했고,
+        startup_recovery 가 매 BFF restart 마다 그 row 를 부활시켜 무의미한
+        polling task 를 누적시켰다 (+ pod 죽어도 orphan helm/GPU).
+        sync 는 in-memory 로만 추적한다 — BFF restart 후 추적 상실은 허용
+        (infer pod 은 Kong 으로 독립 서빙되며, 중지는 명시 cancel / helm
+        uninstall). async (train/batch) 만 persist + recovery 대상.
+        """
+        if self.repository is None:
+            return False
+        if record.manifest.spec.execution_mode == "sync":
+            return False
+        return True
+
+    async def _repo_insert(self, record: JobRecord) -> None:
+        if not self._db_persist(record):
+            return
+        try:
+            await self.repository.insert(
+                job_id=record.job_id,
+                model_id=record.platform_model_id,
+                workspace_id=record.workspace_id,
+                manifest_name=record.manifest.metadata.name,
+                manifest_version=record.manifest.metadata.version,
+                manifest_json=record.manifest.model_dump_json(),
+                namespace=record.namespace,
+                pod_name=record.pod_name,
+                helm_release=record.helm_release,
+                service_url=record.service_url,
+                timeout_seconds=record.timeout_seconds,
+                params_json=json.dumps(record.params),
+                # ExternalContainerStatus(str, Enum) 의 mix-in str 이 Python
+                # 3.11+ 에서 'ExternalContainerStatus.RUNNING' 형식으로 떨어질
+                # 위험이 있어 .value 로 명시 (recovery 의 enum 복원 호환).
+                status=record.result.status.value,
+                started_at=record.started_at,
+                effective_gpu=record.effective_gpu,
+                output_subdir=record.output_subdir,
+            )
+        except Exception:
+            logger.exception(
+                "JobStateRepository.insert failed for %s — in-memory tracking "
+                "continues, but BFF restart will not recover this job",
+                record.job_id,
+            )
+
+    async def _repo_update_status(self, record: JobRecord) -> None:
+        if not self._db_persist(record):
+            return
+        try:
+            await self.repository.update_status(
+                record.job_id, record.result.status.value,
+            )
+        except Exception:
+            logger.exception(
+                "JobStateRepository.update_status failed for %s",
+                record.job_id,
+            )
+
+    async def _repo_update_partner(self, record: JobRecord) -> None:
+        if not self._db_persist(record) or not record.partner_job_id:
+            return
+        try:
+            await self.repository.update_partner_job_id(
+                record.job_id, record.partner_job_id,
+            )
+        except Exception:
+            logger.exception(
+                "JobStateRepository.update_partner_job_id failed for %s",
+                record.job_id,
+            )
+
+    async def _repo_delete(self, record: JobRecord) -> None:
+        if not self._db_persist(record):
+            return
+        try:
+            await self.repository.delete(record.job_id)
+        except Exception:
+            logger.exception(
+                "JobStateRepository.delete failed for %s — orphan row may "
+                "remain; next BFF startup should clean it up",
+                record.job_id,
+            )
+
+    # ── SP-Ext.3 startup recovery ───────────────────────────────────────
+
+    async def startup_recovery(self) -> int:
+        """Reattach polling tasks to in-flight partner jobs after BFF restart.
+
+        Lifespan 의 startup 단계에서 1회 호출. repository 가 가진 모든 active
+        snapshot 을 JobRecord 로 재구성해 ``self._jobs`` 에 등록하고
+        ``_poll_loop`` 를 재시작한다.
+
+        Returns 복원된 job 수. repository 가 None 이거나 list_active 실패 시 0.
+
+        Idempotent: 이미 ``self._jobs`` 에 있는 job_id 는 skip. 같은 BFF
+        프로세스 안에서 두 번 호출되더라도 중복 polling task 안 만듦.
+        """
+        if self.repository is None:
+            return 0
+        try:
+            snapshots = await self.repository.list_active()
+        except Exception:
+            logger.exception(
+                "JobStateRepository.list_active failed — startup recovery skipped"
+            )
+            return 0
+        if not snapshots:
+            logger.info("startup recovery: no active jobs to restore")
+            return 0
+
+        logger.info(
+            "startup recovery: attempting to restore %d active job(s)",
+            len(snapshots),
+        )
+        recovered = 0
+        for snap in snapshots:
+            try:
+                record = self._snapshot_to_record(snap)
+            except Exception:
+                logger.exception(
+                    "snapshot → JobRecord reconstruction failed for job %s "
+                    "(manifest_version=%s); leaving DB row in place for "
+                    "operator inspection",
+                    snap.job_id, snap.manifest_version,
+                )
+                continue
+            async with self._lock:
+                if snap.job_id in self._jobs:
+                    logger.debug(
+                        "skipping recovery of %s — already in self._jobs",
+                        snap.job_id,
+                    )
+                    continue
+                self._jobs[snap.job_id] = record
+            record.poll_task = asyncio.create_task(self._poll_loop(snap.job_id))
+            recovered += 1
+            logger.info(
+                "recovered job %s (partner=%s, prev_status=%s, helm=%s)",
+                snap.job_id, snap.partner_job_id, snap.status, snap.helm_release,
+            )
+        logger.info(
+            "startup recovery: %d/%d job(s) restored",
+            recovered, len(snapshots),
+        )
+        return recovered
+
+    def _snapshot_to_record(self, snap: JobStateSnapshot) -> JobRecord:
+        """Rebuild JobRecord from a persisted snapshot.
+
+        Pydantic manifest 는 ``model_validate`` 로 재구성. status string 은
+        enum 으로 복원. started_at 은 MariaDB naive UTC datetime 이라 UTC
+        tz-aware 로 정정 (lifecycle 내부 _utcnow() 와 비교 가능하게).
+        """
+        manifest = ExternalContainerManifest.model_validate(snap.manifest_dict)
+
+        try:
+            status = ExternalContainerStatus(snap.status)
+        except ValueError:
+            logger.warning(
+                "unknown status %r for recovered job %s; falling back to PENDING",
+                snap.status, snap.job_id,
+            )
+            status = ExternalContainerStatus.PENDING
+
+        started_at = snap.started_at
+        if started_at is not None and started_at.tzinfo is None:
+            started_at = started_at.replace(tzinfo=timezone.utc)
+
+        record = JobRecord(
+            job_id=snap.job_id,
+            manifest=manifest,
+            workspace_id=snap.workspace_id,
+            namespace=snap.namespace,
+            pod_name=snap.pod_name,
+            helm_release=snap.helm_release,
+            service_url=snap.service_url,
+            timeout_seconds=snap.timeout_seconds,
+            params=snap.params_dict,
+            started_at=started_at if started_at is not None else _utcnow(),
+            partner_job_id=snap.partner_job_id,
+            platform_model_id=snap.model_id,
+            output_subdir=snap.output_subdir,
+            effective_gpu=snap.effective_gpu or 0,
+        )
+        record.result = ExternalJobResult(job_id=snap.job_id, status=status)
+        return record
 
     # ── Auto commit hook ────────────────────────────────────────────────
 

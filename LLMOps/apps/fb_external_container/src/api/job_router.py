@@ -51,6 +51,10 @@ class ExternalJobDetail(BaseModel):
     # platform-side metadata — auto commit hook + sse-graph NFS path 추론용
     platform_model_id: Optional[int] = None
     output_subdir: Optional[str] = None
+    # Partner pod readiness — partner /health 200 OK 면 True. infer pod model
+    # load 가 끝나 추론 가능한지 도메인 BFF (llm_playground) 가 Test 버튼 활성화
+    # 게이트로 사용. health 호출 실패 시 False (보수적 — 504 차단 우선).
+    pod_ready: bool = False
 
 
 # ── Request / response models ────────────────────────────────────────────
@@ -77,6 +81,10 @@ class StartJobRequest(BaseModel):
     # output_subdir 는 partner 가 결과를 쓰는 /output/<여기>/ 폴더 이름.
     platform_model_id: Optional[int] = None
     output_subdir: Optional[str] = None
+    # manifest spec.env 의 dynamic override — playground infer 의 dynamic
+    # EVA_CHECKPOINT_PATH (model.latest_commit) 같이 launch 시점에만 결정되는 값.
+    # helm chart pod.yaml 이 spec.env + env_overrides 를 merge 해서 pod 에 주입.
+    env_overrides: Optional[dict[str, str]] = None
 
 
 class StartJobResponse(BaseModel):
@@ -136,6 +144,7 @@ async def start_job(
         gpu_count=req.gpu_count,
         platform_model_id=req.platform_model_id,
         output_subdir=req.output_subdir,
+        env_overrides=req.env_overrides,
     )
     record = tracker.get(job_id)
     return StartJobResponse(
@@ -161,6 +170,11 @@ async def get_job_status(
     record = tracker.get(job_id)
     if record is None:
         raise NotFoundError(f"job {job_id} not found")
+    # codex Med-1: 매 호출마다 partner /health probe 하면 partner_http 의
+    # 300s timeout 때문에 느린/멈춘 partner 가 status 호출 자체를 stall 시킨다
+    # (playground 의 5s timeout → "installing" 표시). poll loop 이 이미
+    # readiness 를 record.pod_ready 로 추적 중이라 그대로 사용.
+    pod_ready = record.pod_ready
     return ExternalJobDetail(
         job_id=record.job_id,
         manifest_name=record.manifest.metadata.name,
@@ -177,6 +191,7 @@ async def get_job_status(
         result=record.result,
         platform_model_id=record.platform_model_id,
         output_subdir=record.output_subdir,
+        pod_ready=pod_ready,
     )
 
 

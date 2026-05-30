@@ -419,6 +419,15 @@ class ExternalPodInfo(BaseModel):
     gpu_uuids: str = ""
     cpu_instance_name: str = ""
 
+    # GPU pre-allocation cluster spec — internal fine_tuning/deployment chart
+    # 의 cluster[N].device.* 패턴과 동형. fb_scheduler external_run.py 가
+    # create_external_pod 진입 시 Redis GPU pool 에서 free GPU 선택 + node_db
+    # uuid→id 매핑으로 자동 채움. chart pod.yaml 의 labels.device_type/
+    # device_count/device_ids 가 이 값을 박아서 fb_monitoring 의
+    # update_pod_gpu_usage_from_labels + insert_gpu_usage 가 used=1 +
+    # used_info 갱신. 비어있으면 K8s nvidia-device-plugin 자동 할당 fallback.
+    cluster: List[Node] = Field(default_factory=list)
+
     # Workspace inputs
     inputs: ExternalInputs = Field(default_factory=ExternalInputs)
 
@@ -439,6 +448,10 @@ class ExternalPodInfo(BaseModel):
 
     # Partner-defined env extras (EVA_LLM_MODEL_PATH, etc.)
     env: Dict[str, str] = Field(default_factory=dict)
+
+    # Dynamic env override — manifest spec.env 위에 덮어쓰기. BFF/playground 가
+    # launch 시점에 결정되는 값 주입 (예: EVA_CHECKPOINT_PATH = latest commit).
+    env_overrides: Dict[str, str] = Field(default_factory=dict)
 
     # Manifest.secrets.required values (injected via helm --set spec.containers.env.*)
     secrets: Dict[str, str] = Field(default_factory=dict)

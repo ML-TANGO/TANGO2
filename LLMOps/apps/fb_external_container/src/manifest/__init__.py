@@ -1,6 +1,6 @@
 """External container manifest schema and validation.
 
-Spec: docs/external-container-spec.md (SP-1 v2)
+Spec: examples/hello-plugin/external-container-spec.md (SP-1 v2)
 ADR:  docs/adr/0003-external-service-onboarding-pattern.md (v2)
 """
 

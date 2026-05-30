@@ -1,7 +1,7 @@
 {{- /*
   external-container/templates/pod.yaml
 
-  Spec: docs/external-container-spec.md (SP-1 v2)
+  Spec: examples/hello-plugin/external-container-spec.md (SP-1 v2)
 
   - kind: Pod + restartPolicy: Never matches fb_scheduler/fine_tuning pattern.
     Inference pods (sync) are also Never; lifecycle (relaunch on crash) is
@@ -25,17 +25,73 @@ metadata:
     acryl.ai/service-family: {{ .Values.manifest.service_family | quote }}
     acryl.ai/contract-version: {{ .Values.manifest.contract_version | quote }}
   labels:
+    # SP-Ext.4 review H2: caller-supplied labels 가 첫 번째 layer.
+    # 우리가 박는 monitoring/lifecycle reserved 라벨이 BFF labels dict 보다
+    # 뒤에 와서 override 우선권을 가진다. internal fine_tuning chart 의
+    # range-first 패턴과 일치 — partner manifest 가 우연히 (또는 악의적으로)
+    # device_type/node_name 같은 reserved key 보내도 monitoring 동작 보존.
+    {{- range $key, $val := .Values.labels }}
+    {{ $key }}: {{ $val | quote }}
+    {{- end }}
     role: jfb-external-container
     job_type: {{ .Values.job_type | quote }}
     execution_mode: {{ .Values.execution_mode | quote }}
     manifest_name: {{ .Values.manifest.name | quote }}
     service_family: {{ .Values.manifest.service_family | quote }}
+    # fb_monitoring GPU usage 가 kube_pod_labels join 으로 다음 4개 라벨
+    # 모두 access (workspace_id, pod_type, helm_name, instance_id) +
+    # work_func_type 으로 filter. 누락 시 KeyError → workspace_usage
+    # tick 자체 crash. 다른 fb_scheduler chart 와 같은 패턴.
+    # SP-Ext.4 Codex #2 fix: monitoring_service.py:2125 의 fine_tuning
+    # 분기 조건이 (label_pod_type == FINE_TUNING_TYPE AND
+    # label_work_func_type == FINE_TUNING_TYPE). 즉 train/batch 는 둘 다
+    # "fine_tuning" 이어야 분기 탄다. 이전 값 "training" 은 monitoring 의
+    # 어떤 분기에도 안 잡혀 workspace_pods[FINE_TUNING_TYPE] 누락 → GPU=0
+    # 의 진짜 root cause. internal fine_tuning chart 도 monitoring 진입
+    # 위해 work_func_type=fine_tuning 사용.
+    work_func_type: {{- if eq .Values.job_type "infer" }} "deployment"
+    {{- else if or (eq .Values.job_type "train") (eq .Values.job_type "batch") }} "fine_tuning"
+    {{- else }} "tool"
+    {{- end }}
+    # pod_type — monitoring 의 insert_gpu_usage 분기에 쓰이는 enum
+    # (project / fine_tuning / preprocessing / deployment). train job 은
+    # fine_tuning 분기로 매핑 — label_model_id 도 같이 박혀야 used_info 채워짐.
+    pod_type: {{- if eq .Values.job_type "infer" }} "deployment"
+    {{- else if or (eq .Values.job_type "train") (eq .Values.job_type "batch") }} "fine_tuning"
+    {{- else }} "tool"
+    {{- end }}
+    helm_name: {{ .Values.helm_release | quote }}
+    instance_id: {{ .Values.labels.instance_id | default "" | quote }}
+    # SP-Ext.4 dashboard fix: monitoring_service.py:2126 의 fine_tuning
+    # workspace_pods set 분기가 `if pod_info.get("label_pod_count"):` 안에서만
+    # workspace_pods[FINE_TUNING_TYPE][model_id] 채움. 누락 시 fb_dashboard
+    # 의 platform_usage.a-llm.gpu 가 영원히 0 → ListStack stack bar 폭 0
+    # → 화면 그래프 바 안 보임. external 은 단일 pod 패턴이라 항상 "1".
+    # internal deployment_llm chart 의 node-length 기반 pod_count 와 동일 의도.
+    pod_count: "1"
     # SP-Ext review HIGH #C3: a per-release identifier so the Service
     # selector below targets exactly this pod, never a sibling job's pod
     # sharing the same manifest_name in the same namespace.
     helm_release: {{ .Values.helm_release | quote }}
-    {{- range $key, $val := .Values.labels }}
-    {{ $key }}: {{ $val | quote }}
+    # GPU device labels — fb_monitoring 의 update_pod_gpu_usage_from_labels
+    # + insert_gpu_usage 가 device_type=="GPU" + device_ids ("12.13" 형식)
+    # 으로 used GPU 추적. internal fine_tuning chart 의 _label.tpl 과 동일
+    # 패턴. fb_scheduler external_run._ensure_gpu_allocation 이 cluster[0]
+    # 를 채울 때만 박힘 (auto-allocation fallback 시엔 누락 — 다음 단계
+    # backlog).
+    # SP-Ext.4 review H1: node_name 라벨 필수 — monitoring_service.py:1820
+    # 가 label_node_name 으로 gpu_status[node_name][gpu_uuid] indexing.
+    # 누락 시 None key 로 indexing → used=1 갱신 안 됨 → 본 fix 목적 미달성.
+    {{- if and .Values.cluster (gt (len .Values.cluster) 0) }}
+    {{- $clusterEntry := (index .Values.cluster 0) }}
+    {{- $dev := $clusterEntry.device }}
+    node_name: {{ $clusterEntry.node_name | default "" | quote }}
+    {{- if $dev }}
+    device_type: {{ $dev.device_type | default "" | quote }}
+    device_count: {{ $dev.count | default 0 | quote }}
+    device_ids: {{ $dev.ids | default "" | quote }}
+    device_model: {{ $dev.model | default "" | quote }}
+    {{- end }}
     {{- end }}
 spec:
   restartPolicy: Never
@@ -106,7 +162,16 @@ spec:
     {{- end }}
     {{- end }}
     # ── Partner-defined extras (EVA_*, etc.) ─────────────────────────────
-    {{- range $key, $val := .Values.env }}
+    # manifest spec.env 가 base. env_overrides 가 있으면 동일 key 덮어씀
+    # (BFF 가 model.latest_commit 의 dynamic path 주입 — EVA_CHECKPOINT_PATH 등)
+    {{- $merged := dict }}
+    {{- range $k, $v := .Values.env }}
+    {{- $_ := set $merged $k $v }}
+    {{- end }}
+    {{- range $k, $v := .Values.env_overrides }}
+    {{- $_ := set $merged $k $v }}
+    {{- end }}
+    {{- range $key, $val := $merged }}
     - name: {{ $key }}
       value: {{ $val | quote }}
     {{- end }}
@@ -116,23 +181,39 @@ spec:
     - name: {{ $key }}
       value: {{ $val | quote }}
     {{- end }}
-    {{- if .Values.gpu_uuids }}
+    # NVIDIA_VISIBLE_DEVICES — fb_scheduler external_run._ensure_gpu_allocation
+    # 이 cluster[0].device.uuids 또는 top-level gpu_uuids 둘 다 채움. cluster
+    # 가 우선 (pre-allocation 일관성).
+    #
+    # SP-Ext.4 GPU fix (2026-05-29): internal fine_tuning/deployment_llm chart
+    # 와 동일하게 NVIDIA_VISIBLE_DEVICES 기반 할당만 사용한다 (nvidia 기본
+    # 런타임이 이 uuid 의 GPU 만 컨테이너에 노출). 이전엔 resources 에
+    # nvidia.com/gpu 도 같이 요청해서 K8s nvidia-device-plugin 이 별도 GPU 를
+    # 할당 + 우리 NVIDIA_VISIBLE_DEVICES override 가 충돌 → 컨테이너에 GPU 2개
+    # 노출 + torch.cuda init 실패 (infer pod 의 model load 가 CPU 로 떨어짐).
+    # internal 은 nvidia.com/gpu 를 전혀 요청하지 않고 (helm_chart/*/templates/
+    # _resources.tpl 에 GPU 없음) NVIDIA_VISIBLE_DEVICES=.node.device.uuids
+    # 만으로 GPU 를 잡는다. GPU 중복 할당 방지는 scheduler 의 Redis
+    # used_info pre-allocation (_ensure_gpu_allocation) 이 담당 — device-plugin
+    # 카운트 불필요. 대시보드 GPU 사용량은 device_ids 라벨 기반이라 영향 없음.
+    {{- $gpuUuids := .Values.gpu_uuids }}
+    {{- if and .Values.cluster (gt (len .Values.cluster) 0) }}
+    {{- $clusterDev := (index .Values.cluster 0).device }}
+    {{- if and $clusterDev $clusterDev.uuids }}
+    {{- $gpuUuids = $clusterDev.uuids }}
+    {{- end }}
+    {{- end }}
+    {{- if $gpuUuids }}
     - name: NVIDIA_VISIBLE_DEVICES
-      value: {{ .Values.gpu_uuids | quote }}
+      value: {{ $gpuUuids | quote }}
     {{- end }}
     resources:
       limits:
         cpu: {{ .Values.resources.cpu | quote }}
         memory: {{ .Values.resources.memory | quote }}
-        {{- if gt (int .Values.resources.gpu) 0 }}
-        nvidia.com/gpu: {{ .Values.resources.gpu }}
-        {{- end }}
       requests:
         cpu: {{ .Values.resources.cpu | quote }}
         memory: {{ .Values.resources.memory | quote }}
-        {{- if gt (int .Values.resources.gpu) 0 }}
-        nvidia.com/gpu: {{ .Values.resources.gpu }}
-        {{- end }}
     securityContext:
       runAsNonRoot: {{ .Values.securityContext.runAsNonRoot }}
       {{- if .Values.securityContext.runAsNonRoot }}
@@ -187,12 +268,15 @@ spec:
       mountPath: /model
       subPath: models/{{ .Values.inputs.base_model.name }}/latest_checkpoint
     {{- end }}
-    # /models/checkpoints — infer only — commit_models RO mount.
+    # /models/checkpoints — infer + train 모두 commit_models RO mount.
     # ETRI EVA_CHECKPOINTS_ROOT default 는 /models/checkpoints. 학습 종료 후
     # commit_external_artifacts 가 결과를 models/<base_model>/commit_models/<name>/
     # 로 옮기니, infer pod 의 ckpt_path = /models/checkpoints/<name> 이 그 path
     # 에 자동 매핑되도록 subPath 를 commit_models 디렉토리로 mount.
-    {{- if and (eq .Values.job_type "infer") .Values.inputs.base_model.name }}
+    # train 도 같은 path 필요: ETRI 4-phase chain (Phase 2a 가 Phase 1
+    # projector_path 받음, Phase 2b/3 가 이전 LoRA resume_lora_path 받음) 에서
+    # 이전 phase commit 의 artifact 를 partner train.py 가 그 path 로 load.
+    {{- if .Values.inputs.base_model.name }}
     - name: jf-main
       mountPath: /models/checkpoints
       subPath: models/{{ .Values.inputs.base_model.name }}/commit_models

@@ -207,6 +207,64 @@ async def get_manifest_by_name(
     ]
 
 
+@router.get(
+    "/{name}/{version}/paired",
+    response_model=ManifestStored,
+)
+async def get_paired_manifest(
+    name: str,
+    version: str,
+    registry: ManifestRegistry = Depends(get_registry),
+) -> ManifestStored:
+    """Return the paired manifest registered with the same pair_id.
+
+    codex Med-2: playground/service.py 가 ``-train`` → ``-infer`` + 버전을
+    hardcode 했었음. 그 대신 train manifest 의 pair_id 로 paired inference
+    manifest 를 lookup. 다른 partner / 다른 version 에서도 동작.
+
+    404 if (name, version) 가 unknown 이거나 pair_id 가 None (paired 등록
+    안 됨) 이거나 pair partner 가 다른 row 에 없음.
+    """
+    rows = await registry.list_all()
+    target = next(
+        (r for r in rows if r.name == name and r.version == version),
+        None,
+    )
+    if target is None:
+        raise HTTPException(
+            status_code=404, detail=f"manifest {name}@{version} not found"
+        )
+    if target.pair_id is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"manifest {name}@{version} has no pair_id (not registered as paired)",
+        )
+    paired = next(
+        (
+            r for r in rows
+            if r.pair_id == target.pair_id and not (r.name == name and r.version == version)
+        ),
+        None,
+    )
+    if paired is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"pair partner for {name}@{version} (pair_id={target.pair_id}) not found",
+        )
+    return ManifestStored(
+        name=paired.name,
+        version=paired.version,
+        job_type=paired.job_type,
+        execution_mode=paired.execution_mode,
+        image=paired.image,
+        service_family=paired.service_family,
+        contract_version=paired.contract_version,
+        description=paired.description,
+        default_params={},
+        is_active=True,
+    )
+
+
 @router.delete(
     "/{name}/{version}",
     status_code=status.HTTP_204_NO_CONTENT,

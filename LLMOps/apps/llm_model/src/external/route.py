@@ -743,47 +743,125 @@ async def stream_fine_tuning_graph(job_id: str, request: Request) -> StreamingRe
 # ── REST — raw log (1s polling on the frontend side) ────────────────────
 
 
+async def _resolve_train_log_path(job_id: str, detail: Optional[dict]) -> Optional[str]:
+    """NFS 의 train.log 위치 추론.
+
+    Source priority — graph fallback 과 동일 path 패턴:
+      1) tracker active → jobs/<job_id>/output/<subdir>/train.log
+      2) tracker cleanup 후 → models/<external>/commit_models/<commit>/train.log
+    """
+    import os
+    from utils.llm_db import db_model as _dbm
+    from utils import PATH
+
+    # 1. tracker active jobs path
+    if detail:
+        output_subdir = detail.get("output_subdir")
+        workspace_id = detail.get("workspace_id")
+        if output_subdir and workspace_id:
+            try:
+                ws = await _dbm.get_workspace_model(workspace_id=int(workspace_id))
+                if ws:
+                    main_root = PATH.JF_MAIN_STORAGE_PATH.format(
+                        STORAGE_NAME=ws["main_storage_name"], WORKSPACE_NAME=ws["name"],
+                    )
+                    p = f"{main_root}/jobs/{job_id}/output/{output_subdir}/train.log"
+                    if os.path.exists(p):
+                        return p
+            except Exception:
+                logger.exception("system-log: ws lookup (active) failed")
+
+    # 2. commit_models fallback
+    try:
+        from utils.llm_db.db_base_async import select_query
+        rows = await select_query(
+            "SELECT id, workspace_id, name, latest_commit_id "
+            "FROM model WHERE external_job_id = %s LIMIT 1",
+            params=(job_id,),
+        )
+        if rows:
+            m = rows[0]
+            if m.get("latest_commit_id"):
+                commit_row = await _dbm.get_commit_model(commit_id=m["latest_commit_id"])
+                ws = await _dbm.get_workspace_model(workspace_id=int(m["workspace_id"]))
+                if commit_row and ws:
+                    main_root = PATH.JF_MAIN_STORAGE_PATH.format(
+                        STORAGE_NAME=ws["main_storage_name"], WORKSPACE_NAME=ws["name"],
+                    )
+                    p = (
+                        f"{main_root}/models/{m['name']}/commit_models/"
+                        f"{commit_row['name']}/train.log"
+                    )
+                    if os.path.exists(p):
+                        return p
+    except Exception:
+        logger.exception("system-log: commit fallback failed")
+    return None
+
+
 @external.get("/jobs/{job_id}/system-log")
 async def get_external_system_log(job_id: str) -> dict[str, Any]:
     """Drop-in replacement for /api/models/fine-tuning/system-log?model_id=.
 
-    v1.0.0: returns a stub string (the partner doesn't expose its train.log
-    over HTTP yet). Frontend's FineTuningSystemLogModal will receive an
-    informational placeholder until either:
+    NFS 의 train.log 직접 read — graph fallback 과 동일한 path 패턴.
+    학습 중 (tracker active) 면 jobs/.../train.log, 학습 종료 후엔
+    commit_models/.../train.log fallback. partner pod 의 /train/log endpoint
+    제공 안 해도 NFS mount 통해 동기 동작.
 
-    (a) ETRI v1.0.1 adds a `/train/log?job_id=&since_line=N` endpoint, or
-    (b) we add a platform-side wrapper that reads
-        `{output_dir}/train.log` via the partner pod's NFS mount.
-
-    The HTTP shape matches the existing `callApi` contract so the modal
-    keeps working as soon as the underlying log source lands.
+    Modal 의 폴링 (1초 간격) 에 매번 마지막 200 줄 응답.
     """
+    import os
+
     client = await _get_client()
+    detail: Optional[dict]
     try:
         detail = await client.get_job(job_id)
     except ExternalContainerError as exc:
-        raise _translate_error(exc) from exc
+        if exc.status_code == 404:
+            detail = None
+        else:
+            raise _translate_error(exc) from exc
 
-    result = detail.get("result") or {}
-    raw_status = result.get("status") or "pending"
-    scalars = _extract_etri_scalars(detail)
+    log_path = await _resolve_train_log_path(job_id, detail)
+    if log_path:
+        try:
+            # 마지막 200 줄. 큰 파일 보호 위해 tail-style read.
+            with open(log_path, "rb") as f:
+                f.seek(0, os.SEEK_END)
+                size = f.tell()
+                read_size = min(size, 256 * 1024)  # 256KB tail
+                f.seek(size - read_size)
+                content = f.read().decode("utf-8", errors="replace")
+            lines = content.splitlines()[-200:]
+            tail = "\n".join(lines)
+            header = (
+                f"[platform] external job {job_id}  "
+                f"size={size} bytes  showing last {len(lines)} lines\n"
+                f"           source={log_path}\n"
+                f"{'-' * 80}\n"
+            )
+            return _envelope(status=1, result=header + tail)
+        except Exception:
+            logger.exception("system-log: read failed for %s", log_path)
+            return _envelope(
+                status=1,
+                result=f"[platform] failed to read {log_path} — see server logs",
+            )
+
+    # train.log 없음 — placeholder 응답
+    result = (detail or {}).get("result") or {}
+    raw_status = result.get("status") or ("unknown" if detail is None else "pending")
+    scalars = _extract_etri_scalars(detail or {})
     output_dir = scalars.get("output_dir") or "(unknown)"
-
     placeholder = (
         f"[platform] external job {job_id}\n"
-        f"  manifest      : {detail.get('manifest_name')}@{detail.get('manifest_version')}\n"
-        f"  helm release  : {detail.get('helm_release')}\n"
-        f"  partner job   : {detail.get('partner_job_id')}\n"
         f"  status        : {raw_status}\n"
         f"  output_dir    : {output_dir}\n"
         f"\n"
-        f"[platform] raw partner log streaming is not wired up for v1.0.0.\n"
-        f"           when ETRI v1.0.1 exposes /train/log or the platform\n"
-        f"           mounts the partner output NFS, this endpoint will\n"
-        f"           return the contents of {output_dir}/train.log.\n"
+        f"[platform] train.log 파일을 NFS 에서 찾지 못했습니다. 학습이 시작 직후\n"
+        f"           이거나 commit 으로 옮겨진 직후일 수 있습니다.\n"
     )
     err = result.get("error")
     if isinstance(err, dict) and err.get("message"):
         placeholder += f"\n[platform] last partner error: {err.get('message')}\n"
-
     return _envelope(status=1, result=placeholder)

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from typing import Optional
 
 import httpx
 from fastapi import FastAPI
@@ -21,7 +22,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from api import health, job_router, manifest_router
 from config import get_settings
 from exceptions import register_exception_handlers
-from launch import JobTracker, SchedulerClient
+from launch import JobStateRepository, JobTracker, SchedulerClient
 from manifest import (
     InMemoryManifestRegistry,
     MariaDBManifestRegistry,
@@ -56,12 +57,20 @@ async def lifespan(app: FastAPI):
     app.state.db_pool = await _try_init_db_pool(settings, logger)
     if app.state.db_pool is not None:
         app.state.registry = MariaDBManifestRegistry(app.state.db_pool)
-        logger.info("manifest registry: MariaDB persistence active")
+        # SP-Ext.3: same pool drives the job state persistence.
+        job_repository: Optional[JobStateRepository] = JobStateRepository(
+            app.state.db_pool
+        )
+        logger.info(
+            "MariaDB persistence active (manifest registry + job state repository)"
+        )
     else:
         app.state.registry = InMemoryManifestRegistry()
+        job_repository = None
         logger.warning(
             "manifest registry: in-memory fallback active "
-            "(set db_host/db_user/db_password env to enable MariaDB)"
+            "(set db_host/db_user/db_password env to enable MariaDB); "
+            "BFF restart will NOT recover in-flight jobs"
         )
 
     scheduler_client = SchedulerClient(
@@ -72,7 +81,23 @@ async def lifespan(app: FastAPI):
         scheduler=scheduler_client,
         http_client=app.state.partner_http,
         poll_interval=settings.poll_interval_seconds,
+        repository=job_repository,
     )
+
+    # SP-Ext.3: restore in-flight jobs left behind by the previous BFF
+    # process. Best-effort — any failure logs and yields to normal startup.
+    if job_repository is not None:
+        try:
+            recovered = await app.state.job_tracker.startup_recovery()
+            if recovered:
+                logger.info(
+                    "SP-Ext.3 startup recovery restored %d in-flight job(s)",
+                    recovered,
+                )
+        except Exception:
+            logger.exception(
+                "SP-Ext.3 startup recovery raised — continuing with cold start"
+            )
 
     try:
         yield

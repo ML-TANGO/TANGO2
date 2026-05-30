@@ -2,7 +2,7 @@ apiVersion: v1
 name: external-container
 description: |
   Generic Helm chart for external partner containers (SP-1 v2).
-  Wraps any image conforming to docs/external-container-spec.md with platform
+  Wraps any image conforming to examples/hello-plugin/external-container-spec.md with platform
   PVC mounts, JF_* env injection, securityContext, and Kong ingress per
   acryl.ai/appType: user convention.
 version: 0.1.0

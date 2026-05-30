@@ -1,6 +1,6 @@
 # TANGO2 GenAI Platform — Error Catalog
 #
-# 외부 컨테이너 인터페이스 v1 (`docs/external-container-spec.md` Section 8) 의 에러 메시지 표준.
+# 외부 컨테이너 인터페이스 v1 (`examples/hello-plugin/external-container-spec.md` Section 8) 의 에러 메시지 표준.
 # 사용자에게 표시되는 모든 에러는 4-튜플(problem/cause/fix/docs_url) 구조를 따른다.
 #
 # 사용 흐름:

@@ -1,6 +1,6 @@
 """ExternalContainerManifest pydantic schema.
 
-1:1 mapping of docs/external-container-spec.md §6 manifest YAML.
+1:1 mapping of examples/hello-plugin/external-container-spec.md §6 manifest YAML.
 
 apiVersion=tango.acryl.ai/v1 / kind=ExternalContainer.
 

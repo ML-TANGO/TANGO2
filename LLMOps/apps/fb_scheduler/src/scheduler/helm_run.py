@@ -628,6 +628,14 @@ def delete_helm_external(helm_release: str, namespace: str):
     install time.
     """
     command = ""
+    # SP-Ext.4 C1: 이 release 가 claim 한 GPU reservation 을 즉시 해제
+    # (TTL 900s 안 기다리고). pod 이 사라지면 monitoring used_info 도 비워지니
+    # reservation 만 남아 다음 launch 의 SETNX 를 막는 것을 방지.
+    try:
+        from scheduler.external_run import release_reservations_for_release
+        release_reservations_for_release(helm_release)
+    except Exception:
+        pass
     try:
         os.chdir("/app/helm_chart/")
         command = f"helm uninstall {helm_release} -n {namespace}"
