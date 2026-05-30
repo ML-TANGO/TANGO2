@@ -23,7 +23,7 @@ REGISTRY_VALUES="./gaip_registry/values.yaml"
 MARIADB_VALUES="./gaip_maraidb/values.yaml"
 
 if [[ ! -f "./gaip_kong/run.sh" ]]; then
-  echo "ERROR: run from GenAI_Platform/devops directory." >&2
+  echo "ERROR: run from LLMOps/devops directory." >&2
   exit 1
 fi
 

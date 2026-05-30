@@ -151,7 +151,7 @@ global:
       src:
         enabled: true                             # 운영 환경: false / 개발 환경: true
         type: nfs
-        path: <SRC_PATH>                          # [조건부 필수] enabled=true일 때 TANGO2/GenAI_Platform/apps 소스 절대 경로
+        path: <SRC_PATH>                          # [조건부 필수] enabled=true일 때 TANGO2/LLMOps/apps 소스 절대 경로
                                                   # 주의: 해당 경로에 NFS 설정이 되어있어야 정상적으로 동작함
         server: <NFS_SERVER_IP>                   # [조건부 필수] enabled=true일 때 NFS 서버 IP
 

@@ -25,7 +25,7 @@ INSTALL_EFK="false"
 RUN_EFK_INIT="false"
 
 if [[ ! -f "./gaip_prometheus/run.sh" ]]; then
-  echo "ERROR: run from GenAI_Platform/devops directory." >&2
+  echo "ERROR: run from LLMOps/devops directory." >&2
   exit 1
 fi
 

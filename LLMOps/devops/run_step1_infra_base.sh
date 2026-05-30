@@ -25,7 +25,7 @@ EFK_VALUES="./gaip_nfs_provisioner/values-efk.yaml"
 INSTALL_METALLB="false"
 
 if [[ ! -f "./gaip_nfs_provisioner/run.sh" ]]; then
-  echo "ERROR: run from GenAI_Platform/devops directory." >&2
+  echo "ERROR: run from LLMOps/devops directory." >&2
   exit 1
 fi
 
