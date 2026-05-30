@@ -944,7 +944,10 @@ async def commit_external_artifacts(model_id : int, job_id : str,
 
     # commit_name: 사용자 지정 또는 job_id 앞 8자 + output_subdir 조합
     if not commit_name:
-        commit_name = f"{output_subdir}-{job_id[:8]}"
+        # suffix: random job_id 대신 timestamp — 시간 순 자연 정렬 + 가독성.
+        # 동일 output_subdir 의 동시 학습은 운영상 거의 없으니 sec 단위로 충분.
+        ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        commit_name = f"{output_subdir}-{ts}"
 
     # NFS path resolve (llm_model pod 안 mount = /jf-data/<storage>/main/<workspace>)
     main_root = PATH.JF_MAIN_STORAGE_PATH.format(

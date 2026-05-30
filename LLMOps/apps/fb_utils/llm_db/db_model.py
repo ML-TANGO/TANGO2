@@ -197,7 +197,10 @@ async def get_models(workspace_id : int) -> List[dict]:
 
 async def get_models_option(workspace_id : int, model_name : str = None, create_user_id : int = None) -> List[dict]:
     sql = """
-        SELECT m.id, m.name, u.name as create_user_name
+        SELECT m.id, m.name, u.name as create_user_name,
+               m.training_type,
+               m.external_manifest_name,
+               m.external_manifest_version
         FROM model m
         LEFT JOIN msa_jfb.user u ON u.id = m.create_user_id
         WHERE m.workspace_id = %s
