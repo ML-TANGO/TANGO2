@@ -26,9 +26,10 @@ spec:
       containers:
       - name: {{ .Values.global.jfb.name.external_container }}
         # Local nerdctl --namespace=k8s.io build — IfNotPresent so we don't
-        # bypass the cache by trying to pull from Docker Hub.
+        # bypass the cache by trying to pull from Docker Hub (image not pushed).
+        # 하드코딩: global pullPolicy(=Always)를 쓰면 로컬 전용 이미지를 못 받아 ImagePullBackOff.
         image: {{ .Values.global.jfb.image.external_container }}
-        imagePullPolicy: {{ .Values.global.jfb.image.pullPolicy }}
+        imagePullPolicy: IfNotPresent
         command: ["/bin/bash", "-c"]
         args: ["cd /app; ./run.sh"]
         # Inline probes — commonlib's _probe.tpl is per-app hard-coded and
