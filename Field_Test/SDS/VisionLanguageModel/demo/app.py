@@ -104,6 +104,117 @@ CSV_KO_COLUMNS = {
 _model = None
 _model_device = None
 
+# ── Global SPICE scorer (lazy-initialized on first use) ───────────────────────
+_spice_scorer = None
+
+
+def _get_spice_scorer():
+    """Spice scorer를 lazy-init한다. Java 11 호환 monkey-patch 포함."""
+    global _spice_scorer
+    if _spice_scorer is None:
+        try:
+            import subprocess as _sp
+            import pycocoevalcap.spice.spice as _spice_mod
+
+            _orig_check_call = _sp.check_call
+
+            def _java11_check_call(cmd, **kwargs):
+                if isinstance(cmd, list) and cmd and cmd[0] == "java" and "-jar" in cmd:
+                    java11_flags = [
+                        "--add-opens", "java.base/java.lang=ALL-UNNAMED",
+                        "--add-opens", "java.base/java.util=ALL-UNNAMED",
+                    ]
+                    cmd = [cmd[0]] + java11_flags + cmd[1:]
+                return _orig_check_call(cmd, **kwargs)
+
+            _spice_mod.subprocess.check_call = _java11_check_call
+
+            from pycocoevalcap.spice.spice import Spice
+            _spice_scorer = Spice()
+        except Exception:
+            pass
+    return _spice_scorer
+
+
+def compute_spice(hypothesis: str, reference: str) -> dict | None:
+    """SPICE F-score를 계산한다.
+
+    pycocoevalcap이 없거나 reference가 비어 있으면 None을 반환한다.
+    reference가 오류 메시지("(" 로 시작)인 경우에도 None을 반환한다.
+
+    Note: spice.py는 plain string 형식을 기대한다. dict {"caption": ...} 형식을
+    전달하면 Java ClassCastException이 발생하므로 반드시 plain string을 사용한다.
+    """
+    if not hypothesis or not reference:
+        return None
+    reference = reference.strip()
+    if reference.startswith("(") or reference.startswith("❌"):
+        return None
+
+    scorer = _get_spice_scorer()
+    if scorer is None:
+        return {"error": "pycocoevalcap 미설치 — pip install pycocoevalcap"}
+
+    try:
+        # plain string 형식: {"caption":...} dict가 아닌 문자열 직접 전달
+        gts = {0: [reference]}
+        res = {0: [hypothesis]}
+        score, scores = scorer.compute_score(gts, res)
+        detail = scores[0] if scores else {}
+        return {"F": round(float(score), 4), "detail": detail}
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+def _is_korean(text: str) -> bool:
+    """텍스트에 한글 문자가 포함되어 있으면 True."""
+    return any("가" <= c <= "힣" for c in text)
+
+
+def format_spice_result(result: dict | None, hypothesis: str = "") -> str:
+    """SPICE 결과 dict를 Markdown 문자열로 포맷한다."""
+    if result is None:
+        return ""
+    if "error" in result:
+        return f"⚠️ SPICE 계산 실패: {result['error']}"
+
+    f_score = result.get("F", 0.0)
+    detail  = result.get("detail", {})
+    lines   = ["### 📊 SPICE 평가 결과", f"**전체 F-score: `{f_score:.4f}`**"]
+
+    if hypothesis and _is_korean(hypothesis):
+        lines.append(
+            "> ℹ️ SPICE는 Stanford CoreNLP 기반으로 영문에 최적화되어 있습니다. "
+            "한국어 텍스트의 경우 점수가 낮게 측정될 수 있습니다."
+        )
+
+    cat_order = ["All", "Object", "Relation", "Attribute",
+                 "Cardinality", "Color", "Count", "Size"]
+    cat_kr = {
+        "All": "전체", "Object": "객체", "Relation": "관계",
+        "Attribute": "속성", "Cardinality": "수량", "Color": "색상",
+        "Count": "개수", "Size": "크기",
+    }
+
+    rows = []
+    for cat in cat_order:
+        c = detail.get(cat)
+        if not c:
+            continue
+        pr = c.get("pr", 0.0)
+        re = c.get("re", 0.0)
+        f  = c.get("f",  0.0)
+        rows.append(f"| {cat_kr.get(cat, cat)} | {pr:.3f} | {re:.3f} | {f:.3f} |")
+
+    if rows:
+        lines += [
+            "",
+            "| 카테고리 | Precision | Recall | F-score |",
+            "|---|---|---|---|",
+        ] + rows
+
+    return "\n".join(lines)
+
 
 # ── Dataset format helpers ────────────────────────────────────────────────────
 
@@ -541,6 +652,13 @@ def run_inference(
             response = response.split(full_question)[-1].strip()
 
         history.append({"role": "assistant", "content": response})
+
+        # ── SPICE 점수 계산 ────────────────────────────────────────────────
+        expected_text = load_expected(dataset_path, sample_name, output_type, frame)
+        spice_result  = compute_spice(response, expected_text)
+        spice_md      = format_spice_result(spice_result, hypothesis=response)
+        if spice_md:
+            history.append({"role": "assistant", "content": spice_md})
 
     except Exception:
         history.append({
