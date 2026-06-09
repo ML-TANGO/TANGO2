@@ -25,23 +25,70 @@ SDS(Software-defined Ship) 해상 도메인 데이터셋에 특화된 학습 파
 
 ## 1. 아키텍처 개요
 
-```
-입력 이미지
-    │
-    ▼
-[Vision Encoder]   CLIP ViT-L/14-336  (고정, 1024-dim, 576 패치 토큰)
-    │
-    ▼
-[MLP Projector]    mlp2x_gelu         (학습, vision_dim → llm_dim)
-    │
-    ▼  (576개 시각 토큰을 <image> 위치에 삽입)
-[Language Model]   Llama 3.1-8B-Instruct / Qwen3-8B
-    │
-    ▼
-텍스트 출력 (해상상황묘사, 항해조력메시지 등)
-```
+![SDS-VLM Arch](docs/img/SDS-VLM Architecture.png)
 
-### 학습 파이프라인
+- 본 구조도는 선박 및 해양 도메인 특화 데이터(**SDS Domain Data**)를 효율적으로 학습하여 해상 상황 묘사 및 항해 조언을 수행하는 **ETRI Vessel Agent** 의 멀티모달 아키텍처를 보여줍니다.
+
+- 기존 LLM과 Vision Encoder는 고정(frozen)한 상태로, **Projector**와 **LoRA Adapter**만을 선택적으로 파인튜닝하는 효율적인 구조를 채택하고 있습니다.
+
+### 1-1. 입력부 (Inputs)
+
+멀티모달 처리를 위해 두 가지 형태의 서로 다른 데이터가 시스템의 시작점으로 입력됩니다.
+
+> **Image (이미지)**
+>* 분석 대상이 되는 해상 관련 시각 자료(예: 선박 주변 전경, CCTV 영상 프레임 등).
+
+
+> **Text Prompt (텍스트 프롬프트)**
+>* 사용자의 질의문 또는 **AIS(선박 자동 식별 시스템, Automatic Identification System)** 데이터를 기반으로 생성된 텍스트 명령지시어.
+
+### 1-2. 시각 정보 처리부 (Vision Processing)
+
+입력된 이미지를 언어 모델이 이해할 수 있는 형태(토큰)로 변환하고 정렬하는 구간입니다.
+
+> **CLIP Vision Encoder (`ViT-L/14`)**
+>* **설명:** OpenAI의 CLIP 모델을 백본으로 삼아 이미지에서 고차원의 시각적 특징을 추출합니다.
+>* **상태:** 🔒 **Frozen (고정)** — 기구축된 시각 인식 능력을 유지하기 위해 가중치를 업데이트하지 않습니다.
+
+
+> **Image Embeddings**
+>* Vision Encoder로부터 출력된 고차원 이미지 특징 벡터 데이터입니다.
+
+
+> **Projector (`Multi Layer Perceptron`)**
+>* **설명:** 이미지 임베딩을 언어 모델(LLM)이 단어처럼 인식할 수 있는 공간인 `Image Tokens`로 매핑해 주는 **MLP(다층 퍼셉트론)** 구조의 연결 다리입니다.
+>* **상태:** ✏️ **Trainable (학습 가능)** — 시각 정보와 언어 정보 간의 도메인 정렬을 위해 이 영역의 가중치는 **Full Tuning** 방식으로 직접 학습됩니다.
+
+### 1-3. 융합 및 언어 모델부 (Multimodal Fusion & LLM)
+
+시각 토큰과 텍스트 토큰을 결합하여, 도메인 특화 지식을 바탕으로 추론을 수행하는 핵심 두뇌 구간입니다.
+
+> **Concatenate (연결)**
+>* Projector를 거쳐 나온 `Image Tokens`와 사용자가 입력한 `Text Prompt` 토큰을 하나의 시퀀스로 길게 이어 붙여 LLM의 입력값으로 전달합니다.
+
+
+> **Language Model (`Llama / Qwen`)**
+>* **설명:** 시스템의 텍스트 생성 및 추론을 담당하는 대형 언어 모델(LLM) 백본입니다.
+>* **상태:** 🔒 **Frozen Backbone (고정)** — 수십~수백억 개의 거대한 파라미터 본체는 연산 자원 절약 및 기본 언어 능력 보존을 위해 고정됩니다.
+
+
+> **LoRA Adapter (`Linear Adapter`)**
+>* **설명:** 고정된 LLM 레이어 옆에 병렬로 삽입되는 초소형 가중치 행렬 쌍(Linear Adapter)입니다.
+>* **상태:** ✏️ **Trainable (학습 가능)** — 하단의 SDS Domain Data (Specific Dataset)인 선박/해양 전문 데이터를 주입받아 이 어댑터 영역만 집중적으로 파인튜닝(PEFT)됩니다.
+
+### 1-4. 출력부 (Output)
+
+모델이 최종 연산을 마치고 사용자에게 도메인 지식을 전달하는 단계입니다.
+
+>**Text Tokens**
+>* LLM과 LoRA 어댑터의 협업을 통해 생성된 언어 토큰 시퀀스입니다.
+
+
+>**Output: Domain-Specific Response**
+>* **최종 결과물:** 일반적인 답변을 넘어, 주입된 전문 데이터를 기반으로 생성된 **해상 상황 묘사(Description of sea conditions)** 및 **항해 조언(Navigation advice)** 등의 도메인 특화 답변을 출력합니다.
+
+
+### 1-5. 학습 파이프라인
 
 | 단계 | 스크립트 | 데이터 | 학습 대상 | 고정 | 목적 |
 |------|---------|--------|-----------|------|------|
@@ -51,8 +98,8 @@ SDS(Software-defined Ship) 해상 도메인 데이터셋에 특화된 학습 파
 | Phase 4 | `train_lora_sds.sh` | SDS 100개 (이미지+텍스트) | Projector + LLM(LoRA) 계속학습 | CLIP | SDS 태스크 특화 |
 | Phase 4-GAA | `train_lora_gaa.sh` | SDS 100개 + BBox | CLIP + Projector + LLM(LoRA) | — | GAA 기하 어텐션 정렬 |
 
-> Phase 3는 이미지 없이 텍스트만 사용하므로 Vision Encoder / Projector를 로드하지 않습니다.  
-> Phase 4-GAA는 Phase 4와 동일한 SDS 데이터를 사용하되 바운딩 박스 어노테이션이 추가로 필요합니다. 자세한 내용은 [§8 GAA](#8-gaa--geometric-attention-alignment)를 참조하세요.
+> * Phase 3는 이미지 없이 텍스트만 사용하므로 Vision Encoder / Projector를 로드하지 않습니다.  
+> * Phase 4-GAA는 Phase 4와 동일한 SDS 데이터를 사용하되 바운딩 박스 어노테이션이 추가로 필요합니다. 자세한 내용은 [§8 GAA](#8-gaa--geometric-attention-alignment)를 참조하세요.
 
 ---
 
@@ -88,6 +135,10 @@ source ~/.bashrc
 
 ```bash
 # Miniforge 는 conda-forge 를 기본 채널로 사용함
+# nvidia, pytorch 채널을 추가할 것
+
+conda config --add channels nvidia
+conda config --add channels pytorch
 conda config --show channels
 ```
 
@@ -123,19 +174,31 @@ python -c "import torch; print(torch.__version__); print('CUDA:', torch.cuda.is_
 ```bash
 pip install \
     transformers==5.3.0 \
-    peft==0.18.1 \
-    accelerate==1.13.0 \
+    tokenizers==0.22.2  \
+    huggingface_hub==1.7.2  \
+    safetensors==0.7.0  \
+    peft==0.18.1  \
+    accelerate==1.13.0  \
     deepspeed==0.18.8 \
+    sentencepiece==0.2.1  \
+    einops==0.8.2 \
     wandb==0.26.1 \
-    gradio==6.14.0 \
-    torchinfo==1.8.0 \
-    sentencepiece==0.2.1 \
-    pandas \
-    pillow \
-    numpy \
-    huggingface_hub
+    torchinfo==1.8.0  \
+    gradio==6.14.0  \
+    pillow==12.1.1  \
+    pandas==3.0.1 \
+    numpy==2.4.3  \
+    tqdm==4.67.3  \
+    requests==2.32.5  \
+    psutil==7.2.2
 ```
 
+### 3-6. Flash Attntion 2 빌드 및 설치
+```bash
+# RAM 이 충분하다면 빠른 빌드를 위해 MAX_JOBS 를 높일 것
+# 테스트 = 64GB
+MAX_JOBS=1 pip install flash-attn==2.8.3 --no-build-isolation
+```
 ---
 
 ## 4. 모델 가중치 준비
@@ -367,8 +430,6 @@ LEARNING_RATE=5e-5      # 기존 LoRA 대비 낮게 (catastrophic forgetting 방
 NUM_EPOCHS=1
 ```
 
-6 GPU 기준 iteration: `54,657 ÷ (2×8×6) = 약 570 steps`
-
 결과물: `checkpoints/clip_llama31_lora_marine/`  
 (projector.bin을 `clip_llama31_lora`에서 자동 복사)
 
@@ -528,37 +589,66 @@ python gaa/compare_models.py \
 
 ## 9. 추론 테스트
 
-학습된 체크포인트로 단일 이미지 추론을 실행합니다.
+- 학습된 체크포인트로 단일 이미지 추론을 실행합니다.
+- 사전 학습된 가중치 파일은 허깅페이스 저장소(https://huggingface.co/ETRI-TANGO/TANGO2-SDS)에서 미리 다운받으시기 바랍니다. 
+
+- 주요 `test_sds.py` 인수:
+
+| 인수                     | 기본값                        | 설명                                                                                |
+|------------------------|----------------------------|-----------------------------------------------------------------------------------|
+| `--lora_path`          | None                       | LoRA 디렉토리 (없으면 projector만 사용)                                                     |
+| `--projector_path`     | None                       | projector.bin 경로                                                                  |
+| `--Vision_model`       | `CLIP/ViT-L/14-336`        | 비전 모델 경로                                                                          |
+| `--llm_model`          | `Llama-3.1-8B 또는 Qwen3-8B` | 언어 모델 경로                                                                          |
+| `--sample_dir`         | None                       | TANGO2 저장소 기준, `TANGO2/Field_Test/SDS/dataset/20251031/` 경로 하위의 10개 디렉토리 중 하나를 선택 |
+| `--frame`              | None                       | 10개 이미지 중 하나를 선택                                                                  |
+| `--lang`               | None                       | 영문 (en), 한글 (ko)                                                                  |
+| `--max_new_tokens`     | 512                        | 최대 생성 토큰 수                                                                        |
+| `--repetition_penalty` | 1.0                        | 반복 억제 (1.1 권장)                                                                    |
 
 ```bash
-PYTHON=$HOME/miniforge3/envs/eva/bin/python
-CKPT="checkpoints/sds_lora_en"
-
-$PYTHON test.py \
-    --projector_path "$CKPT/projector.bin" \
-    --lora_path      "$CKPT" \
-    --llm_model      "/path/to/Llama-3.1-8B-Instruct" \
-    --image          "/path/to/sample/input_image.png" \
-    --question       "[Vessel AIS Information]
-- Own vessel (ID:0) | Lat:34.45 Lon:127.73 | Speed:17.5kt Heading:141° | Size:93m x 28m Draft:3m
-- Nearby vessel (ID:1) | Lat:34.44 Lon:127.73 | Speed:20.1kt Heading:115° | Size:134m x 24m Draft:4m | BoundingBox:[x=975 y=318 w=408 h=263]
-
-Based on the camera image and AIS data provided, describe the current maritime situation and provide appropriate navigational advice in accordance with COLREG rules." \
-    --max_new_tokens 512 \
-    --repetition_penalty 1.1
+# 아래 예시에서 경로를 본인에 맞게 수정하시기 바랍니다.
+# 학습에 사용되지 않은 데이터셋 `SDS/dataset/20251031/` 경로의 데이터를 대상으로 합니다.
+      
+python test_sds.py \
+      --lora_path      "TANGO2-SDS/clip_llama31_lora_marine_sds_lora_ko/" \
+      --projector_path "TANGO2-SDS/clip_llama31_lora_marine_sds_lora_ko/projector.bin" \
+      --vision_model   "openai/clip-vit-large-patch14-336" \
+      --llm_model      "/path/to/Llama-3.1-8B-Instruct" \
+      --sample_dir     "../dataset/20251031/dataset1" \
+      --frame          frame_3 \
+      --lang ko \
+      --max_new_tokens 512 \
+      --repetition_penalty 1.1 \
+      --show_reference
 ```
 
-주요 `test.py` 인수:
+```bash
+# 출력 예시
+[Inference] Question (ko):
+[선박 AIS 정보]
+- 자선 (ID:0 종류:Boat) | 위도:36.347371 경도:127.376753 | 속도:5.0kt 방향:330.6° | 선체:103m × 34m 흘수:3m
+- 주변선박 (ID:1 종류:Fishing) | 위도:36.352994 경도:127.377201 | 속도:1.8kt 방향:81.0° | 선체:200m × 27m 흘수:3m | 바운딩박스:[x=774 y=331 w=250 h=141]
 
-| 인수 | 기본값 | 설명 |
-|------|--------|------|
-| `--projector_path` | (필수) | projector.bin 경로 |
-| `--lora_path` | None | LoRA 디렉토리 (없으면 projector만 사용) |
-| `--llm_model` | `/home/ywlee/Llama-3.1-8B-Instruct` | LLM 경로 |
-| `--max_new_tokens` | 512 | 최대 생성 토큰 수 |
-| `--do_sample` | False | 샘플링 여부 (False=greedy) |
-| `--repetition_penalty` | 1.0 | 반복 억제 (1.1 권장) |
+사진과 AIS 데이터를 바탕으로 현재 해상상황을 묘사하고 COLREG 규칙에 따른 올바른 항해 조력 메시지를 생성해줘.
 
+[Inference] Generating …
+
+The following generation flags are not valid and may be ignored: ['temperature', 'top_p']. Set `TRANSFORMERS_VERBOSITY=info` for more details.
+============================================================
+[MODEL OUTPUT]
+============================================================
+맑은 주간 날씨로 시계가 양호하며 해상은 잔잔함. 본선은 침로 330.6도, 속력 5.0노트로 북북동 방향 항해 중이며, 좌현 전방에서 침로 81.0도, 속력 1.8노트의 저속 타선이 유사한 방향으로 항해 중임. 본선 속력이 타선의 두 배 이상으로 빨라 추월 상황(Overtaking)이 전개되고 있음.
+
+귀선이 타선을 추월하는 상황(Overtaking Situation)이므로, 국제해상충돌예방규칙 제13조에 따라 귀선은 피항선으로서 타선의 진로를 방해하지 않도록 충분한 안전 이격 거리(CPA 1마일 이상)를 확보하며 통과해야 합니다. 특히 추월 중 타선의 선수 방향을 가로지르거나 근접하여 선체 상호작용(Interaction)이 발생하지 않도록 유의하고, 추월이 완전히 끝나 타선이 귀선의 선미를 통과할 때까지 경계를 유지하십시오.
+============================================================
+
+============================================================
+[REFERENCE / Ground Truth]
+============================================================
+5노트로 증속하며 우현 변침 중. 우현 선수 어선(ship_id 1)과 가까워지고 있어 충돌 위험 증가.
+============================================================
+```
 ---
 
 ## 10. 데모 웹 앱
@@ -580,7 +670,7 @@ python demo/app.py --share
 | 📸 입력 이미지 (bbox 오버레이) <br> 📊 AIS 데이터 테이블                    | 📁 데이터셋 탐색기 <br> - 경로 입력 + 📂 탐색 <br> - 스캔 → 샘플 드롭다운                      |
 | 📋 기대값 (Ground Truth) <br> - 5가지 출력 유형 선택 <br> - 레퍼런스 텍스트 표시 | ⚙️ 모델 설정 <br> - 체크포인트 선택 + 📂 <br> - 비전/LLM 경로 + 📂 <br> - 모델 로드 버튼 <br> 💬 추론 결과 채팅 |
 
-![SDS-VLM Demo](demo/screenshot.png)
+![SDS-VLM Demo](docs/img/Demo screenshot.png)
 
 ### 주요 기능
 
