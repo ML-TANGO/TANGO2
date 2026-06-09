@@ -249,7 +249,9 @@ def main():
     dtype  = DTYPE_MAP[args.dtype]
     device = torch.device(args.device)
 
-    sample_dir = args.sample_dir.rstrip("/")
+    sample_dir = os.path.abspath(args.sample_dir.rstrip("/"))
+    if not os.path.isdir(sample_dir):
+        raise FileNotFoundError(f"sample_dir 가 존재하지 않습니다: {sample_dir}")
     fmt = detect_format(sample_dir)
     print(f"[Inference] Dataset format : {fmt}  ({sample_dir})")
 
