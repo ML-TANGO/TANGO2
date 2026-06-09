@@ -25,7 +25,7 @@ SDS(Software-defined Ship) 해상 도메인 데이터셋에 특화된 학습 파
 
 ## 1. 아키텍처 개요
 
-![SDS-VLM Arch](docs/img/SDS-VLM Architecture.png)
+![SDS-VLM Arch](docs/img/sds_vlm_architecture.png)
 
 - 본 구조도는 선박 및 해양 도메인 특화 데이터(**SDS Domain Data**)를 효율적으로 학습하여 해상 상황 묘사 및 항해 조언을 수행하는 **ETRI Vessel Agent** 의 멀티모달 아키텍처를 보여줍니다.
 
@@ -590,7 +590,7 @@ python gaa/compare_models.py \
 ## 9. 추론 테스트
 
 - 학습된 체크포인트로 단일 이미지 추론을 실행합니다.
-- 사전 학습된 가중치 파일은 허깅페이스 저장소(https://huggingface.co/ETRI-TANGO/TANGO2-SDS)에서 미리 다운받으시기 바랍니다. 
+- 사전 학습된 가중치 파일은 [TANGO2 허깅페이스 저장소](https://huggingface.co/ETRI-TANGO/TANGO2-SDS) 에서 미리 다운받으시기 바랍니다. 
 
 - 주요 `test_sds.py` 인수:
 
@@ -670,7 +670,7 @@ python demo/app.py --share
 | 📸 입력 이미지 (bbox 오버레이) <br> 📊 AIS 데이터 테이블                    | 📁 데이터셋 탐색기 <br> - 경로 입력 + 📂 탐색 <br> - 스캔 → 샘플 드롭다운                      |
 | 📋 기대값 (Ground Truth) <br> - 5가지 출력 유형 선택 <br> - 레퍼런스 텍스트 표시 | ⚙️ 모델 설정 <br> - 체크포인트 선택 + 📂 <br> - 비전/LLM 경로 + 📂 <br> - 모델 로드 버튼 <br> 💬 추론 결과 채팅 |
 
-![SDS-VLM Demo](docs/img/Demo screenshot.png)
+![SDS-VLM Demo](docs/img/demo_screenshot.png)
 
 ### 주요 기능
 
