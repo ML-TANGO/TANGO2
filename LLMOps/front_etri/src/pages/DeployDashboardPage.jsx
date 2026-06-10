@@ -328,13 +328,15 @@ function DeployDashboardPage() {
       });
       const { result, status, message, error } = res;
       if (status === STATUS_SUCCESS) {
-        const newWorkerList = result.deployment_running_worker.map((worker) => {
-          return {
-            label: ['worker.label', worker],
-            value: worker,
-            checked: true,
-          };
-        });
+        const newWorkerList = Array.isArray(result?.deployment_running_worker)
+          ? result.deployment_running_worker.map((worker) => {
+              return {
+                label: ['worker.label', worker],
+                value: worker,
+                checked: true,
+              };
+            })
+          : [];
         newWorkerList.unshift({
           label: 'all.label',
           value: 'all',
@@ -621,13 +623,15 @@ function DeployDashboardPage() {
       setLoading(false);
 
       if (status === STATUS_SUCCESS) {
-        const graphResult = result.graph_result?.map((d) => {
-          const newData = { ...d };
-          const { gpu_resource: gpuResources } = d;
-          const gpuRes = gpuResources[0];
-          newData.average_util_gpu = gpuRes ? gpuRes.average_util_gpu : 0;
-          return newData;
-        });
+        const graphResult = Array.isArray(result?.graph_result)
+          ? result.graph_result.map((d) => {
+              const newData = { ...d };
+              const { gpu_resource: gpuResources } = d;
+              const gpuRes = Array.isArray(gpuResources) ? gpuResources[0] : null;
+              newData.average_util_gpu = gpuRes ? gpuRes.average_util_gpu : 0;
+              return newData;
+            })
+          : [];
         setChartData(graphResult);
         setHistoryGraphData(result.graph_result);
         setSearchResultInfoData(result.total_info);

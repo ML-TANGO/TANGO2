@@ -652,10 +652,12 @@ function DeployWorkerDashboardPage() {
         ],
       };
 
-      const gpuPer = Object.values(result.gpus);
-      Object.keys(gpuHistory).forEach((gpus, i) => {
-        const { utils_gpu, memory_used_ratio, memory_used, memory_total } =
-          gpuPer[i];
+      const gpuPer = result?.gpus ? Object.values(result.gpus) : [];
+      const gpuHistoryKeys = gpuHistory ? Object.keys(gpuHistory) : [];
+      gpuHistoryKeys.forEach((gpus, i) => {
+        const gpuObj = gpuPer[i] || {};
+        const { utils_gpu = 0, memory_used_ratio = 0, memory_used = 0, memory_total = 0 } =
+          gpuObj;
         const gpuUtilData = [
           {
             id: 'GPU Util',
@@ -675,7 +677,8 @@ function DeployWorkerDashboardPage() {
             data: [],
           },
         ];
-        gpuHistory[gpus].forEach((gpu, idx) => {
+        const historyList = Array.isArray(gpuHistory[gpus]) ? gpuHistory[gpus] : [];
+        historyList.forEach((gpu, idx) => {
           const { x, memory_used, util_gpu, util_memory } = gpu;
           gpuUtilData[0].data[idx] = {
             x,

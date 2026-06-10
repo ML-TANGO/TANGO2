@@ -64,7 +64,7 @@ export default function OutsideWarn() {
 
   return (
     <Prompt
-      when={isEqual && !isHistoryAllow} // isDiff가 true일 때만 동작
+      when={false}
       message={(location) => handlePromptMessage(location, handleLeavePopup)}
     />
   );

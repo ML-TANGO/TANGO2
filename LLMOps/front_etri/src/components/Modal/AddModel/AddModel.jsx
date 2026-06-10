@@ -49,8 +49,17 @@ const menuOptions = [
 // value=1 Hugging Face / value=0 GenAI Platform / value=2 External Training (외부 협력기관 컨테이너)
 const accessTypeOptions = [
   {
-    label: 'Hugging Face',
+    label: 'Single',
     value: 1,
+    labelStyle: {
+      fontSize: '14px',
+      fontFamily: 'SpoqaM',
+      marginTop: '2px',
+    },
+  },
+  {
+    label: 'Multimodal',
+    value: 'multimodal',
     labelStyle: {
       fontSize: '14px',
       fontFamily: 'SpoqaM',
@@ -81,6 +90,7 @@ const calFooterMessage = (
   modelName,
   type,
   huggingData,
+  huggingData2,
   modelBaseData,
   versionData,
   firstNameInput,
@@ -102,6 +112,8 @@ const calFooterMessage = (
 
   if (type === 1) {
     if (!huggingData) return t('model.select.message');
+  } else if (type === 'multimodal') {
+    if (!huggingData || !huggingData2) return t('model.select.message');
   } else {
     if (!modelBaseData) return t('model.select.message');
     if (!versionData) return t('version.select.warning.message');
@@ -143,6 +155,7 @@ const AddModel = ({ data, type }) => {
   const [externalManifestKey, setExternalManifestKey] = useState('');
   const [externalManifestsLoading, setExternalManifestsLoading] = useState(false);
   const [huggingList, setHuggingList] = useState(null);
+  const [huggingList2, setHuggingList2] = useState(null);
   const [modelBaseList, setModelBaseList] = useState([]);
   const [versionList, setVersionList] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -153,6 +166,17 @@ const AddModel = ({ data, type }) => {
   });
 
   const [huggingData, setHuggingData] = useState({
+    keyword: '',
+    token: '',
+    private: 0,
+    selectedModel: null,
+    selectedOption: {
+      label: 'Public',
+      value: 'public',
+    },
+  });
+
+  const [huggingData2, setHuggingData2] = useState({
     keyword: '',
     token: '',
     private: 0,
@@ -190,11 +214,18 @@ const AddModel = ({ data, type }) => {
   };
 
   // hugging list 선택
-  const onSelectHugging = (name) => {
-    setHuggingData((prev) => ({
-      ...prev,
-      selectedModel: name,
-    }));
+  const onSelectHugging = (name, id) => {
+    if (id === 'second') {
+      setHuggingData2((prev) => ({
+        ...prev,
+        selectedModel: name,
+      }));
+    } else {
+      setHuggingData((prev) => ({
+        ...prev,
+        selectedModel: name,
+      }));
+    }
   };
 
   // model base select 함수
@@ -240,7 +271,7 @@ const AddModel = ({ data, type }) => {
 
   // 모달 Radio
   const radioBtnHandler = (value) => {
-    const radioType = parseInt(value, 10);
+    const radioType = value === 'multimodal' ? 'multimodal' : parseInt(value, 10);
     setLoadType(radioType);
     if (radioType === 0) {
       getModelBaseModel();
@@ -251,37 +282,53 @@ const AddModel = ({ data, type }) => {
 
   const { t } = useTranslation();
 
-  const onClickHuggingSubMenu = (selectedItem) => {
+  const onClickHuggingSubMenu = (selectedItem, id) => {
     if (selectedItem.value === 'private') {
-      openTokenModal(selectedItem);
+      openTokenModal(selectedItem, id);
     } else {
-      setHuggingData((prev) => ({
-        ...prev,
-        private: 0,
-        selectedOption: selectedItem,
-      }));
+      if (id === 'second') {
+        setHuggingData2((prev) => ({
+          ...prev,
+          private: 0,
+          selectedOption: selectedItem,
+        }));
+      } else {
+        setHuggingData((prev) => ({
+          ...prev,
+          private: 0,
+          selectedOption: selectedItem,
+        }));
+      }
     }
   };
 
   /**
    * Hugging Token 모달
    */
-  const openTokenModal = async (selectedItem) => {
+  const openTokenModal = async (selectedItem, id) => {
     dispatch(
       openModal({
         modalType: 'HUGGINGFACE_TOKEN_MODAL',
         modalData: {
           onSubmit: (token) => {
-            // postHuggingFace({ token });
-            setHuggingData((prev) => ({
-              ...prev,
-              token,
-              private: 1,
-              selectedOption: selectedItem,
-            }));
+            if (id === 'second') {
+              setHuggingData2((prev) => ({
+                ...prev,
+                token,
+                private: 1,
+                selectedOption: selectedItem,
+              }));
+            } else {
+              setHuggingData((prev) => ({
+                ...prev,
+                token,
+                private: 1,
+                selectedOption: selectedItem,
+              }));
+            }
             dispatch(closeModal('HUGGINGFACE_TOKEN_MODAL'));
           },
-          postHuggingFace,
+          postHuggingFace: id === 'second' ? postHuggingFace2 : postHuggingFace,
         },
       }),
     );
@@ -326,6 +373,18 @@ const AddModel = ({ data, type }) => {
         training_type: 'external',
         external_manifest_name: name,
         external_manifest_version: version,
+      };
+    } else if (loadType === 'multimodal') {
+      body = {
+        workspace_id: workspaceId,
+        description: modelData.modelDesc,
+        model_name: modelData.modelName,
+        huggingface_token: huggingData.token || huggingData2.token || '',
+        huggingface_model_id: `${huggingData.selectedModel?.name},${huggingData2.selectedModel?.name}`,
+        private: huggingData.private || huggingData2.private || 0,
+        access: selectedAccessType,
+        create_user_id: owner.value,
+        users_id: userList.map(({ value }) => value),
       };
     } else {
       body = {
@@ -396,6 +455,39 @@ const AddModel = ({ data, type }) => {
     [huggingData.private, huggingData.token],
   );
 
+  // POST Hugging Data 2
+  const postHuggingFace2 = useCallback(
+    async ({ keyword = '', token } = {}) => {
+      const body = {
+        model_name: keyword,
+        huggingface_token: token ? token : huggingData2.token,
+        private: huggingData2.private,
+      };
+
+      setHuggingData2((prev) => ({
+        ...prev,
+        keyword,
+      }));
+      const response = await callApi({
+        url: `models/option/huggingface-models`,
+        method: 'post',
+        body,
+      });
+
+      const { status, result, message, error } = response;
+      if (status === STATUS_SUCCESS) {
+        const formattedResult = result.map((item) => ({
+          name: item,
+        }));
+
+        setHuggingList2(formattedResult);
+      } else {
+        errorToastMessage(error, message);
+      }
+    },
+    [huggingData2.private, huggingData2.token],
+  );
+
   // GET ModelBase - model
   const getModelBaseModel = async ({ keyword = '' } = {}) => {
     setModelBaseData((prev) => ({
@@ -453,7 +545,8 @@ const AddModel = ({ data, type }) => {
   useEffect(() => {
     loadModalComponent('HUGGINGFACE_TOKEN_MODAL');
     postHuggingFace();
-  }, [postHuggingFace]);
+    postHuggingFace2();
+  }, [postHuggingFace, postHuggingFace2]);
 
   useEffect(() => {
     const fetchOwnerList = async () => {
@@ -461,12 +554,15 @@ const AddModel = ({ data, type }) => {
       const { result, status } = res;
 
       if (status === STATUS_SUCCESS) {
+        const ownerListResult = result?.list || result || [];
         setOwnerList(
-          result.map(({ id, name }) => ({ value: id, label: name })),
+          (Array.isArray(ownerListResult) ? ownerListResult : []).map(({ id, name }) => ({ value: id, label: name })),
         );
-        const loginUser = result.filter(({ name }) => name === userName)[0];
+        const loginUser = (Array.isArray(ownerListResult) ? ownerListResult : []).filter(({ name }) => name === userName)[0];
 
-        setOwner({ label: loginUser.name, value: loginUser.id });
+        if (loginUser) {
+          setOwner({ label: loginUser.name, value: loginUser.id });
+        }
       }
     };
     fetchOwnerList();
@@ -477,6 +573,7 @@ const AddModel = ({ data, type }) => {
     modelData.modelName,
     loadType,
     huggingData.selectedModel,
+    huggingData2.selectedModel,
     modelBaseData.selectedModel,
     versionData.selectedModel,
     firstNameInput,
@@ -583,6 +680,38 @@ const AddModel = ({ data, type }) => {
                   menuOptions={menuOptions}
                   title={{
                     first: 'model.label',
+                  }}
+                  t={t}
+                />
+                <span className={cx('hugging-message')}>
+                  {t('finetuning.huggingface.message')}
+                </span>
+              </>
+            )}
+            {loadType === 'multimodal' && (
+              <>
+                <SearchComponent
+                  key='multimodal'
+                  firstData={huggingData}
+                  firstList={huggingList}
+                  secondData={huggingData2}
+                  secondList={huggingList2}
+                  firstSelectedItem={huggingData.selectedModel}
+                  secondSelectedItem={huggingData2.selectedModel}
+                  onClick={onSelectHugging}
+                  onSearchFirst={postHuggingFace}
+                  onSearchSecond={postHuggingFace2}
+                  onClickSubMenu={onClickHuggingSubMenu}
+                  noSelectedDataMessage={{
+                    first: 'modelSelect.message',
+                    second: 'modelSelect.message',
+                  }}
+                  firstIcon={IconSmile}
+                  secondIcon={IconSmile}
+                  menuOptions={menuOptions}
+                  title={{
+                    first: 'Model 1',
+                    second: 'Model 2',
                   }}
                   t={t}
                 />

@@ -1,5 +1,6 @@
 // i18n
 import { useTranslation } from 'react-i18next';
+import { useHistory } from 'react-router-dom';
 
 import { convertLocalTime } from '@src/datetimeUtils';
 
@@ -43,8 +44,19 @@ const calIcon = (type) => {
 
 function Card({ data, openTest, wid }) {
   const { t } = useTranslation();
+  const history = useHistory();
+
+  // Safe destructuring of status
+  let statusVal = '';
+  if (data && data.status) {
+    if (typeof data.status === 'object' && data.status.status) {
+      statusVal = data.status.status;
+    } else if (typeof data.status === 'string') {
+      statusVal = data.status;
+    }
+  }
+
   const {
-    status: { status },
     type,
     name,
     create_datetime: date,
@@ -54,7 +66,8 @@ function Card({ data, openTest, wid }) {
     input_type: inputType,
   } = data;
 
-  const active = status === 'running' || status === 'active';
+  const status = statusVal;
+  const active = status === 'running' || status === 'active' || status === 'Running';
 
   const calCardType = (type) => {
     if (type === 'custom') return 'Custom';
@@ -70,7 +83,9 @@ function Card({ data, openTest, wid }) {
       className={cx('card', status)}
       onClick={() => {
         sessionStorage.setItem(`services/${wid}_scroll_pos`, window.scrollY);
-        if (status === 'running' || status === 'active') {
+        if (data.id === 'sds-eval') {
+          history.push(`/user/workspace/${wid}/services/sds`);
+        } else if (status === 'running' || status === 'active' || status === 'Running') {
           openTest(data);
         }
       }}

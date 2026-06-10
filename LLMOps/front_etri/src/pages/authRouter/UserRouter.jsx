@@ -186,6 +186,7 @@ const UserFederatedLearningPage = lazy(() =>
 );
 const UserDeploymentPage = lazy(() => import('@src/pages/UserDeploymentPage'));
 const UserServicePage = lazy(() => import('@src/pages/UserServicePage'));
+const SdsEvaluationPage = lazy(() => import('@src/pages/SdsEvaluationPage'));
 const UserTestPage = lazy(() => import('@src/pages/UserTestPage'));
 const NotFoundPage = lazy(() => import('@src/pages/NotFoundPage'));
 const UserDatasetPreprocessPage = lazy(() =>
@@ -782,6 +783,16 @@ const routeArr = [
     activeIcon: IconLnbTestBlue,
     platform: 'flightbase',
     render: (props) => <UserServicePage {...props} />,
+  },
+  {
+    name: 'SdsEvaluation',
+    path: '/user/workspace/:id/services/sds',
+    exact: true,
+    disabled: true,
+    icon: IconLnbTestGray,
+    activeIcon: IconLnbTestBlue,
+    platform: 'flightbase',
+    render: (props) => <SdsEvaluationPage {...props} />,
   },
   {
     name: 'Deployment',

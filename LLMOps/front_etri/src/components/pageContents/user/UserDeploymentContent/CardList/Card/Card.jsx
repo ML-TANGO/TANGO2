@@ -318,7 +318,7 @@ function Card({ data, refreshData }) {
                     title={t('template.deployment.warning.Tooltip.message')}
                     contents={
                       <ul className={cx('tooltip-error-list')}>
-                        {item_deleted.map((item, idx) => (
+                        {Array.isArray(item_deleted) && item_deleted.map((item, idx) => (
                           <li key={idx}>{t(item)}</li>
                         ))}
                       </ul>

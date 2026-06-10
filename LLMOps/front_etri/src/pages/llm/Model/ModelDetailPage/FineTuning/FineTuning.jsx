@@ -46,6 +46,31 @@ const Tlabel = {
   'Warmup Steps': 'warmupSteps',
 };
 
+const TlabelMM = {
+  'Epochs': 'numberOfEpochs',
+  'Learning Rate': 'learningRate',
+  'Batch Size': 'perDeviceTrainBatchSize',
+  'Warmup Steps': 'warmupSteps',
+  'Cutoff Length': 'cutoffLength',
+  'Gradient Accumulation Steps': 'gradientAccumulationSteps',
+};
+
+const stage1Fields = [
+  { label: 'Epochs', valueTitle: 'numberOfEpochs', min: 1, max: 100, step: 1 },
+  { label: 'Learning Rate', valueTitle: 'learningRate', min: 0.000001, max: 0.01, step: 0.000001 },
+  { label: 'Batch Size', valueTitle: 'perDeviceTrainBatchSize', min: 1, max: 64, step: 1 },
+  { label: 'Warmup Steps', valueTitle: 'warmupSteps', min: 0, max: 10000, step: 100 },
+];
+
+const stage2Fields = [
+  { label: 'Epochs', valueTitle: 'numberOfEpochs', min: 1, max: 100, step: 1 },
+  { label: 'Learning Rate', valueTitle: 'learningRate', min: 0.000001, max: 0.01, step: 0.000001 },
+  { label: 'Batch Size', valueTitle: 'perDeviceTrainBatchSize', min: 1, max: 64, step: 1 },
+  { label: 'Warmup Steps', valueTitle: 'warmupSteps', min: 0, max: 10000, step: 100 },
+  { label: 'Cutoff Length', valueTitle: 'cutoffLength', min: 64, max: 4096, step: 64 },
+  { label: 'Gradient Accumulation Steps', valueTitle: 'gradientAccumulationSteps', min: 1, max: 32, step: 1 },
+];
+
 const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
   const { userName } = useSelector((state) => state.auth, shallowEqual);
 
@@ -61,6 +86,7 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
   // Router Hooks
   const dispatch = useDispatch();
 
+  const [infoData, setInfoData] = useState(null);
   const [fineTuningData, setFineTuningData] = useState(null);
   const [fineTuningType, setFineTuningType] = useState(1);
   const [graphData, setGraphData] = useState(null);
@@ -81,6 +107,48 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
     bit: false,
     lora: true,
   });
+
+  const [stage1, setStage1] = useState({
+    numberOfEpochs: 3,
+    learningRate: 0.00003,
+    perDeviceTrainBatchSize: 8,
+    warmupSteps: 150,
+  });
+  const [stage1Origin, setStage1Origin] = useState({
+    numberOfEpochs: 3,
+    learningRate: 0.00003,
+    perDeviceTrainBatchSize: 8,
+    warmupSteps: 150,
+  });
+
+  const [stage2, setStage2] = useState({
+    numberOfEpochs: 5,
+    learningRate: 0.00005,
+    perDeviceTrainBatchSize: 4,
+    warmupSteps: 100,
+    cutoffLength: 1024,
+    gradientAccumulationSteps: 2,
+  });
+  const [stage2Origin, setStage2Origin] = useState({
+    numberOfEpochs: 5,
+    learningRate: 0.00005,
+    perDeviceTrainBatchSize: 4,
+    warmupSteps: 100,
+    cutoffLength: 1024,
+    gradientAccumulationSteps: 2,
+  });
+
+  const [stage2CheckValue, setStage2CheckValue] = useState({
+    bit: false,
+    lora: true,
+  });
+
+  const [stage1Enabled, setStage1Enabled] = useState(true);
+  const [stage2Enabled, setStage2Enabled] = useState(true);
+
+  const isMultimodal = useMemo(() => {
+    return infoData?.load_type === 'multimodal';
+  }, [infoData]);
 
   const handleRangeBar = useCallback(
     (e, label) => {
@@ -110,6 +178,38 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
     },
     [dispatch, originRange],
   );
+
+  const handleStage1RangeBar = useCallback((e, label) => {
+    const key = TlabelMM[label];
+    setStage1((prev) => ({
+      ...prev,
+      [key]: +e.target.value,
+    }));
+  }, []);
+
+  const handleStage1Refresh = useCallback((label) => {
+    const key = TlabelMM[label];
+    setStage1((prev) => ({
+      ...prev,
+      [key]: stage1Origin[key],
+    }));
+  }, [stage1Origin]);
+
+  const handleStage2RangeBar = useCallback((e, label) => {
+    const key = TlabelMM[label];
+    setStage2((prev) => ({
+      ...prev,
+      [key]: +e.target.value,
+    }));
+  }, []);
+
+  const handleStage2Refresh = useCallback((label) => {
+    const key = TlabelMM[label];
+    setStage2((prev) => ({
+      ...prev,
+      [key]: stage2Origin[key],
+    }));
+  }, [stage2Origin]);
 
   // get commit id
   const getCommitId = (loadId) => {
@@ -167,31 +267,59 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
   };
 
   const runFineTuning = async ({ instanceId, instanceCount, gpuCount }) => {
+    const isMM = infoData?.load_type === 'multimodal';
+
+    const fine_tuning_config = {
+      fine_tuning_type: fineTuningType === 1 ? 'basic' : 'advanced', // basic, advanced
+      used_jonathan_accelerator: accelator ? 1 : 0,
+    };
+
+    if (fineTuningType === 1) {
+      if (isMM) {
+        if (stage1Enabled) {
+          fine_tuning_config.stage1_config = {
+            num_train_epochs: stage1.numberOfEpochs,
+            learning_rate: stage1.learningRate,
+            per_device_train_batch_size: stage1.perDeviceTrainBatchSize,
+            warmup_steps: stage1.warmupSteps,
+          };
+        }
+        if (stage2Enabled) {
+          fine_tuning_config.stage2_config = {
+            num_train_epochs: stage2.numberOfEpochs,
+            learning_rate: stage2.learningRate,
+            per_device_train_batch_size: stage2.perDeviceTrainBatchSize,
+            warmup_steps: stage2.warmupSteps,
+            cutoff_length: stage2.cutoffLength,
+            gradient_accumulation_steps: stage2.gradientAccumulationSteps,
+            load_in_8bit: stage2CheckValue.bit ? 1 : 0,
+            used_lora: stage2CheckValue.lora ? 1 : 0,
+          };
+        }
+      } else {
+        fine_tuning_config.cutoff_length = range.cutoffLength;
+        fine_tuning_config.gradient_accumulation_steps = range.gradientAccumulationSteps;
+        fine_tuning_config.learning_rate = range.learningRate;
+        fine_tuning_config.load_in_8bit = rangeCheckValue.bit ? 1 : 0;
+        fine_tuning_config.num_train_epochs = range.numberOfEpochs;
+        fine_tuning_config.used_lora = rangeCheckValue.lora ? 1 : 0;
+        fine_tuning_config.warmup_steps = range.warmupSteps;
+      }
+    } else {
+      const configFile = fineTuningData?.model_config_file_list[0] ?? {
+        file_name: '',
+      };
+      fine_tuning_config.config_file_name = configFile.file_name;
+    }
+
     const body = {
       model_id: parseInt(modelId, 10),
       model_dataset_id: fineTuningData?.model_datasets[0]?.id ?? 0,
       instance_id: instanceId,
       instance_count: instanceCount,
       gpu_count: gpuCount,
-      fine_tuning_config: {
-        cutoff_length: range.cutoffLength,
-        fine_tuning_type: fineTuningType === 1 ? 'basic' : 'advanced', // basic, advanced
-        gradient_accumulation_steps: range.gradientAccumulationSteps,
-        learning_rate: range.learningRate,
-        load_in_8bit: rangeCheckValue.bit ? 1 : 0,
-        num_train_epochs: range.numberOfEpochs,
-        used_lora: rangeCheckValue.lora ? 1 : 0,
-        warmup_steps: range.warmupSteps,
-        used_jonathan_accelerator: accelator ? 1 : 0,
-      },
+      fine_tuning_config,
     };
-
-    if (fineTuningType === 2) {
-      const configFile = fineTuningData?.model_config_file_list[0] ?? {
-        file_name: '',
-      };
-      body.fine_tuning_config.config_file_name = configFile.file_name;
-    }
 
     if (commitId) {
       // 커밋불러오기로한 아이디값 가져오기
@@ -262,6 +390,16 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
     async (fineTuningStatus) => {
       //* 처음에만 get 해서 redux;
 
+      const summaryResponse = await callApi({
+        url: `models/fine-tuning/summary?model_id=${modelId}`,
+        method: 'get',
+      });
+      let currentInfoData = null;
+      if (summaryResponse.status === STATUS_SUCCESS) {
+        setInfoData(summaryResponse.result);
+        currentInfoData = summaryResponse.result;
+      }
+
       const response = await callApi({
         url: `models/fine-tuning?model_id=${modelId}`,
         method: 'get',
@@ -278,41 +416,74 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
           return;
         }
 
-        const { fine_tuning_config: config } = result;
+        const isMM = currentInfoData?.load_type === 'multimodal';
 
-        const getRangeData = {
-          numberOfEpochs: config.num_train_epochs,
-          gradientAccumulationSteps: config.gradient_accumulation_steps,
-          cutoffLength: config.cutoff_length,
-          learningRate: config.learning_rate,
-          warmupSteps: config.warmup_steps,
-        };
+        if (isMM) {
+          const s1 = result?.stage1_config;
+          const s2 = result?.stage2_config;
 
-        if (!accelatorDirty) {
-          setAccelator(config?.used_jonathan_accelerator);
+          const getStage1Data = {
+            numberOfEpochs: s1?.num_train_epochs ?? 3,
+            learningRate: s1?.learning_rate ?? 0.00003,
+            perDeviceTrainBatchSize: s1?.per_device_train_batch_size ?? 8,
+            warmupSteps: s1?.warmup_steps ?? 150,
+          };
+
+          const getStage2Data = {
+            numberOfEpochs: s2?.num_train_epochs ?? 5,
+            learningRate: s2?.learning_rate ?? 0.00005,
+            perDeviceTrainBatchSize: s2?.per_device_train_batch_size ?? 4,
+            warmupSteps: s2?.warmup_steps ?? 100,
+            cutoffLength: s2?.cutoff_length ?? 1024,
+            gradientAccumulationSteps: s2?.gradient_accumulation_steps ?? 2,
+          };
+
+          setStage1(getStage1Data);
+          setStage1Origin(getStage1Data);
+          setStage2(getStage2Data);
+          setStage2Origin(getStage2Data);
+          setStage2CheckValue({
+            bit: s2?.load_in_8bit ?? 0,
+            lora: s2?.used_lora ?? 1,
+          });
+        } else {
+          const config = result?.fine_tuning_config;
+
+          const getRangeData = {
+            numberOfEpochs: config?.num_train_epochs ?? 3,
+            gradientAccumulationSteps: config?.gradient_accumulation_steps ?? 1,
+            cutoffLength: config?.cutoff_length ?? 512,
+            learningRate: config?.learning_rate ?? 0.00005,
+            warmupSteps: config?.warmup_steps ?? 100,
+          };
+
+          if (!accelatorDirty) {
+            setAccelator(config?.used_jonathan_accelerator ?? 0);
+          }
+
+          dispatch(
+            handleSetModelState({
+              type: 'range',
+              range: getRangeData,
+            }),
+          );
+
+          dispatch(
+            handleSetModelState({
+              type: 'originRange',
+              originRange: getRangeData,
+            }),
+          );
+
+          setRangeCheckValue({
+            bit: config?.load_in_8bit ?? 0,
+            lora: config?.used_lora ?? 0,
+          });
         }
 
-        dispatch(
-          handleSetModelState({
-            type: 'range',
-            range: getRangeData,
-          }),
-        );
-
-        dispatch(
-          handleSetModelState({
-            type: 'originRange',
-            originRange: getRangeData,
-          }),
-        );
-
-        setRangeCheckValue({
-          bit: config.load_in_8bit,
-          lora: config.used_lora,
-        });
-
         if (!userChangedFineTuningType) {
-          setFineTuningType(config.fine_tuning_type === 'basic' ? 1 : 2);
+          const config = result?.fine_tuning_config;
+          setFineTuningType(config?.fine_tuning_type === 'basic' ? 1 : 2);
         }
       } else {
         errorToastMessage(error, message);
@@ -389,12 +560,16 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
 
   // 실행 버튼 활성화 비활성화 체크
   const runValidate = useCallback(() => {
+    const isMM = infoData?.load_type === 'multimodal';
+    const hasActiveStage = !isMM || fineTuningType !== 1 || stage1Enabled || stage2Enabled;
+
     const conditions = [
       fineTuningData?.model_datasets?.length > 0, // 학습 데이터 선택 여부
       !(
         fineTuningType === 2 &&
         fineTuningData?.model_config_file_list?.length === 0
       ), // config 선택 여부
+      hasActiveStage, // Multimodal basic 일 때, 적어도 하나의 stage가 켜져 있어야 함
     ];
 
     setBtnDisable((prev) => ({
@@ -405,6 +580,9 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
     fineTuningData?.model_config_file_list,
     fineTuningData?.model_datasets?.length,
     fineTuningType,
+    infoData?.load_type,
+    stage1Enabled,
+    stage2Enabled,
   ]);
 
   useEffect(() => {
@@ -552,59 +730,180 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
               />
               <div className={cx('border')}></div>
               {fineTuningType === 1 && (
-                <div className={cx('flex-16')}>
-                  {rangeBarTitle.map(
-                    ({ label, valueTitle, min, max, step }) => {
-                      return (
-                        <ModelRangeBar
-                          label={label}
-                          value={range[valueTitle]}
-                          min={min}
-                          max={max}
-                          step={step}
+                isMultimodal ? (
+                  <div className={cx('stage-container')}>
+                    {/* Stage 1: Projector Training */}
+                    <div className={cx('stage-card', !stage1Enabled && 'stage-card-disabled')}>
+                      <div className={cx('stage-header')}>
+                        <Checkbox
+                          checked={stage1Enabled}
+                          onChange={() => {
+                            if (!runningStatus) {
+                              setStage1Enabled((prev) => !prev);
+                            }
+                          }}
                           disabled={runningStatus}
-                          onChange={handleRangeBar}
-                          handleRefresh={handleRefreshRangeBar}
                         />
-                      );
-                    },
-                  )}
-                  <div
-                    className={cx(
-                      'range-checkbox',
-                      runningStatus && 'disabled',
-                    )}
-                    style={{ margin: '24px 0 14px 0' }}
-                  >
-                    Load in 8bit
-                    <Checkbox
-                      checked={rangeCheckValue.bit}
-                      onChange={() => {
-                        if (!runningStatus) {
-                          handleRangeCheckbox('bit');
-                        }
-                      }}
-                      disabled={runningStatus}
-                    />
+                        <span className={cx('stage-badge')}>1</span>
+                        <span className={cx('stage-title')}>Stage 1: Projector Training</span>
+                      </div>
+                      <div className={cx('stage-desc')}>
+                        Train the projection layer connecting vision encoder and LLM
+                      </div>
+                      <div className={cx('flex-16')}>
+                        {stage1Fields.map(({ label, valueTitle, min, max, step }) => (
+                          <ModelRangeBar
+                            key={`stage1-${valueTitle}`}
+                            label={label}
+                            value={stage1[valueTitle]}
+                            min={min}
+                            max={max}
+                            step={step}
+                            disabled={runningStatus || !stage1Enabled}
+                            onChange={handleStage1RangeBar}
+                            handleRefresh={handleStage1Refresh}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Arrow / Divider */}
+                    <div className={cx('stage-divider')}>
+                      <span className={cx('arrow')}>↓</span>
+                    </div>
+
+                    {/* Stage 2: LLM Training (LoRA) */}
+                    <div className={cx('stage-card', !stage2Enabled && 'stage-card-disabled')}>
+                      <div className={cx('stage-header')}>
+                        <Checkbox
+                          checked={stage2Enabled}
+                          onChange={() => {
+                            if (!runningStatus) {
+                              setStage2Enabled((prev) => !prev);
+                            }
+                          }}
+                          disabled={runningStatus}
+                        />
+                        <span className={cx('stage-badge')}>2</span>
+                        <span className={cx('stage-title')}>Stage 2: LLM Fine-tuning (LoRA)</span>
+                      </div>
+                      <div className={cx('stage-desc')}>
+                        Fine-tune the LLM with LoRA adapters
+                      </div>
+                      <div className={cx('flex-16')}>
+                        {stage2Fields.map(({ label, valueTitle, min, max, step }) => (
+                          <ModelRangeBar
+                            key={`stage2-${valueTitle}`}
+                            label={label}
+                            value={stage2[valueTitle]}
+                            min={min}
+                            max={max}
+                            step={step}
+                            disabled={runningStatus || !stage2Enabled}
+                            onChange={handleStage2RangeBar}
+                            handleRefresh={handleStage2Refresh}
+                          />
+                        ))}
+                        <div
+                          className={cx(
+                            'range-checkbox',
+                            (runningStatus || !stage2Enabled) && 'disabled',
+                          )}
+                          style={{ margin: '12px 0 6px 0' }}
+                        >
+                          Load in 8bit
+                          <Checkbox
+                            checked={stage2CheckValue.bit}
+                            onChange={() => {
+                              if (!runningStatus && stage2Enabled) {
+                                setStage2CheckValue((prev) => ({
+                                  ...prev,
+                                  bit: !prev.bit,
+                                }));
+                              }
+                            }}
+                            disabled={runningStatus || !stage2Enabled}
+                          />
+                        </div>
+                        <div
+                          className={cx(
+                            'range-checkbox',
+                            (runningStatus || !stage2Enabled) && 'disabled',
+                          )}
+                        >
+                          Use LoRA
+                          <Checkbox
+                            checked={stage2CheckValue.lora}
+                            onChange={() => {
+                              if (!runningStatus && stage2Enabled) {
+                                setStage2CheckValue((prev) => ({
+                                  ...prev,
+                                  lora: !prev.lora,
+                                }));
+                              }
+                            }}
+                            disabled={runningStatus || !stage2Enabled}
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div
-                    className={cx(
-                      'range-checkbox',
-                      runningStatus && 'disabled',
+                ) : (
+                  <div className={cx('flex-16')}>
+                    {rangeBarTitle.map(
+                      ({ label, valueTitle, min, max, step }) => {
+                        return (
+                          <ModelRangeBar
+                            key={`single-${valueTitle}`}
+                            label={label}
+                            value={range[valueTitle]}
+                            min={min}
+                            max={max}
+                            step={step}
+                            disabled={runningStatus}
+                            onChange={handleRangeBar}
+                            handleRefresh={handleRefreshRangeBar}
+                          />
+                        );
+                      },
                     )}
-                  >
-                    Use LoRA
-                    <Checkbox
-                      checked={rangeCheckValue.lora}
-                      onChange={() => {
-                        if (!runningStatus) {
-                          handleRangeCheckbox('lora');
-                        }
-                      }}
-                      disabled={runningStatus}
-                    />
+                    <div
+                      className={cx(
+                        'range-checkbox',
+                        runningStatus && 'disabled',
+                      )}
+                      style={{ margin: '24px 0 14px 0' }}
+                    >
+                      Load in 8bit
+                      <Checkbox
+                        checked={rangeCheckValue.bit}
+                        onChange={() => {
+                          if (!runningStatus) {
+                            handleRangeCheckbox('bit');
+                          }
+                        }}
+                        disabled={runningStatus}
+                      />
+                    </div>
+                    <div
+                      className={cx(
+                        'range-checkbox',
+                        runningStatus && 'disabled',
+                      )}
+                    >
+                      Use LoRA
+                      <Checkbox
+                        checked={rangeCheckValue.lora}
+                        onChange={() => {
+                          if (!runningStatus) {
+                            handleRangeCheckbox('lora');
+                          }
+                        }}
+                        disabled={runningStatus}
+                      />
+                    </div>
                   </div>
-                </div>
+                )
               )}
               {fineTuningType === 2 && (
                 <>

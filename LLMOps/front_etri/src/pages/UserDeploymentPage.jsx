@@ -6,6 +6,7 @@ import { useHistory, useRouteMatch } from 'react-router-dom';
 
 // Components
 import UserDeploymentContent from '@src/components/pageContents/user/UserDeploymentContent';
+import NewDeploymentWizard from '@src/components/Modal/NewDeploymentWizard';
 
 import { startPath } from '@src/store/modules/breadCrumb';
 // Actions
@@ -43,6 +44,7 @@ function UserDeploymentPage() {
   const [deploymentList, setDeploymentList] = useState([]); // 배포 목록 값 (Array)
   const [selectedFilter, setSelectedFilter] = useState([]); // 체크된 필터 목록 (Array<{ label: string, value: string }>)
   const [keywordFilter, setKeywordFilter] = useState(''); // 검색 필터 (string)
+  const [isWizardOpen, setIsWizardOpen] = useState(false); // wizard 모달 노출 여부 (boolean)
 
   const { t } = useTranslation();
 
@@ -122,9 +124,11 @@ function UserDeploymentPage() {
 
     const { result, status, message, error } = response;
     if (status === STATUS_SUCCESS) {
-      const resultList = result.map((d) => {
-        return { ...d };
-      });
+      const resultList = Array.isArray(result)
+        ? result.map((d) => {
+            return { ...d };
+          })
+        : [];
       const sortList = sortDescending(resultList.reverse(), 'bookmark');
       setDeploymentList(sortList);
       setIsLoading(false);
@@ -234,26 +238,33 @@ function UserDeploymentPage() {
    * 배포 생성 모달 열기
    */
   const openCreateDeploymentModal = () => {
-    dispatch(
-      openModal({
-        modalType: 'CREATE_DEPLOYMENT',
-        modalData: {
-          submit: {
-            text: 'create.label',
-            func: () => refreshData(),
-          },
-          cancel: {
-            text: 'cancel.label',
-          },
-          workspaceId,
-          // groupData,
-          // defaultGroupName,
-          // defaultTemplateName,
-          // getTemplateList: () => getTemplateList(),
-          // getGroupData: () => getGroupData(),
-        },
-      }),
-    );
+    setIsWizardOpen(true);
+  };
+
+  /**
+   * 배포 생성 제출 처리
+   */
+  const handleDeploySubmit = async (formData) => {
+    const response = await callApi({
+      url: `deployments?workspace_id=${workspaceId}`,
+      method: 'POST',
+      body: {
+        deployment_name: formData.deployment_name,
+        model_name: formData.model_name,
+        convert_type: formData.convert_type,
+        target_device: formData.target_device,
+        workspace_id: workspaceId,
+      },
+    });
+
+    const { status, message, error } = response;
+    if (status === STATUS_SUCCESS) {
+      setIsWizardOpen(false);
+      refreshData();
+      return true;
+    }
+    errorToastMessage(error, message);
+    return false;
   };
 
   /**
@@ -311,26 +322,33 @@ function UserDeploymentPage() {
   }, [workspaceId]);
 
   return (
-    <UserDeploymentContent
-      watchFilterViewType={watchFilterViewType}
-      deploymentList={listFilter(deploymentList)}
-      isLoading={isLoading}
-      openCreateDeploymentModal={openCreateDeploymentModal}
-      openCreateApiCodeModal={openCreateApiCodeModal}
-      refreshData={refreshData}
-      // groupData={groupData}
-      // getGroupData={getGroupData}
-      // getTemplateData={getTemplateData}
-      // clickedGroupId={clickedGroupId}
-      // setClickedGroupId={setClickedGroupId}
-      // templateData={templateData}
-      // defaultGroupName={defaultGroupName}
-      // defaultTemplateName={defaultTemplateName}
-      // onClickNoGroup={onClickNoGroup}
-      // noGroupSelectedStatus={noGroupSelectedStatus}
-      // onClickGroupList={onClickGroupList}
-      // selectedGroupData={selectedGroupData}
-    />
+    <>
+      <UserDeploymentContent
+        watchFilterViewType={watchFilterViewType}
+        deploymentList={listFilter(deploymentList)}
+        isLoading={isLoading}
+        openCreateDeploymentModal={openCreateDeploymentModal}
+        openCreateApiCodeModal={openCreateApiCodeModal}
+        refreshData={refreshData}
+        // groupData={groupData}
+        // getGroupData={getGroupData}
+        // getTemplateData={getTemplateData}
+        // clickedGroupId={clickedGroupId}
+        // setClickedGroupId={setClickedGroupId}
+        // templateData={templateData}
+        // defaultGroupName={defaultGroupName}
+        // defaultTemplateName={defaultTemplateName}
+        // onClickNoGroup={onClickNoGroup}
+        // noGroupSelectedStatus={noGroupSelectedStatus}
+        // onClickGroupList={onClickGroupList}
+        // selectedGroupData={selectedGroupData}
+      />
+      <NewDeploymentWizard
+        isOpen={isWizardOpen}
+        onClose={() => setIsWizardOpen(false)}
+        onSubmit={handleDeploySubmit}
+      />
+    </>
   );
 }
 

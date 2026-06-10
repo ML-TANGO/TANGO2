@@ -106,13 +106,13 @@ const useDashboardSse = ({ workspaceId }) => {
     const connectSSE = () => {
       const handleErrorReset = (error) => {
         eventSourceRef.current.close();
-        toast.error('[SSE CONNECT ERROR] SSE 연결이 끊어졌습니다.');
+        console.warn('[SSE CONNECT ERROR] SSE 연결이 끊어졌습니다.');
         console.log('[SSE CONNECT ERROR] ', error);
 
         errorTimeout = setTimeout(() => {
           if (recount < 6) {
             recount++;
-            toast.error(
+            console.warn(
               `[${recount}번 연결 시도] SSE 연결을 다시 시도합니다. 최대 5번까지 시도합니다. 5번 실패 후 메뉴 페이지로 나가게 됩니다. `,
             );
             connectSSE();

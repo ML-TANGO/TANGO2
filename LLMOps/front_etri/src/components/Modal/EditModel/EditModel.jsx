@@ -114,7 +114,8 @@ const onSelectUser = (setState, list) => {
 };
 
 const EditModel = ({ data, type }) => {
-  const { workspaceId, refresh, prevModelData } = data;
+  const { workspaceId, refresh, handleRefresh, prevModelData } = data;
+  const onRefresh = refresh || handleRefresh;
 
   const dispatch = useDispatch();
   const { auth } = useSelector((state) => ({
@@ -308,7 +309,7 @@ const EditModel = ({ data, type }) => {
       workspace_id: workspaceId,
       access: selectedAccessType,
       create_user_id: owner.value,
-      user_list: userList.map(({ value }) => value),
+      user_list: (Array.isArray(userList) ? userList : []).map(({ value }) => value),
       model_id: prevModelData?.id,
     };
 
@@ -321,7 +322,9 @@ const EditModel = ({ data, type }) => {
 
     if (status === STATUS_SUCCESS) {
       dispatch(closeModal('EDIT_MODEL'));
-      refresh();
+      if (typeof onRefresh === 'function') {
+        onRefresh();
+      }
     } else {
       errorToastMessage(error, message);
     }
@@ -353,7 +356,7 @@ const EditModel = ({ data, type }) => {
 
       const { status, result, message, error } = response;
       if (status === STATUS_SUCCESS) {
-        const formattedResult = result.map((item) => ({
+        const formattedResult = (Array.isArray(result) ? result : []).map((item) => ({
           name: item,
         }));
 
@@ -435,15 +438,16 @@ const EditModel = ({ data, type }) => {
       const { result, status } = res;
 
       if (status === STATUS_SUCCESS) {
-        const newList = result.map(({ id, name }) => ({
+        const ownerListResult = result?.list || result || [];
+        const newList = (Array.isArray(ownerListResult) ? ownerListResult : []).map(({ id, name }) => ({
           value: id,
           label: name,
         }));
 
-        const loginUser = result.filter(({ name }) => name === userName)[0];
+        const loginUser = (Array.isArray(ownerListResult) ? ownerListResult : []).filter(({ name }) => name === userName)[0];
 
         if (prevModelData) {
-          const prevSelectedUsers = prevModelData.users.map((v) => {
+          const prevSelectedUsers = (Array.isArray(prevModelData?.users) ? prevModelData.users : []).map((v) => {
             return {
               label: v.user_name,
               value: v.user_id,
@@ -468,7 +472,9 @@ const EditModel = ({ data, type }) => {
           setOwner(prevOwner);
           setSelectedAccessType(prevModelData.isAccess);
         } else {
-          setOwner({ label: loginUser.name, value: loginUser.id });
+          if (loginUser) {
+            setOwner({ label: loginUser.name, value: loginUser.id });
+          }
         }
       }
     };
@@ -490,7 +496,7 @@ const EditModel = ({ data, type }) => {
   useEffect(() => {
     if (prevModelData) {
       if (prevModelData.isAccess === 0 && prevModelData.users) {
-        const prevSelectedUsers = prevModelData.users.map((v) => {
+        const prevSelectedUsers = (Array.isArray(prevModelData?.users) ? prevModelData.users : []).map((v) => {
           return {
             label: v.user_name,
             value: v.user_id,
@@ -514,11 +520,11 @@ const EditModel = ({ data, type }) => {
       cancel={{
         text: t('cancel.label'),
       }}
-      validate={true}
+      validate={footerMessage === ''}
       isResize={true}
       isLoading={loading}
       isMinimize={true}
-      // footerMessage={footerMessage}
+      footerMessage={footerMessage}
     >
       <div className={cx('row')}>
         <InputBoxWithLabel
@@ -537,7 +543,7 @@ const EditModel = ({ data, type }) => {
             status={
               !isNameValidate && firstNameInput.current ? 'error' : 'default'
             }
-            isReadOnly={true}
+            isReadOnly={false}
             options={{ maxLength: 50 }}
             autoFocus={true}
             customStyle={{ fontSize: '14px' }}

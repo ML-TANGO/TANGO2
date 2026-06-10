@@ -57,12 +57,6 @@ const FamilySite = ({ t }) => {
           </li>
           <li
             className={cx('option_li')}
-            onClick={() => moveFamilySite('jonathan')}
-          >
-            {t('jonathanHomepage.label')}
-          </li>
-          <li
-            className={cx('option_li')}
             onClick={() => moveFamilySite('hugbot')}
           >
             {t('hugbotHomepage.label')}

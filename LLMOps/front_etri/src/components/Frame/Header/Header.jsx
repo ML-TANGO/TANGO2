@@ -18,7 +18,7 @@ import style from './Header.module.scss';
 const cx = classNames.bind(style);
 
 const SERVICE_LOGO =
-  import.meta.env.VITE_REACT_APP_SERVICE_LOGO || 'Jonathan Flightbase';
+  import.meta.env.VITE_REACT_APP_SERVICE_LOGO || 'Flightbase';
 /**
  * header 색이
  * 밝을 경우: VITE_REACT_APP_SERVICE_LOGO_IMG
@@ -26,7 +26,7 @@ const SERVICE_LOGO =
  */
 const SERVICE_LOGO_IMG =
   import.meta.env.VITE_REACT_APP_SERVICE_LOGO_IMG_WHITE ||
-  '/images/logo/BI_Jonathan_white.svg';
+  '/images/logo/BI_Flightbase_v.svg';
 const MODE = import.meta.env.VITE_REACT_APP_MODE?.toLowerCase();
 const IS_INTEGRATION = MODE === 'integration';
 // 아크릴 로고 (Powered by ACRYL)

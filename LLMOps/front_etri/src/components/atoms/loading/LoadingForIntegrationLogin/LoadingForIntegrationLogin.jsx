@@ -73,22 +73,16 @@ function LoadingForIntegrationLogin({ children }) {
       <div className={cx('center-box')}>
         <Loading customStyle={{ width: '90px', height: '76px' }} />
         <p className={cx('text')}>
-          지금 조나단 플랫폼으로 이동 중입니다.
+          지금 플랫폼으로 이동 중입니다.
           <br />
           잠시만 기다려주세요.
           <br />
           <br />
-          We're moving to the Jonathan platform now.
+          We're moving to the platform now.
           <br />
           Please wait a moment.
         </p>
       </div>
-      <img
-        className={cx('jf-footer-logo')}
-        src='/images/logo/BI_Jonathan.svg'
-        alt='JONATHAN logo'
-        width='278'
-      />
     </div>
   );
 }

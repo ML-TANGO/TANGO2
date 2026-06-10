@@ -31,7 +31,7 @@ function CardList({ deploymentList = [], onClickCard, refreshData }) {
   return (
     <div className={cx('card-list')}>
       {onClickCard && <CreateCard onClick={onClickCard} />}
-      {deploymentList.map((data, key) => (
+      {Array.isArray(deploymentList) && deploymentList.map((data, key) => (
         <Card data={data} key={key} refreshData={refreshData} />
       ))}
     </div>

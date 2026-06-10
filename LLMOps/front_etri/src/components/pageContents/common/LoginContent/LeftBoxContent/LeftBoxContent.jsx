@@ -11,10 +11,10 @@ import style from './LeftBoxContent.module.scss';
 const cx = classNames.bind(style);
 
 const MODE = import.meta.env.VITE_REACT_APP_MODE?.toLowerCase();
-const SERVICE_LOGO = import.meta.env.VITE_REACT_APP_SERVICE_LOGO || 'Jonathan';
+const SERVICE_LOGO = import.meta.env.VITE_REACT_APP_SERVICE_LOGO || 'TANGO';
 const SERVICE_LOGO_IMG =
   import.meta.env.VITE_REACT_APP_SERVICE_LOGO_IMG ||
-  '/images/logo/BI_Jonathan.svg';
+  '/images/logo/ETRI_TANGO_logo.svg';
 
 /**
  * 로그인 페이지 로고 영역 컴포넌트

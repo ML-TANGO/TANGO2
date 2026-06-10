@@ -118,7 +118,7 @@ function AdminDeploymentPage() {
                 // customStyle={{}}
               />
             </div>
-            {status === 'error' && workerList > 0 && (
+            {status === 'error' && Array.isArray(workerList) && workerList.length > 0 && (
               <Tooltip
                 contents={workerList.map(
                   ({ tool_type: toolType, name: toolName, id, status }) => {
@@ -486,7 +486,7 @@ function AdminDeploymentPage() {
    * 체크박스 선택된 데이터 삭제
    */
   const onDelete = async () => {
-    const ids = selectedRows.map(({ id }) => id);
+    const ids = Array.isArray(selectedRows) ? selectedRows.map(({ id }) => id) : [];
     const response = await callApi({
       url: `deployments/${ids.join(',')}`,
       method: 'delete',

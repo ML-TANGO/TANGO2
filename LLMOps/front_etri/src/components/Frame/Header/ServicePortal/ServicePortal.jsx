@@ -44,12 +44,6 @@ const familySiteList = [
     disabled: false,
   },
   {
-    label: 'Jonathan',
-    link: 'https://jonathan.acryl.ai/',
-    img: '/images/logo/BI_Jonathan_only_text.svg',
-    disabled: false,
-  },
-  {
     label: 'Hugbot',
     link: 'https://hugbot.acryl.ai/',
     img: '/images/logo/logo-hugbot-basic-v.png',

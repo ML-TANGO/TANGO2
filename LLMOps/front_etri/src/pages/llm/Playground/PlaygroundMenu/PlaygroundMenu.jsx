@@ -40,32 +40,34 @@ const breadCrumbHandler = (dispatch) => {
 const getPlaygroundInfo = async (workspace_id, setPlaygroundInfo) => {
   const { result, message, status, error } = await getPlayground(workspace_id);
   if (status === STATUS_SUCCESS) {
-    const transformList = result.map((el) => {
-      const {
-        id,
-        name,
-        description,
-        owner,
-        update_datetime,
-        create_datetime,
-        bookmark,
-        access,
-        status,
-        users,
-      } = el;
-      return {
-        id,
-        title: name,
-        subTitle: description,
-        constructor: owner,
-        updateTime: update_datetime,
-        createTime: create_datetime,
-        isBookMark: bookmark,
-        isAccess: access,
-        userList: users,
-        status,
-      };
-    });
+    const transformList = Array.isArray(result)
+      ? result.map((el) => {
+          const {
+            id,
+            name,
+            description,
+            owner,
+            update_datetime,
+            create_datetime,
+            bookmark,
+            access,
+            status,
+            users,
+          } = el;
+          return {
+            id,
+            title: name,
+            subTitle: description,
+            constructor: owner,
+            updateTime: update_datetime,
+            createTime: create_datetime,
+            isBookMark: bookmark,
+            isAccess: access,
+            userList: users,
+            status,
+          };
+        })
+      : [];
     const sortArr = transformList.sort((a, b) => b.isBookMark - a.isBookMark);
     setPlaygroundInfo(sortArr);
     return transformList;
@@ -197,12 +199,14 @@ const PlaygroundMenu = () => {
         setPlaygroundInfo,
       ).then((res) => res.find((item) => item.id === id));
 
-      const transformUserList = userList.map((info) => {
-        return {
-          label: info.user_name,
-          value: info.user_id,
-        };
-      });
+      const transformUserList = Array.isArray(userList)
+        ? userList.map((info) => {
+            return {
+              label: info.user_name,
+              value: info.user_id,
+            };
+          })
+        : [];
 
       dispatch(
         openModal({

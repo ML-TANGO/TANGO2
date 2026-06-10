@@ -147,7 +147,19 @@ const ModelInfo = memo(function ModelInfo({ navList, data, ...rest }) {
         <div className={cx('label')}>{t('model.label')}</div>
 
         <div className={cx('value')}>
-          {infoData?.commit_model_name ? (
+          {infoData?.load_type === 'multimodal' ? (
+            <div className={cx('multimodal-box')}>
+              <div className={cx('header-row')}>
+                <img src={IconSmile} alt='icon' />
+                <span className={cx('model')}>Multimodal</span>
+              </div>
+              <div className={cx('model-list')}>
+                {infoData?.huggingface_model_id?.split(',').map((model, idx) => (
+                  <span key={idx}>Model {idx + 1}: {model.trim()}</span>
+                ))}
+              </div>
+            </div>
+          ) : infoData?.commit_model_name ? (
             <div className={cx('model-box')}>
               <img src={GroupIcon} alt='icon' />
               <span className={cx('model')}>GenAI Platform</span>

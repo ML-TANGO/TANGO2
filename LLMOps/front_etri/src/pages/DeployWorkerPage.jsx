@@ -80,16 +80,17 @@ function DeployWorkerPage() {
     });
     const { status, result, message, error } = response;
     if (status === STATUS_SUCCESS) {
-      setOriginData(result);
+      const resultList = Array.isArray(result) ? result : [];
+      setOriginData(resultList);
       if (searchKey.value === 'all') {
-        const filteredList = result.filter(
+        const filteredList = resultList.filter(
           (data) =>
             String(data['deployment_worker_id']).includes(keyword) ||
             String(data['description']).includes(keyword),
         );
         setTableData(filteredList);
       } else {
-        const filteredList = result.filter((data) =>
+        const filteredList = resultList.filter((data) =>
           String(data[searchKey.value]).includes(keyword),
         );
         setTableData(filteredList);
@@ -259,7 +260,9 @@ function DeployWorkerPage() {
    */
   const workerDeleteClickHandler = async (checkedData) => {
     let checkedId = [];
-    checkedData.map((data) => checkedId.push(data.deployment_worker_id));
+    if (Array.isArray(checkedData)) {
+      checkedData.map((data) => checkedId.push(data.deployment_worker_id));
+    }
     const response = await callApi({
       url: `deployments/worker`,
       method: 'delete',
@@ -384,13 +387,14 @@ function DeployWorkerPage() {
     const { result, status, message, error } = response;
 
     if (status === STATUS_SUCCESS) {
-      setWorkerList([...result]);
+      const resultList = Array.isArray(result) ? result : [];
+      setWorkerList([...resultList]);
       if (
         Object.keys(overviewList).length === 0 &&
-        Object.keys(result).length > 0
+        resultList.length > 0
       ) {
         let initializeOverview = {};
-        result.forEach((worker) => {
+        resultList.forEach((worker) => {
           if (worker && worker.worker_status.status !== 'stop') {
             initializeOverview = {
               ...initializeOverview,
