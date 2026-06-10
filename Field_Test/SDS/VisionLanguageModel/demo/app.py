@@ -10,7 +10,9 @@ demo/app.py — VisionLanguageModelV2 SDS 데모 웹 애플리케이션
 레이아웃:
   [상단 좌] 이미지 / CSV 테이블     [상단 우] 데이터셋 탐색기 (+ 프레임 선택)
   ─────────────────────────────────────────────────────────────────────
-  [하단 좌] 기대값 (출력유형 선택)   [하단 우] 모델 설정 + 채팅
+  [중단 좌] 기대값 (출력유형 선택)   [중단 우] 모델 설정 + 출력유형
+  ─────────────────────────────────────────────────────────────────────
+  [하단] 채팅 (전체 너비)
 
 실행:
   python demo/app.py
@@ -38,7 +40,7 @@ import gradio as gr
 DEFAULT_DATASET_PATH = os.path.normpath(os.path.join(VLM_DIR, "../dataset/20260227"))
 CHECKPOINTS_ROOT     = os.path.join(VLM_DIR, "checkpoints")
 DEFAULT_VISION_MODEL = "openai/clip-vit-large-patch14-336"
-DEFAULT_LLM_MODEL    = "/home/ywlee/Llama-3.1-8B-Instruct"
+DEFAULT_LLM_MODEL    = "meta-llama/Llama-3.1-8B-Instruct"
 
 # ── 출력 유형 ─────────────────────────────────────────────────────────────────
 # 구 포맷 (20260227): 5종
@@ -79,7 +81,7 @@ PROMPT_MAP = {
         "속도 조치, 방향 조치, 적용 근거(COLREG 조항)를 포함하시오.",
     NEW_OUTPUT_TYPE:
         "사진과 AIS 데이터를 바탕으로 현재 해상상황을 묘사하고 "
-        "COLREG 규칙에 따른 올바른 항해 조력 메시지를 생성해줘.",
+        "COLREG 규칙에 따른 올바른 항해 조력 메시지를 생성하시오.",
 }
 
 CSV_KO_COLUMNS = {
@@ -180,7 +182,7 @@ def format_spice_result(result: dict | None, hypothesis: str = "") -> str:
 
     f_score = result.get("F", 0.0)
     detail  = result.get("detail", {})
-    lines   = ["### 📊 SPICE 평가 결과", f"**전체 F-score: `{f_score:.4f}`**"]
+    lines   = ['<br><br>', "### 📊 SPICE 평가 결과", f"**전체 F-score: `{f_score:.4f}`**"]
 
     if hypothesis and _is_korean(hypothesis):
         lines.append(
@@ -196,22 +198,17 @@ def format_spice_result(result: dict | None, hypothesis: str = "") -> str:
         "Count": "개수", "Size": "크기",
     }
 
-    rows = []
-    for cat in cat_order:
-        c = detail.get(cat)
-        if not c:
-            continue
-        pr = c.get("pr", 0.0)
-        re = c.get("re", 0.0)
-        f  = c.get("f",  0.0)
-        rows.append(f"| {cat_kr.get(cat, cat)} | {pr:.3f} | {re:.3f} | {f:.3f} |")
+    # 존재하는 카테고리만 수집
+    present = [(cat_kr.get(c, c), detail[c]) for c in cat_order if detail.get(c)]
 
-    if rows:
-        lines += [
-            "",
-            "| 카테고리 | Precision | Recall | F-score |",
-            "|---|---|---|---|",
-        ] + rows
+    if present:
+        col_names = [name for name, _ in present]
+        header    = "| 지표 | " + " | ".join(col_names) + " |"
+        sep       = "|---| " + " | ".join("---" for _ in present) + " |"
+        pr_row    = "| Precision | " + " | ".join(f"{d.get('pr', 0):.3f}" for _, d in present) + " |"
+        re_row    = "| Recall    | " + " | ".join(f"{d.get('re', 0):.3f}" for _, d in present) + " |"
+        f_row     = "| F-score   | " + " | ".join(f"{d.get('f',  0):.3f}" for _, d in present) + " |"
+        lines += ["", header, sep, pr_row, re_row, f_row]
 
     return "\n".join(lines)
 
@@ -673,40 +670,53 @@ def run_inference(
 
 def on_sample_change(dataset_path: str, sample_name: str, current_ot: str):
     """샘플 선택 시 포맷 감지 → 프레임 드롭다운 / 출력유형 / 이미지 / 기대값 일괄 갱신."""
+    _default_ot = OLD_OUTPUT_TYPES[0]
+    _empty = (
+        None, pd.DataFrame(),
+        gr.update(choices=[], value=None, visible=False),
+        gr.update(choices=OLD_OUTPUT_TYPES, value=_default_ot),
+        gr.update(choices=OLD_OUTPUT_TYPES, value=_default_ot),
+        "", _default_ot,
+    )
+
     if not sample_name:
-        return (
-            None, pd.DataFrame(),
-            gr.update(choices=[], value=None, visible=False),
-            gr.update(choices=OLD_OUTPUT_TYPES, value=OLD_OUTPUT_TYPES[0]),
-            gr.update(choices=OLD_OUTPUT_TYPES, value=OLD_OUTPUT_TYPES[0]),
-            "",
-        )
+        return _empty
 
-    sample_dir = os.path.join(dataset_path.strip(), sample_name)
-    fmt = _detect_fmt(sample_dir)
+    try:
+        sample_dir = os.path.join(dataset_path.strip(), sample_name)
+        fmt = _detect_fmt(sample_dir)
 
-    if fmt == "new":
-        frames = _list_frames(sample_dir)
-        frame  = frames[0] if frames else None
-        img, df = load_sample(dataset_path, sample_name, frame)
-        expected = load_expected(dataset_path, sample_name, NEW_OUTPUT_TYPE, frame)
+        if fmt == "new":
+            frames = _list_frames(sample_dir)
+            frame  = frames[0] if frames else None
+            img, df = load_sample(dataset_path, sample_name, frame)
+            expected = load_expected(dataset_path, sample_name, NEW_OUTPUT_TYPE, frame)
+            return (
+                img, df,
+                gr.update(choices=frames, value=frame, visible=True),
+                gr.update(choices=NEW_OUTPUT_TYPES, value=NEW_OUTPUT_TYPE),
+                gr.update(choices=NEW_OUTPUT_TYPES, value=NEW_OUTPUT_TYPE),
+                expected, NEW_OUTPUT_TYPE,
+            )
+        else:
+            ot = current_ot if current_ot in OLD_OUTPUT_TYPES else _default_ot
+            img, df  = load_sample(dataset_path, sample_name)
+            expected = load_expected(dataset_path, sample_name, ot)
+            return (
+                img, df,
+                gr.update(choices=[], value=None, visible=False),
+                gr.update(choices=OLD_OUTPUT_TYPES, value=ot),
+                gr.update(choices=OLD_OUTPUT_TYPES, value=ot),
+                expected, ot,
+            )
+    except Exception as exc:
+        err_df = pd.DataFrame({"오류": [str(exc)]})
         return (
-            img, df,
-            gr.update(choices=frames, value=frame, visible=True),
-            gr.update(choices=NEW_OUTPUT_TYPES, value=NEW_OUTPUT_TYPE),
-            gr.update(choices=NEW_OUTPUT_TYPES, value=NEW_OUTPUT_TYPE),
-            expected,
-        )
-    else:
-        ot = current_ot if current_ot in OLD_OUTPUT_TYPES else OLD_OUTPUT_TYPES[0]
-        img, df  = load_sample(dataset_path, sample_name)
-        expected = load_expected(dataset_path, sample_name, ot)
-        return (
-            img, df,
+            None, err_df,
             gr.update(choices=[], value=None, visible=False),
-            gr.update(choices=OLD_OUTPUT_TYPES, value=ot),
-            gr.update(choices=OLD_OUTPUT_TYPES, value=ot),
-            expected,
+            gr.update(choices=OLD_OUTPUT_TYPES, value=_default_ot),
+            gr.update(choices=OLD_OUTPUT_TYPES, value=_default_ot),
+            f"❌ 샘플 로드 실패: {exc}", _default_ot,
         )
 
 
@@ -732,17 +742,16 @@ CUSTOM_CSS = """
     .section-title { font-size: 1rem; font-weight: 600; margin-bottom: 4px; }
     .csv-table { font-size: 0.82rem; }
     #expected-box textarea { font-size: 0.85rem; line-height: 1.6; }
-    #chat-col { border-left: 1px solid #e2e8f0; padding-left: 12px; }
 """
 
 
 def build_ui():
     with gr.Blocks(title="VLM SDS Demo") as demo:
 
-        gr.Markdown("# 🚢 VisionLanguageModel SDS 데모")
+        gr.Markdown("# 🚢 ETRI Vessel Agent (SDS-VLM)", elem_classes="section-title")
         gr.Markdown(
-            "선박 자율항행 지원을 위한 Vision-Language Model 추론 데모입니다.  \n"
-            "지원 포맷: **20260227** (구 포맷) / **20250922·20251031** (신 포맷 — 프레임 선택 가능)"
+            "선박 자율항행 지원을 위한 추론 데모입니다.  \n"
+            "Aivenautics 데이터셋 지원 포맷: **20250922·20251031** (구 포맷 — 프레임 선택 가능) / **20260227** (신 포맷)"
         )
 
         # ── 상단: 이미지/CSV + 탐색기 ──────────────────────────────────────────
@@ -777,6 +786,7 @@ def build_ui():
                         path_file_explorer = gr.FileExplorer(
                             root_dir="/home",
                             glob="**",
+                            ignore_glob="**/.*",
                             file_count="single",
                             label="데이터셋 디렉토리 선택",
                             height=240,
@@ -796,7 +806,7 @@ def build_ui():
                 frame_dd = gr.Dropdown(
                     choices=[],
                     value=None,
-                    label="프레임 선택 (신 포맷)",
+                    label="프레임 선택 (구 포맷)",
                     visible=False,
                 )
 
@@ -830,7 +840,7 @@ def build_ui():
                     with gr.Row():
                         checkpoint_dd = gr.Dropdown(
                             choices=get_checkpoint_choices(),
-                            value=None,
+                            value=get_checkpoint_choices()[0],
                             label="체크포인트 디렉토리 (projector.bin / LoRA 자동 감지)",
                             scale=4,
                         )
@@ -841,6 +851,7 @@ def build_ui():
                             ckpt_file_explorer = gr.FileExplorer(
                                 root_dir="/home",
                                 glob="**",
+                                ignore_glob="**/.*",
                                 file_count="single",
                                 label="체크포인트 디렉토리 선택",
                                 height=240,
@@ -850,7 +861,7 @@ def build_ui():
                     with gr.Row():
                         vision_input = gr.Textbox(
                             value=DEFAULT_VISION_MODEL,
-                            label="비전 모델 경로",
+                            label="비전 모델 경로 (기본값: 허깅페이스에서 다운로드)",
                             scale=4,
                         )
                         vision_browse_btn = gr.Button("📂", scale=0, min_width=44, size="sm")
@@ -859,6 +870,7 @@ def build_ui():
                             vision_file_explorer = gr.FileExplorer(
                                 root_dir="/home",
                                 glob="**",
+                                ignore_glob="**/.*",
                                 file_count="single",
                                 label="비전 모델 디렉토리 선택",
                                 height=240,
@@ -868,7 +880,7 @@ def build_ui():
                     with gr.Row():
                         llm_input = gr.Textbox(
                             value=DEFAULT_LLM_MODEL,
-                            label="언어 모델 경로",
+                            label="언어 모델 경로 (기본값: 허깅페이스에서 다운로드)",
                             scale=4,
                         )
                         llm_browse_btn = gr.Button("📂", scale=0, min_width=44, size="sm")
@@ -877,6 +889,7 @@ def build_ui():
                             llm_file_explorer = gr.FileExplorer(
                                 root_dir="/home",
                                 glob="**",
+                                ignore_glob="**/.*",
                                 file_count="single",
                                 label="언어 모델 디렉토리 선택",
                                 height=240,
@@ -894,61 +907,90 @@ def build_ui():
                     label="채팅 출력 유형 (기대값과 연동됨)",
                 )
 
+        gr.Markdown("---")
+
+        # ── 채팅 패널 (전체 너비) ─────────────────────────────────────────────
+        with gr.Row():
+            with gr.Column():
+                gr.Markdown("### 💬 대화", elem_classes="section-title")
                 chatbot = gr.Chatbot(
                     label="대화",
-                    height=300,
+                    height=500,
                     avatar_images=(None, "🤖"),
                 )
-
                 prompt_input = gr.Textbox(
                     value=PROMPT_MAP[OLD_OUTPUT_TYPES[0]],
                     label="프롬프트 (편집 가능 — 비우면 출력 유형 기본값 사용)",
                     lines=3,
                 )
-
                 with gr.Row():
                     infer_btn = gr.Button("🚀 추론 실행", variant="primary", scale=3)
                     clear_btn = gr.Button("🗑️ 초기화", variant="secondary", scale=1)
 
         # ── Event bindings ─────────────────────────────────────────────────────
 
-        # 스캔
+        # Radio validation 우회용 State (choices 변경과 무관하게 항상 유효한 ot 문자열 보관)
+        current_ot_state = gr.State(OLD_OUTPUT_TYPES[0])
+
+        _SAMPLE_OUTPUTS = [img_display, csv_display, frame_dd,
+                           output_type_radio, chat_type, expected_box, current_ot_state]
+
+        # 스캔 → 첫 샘플 자동 로드
+        def _scan_then_load(path, sample):
+            return on_sample_change(path, sample, None)
+
         scan_btn.click(
             fn=scan_dataset,
             inputs=[path_input],
             outputs=[sample_list, scan_status],
+        ).then(
+            fn=_scan_then_load,
+            inputs=[path_input, sample_list],
+            outputs=_SAMPLE_OUTPUTS,
         )
         path_input.submit(
             fn=scan_dataset,
             inputs=[path_input],
             outputs=[sample_list, scan_status],
+        ).then(
+            fn=_scan_then_load,
+            inputs=[path_input, sample_list],
+            outputs=_SAMPLE_OUTPUTS,
         )
 
         # 샘플 선택 → 포맷 감지 → 이미지/CSV/프레임DD/출력유형/기대값 일괄 갱신
+        # current_ot_state 사용 — Radio를 직접 읽으면 choices 불일치 시 validation 에러 발생
         sample_list.change(
             fn=on_sample_change,
-            inputs=[path_input, sample_list, output_type_radio],
-            outputs=[img_display, csv_display, frame_dd,
-                     output_type_radio, chat_type, expected_box],
+            inputs=[path_input, sample_list, current_ot_state],
+            outputs=_SAMPLE_OUTPUTS,
         )
 
         # 프레임 변경 (신 포맷) → 이미지 / CSV / 기대값 갱신
         frame_dd.change(
             fn=on_frame_change,
-            inputs=[path_input, sample_list, frame_dd, output_type_radio],
+            inputs=[path_input, sample_list, frame_dd, current_ot_state],
             outputs=[img_display, csv_display, expected_box],
         )
 
-        # 출력유형 변경 → 기대값 + 프롬프트 기본값 + chat_type 연동
+        # 출력유형 변경 → 기대값 + 프롬프트 기본값 + chat_type 연동 + State 동기화
+        def _on_ot_radio_change(path, sample, ot, frame):
+            chat, prompt, expected = on_output_type_change(path, sample, ot, frame)
+            return chat, prompt, expected, ot
+
+        def _on_chat_type_change(path, sample, ct, frame):
+            ot_radio, prompt, expected = on_output_type_change(path, sample, ct, frame)
+            return ot_radio, prompt, expected, ct
+
         output_type_radio.change(
-            fn=on_output_type_change,
+            fn=_on_ot_radio_change,
             inputs=[path_input, sample_list, output_type_radio, frame_dd],
-            outputs=[chat_type, prompt_input, expected_box],
+            outputs=[chat_type, prompt_input, expected_box, current_ot_state],
         )
         chat_type.change(
-            fn=on_output_type_change,
+            fn=_on_chat_type_change,
             inputs=[path_input, sample_list, chat_type, frame_dd],
-            outputs=[output_type_radio, prompt_input, expected_box],
+            outputs=[output_type_radio, prompt_input, expected_box, current_ot_state],
         )
 
         # ── 파일 탐색기 이벤트 ────────────────────────────────────────────────
@@ -1019,11 +1061,18 @@ def build_ui():
             outputs=[load_btn],
         )
 
-        # 추론 실행 (frame_dd 포함)
+        # 추론 실행 (frame_dd 포함): 버튼 비활성화 → 추론 → 버튼 복원
         infer_btn.click(
+            fn=lambda: gr.update(interactive=False, value="⏳ 추론 중..."),
+            outputs=[infer_btn],
+            queue=False,
+        ).then(
             fn=run_inference,
             inputs=[path_input, sample_list, chat_type, prompt_input, chatbot, frame_dd],
             outputs=[chatbot],
+        ).then(
+            fn=lambda: gr.update(interactive=True, value="🚀 추론 실행"),
+            outputs=[infer_btn],
         )
 
         # 채팅 초기화
@@ -1040,11 +1089,10 @@ def build_ui():
                 on_sample_change(dp, scan_dataset(dp)[0]["value"] or "", OLD_OUTPUT_TYPES[0])
                 if scan_dataset(dp)[0].get("value") else
                 (None, pd.DataFrame(), gr.update(visible=False),
-                 gr.update(), gr.update(), "")
+                 gr.update(), gr.update(), "", OLD_OUTPUT_TYPES[0])
             ),
             inputs=[path_input],
-            outputs=[img_display, csv_display, frame_dd,
-                     output_type_radio, chat_type, expected_box],
+            outputs=_SAMPLE_OUTPUTS,
         )
 
     return demo
