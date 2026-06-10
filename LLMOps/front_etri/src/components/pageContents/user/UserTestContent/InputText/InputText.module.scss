@@ -1,0 +1,13 @@
+@import '@src/styles/color.scss';
+
+.input-analysis {
+  flex: 1;
+  box-sizing: border-box;
+  margin-bottom: 36px;
+  .text-box {
+    width: 100%;
+    max-width: 760px;
+    min-width: 50%;
+    margin-bottom: 8px;
+  }
+}

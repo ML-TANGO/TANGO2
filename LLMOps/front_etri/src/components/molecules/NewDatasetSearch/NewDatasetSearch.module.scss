@@ -1,0 +1,144 @@
+@import '@src/styles/color.scss';
+
+.container {
+  font-size: 14px;
+
+  .header {
+    box-sizing: border-box;
+    height: 46px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0px 16px;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+    border: 1px solid $mono203;
+
+    &.data {
+      border-top: 0px;
+      border-radius: 0px;
+
+      &.close {
+        border-bottom-left-radius: 10px;
+        border-bottom-right-radius: 10px;
+      }
+    }
+
+    .left-side {
+      display: flex;
+      gap: 16px;
+    }
+
+    .type {
+      color: $mono205;
+      font-weight: 700;
+      width: 60px;
+    }
+
+    .text {
+      color: $mono207;
+    }
+
+    .place-holder {
+      color: $mono204;
+    }
+
+    &.disabled {
+      background-color: #f0f0f0;
+    }
+  }
+
+  .content-box {
+    border-left: 1px solid $mono203;
+    border-right: 1px solid $mono203;
+    border-bottom: 1px solid $mono203;
+
+    &.data {
+      &.open {
+        border-bottom-left-radius: 10px;
+        border-bottom-right-radius: 10px;
+      }
+    }
+
+    .data-search-box {
+      display: flex;
+      gap: 16px;
+      padding: 8px 16px;
+      background-color: $mono201;
+      border-bottom: 1px solid $mono203;
+    }
+
+    .input {
+      flex: 1;
+    }
+
+    .owner-box {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+
+      .text {
+        font-size: 12px;
+        color: $mono205;
+      }
+    }
+
+    .data-box {
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      padding: 8px 16px;
+      height: 200px;
+
+      .data-content {
+        width: 492px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0px 16px;
+        border: 1px solid $mono203;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        cursor: pointer;
+        // box-sizing: border-box;
+        &:hover {
+          background-color: $mono201;
+        }
+
+        &.back {
+          height: 47px;
+        }
+
+        &.selected {
+          border: 1px solid $blue104;
+          color: $blue104;
+          background-color: $blue101;
+        }
+
+        &.file-disabled {
+          cursor: not-allowed;
+        }
+
+        .left-side {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          color: $mono205;
+
+          &.selected {
+            color: $blue104;
+          }
+        }
+
+        .user {
+          color: $mono204;
+
+          &.selected {
+            color: $blue104;
+          }
+        }
+      }
+    }
+  }
+}

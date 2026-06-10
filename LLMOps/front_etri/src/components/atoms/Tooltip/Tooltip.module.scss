@@ -1,0 +1,20 @@
+@import '@src/styles/color.scss';
+
+.tooltip-wrap {
+  display: inline-block;
+  position: relative;
+  z-index: 99999;
+  pointer-events: auto;
+  .tooltip-btn {
+    & > img {
+      width: 24px;
+      height: 24px;
+      vertical-align: middle;
+      // cursor: url(../../../../../src/static/images/00-ic-mouse-pointer.svg),
+      //   auto;
+    }
+  }
+  .label {
+    vertical-align: middle;
+  }
+}

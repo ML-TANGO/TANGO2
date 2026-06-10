@@ -1,0 +1,92 @@
+{
+  "result": {
+    "active_list": {
+      "editor": [
+        {
+          "editor": "True",
+          "executor_id": "2",
+          "executor_name": "yeobie",
+          "jupyter_id": "5",
+          "pod_name": "h9bf81cb0a03ac925b1a60668b37b28e2",
+          "training_group": "h9bf81cb0a03ac925b1a60668b37b28e2",
+          "training_id": "3",
+          "training_name": "no-g2-hps",
+          "training_total_gpu": "0",
+          "training_type": "advanced",
+          "user": "yeobie",
+          "work_func_type": "jupyter",
+          "work_type": "training",
+          "workspace_id": "3",
+          "workspace_name": "robert-ws-no-g2"
+        },
+        {
+          "editor": "True",
+          "executor_id": "2",
+          "executor_name": "yeobie",
+          "jupyter_id": "31",
+          "pod_name": "had4b7ab49bad00e3dafdd5cb4f10ac9e",
+          "training_group": "had4b7ab49bad00e3dafdd5cb4f10ac9e",
+          "training_id": "16",
+          "training_name": "hps-pendingtttt",
+          "training_total_gpu": "0",
+          "training_type": "advanced",
+          "user": "yeobie",
+          "work_func_type": "jupyter",
+          "work_type": "training",
+          "workspace_id": "1",
+          "workspace_name": "robert-ws"
+        }
+      ],
+      "jupyter-gpu": [
+        {
+          "editor": "False",
+          "executor_id": "2",
+          "executor_name": "yeobie",
+          "jupyter_id": "10",
+          "pod_name": "hfa9ad5b5de5329c525e527485943aed0",
+          "training_group": "hfa9ad5b5de5329c525e527485943aed0",
+          "training_id": "5",
+          "training_name": "qqq",
+          "training_total_gpu": "1",
+          "training_type": "jupyter",
+          "user": "yeobie",
+          "work_func_type": "jupyter",
+          "work_type": "training",
+          "workspace_id": "1",
+          "workspace_name": "robert-ws"
+        }
+      ],
+      "job-cpu": [
+        {
+          "create_datetime": "1614765475.0",
+          "executor_id": "2",
+          "executor_name": "yeobie",
+          "job_group_index": "0",
+          "job_group_number": "0",
+          "job_id": "345",
+          "job_name": "tjjjt3",
+          "pod_name": "6935f39e36351eb914b7f52c51ffd30e-0",
+          "training_group": "robert-ws-no-g3-hps-test",
+          "training_id": "9",
+          "training_index": "0",
+          "training_mpi_port": "29000",
+          "training_name": "hps-test",
+          "training_total_gpu": "0",
+          "training_type": "advanced",
+          "user": "robert",
+          "work_func_type": "job",
+          "work_type": "training",
+          "workspace_id": "4",
+          "workspace_name": "robert-ws-no-g3"
+        }
+      ],
+      "job-gpu": [],
+      "hps-cpu": [],
+      "hps-gpu": [],
+      "deployment-cpu": [],
+      "deployment-gpu": []
+    }
+  },
+  "message": null,
+  "status": 1
+}

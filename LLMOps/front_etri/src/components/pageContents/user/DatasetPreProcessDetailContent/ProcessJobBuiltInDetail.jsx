@@ -1,0 +1,288 @@
+import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useDispatch } from 'react-redux';
+
+import { calcDuration, getKoreaTime } from '@src/datetimeUtils';
+
+import ProcessToolTip from '@src/components/Modal/AddDatasetPreprocess/ProcessToolTip';
+
+import { openConfirm } from '@src/store/modules/confirm';
+import { closeModal, openModal } from '@src/store/modules/modal';
+import { callApi, downloadBlob, STATUS_SUCCESS } from '@src/network';
+
+import GrayArrowClose from '/images/icon/gray-close-arrow.svg';
+import GrayDownloadIcon from '/images/icon/gray-download.svg';
+import GrayArrowOpen from '/images/icon/gray-open-arrow.svg';
+import StopIcon from '/images/icon/gray-stop.svg';
+import TrashIcon from '/images/icon/gray-trash.svg';
+import OrangeDownloadIcon from '/images/icon/orange-download.svg';
+import ErrorIcon from '/images/icon/yellow-error.svg';
+
+import classNames from 'classnames/bind';
+import style from './ProcessJobBuiltInDetail.module.scss';
+
+const cx = classNames.bind(style);
+
+const STATUS_TEXT = {
+  pending: '대기',
+  done: '종료',
+  running: '진행',
+  error: '오류',
+  installing: '설치중',
+};
+
+const ProcessJobBuiltInDetail = ({
+  id,
+  name,
+  createAt,
+  dataset,
+  startAt,
+  gpu,
+  parameter,
+  status,
+  isAllOpen,
+  dataPath,
+  canLogDownload,
+  endAt,
+}) => {
+  const { t } = useTranslation();
+  const dispatch = useDispatch();
+
+  const [isOpen, setIsOpen] = useState(true);
+
+  const openLogModal = (id) => {
+    if (status === 'pending') return;
+
+    dispatch(
+      openModal({
+        modalType: 'DATASET_PROCESS_SYSTEM_LOG',
+        modalData: {
+          submit: {
+            text: 'confirm.label',
+            func: () => {
+              dispatch(closeModal('DATASET_PROCESS_SYSTEM_LOG'));
+            },
+          },
+          cancel: {
+            text: 'cancel.label',
+          },
+          id,
+          status,
+          name,
+        },
+      }),
+    );
+  };
+
+  const deleteTool = async () => {
+    const { status, message, error } = await callApi({
+      url: 'preprocessing/jobs',
+      method: 'delete',
+      body: {
+        preprocessing_job_id: id,
+      },
+    });
+  };
+
+  const stopTool = async () => {
+    const { status, message, error } = await callApi({
+      url: 'preprocessing/jobs/stop',
+      method: 'post',
+      body: id,
+    });
+  };
+
+  const deleteToolConfirmPopup = () => {
+    dispatch(
+      openConfirm({
+        title: 'JOB 삭제',
+        content: 'deleteJobPopup.message',
+        submit: {
+          text: 'accept.label',
+          func: () => {
+            deleteTool();
+          },
+        },
+        cancel: {
+          text: 'cancel.label',
+        },
+        notice: t('deleteJobPopup.notice.message'),
+        contentCustomStyle: {
+          color: 'rgba(116, 116, 116, 1)',
+        },
+      }),
+    );
+  };
+
+  const downloadLog = async () => {
+    if (!canLogDownload) return;
+
+    const result = await downloadBlob({
+      url: `preprocessing/job/result-log/download?job_id=${id}`,
+    });
+
+    const blobUrl = window.URL.createObjectURL(
+      new Blob([result], { type: 'application/octet-stream' }),
+    );
+
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.setAttribute('download', `${name}-result-log.csv`);
+    document.body.appendChild(link);
+    link.click();
+    link.parentNode.removeChild(link);
+  };
+
+  useEffect(() => {
+    setIsOpen(isAllOpen);
+  }, [isAllOpen]);
+
+  return (
+    <div className={cx('container')}>
+      <div className={cx('basic-info', isOpen && 'open')}>
+        <img
+          className={cx('arrow')}
+          onClick={() => setIsOpen((prev) => !prev)}
+          width={24}
+          height={24}
+          src={isOpen ? GrayArrowOpen : GrayArrowClose}
+          alt='arrow'
+        />
+        <span
+          onClick={() => openLogModal(id)}
+          className={cx('system-log', status === 'pending' && 'disabled')}
+        >
+          시스템 로그
+        </span>
+        <div className={cx('info-box')}>
+          <div className={cx('first-info')}>
+            <div className={cx('status', status)}>{STATUS_TEXT[status]}</div>
+            <div className={cx('detail')}>
+              <span className={cx('name')}>{name}</span>
+              <span className={cx('time')}>{getKoreaTime(createAt)}</span>
+            </div>
+          </div>
+
+          <div className={cx('detail')}>
+            <span className={cx('type')}>데이터셋</span>
+            <span className={cx('value')}>{dataset}</span>
+          </div>
+          <div className={cx('detail')}>
+            <span className={cx('type')}>데이터</span>
+            <span className={cx('value')}>
+              {dataPath.length > 50 ? `${dataPath.slice(0, 47)}...` : dataPath}
+            </span>
+          </div>
+          <div className={cx('btn-box')}>
+            {status === 'done' && !canLogDownload && (
+              <ProcessToolTip
+                icon={ErrorIcon}
+                iconHeight={24}
+                iconWidth={24}
+                position={'down'}
+                iconStyle={{ transform: 'translateY(2px)' }}
+                customStyle={{
+                  height: '80px',
+                  width: '305px',
+                  padding: '16px',
+                  transform: 'translate(-240px, 10px)',
+                }}
+                contents={
+                  <div className={cx('tool-tip-content')}>
+                    <span>지정된 경로 내 파일이 없습니다.</span>
+                    <span>전처리 결과 파일의 유무를 확인해 주세요.</span>
+                  </div>
+                }
+              />
+            )}
+
+            <div
+              className={cx('process-download-btn', canLogDownload && 'orange')}
+              onClick={downloadLog}
+            >
+              <img
+                src={canLogDownload ? OrangeDownloadIcon : GrayDownloadIcon}
+                alt='icon'
+              />
+              <span>전처리 결과</span>
+            </div>
+
+            <img
+              className={cx('trash-btn')}
+              width={24}
+              height={24}
+              src={TrashIcon}
+              alt='trash'
+              onClick={deleteToolConfirmPopup}
+            />
+          </div>
+        </div>
+      </div>
+      {isOpen && (
+        <div className={cx('detail-info')}>
+          <div className={cx('stop-btn-box')}>
+            {status === 'running' && (
+              <img
+                className={cx('stop-btn')}
+                width={20}
+                height={20}
+                src={StopIcon}
+                alt='stop'
+                onClick={stopTool}
+              />
+            )}
+          </div>
+          <div className={cx('info-box')}>
+            {status === 'pending' && (
+              <div className={cx('pending-ui')}>
+                <img
+                  src='/images/icon/00-ic-orange-history.svg'
+                  alt='history'
+                  width={16}
+                  height={16}
+                />
+                <span>전처리를 실행하기 위한 GPU 자원 할당 대기 중입니다.</span>
+              </div>
+            )}
+            {status !== 'pending' && (
+              <div className={cx('detail', 'first-detail')}>
+                <span className={cx('type')}>전처리 실행 시간</span>
+                <span className={cx('value')}>
+                  {status === 'done' ? (
+                    <span>
+                      {`${getKoreaTime(startAt)} ~ ${getKoreaTime(endAt)}`}
+                      <br />
+                      <span className={cx('duration')}>
+                        {calcDuration(startAt, endAt)}
+                      </span>
+                    </span>
+                  ) : (
+                    `${getKoreaTime(startAt)} ~ `
+                  )}
+                </span>
+              </div>
+            )}
+
+            <div className={cx('detail')}>
+              <span className={cx('type')}>GPU 할당</span>
+              <span className={cx('value')}>{gpu} EA</span>
+            </div>
+            <div className={cx('detail', 'long-detail')}>
+              <span className={cx('type')}>전처리 실행 파라미터</span>
+              <span className={cx('value', 'paramValue')}>
+                {parameter.map(({ key, value }) => (
+                  <span className={cx('param')} key={key}>
+                    <span className={cx('param-key')}>{key}</span>
+                    <span className={cx('param-value')}>{value}</span>
+                  </span>
+                ))}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default ProcessJobBuiltInDetail;

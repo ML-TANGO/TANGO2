@@ -1,0 +1,17 @@
+@import '@src/styles/color.scss';
+
+.wrapper {
+  .label {
+    display: inline-block;
+    font-size: 16px;
+    font-family: SpoqaB;
+    color: $mono207;
+    margin-bottom: 8px;
+  }
+  .command-form {
+    padding: 24px;
+    border-radius: 4px;
+    background-color: rgba($blue104, 0.08);
+    box-sizing: border-box;
+  }
+}

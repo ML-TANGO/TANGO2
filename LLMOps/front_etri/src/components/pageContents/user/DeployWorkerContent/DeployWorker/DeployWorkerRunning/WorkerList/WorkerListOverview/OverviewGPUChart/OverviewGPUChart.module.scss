@@ -1,0 +1,47 @@
+@import '../WorkerListOverview.module.scss';
+
+.overview-chart {
+  &.gpu {
+    padding: $padding-xsmall 0 $padding-xsmall $padding-xsmall;
+  }
+  &.gpu {
+    display: flex;
+    .gpu-chart {
+      margin-right: 24px;
+      &:nth-last-child(1) {
+        margin-right: 0;
+      }
+      padding: 14px;
+      background-color: $mono200;
+      .chart-label {
+        display: flex;
+        justify-content: space-between;
+        & > label {
+          font-size: 13px;
+          color: $mono205;
+        }
+      }
+      .charts {
+        display: flex;
+        justify-content: space-between;
+        width: 555px;
+        & > div {
+          .chart-area {
+            width: 270px;
+            height: 161px;
+            outline: 1px solid $mono203;
+          }
+          & > label {
+            display: inline-block;
+            font-size: 13px;
+            color: $mono205;
+            margin-bottom: 4px;
+            .value {
+              color: $mono206;
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,59 @@
+@import '@src/styles/color.scss';
+
+.list-area {
+  margin-bottom: 67px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 12px;
+  height: 36px;
+  .title {
+    font-family: SpoqaM;
+    font-size: 20px;
+    color: $mono207;
+    margin: 0;
+  }
+}
+
+.loading-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 500px;
+}
+
+.list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  overflow-y: auto;
+  padding: 2px 4px 2px 2px;
+  margin-top: 33px;
+  & > li:last-child {
+    margin-bottom: 2px;
+  }
+}
+
+@media (max-width: 1270px) {
+  .list {
+    flex-wrap: wrap;
+    li {
+      margin-bottom: 16px;
+    }
+  }
+}
+
+.no-data {
+  width: 100%;
+  height: 200px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  font-size: 14px;
+  font-family: SpoqaM;
+  color: $mono207;
+}

@@ -1,0 +1,171 @@
+@import '../WorkerList.module.scss';
+$chart-background: rgba(100, 150, 255, 0.1);
+
+.overview {
+  display: flex;
+  background-color: $mono200;
+  border-radius: 16px;
+  border: 1px solid $blue103;
+  font-size: 16px;
+  border-top: none;
+  border-top-right-radius: 0px;
+  border-top-left-radius: 0px;
+
+  &.pending {
+    border: 1px solid $yellow304;
+    border-top: none;
+  }
+
+  &.installing {
+    border: 1px solid $lime603;
+    border-top: none;
+  }
+
+  &.error {
+    border: 1px solid $red502;
+    border-top: none;
+  }
+
+  .left {
+    width: 30%;
+    display: flex;
+    flex-direction: column;
+    padding: 0px $padding-small 0px 80px;
+
+    .info {
+      padding-top: $padding-xsmall;
+      & > span {
+        color: $mono206;
+        font-size: 13px;
+      }
+      .overview-info {
+        font-size: 13px;
+        font-family: SpoqaB;
+      }
+      .restart-cnt-label {
+        display: flex;
+        flex-direction: row;
+      }
+
+      .restart {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        font-size: 14px;
+        margin-bottom: 12px;
+      }
+
+      .notice {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        font-style: normal;
+        font-weight: 500;
+        color: $mono205;
+      }
+    }
+    .memo {
+      margin-top: 15px;
+      padding-bottom: $padding-xsmall;
+      font-size: 14px;
+      .memo-controler {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        & > span {
+          color: $mono206;
+        }
+        img & > label {
+          cursor: pointer;
+          font-weight: 500;
+          font-size: 12px;
+          width: 25px;
+          height: 21px;
+          color: $blue105;
+        }
+
+        .pencil-icon {
+          cursor: pointer;
+        }
+      }
+      .memo-output {
+        border-radius: 4px;
+        margin-top: 14px;
+        background-color: $mono200;
+        padding: $padding-xsmall $padding-xsmall 0 $padding-xsmall;
+        overflow: scroll;
+        height: 100px;
+        font-size: 14px;
+        &::-webkit-scrollbar {
+          width: 8px;
+        }
+        border: 1px solid $blue102;
+      }
+    }
+  }
+  .right {
+    flex: 1;
+    display: flex;
+    overflow-x: scroll;
+    .chart-wrap {
+      display: flex;
+      align-items: center;
+
+      .overview-chart {
+        &.ram,
+        &.cpu {
+          padding: $padding-xsmall $padding-xsmall $padding-xsmall
+            $padding-xsmall;
+        }
+        &.ram,
+        &.cpu {
+          border-radius: 3px;
+          margin-right: 24px;
+          background-color: $mono200;
+
+          .chart-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            & > label {
+              font-size: 13px;
+              color: $mono205;
+              margin-bottom: 4px;
+              .value {
+                color: $mono206;
+              }
+              & > img {
+                width: 19px;
+                margin-left: 3px;
+              }
+            }
+          }
+          .chart-area {
+            width: 460px;
+            height: 208px;
+            outline: 1px solid $blue102;
+          }
+        }
+      }
+    }
+  }
+}
+
+@media screen and (max-width: 1220px) {
+  .overview {
+    flex-direction: column;
+    .left {
+      width: auto;
+      border-bottom: 1px solid $mono203;
+      display: grid;
+      grid-template-columns: 50% 50%;
+      padding-top: $padding-xsmall;
+    }
+    .right {
+      width: auto;
+      padding-top: $padding-xsmall;
+      padding-bottom: $padding-xsmall;
+    }
+  }
+}

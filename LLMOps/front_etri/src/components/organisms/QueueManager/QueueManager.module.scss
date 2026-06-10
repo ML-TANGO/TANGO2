@@ -1,0 +1,52 @@
+@import '@src/styles/color.scss';
+
+.queue-manager {
+  padding: 0 20px 20px 20px;
+  .sticky {
+    position: sticky;
+    top: 0;
+    background-color: $mono200;
+    margin: 0;
+    padding: 0 0 10px 0;
+  }
+  .resource-status {
+    margin-bottom: 10px;
+  }
+  .active-box {
+    .box-title {
+      display: flex;
+      align-items: center;
+      margin: 0 0 10px 0;
+    }
+    .info {
+      font-size: 12px;
+      color: $mono206;
+      margin-left: 6px;
+    }
+    .list {
+      max-height: 250px;
+      margin-bottom: 20px;
+      background-color: $mono202;
+      padding: 10px;
+      border-radius: 4px;
+      overflow-y: auto;
+    }
+  }
+  .pending-box {
+    .box-title {
+      margin: 0 0 10px 0;
+    }
+    .info {
+      font-size: 12px;
+      color: $mono206;
+      margin-left: 6px;
+    }
+    .list {
+      max-height: 250px;
+      background-color: $mono202;
+      padding: 10px;
+      border-radius: 4px;
+      overflow-y: auto;
+    }
+  }
+}

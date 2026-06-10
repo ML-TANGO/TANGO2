@@ -1,0 +1,223 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useDispatch, useSelector } from 'react-redux';
+
+import { InputText, Textarea } from '@jonathan/ui-react';
+
+import FbRadio from '@src/components/atoms/input/Radio';
+import InputBoxWithLabel from '@src/components/molecules/InputBoxWithLabel';
+
+import { getRagsOwner, postRag, putRagDescription } from '@src/apis/llm/rag';
+import { closeModal } from '@src/store/modules/modal';
+import { STATUS_SUCCESS } from '@src/network';
+
+import GrayDropDown from '../BasicFeeOptionModal/GrayDropDown';
+import NewStyleModalFrame from '../NewStyleModalFrame';
+
+import { errorToastMessage } from '@src/utils';
+
+import classNames from 'classnames/bind';
+import style from './EditRag.module.scss';
+
+const accessOption = [
+  {
+    label: 'public',
+    value: 1,
+    labelStyle: { fontSize: '14px', fontFamily: 'SpoqaM' },
+  },
+  {
+    label: 'private',
+    value: 0,
+    labelStyle: { fontSize: '14px', fontFamily: 'SpoqaM' },
+  },
+];
+
+const cx = classNames.bind(style);
+const EditRag = ({ data, type }) => {
+  const { workspaceId, refresh, rag_item: prevRagItem } = data;
+  const dispatch = useDispatch();
+  const { auth } = useSelector((state) => ({
+    auth: state.auth,
+  }));
+
+  const { userName } = auth;
+
+  const [loadType, setLoadType] = useState(1); // 1 , 0
+  const [footerMessage, setFooterMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const [validate, setValidate] = useState(false);
+
+  const [modalData, setModalData] = useState({
+    ragName: prevRagItem?.name,
+    ragDesc: prevRagItem?.description,
+  });
+  const [selectedAccessType, setSelectedAccessType] = useState(1);
+  const [owner, setOwner] = useState({ label: '', value: '' });
+  const [ownerList, setOwnerList] = useState([]);
+
+  const handleOwner = ({ value, label }) => {
+    setOwner({ label, value });
+  };
+
+  const radioBtnHandler = (name, value) => {
+    setSelectedAccessType(Number(value));
+  };
+
+  const onSubmit = async () => {
+    setIsLoading(true);
+    // const response = await postRag({
+    //   workspace_id: workspaceId,
+    //   name: modalData.ragName,
+    //   description: modalData.ragDesc,
+    //   access: selectedAccessType,
+    //   owner_id: owner.value,
+    // });
+
+    const response = await putRagDescription({
+      ragId: prevRagItem?.id,
+      description: modalData.ragDesc,
+    });
+    const { result, error, message, status } = response;
+
+    if (status === STATUS_SUCCESS) {
+      dispatch(closeModal('EDIT_RAG'));
+      refresh();
+    } else {
+      errorToastMessage(error, message);
+    }
+    setIsLoading(false);
+  };
+
+  const onChange = (label, value) => {
+    setModalData((prevData) => ({
+      ...prevData,
+      [label === 'name' ? 'ragName' : 'ragDesc']: value,
+    }));
+  };
+
+  const { t } = useTranslation();
+
+  const firstInputRef = useRef(false);
+
+  useEffect(() => {
+    const fetchOwnerList = async () => {
+      const res = await getRagsOwner(workspaceId);
+      const { result, status } = res;
+
+      if (status === STATUS_SUCCESS) {
+        setOwnerList(
+          result.map(({ id, name }) => ({ value: id, label: name })),
+        );
+        const loginUser = result.filter(({ name }) => name === userName)[0];
+        setOwner({ label: loginUser.name, value: loginUser.id });
+      }
+    };
+
+    fetchOwnerList();
+  }, [userName, workspaceId]);
+
+  return (
+    <NewStyleModalFrame
+      title={t('editRag.label')}
+      type={type}
+      submit={{
+        text: t('onlyNext.label'),
+        func: () => {
+          onSubmit();
+        },
+      }}
+      cancel={{
+        text: t('cancel.label'),
+      }}
+      validate={true}
+      isLoading={isLoading}
+      isResize={true}
+      isMinimize={true}
+      footerMessage={t(footerMessage)}
+    >
+      <div className={cx('row')}>
+        <InputBoxWithLabel
+          labelText={t('ragName.label')}
+          labelSize='large'
+          disableErrorMsg
+        >
+          <InputText
+            placeholder={t('ragName.placeholder')}
+            onChange={(e) => {
+              firstInputRef.current = true;
+              onChange('name', e.target.value);
+            }}
+            name='workspace'
+            value={modalData.ragName}
+            status={!validate && firstInputRef.current ? 'error' : 'default'}
+            isReadOnly={type === 'EDIT_RAG'}
+            options={{ maxLength: 50 }}
+            autoFocus={true}
+            customStyle={{ fontSize: '14px' }}
+            disableLeftIcon
+            disableClearBtn
+          />
+        </InputBoxWithLabel>
+      </div>
+      <div className={cx('row')}>
+        <InputBoxWithLabel
+          labelText={t('ragDescription.label')}
+          optionalText={t('optional.label')}
+          labelSize='large'
+          optionalSize='medium'
+          disableErrorMsg
+        >
+          <Textarea
+            size='large'
+            placeholder={t('ragDescription.placeholder')}
+            value={modalData.ragDesc}
+            name='description'
+            onChange={(e) => onChange('desc', e.target.value)}
+            // error={descriptionError}
+            // status={descriptionError ? 'error' : 'default'}
+            customStyle={{ fontSize: '14px' }}
+            isShowMaxLength
+          />
+        </InputBoxWithLabel>
+      </div>
+      <div className={cx('bottom-box')}>
+        <div className={cx('content')}>
+          <InputBoxWithLabel
+            labelText={t('accessType.label')}
+            labelSize='large'
+            disableErrorMsg
+          >
+            <FbRadio
+              name='accessType'
+              options={accessOption}
+              value={selectedAccessType}
+              onChange={(e) => {
+                radioBtnHandler('accessType', e.currentTarget.value);
+              }}
+              isLabelColor
+            />
+          </InputBoxWithLabel>
+        </div>
+        <div className={cx('content')}>
+          <InputBoxWithLabel
+            labelText={t('owner.label')}
+            labelSize='large'
+            disableErrorMsg
+          >
+            <GrayDropDown
+              list={ownerList}
+              value={owner}
+              handleSelectOption={handleOwner}
+              placeholder={t('owner.placeholder')}
+              isCloseBorder={false}
+              listCustomStyle={{ maxHeight: '110px', overflow: 'auto' }}
+            />
+          </InputBoxWithLabel>
+        </div>
+      </div>
+    </NewStyleModalFrame>
+  );
+};
+
+export default EditRag;

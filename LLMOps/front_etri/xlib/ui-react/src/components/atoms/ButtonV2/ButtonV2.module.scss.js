@@ -1,0 +1,4 @@
+var style = {"button":"ButtonV2-module_button__s-05b","spinner-cont":"ButtonV2-module_spinner-cont__kB-Wt","content-cont":"ButtonV2-module_content-cont__pjkeq","icon":"ButtonV2-module_icon__cqEcp","isLoading":"ButtonV2-module_isLoading__wLSPg","solid":"ButtonV2-module_solid__KYrrX","blue":"ButtonV2-module_blue__2d4kd","white":"ButtonV2-module_white__e9hQ8","skyblue":"ButtonV2-module_skyblue__6tTjr","red":"ButtonV2-module_red__s1qok","lightRed":"ButtonV2-module_lightRed__4PzlD","gray":"ButtonV2-module_gray__2oMqh","outline":"ButtonV2-module_outline__Ub3Xc","clear":"ButtonV2-module_clear__YrY3C","with-box-shadow":"ButtonV2-module_with-box-shadow__zdJCM","s":"ButtonV2-module_s__WVbQf","m":"ButtonV2-module_m__eQl7p","l":"ButtonV2-module_l__XpJde","xl":"ButtonV2-module_xl__pq1Vm","icon-left":"ButtonV2-module_icon-left__KSyLX","icon-right":"ButtonV2-module_icon-right__Dx8JV"};
+
+export { style as default };
+//# sourceMappingURL=ButtonV2.module.scss.js.map

@@ -1,0 +1,10 @@
+@import '@src/styles/color.scss';
+
+.input-group-title {
+  font-family: SpoqaM;
+  font-size: 14px;
+  color: $mono205;
+  padding-bottom: 4px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid $mono203;
+}

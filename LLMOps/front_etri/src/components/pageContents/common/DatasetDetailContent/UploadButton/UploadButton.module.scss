@@ -1,0 +1,42 @@
+@import '@src/styles/color.scss';
+
+.upload {
+  position: relative;
+  margin-right: 12px;
+  .options {
+    position: absolute;
+    margin: 8px 0 0 0;
+    border-radius: 4px;
+    box-shadow: 0 3px 9px 0 rgba(18, 22, 25, 0.08),
+      0 2px 4px 1px rgba(18, 22, 25, 0.14);
+    background-color: $mono200;
+    width: max-content;
+    padding: 8px 0;
+    z-index: 2;
+    box-sizing: border-box;
+    display: block;
+
+    .option_li {
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      padding: 10px 16px;
+      width: 100%;
+      height: 40px;
+      text-align: center;
+      cursor: pointer;
+      font-size: 14px;
+      font-family: SpoqaM;
+      color: $mono207;
+
+      .icon {
+        width: 20px;
+        margin-right: 8px;
+      }
+
+      &:hover {
+        background-color: $hover-bg-color;
+      }
+    }
+  }
+}

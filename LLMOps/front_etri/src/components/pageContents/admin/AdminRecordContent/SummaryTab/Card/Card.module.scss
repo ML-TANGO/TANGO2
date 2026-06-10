@@ -1,0 +1,175 @@
+@import '@src/styles/color.scss';
+
+.card {
+  width: 49%;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  border-radius: 16px;
+  border: 1px solid $mono203;
+  background-color: $mono200;
+  height: 320px;
+  perspective: 1000px;
+  position: relative;
+  transition: 0.4s;
+  transform-style: preserve-3d;
+  cursor: pointer;
+  .content-info-box {
+    padding: 24px 24px 0 24px;
+    box-sizing: border-box;
+  }
+
+  &.flip {
+    transform: rotateY(180deg);
+  }
+
+  .front-card {
+    width: 100%;
+    position: absolute;
+    backface-visibility: hidden;
+    .status-box {
+      width: 100%;
+      padding: 24px 24px 0px 24px;
+      box-sizing: border-box;
+      .name {
+        font-family: SpoqaB;
+        font-size: 24px;
+        color: $mono207;
+        margin: initial;
+      }
+      .range {
+        display: inline-block;
+        width: 100%;
+        color: $mono205;
+        font-size: 14px;
+        font-family: SpoqaR;
+        font-weight: 500;
+        padding-bottom: 36px;
+        margin-bottom: 12px;
+        border-bottom: 1px solid #dbdbdb;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
+    .content-info-box {
+      .content-title {
+        color: $mono205;
+        margin: inherit;
+        font-family: SpoqaB;
+        font-size: 18px;
+        font-weight: 700;
+        margin-bottom: 16px;
+      }
+      .right-box {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        .info-item {
+          .label {
+            font-family: SpoqaR;
+            font-weight: 700;
+            white-space: nowrap;
+            color: $blue107;
+            font-size: 16px;
+            margin: 0 0 12px 0;
+            height: 18px;
+            img {
+              width: 24px;
+              height: 24px;
+              margin-right: 4px;
+              vertical-align: top;
+            }
+          }
+          .val {
+            font-family: SpoqaR;
+            color: $mono207;
+            font-size: 14px;
+            font-weight: 500;
+          }
+        }
+      }
+    }
+  }
+  .scroll-cont {
+    margin: 12px 0 22px;
+    position: absolute;
+    backface-visibility: hidden;
+    transform: rotateY(180deg);
+    overflow-y: scroll;
+    width: 100%;
+    .back-card {
+      height: 286px;
+      .storage-cont,
+      .record-instance-time-cont {
+        display: flex;
+        flex-direction: column;
+        .storage-header-cont,
+        .record-time-header-cont {
+          display: flex;
+          align-items: center;
+          padding: 12px 0 12px 24px;
+          gap: 4px;
+          border-bottom: 1px solid $mono203;
+          &.pt-0 {
+            padding-top: 0px;
+          }
+          .avg-time-txt,
+          .record-time-txt {
+            margin: initial;
+            color: $blue107;
+            font-size: 14px;
+            font-weight: 700;
+            line-height: 14px; /* 100% */
+          }
+        }
+        .storage-instance-cont,
+        .record-instance-cont {
+          .storage-instance,
+          .record-instance {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0px 32px 0px 24px;
+            border-bottom: 1px solid $mono203;
+            .instance-name-txt,
+            .record-name-txt {
+              margin: initial;
+              padding: 8px 0 8px;
+              width: 480px;
+              color: $mono207;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+              font-family: SpoqaM;
+              font-size: 14px;
+              font-weight: 500;
+              line-height: 14px;
+            }
+
+            .instance-memory-txt,
+            .record-memory-txt {
+              font-family: SpoqaM;
+              font-size: 14px;
+              font-weight: 500;
+              line-height: 14px;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+            }
+          }
+
+          .record-instance:last-child {
+            border-bottom: none;
+          }
+        }
+      }
+    }
+  }
+}
+
+@media (max-width: 1024px) {
+  .card {
+    width: 100%;
+  }
+}

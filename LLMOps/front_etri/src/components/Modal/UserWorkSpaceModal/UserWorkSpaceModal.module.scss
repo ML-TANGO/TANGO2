@@ -1,0 +1,30 @@
+@import '@src/styles/color.scss';
+
+.modal-content {
+  padding: 24px 48px;
+  .input-group {
+    padding: 20px 24px;
+    margin-bottom: 49px;
+    border-radius: 4px;
+    background-color: rgba($blue104, 0.08);
+    .group-title {
+      display: flex;
+      font-size: 20px;
+      margin-bottom: 20px;
+      font-family: SpoqaB;
+      color: $mono207;
+      .text {
+        margin-right: 10px;
+      }
+    }
+
+    .btn-cont {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+    }
+  }
+  .warn {
+    color: red;
+  }
+}

@@ -1,0 +1,41 @@
+@import '@src/styles/color.scss';
+
+.frame {
+  flex-direction: column;
+  border: 1px solid $blue102;
+  border-radius: 16px;
+  background-color: $blue100;
+  box-sizing: border-box;
+  padding: 24px;
+  overflow-y: auto;
+  &.height-746 {
+    height: 746px;
+  }
+  &.height-1140 {
+    height: 1140px;
+  }
+}
+
+.no-data {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 14px;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 22px;
+  color: $red502;
+}
+
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr); // 2x2 기본 레이아웃
+  gap: 24px; // 차트 간 간격
+  padding: 0; // grid 자체에는 패딩 없음
+
+  // 768px 이하일 때 1열로 변경
+  @media (max-width: 1199px) {
+    grid-template-columns: 1fr;
+  }
+}

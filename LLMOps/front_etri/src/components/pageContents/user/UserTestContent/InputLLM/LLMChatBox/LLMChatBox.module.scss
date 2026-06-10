@@ -1,0 +1,54 @@
+@import 'src/styles/color.scss';
+
+.chat-outer-box {
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  border-bottom: 1px solid $mono204;
+  padding: 20px 16px;
+  .chat-img-box {
+    display: flex;
+    gap: 16px;
+    .chat-profile-box {
+      display: flex;
+      width: 32px;
+      height: 32px;
+      flex-shrink: 0;
+      font-size: 12px;
+      justify-content: center;
+      align-items: center;
+      border-radius: 4px;
+      border: 1px solid $blue104;
+      box-sizing: border-box;
+      background-color: $blue104;
+      color: #fff;
+    }
+    .fb-profile-box {
+      display: flex;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      flex-shrink: 0;
+      border-radius: 4px;
+      border: 1px solid $blue101;
+      background-color: $mono200;
+      .fb-profile-img {
+        width: 21px;
+      }
+    }
+    .chat-paragraph {
+      font-size: 14px;
+      font-weight: 400;
+      line-height: 150%;
+      color: $mono207;
+      margin: 0;
+    }
+  }
+  .copy-btn {
+    cursor: pointer;
+  }
+}
+
+.chat-outer-box.jonathan {
+  background-color: $blue100;
+}

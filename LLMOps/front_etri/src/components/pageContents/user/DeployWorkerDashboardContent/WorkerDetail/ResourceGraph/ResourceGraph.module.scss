@@ -1,0 +1,88 @@
+@import '../WorkerDetail.module.scss';
+
+.ram-cpu-chart {
+  display: grid;
+  column-gap: 30px;
+  grid-template-columns: repeat(2, minmax(440px, 1fr));
+  grid-template-rows: repeat(auto-fill, minmax(240px, auto));
+  @media (max-width: 1368px) {
+    grid-template-columns: 100%;
+    row-gap: 30px;
+    grid-template-rows: repeat(2, minmax(240px, auto));
+  }
+  @media (max-width: 1024px) {
+    column-gap: 20px;
+    row-gap: 20px;
+  }
+  .chart {
+    @include box-area();
+    padding: $padding-xsmall $padding-small $padding-xsmall $padding-small;
+    font-family: SpoqaM;
+    & > div {
+      display: flex;
+      justify-content: space-between;
+      & > label {
+        font-size: 13px;
+        color: $mono205;
+        margin-bottom: 4px;
+        font-family: SpoqaM;
+        .value {
+          color: $mono206;
+        }
+      }
+    }
+    .chart-area {
+      height: 240px;
+      outline: 1px solid $mono203;
+    }
+  }
+}
+
+.gpu-chart {
+  margin-top: $margin-top;
+  & > ul {
+    @include box-area();
+    padding: $padding-small;
+    overflow: scroll;
+    display: flex;
+    flex-wrap: nowrap;
+    & > li {
+      margin-right: 24px;
+      margin-left: 24px;
+      &:nth-child(1) {
+        margin-left: 0 !important;
+      }
+      display: flex;
+      flex-direction: column;
+      min-width: 600px;
+      .chart-wrap {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(50%, auto));
+        .left,
+        .right {
+          margin-right: 1em;
+          .label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            color: $mono205;
+            margin-bottom: 4px;
+            font-family: SpoqaM;
+            .value {
+              color: $mono206;
+            }
+          }
+          .chart-area {
+            height: 120px;
+            outline: 1px solid $mono203;
+          }
+        }
+      }
+      & > label {
+        font-size: 13px;
+        color: $mono205;
+        font-family: SpoqaB;
+      }
+    }
+  }
+}

@@ -1,0 +1,22 @@
+@import '@src/styles/color.scss';
+
+.border {
+  width: 100%;
+  height: 1px;
+  background-color: $mono203;
+  margin-bottom: 32px;
+}
+
+.restart-input {
+  position: relative;
+  .unit-txt {
+    position: absolute;
+    top: 50%;
+    right: 12px;
+    transform: translateY(-50%);
+    color: $mono205;
+    font-family: SpoqaM;
+    font-size: 14px;
+    line-height: 14px;
+  }
+}

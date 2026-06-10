@@ -1,0 +1,79 @@
+@import '@src/styles/color.scss';
+
+.container {
+  margin-top: 13px;
+  align-content: center;
+  // display: flex;
+  flex-wrap: wrap;
+  .line-wrap {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    .connectIcon {
+      margin-right: 9px;
+    }
+    .name {
+      font-size: 14px;
+    }
+    .category-text {
+      font-family: SpoqaR;
+      background-color: $mono203;
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 12px;
+      color: $mono206;
+      max-width: 500px;
+      display: inline;
+      word-break: break-all;
+      margin-left: 6px;
+    }
+  }
+  .category-description {
+    color: $mono205;
+    font-size: 12px;
+    line-height: 20px;
+    word-break: break-all;
+    margin-top: 6px;
+    margin-left: 64px;
+  }
+}
+.form-type {
+  margin-bottom: 10px;
+}
+.text-container {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: center;
+  margin-top: 8px;
+}
+.type-text {
+  font-size: 14px;
+  color: $mono206;
+  margin: auto 0;
+}
+.icon {
+  margin-left: 10px;
+  margin-right: 10px;
+}
+.name-text {
+  font-size: 14px;
+  color: $mono207;
+  margin: auto 0;
+}
+.category {
+  font-family: SpoqaR;
+  background-color: $mono203;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: $mono206;
+  max-width: 500px;
+  display: inline;
+  margin-left: 10px;
+}
+.category-description {
+  color: $mono205;
+  font-size: 12px;
+  font-family: SpoqaR;
+  line-height: 20px;
+}

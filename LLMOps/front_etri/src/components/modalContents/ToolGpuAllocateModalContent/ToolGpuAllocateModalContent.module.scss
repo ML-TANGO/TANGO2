@@ -1,0 +1,130 @@
+@import '@src/styles/color.scss';
+
+.title {
+  display: flex;
+  align-items: center;
+  flex-direction: row;
+  display: flex;
+  margin-top: 0;
+  font-family: SpoqaB;
+
+  .instance {
+    font-size: 18px;
+  }
+
+  .divide {
+    margin: 0 8px;
+  }
+  .tool-icon {
+    width: 24px;
+    height: 24px;
+    margin-right: 8px;
+    margin-left: 16px;
+  }
+  .tool-label {
+    font-size: 18px;
+    font-family: SpoqaM;
+    color: $mono205;
+  }
+}
+
+.contents {
+  .first-row {
+    display: flex;
+    gap: 48px;
+
+    .row-content {
+      flex: 1;
+    }
+  }
+
+  .gpu-notice {
+    font-size: 12px;
+    font-family: SpoqaM;
+
+    .warning {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      color: $blue104;
+    }
+  }
+
+  .gpu-rows {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid $mono203;
+    border-radius: 8px;
+    padding: 20px 24px;
+    margin-top: 10px;
+  }
+
+  border-radius: 8px;
+
+  min-height: 100px;
+  max-height: calc(65vh - 100px);
+  overflow-y: scroll;
+  overflow-x: hidden;
+
+  font-family: SpoqaR;
+
+  .row {
+    &.option {
+      margin-bottom: 32px;
+    }
+    &.grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+    }
+  }
+  .sub-title {
+    // font-family: SpoqaB;
+    font-size: 18px;
+    margin-bottom: 16px;
+    margin-top: 8px;
+  }
+
+  .notice {
+    font-size: 16px;
+    color: $mono207;
+    margin-bottom: 48px;
+  }
+  .message {
+    white-space: pre-wrap;
+    margin-top: 12px;
+    &.attention {
+      color: $red503;
+    }
+    &.recommend {
+      color: $blue104;
+    }
+  }
+}
+
+.ban-icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+.ban-text-box {
+  position: relative;
+  .ban-text {
+    display: flex;
+    align-items: center;
+    z-index: 2;
+    color: $red502;
+    margin-top: 5px;
+    font-size: 16px;
+    font-family: SpoqaM;
+    font-weight: normal;
+  }
+}
+
+.test {
+  display: flex;
+  flex-direction: column;
+}

@@ -1,0 +1,17 @@
+@import '@src/styles/color.scss';
+
+.training-input-data-form {
+  .btn-wrap {
+    display: flex;
+    flex-direction: row;
+    .add-btn-box {
+      display: flex;
+      flex-direction: row;
+    }
+    .fold-btn-box {
+      display: flex;
+      flex-direction: row;
+      grid-gap: 12px;
+    }
+  }
+}

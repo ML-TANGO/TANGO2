@@ -1,0 +1,109 @@
+@import '../modal.scss';
+
+.row {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 32px;
+}
+
+.resource-box {
+  box-sizing: border-box;
+  border: 1px solid $mono203;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 32px;
+
+  .header {
+    padding: 0px 44px;
+    display: flex;
+    align-items: center;
+    height: 44px;
+    font-size: 12px;
+    color: $mono205;
+
+    .first {
+      flex: 4;
+    }
+    .second {
+      flex: 2;
+      display: flex;
+      justify-content: center;
+      transform: translateX(6px);
+    }
+    .third {
+      flex: 2;
+      display: flex;
+      justify-content: center;
+      transform: translateX(10px);
+    }
+  }
+
+  .gray-line {
+    width: 100%;
+    height: 1px;
+    background-color: $mono203;
+  }
+
+  .instance-box {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 0px 16px;
+    min-height: 236px;
+    max-height: 236px;
+    overflow-y: auto;
+  }
+}
+
+.bottom-box {
+  display: flex;
+
+  .text {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+    gap: 8px;
+    font-family: SpoqaB;
+  }
+
+  .content {
+    flex: 1;
+  }
+
+  .tool-tip {
+    display: flex;
+    flex-direction: column;
+    font-size: 14px;
+    color: $mono207;
+    font-family: SpoqaM;
+
+    .header {
+      font-weight: 700;
+      padding-bottom: 8px;
+      border-bottom: 1px solid $mono203;
+      margin-bottom: 24px;
+    }
+
+    .info-box {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+
+      .info {
+        display: inline-block;
+        font-weight: 500;
+        line-height: 22px;
+
+        .red-text {
+          display: inline;
+          color: $red502;
+        }
+      }
+    }
+  }
+}
+
+.users {
+}

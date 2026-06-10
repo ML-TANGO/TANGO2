@@ -1,0 +1,37 @@
+@import '@src/styles/color.scss';
+
+.list-item {
+  display: flex;
+  flex-direction: row;
+  padding: 8px 0;
+  align-items: center;
+  font-size: 14px;
+  div {
+    margin: 0 8px;
+    &:first-of-type {
+      flex: 1;
+    }
+    &:nth-of-type(2),
+    &:nth-of-type(3) {
+      width: 70px;
+    }
+    &:last-of-type {
+      width: 148px;
+      margin: 0;
+      padding-right: 8px;
+    }
+    .server-selected {
+      display: inline-block;
+      font-family: SpoqaM;
+      font-size: 14px;
+      padding: 4px 0;
+      cursor: pointer;
+      .fixed {
+        display: inline-block;
+        width: 48px;
+        margin-left: 4px;
+        text-align: left;
+      }
+    }
+  }
+}

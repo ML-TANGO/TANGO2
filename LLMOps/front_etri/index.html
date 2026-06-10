@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <script>
+      window.addEventListener('error', function(event) {
+        var div = document.createElement('div');
+        div.style.position = 'fixed';
+        div.style.top = '0';
+        div.style.left = '0';
+        div.style.width = '100vw';
+        div.style.height = '100vh';
+        div.style.backgroundColor = 'rgba(220, 53, 69, 0.95)';
+        div.style.color = 'white';
+        div.style.zIndex = '999999';
+        div.style.padding = '30px';
+        div.style.fontFamily = 'monospace';
+        div.style.overflow = 'auto';
+        div.style.boxSizing = 'border-box';
+        div.innerHTML = '<h1 style="margin-top:0;font-size:24px;border-bottom:1px solid rgba(255,255,255,0.3);padding-bottom:10px;">🔴 Unhandled Script Error</h1>' +
+                        '<p style="font-size:16px;"><strong>Message:</strong> ' + event.message + '</p>' +
+                        '<p style="font-size:14px;"><strong>Source:</strong> ' + event.filename + ':' + event.lineno + ':' + event.colno + '</p>' +
+                        '<pre style="background:rgba(0,0,0,0.3);padding:15px;border-radius:4px;white-space:pre-wrap;word-break:break-all;font-size:13px;line-height:1.5;">' + (event.error && event.error.stack ? event.error.stack : 'No stack trace available') + '</pre>';
+        document.body.appendChild(div);
+      });
+      window.addEventListener('unhandledrejection', function(event) {
+        var div = document.createElement('div');
+        div.style.position = 'fixed';
+        div.style.top = '0';
+        div.style.left = '0';
+        div.style.width = '100vw';
+        div.style.height = '100vh';
+        div.style.backgroundColor = 'rgba(253, 126, 20, 0.95)';
+        div.style.color = 'white';
+        div.style.zIndex = '999999';
+        div.style.padding = '30px';
+        div.style.fontFamily = 'monospace';
+        div.style.overflow = 'auto';
+        div.style.boxSizing = 'border-box';
+        var reason = event.reason;
+        var message = reason instanceof Error ? reason.message : String(reason);
+        var stack = reason instanceof Error && reason.stack ? reason.stack : 'No stack trace available';
+        div.innerHTML = '<h1 style="margin-top:0;font-size:24px;border-bottom:1px solid rgba(255,255,255,0.3);padding-bottom:10px;">⚠️ Unhandled Promise Rejection</h1>' +
+                        '<p style="font-size:16px;"><strong>Reason:</strong> ' + message + '</p>' +
+                        '<pre style="background:rgba(0,0,0,0.3);padding:15px;border-radius:4px;white-space:pre-wrap;word-break:break-all;font-size:13px;line-height:1.5;">' + stack + '</pre>';
+        document.body.appendChild(div);
+      });
+    </script>
+    <meta charset="utf-8" />
+    <link rel="icon" href="/favicon.ico" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1"
+    />
+    <meta name="theme-color" content="#000000" />
+    <meta name="description" content="AI development and operation Platform" />
+    <!--
+      manifest.json provides metadata used when your web app is installed on a
+      user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
+    -->
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="stylesheet" href="/index.css" />
+
+    <!-- Progressive Web App -->
+    <link rel="apple-touch-icon" href="/favicon.ico" />
+    <link
+      rel="apple-touch-icon"
+      sizes="57x57"
+      href="/images/favicon/apple-icon-57x57.png"
+    />
+    <link
+      rel="apple-touch-icon"
+      sizes="60x60"
+      href="/images/favicon/apple-icon-60x60.png"
+    />
+    <link
+      rel="apple-touch-icon"
+      sizes="72x72"
+      href="/images/favicon/apple-icon-72x72.png"
+    />
+    <link
+      rel="apple-touch-icon"
+      sizes="76x76"
+      href="/images/favicon/apple-icon-76x76.png"
+    />
+    <link
+      rel="apple-touch-icon"
+      sizes="114x114"
+      href="/images/favicon/apple-icon-114x114.png"
+    />
+    <link
+      rel="apple-touch-icon"
+      sizes="120x120"
+      href="/images/favicon/apple-icon-120x120.png"
+    />
+    <link
+      rel="apple-touch-icon"
+      sizes="144x144"
+      href="/images/favicon/apple-icon-144x144.png"
+    />
+    <link
+      rel="apple-touch-icon"
+      sizes="152x152"
+      href="/images/favicon/apple-icon-152x152.png"
+    />
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="/images/favicon/apple-icon-180x180.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="192x192"
+      href="/images/favicon/android-icon-192x192.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href="/images/favicon/favicon-32x32.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="96x96"
+      href="/images/favicon/favicon-96x96.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="16x16"
+      href="/images/favicon/favicon-16x16.png"
+    />
+    <meta name="msapplication-TileColor" content="#ffffff" />
+    <meta name="msapplication-TileImage" content="/ms-icon-144x144.png" />
+    <meta name="theme-color" content="#ffffff" />
+
+    <meta name="apple-mobile-web-app-title" content="Jonathan" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="application-name" content="&nbsp;" />
+
+    <title>JONATHAN</title>
+  </head>
+
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+    <div id="aside-cont"></div>
+    <script type="module" src="/src/index.jsx"></script>
+    <!--
+      This HTML file is a template.
+      If you open it directly in the browser, you will see an empty page.
+
+      You can add webfonts, meta tags, or analytics to this file.
+      The build step will place the bundled scripts into the <body> tag.
+
+      To begin the development, run `npm start` or `yarn start`.
+      To create a production bundle, use `npm run build` or `yarn build`.
+    -->
+  </body>
+</html>

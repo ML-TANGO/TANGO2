@@ -1,0 +1,12 @@
+@import '@src/styles/color.scss';
+
+.input-box {
+  .notice {
+    font-size: 15px;
+    font-style: normal;
+    font-weight: 500;
+    color: $mono205;
+    text-align: left;
+    margin-bottom: 10px;
+  }
+}

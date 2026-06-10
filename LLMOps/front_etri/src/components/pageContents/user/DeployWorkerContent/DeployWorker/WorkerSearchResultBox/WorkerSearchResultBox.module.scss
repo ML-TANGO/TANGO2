@@ -1,0 +1,41 @@
+@import '../DeployWorker.module.scss';
+
+.worker-result-wrap {
+  background-color: $mono200;
+  border-radius: 4px;
+  border: 1px solid $card-border-color;
+  & > label {
+    cursor: pointer;
+    font-size: 16px;
+    color: $mono205;
+  }
+
+  .chart-area {
+    padding: $padding-xsmall $padding-small $padding-xsmall $padding-small;
+    & > div {
+      background-color: $mono203;
+      height: 456px;
+    }
+  }
+  .status-code-count {
+    padding: $padding-small;
+    & > label {
+      color: $mono205;
+    }
+    & > div {
+      margin-top: 10px;
+    }
+  }
+  .abnormal-processing-record {
+    padding: $padding-small;
+    & > span {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: $mono205;
+    }
+    & > div {
+      margin-top: 10px;
+    }
+  }
+}

@@ -1,0 +1,19 @@
+@import '@src/styles/color.scss';
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  .title {
+    margin: initial;
+    color: $blue107;
+    font-family: SpoqaB;
+    font-size: 20px;
+    font-style: normal;
+    font-weight: 700;
+    line-height: 20px; /* 100% */
+  }
+}
+.selectbox {
+  width: 180px;
+}

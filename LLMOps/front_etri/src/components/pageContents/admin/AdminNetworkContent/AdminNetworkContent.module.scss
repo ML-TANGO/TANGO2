@@ -1,0 +1,144 @@
+@import '@src/styles/color.scss';
+
+.content {
+  margin-top: 12px;
+
+  .group-view {
+    width: 100%;
+    height: 380px;
+    background-color: $mono200;
+    margin-bottom: 20px;
+    border: 1px solid $card-border-color;
+    border-radius: 8px;
+    .tab-container {
+      display: flex;
+      flex-direction: row;
+      height: calc(100% - 44px);
+      .title {
+        font-size: 16px;
+        font-family: SpoqaB;
+        color: $mono207;
+        margin: 0;
+      }
+      .status {
+        flex: 1;
+        border-right: 1px solid $card-border-color;
+        padding: 20px;
+        overflow: auto;
+        .group-wrapper {
+          display: flex;
+          flex-direction: column;
+          margin-top: 12px;
+          margin-bottom: 20px;
+          .label {
+            font-size: 14px;
+            color: $mono205;
+          }
+          .nodes {
+            margin-top: 12px;
+          }
+        }
+      }
+      .nodes-by-group {
+        flex: 2;
+        padding: 20px;
+        overflow: auto;
+        .info {
+          display: flex;
+          flex-direction: row;
+          justify-content: flex-end;
+          align-items: center;
+          font-size: 13px;
+          margin-top: -20px;
+          .multi-port {
+            display: flex;
+            align-items: center;
+            margin-right: 3px;
+          }
+        }
+        .group-wrapper {
+          display: flex;
+          flex-direction: column;
+          margin-top: 12px;
+          gap: 12px;
+          .group-box {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            justify-content: center;
+            background-color: $mono201;
+            border-radius: 4px;
+            padding: 12px 16px;
+            .label {
+              font-size: 14px;
+              font-family: SpoqaB;
+              color: $blue107;
+              display: inline-block;
+              margin-bottom: 8px;
+            }
+          }
+          & > .empty-message {
+            font-size: 14px;
+            font-family: SpoqaR;
+            color: $mono204;
+            height: 230px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+        }
+      }
+      .nodes {
+        display: flex;
+        flex-direction: row;
+        justify-content: flex-start;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+        width: 100%;
+        .node {
+          position: relative;
+          border-radius: 14px;
+          border: 1px solid $blue102;
+          background-color: rgba($blue104, 0.08);
+          color: $blue106;
+          padding: 4px 12px;
+          font-size: 13px;
+          &.multi-port {
+            &::after {
+              position: absolute;
+              top: -8px;
+              right: -6px;
+            }
+          }
+        }
+        .empty-message {
+          width: 100%;
+          height: 28px;
+          display: flex;
+          justify-content: center;
+          align-items: flex-start;
+          font-size: 14px;
+          font-family: SpoqaR;
+          color: $mono204;
+        }
+      }
+      .multi-port {
+        &::after {
+          content: 'm';
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 16px;
+          height: 16px;
+          font-size: 10px;
+          background-color: $blue104;
+          color: $mono200;
+          border-radius: 8px;
+          box-sizing: border-box;
+          contain: content;
+        }
+      }
+    }
+  }
+}

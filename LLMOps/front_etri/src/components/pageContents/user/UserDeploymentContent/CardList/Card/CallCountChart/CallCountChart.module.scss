@@ -1,0 +1,18 @@
+@import '@src/styles/color.scss';
+
+.chart-container {
+  padding: 4px 8px;
+  background-color: $mono201;
+  box-sizing: border-box;
+  border-radius: 4px;
+  .chart-text-box {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    color: $mono205;
+    height: 16px;
+  }
+  .empty-box {
+    min-height: 50px;
+  }
+}

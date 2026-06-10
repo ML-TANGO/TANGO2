@@ -1,0 +1,31 @@
+@import '@src/styles/color.scss';
+
+.input-box {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-start;
+
+  background-color: $mono200;
+  overflow: auto;
+
+  .input-label {
+    display: flex;
+    flex-direction: column;
+    .test-label {
+      margin-bottom: 12px;
+      margin-right: 40px;
+    }
+  }
+  .input-form {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    > div {
+      padding-bottom: 20px;
+      border-bottom: 1px solid $card-border-color;
+      &:last-child {
+        border-bottom: none;
+      }
+    }
+  }
+}

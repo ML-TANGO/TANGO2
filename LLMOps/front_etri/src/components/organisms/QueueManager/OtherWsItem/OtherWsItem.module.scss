@@ -1,0 +1,11 @@
+@import '@src/styles/color.scss';
+
+.other-ws-item {
+  padding: 10px;
+  border-radius: 4px;
+  box-shadow: 0 3px 9px 0 rgba(18, 22, 25, 0.08),
+    0 2px 4px 1px rgba(18, 22, 25, 0.14);
+  margin-bottom: 20px;
+  font-size: 12px;
+  background-color: $mono202;
+}

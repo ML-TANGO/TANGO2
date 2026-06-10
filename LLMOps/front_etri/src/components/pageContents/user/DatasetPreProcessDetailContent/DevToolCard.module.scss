@@ -1,0 +1,239 @@
+@import '@src/styles/color.scss';
+
+.container {
+  box-sizing: border-box;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  border-radius: 16px;
+  border: 1px solid $blue102;
+  background: #fff;
+  box-shadow: 0px 3px 4px 0px rgba(45, 118, 248, 0.06);
+
+  .tool-logo {
+    box-sizing: border-box;
+    display: flex;
+    width: 64px;
+    height: 64px;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background-color: white;
+    border-radius: 12px;
+    border: 1px solid $mono203;
+    margin-bottom: 24px;
+  }
+
+  .tool-delete {
+    position: absolute;
+    top: 24px;
+    right: 24px;
+    cursor: pointer;
+  }
+
+  .tool {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 20px;
+    font-weight: 700;
+    color: $mono207;
+    margin-bottom: 8px;
+
+    .name {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .tooltip-cont {
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+  }
+
+  .message {
+    font-size: 12px;
+    height: 65px;
+
+    &.pending,
+    &.scheduling {
+      color: $orange403;
+    }
+
+    &.error,
+    &.failed {
+      color: $red502;
+    }
+
+    &.installing {
+      color: $lime603;
+    }
+  }
+
+  .desc {
+    font-size: 14px;
+    color: $mono205;
+    margin-bottom: 16px;
+  }
+
+  .environment-info {
+    box-sizing: border-box;
+    max-height: 260px;
+    margin-bottom: 24px;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid $mono203;
+    border-radius: 12px;
+    background-color: white;
+    font-size: 14px;
+    overflow-y: auto;
+
+    .header {
+      padding: 12px 24px;
+      font-weight: 700;
+      color: $mono207;
+      border-bottom: 1px solid $mono203;
+    }
+
+    .info-box {
+      max-height: 260px;
+      overflow-y: auto;
+      padding-bottom: 12px;
+
+      .column {
+        display: flex;
+        padding: 12px 24px;
+        border-bottom: 1px solid $mono203;
+
+        &.pod {
+          background-color: $mono201;
+        }
+
+        .type {
+          color: $mono205;
+          flex: 1.1;
+
+          &.pod {
+            color: $mono206;
+          }
+        }
+
+        .value {
+          color: $mono207;
+          flex: 1.5;
+        }
+      }
+    }
+  }
+
+  .footer-box {
+    display: flex;
+    justify-content: space-between;
+
+    .ssh-box {
+      position: relative;
+      display: flex;
+      gap: 8px;
+
+      .popup {
+        display: flex;
+        flex-direction: column;
+        font-size: 16px;
+        position: absolute;
+        padding: 14px 20px 10px 20px;
+        top: -130px;
+        right: 0px;
+        min-width: 284px !important;
+        z-index: 99;
+        border: 0.5px solid $blue101;
+        border-radius: 8px;
+        filter: drop-shadow(0px 3px 12px rgba(45, 118, 248, 0.06));
+        background-color: $mono200;
+        box-sizing: border-box;
+        overflow: hidden;
+        .info-box {
+          display: flex;
+          gap: 10px;
+          min-width: 310px;
+        }
+        .copy-cont {
+          position: relative;
+          display: flex;
+          align-items: center;
+          width: 218px;
+          padding-right: 20px;
+          height: 16px;
+          margin-bottom: 8px;
+          cursor: pointer;
+          span {
+            display: inline-block;
+            margin-right: 15px;
+            color: $mono205;
+            font-size: 12px;
+            font-weight: 500;
+            line-height: 12px;
+            margin-right: 4px;
+          }
+          p {
+            display: inline-block;
+            color: $mono207;
+            font-size: 12px;
+            font-weight: 500;
+            line-height: 12px; /* 100% */
+            text-wrap: nowrap;
+            margin: initial;
+            overflow: hidden;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+          img {
+            position: absolute;
+            right: 0;
+          }
+        }
+        .border {
+          width: 100%;
+          height: 1px;
+          background-color: $mono203;
+          margin: 4px 0 12px;
+        }
+        .connect-guide-cont {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 8px;
+          padding: 8px 16px;
+          cursor: pointer;
+          span {
+            color: $blue104;
+            font-size: 12px;
+            font-weight: 500;
+            line-height: 12px; /* 100% */
+          }
+        }
+        &.small {
+          width: 270px;
+          .manual-box {
+            height: 78px;
+            .manual-item {
+              .service-icon {
+                width: auto;
+                left: 78px;
+                bottom: 24px;
+                &.dna {
+                  width: 46px;
+                  left: 170px;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

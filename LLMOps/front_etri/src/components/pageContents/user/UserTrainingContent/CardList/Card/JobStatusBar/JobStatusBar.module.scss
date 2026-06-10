@@ -1,0 +1,46 @@
+@import '@src/styles/color.scss';
+
+.job-status-bar {
+  flex: 1;
+  display: flex;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  box-sizing: border-box;
+  &:hover {
+    background-color: $mono202;
+  }
+  .job-progress {
+    flex: 1;
+    .progress-inner-box {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 6px;
+      .progress-label {
+        font-size: 14px;
+        &.default,
+        &.stop {
+          color: $mono203;
+        }
+        &.pending {
+          color: $yellow303;
+        }
+        &.running {
+          color: $blue104;
+        }
+      }
+      .progress-status {
+        font-size: 13px;
+        font-family: SpoqaR;
+        &.default,
+        &.stop {
+          color: $mono203;
+        }
+        &.pending,
+        &.running {
+          color: $mono205;
+        }
+      }
+    }
+  }
+}

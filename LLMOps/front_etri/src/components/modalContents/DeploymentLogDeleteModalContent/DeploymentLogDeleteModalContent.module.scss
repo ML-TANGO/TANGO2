@@ -1,0 +1,23 @@
+@import '@src/styles/color.scss';
+
+.modal-content {
+  padding: 22px 48px 22px 48px;
+  .row {
+    margin-bottom: 20px;
+    &.margin-bottom-48 {
+      margin-bottom: 48px;
+    }
+    .input-label {
+      display: inline-block;
+      font-size: 16px;
+      font-family: SpoqaB;
+      color: $mono207;
+      margin-bottom: 8px;
+      .optional {
+        color: $mono205;
+        font-size: 16px;
+        font-family: SpoqaM;
+      }
+    }
+  }
+}

@@ -1,0 +1,186 @@
+@import '@src/styles/color.scss';
+
+.wrapper {
+  padding: 14px;
+  margin-bottom: 8px;
+  border-radius: 4px;
+  background-color: $mono200;
+  box-sizing: border-box;
+
+  .list-header {
+    border-bottom: 1px solid $mono203;
+    font-size: 13px;
+    font-family: SpoqaM;
+    color: $mono205;
+    display: flex;
+    .block {
+      min-width: 34px;
+    }
+    .status {
+      min-width: 68px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 24px;
+    }
+    .box {
+      width: 100%;
+      .header-title {
+        border-bottom: 1px solid $mono203;
+        padding-bottom: 6px;
+        display: flex;
+        width: 100%;
+        .title {
+          flex: 1;
+          display: flex;
+          justify-content: center;
+        }
+      }
+      .header-column {
+        display: flex;
+        font-size: 13px;
+        .column-title {
+          display: flex;
+          align-items: center;
+          flex: 1;
+          div {
+            margin: 0 6px;
+            margin-bottom: 8px;
+            margin-top: 8px;
+
+            &:first-of-type {
+              flex: 1;
+              min-width: 70px;
+            }
+            &:nth-of-type(2) {
+              flex: 1;
+            }
+            &:nth-of-type(3) {
+              flex: 1;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  .list-body {
+    border-bottom: 1px solid $mono203;
+
+    .list-item {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      padding: 6px 0;
+      font-size: 13px;
+      .checkbox {
+        min-width: 34px;
+        display: flex;
+        justify-content: flex-end;
+      }
+      .status-box {
+        min-width: 68px;
+        display: flex;
+        justify-content: center;
+        .image {
+          width: 10px;
+        }
+        .status-red {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          border: 1px solid $red502;
+          background-color: $red501;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+        }
+        .status-green {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          border: 1px solid $lime604;
+          background-color: $lime601;
+        }
+        .status-yellow {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          border: 1px solid $orange402;
+          background-color: $orange401;
+        }
+      }
+      div {
+        margin: 0 6px;
+
+        &:first-of-type {
+          margin: 0px;
+        }
+        &:nth-of-type(2) {
+          margin: 0px;
+        }
+        &:nth-of-type(3) {
+          flex: 1;
+        }
+        &:nth-of-type(4) {
+          flex: 1;
+        }
+        &:nth-of-type(5) {
+          flex: 1;
+        }
+        &:nth-of-type(6) {
+          flex: 1;
+        }
+        &:nth-of-type(7) {
+          flex: 1;
+        }
+        &:nth-of-type(8) {
+          flex: 1;
+        }
+      }
+    }
+    .slider-box {
+      display: flex;
+      padding: 0px;
+      padding-bottom: 6px;
+      width: 100%;
+      box-sizing: border-box;
+      .clear-space {
+        flex: 20%;
+      }
+      .slider {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background-color: $blue100;
+        padding: 4px 12px 4px 12px;
+        border-radius: 4px;
+        height: 24px;
+        position: relative;
+        width: 100%;
+        margin-right: 12px;
+        .slider-input {
+          margin-left: 15px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          .unit {
+            height: 36px;
+            width: 16px;
+            margin-left: 6px;
+            font-size: 12px;
+            color: $mono205;
+            display: flex;
+            align-items: center;
+          }
+        }
+      }
+    }
+    .empty-item {
+      color: $mono207;
+      text-align: center;
+      font-size: 14px;
+      margin-top: 20px;
+    }
+  }
+}

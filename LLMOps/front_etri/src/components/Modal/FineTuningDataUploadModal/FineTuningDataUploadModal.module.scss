@@ -1,0 +1,39 @@
+@import '@src/styles/color.scss';
+
+.link-box {
+  margin-top: 24px;
+  .title {
+    color: $mono205;
+    font-size: 12px;
+    font-family: SpoqaM;
+    font-style: normal;
+    font-weight: 500;
+    line-height: 12px;
+    letter-spacing: -0.18px;
+  }
+  .link {
+    background-color: $blue100;
+    font-size: 12px;
+    color: $mono207;
+    padding: 16px;
+    border-radius: 18px;
+    box-sizing: border-box;
+    font-family: SpoqaM;
+    width: 100%;
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.dataset-notice {
+  margin-top: 8px;
+  color: $mono205;
+  font-family: SpoqaM;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 12px;
+  letter-spacing: -0.18px;
+}

@@ -1,0 +1,55 @@
+@import '@src/styles/color.scss';
+
+.parameter-list {
+  .label-box {
+    display: flex;
+    flex-direction: row;
+    width: calc(100% - 36px);
+    .label {
+      flex: 1;
+      font-size: 14px;
+      font-family: SpoqaB;
+      color: $mono206;
+      margin-right: 12px;
+      .optional {
+        color: $mono205;
+        font-size: 14px;
+        font-family: SpoqaM;
+      }
+      &:last-child {
+        flex: 1.5;
+      }
+    }
+  }
+  .input-box {
+    display: flex;
+    align-items: flex-end;
+    margin: 4px 0 8px;
+
+    .input-wrap {
+      flex: 1;
+      margin-right: 8px;
+      &:last-of-type {
+        flex: 1.5;
+      }
+    }
+
+    .remove-btn {
+      width: 36px;
+      height: 36px;
+      border: none;
+      border-radius: 4px;
+      padding: 4px;
+      background-position: 50%;
+      background-image: url(@src/static/images/icon/minus.svg);
+      background-size: 24px 24px;
+      background-color: $mono205;
+      background-repeat: no-repeat;
+      cursor: pointer;
+      &.disabled {
+        opacity: 0.2;
+        cursor: not-allowed;
+      }
+    }
+  }
+}
