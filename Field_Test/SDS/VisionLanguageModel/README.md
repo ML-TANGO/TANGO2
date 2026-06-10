@@ -20,6 +20,7 @@ SDS(Software-defined Ship) 해상 도메인 데이터셋에 특화된 학습 파
 10. [데모 웹 앱](#10-데모-웹-앱)
 11. [프로젝트 구조](#11-프로젝트-구조)
 12. [W&B 학습 모니터링](#12-wb-학습-모니터링)
+13. [가중치 변환 — vLLM / llama.cpp](#13-가중치-변환--vllm--llamacpp)
 
 ---
 
@@ -788,5 +789,173 @@ WANDB_MODE=disabled bash scripts/train_projector.sh
 python model_summary.py                        # 콘솔 출력
 python model_summary.py --wandb_project vlm-v2 # W&B 아티팩트 업로드
 ```
+
+---
+
+## 13. 가중치 변환 — vLLM / llama.cpp
+
+학습 후 생성된 체크포인트(LoRA 어댑터 + projector + CLIP)를 프로덕션 추론 엔진용으로 변환합니다.
+
+### 체크포인트 구조
+
+```
+clip_llama31_lora_marine_sds_lora_ko/
+├── adapter_model.safetensors   # LoRA 가중치 (rank=128)
+├── projector.bin               # mlp2x_gelu projector
+├── vlm_config.json             # 학습 설정 스냅샷
+├── tokenizer.json
+└── tokenizer_config.json
+```
+
+> `adapter_config.json` 이 없어도 변환 스크립트가 weight 형상으로 자동 재구성합니다.  
+> LoRA rank=128, target_modules: `q_proj`, `k_proj`, `v_proj`, `o_proj`, `gate_proj`, `up_proj`, `down_proj`
+
+---
+
+### 13-1. vLLM 배포 (`convert_to_llava_hf.py`)
+
+HuggingFace `LlavaForConditionalGeneration` 포맷으로 변환합니다.  
+vLLM 또는 `transformers` 에서 직접 로드 가능합니다.
+
+**변환 실행**
+
+```bash
+python scripts/convert_to_llava_hf.py \
+  --ckpt_dir   /path/to/checkpoint \
+  --llm_path   /path/to/Llama-3.1-8B-Instruct \
+  --clip_model openai/clip-vit-large-patch14-336 \
+  --output_dir /path/to/llava_hf_merged \
+  --bf16
+```
+
+| 옵션 | 기본값 | 설명 |
+|------|--------|------|
+| `--ckpt_dir` | (필수) | 체크포인트 디렉토리 |
+| `--llm_path` | (필수) | base LLM 경로 (로컬 경로 또는 HF 모델 ID) |
+| `--clip_model` | (필수) | CLIP 모델 경로 (로컬 경로 또는 HF 모델 ID) |
+| `--output_dir` | (필수) | 출력 디렉토리 |
+| `--bf16` / `--fp16` | bfloat16 | 저장 dtype |
+| `--max_shard_gb` | 4.0 | shard 최대 크기 (GB) |
+
+**출력 구조**
+
+```
+llava_hf_merged/
+├── config.json                           # LlavaConfig
+├── tokenizer.json / tokenizer_config.json
+├── model-00001-of-NNNNN.safetensors      # sharded 가중치
+└── model.safetensors.index.json
+```
+
+**projector 키 매핑**
+
+| 원본 (커스텀) | 변환 후 (LLaVA HF) |
+|---|---|
+| `proj.0.weight` / `proj.0.bias` | `multi_modal_projector.linear_1.weight` / `.bias` |
+| `proj.2.weight` / `proj.2.bias` | `multi_modal_projector.linear_2.weight` / `.bias` |
+
+**vLLM 서빙**
+
+```bash
+vllm serve /path/to/llava_hf_merged \
+  --trust-remote-code \
+  --max-model-len 4096
+```
+
+---
+
+### 13-2. llama.cpp 배포 (`convert_to_gguf.py`)
+
+llama.cpp 에서 사용하는 GGUF 포맷으로 변환합니다.  
+멀티모달 projector(`mmproj.gguf`)는 이 스크립트가 직접 생성하고,  
+LLM 본체(`llm.gguf`)는 llama.cpp 의 `convert_hf_to_gguf.py` 로 별도 변환합니다.
+
+**Step 1 — mmproj.gguf + merged_llm 생성**
+
+```bash
+python scripts/convert_to_gguf.py \
+  --ckpt_dir      /path/to/checkpoint \
+  --llm_path      /path/to/Llama-3.1-8B-Instruct \
+  --clip_model    openai/clip-vit-large-patch14-336 \
+  --llama_cpp_dir /path/to/llama.cpp \
+  --output_dir    /path/to/gguf_output
+```
+
+| 옵션 | 기본값 | 설명 |
+|------|--------|------|
+| `--ckpt_dir` | (필수) | 체크포인트 디렉토리 |
+| `--llm_path` | (필수) | base LLM 경로 (로컬 경로 또는 HF 모델 ID) |
+| `--clip_model` | (필수) | CLIP 모델 경로 (로컬 경로 또는 HF 모델 ID) |
+| `--llama_cpp_dir` | (필수) | llama.cpp 리포지토리 경로 (`gguf-py` 로드에 사용) |
+| `--output_dir` | (필수) | 출력 디렉토리 |
+| `--bf16` / `--fp16` | bfloat16 | merged_llm 저장 dtype |
+| `--skip_merge` | false | LoRA merge 건너뜀 (`merged_llm/` 이미 존재 시) |
+
+**Step 2 — llm.gguf 변환**
+
+```bash
+python /path/to/llama.cpp/convert_hf_to_gguf.py \
+  /path/to/gguf_output/merged_llm \
+  --outfile /path/to/gguf_output/llm.gguf \
+  --outtype bf16
+```
+
+> 양자화가 필요하면 `--outtype q4_k_m` 등으로 변경합니다.
+
+**출력 구조**
+
+```
+gguf_output/
+├── merged_llm/          # 중간 산출물 — LoRA 병합된 LLM (HF 포맷)
+├── mmproj.gguf          # CLIP + mlp2x_gelu projector (~1.3 GB)
+└── llm.gguf             # LLM 본체 (bf16 ~15 GB, 또는 양자화)
+```
+
+**Step 3 — llama-mtmd-cli 실행**
+
+```bash
+# VRAM 여유가 충분한 경우 (CLIP도 GPU에 올림)
+/path/to/llama.cpp/build/bin/llama-mtmd-cli \
+  -m     /path/to/gguf_output/llm.gguf \
+  --mmproj /path/to/gguf_output/mmproj.gguf \
+  -c 4096 \
+  --image /path/to/image.jpg \
+  -p "이 이미지의 해상 상황을 묘사하세요." \
+  -n 300
+
+# VRAM 부족 시 — CLIP을 CPU에서 실행
+/path/to/llama.cpp/build/bin/llama-mtmd-cli \
+  -m     /path/to/gguf_output/llm.gguf \
+  --mmproj /path/to/gguf_output/mmproj.gguf \
+  --no-mmproj-offload \
+  --image /path/to/image.jpg \
+  -p "이 이미지의 해상 상황을 묘사하세요." \
+  -n 300
+```
+
+> **VRAM 관리**: LLM bf16(~15 GB) + KV 캐시가 GPU를 대부분 차지합니다.  
+> `-c 4096` 으로 컨텍스트를 줄이거나, `--no-mmproj-offload` 로 CLIP을 CPU에 두면 됩니다.
+
+**projector 키 매핑 (커스텀 → GGUF)**
+
+| 원본 (커스텀) | GGUF 텐서명 |
+|---|---|
+| `proj.0.weight` | `mm.0.weight` |
+| `proj.0.bias` | `mm.0.bias` |
+| `proj.2.weight` | `mm.2.weight` |
+| `proj.2.bias` | `mm.2.bias` |
+
+---
+
+### 비교 요약
+
+| 항목 | vLLM (`convert_to_llava_hf.py`) | llama.cpp (`convert_to_gguf.py`) |
+|---|---|---|
+| 출력 포맷 | HuggingFace safetensors (LlavaForConditionalGeneration) | GGUF (mmproj.gguf + llm.gguf) |
+| 정밀도 | bf16 / fp16 (무손실) | bf16 기본, 양자화 선택 가능 |
+| VRAM 요구 | ~16 GB (bf16 8B) | ~15 GB (bf16) / ~6 GB (Q4_K_M) |
+| 추론 속도 | ~524 tok/s (prompt), ~84 tok/s (gen) | ~84 tok/s (gen, bf16, RTX 5090) |
+| 사용 목적 | GPU 서버 고속 서빙 | 로컬 / 엣지 / 양자화 환경 |
+| 추가 의존성 | `vllm`, `transformers` | llama.cpp 빌드본, `gguf-py` |
 
 ---
