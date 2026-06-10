@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
+import IconHome from '@src/static/images/nav/icon-lnb-home-white.svg';
 
 import CompanyLogo from '@src/components/Frame/Header/CompanyLogo/CompanyLogo';
 
@@ -38,7 +39,11 @@ function Header({ authType, navHandler, isDashboard }) {
   }));
 
   const LogoItem = () => {
-    return <div className={cx('logo-icon')}>GenAI Platform</div>;
+    return (
+      <div className={cx('logo-icon')}>
+        <img src={IconHome} alt='Home' style={{ height: '24px' }} />
+      </div>
+    );
   };
   return (
     <div

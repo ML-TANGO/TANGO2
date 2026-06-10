@@ -1,4 +1,5 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef } from 'react';
+import IconHome from '@src/static/images/nav/icon-lnb-home-white.svg';
 // i18n
 import { useTranslation } from 'react-i18next';
 import { NavLink, useRouteMatch } from 'react-router-dom';
@@ -55,7 +56,16 @@ const IS_MANUAL = import.meta.env.VITE_REACT_APP_IS_MANUAL === 'true';
 const IS_HIDE_MANUAL = import.meta.env.VITE_REACT_APP_IS_HIDE_MANUAL === 'true';
 // 사이드 헤더 영역
 // 헤더 왼쪽 영역
-const headerLeftBoxContents = [<BreadCrumb />];
+const headerLeftBoxContents = [
+  <a
+    key='home'
+    href='/user/dashboard'
+    style={{ marginLeft: '76px', display: 'flex', alignItems: 'center', height: '100%' }}
+  >
+    <img src={IconHome} alt='Home' style={{ height: '24px' }} />
+  </a>,
+  <BreadCrumb key='breadcrumb' />,
+];
 // 헤더 오른쪽 영역
 const headerRightBoxContents = [
   <UserSetting />,
@@ -184,9 +194,7 @@ function PageTemplate({
     };
   }, [navList, currentPath, makePath]);
 
-  const logoItem = () => {
-    return <div className={cx('logo-icon')}>GenAI Platform</div>;
-  };
+  const logoItem = () => null;
 
   useEffect(() => {
     if (currentPath === '/user/dashboard') {
@@ -204,8 +212,7 @@ function PageTemplate({
             expandHandler={expandHandler}
             leftBoxContents={headerLeftBoxContents}
             rightBoxContents={headerRightBoxContents}
-            isLogo={true}
-            logoIcon={logoItem}
+            isLogo={false}
             isExpand={true}
           />
         );

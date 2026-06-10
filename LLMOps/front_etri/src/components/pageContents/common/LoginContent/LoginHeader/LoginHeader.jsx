@@ -21,13 +21,22 @@ const MODE = import.meta.env.VITE_REACT_APP_MODE?.toLowerCase();
 function LoginHeader() {
   return (
     <div className={cx('header')}>
-      <a href='https://www.acryl.ai' rel='noopener noreferrer' target='_blank'>
-        <img
-          className={cx('company-logo')}
-          src='/images/logo/ACRYL_CI.png'
-          alt='Acryl Inc.'
-        />
-      </a>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <a href='https://www.etri.re.kr/' rel='noopener noreferrer' target='_blank'>
+          <img
+            className={cx('company-logo')}
+            src='/images/logo/logo_etri.png'
+            alt='ETRI'
+          />
+        </a>
+        <a href='https://www.acryl.ai' rel='noopener noreferrer' target='_blank'>
+          <img
+            className={cx('company-logo')}
+            src='/images/logo/ACRYL_CI.png'
+            alt='Acryl Inc.'
+          />
+        </a>
+      </div>
       {PARTNER[MODE]?.logo?.loginHeader && (
         <a
           href={PARTNER[MODE]?.siteUrl || '#'}

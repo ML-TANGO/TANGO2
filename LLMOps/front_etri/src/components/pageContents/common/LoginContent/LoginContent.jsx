@@ -11,6 +11,7 @@ import { useEffect } from 'react';
 
 import Language from '@src/components/Frame/Footer/Language';
 import LoginFrame from '@src/components/Frame/LoginFrame';
+import ETRITANGOLogo from '@src/static/images/logo/ETRI_TANGO_logo.svg';
 
 import usePreloadComponent from '@src/hooks/usePreloadComponent';
 
@@ -26,6 +27,23 @@ const UPDATE_DATE = import.meta.env.VITE_REACT_APP_UPDATE_DATE || today();
 
 // Copyright 연도
 const year = dayjs().year();
+
+const partnerFooterLogo = PARTNER['jp'].logo.footer;
+const PartnerFooterLogo = partnerFooterLogo;
+
+function FooterLogos() {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+      <img src='/images/logo/ACRYL_CI.png' alt='Acryl Inc.' style={{ height: '16px' }} />
+      {typeof partnerFooterLogo === 'function' ? (
+        <PartnerFooterLogo />
+      ) : (
+        <img src={partnerFooterLogo} alt='logo' style={{ height: '29px' }} />
+      )}
+      <img src={ETRITANGOLogo} alt='ETRI TANGO' style={{ height: '40px' }} />
+    </div>
+  );
+}
 
 function LoginContent() {
   const { lazyLoad } = usePreloadComponent();
@@ -62,8 +80,8 @@ function LoginContent() {
       footerRender={
         <Footer
           theme={theme.PRIMARY_THEME}
-          logoIcon={PARTNER[MODE]?.logo.footer || PARTNER['jp'].logo.footer}
-          copyrights={`© ${year} Acryl inc. All rights reserved.`}
+          logoIcon={() => null}
+          copyrights={`© ${year} Electronics and Telecommunications Research Institute. All rights reserved.`}
           updated={UPDATE_DATE}
           language={<Language />}
         />

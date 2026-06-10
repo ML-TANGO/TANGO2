@@ -44,12 +44,11 @@ function LeftBoxContent() {
       )}
       <img
         className={cx('service-logo')}
-        src='/images/logo/logo_etri.png'
-        alt='ETRI'
+        src='/images/logo/ETRI_TANGO_logo.svg'
+        alt='ETRI TANGO'
       />
-      <span className={cx('welcome-title')}>TANGO</span>
       <span className={cx('welcome-sub-title')}>
-        (<strong>T</strong>arget <strong>A</strong>ware <strong>N</strong>o-code neural network <strong>G</strong>eneration and <strong>O</strong>peration framework)
+        <strong>T</strong>arget <strong>A</strong>ware <strong>N</strong>o-code neural network <strong>G</strong>eneration and <strong>O</strong>peration framework
       </span>
     </div>
   );
