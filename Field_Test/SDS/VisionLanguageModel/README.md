@@ -611,8 +611,8 @@ python gaa/compare_models.py \
 # 학습에 사용되지 않은 데이터셋 `SDS/dataset/20251031/` 경로의 데이터를 대상으로 합니다.
       
 python test_sds.py \
-      --lora_path      "TANGO2-SDS/clip_llama31_lora_marine_sds_lora_ko/" \
-      --projector_path "TANGO2-SDS/clip_llama31_lora_marine_sds_lora_ko/projector.bin" \
+      --lora_path      "TANGO2-SDS/clip_llama31_proj_lora_marine_sds_lora_ko/" \
+      --projector_path "TANGO2-SDS/clip_llama31_proj_lora_marine_sds_lora_ko/projector.bin" \
       --vision_model   "openai/clip-vit-large-patch14-336" \
       --llm_model      "/path/to/Llama-3.1-8B-Instruct" \
       --sample_dir     "../dataset/20251031/dataset1" \
