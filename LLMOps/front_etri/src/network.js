@@ -45,6 +45,7 @@ export const network = (() => {
       const mockData = getMockResponse(url, method, body, null);
       await new Promise(resolve => setTimeout(resolve, 50));
       return {
+        status: 200,
         data: mockData,
         headers: { token: 'dummy-token' }
       };

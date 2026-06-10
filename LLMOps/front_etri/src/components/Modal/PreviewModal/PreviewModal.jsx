@@ -103,20 +103,50 @@ function PreviewModal({ type, data }) {
             <pre className={cx('text')}>{previewData}</pre>
           )}
           {fileType === 'json' && (
-            <ReactJson
-              src={previewData}
-              theme='summerfruit:inverted'
-              iconStyle='triangle'
-              collapseStringsAfterLength={36}
-              style={{
-                textAlign: 'left',
-                fontFamily: 'SpoqaM',
-                fontSize: '14px',
-                lineHeight: '1.2',
-                overflowX: 'auto',
-                paddingBottom: '8px',
-              }}
-            />
+            (() => {
+              let parsedData = previewData;
+              let isJsonParseError = false;
+              if (typeof previewData === 'string') {
+                try {
+                  parsedData = JSON.parse(previewData);
+                } catch (e) {
+                  isJsonParseError = true;
+                }
+              }
+              if (isJsonParseError) {
+                return (
+                  <pre style={{
+                    background: '#1e1e1e',
+                    color: '#d4d4d4',
+                    padding: '16px',
+                    borderRadius: '4px',
+                    overflow: 'auto',
+                    fontSize: '13px',
+                    lineHeight: '1.5',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-all'
+                  }}>
+                    {typeof previewData === 'string' ? previewData : JSON.stringify(previewData, null, 2)}
+                  </pre>
+                );
+              }
+              return (
+                <ReactJson
+                  src={parsedData}
+                  theme='summerfruit:inverted'
+                  iconStyle='triangle'
+                  collapseStringsAfterLength={36}
+                  style={{
+                    textAlign: 'left',
+                    fontFamily: 'SpoqaM',
+                    fontSize: '14px',
+                    lineHeight: '1.2',
+                    overflowX: 'auto',
+                    paddingBottom: '8px',
+                  }}
+                />
+              );
+            })()
           )}
           {fileType === 'markdown' && (
             <div className={cx('markdown')}>

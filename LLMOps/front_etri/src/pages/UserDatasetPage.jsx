@@ -89,6 +89,9 @@ function UserDatasetPage({ trackingEvent }) {
   const [toggledClearRows, setToggledClearRows] = useState(false);
   const [builtInModalOpen, setBuiltInModalOpen] = useState(false);
   const [builtInModelList, setBuiltInModelList] = useState([]);
+  const [transformations, setTransformations] = useState([]);
+  const [isTransformModalOpen, setIsTransformModalOpen] = useState(false);
+  const [selectedTransformItem, setSelectedTransformItem] = useState(null);
   const [accessType, setAccessType] = useState({
     label: t('allAccessType.label'),
     value: 'all',
@@ -182,6 +185,32 @@ function UserDatasetPage({ trackingEvent }) {
       errorToastMessage(error, message);
     }
   }, [allLoading, dispatch, keyword, onSearch, syncLoading, workspaceId]);
+
+  /**
+   * Transformation 데이터 요청
+   */
+  const fetchTransformations = useCallback(async () => {
+    const response = await callApi({
+      url: 'datasets/transformations',
+      method: 'get',
+    });
+    const { status, result, message, error } = response;
+    if (status === STATUS_SUCCESS) {
+      setTransformations(result.list || []);
+    } else {
+      errorToastMessage(error, message);
+    }
+  }, []);
+
+  const onOpenTransformModal = useCallback((item) => {
+    setSelectedTransformItem(item);
+    setIsTransformModalOpen(true);
+  }, []);
+
+  const onCloseTransformModal = useCallback(() => {
+    setIsTransformModalOpen(false);
+    setSelectedTransformItem(null);
+  }, []);
 
   /**
    * dataset download
@@ -603,6 +632,34 @@ function UserDatasetPage({ trackingEvent }) {
     });
   };
 
+  const onTransformRowClick = (data) => {
+    const {
+      id: datasetId,
+      dataset_name: name,
+      description,
+      access,
+      permission_level,
+    } = data;
+
+    history.push({
+      pathname: `/user/workspace/${workspaceId}/datasets/transformations/${datasetId}/files`,
+      state: {
+        id: datasetId,
+        name,
+        description,
+        accessType: access || 0,
+        permissionLevel: permission_level || 4,
+        workspaceId,
+        loc: ['Home', name, 'Files'],
+      },
+    });
+
+    trackingEvent({
+      category: 'User Dataset Page',
+      action: 'Move To Transformation Detail Page',
+    });
+  };
+
   /**
    * 검색/필터 셀렉트 박스 이벤트 핸들러
    *
@@ -876,6 +933,49 @@ function UserDatasetPage({ trackingEvent }) {
     },
   ];
 
+  const transformColumns = [
+    {
+      name: t('datasetName.label'),
+      selector: 'dataset_name',
+      sortable: true,
+      minWidth: '180px',
+    },
+    {
+      name: t('sourceDataset.label') || 'Source Dataset',
+      selector: 'source_dataset_name',
+      sortable: true,
+      minWidth: '150px',
+    },
+    {
+      name: t('outputFiles.label') || 'Output Files',
+      selector: 'file_count',
+      sortable: true,
+      minWidth: '120px',
+      cell: ({ file_count: fileCount }) => {
+        return `${numberWithCommas(fileCount)} ${
+          fileCount > 1 ? 'files' : 'file'
+        }`;
+      },
+    },
+    {
+      name: t('size.label'),
+      selector: 'size',
+      sortable: true,
+      minWidth: '120px',
+      cell: ({ size }) => {
+        if (!size) return '0 Bytes';
+        return convertBinaryByte(size);
+      },
+    },
+    {
+      name: t('createdAt.label'),
+      selector: 'created_at',
+      sortable: true,
+      minWidth: '160px',
+      cell: ({ created_at: date }) => convertLocalTime(date),
+    }
+  ];
+
   /**
    * Action 브래드크럼
    */
@@ -904,9 +1004,10 @@ function UserDatasetPage({ trackingEvent }) {
   useEffect(() => {
     if (mount === false) {
       getDatasetsData();
+      fetchTransformations();
       setMount(true);
     }
-  }, [getDatasetsData, mount]);
+  }, [getDatasetsData, fetchTransformations, mount]);
 
   useEffect(() => {
     breadCrumbHandler();
@@ -930,6 +1031,7 @@ function UserDatasetPage({ trackingEvent }) {
       }}
       downloading={downloading}
       onRowClick={onRowClick}
+      onTransformRowClick={onTransformRowClick}
       totalRows={totalRows}
       toggledClearRows={toggledClearRows}
       deleteBtnDisabled={selectedRows.length === 0}
@@ -944,6 +1046,13 @@ function UserDatasetPage({ trackingEvent }) {
       builtInTemplateOpen={builtInTemplateOpen}
       onSortHandler={onSortHandler}
       onClickDataResourceSetting={onClickDataResourceSetting}
+      transformColumns={transformColumns}
+      transformations={transformations}
+      isTransformModalOpen={isTransformModalOpen}
+      selectedTransformItem={selectedTransformItem}
+      onOpenTransformModal={onOpenTransformModal}
+      onCloseTransformModal={onCloseTransformModal}
+      datasets={originData}
     />
   );
 }

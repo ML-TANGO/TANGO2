@@ -174,6 +174,9 @@ const DeployDashboardPage = lazy(() =>
 const UserHomePage = lazy(() => import('@src/pages/UserHomePage'));
 const UserDatasetPage = lazy(() => import('@src/pages/UserDatasetPage'));
 const DatasetDetailPage = lazy(() => import('@src/pages/DatasetDetailPage'));
+const TransformationDetailPage = lazy(() =>
+  import('@src/pages/TransformationDetailPage'),
+);
 const UserTrainingPage = lazy(() => import('@src/pages/UserTrainingPage'));
 const UserHpsPage = lazy(() => import('@src/pages/UserHpsPage'));
 const UserCheckpointPage = lazy(() => import('@src/pages/UserCheckpointPage'));
@@ -504,6 +507,16 @@ const routeArr = [
     activeIcon: IconLnbDatasetsBlue,
     platform: 'flightbase',
     render: (props) => <DatasetDetailPage {...props} />,
+  },
+  {
+    name: 'Transformation Detail',
+    path: '/user/workspace/:id/datasets/transformations/:did/files',
+    exact: true,
+    disabled: true,
+    icon: IconLnbDatasetsGray,
+    activeIcon: IconLnbDatasetsBlue,
+    platform: 'flightbase',
+    render: (props) => <TransformationDetailPage {...props} />,
   },
   // {
   //   name: 'Training',
