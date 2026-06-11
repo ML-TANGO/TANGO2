@@ -2501,7 +2501,11 @@ export const mockResponses = {
         deployment_type: 'built-in',
         built_in_model_name: 'SDS',
         user_name: 'etri',
-        description: 'Llama 3 8B model deployment',
+        description: 'Llama 3 8B model deployment on cloud (vLLM)',
+        target_category: 'cloud',
+        target_device: 'AWS EC2 g5 (A10G)',
+        serving_system: 'vLLM',
+        deploy_method: 'auto',
         deployment_status: {
           status: 'running',
           worker: {
@@ -2546,7 +2550,11 @@ export const mockResponses = {
         deployment_type: 'built-in',
         built_in_model_name: 'SDS',
         user_name: 'etri',
-        description: 'SDS VLM model deployment on Orin using TensorRT',
+        description: 'SDS VLM model on Jetson Orin AGX (TensorRT-LLM, 자동 배포)',
+        target_category: 'edge-k8s',
+        target_device: 'NVIDIA Jetson Orin AGX 64GB',
+        serving_system: 'TensorRT-LLM',
+        deploy_method: 'auto',
         deployment_status: {
           status: 'running',
           worker: {
@@ -2563,8 +2571,8 @@ export const mockResponses = {
         access: true,
         item_deleted: false,
         users: ['etri'],
-        target_device: 'Orin',
-        convert_type: 'TensorRT',
+        target_device: 'NVIDIA Jetson Orin AGX 64GB',
+        convert_type: 'TensorRT-LLM',
         instance: {
           ram: 32,
           cpu: 12,
@@ -2577,6 +2585,49 @@ export const mockResponses = {
             count: 0
           },
           name: 'orin-agx',
+          allocate: 1,
+          type: 'GPU'
+        }
+      },
+      {
+        id: 'dep-3',
+        name: 'SDS-Standalone-llama.cpp',
+        deployment_name: 'SDS-Standalone-llama.cpp',
+        status: 'stopped',
+        creator: 'etri',
+        created_at: '2026-06-11T10:00:00Z',
+        url: 'http://192.168.1.100:8080',
+        api_address: 'http://192.168.1.100:8080',
+        deployment_type: 'built-in',
+        built_in_model_name: 'SDS',
+        user_name: 'etri',
+        description: 'SDS 모델을 독립 서버에 수동 배포 (llama.cpp)',
+        target_category: 'standalone',
+        target_device: '독립 GPU 서버',
+        serving_system: 'llama.cpp',
+        deploy_method: 'manual',
+        deployment_status: {
+          status: 'stopped',
+          worker: {
+            status: { installing: 0, running: 0, error: 0, pending: 0 },
+            configurations: {},
+            count: 0,
+            resource_usage: { cpu: 0, gpu: 0 }
+          }
+        },
+        permission_level: 1,
+        call_count_chart: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        bookmark: false,
+        model_type: 'built-in',
+        access: true,
+        item_deleted: false,
+        users: ['etri'],
+        instance: {
+          ram: 32,
+          cpu: 16,
+          gpu: { name: 'NVIDIA RTX 4090', count: 1 },
+          npu: { name: '', count: 0 },
+          name: 'rtx4090',
           allocate: 1,
           type: 'GPU'
         }
@@ -3116,8 +3167,11 @@ export const getMockResponse = (url, method, body, params) => {
       access: true,
       item_deleted: false,
       users: ['etri'],
-      target_device: body.target_device || 'Local',
-      convert_type: body.convert_type || 'vLLM',
+      target_category: body.target_category || 'cloud',
+      target_device: body.target_device || 'Unknown',
+      serving_system: body.serving_system || 'vLLM',
+      deploy_method: body.deploy_method || 'auto',
+      convert_type: body.serving_system || 'vLLM',
       instance: {
         ram: body.target_device === 'Orin' ? 32 : 16,
         cpu: body.target_device === 'Orin' ? 12 : 8,

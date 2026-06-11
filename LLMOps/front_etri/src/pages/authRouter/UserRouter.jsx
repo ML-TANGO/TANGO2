@@ -183,6 +183,7 @@ const UserFederatedLearningPage = lazy(() =>
   import('@src/pages/UserFederatedLearningPage'),
 );
 const UserDeploymentPage = lazy(() => import('@src/pages/UserDeploymentPage'));
+const DeploymentDetailPage = lazy(() => import('@src/pages/DeploymentDetailPage'));
 const UserServicePage = lazy(() => import('@src/pages/UserServicePage'));
 const SdsEvaluationPage = lazy(() => import('@src/pages/SdsEvaluationPage'));
 const BenchmarkEvaluationPage = lazy(() => import('@src/pages/BenchmarkEvaluationPage'));
@@ -802,6 +803,16 @@ const routeArr = [
     activeIcon: IconLnbServingBlue,
     platform: 'flightbase',
     render: (props) => <UserDeploymentPage {...props} />,
+  },
+  {
+    name: 'DeploymentDetail',
+    path: '/user/workspace/:id/deployments/:did',
+    exact: false,
+    disabled: true,
+    icon: IconLnbServingGray,
+    activeIcon: IconLnbServingBlue,
+    platform: 'flightbase',
+    render: (props) => <DeploymentDetailPage {...props} />,
   },
 ];
 

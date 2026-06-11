@@ -251,8 +251,12 @@ function UserDeploymentPage() {
       body: {
         deployment_name: formData.deployment_name,
         model_name: formData.model_name,
-        convert_type: formData.convert_type,
+        model_id: formData.model_id,
+        target_category: formData.target_category,
         target_device: formData.target_device,
+        target_device_id: formData.target_device_id,
+        serving_system: formData.serving_system,
+        deploy_method: formData.deploy_method,
         workspace_id: workspaceId,
       },
     });
@@ -347,6 +351,7 @@ function UserDeploymentPage() {
         isOpen={isWizardOpen}
         onClose={() => setIsWizardOpen(false)}
         onSubmit={handleDeploySubmit}
+        workspaceId={workspaceId}
       />
     </>
   );
