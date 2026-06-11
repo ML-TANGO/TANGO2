@@ -11,6 +11,7 @@ import FBLoading from '@src/components/organisms/FBLoading';
 import DeferredComponent from '@src/hooks/useDeferredComponent';
 
 import Card from './Card';
+import CreateCard from '@src/components/pageContents/user/UserDeploymentContent/CardList/CreateCard/CreateCard';
 
 import classNames from 'classnames/bind';
 // CSS module
@@ -50,6 +51,7 @@ function UserServiceContent({
   loading,
   serverError,
   workspaceId,
+  onNewEvaluation,
 }) {
   const { t } = useTranslation();
 
@@ -75,7 +77,7 @@ function UserServiceContent({
       className={cx('content', loading && 'loading-wrapper')}
     >
       <div className={cx('title-fliter')}>
-        <PageTitle>{t('Test')}</PageTitle>
+        <PageTitle>Evaluation</PageTitle>
         {(originData.length > 0 || serverError) && (
           <div>
             {/* <div className={cx('btn-box')}>
@@ -121,57 +123,10 @@ function UserServiceContent({
         </div>
       ) : serverError ? (
         <div className={cx('no-response')}>{t('noResponse.message')}</div>
-      ) : originData.length > 0 ? (
-        cardData.length > 0 ? (
-          <div className={cx('card-box')}>{serviceList}</div>
-        ) : (
-          <div className={cx('no-data')}>
-            <div className={cx('message')}>
-              <span>{t('noResultOf.message')}</span>
-              {serviceType.value !== 'all' && (
-                <span>
-                  {t('serviceType.label')} :{' '}
-                  <span className={cx('highlight')}>
-                    {t(serviceType.label)}
-                  </span>
-                </span>
-              )}
-              {status.value !== 'all' && serviceType.value !== 'all' && (
-                <span>&amp;</span>
-              )}
-              {status.value !== 'all' && (
-                <span>
-                  {t('status.label')} :{' '}
-                  <span className={cx('highlight')}>{t(status.label)}</span>
-                </span>
-              )}
-              {deploymentType.value !== 'all' &&
-                (serviceType.value !== 'all' || status.value !== 'all') && (
-                  <span>&amp;</span>
-                )}
-              {deploymentType.value !== 'all' && (
-                <span>
-                  {t('modelType.label')} :{' '}
-                  <span className={cx('highlight')}>
-                    {deploymentType.label}
-                  </span>
-                </span>
-              )}
-            </div>
-          </div>
-        )
       ) : (
-        <div className={cx('no-data')}>
-          <div className={cx('message')}>{t('noService.message')}</div>
-          <button
-            className={cx('go-to-btn')}
-            onClick={() => {
-              moveToDeploymentPage();
-            }}
-          >
-            {t('goToCreateDeployment.label')}
-            <img src='/images/icon/ic-right-blue.svg' alt='>' />
-          </button>
+        <div className={cx('card-box')}>
+          <CreateCard onClick={onNewEvaluation} label='새 평가 생성' />
+          {serviceList}
         </div>
       )}
     </div>

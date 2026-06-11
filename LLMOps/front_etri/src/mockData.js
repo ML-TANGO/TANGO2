@@ -2452,7 +2452,9 @@ export const mockResponses = {
     status: 1,
     result: {
       list: [
-        { id: 'sds-eval', name: 'SDS', type: 'built-in', description: 'SDS Expert Evaluation', status: 'active' }
+        { id: 'sds-eval',       name: '전문가 평가',    type: 'built-in', description: 'SDS',                                       eval_type: 'expert',    status: 'active' },
+        { id: 'benchmark-eval', name: '벤치마크',       type: 'built-in', description: 'MixATIS, LogicKor, 객체탐지, 세그멘테이션, OCR', eval_type: 'benchmark', status: 'active' },
+        { id: 'llm-judge-eval', name: 'LLM-as-a-Judge', type: 'built-in', description: 'ChatGPT, Claude, Gemini, 로컬 LLM',          eval_type: 'llm_judge', status: 'active' },
       ]
     },
     message: 'Success',

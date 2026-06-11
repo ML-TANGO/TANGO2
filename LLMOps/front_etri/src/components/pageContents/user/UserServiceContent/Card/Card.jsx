@@ -85,6 +85,10 @@ function Card({ data, openTest, wid }) {
         sessionStorage.setItem(`services/${wid}_scroll_pos`, window.scrollY);
         if (data.id === 'sds-eval') {
           history.push(`/user/workspace/${wid}/services/sds`);
+        } else if (data.id === 'benchmark-eval') {
+          history.push(`/user/workspace/${wid}/services/benchmark`);
+        } else if (data.id === 'llm-judge-eval') {
+          history.push(`/user/workspace/${wid}/services/llm-judge`);
         } else if (status === 'running' || status === 'active' || status === 'Running') {
           openTest(data);
         }

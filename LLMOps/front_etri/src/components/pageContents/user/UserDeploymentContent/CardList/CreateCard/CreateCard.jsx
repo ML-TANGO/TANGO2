@@ -5,7 +5,7 @@ import classNames from 'classnames/bind';
 import style from './CreateCard.module.scss';
 const cx = classNames.bind(style);
 
-function CreateCard({ onClick }) {
+function CreateCard({ onClick, label }) {
   const { t } = useTranslation();
   return (
     <div
@@ -15,7 +15,7 @@ function CreateCard({ onClick }) {
     >
       <div className={cx('inner-box')}>
         <div className={cx('plus')}></div>
-        <span className={cx('text')}>{t('newDeployment.label')}</span>
+        <span className={cx('text')}>{label ?? t('newDeployment.label')}</span>
       </div>
     </div>
   );

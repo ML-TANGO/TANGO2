@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useHistory } from 'react-router-dom';
+import { useHistory, useLocation } from 'react-router-dom';
 import { callApi, STATUS_SUCCESS } from '@src/network';
+import ModelSelector from '@src/components/ModelSelector/ModelSelector';
 import PageTitle from '@src/components/atoms/PageTitle';
 import FBLoading from '@src/components/organisms/FBLoading';
 import DeferredComponent from '@src/hooks/useDeferredComponent';
@@ -71,6 +72,9 @@ const CsvTable = ({ url }) => {
 const SdsEvaluationPage = () => {
   const { t } = useTranslation();
   const history = useHistory();
+  const location = useLocation();
+  const wid = location.pathname.split('/')[3];
+  const [selectedModel, setSelectedModel] = useState(null);
   const [samples, setSamples] = useState([]);
   const [loading, setLoading] = useState(true);
   const [evaluations, setEvaluations] = useState(() => {
@@ -232,6 +236,18 @@ const SdsEvaluationPage = () => {
             </button>
           </div>
         )}
+      </div>
+
+      {/* 평가 대상 모델 선택 */}
+      <div style={{ marginBottom: '28px' }}>
+        <div style={{ fontSize: '14px', fontWeight: '600', color: '#475569', marginBottom: '12px', borderLeft: '3px solid #3b82f6', paddingLeft: '10px' }}>
+          평가 대상 모델
+        </div>
+        <ModelSelector
+          wid={wid}
+          selected={selectedModel}
+          onSelect={(id) => setSelectedModel(id)}
+        />
       </div>
 
       {/* 리스트 카드 */}

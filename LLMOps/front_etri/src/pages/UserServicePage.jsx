@@ -6,6 +6,7 @@ import { withRouter } from 'react-router-dom';
 
 // Components
 import UserServiceContent from '@src/components/pageContents/user/UserServiceContent';
+import NewEvaluationModal from '@src/components/Modal/NewEvaluationModal/NewEvaluationModal';
 
 import { startPath } from '@src/store/modules/breadCrumb';
 import { openConfirm } from '@src/store/modules/confirm';
@@ -31,6 +32,7 @@ class UserServicePage extends PureComponent {
     loading: false,
     serverError: false,
     workspaceId: null,
+    isEvalModalOpen: false,
   };
 
   async componentDidMount() {
@@ -174,6 +176,22 @@ class UserServicePage extends PureComponent {
     });
   };
 
+  openEvalModal = () => this.setState({ isEvalModalOpen: true });
+
+  closeEvalModal = () => this.setState({ isEvalModalOpen: false });
+
+  handleEvalSelect = (typeId) => {
+    this.closeEvalModal();
+    const wid = this.state.workspaceId;
+    if (typeId === 'expert') {
+      this.props.history.push(`/user/workspace/${wid}/services/sds`);
+    } else if (typeId === 'benchmark') {
+      this.props.history.push(`/user/workspace/${wid}/services/benchmark`);
+    } else if (typeId === 'llm_judge') {
+      this.props.history.push(`/user/workspace/${wid}/services/llm-judge`);
+    }
+  };
+
   /**
    * 배포 화면으로 이동
    */
@@ -202,7 +220,14 @@ class UserServicePage extends PureComponent {
           openTest={openTest}
           selectInputHandler={selectInputHandler}
           moveToDeploymentPage={moveToDeploymentPage}
+          onNewEvaluation={this.openEvalModal}
         />
+        {state.isEvalModalOpen && (
+          <NewEvaluationModal
+            onClose={this.closeEvalModal}
+            onSelect={this.handleEvalSelect}
+          />
+        )}
       </>
     );
   }

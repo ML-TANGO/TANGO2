@@ -1,0 +1,71 @@
+.loading, .empty {
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: #8890b0;
+  padding: 8px 0;
+}
+
+.grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.card {
+  border: 1px solid #2e3358;
+  border-radius: 10px;
+  padding: 14px 16px;
+  min-width: 160px;
+  max-width: 220px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: border-color 0.2s, background 0.2s;
+
+  &:hover {
+    border-color: #4f6ef7;
+    background: rgba(79, 110, 247, 0.06);
+  }
+
+  &.selected {
+    border-color: #4f6ef7;
+    background: rgba(79, 110, 247, 0.14);
+  }
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.name {
+  font-family: SpoqaB;
+  font-size: 14px;
+  color: #e8eaf6;
+}
+
+.badge {
+  font-family: SpoqaM;
+  font-size: 10px;
+  color: #4f6ef7;
+  border: 1px solid #4f6ef7;
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.desc {
+  font-family: SpoqaM;
+  font-size: 11px;
+  color: #8890b0;
+  line-height: 1.4;
+}
+
+.meta {
+  display: flex;
+  gap: 8px;
+  font-family: SpoqaM;
+  font-size: 11px;
+  color: #5a6080;
+}

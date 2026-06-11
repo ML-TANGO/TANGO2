@@ -187,6 +187,8 @@ const UserFederatedLearningPage = lazy(() =>
 const UserDeploymentPage = lazy(() => import('@src/pages/UserDeploymentPage'));
 const UserServicePage = lazy(() => import('@src/pages/UserServicePage'));
 const SdsEvaluationPage = lazy(() => import('@src/pages/SdsEvaluationPage'));
+const BenchmarkEvaluationPage = lazy(() => import('@src/pages/BenchmarkEvaluationPage'));
+const LlmJudgeEvaluationPage = lazy(() => import('@src/pages/LlmJudgeEvaluationPage'));
 const UserTestPage = lazy(() => import('@src/pages/UserTestPage'));
 const NotFoundPage = lazy(() => import('@src/pages/NotFoundPage'));
 const UserDatasetPreprocessPage = lazy(() =>
@@ -793,6 +795,26 @@ const routeArr = [
     activeIcon: IconLnbTestBlue,
     platform: 'flightbase',
     render: (props) => <SdsEvaluationPage {...props} />,
+  },
+  {
+    name: 'BenchmarkEvaluation',
+    path: '/user/workspace/:id/services/benchmark',
+    exact: true,
+    disabled: true,
+    icon: IconLnbTestGray,
+    activeIcon: IconLnbTestBlue,
+    platform: 'flightbase',
+    render: (props) => <BenchmarkEvaluationPage {...props} />,
+  },
+  {
+    name: 'LlmJudgeEvaluation',
+    path: '/user/workspace/:id/services/llm-judge',
+    exact: true,
+    disabled: true,
+    icon: IconLnbTestGray,
+    activeIcon: IconLnbTestBlue,
+    platform: 'flightbase',
+    render: (props) => <LlmJudgeEvaluationPage {...props} />,
   },
   {
     name: 'Deployment',
