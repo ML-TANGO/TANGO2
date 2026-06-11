@@ -11,7 +11,6 @@ import FBLoading from '@src/components/organisms/FBLoading';
 import DeferredComponent from '@src/hooks/useDeferredComponent';
 
 import Card from './Card';
-import CreateCard from '@src/components/pageContents/user/UserDeploymentContent/CardList/CreateCard/CreateCard';
 
 import classNames from 'classnames/bind';
 // CSS module
@@ -125,7 +124,10 @@ function UserServiceContent({
         <div className={cx('no-response')}>{t('noResponse.message')}</div>
       ) : (
         <div className={cx('card-box')}>
-          <CreateCard onClick={onNewEvaluation} label='새 평가 생성' />
+          <div className={cx('create-card')} onClick={onNewEvaluation}>
+            <span className={cx('create-plus')}>+</span>
+            <span>새 평가 생성</span>
+          </div>
           {serviceList}
         </div>
       )}

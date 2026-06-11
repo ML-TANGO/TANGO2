@@ -13,6 +13,7 @@ nohup.out
 *.cursor/
 *.aider*
 *.agents/
+*.vite
 
 # Python
 __pycache__/

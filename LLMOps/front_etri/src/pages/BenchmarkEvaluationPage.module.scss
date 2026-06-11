@@ -1,7 +1,8 @@
+@import '@src/styles/color.scss';
+
 .page {
   padding: 32px;
   min-height: 100%;
-  color: #e8eaf6;
 }
 
 .header {
@@ -13,19 +14,20 @@
 
 .back-btn {
   background: none;
-  border: 1px solid #2e3358;
+  border: 1px solid $mono203;
   border-radius: 8px;
-  color: #8890b0;
+  color: $mono205;
   padding: 8px 16px;
   font-size: 13px;
+  font-family: SpoqaM;
   cursor: pointer;
-  &:hover { border-color: #4f6ef7; color: #e8eaf6; }
+  &:hover { border-color: $blue104; color: $blue104; }
 }
 
 .title {
   font-family: SpoqaB;
   font-size: 22px;
-  color: #e8eaf6;
+  color: $mono207;
 }
 
 .body {
@@ -43,47 +45,47 @@
 .section-title {
   font-family: SpoqaB;
   font-size: 16px;
-  color: #c0c8f0;
-  border-left: 3px solid #4f6ef7;
-  padding-left: 10px;
+  color: $mono207;
+  border-left: 3px solid $blue104;
+  padding-left: 8px;
 }
 
 .option-grid {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 12px;
 }
 
 .option-card {
-  border: 1px solid #2e3358;
+  border: 1px solid $mono203;
   border-radius: 10px;
-  padding: 14px 18px;
-  min-width: 140px;
+  padding: 14px 16px;
+  min-height: 72px;
   cursor: pointer;
-  transition: border-color 0.2s, background 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 
   &:hover {
-    border-color: #4f6ef7;
-    background: rgba(79, 110, 247, 0.06);
+    border-color: $blue104;
+    box-shadow: $card-hover-color;
   }
 
   &.selected {
-    border-color: #4f6ef7;
-    background: rgba(79, 110, 247, 0.14);
+    border-color: $blue104;
+    background: rgba($blue104, 0.06);
   }
 }
 
 .option-name {
   font-family: SpoqaB;
   font-size: 14px;
-  color: #e8eaf6;
+  color: $mono207;
   margin-bottom: 4px;
 }
 
 .option-desc {
   font-family: SpoqaM;
   font-size: 11px;
-  color: #8890b0;
+  color: $mono205;
   line-height: 1.4;
 }
 
@@ -94,17 +96,17 @@
 
 .run-btn {
   padding: 12px 32px;
-  border-radius: 10px;
+  border-radius: 8px;
   border: none;
-  background: #4f6ef7;
-  color: #fff;
+  background: $blue104;
+  color: $mono200;
   font-family: SpoqaB;
   font-size: 15px;
   cursor: pointer;
-  &:hover { background: #3a58e0; }
+  &:hover { background: $blue105; }
   &.disabled {
-    background: #2e3358;
-    color: #5a6080;
+    background: $mono203;
+    color: $mono205;
     cursor: not-allowed;
   }
 }
@@ -116,23 +118,23 @@
   font-size: 14px;
 
   th {
-    background: #1e2238;
-    color: #8890b0;
+    background: $mono202;
+    color: $mono205;
     padding: 10px 16px;
     text-align: left;
-    border-bottom: 1px solid #2e3358;
+    border-bottom: 1px solid $mono203;
   }
 
   td {
     padding: 10px 16px;
-    border-bottom: 1px solid #1e2238;
-    color: #c0c8f0;
+    border-bottom: 1px solid $mono202;
+    color: $mono207;
   }
 
-  tr:hover td { background: rgba(79, 110, 247, 0.05); }
+  tr:hover td { background: rgba($blue104, 0.04); }
 }
 
 .score {
   font-family: SpoqaB;
-  color: #4f6ef7;
+  color: $blue104;
 }

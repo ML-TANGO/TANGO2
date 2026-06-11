@@ -1,7 +1,8 @@
+@import '@src/styles/color.scss';
+
 .page {
   padding: 32px;
   min-height: 100%;
-  color: #e8eaf6;
 }
 
 .header {
@@ -13,19 +14,20 @@
 
 .back-btn {
   background: none;
-  border: 1px solid #2e3358;
+  border: 1px solid $mono203;
   border-radius: 8px;
-  color: #8890b0;
+  color: $mono205;
   padding: 8px 16px;
   font-size: 13px;
+  font-family: SpoqaM;
   cursor: pointer;
-  &:hover { border-color: #4f6ef7; color: #e8eaf6; }
+  &:hover { border-color: $blue104; color: $blue104; }
 }
 
 .title {
   font-family: SpoqaB;
   font-size: 22px;
-  color: #e8eaf6;
+  color: $mono207;
 }
 
 .body {
@@ -43,9 +45,9 @@
 .section-title {
   font-family: SpoqaB;
   font-size: 16px;
-  color: #c0c8f0;
-  border-left: 3px solid #4f6ef7;
-  padding-left: 10px;
+  color: $mono207;
+  border-left: 3px solid $blue104;
+  padding-left: 8px;
 }
 
 .type-tabs {
@@ -56,18 +58,19 @@
 .tab {
   padding: 8px 20px;
   border-radius: 8px;
-  border: 1px solid #2e3358;
+  border: 1px solid $mono203;
   background: transparent;
-  color: #8890b0;
+  color: $mono205;
   font-family: SpoqaM;
   font-size: 14px;
   cursor: pointer;
   &.active {
-    border-color: #4f6ef7;
-    background: rgba(79, 110, 247, 0.15);
-    color: #e8eaf6;
+    border-color: $blue104;
+    background: rgba($blue104, 0.08);
+    color: $blue104;
+    font-family: SpoqaB;
   }
-  &:hover:not(.active) { border-color: #4f6ef7; }
+  &:hover:not(.active) { border-color: $blue104; }
 }
 
 .judge-area {
@@ -77,31 +80,25 @@
 }
 
 .judge-cards {
-  display: flex;
-  gap: 14px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
 }
 
 .judge-card {
-  flex: 1;
-  border: 1px solid #2e3358;
-  border-radius: 12px;
-  padding: 16px;
+  border: 1px solid $mono203;
+  border-radius: 10px;
+  padding: 14px 16px;
+  min-height: 72px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  transition: border-color 0.2s, background 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 
-  &:hover {
-    border-color: #4f6ef7;
-    background: rgba(79, 110, 247, 0.06);
-  }
-
-  &.selected {
-    border-color: #4f6ef7;
-    background: rgba(79, 110, 247, 0.14);
-  }
+  &:hover { border-color: $blue104; box-shadow: $card-hover-color; }
+  &.selected { border-color: $blue104; background: rgba($blue104, 0.06); }
 }
 
 .judge-icon { font-size: 26px; }
@@ -109,13 +106,13 @@
 .judge-label {
   font-family: SpoqaB;
   font-size: 15px;
-  color: #e8eaf6;
+  color: $mono207;
 }
 
 .judge-model {
   font-family: SpoqaM;
   font-size: 11px;
-  color: #8890b0;
+  color: $mono205;
 }
 
 .field {
@@ -125,74 +122,68 @@
 }
 
 .field-label {
-  font-family: SpoqaM;
+  font-family: SpoqaB;
   font-size: 13px;
-  color: #8890b0;
+  color: $mono207;
 }
 
 .field-input {
-  background: #12152a;
-  border: 1px solid #2e3358;
+  background: $mono200;
+  border: 1px solid $mono203;
   border-radius: 8px;
-  color: #e8eaf6;
+  color: $mono207;
   padding: 10px 14px;
   font-family: SpoqaM;
   font-size: 14px;
   outline: none;
-  &:focus { border-color: #4f6ef7; }
-  &::placeholder { color: #4a5070; }
+  &:focus { border-color: $blue104; }
+  &::placeholder { color: $mono204; }
 }
 
 .criteria-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 12px;
 }
 
 .criteria-card {
-  border: 1px solid #2e3358;
+  border: 1px solid $mono203;
   border-radius: 10px;
-  padding: 14px;
+  padding: 14px 16px;
+  min-height: 72px;
   cursor: pointer;
-  transition: border-color 0.2s, background 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 
-  &:hover {
-    border-color: #4f6ef7;
-    background: rgba(79, 110, 247, 0.06);
-  }
-
-  &.selected {
-    border-color: #4f6ef7;
-    background: rgba(79, 110, 247, 0.14);
-  }
+  &:hover { border-color: $blue104; box-shadow: $card-hover-color; }
+  &.selected { border-color: $blue104; background: rgba($blue104, 0.06); }
 }
 
 .criteria-label {
   font-family: SpoqaB;
   font-size: 14px;
-  color: #e8eaf6;
+  color: $mono207;
   margin-bottom: 4px;
 }
 
 .criteria-desc {
   font-family: SpoqaM;
   font-size: 11px;
-  color: #8890b0;
+  color: $mono205;
   line-height: 1.4;
 }
 
 .prompt-textarea {
-  background: #12152a;
-  border: 1px solid #2e3358;
+  background: $mono200;
+  border: 1px solid $mono203;
   border-radius: 8px;
-  color: #e8eaf6;
+  color: $mono207;
   padding: 12px 14px;
   font-family: SpoqaM;
   font-size: 14px;
   line-height: 1.6;
   outline: none;
   resize: vertical;
-  &:focus { border-color: #4f6ef7; }
+  &:focus { border-color: $blue104; }
 }
 
 .run-row {
@@ -202,19 +193,15 @@
 
 .run-btn {
   padding: 12px 32px;
-  border-radius: 10px;
+  border-radius: 8px;
   border: none;
-  background: #4f6ef7;
-  color: #fff;
+  background: $blue104;
+  color: $mono200;
   font-family: SpoqaB;
   font-size: 15px;
   cursor: pointer;
-  &:hover { background: #3a58e0; }
-  &.disabled {
-    background: #2e3358;
-    color: #5a6080;
-    cursor: not-allowed;
-  }
+  &:hover { background: $blue105; }
+  &.disabled { background: $mono203; color: $mono205; cursor: not-allowed; }
 }
 
 .result-table {
@@ -224,28 +211,28 @@
   font-size: 14px;
 
   th {
-    background: #1e2238;
-    color: #8890b0;
+    background: $mono202;
+    color: $mono205;
     padding: 10px 16px;
     text-align: left;
-    border-bottom: 1px solid #2e3358;
+    border-bottom: 1px solid $mono203;
   }
 
   td {
     padding: 10px 16px;
-    border-bottom: 1px solid #1e2238;
-    color: #c0c8f0;
+    border-bottom: 1px solid $mono202;
+    color: $mono207;
   }
 
-  tr:hover td { background: rgba(79, 110, 247, 0.05); }
+  tr:hover td { background: rgba($blue104, 0.04); }
 }
 
 .score {
   font-family: SpoqaB;
-  color: #4f6ef7;
+  color: $blue104;
 }
 
 .reason {
   font-size: 12px;
-  color: #8890b0;
+  color: $mono205;
 }

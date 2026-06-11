@@ -55,6 +55,32 @@
       height: 100%;
     }
   }
+  .create-card {
+    height: 344px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    border-radius: 10px;
+    background: $mono200;
+    border: 1px dashed $blue103;
+    cursor: pointer;
+    font-family: SpoqaB;
+    font-size: 16px;
+    color: $blue104;
+    box-shadow: 0 3px 4px rgba(45, 118, 248, 0.06);
+    transition: background 0.2s, border-color 0.2s;
+    &:hover {
+      background: $hover-bg-color;
+      border-color: $blue104;
+    }
+    .create-plus {
+      font-size: 32px;
+      line-height: 1;
+    }
+  }
+
   .card-box {
     margin-top: 20px;
     display: grid;
@@ -62,7 +88,7 @@
     grid-column-gap: 30px;
     grid-row-gap: 30px;
     justify-content: space-between;
-    align-items: center;
+    align-items: start;
     @media (max-width: 1724px) {
       grid-template-columns: repeat(3, 1fr);
     }

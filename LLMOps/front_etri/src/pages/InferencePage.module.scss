@@ -3,7 +3,6 @@
 .page {
   padding: 32px;
   min-height: 100%;
-  color: #e8eaf6;
 }
 
 .title-bar {
@@ -13,47 +12,75 @@
 .title {
   font-family: SpoqaB;
   font-size: 24px;
-  color: #e8eaf6;
+  color: $mono207;
   margin-bottom: 6px;
 }
 
 .sub {
   font-family: SpoqaM;
   font-size: 13px;
-  color: #8890b0;
+  color: $mono205;
 }
 
 .loading {
   font-family: SpoqaM;
   font-size: 14px;
-  color: #8890b0;
+  color: $mono205;
   padding: 40px 0;
 }
 
-/* Card grid — matches deployment CardList layout */
 .card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 20px;
-  align-items: start;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 24px;
 }
 
-/* Session card */
-.session-card {
-  border: 1px solid #2e3358;
+.create-card {
+  border: 1px dashed $blue103;
   border-radius: 10px;
-  background: #12152a;
-  padding: 20px;
+  background: $mono200;
+  padding: 20px 24px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 140px;
+  transition: border-color 0.2s, background 0.2s;
+
+  &:hover {
+    background: $hover-bg-color;
+    border-color: $blue104;
+  }
+}
+
+.create-plus {
+  font-size: 28px;
+  color: $blue104;
+  line-height: 1;
+}
+
+.create-label {
+  font-family: SpoqaB;
+  font-size: 14px;
+  color: $blue104;
+}
+
+.session-card {
+  border: 1px solid $mono203;
+  border-radius: 10px;
+  background: $mono200;
+  padding: 20px 24px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  transition: border-color 0.2s, box-shadow 0.2s;
-  min-height: 160px;
+  min-height: 140px;
+  transition: box-shadow 0.2s;
 
   &:hover {
-    border-color: #4f6ef7;
-    box-shadow: 0 4px 16px rgba(79,110,247,0.12);
+    box-shadow: $card-hover-color;
   }
 }
 
@@ -67,7 +94,7 @@
 .session-name {
   font-family: SpoqaB;
   font-size: 15px;
-  color: #e8eaf6;
+  color: $mono207;
   line-height: 1.3;
 }
 
@@ -87,16 +114,16 @@
 .model-tag {
   font-family: SpoqaM;
   font-size: 12px;
-  border-radius: 6px;
+  border-radius: 4px;
   padding: 3px 8px;
 
   &.inference {
-    background: rgba(79,110,247,0.15);
-    color: #7b9fff;
+    background: $blue101;
+    color: $blue104;
   }
   &.prompt {
-    background: rgba(16,185,129,0.12);
-    color: #34d399;
+    background: $lime601;
+    color: $lime604;
   }
 }
 
@@ -109,8 +136,8 @@
 .res-chip {
   font-family: SpoqaM;
   font-size: 11px;
-  color: #8890b0;
-  border: 1px solid #2e3358;
+  color: $mono205;
+  border: 1px solid $mono203;
   border-radius: 4px;
   padding: 2px 7px;
 }
@@ -123,11 +150,11 @@
   padding: 3px 8px;
 
   &.single {
-    background: rgba(94,114,228,0.12);
-    color: #a0b0ff;
+    background: $blue101;
+    color: $blue104;
   }
   &.dual {
-    background: rgba(245,158,11,0.12);
-    color: #fbbf24;
+    background: $yellow301;
+    color: $yellow303;
   }
 }

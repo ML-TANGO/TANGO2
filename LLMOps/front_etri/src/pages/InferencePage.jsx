@@ -3,15 +3,14 @@ import { useHistory, useLocation } from 'react-router-dom';
 import { callApi, STATUS_SUCCESS } from '@src/network';
 import classNames from 'classnames/bind';
 import style from './InferencePage.module.scss';
-import CreateCard from '@src/components/pageContents/user/UserDeploymentContent/CardList/CreateCard/CreateCard';
 import NewInferenceWizard from '@src/components/Modal/NewInferenceWizard/NewInferenceWizard';
 
 const cx = classNames.bind(style);
 
 const STATUS_META = {
-  ready:   { label: '준비',   color: '#10b981' },
-  running: { label: '실행 중', color: '#f59e0b' },
-  error:   { label: '오류',   color: '#ef4444' },
+  ready:   { label: '준비',   color: '#00c775' },
+  running: { label: '실행 중', color: '#ffc500' },
+  error:   { label: '오류',   color: '#fa4e57' },
 };
 
 export default function InferencePage() {
@@ -48,7 +47,10 @@ export default function InferencePage() {
         <div className={cx('loading')}>로딩 중...</div>
       ) : (
         <div className={cx('card-grid')}>
-          <CreateCard onClick={() => setWizardOpen(true)} label='새 추론 생성' />
+          <div className={cx('create-card')} onClick={() => setWizardOpen(true)}>
+            <span className={cx('create-plus')}>＋</span>
+            <span className={cx('create-label')}>새 추론 생성</span>
+          </div>
           {sessions.map((s) => {
             const infModel   = s.models?.find((m) => m.role === 'inference');
             const promptModel = s.models?.find((m) => m.role === 'prompt');

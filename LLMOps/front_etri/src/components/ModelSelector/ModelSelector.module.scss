@@ -1,7 +1,9 @@
+@import '@src/styles/color.scss';
+
 .loading, .empty {
   font-family: SpoqaM;
   font-size: 13px;
-  color: #8890b0;
+  color: $mono205;
   padding: 8px 0;
 }
 
@@ -12,25 +14,25 @@
 }
 
 .card {
-  border: 1px solid #2e3358;
+  border: 1px solid $mono203;
   border-radius: 10px;
-  padding: 14px 16px;
+  padding: 16px;
   min-width: 160px;
   max-width: 220px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  transition: border-color 0.2s, background 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 
   &:hover {
-    border-color: #4f6ef7;
-    background: rgba(79, 110, 247, 0.06);
+    border-color: $blue104;
+    box-shadow: $card-hover-color;
   }
 
   &.selected {
-    border-color: #4f6ef7;
-    background: rgba(79, 110, 247, 0.14);
+    border-color: $blue104;
+    background: rgba($blue104, 0.06);
   }
 }
 
@@ -43,14 +45,14 @@
 .name {
   font-family: SpoqaB;
   font-size: 14px;
-  color: #e8eaf6;
+  color: $mono207;
 }
 
 .badge {
   font-family: SpoqaM;
   font-size: 10px;
-  color: #4f6ef7;
-  border: 1px solid #4f6ef7;
+  color: $blue104;
+  border: 1px solid $blue104;
   border-radius: 4px;
   padding: 1px 6px;
 }
@@ -58,7 +60,7 @@
 .desc {
   font-family: SpoqaM;
   font-size: 11px;
-  color: #8890b0;
+  color: $mono205;
   line-height: 1.4;
 }
 
@@ -67,5 +69,5 @@
   gap: 8px;
   font-family: SpoqaM;
   font-size: 11px;
-  color: #5a6080;
+  color: $mono204;
 }

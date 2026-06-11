@@ -1,7 +1,9 @@
+@import '@src/styles/color.scss';
+
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.65);
+  background: rgba(0, 0, 0, 0.6);
   z-index: 1000;
   display: flex;
   align-items: center;
@@ -9,9 +11,9 @@
 }
 
 .wizard {
-  background: #1a1d2e;
-  border: 1px solid #2e3358;
-  border-radius: 16px;
+  background: $mono200;
+  border-radius: 12px;
+  box-shadow: 0 3px 16px rgba(0, 0, 0, 0.12);
   width: 680px;
   max-width: 96vw;
   max-height: 90vh;
@@ -31,19 +33,18 @@
 .title {
   font-family: SpoqaB;
   font-size: 20px;
-  color: #e8eaf6;
+  color: $mono207;
 }
 
 .close-btn {
   background: none;
   border: none;
-  color: #8890b0;
+  color: $mono205;
   font-size: 18px;
   cursor: pointer;
-  &:hover { color: #e8eaf6; }
+  &:hover { color: $mono207; }
 }
 
-/* Step bar */
 .step-bar {
   display: flex;
   align-items: center;
@@ -63,46 +64,37 @@
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  border: 2px solid #2e3358;
+  border: 2px solid $mono203;
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: SpoqaB;
   font-size: 12px;
-  color: #5a6080;
+  color: $mono204;
   flex-shrink: 0;
 
-  .active & {
-    border-color: #4f6ef7;
-    background: #4f6ef7;
-    color: #fff;
-  }
-  .done & {
-    border-color: #4f6ef7;
-    background: rgba(79,110,247,0.15);
-    color: #4f6ef7;
-  }
+  .active & { border-color: $blue104; background: $blue104; color: $mono200; }
+  .done &   { border-color: $blue104; background: rgba($blue104, 0.1); color: $blue104; }
 }
 
 .step-label {
   font-family: SpoqaM;
   font-size: 12px;
-  color: #5a6080;
+  color: $mono204;
   white-space: nowrap;
 
-  .active & { color: #e8eaf6; }
-  .done &   { color: #4f6ef7; }
+  .active & { color: $mono207; font-family: SpoqaB; }
+  .done &   { color: $blue104; }
 }
 
 .step-line {
   flex: 1;
   height: 1px;
-  background: #2e3358;
+  background: $mono203;
   margin: 0 8px;
-  &.filled { background: #4f6ef7; }
+  &.filled { background: $blue104; }
 }
 
-/* Body */
 .body {
   flex: 1;
   overflow-y: auto;
@@ -121,12 +113,11 @@
 .section-title {
   font-family: SpoqaB;
   font-size: 14px;
-  color: #c0c8f0;
-  border-left: 3px solid #4f6ef7;
+  color: $mono207;
+  border-left: 3px solid $blue104;
   padding-left: 8px;
 }
 
-/* Mode cards */
 .mode-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -134,39 +125,34 @@
 }
 
 .mode-card {
-  border: 1px solid #2e3358;
+  border: 1px solid $mono203;
   border-radius: 12px;
   padding: 16px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  transition: border-color 0.2s, background 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 
-  &:hover {
-    border-color: #4f6ef7;
-    background: rgba(79,110,247,0.06);
-  }
-  &.selected {
-    border-color: #4f6ef7;
-    background: rgba(79,110,247,0.14);
-  }
+  &:hover { border-color: $blue104; box-shadow: $card-hover-color; }
+  &.selected { border-color: $blue104; background: rgba($blue104, 0.06); }
 }
 
 .mode-icon { font-size: 26px; }
+
 .mode-name {
   font-family: SpoqaB;
   font-size: 14px;
-  color: #e8eaf6;
+  color: $mono207;
 }
+
 .mode-desc {
   font-family: SpoqaM;
   font-size: 12px;
-  color: #8890b0;
+  color: $mono205;
   line-height: 1.4;
 }
 
-/* Resource options */
 .res-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -174,17 +160,17 @@
 }
 
 .res-card {
-  border: 1px solid #2e3358;
+  border: 1px solid $mono203;
   border-radius: 8px;
   padding: 12px 14px;
   font-family: SpoqaM;
   font-size: 13px;
-  color: #c0c8f0;
+  color: $mono207;
   cursor: pointer;
-  transition: border-color 0.2s, background 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 
-  &:hover { border-color: #4f6ef7; background: rgba(79,110,247,0.06); }
-  &.selected { border-color: #4f6ef7; background: rgba(79,110,247,0.14); color: #e8eaf6; }
+  &:hover { border-color: $blue104; }
+  &.selected { border-color: $blue104; background: rgba($blue104, 0.06); }
 }
 
 .chip-row {
@@ -194,37 +180,36 @@
 }
 
 .chip {
-  border: 1px solid #2e3358;
+  border: 1px solid $mono203;
   border-radius: 8px;
   padding: 8px 18px;
   font-family: SpoqaM;
   font-size: 13px;
-  color: #8890b0;
+  color: $mono205;
   cursor: pointer;
-  transition: border-color 0.2s, background 0.2s;
+  transition: border-color 0.2s;
 
-  &:hover { border-color: #4f6ef7; }
-  &.selected { border-color: #4f6ef7; background: rgba(79,110,247,0.14); color: #e8eaf6; }
+  &:hover { border-color: $blue104; }
+  &.selected { border-color: $blue104; background: rgba($blue104, 0.06); color: $blue104; }
 }
 
-/* Step 3 */
 .name-input {
-  background: #12152a;
-  border: 1px solid #2e3358;
+  background: $mono200;
+  border: 1px solid $mono203;
   border-radius: 8px;
-  color: #e8eaf6;
+  color: $mono207;
   padding: 10px 14px;
   font-family: SpoqaM;
   font-size: 14px;
   outline: none;
   width: 100%;
   box-sizing: border-box;
-  &:focus { border-color: #4f6ef7; }
-  &::placeholder { color: #4a5070; }
+  &:focus { border-color: $blue104; }
+  &::placeholder { color: $mono204; }
 }
 
 .summary {
-  border: 1px solid #2e3358;
+  border: 1px solid $mono203;
   border-radius: 10px;
   overflow: hidden;
 }
@@ -232,14 +217,14 @@
 .s-row {
   display: flex;
   padding: 10px 16px;
-  border-bottom: 1px solid #1e2238;
+  border-bottom: 1px solid $mono202;
   &:last-child { border-bottom: none; }
 }
 
 .s-key {
   font-family: SpoqaM;
   font-size: 13px;
-  color: #8890b0;
+  color: $mono205;
   width: 130px;
   flex-shrink: 0;
 }
@@ -247,10 +232,9 @@
 .s-val {
   font-family: SpoqaM;
   font-size: 13px;
-  color: #e8eaf6;
+  color: $mono207;
 }
 
-/* Footer */
 .footer {
   display: flex;
   justify-content: flex-end;
@@ -258,47 +242,43 @@
   gap: 10px;
   padding: 16px 28px 24px;
   flex-shrink: 0;
-  border-top: 1px solid #1e2238;
+  border-top: 1px solid $mono203;
 }
 
 .back-btn {
   padding: 9px 20px;
   border-radius: 8px;
-  border: 1px solid #2e3358;
+  border: 1px solid $mono203;
   background: transparent;
-  color: #8890b0;
+  color: $mono205;
   font-family: SpoqaM;
   font-size: 14px;
   cursor: pointer;
   margin-right: auto;
-  &:hover { border-color: #4f6ef7; color: #e8eaf6; }
+  &:hover { border-color: $blue104; color: $blue104; }
 }
 
 .cancel-btn {
   padding: 9px 20px;
   border-radius: 8px;
-  border: 1px solid #2e3358;
+  border: 1px solid $mono203;
   background: transparent;
-  color: #8890b0;
+  color: $mono205;
   font-family: SpoqaM;
   font-size: 14px;
   cursor: pointer;
-  &:hover { border-color: #4f6ef7; color: #e8eaf6; }
+  &:hover { border-color: $blue104; color: $blue104; }
 }
 
 .next-btn, .create-btn {
   padding: 9px 24px;
   border-radius: 8px;
   border: none;
-  background: #4f6ef7;
-  color: #fff;
+  background: $blue104;
+  color: $mono200;
   font-family: SpoqaB;
   font-size: 14px;
   cursor: pointer;
-  &:hover { background: #3a58e0; }
-  &.disabled {
-    background: #2e3358;
-    color: #5a6080;
-    cursor: not-allowed;
-  }
+  &:hover { background: $blue105; }
+  &.disabled { background: $mono203; color: $mono205; cursor: not-allowed; }
 }

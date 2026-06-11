@@ -1,0 +1,256 @@
+@import '@src/styles/color.scss';
+
+.page {
+  padding: 24px 32px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.sticky-header {
+  position: sticky;
+  top: 0;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid $mono203;
+  padding: 16px 20px;
+  z-index: 50;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  margin-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.back-btn {
+  background: none;
+  border: none;
+  color: $mono205;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: SpoqaM;
+  font-size: 14px;
+  padding: 0;
+  margin-bottom: 4px;
+  &:hover { color: $blue104; }
+}
+
+.progress-count {
+  font-family: SpoqaB;
+  font-size: 18px;
+  color: $mono207;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: $mono203;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, $blue104 0%, $lime603 100%);
+  transition: width 0.3s ease-in-out;
+}
+
+.complete-banner {
+  padding: 14px 16px;
+  background: $lime601;
+  border: 1px solid $lime602;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.complete-stats {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  font-family: SpoqaM;
+  font-size: 14px;
+  color: $lime604;
+}
+
+.complete-title {
+  font-family: SpoqaB;
+  font-size: 15px;
+  color: $lime604;
+}
+
+.stat-o { color: $lime604; font-family: SpoqaB; }
+.stat-x { color: $red502; font-family: SpoqaB; }
+
+.reset-btn {
+  background: $mono200;
+  border: 1px solid $lime602;
+  color: $lime604;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: SpoqaM;
+  font-size: 13px;
+  &:hover { background: $lime601; }
+}
+
+.model-section {
+  margin-bottom: 28px;
+}
+
+.section-label {
+  font-family: SpoqaB;
+  font-size: 14px;
+  color: $mono205;
+  border-left: 3px solid $blue104;
+  padding-left: 10px;
+  margin-bottom: 12px;
+}
+
+.sample-list {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.sample-card {
+  background: $mono200;
+  border-radius: 10px;
+  border: 1px solid $mono203;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  transition: box-shadow 0.2s;
+  &:hover { box-shadow: $card-hover-color; }
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid $mono202;
+  padding-bottom: 12px;
+}
+
+.sample-num {
+  font-family: SpoqaB;
+  font-size: 16px;
+  color: $mono207;
+}
+
+.sample-id {
+  font-family: SpoqaM;
+  font-size: 12px;
+  color: $mono204;
+}
+
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field-label {
+  font-family: SpoqaB;
+  font-size: 13px;
+  color: $mono205;
+}
+
+.image-container {
+  background: $mono202;
+  border-radius: 8px;
+  border: 1px solid $mono203;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  max-height: 400px;
+}
+
+.text-block {
+  background: $mono202;
+  border: 1px solid $mono203;
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-family: SpoqaM;
+  font-size: 14px;
+  line-height: 1.6;
+  color: $mono207;
+  white-space: pre-wrap;
+}
+
+.output-block {
+  background: $blue109;
+  border: 1px solid $blue101;
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-family: SpoqaM;
+  font-size: 14px;
+  line-height: 1.6;
+  color: $blue104;
+  white-space: pre-wrap;
+}
+
+.eval-row {
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid $mono202;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.eval-title {
+  font-family: SpoqaB;
+  font-size: 14px;
+  color: $mono205;
+}
+
+.eval-btns {
+  display: flex;
+  gap: 12px;
+}
+
+.eval-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 8px 18px;
+  border-radius: 8px;
+  border: 1px solid $mono203;
+  background: $mono200;
+  color: $mono205;
+  font-family: SpoqaM;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.2s;
+  user-select: none;
+
+  &.active-o {
+    border-color: $lime603;
+    background: $lime601;
+    color: $lime604;
+  }
+
+  &.active-x {
+    border-color: $red502;
+    background: $red501;
+    color: $red502;
+  }
+
+  &:hover:not(.active-o):not(.active-x) {
+    border-color: $blue104;
+    color: $blue104;
+  }
+}
