@@ -356,3 +356,170 @@
   font-size: 12px;
   color: $mono205;
 }
+
+/* ── 배포 구성 ── */
+
+.config-divider {
+  height: 1px;
+  background: $mono203;
+  margin: 8px 0 4px;
+}
+
+.config-section {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.config-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.config-label {
+  font-family: SpoqaB;
+  font-size: 14px;
+  color: $mono207;
+  border-left: 3px solid $blue104;
+  padding-left: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.config-hint {
+  font-family: SpoqaM;
+  font-size: 12px;
+  color: $mono205;
+}
+
+.artifact-select {
+  background: $mono200;
+  border: 1px solid $mono203;
+  border-radius: 8px;
+  color: $mono207;
+  padding: 10px 14px;
+  font-family: SpoqaM;
+  font-size: 14px;
+  outline: none;
+  width: 100%;
+  max-width: 400px;
+  cursor: pointer;
+  &:focus { border-color: $blue104; }
+}
+
+.runtime-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.runtime-card {
+  border: 1px solid $mono203;
+  border-radius: 10px;
+  padding: 14px 16px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+
+  &:hover { border-color: $blue104; box-shadow: $card-hover-color; }
+  &.selected { border-color: $blue104; background: rgba($blue104, 0.06); }
+}
+
+.runtime-icon { font-size: 22px; line-height: 1; }
+
+.runtime-name {
+  font-family: SpoqaB;
+  font-size: 14px;
+  color: $mono207;
+}
+
+.runtime-desc {
+  font-family: SpoqaM;
+  font-size: 11px;
+  color: $mono205;
+  line-height: 1.4;
+}
+
+.quant-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.quant-card {
+  border: 1px solid $mono203;
+  border-radius: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+
+  &:hover { border-color: $blue104; box-shadow: $card-hover-color; }
+  &.selected { border-color: $blue104; background: rgba($blue104, 0.06); }
+}
+
+.quant-name {
+  font-family: SpoqaB;
+  font-size: 14px;
+  color: $mono207;
+  margin-bottom: 3px;
+}
+
+.quant-desc {
+  font-family: SpoqaM;
+  font-size: 11px;
+  color: $mono205;
+  line-height: 1.4;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.config-chip {
+  border: 1px solid $mono203;
+  border-radius: 8px;
+  padding: 8px 18px;
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: $mono205;
+  cursor: pointer;
+  transition: border-color 0.2s;
+
+  &:hover { border-color: $blue104; }
+  &.selected { border-color: $blue104; background: rgba($blue104, 0.06); color: $blue104; }
+}
+
+.action-row {
+  display: flex;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.gen-btn {
+  padding: 10px 28px;
+  border-radius: 8px;
+  font-family: SpoqaB;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+
+  &.gen-image {
+    background: $blue104;
+    color: $mono200;
+    border: none;
+    &:hover { background: $blue105; }
+  }
+
+  &.gen-code {
+    background: transparent;
+    color: $blue104;
+    border: 1px solid $blue104;
+    &:hover { background: rgba($blue104, 0.06); }
+  }
+}
