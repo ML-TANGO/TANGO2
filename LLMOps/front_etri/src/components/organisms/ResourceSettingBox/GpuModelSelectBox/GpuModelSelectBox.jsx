@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 // Components
 import ListItem from './ListItem';
-import { InputNumber, Switch } from '@jonathan/ui-react';
+import { InputNumber, Switch } from '@tango/ui-react';
 import Slider from '@mui/material/Slider';
 
 // CSS Module

@@ -1,5 +1,5 @@
 // Component
-import { Button, InputText } from '@jonathan/ui-react';
+import { Button, InputText } from '@tango/ui-react';
 
 // Icons
 import PlusIcon from '@src/static/images/icon/00-ic-basic-plus-blue.svg';

@@ -1,10 +1,10 @@
 import {
   InputNumber,
   InputText,
-  Radio as JonathanRadio,
+  Radio as TangoRadio,
   Selectbox,
   Tooltip,
-} from '@jonathan/ui-react';
+} from '@tango/ui-react';
 
 import PropTypes from 'prop-types';
 import { memo, useEffect, useRef } from 'react';

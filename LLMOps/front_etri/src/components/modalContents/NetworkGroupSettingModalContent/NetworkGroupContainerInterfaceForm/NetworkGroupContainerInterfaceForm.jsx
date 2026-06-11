@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 // Components
 import InputLabel from '@src/components/atoms/input/InputLabel';
-import { Button } from '@jonathan/ui-react';
+import { Button } from '@tango/ui-react';
 
 // Icons
 import RemoveIcon from '@src/static/images/icon/ic-remove-red.svg';

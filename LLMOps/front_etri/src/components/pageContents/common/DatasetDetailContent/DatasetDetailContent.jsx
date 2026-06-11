@@ -10,7 +10,7 @@ import {
   InputText,
   Selectbox,
   Switch,
-} from '@jonathan/ui-react';
+} from '@tango/ui-react';
 
 import { convertLocalTime } from '@src/datetimeUtils';
 

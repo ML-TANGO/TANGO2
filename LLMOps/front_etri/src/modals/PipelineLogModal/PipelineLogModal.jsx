@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
 
-import { Badge, ButtonV2 } from '@jonathan/ui-react';
+import { Badge, ButtonV2 } from '@tango/ui-react';
 
 import dayjs from 'dayjs';
 

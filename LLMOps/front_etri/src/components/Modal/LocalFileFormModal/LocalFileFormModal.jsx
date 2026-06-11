@@ -1,7 +1,7 @@
 // i18n
 
 // Atom
-import { Modal } from '@jonathan/ui-react';
+import { Modal } from '@tango/ui-react';
 
 import { withTranslation } from 'react-i18next';
 

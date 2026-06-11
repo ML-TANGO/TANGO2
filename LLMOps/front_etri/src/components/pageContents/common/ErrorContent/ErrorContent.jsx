@@ -1,11 +1,11 @@
 import { useCallback } from 'react';
-import { Button } from '@jonathan/ui-react';
+import { Button } from '@tango/ui-react';
 import { useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
 
 import { logoutRequest } from '@src/store/modules/auth';
 
-import FlightbaseIcon from '@images/logo/ICO_Jonathan.svg';
+import FlightbaseIcon from '@images/logo/ICO_Tango.svg';
 import Error500FontEn from '@images/logo/500Font.svg';
 import Error500FontKo from '@images/logo/500FontKO.svg';
 

@@ -1,7 +1,7 @@
 // i18n
 import { useTranslation } from 'react-i18next';
 
-import { Button } from '@jonathan/ui-react';
+import { Button } from '@tango/ui-react';
 
 // Components
 import PageTitle from '@src/components/atoms/PageTitle';

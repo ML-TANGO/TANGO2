@@ -8,7 +8,7 @@ import arrowDown from '@src/static/images/icon/00-ic-basic-arrow-02-down-grey.sv
 import { intCheck } from '@src/utils';
 
 // Components
-import { Badge } from '@jonathan/ui-react';
+import { Badge } from '@tango/ui-react';
 
 // CSS Module
 import classNames from 'classnames/bind';

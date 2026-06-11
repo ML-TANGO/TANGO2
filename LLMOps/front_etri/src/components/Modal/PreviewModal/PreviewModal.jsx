@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 // Components
-import { Switch } from '@jonathan/ui-react';
+import { Switch } from '@tango/ui-react';
 import ModalFrame from '../ModalFrame';
 
 // Library

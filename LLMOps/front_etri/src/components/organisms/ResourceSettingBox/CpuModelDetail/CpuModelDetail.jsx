@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import Slider from '@mui/material/Slider';
 // Components
-import { InputNumber, Checkbox } from '@jonathan/ui-react';
+import { InputNumber, Checkbox } from '@tango/ui-react';
 
 // CSS Module
 import classNames from 'classnames/bind';

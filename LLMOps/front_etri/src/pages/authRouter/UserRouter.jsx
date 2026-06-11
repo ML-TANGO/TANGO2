@@ -48,10 +48,10 @@ import IconLnbWorkbenchBlue from '@src/static/images/nav/icon-lnb-workbench-blue
 import IconLnbWorkbenchGray from '@src/static/images/nav/icon-lnb-workbench-gray.svg';
 import IconLnbWorkerBlue from '@src/static/images/nav/icon-lnb-worker-blue.svg';
 import IconLnbWorkerGray from '@src/static/images/nav/icon-lnb-worker-gray.svg';
-import IconNavFlightbase from '@src/static/images/nav/Jonathan-fb.png';
-import IconNavLLM from '@src/static/images/nav/Jonathan-llm.png';
-import IconNavMarker from '@src/static/images/nav/Jonathan-marker.png';
-import IconNavService from '@src/static/images/nav/Jonathan-service.png';
+import IconNavFlightbase from '@src/static/images/nav/Tango-fb.png';
+import IconNavLLM from '@src/static/images/nav/Tango-llm.png';
+import IconNavMarker from '@src/static/images/nav/Tango-marker.png';
+import IconNavService from '@src/static/images/nav/Tango-service.png';
 import IconMarkerLink from '@src/static/images/nav/marker-link.svg';
 import IconModelActive from '@src/static/images/nav/model-active.svg';
 import IconModel from '@src/static/images/nav/model.svg';
@@ -63,7 +63,7 @@ import IconPrompt from '@src/static/images/nav/prompt.svg';
 import IconRagActive from '@src/static/images/nav/rag-active.svg';
 import IconRag from '@src/static/images/nav/rag.svg';
 
-import '@jonathan/ui-react/index.css';
+import '@tango/ui-react/index.css';
 
 import Alarm from '@src/components/Frame/Header/Alarm';
 // Template

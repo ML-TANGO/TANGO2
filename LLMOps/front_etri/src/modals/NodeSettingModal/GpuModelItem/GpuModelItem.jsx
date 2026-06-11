@@ -1,4 +1,4 @@
-import { Checkbox, InputNumber } from '@jonathan/ui-react';
+import { Checkbox, InputNumber } from '@tango/ui-react';
 
 // import InstanceTooltip from '@src/components/organisms/InstanceTooltip';
 

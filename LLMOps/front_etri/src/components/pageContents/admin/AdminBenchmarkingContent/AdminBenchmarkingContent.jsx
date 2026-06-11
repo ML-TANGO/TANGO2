@@ -12,7 +12,7 @@ import NodeIcon from '@src/static/images/icon/icon-node-gray.svg';
 import StorageIcon from '@src/static/images/icon/icon-storage-gray.svg';
 
 // Components
-import { Button, Tooltip } from '@jonathan/ui-react';
+import { Button, Tooltip } from '@tango/ui-react';
 import PageTitle from '@src/components/atoms/PageTitle';
 import DropMenu from '@src/components/molecules/DropMenu';
 import BtnMenu from '@src/components/molecules/DropMenu/BtnMenu';

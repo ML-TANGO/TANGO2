@@ -1,5 +1,5 @@
 // storybook
-import { ButtonV2 } from '@jonathan/ui-react';
+import { ButtonV2 } from '@tango/ui-react';
 
 import style from '@src/components/Modal/DockerImageDeleteModal/DockerImageDeleteModal.module.scss';
 

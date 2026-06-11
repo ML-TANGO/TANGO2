@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 // i18n
 import { useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
-import { Button } from '@jonathan/ui-react';
+import { Button } from '@tango/ui-react';
 
 // Actions
 import { closeDownloadProgress } from '@src/store/modules/download';

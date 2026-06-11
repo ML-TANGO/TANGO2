@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 // Components
-import { Button } from '@jonathan/ui-react';
+import { Button } from '@tango/ui-react';
 import ListItem from './ListItem';
 
 // Icons

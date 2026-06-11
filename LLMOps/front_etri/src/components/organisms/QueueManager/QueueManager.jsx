@@ -3,7 +3,7 @@ import { withRouter } from 'react-router-dom';
 import PropTypes from 'prop-types';
 
 // Components
-import { Tooltip } from '@jonathan/ui-react';
+import { Tooltip } from '@tango/ui-react';
 import EmptyBox from '@src/components/molecules/EmptyBox';
 import HpsItem from './HpsItem';
 import JobItem from './JobItem';

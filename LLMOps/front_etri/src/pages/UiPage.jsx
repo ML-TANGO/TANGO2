@@ -3,7 +3,7 @@ import {
   PageTemplate,
   PageTemplateProvider,
   SideNav,
-} from '@jonathan/ui-react';
+} from '@tango/ui-react';
 
 import LangSetting from '@src/components/Frame/Header/LangSetting';
 // Components

@@ -1,5 +1,5 @@
 // i18n
-// import { Button } from '@jonathan/ui-react';
+// import { Button } from '@tango/ui-react';
 
 // Utils
 import { useTranslation } from 'react-i18next';

@@ -11,7 +11,7 @@ import {
   Switch,
   Tooltip,
   Selectbox,
-} from '@jonathan/ui-react';
+} from '@tango/ui-react';
 import Radio from '@src/components/atoms/input/Radio';
 import Tab from '@src/components/molecules/Tab';
 import CheckboxList from '@src/components/molecules/CheckboxList';

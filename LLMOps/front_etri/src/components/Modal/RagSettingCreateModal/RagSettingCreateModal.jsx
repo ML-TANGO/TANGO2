@@ -1,4 +1,4 @@
-import { InputNumber, InputText, Radio, Textarea } from '@jonathan/ui-react';
+import { InputNumber, InputText, Radio, Textarea } from '@tango/ui-react';
 
 import {
   getRagOptionInstance,

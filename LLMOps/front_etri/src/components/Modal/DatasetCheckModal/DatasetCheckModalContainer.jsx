@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 // Components
-import { Button, Selectbox } from '@jonathan/ui-react';
+import { Button, Selectbox } from '@tango/ui-react';
 import OptionLabel from '@src/components/atoms/OptionLabel';
 
 // CSS module

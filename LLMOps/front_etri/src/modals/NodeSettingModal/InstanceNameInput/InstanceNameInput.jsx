@@ -1,4 +1,4 @@
-import { InputText } from '@jonathan/ui-react';
+import { InputText } from '@tango/ui-react';
 
 import InputBoxWithLabel from '@src/components/molecules/InputBoxWithLabel';
 

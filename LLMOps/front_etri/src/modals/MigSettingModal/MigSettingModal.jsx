@@ -1,4 +1,4 @@
-import { Radio, Selectbox } from '@jonathan/ui-react';
+import { Radio, Selectbox } from '@tango/ui-react';
 
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -3,7 +3,7 @@
 // Components
 import { useTranslation } from 'react-i18next';
 
-import { Tab } from '@jonathan/ui-react';
+import { Tab } from '@tango/ui-react';
 
 import DeployWorkerRunning from './DeployWorkerRunning';
 import DeployWorkerStopped from './DeployWorkerStopped';

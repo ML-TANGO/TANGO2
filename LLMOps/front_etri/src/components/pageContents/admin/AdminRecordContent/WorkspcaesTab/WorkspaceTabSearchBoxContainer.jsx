@@ -10,7 +10,7 @@ import WorkspaceMultiCheckSelectContainer from '@src/containers/WorkspaceMultiCh
 
 // Components
 import SearchBox from '../SearchBox';
-import { Selectbox } from '@jonathan/ui-react';
+import { Selectbox } from '@tango/ui-react';
 
 const cYear = dayjs().year();
 

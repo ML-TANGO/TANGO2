@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 // Components
-import { Button, Tooltip } from '@jonathan/ui-react';
+import { Button, Tooltip } from '@tango/ui-react';
 import ListInfo from './ListInfo';
 
 // Icons

@@ -1,5 +1,5 @@
 // @storybook
-import { InputText, Selectbox } from '@jonathan/ui-react';
+import { InputText, Selectbox } from '@tango/ui-react';
 
 import React, { forwardRef, useEffect, useState } from 'react';
 import DataTable, { createTheme } from 'react-data-table-component';
@@ -88,7 +88,7 @@ const Table = ({
   }, [data]);
 
   createTheme(
-    'jonathan',
+    'tango',
     {
       selected: {
         default: 'rgba(45,118,248, .08)',
@@ -153,7 +153,7 @@ const Table = ({
         className='datatable2'
         columns={columns}
         data={data}
-        theme='jonathan'
+        theme='tango'
         allowOverflow
         noDataComponent={
           <EmptyBox customStyle={{ height: '120px' }} text={noDataMessage} />

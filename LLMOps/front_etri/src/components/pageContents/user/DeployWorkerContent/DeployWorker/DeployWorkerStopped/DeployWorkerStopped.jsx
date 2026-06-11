@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
 import { useHistory, useParams } from 'react-router-dom';
 
-import { Button } from '@jonathan/ui-react';
+import { Button } from '@tango/ui-react';
 
 import { convertDuration } from '@src/datetimeUtils';
 

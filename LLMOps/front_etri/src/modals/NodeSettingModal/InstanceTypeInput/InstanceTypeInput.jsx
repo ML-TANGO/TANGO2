@@ -1,4 +1,4 @@
-import { Radio } from '@jonathan/ui-react';
+import { Radio } from '@tango/ui-react';
 
 import InputBoxWithLabel from '@src/components/molecules/InputBoxWithLabel';
 

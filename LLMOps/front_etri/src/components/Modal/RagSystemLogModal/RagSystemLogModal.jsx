@@ -1,4 +1,4 @@
-import { ButtonV2, Loading } from '@jonathan/ui-react';
+import { ButtonV2, Loading } from '@tango/ui-react';
 
 import { getRagSystemLog, getRagSystemLogDownload } from '@src/apis/llm/rag';
 import { useCallback, useEffect, useState } from 'react';

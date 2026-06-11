@@ -1,5 +1,5 @@
 // Utils
-import { Badge, ButtonV2 } from '@jonathan/ui-react';
+import { Badge, ButtonV2 } from '@tango/ui-react';
 
 import { convertLocalTime } from '@src/datetimeUtils';
 import { loadModalComponent } from '@src/modal';

@@ -3,7 +3,7 @@
 // Components
 import { useTranslation } from 'react-i18next';
 
-import { InputText } from '@jonathan/ui-react';
+import { InputText } from '@tango/ui-react';
 
 // CSS module
 import classNames from 'classnames/bind';

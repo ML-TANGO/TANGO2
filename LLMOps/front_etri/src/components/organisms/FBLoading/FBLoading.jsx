@@ -1,4 +1,4 @@
-import { Loading } from '@jonathan/ui-react';
+import { Loading } from '@tango/ui-react';
 
 import classNames from 'classnames/bind';
 import style from './FBLoading.module.scss';

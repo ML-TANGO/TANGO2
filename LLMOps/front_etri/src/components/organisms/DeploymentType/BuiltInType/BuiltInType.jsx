@@ -6,7 +6,7 @@ import arrowDown from '@src/static/images/icon/00-ic-basic-arrow-02-down-grey.sv
 import builtInImage from '@src/static/images/icon/ic-built-in-blue.svg';
 
 // Components
-import { InputText, Badge, Selectbox } from '@jonathan/ui-react';
+import { InputText, Badge, Selectbox } from '@tango/ui-react';
 
 // CSS Module
 import classNames from 'classnames/bind';

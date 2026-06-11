@@ -1,4 +1,4 @@
-import jonathanIcon from '@images/logo/ICO_Jonathan.svg';
+import tangoIcon from '@images/logo/ICO_Tango.svg';
 
 import closeIcon from './ic-close.svg';
 
@@ -17,7 +17,7 @@ const SignupModalHeader = ({ t, handleCloseModal }) => {
         src={closeIcon}
         alt='close'
       />
-      <img src={jonathanIcon} alt='logo' className={cx('img')} />
+      <img src={tangoIcon} alt='logo' className={cx('img')} />
       <div className={cx('title')}>Request to Join</div>
       <div className={cx('sub-title')}>
         {t('signup.title1.label')}

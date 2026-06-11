@@ -22,7 +22,7 @@ import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallowEqual, useDispatch, useSelector } from 'react-redux';
 
-import { ButtonV2 } from '@jonathan/ui-react';
+import { ButtonV2 } from '@tango/ui-react';
 
 import { openModal } from '@src/store/modules/modal';
 import { openConfirm } from '@src/store/modules/confirm';
@@ -66,11 +66,11 @@ const ExternalFineTuningView = memo(function ExternalFineTuningView({
   // 좌측 panel — 사용자가 사전에 편집하는 params JSON + namespace.
   // 실행 모달로 들어갈 때 closure 로 이 값을 캡쳐해서 BFF 호출에 같이 보낸다.
   // workspace_scope=per-workspace manifest 의 namespace 규칙 (platform
-  // convention): jonathan-system-{workspace_id}. backend lifecycle.py 도
+  // convention): tango-system-{workspace_id}. backend lifecycle.py 도
   // 같은 값으로 override 하지만, frontend default 를 일치시켜 UX 일관성.
   const defaultNamespace = workspaceId
-    ? `jonathan-system-${workspaceId}`
-    : 'jonathan-system';
+    ? `tango-system-${workspaceId}`
+    : 'tango-system';
   const [namespaceInput, setNamespaceInput] = useState(defaultNamespace);
   const [paramsInput, setParamsInput] = useState('{}');
   // 첫 마운트 시 manifest 의 default_params 로 textarea pre-fill.

@@ -1,4 +1,4 @@
-import { Badge } from '@jonathan/ui-react';
+import { Badge } from '@tango/ui-react';
 
 import React from 'react';
 

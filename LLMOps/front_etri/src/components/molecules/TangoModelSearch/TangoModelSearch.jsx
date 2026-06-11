@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { InputText } from '@jonathan/ui-react';
+import { InputText } from '@tango/ui-react';
 
 import { callApi, STATUS_SUCCESS } from '@src/network';
 
@@ -13,7 +13,7 @@ import ModelIcon from './model-icon.svg';
 import VisualIcon from './visual.svg';
 
 import classNames from 'classnames/bind';
-import style from './JonathanModelSearch.module.scss';
+import style from './TangoModelSearch.module.scss';
 
 import arrowDown from '@src/static/images/icon/00-ic-basic-arrow-02-down-grey.svg';
 import arrowUp from '@src/static/images/icon/00-ic-basic-arrow-02-up-grey.svg';
@@ -21,7 +21,7 @@ import info from '@src/static/images/icon/00-ic-gray-info.svg';
 
 const cx = classNames.bind(style);
 
-const JonathanModelSearch = ({
+const TangoModelSearch = ({
   selectCategory,
   setSelectCategory,
   selectModel,
@@ -234,4 +234,4 @@ const JonathanModelSearch = ({
   );
 };
 
-export default JonathanModelSearch;
+export default TangoModelSearch;

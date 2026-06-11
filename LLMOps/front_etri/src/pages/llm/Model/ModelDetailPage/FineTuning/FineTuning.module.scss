@@ -168,6 +168,46 @@
         line-height: 1.4;
       }
 
+      .projector-select-row {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: -4px;
+      }
+
+      .projector-label {
+        font-family: SpoqaM;
+        font-size: 12px;
+        color: $mono205;
+      }
+
+      .projector-select {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid $blue102;
+        border-radius: 8px;
+        background-color: transparent;
+        color: $mono207;
+        font-family: SpoqaM;
+        font-size: 13px;
+        cursor: pointer;
+        outline: none;
+
+        &:focus {
+          border-color: $blue104;
+        }
+
+        &:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        option {
+          background-color: #1e2130;
+          color: $mono207;
+        }
+      }
+
       .stage-divider {
         display: flex;
         align-items: center;

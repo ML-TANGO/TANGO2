@@ -4,7 +4,7 @@ import { Fragment, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 // Components
-import { Tooltip, InputText } from '@jonathan/ui-react';
+import { Tooltip, InputText } from '@tango/ui-react';
 import InputBoxWithLabel from '@src/components/molecules/InputBoxWithLabel';
 
 // CSS Module

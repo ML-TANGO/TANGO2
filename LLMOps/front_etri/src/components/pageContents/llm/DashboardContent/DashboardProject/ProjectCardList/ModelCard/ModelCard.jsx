@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Badge } from '@jonathan/ui-react';
+import { Badge } from '@tango/ui-react';
 
 import ModelIcon from '@src/components/icon/ModelIcon';
 

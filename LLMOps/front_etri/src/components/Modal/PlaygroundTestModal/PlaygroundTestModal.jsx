@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import { toast } from 'react-toastify';
 
-import { ButtonV2 } from '@jonathan/ui-react';
+import { ButtonV2 } from '@tango/ui-react';
 
 import dayjs from 'dayjs';
 

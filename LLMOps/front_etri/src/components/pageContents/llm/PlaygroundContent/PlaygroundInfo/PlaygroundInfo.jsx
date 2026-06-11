@@ -4,7 +4,7 @@ import { shallowEqual, useDispatch, useSelector } from 'react-redux';
 import { useRouteMatch } from 'react-router-dom';
 import { toast } from 'react-toastify';
 
-import { ButtonV2, Switch, Textarea } from '@jonathan/ui-react';
+import { ButtonV2, Switch, Textarea } from '@tango/ui-react';
 
 import {
   postPlaygroundStartAccel,

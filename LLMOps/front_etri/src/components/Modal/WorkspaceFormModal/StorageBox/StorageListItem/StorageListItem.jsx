@@ -5,10 +5,10 @@ import { useSelector } from 'react-redux';
 import { useTranslation } from 'react-i18next';
 
 // Atom
-import { InputNumber } from '@jonathan/ui-react';
+import { InputNumber } from '@tango/ui-react';
 
 // Components
-import { Checkbox } from '@jonathan/ui-react';
+import { Checkbox } from '@tango/ui-react';
 
 // CSS Module
 import classNames from 'classnames/bind';

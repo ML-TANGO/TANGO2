@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Selectbox } from '@jonathan/ui-react';
+import { Selectbox } from '@tango/ui-react';
 
 // Network
 import { callApi, STATUS_SUCCESS } from '@src/network';

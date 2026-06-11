@@ -1,5 +1,5 @@
 // Components
-import { Checkbox } from '@jonathan/ui-react';
+import { Checkbox } from '@tango/ui-react';
 
 // CSS Module
 import classNames from 'classnames/bind';

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
 
-import { InputPassword, InputText } from '@jonathan/ui-react';
+import { InputPassword, InputText } from '@tango/ui-react';
 
 import InputBoxWithLabel from '@src/components/molecules/InputBoxWithLabel';
 

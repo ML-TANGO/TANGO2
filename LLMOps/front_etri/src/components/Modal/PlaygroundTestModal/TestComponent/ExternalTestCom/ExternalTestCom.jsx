@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { toast } from 'react-toastify';
 
-import { ButtonV2 } from '@jonathan/ui-react';
+import { ButtonV2 } from '@tango/ui-react';
 
 import { postPlaygroundTestChat } from '@src/apis/llm/playground';
 import { STATUS_SUCCESS } from '@src/network';

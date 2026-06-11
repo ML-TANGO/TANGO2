@@ -2,7 +2,7 @@
 import { withTranslation } from 'react-i18next';
 
 // Components
-import { Textarea } from '@jonathan/ui-react';
+import { Textarea } from '@tango/ui-react';
 import InputLabelBox from '../InputLabelBox';
 
 // CSS module

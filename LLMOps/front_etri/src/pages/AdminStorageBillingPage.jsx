@@ -1,4 +1,4 @@
-import { Switch } from '@jonathan/ui-react';
+import { Switch } from '@tango/ui-react';
 
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';

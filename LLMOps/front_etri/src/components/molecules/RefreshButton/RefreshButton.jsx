@@ -1,4 +1,4 @@
-import { ButtonV2 } from '@jonathan/ui-react';
+import { ButtonV2 } from '@tango/ui-react';
 
 import RefreshIcon from '@src/static/images/icon/ic-refresh-blue.svg';
 import loadingIcon from '@src/static/images/icon/spinner-1s-58.svg';

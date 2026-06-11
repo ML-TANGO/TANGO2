@@ -1,4 +1,4 @@
-import { Button } from '@jonathan/ui-react';
+import { Button } from '@tango/ui-react';
 
 import MenuIcon from '@src/static/images/icon/00-ic-menu.svg';
 import React from 'react';

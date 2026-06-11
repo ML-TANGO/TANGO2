@@ -1,4 +1,4 @@
-import { Selectbox } from '@jonathan/ui-react';
+import { Selectbox } from '@tango/ui-react';
 
 import { convertDuration, convertLocalTime } from '@src/datetimeUtils';
 import { debounce } from 'lodash';

@@ -4,7 +4,7 @@ import DataTable, { createTheme } from 'react-data-table-component';
 // i18n
 import { useTranslation } from 'react-i18next';
 
-import { InputText, Selectbox } from '@jonathan/ui-react';
+import { InputText, Selectbox } from '@tango/ui-react';
 
 import Loading from '@src/components/atoms/loading/Loading';
 // Components
@@ -95,7 +95,7 @@ const Table = ({
   }, [data]);
 
   createTheme(
-    'jonathan',
+    'tango',
     {
       selected: {
         default: 'rgba(45,118,248, .08)',
@@ -168,7 +168,7 @@ const Table = ({
         className='datatable'
         columns={columns}
         data={data}
-        theme='jonathan'
+        theme='tango'
         allowOverflow
         customStyles={customStyles && customStyles}
         noDataComponent={

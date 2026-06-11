@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
-import { ButtonV2, Loading } from '@jonathan/ui-react';
+import { ButtonV2, Loading } from '@tango/ui-react';
 
 import ChartInfoCard from './ChartInfoCard';
 import DynamicCharts from './DynamicCharts';

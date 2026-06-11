@@ -1,7 +1,7 @@
 import React from 'react';
 import { shallowEqual, useSelector } from 'react-redux';
 
-import { Badge } from '@jonathan/ui-react';
+import { Badge } from '@tango/ui-react';
 
 import PlaygroundFrame from '../../PlaygroundFrame';
 

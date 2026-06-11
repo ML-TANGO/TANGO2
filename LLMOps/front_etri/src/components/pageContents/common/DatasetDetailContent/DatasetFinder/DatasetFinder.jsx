@@ -1,5 +1,5 @@
 // Components
-import { InputText, Selectbox } from '@jonathan/ui-react';
+import { InputText, Selectbox } from '@tango/ui-react';
 
 // Images
 import DirectoryArrowIcon from '@src/static/images/icon/ic-directory-arrow.svg';

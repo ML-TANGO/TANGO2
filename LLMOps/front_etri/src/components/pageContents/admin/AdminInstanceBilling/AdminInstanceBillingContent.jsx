@@ -1,4 +1,4 @@
-import { ButtonV2, Selectbox } from '@jonathan/ui-react';
+import { ButtonV2, Selectbox } from '@tango/ui-react';
 
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

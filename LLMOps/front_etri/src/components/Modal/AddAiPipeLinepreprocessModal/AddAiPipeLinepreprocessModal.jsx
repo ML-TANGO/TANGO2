@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
 
-import { InputText } from '@jonathan/ui-react';
+import { InputText } from '@tango/ui-react';
 
 import Dropdown from '@src/components/atoms/Dropdown';
 import InputBoxWithLabel from '@src/components/molecules/InputBoxWithLabel';
@@ -62,14 +62,14 @@ const PipeLineTitle = ({ title, src, type }) => {
 
 const calTypeTxt = (type) => {
   if (['advanced', 'custom'].includes(type)) return 'Custom';
-  if (type === 'built-in') return 'Jonathan Intelligence';
+  if (type === 'built-in') return 'Tango Intelligence';
   return 'Hugging face';
 };
 
 export const calTypeImg = (type) => {
   if (['advanced', 'custom'].includes(type))
     return '/src/static/images/icon/ic-allm-model.svg';
-  if (type === 'built-in') return '/src/static/images/icon/jonathan-intell.svg';
+  if (type === 'built-in') return '/src/static/images/icon/tango-intell.svg';
   return '/src/static/images/icon/hugging-face.svg';
 };
 

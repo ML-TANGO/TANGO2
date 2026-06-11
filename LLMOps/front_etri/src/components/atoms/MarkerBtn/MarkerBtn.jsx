@@ -38,7 +38,7 @@ const ModalOpenButton = ({
     >
       <img
         src='/images/logo/BI_Marker.svg'
-        alt='Jonathan Marker'
+        alt='Tango Marker'
         className='marker-logo'
       />
       <img

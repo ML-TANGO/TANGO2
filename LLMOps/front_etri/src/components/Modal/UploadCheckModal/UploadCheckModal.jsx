@@ -1,5 +1,5 @@
 // Components
-import { Button, Checkbox, Switch } from '@jonathan/ui-react';
+import { Button, Checkbox, Switch } from '@tango/ui-react';
 
 import { useEffect, useState } from 'react';
 // i18n

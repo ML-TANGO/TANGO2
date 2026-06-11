@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
 
-import { Button } from '@jonathan/ui-react';
+import { Button } from '@tango/ui-react';
 
 import Status from '@src/components/atoms/Status';
 import AccuracyLossChart from '@src/components/molecules/chart/AccuracyLossChart';

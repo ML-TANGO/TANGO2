@@ -1,5 +1,5 @@
 // Components
-import { Badge, InputNumber } from '@jonathan/ui-react';
+import { Badge, InputNumber } from '@tango/ui-react';
 
 import settingImage from '@images/icon/ic-lock.svg';
 

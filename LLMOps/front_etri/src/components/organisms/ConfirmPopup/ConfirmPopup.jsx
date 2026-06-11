@@ -1,5 +1,5 @@
 // Components
-import { ButtonV2 } from '@jonathan/ui-react';
+import { ButtonV2 } from '@tango/ui-react';
 
 import CloseIcon from '@src/static/images/icon/00-ic-popup-close.svg';
 import { Fragment, useEffect, useState } from 'react';

@@ -1,5 +1,5 @@
 // ui-react
-import { DateRangePicker, Radio } from '@jonathan/ui-react';
+import { DateRangePicker, Radio } from '@tango/ui-react';
 
 // Date Utils
 import { DATE_FORM, today } from '@src/datetimeUtils';

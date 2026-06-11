@@ -1,5 +1,5 @@
 // Components
-import { Button, Tooltip } from '@jonathan/ui-react';
+import { Button, Tooltip } from '@tango/ui-react';
 
 // Icon
 import download from '@src/static/images/icon/00-ic-data-download-blue.svg';

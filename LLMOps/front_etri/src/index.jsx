@@ -16,7 +16,7 @@ import { Buffer } from 'buffer';
 import Root from './Root';
 import * as serviceWorker from './serviceWorker';
 
-import '@jonathan/ui-react/index.css';
+import '@tango/ui-react/index.css';
 
 window.Buffer = Buffer;
 

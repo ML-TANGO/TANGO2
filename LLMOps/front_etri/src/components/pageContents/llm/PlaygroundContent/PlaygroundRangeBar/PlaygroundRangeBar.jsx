@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 
-import { InputNumber } from '@jonathan/ui-react';
+import { InputNumber } from '@tango/ui-react';
 
 import DarkTooltip from '@src/components/molecules/DarkTooltip/DarkTooltip';
 

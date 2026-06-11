@@ -1,4 +1,4 @@
-import { ButtonV2 } from '@jonathan/ui-react';
+import { ButtonV2 } from '@tango/ui-react';
 
 import { deleteRagDocuments, getRagDocuments } from '@src/apis/llm/rag';
 import WarningIcon from '@src/static/images/icon/ic-warning-yellow.svg';

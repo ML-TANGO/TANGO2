@@ -1,5 +1,5 @@
 // Components
-import { Button, InputText, Tooltip } from '@jonathan/ui-react';
+import { Button, InputText, Tooltip } from '@tango/ui-react';
 
 // i18n
 import { useTranslation } from 'react-i18next';

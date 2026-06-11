@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
-import { Checkbox } from '@jonathan/ui-react';
+import { Checkbox } from '@tango/ui-react';
 
 import classNames from 'classnames/bind';
 import style from './ChartInfoCard.module.scss';

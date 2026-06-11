@@ -3,7 +3,7 @@ import { useDispatch } from 'react-redux';
 import { useRouteMatch } from 'react-router-dom';
 import { toast } from 'react-toastify';
 
-import { ButtonV2 } from '@jonathan/ui-react';
+import { ButtonV2 } from '@tango/ui-react';
 
 import { handleAddData } from '../ReactFlowComponent/util';
 

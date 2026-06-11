@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Prompt, Redirect, Route, Router, Switch } from 'react-router-dom';
 
-import { PageTemplateProvider } from '@jonathan/ui-react';
+import { PageTemplateProvider } from '@tango/ui-react';
 
 import ConfirmPopup from '@src/containers/ConfirmContainer';
 import DownloadProgressContainer from '@src/containers/DownloadProgressContainer';
@@ -47,17 +47,17 @@ const API_HOST = APP_LOCAL_HOST
   ? '/api/'
   : `${window.location.protocol}//${window.location.hostname}:${window.location.port}/api/`;
 
-// 콘솔로그 Welcome to Jonathan!
+// 콘솔로그 Welcome to Tango!
 const emoji = ['😊', '🥰', '😄', '😆', '🤩', '😘'];
 function randomEmoji() {
   let random = Math.floor(Math.random() * emoji.length);
   return emoji[random];
 }
 console.log(
-  `%c통합 AI 플랫폼, 조나단 %cWelcome to Jonathan!${randomEmoji()} %c\n${
+  `%c통합 AI 플랫폼, Tango %cWelcome to Tango!${randomEmoji()} %c\n${
     MODE === 'local' || MODE === 'dev'
       ? `API: ${API_HOST}`
-      : `JONATHAN © ${dayjs().year()} Acryl inc. All rights reserved.`
+      : `TANGO © ${dayjs().year()} Acryl inc. All rights reserved.`
   }  Updated: %c${UPDATED_DATE}\n`,
   `color: #121619; font-family: SpoqaB; font-size: 12px; margin-top: 16px;`,
   `color: #fff; font-family: SpoqaB; font-size: 30px; 

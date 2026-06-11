@@ -1,5 +1,5 @@
 // Components
-import { Button } from '@jonathan/ui-react';
+import { Button } from '@tango/ui-react';
 
 // Icon
 import download from '@src/static/images/icon/00-ic-data-download-white.svg';

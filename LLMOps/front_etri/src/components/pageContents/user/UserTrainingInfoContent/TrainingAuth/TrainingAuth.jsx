@@ -75,7 +75,7 @@ function TrainingAuth({ accessInfo, basicInfo, instanceInfo }) {
                   </span>
                   <span className={cx('model-type-value')}>
                     <img
-                      src={'/images/icon/ic-jonathanIntelligence.svg'}
+                      src={'/images/icon/ic-tangoIntelligence.svg'}
                       alt='model-icon'
                     />
                     {builtInModel}

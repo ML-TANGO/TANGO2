@@ -1,5 +1,5 @@
 // Components
-import { Modal } from '@jonathan/ui-react';
+import { Modal } from '@tango/ui-react';
 
 import { useEffect, useState } from 'react';
 // i18n

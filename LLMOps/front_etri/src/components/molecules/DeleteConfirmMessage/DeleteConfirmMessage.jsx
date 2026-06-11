@@ -1,5 +1,5 @@
 // Components
-import { InputText } from '@jonathan/ui-react';
+import { InputText } from '@tango/ui-react';
 
 // CSS Module
 import classNames from 'classnames/bind';

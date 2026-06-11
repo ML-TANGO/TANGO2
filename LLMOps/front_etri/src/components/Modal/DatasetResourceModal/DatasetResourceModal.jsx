@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
 
-import { InputNumber } from '@jonathan/ui-react';
+import { InputNumber } from '@tango/ui-react';
 
 import Radio from '@src/components/atoms/input/Radio';
 import GpuNodeSelectBox from '@src/components/molecules/GpuNodeSelectBox';

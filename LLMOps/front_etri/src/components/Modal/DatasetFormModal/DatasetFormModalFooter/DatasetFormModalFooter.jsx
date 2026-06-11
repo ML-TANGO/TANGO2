@@ -5,7 +5,7 @@ import { connect } from 'react-redux';
 import { withTranslation } from 'react-i18next';
 
 // storybook
-import { Button } from '@jonathan/ui-react';
+import { Button } from '@tango/ui-react';
 
 // HOC
 import EnterSubmitHOC from '@src/hoc/EnterSubmitHOC';

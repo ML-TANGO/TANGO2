@@ -1,5 +1,5 @@
 // Components
-import { Button } from '@jonathan/ui-react';
+import { Button } from '@tango/ui-react';
 
 import { useState } from 'react';
 // i18n

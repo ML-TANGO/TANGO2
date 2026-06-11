@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDispatch, useSelector } from 'react-redux';
 
-import { InputText, Selectbox, Textarea } from '@jonathan/ui-react';
+import { InputText, Selectbox, Textarea } from '@tango/ui-react';
 
 import InputBoxWithLabel from '@src/components/molecules/InputBoxWithLabel';
 import NewDatasetSearch from '@src/components/molecules/NewDatasetSearch';

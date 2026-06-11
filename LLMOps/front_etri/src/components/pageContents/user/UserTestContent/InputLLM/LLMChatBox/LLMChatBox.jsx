@@ -4,7 +4,7 @@ import { t } from 'i18next';
 import { CopyToClipboard } from 'react-copy-to-clipboard';
 import { toast } from '@src/components/Toast';
 
-import JonathanIcon from '@src/static/images/logo/ICO_Jonathan.svg';
+import TangoIcon from '@src/static/images/logo/ICO_Tango.svg';
 import CopyIcon from '@src/static/images/icon/00-ic-basic-copy-o.svg';
 import style from './LLMChatBox.module.scss';
 import classNames from 'classnames/bind';
@@ -54,7 +54,7 @@ const LLMChatBox = ({ messageInfo, isLastIndex, scrollBottom, setLoading }) => {
   const { type, message } = messageInfo;
 
   return (
-    <div className={cx('chat-outer-box', type === 'output' && 'jonathan')}>
+    <div className={cx('chat-outer-box', type === 'output' && 'tango')}>
       <div className={cx('chat-img-box')}>
         {type === 'input' ? (
           <div className={cx('chat-profile-box')}>{userName.slice(0, 2)}</div>
@@ -62,7 +62,7 @@ const LLMChatBox = ({ messageInfo, isLastIndex, scrollBottom, setLoading }) => {
           <div className={cx('fb-profile-box')}>
             <img
               className={cx('fb-profile-img')}
-              src={JonathanIcon}
+              src={TangoIcon}
               alt='fb-profile-img'
             />
           </div>

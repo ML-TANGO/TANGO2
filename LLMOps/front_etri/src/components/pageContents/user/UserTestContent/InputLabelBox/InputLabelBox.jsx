@@ -1,7 +1,7 @@
 // i18n
 
 // Components
-import { Badge, Tooltip } from '@jonathan/ui-react';
+import { Badge, Tooltip } from '@tango/ui-react';
 
 import { withTranslation } from 'react-i18next';
 

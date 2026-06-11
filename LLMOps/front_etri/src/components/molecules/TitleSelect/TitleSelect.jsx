@@ -1,5 +1,5 @@
 // Components
-import { InputText } from '@jonathan/ui-react';
+import { InputText } from '@tango/ui-react';
 
 import { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';

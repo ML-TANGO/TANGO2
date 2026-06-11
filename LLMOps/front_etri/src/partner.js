@@ -1,9 +1,9 @@
 import IcoJP from '@src/static/images/logo/ICO_Flightbase.svg';
 import LogoJP from '@src/static/images/logo/BI_Flightbase_v.svg';
 // import WhiteLogoJP from '@src/static/images/logo/BI_Flightbase_white.svg';
-import WhiteLogoJP from '@src/static/images/logo/BI_Jonathan_white.svg';
+import WhiteLogoJP from '@src/static/images/logo/BI_Tango_white.svg';
 // import FooterLogoJP from '@src/static/images/logo/BI_Flightbase.svg';
-import FooterLogoJP from '@src/static/images/logo/BI_Jonathan.svg';
+import FooterLogoJP from '@src/static/images/logo/BI_Tango.svg';
 import LogoCBTP from '@src/static/images/custom/cbtp-logo.svg';
 import SimpleLogoCBTP from '@src/static/images/custom/cbtp.svg';
 import SimpleWhiteLogoCBTP from '@src/static/images/custom/cbtp-white.svg';

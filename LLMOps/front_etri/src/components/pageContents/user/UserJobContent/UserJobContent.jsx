@@ -4,7 +4,7 @@ import { Fragment, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
 
-import { Button, InputText, Selectbox } from '@jonathan/ui-react';
+import { Button, InputText, Selectbox } from '@tango/ui-react';
 
 import Loading from '@src/components/atoms/loading/Loading';
 import PageTitle from '@src/components/atoms/PageTitle';

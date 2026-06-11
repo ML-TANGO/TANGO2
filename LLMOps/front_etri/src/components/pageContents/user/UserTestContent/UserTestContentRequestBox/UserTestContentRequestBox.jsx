@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Selectbox } from '@jonathan/ui-react';
+import { Selectbox } from '@tango/ui-react';
 
 import TextInput from '@src/components/atoms/input/TextInput';
 

@@ -13,7 +13,7 @@ import StorageSettingModalContent from '@src/components/Modal/StorageSettingModa
 import StorageSettingModalFooter from '@src/components/Modal/StorageSettingModal/StorageSettingModalFooter';
 
 // Atom
-import { Modal } from '@jonathan/ui-react';
+import { Modal } from '@tango/ui-react';
 
 function StorageSettingModalContainer({ data: modalData }) {
   const dispatch = useDispatch();

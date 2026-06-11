@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Checkbox } from '@jonathan/ui-react';
+import { Checkbox } from '@tango/ui-react';
 
 import * as echarts from 'echarts';
 import PropTypes from 'prop-types';

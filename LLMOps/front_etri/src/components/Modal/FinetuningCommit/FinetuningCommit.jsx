@@ -1,4 +1,4 @@
-import { InputText, Radio, Textarea } from '@jonathan/ui-react';
+import { InputText, Radio, Textarea } from '@tango/ui-react';
 
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';

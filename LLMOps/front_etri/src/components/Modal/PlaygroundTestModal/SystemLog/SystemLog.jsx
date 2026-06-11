@@ -1,4 +1,4 @@
-import { InputText } from '@jonathan/ui-react';
+import { InputText } from '@tango/ui-react';
 
 import { getPlaygroundTestLog } from '@src/apis/llm/playground';
 import React, { useEffect, useState } from 'react';

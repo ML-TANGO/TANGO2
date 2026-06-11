@@ -1,5 +1,5 @@
 // Atom
-import { Textarea } from '@jonathan/ui-react';
+import { Textarea } from '@tango/ui-react';
 
 // CSS module
 import classNames from 'classnames/bind';

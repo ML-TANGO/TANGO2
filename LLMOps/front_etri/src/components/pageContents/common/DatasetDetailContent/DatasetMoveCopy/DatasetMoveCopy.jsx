@@ -1,5 +1,5 @@
 // Components
-import { Button, Checkbox, InputText } from '@jonathan/ui-react';
+import { Button, Checkbox, InputText } from '@tango/ui-react';
 
 import { useEffect, useRef, useState } from 'react';
 // i18n

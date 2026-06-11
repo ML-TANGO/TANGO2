@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
 import { toast } from 'react-toastify';
 
-import { InputText, Selectbox } from '@jonathan/ui-react';
+import { InputText, Selectbox } from '@tango/ui-react';
 
 import InputBoxWithLabel from '@src/components/molecules/InputBoxWithLabel';
 

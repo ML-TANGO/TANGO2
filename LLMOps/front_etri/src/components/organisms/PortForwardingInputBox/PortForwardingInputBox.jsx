@@ -8,7 +8,7 @@ import {
   Selectbox,
   Switch,
   Tooltip,
-} from '@jonathan/ui-react';
+} from '@tango/ui-react';
 
 // CSS module
 import classNames from 'classnames/bind';

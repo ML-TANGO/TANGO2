@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 // Components
 import ProgressStatusItem from './ProgressStatusItem';
-import { Button } from '@jonathan/ui-react';
+import { Button } from '@tango/ui-react';
 
 // Actions
 import { closeProgressList } from '@src/store/modules/progressList';

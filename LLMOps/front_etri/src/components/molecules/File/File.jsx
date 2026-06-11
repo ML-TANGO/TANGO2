@@ -1,5 +1,5 @@
 // Components
-import { Button, ButtonV2 } from '@jonathan/ui-react';
+import { Button, ButtonV2 } from '@tango/ui-react';
 
 import { Fragment, useRef } from 'react';
 // i18n

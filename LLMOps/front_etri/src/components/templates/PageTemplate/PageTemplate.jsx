@@ -9,7 +9,7 @@ import {
   Header,
   PageTemplate as PTemplate,
   SideNav,
-} from '@jonathan/ui-react';
+} from '@tango/ui-react';
 
 // Utils
 import { today } from '@src/datetimeUtils';
@@ -109,7 +109,7 @@ const handleMouseEnterPreload = (path, lazyLoad) => {
 /**
  * PageTemplate 컴포넌트
  *
- * - @jonathan/ui-react의 PageTemplate 및 PageTemplateProvider 컴포넌트를 사용한 FB 페이지 템플릿 컴포넌트
+ * - @tango/ui-react의 PageTemplate 및 PageTemplateProvider 컴포넌트를 사용한 FB 페이지 템플릿 컴포넌트
  * @param {{ children: any, navList: Array<{ name: string; path: string; icon?: any }> }} props PageTemplate props
  * @returns {JSX.Element}
  */

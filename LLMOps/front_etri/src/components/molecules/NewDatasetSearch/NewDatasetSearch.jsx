@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useSelector } from 'react-redux';
 import { FixedSizeList as List } from 'react-window';
 
-import { InputText } from '@jonathan/ui-react';
+import { InputText } from '@tango/ui-react';
 
 import Loading from '@src/components/atoms/loading/Loading';
 import SubMenuItem from '@src/components/Modal/FineTuningDataUploadModal/SearchComponent/Item/SubMenuItem';

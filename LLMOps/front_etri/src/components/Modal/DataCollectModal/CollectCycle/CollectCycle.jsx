@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { InputNumber } from '@jonathan/ui-react';
+import { InputNumber } from '@tango/ui-react';
 
 import SelectBox from '@src/components/atoms/SelectBox';
 import InputBoxWithLabel from '@src/components/molecules/InputBoxWithLabel';

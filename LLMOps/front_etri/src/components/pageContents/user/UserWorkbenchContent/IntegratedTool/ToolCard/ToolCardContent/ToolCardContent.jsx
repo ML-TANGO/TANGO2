@@ -1,4 +1,4 @@
-import { Switch, Tooltip } from '@jonathan/ui-react';
+import { Switch, Tooltip } from '@tango/ui-react';
 
 import { TRAINING_TOOL_TYPE } from '@src/types';
 

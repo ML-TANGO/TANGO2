@@ -8,7 +8,7 @@ import DeploymentAuth from './DeploymentAuth';
 import UsageStatus from './UsageStatus';
 import DeploymentLog from './DeploymentLog';
 import InstanceInfo from './InstanceInfo';
-import { Button } from '@jonathan/ui-react';
+import { Button } from '@tango/ui-react';
 
 // CSS Module
 import classNames from 'classnames/bind';

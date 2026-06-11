@@ -1,4 +1,4 @@
-import { InputNumber, Tooltip } from '@jonathan/ui-react';
+import { InputNumber, Tooltip } from '@tango/ui-react';
 import StorageUsageBar from '../StorageUsageBar';
 import StorageListItem from './StorageListItem/StorageListItem';
 

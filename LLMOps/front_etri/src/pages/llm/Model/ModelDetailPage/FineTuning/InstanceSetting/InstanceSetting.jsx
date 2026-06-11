@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { StatusCard, Tooltip } from '@jonathan/ui-react';
+import { StatusCard, Tooltip } from '@tango/ui-react';
 
 // CSS Module
 import classNames from 'classnames/bind';

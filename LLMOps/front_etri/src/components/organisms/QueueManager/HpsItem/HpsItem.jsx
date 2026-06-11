@@ -1,7 +1,7 @@
 import PropTypes from 'prop-types';
 
 // Components
-import { Badge } from '@jonathan/ui-react';
+import { Badge } from '@tango/ui-react';
 
 // CSS Module
 import style from './HpsItem.module.scss';

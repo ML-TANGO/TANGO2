@@ -1,4 +1,4 @@
-import { ButtonV2, DateRangePicker } from '@jonathan/ui-react';
+import { ButtonV2, DateRangePicker } from '@tango/ui-react';
 
 import { DATE_FORM } from '@src/datetimeUtils';
 import dayjs from 'dayjs';

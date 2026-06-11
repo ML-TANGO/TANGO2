@@ -2,7 +2,7 @@
 import { useTranslation } from 'react-i18next';
 
 // Components
-import { InputNumber, Checkbox, Tooltip } from '@jonathan/ui-react';
+import { InputNumber, Checkbox, Tooltip } from '@tango/ui-react';
 import Slider from '@mui/material/Slider';
 
 // CSS Module

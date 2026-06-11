@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { shallowEqual, useDispatch, useSelector } from 'react-redux';
 import { Prompt, useHistory, useRouteMatch } from 'react-router-dom';
 
-import { ButtonV2, Textarea } from '@jonathan/ui-react';
+import { ButtonV2, Textarea } from '@tango/ui-react';
 
 import { putPromptsDescription } from '@src/apis/llm/prompt';
 import { handleSetPromptState } from '@src/store/modules/llmprompt';

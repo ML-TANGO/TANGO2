@@ -5,7 +5,7 @@ import ReactDOM from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 // Components
-import { Button, Checkbox, InputText } from '@jonathan/ui-react';
+import { Button, Checkbox, InputText } from '@tango/ui-react';
 
 // Utils
 import { arrayToTranslationString } from '@src/utils';

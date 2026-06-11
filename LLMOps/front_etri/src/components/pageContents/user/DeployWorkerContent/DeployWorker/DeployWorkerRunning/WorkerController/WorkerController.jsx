@@ -1,6 +1,6 @@
 import { Fragment } from 'react';
 
-import { Button } from '@jonathan/ui-react';
+import { Button } from '@tango/ui-react';
 
 import classNames from 'classnames/bind';
 import style from './WorkerController.module.scss';
@@ -108,7 +108,7 @@ function WorkerController({
                         <ul className={cx('model-type')}>
                           <div className={cx('model-title')}>
                             {info.content === 'built-in'
-                              ? 'Jonathan Intelligence'
+                              ? 'Tango Intelligence'
                               : 'Hugging Face'}
                           </div>
                           <div className={cx('border')} />

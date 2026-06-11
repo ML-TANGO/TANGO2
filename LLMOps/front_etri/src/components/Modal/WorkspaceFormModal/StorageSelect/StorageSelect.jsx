@@ -1,6 +1,6 @@
 // import Card from './Card';
 
-// import { InputNumber, Tooltip } from '@jonathan/ui-react';
+// import { InputNumber, Tooltip } from '@tango/ui-react';
 // import StorageUsageBar from '../StorageUsageBar';
 
 // // CSS Module
@@ -163,7 +163,7 @@
 
 // export default StorageSelect;
 
-import { InputNumber, Tooltip } from '@jonathan/ui-react';
+import { InputNumber, Tooltip } from '@tango/ui-react';
 
 import StorageUsageBar from '../StorageUsageBar';
 import Card from './Card';

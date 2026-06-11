@@ -5,7 +5,7 @@ import { useRouteMatch } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 // Components
-import { Button } from '@jonathan/ui-react';
+import { Button } from '@tango/ui-react';
 import Table from '@src/components/molecules/Table';
 import ListFilter from '@src/components/pageContents/user/UserCheckpointContent/ListFilter';
 import { toast } from '@src/components/Toast';

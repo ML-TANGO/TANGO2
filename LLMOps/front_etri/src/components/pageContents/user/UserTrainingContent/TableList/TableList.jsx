@@ -24,7 +24,7 @@ import {
 import Status from '@src/components/atoms/Status';
 import Table from '@src/components/molecules/Table';
 import { toast } from '@src/components/Toast';
-import { Tooltip } from '@jonathan/ui-react';
+import { Tooltip } from '@tango/ui-react';
 import useSortColumn from '@src/components/molecules/Table/TableHead/useSortColumn';
 import SortColumn from '@src/components/molecules/Table/TableHead/SortColumn';
 

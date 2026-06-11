@@ -1,7 +1,7 @@
 // i18n
 
 // Utils
-import { Badge } from '@jonathan/ui-react';
+import { Badge } from '@tango/ui-react';
 
 import { convertDuration, convertLocalTime } from '@src/datetimeUtils';
 import StorageIcon from '@src/static/images/icon/00-ic-filled-storage.svg';

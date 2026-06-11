@@ -4,7 +4,7 @@ import _ from 'lodash';
 // i18n
 import { useTranslation } from 'react-i18next';
 
-import { CanvasLineChart } from '@jonathan/ui-react';
+import { CanvasLineChart } from '@tango/ui-react';
 import { reorganization } from './ChartDataChange';
 
 // CSS Module

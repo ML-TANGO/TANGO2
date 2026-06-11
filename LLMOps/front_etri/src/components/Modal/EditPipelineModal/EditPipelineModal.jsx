@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { shallowEqual, useDispatch, useSelector } from 'react-redux';
 import { toast } from 'react-toastify';
 
-import { InputText, Textarea, Tooltip } from '@jonathan/ui-react';
+import { InputText, Textarea, Tooltip } from '@tango/ui-react';
 
 import Dropdown from '@src/components/atoms/Dropdown';
 import Radio from '@src/components/atoms/input/Radio';

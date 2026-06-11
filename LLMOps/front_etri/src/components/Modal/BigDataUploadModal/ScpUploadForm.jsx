@@ -1,4 +1,4 @@
-import { InputPassword, InputText } from '@jonathan/ui-react';
+import { InputPassword, InputText } from '@tango/ui-react';
 
 import React from 'react';
 import { useTranslation } from 'react-i18next';

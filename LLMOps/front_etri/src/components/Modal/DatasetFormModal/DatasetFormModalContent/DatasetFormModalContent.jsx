@@ -1,5 +1,5 @@
 // Components
-import { InputText, Radio, Selectbox, Textarea } from '@jonathan/ui-react';
+import { InputText, Radio, Selectbox, Textarea } from '@tango/ui-react';
 
 // CSS module
 import classNames from 'classnames/bind';

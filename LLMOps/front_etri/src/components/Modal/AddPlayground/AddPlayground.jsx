@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
 import { useHistory } from 'react-router-dom';
 
-import { InputText, Textarea } from '@jonathan/ui-react';
+import { InputText, Textarea } from '@tango/ui-react';
 
 import AccessOwnerSelect from '@src/components/molecules/AccessOwnerSelect';
 import InputBoxWithLabel from '@src/components/molecules/InputBoxWithLabel';

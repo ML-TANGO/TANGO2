@@ -10,7 +10,7 @@ import useWindowDimensions from '@src/hooks/useWindowDimensions';
 import { convertBps } from '@src/utils';
 
 // Components
-import { Button } from '@jonathan/ui-react';
+import { Button } from '@tango/ui-react';
 import ModalFrame from '@src/components/Modal/ModalFrame';
 import Loading from '@src/components/atoms/loading/Loading';
 

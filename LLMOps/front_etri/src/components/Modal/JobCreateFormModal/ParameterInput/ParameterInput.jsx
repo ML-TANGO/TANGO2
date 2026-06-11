@@ -3,7 +3,7 @@
 // Components
 import { withTranslation } from 'react-i18next';
 
-import { Button, Tooltip } from '@jonathan/ui-react';
+import { Button, Tooltip } from '@tango/ui-react';
 
 // CSS module
 import classNames from 'classnames/bind';

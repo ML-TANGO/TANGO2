@@ -1,4 +1,4 @@
-import { Badge } from '@jonathan/ui-react';
+import { Badge } from '@tango/ui-react';
 
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';

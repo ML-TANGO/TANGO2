@@ -1,4 +1,4 @@
-import { InputNumber, InputText } from '@jonathan/ui-react';
+import { InputNumber, InputText } from '@tango/ui-react';
 
 import tooltipIcon from '@src/static/images/icon/00-gray-tooltip-icon.svg';
 import RefreshIcon from '@src/static/images/icon/ic-refresh.svg';

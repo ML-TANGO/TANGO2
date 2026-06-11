@@ -1,4 +1,4 @@
-// Mock Data for Jonathan Flightbase Frontend (Kubernetes-free dummy mode)
+// Mock Data for Tango Flightbase Frontend (Kubernetes-free dummy mode)
 import crypto from 'crypto-js';
 
 const ENC_KEY = 'robertirenelico!robertirenelico!';
@@ -3116,7 +3116,7 @@ export const mockResponses = {
       id: 'job-dummy-123',
       name: 'external-job-run',
       status: 'Running',
-      namespace: 'jonathan-system',
+      namespace: 'tango-system',
       manifest: 'custom-training-manifest',
       params: '{"batch_size": 8, "learning_rate": 0.0001, "epochs": 5}',
       created_at: '2026-06-09T07:00:00Z',
@@ -4550,7 +4550,7 @@ export const getMockResponse = (url, method, body, params) => {
           cutoff_length: 512,
           learning_rate: 0.00005,
           warmup_steps: 100,
-          used_jonathan_accelerator: 1,
+          used_tango_accelerator: 1,
           load_in_8bit: 0,
           used_lora: 1,
           fine_tuning_type: 'basic'

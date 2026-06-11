@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
 
-import { Button } from '@jonathan/ui-react';
+import { Button } from '@tango/ui-react';
 
 // Type
 import { TRAINING_TOOL_TYPE } from '@src/types';

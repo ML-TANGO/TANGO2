@@ -1,5 +1,5 @@
 // Components
-import { ButtonV2, Checkbox, Radio } from '@jonathan/ui-react';
+import { ButtonV2, Checkbox, Radio } from '@tango/ui-react';
 
 import classNames from 'classnames/bind';
 import style from '../RagSearch.module.scss';

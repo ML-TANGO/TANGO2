@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { shallowEqual, useDispatch, useSelector } from 'react-redux';
 import { NavLink } from 'react-router-dom';
 
-import { Checkbox } from '@jonathan/ui-react';
+import { Checkbox } from '@tango/ui-react';
 
 import classNames from 'classnames/bind';
 import style from './SimpleNav.module.scss';

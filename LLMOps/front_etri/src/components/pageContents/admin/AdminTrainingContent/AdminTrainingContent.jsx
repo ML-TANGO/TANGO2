@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
-import { ButtonV2, Selectbox } from '@jonathan/ui-react';
+import { ButtonV2, Selectbox } from '@tango/ui-react';
 
 import FederatedLearningBtn from '@src/components/molecules/FederatedLearningBtn';
 import PageHeader from '@src/components/molecules/PageHeader/PageHeader';

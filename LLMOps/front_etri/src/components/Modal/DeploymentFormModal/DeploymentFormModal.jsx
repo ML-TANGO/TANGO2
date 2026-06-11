@@ -1,11 +1,11 @@
 import { useTranslation } from 'react-i18next';
 
-import { InputText, Selectbox, Textarea } from '@jonathan/ui-react';
+import { InputText, Selectbox, Textarea } from '@tango/ui-react';
 
 import Radio from '@src/components/atoms/input/Radio';
 import HuggingFaceSearch from '@src/components/molecules/HuggingFaceSearch';
 import InputBoxWithLabel from '@src/components/molecules/InputBoxWithLabel';
-import JonathanModelSearch from '@src/components/molecules/JonathanModelSearch';
+import TangoModelSearch from '@src/components/molecules/TangoModelSearch';
 import MultiSelect from '@src/components/molecules/MultiSelect';
 import ResourceSetting from '@src/components/molecules/ResourceSetting';
 
@@ -50,14 +50,14 @@ const DeploymentFormModal = ({
   gpuInputValues,
   modelSelectType,
   modelSelectOptions,
-  jonathanSelectValue,
+  tangoSelectValue,
   huggingSelectValue,
-  jonathanIntelligenceType,
-  jonathanIntelligenceOptions,
+  tangoIntelligenceType,
+  tangoIntelligenceOptions,
   handleBuiltInValue,
   /// *
-  jonathanTraining,
-  jonathanModel,
+  tangoTraining,
+  tangoModel,
   huggingTraining,
   huggingModel,
   handleHuggingFaceToken,
@@ -216,41 +216,41 @@ const DeploymentFormModal = ({
               labelSize='large'
             >
               <Radio
-                name='jonathanIntelligenceType'
-                options={jonathanIntelligenceOptions}
-                value={jonathanIntelligenceType}
+                name='tangoIntelligenceType'
+                options={tangoIntelligenceOptions}
+                value={tangoIntelligenceType}
                 onChange={radioBtnHandler}
                 readOnly={type === 'EDIT_DEPLOYMENT'}
                 isLabelColor
               />
 
-              {modelSelectType === 0 && jonathanIntelligenceType === 0 && (
+              {modelSelectType === 0 && tangoIntelligenceType === 0 && (
                 <LoadTrainingSearch
-                  selectCategory={jonathanTraining}
+                  selectCategory={tangoTraining}
                   setSelectCategory={(v) =>
-                    handleBuiltInValue(v, 'jonathanTraining')
+                    handleBuiltInValue(v, 'tangoTraining')
                   }
-                  setSelectModel={(v) => handleBuiltInValue(v, 'jonathanModel')}
-                  selectModel={jonathanModel}
+                  setSelectModel={(v) => handleBuiltInValue(v, 'tangoModel')}
+                  selectModel={tangoModel}
                   workspaceId={workspaceId}
                   getTrainingUrl={'/options/built-in-model/training'}
                   editMode={type === 'EDIT_DEPLOYMENT'}
                   style={{ marginTop: '20px' }}
                 />
               )}
-              {modelSelectType === 0 && jonathanIntelligenceType === 1 && (
-                <JonathanModelSearch
-                  selectCategory={jonathanTraining}
+              {modelSelectType === 0 && tangoIntelligenceType === 1 && (
+                <TangoModelSearch
+                  selectCategory={tangoTraining}
                   setSelectCategory={(v) =>
-                    handleBuiltInValue(v, 'jonathanTraining')
+                    handleBuiltInValue(v, 'tangoTraining')
                   }
-                  setSelectModel={(v) => handleBuiltInValue(v, 'jonathanModel')}
-                  selectModel={jonathanModel}
+                  setSelectModel={(v) => handleBuiltInValue(v, 'tangoModel')}
+                  selectModel={tangoModel}
                   disabled={type === 'EDIT_DEPLOYMENT'}
                   style={{ marginTop: '20px' }}
                 />
               )}
-              {modelSelectType === 2 && jonathanIntelligenceType === 0 && (
+              {modelSelectType === 2 && tangoIntelligenceType === 0 && (
                 <LoadTrainingSearch
                   setSelectCategory={(v) =>
                     handleBuiltInValue(v, 'huggingTraining')
@@ -264,7 +264,7 @@ const DeploymentFormModal = ({
                   style={{ marginTop: '20px' }}
                 />
               )}
-              {modelSelectType === 2 && jonathanIntelligenceType === 1 && (
+              {modelSelectType === 2 && tangoIntelligenceType === 1 && (
                 <HuggingFaceSearch
                   setSelectCategory={(v) =>
                     handleBuiltInValue(v, 'huggingTraining')

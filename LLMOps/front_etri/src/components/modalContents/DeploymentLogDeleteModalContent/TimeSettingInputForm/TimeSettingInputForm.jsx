@@ -1,5 +1,5 @@
 // i18n
-import { InputDate } from '@jonathan/ui-react';
+import { InputDate } from '@tango/ui-react';
 
 import { useTranslation } from 'react-i18next';
 

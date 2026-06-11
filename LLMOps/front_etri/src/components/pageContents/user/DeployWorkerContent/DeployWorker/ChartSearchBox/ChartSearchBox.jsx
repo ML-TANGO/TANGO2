@@ -2,12 +2,12 @@
 import { useTranslation } from 'react-i18next';
 
 // Components
-import { Selectbox, Button, Tooltip } from '@jonathan/ui-react';
+import { Selectbox, Button, Tooltip } from '@tango/ui-react';
 import OptionTabMenu from '@src/components/molecules/OptionTabMenu';
 import MutliCheckSelect from '@src/components/molecules/MutliCheckSelect';
 
 // ui-react
-import { DateRangePicker } from '@jonathan/ui-react';
+import { DateRangePicker } from '@tango/ui-react';
 
 // Date Utils
 import { today, DATE_FORM } from '@src/datetimeUtils';

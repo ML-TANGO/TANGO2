@@ -1,4 +1,4 @@
-import { ButtonV2, Loading } from '@jonathan/ui-react';
+import { ButtonV2, Loading } from '@tango/ui-react';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';

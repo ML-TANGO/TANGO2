@@ -4,7 +4,7 @@ import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 
 // Components
-import { DateRangePicker, Selectbox } from '@jonathan/ui-react';
+import { DateRangePicker, Selectbox } from '@tango/ui-react';
 import InputBoxWithLabel from '@src/components/molecules/InputBoxWithLabel';
 import Radio from '@src/components/atoms/input/Radio';
 

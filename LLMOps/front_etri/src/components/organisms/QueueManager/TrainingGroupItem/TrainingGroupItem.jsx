@@ -3,7 +3,7 @@ import { Fragment } from 'react';
 // Components
 import HpsItem from '../HpsItem';
 import JobItem from '../JobItem';
-import { Badge } from '@jonathan/ui-react';
+import { Badge } from '@tango/ui-react';
 
 // CSS module
 import classNames from 'classnames/bind';

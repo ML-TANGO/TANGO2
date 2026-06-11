@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button, Switch, Tooltip } from '@jonathan/ui-react';
+import { Button, Switch, Tooltip } from '@tango/ui-react';
 
 import DeleteXIcon from './gray-delete-x-icon.svg';
 import useDevTool from './useDevTool';

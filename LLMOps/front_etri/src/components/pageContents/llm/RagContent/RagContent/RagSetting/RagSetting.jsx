@@ -1,4 +1,4 @@
-import { ButtonV2, Textarea } from '@jonathan/ui-react';
+import { ButtonV2, Textarea } from '@tango/ui-react';
 
 import { putRagDescription } from '@src/apis/llm/rag';
 import { loadModalComponent } from '@src/modal';

@@ -14,7 +14,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
 
-import { InputText } from '@jonathan/ui-react';
+import { InputText } from '@tango/ui-react';
 
 import InputBoxWithLabel from '@src/components/molecules/InputBoxWithLabel';
 import { closeModal } from '@src/store/modules/modal';
@@ -38,7 +38,7 @@ const ExternalTrainingStartModal = ({ data, type }) => {
   const { t } = useTranslation();
   const dispatch = useDispatch();
 
-  const [namespaceInput, setNamespaceInput] = useState('jonathan-system');
+  const [namespaceInput, setNamespaceInput] = useState('tango-system');
   const [paramsInput, setParamsInput] = useState('{}');
   const [submitting, setSubmitting] = useState(false);
   const [footerMessage, setFooterMessage] = useState('');

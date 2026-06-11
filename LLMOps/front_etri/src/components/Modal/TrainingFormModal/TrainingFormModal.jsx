@@ -3,12 +3,12 @@ import { useState } from 'react';
 // i18n
 import { useTranslation } from 'react-i18next';
 
-import { InputText, Selectbox, Textarea, Tooltip } from '@jonathan/ui-react';
+import { InputText, Selectbox, Textarea, Tooltip } from '@tango/ui-react';
 
 import Radio from '@src/components/atoms/input/Radio';
 import HuggingFaceSearch from '@src/components/molecules/HuggingFaceSearch';
 import InputBoxWithLabel from '@src/components/molecules/InputBoxWithLabel';
-import JonathanModelSearch from '@src/components/molecules/JonathanModelSearch';
+import TangoModelSearch from '@src/components/molecules/TangoModelSearch';
 import MultiSelect from '@src/components/molecules/MultiSelect';
 import ResourceSetting from '@src/components/molecules/ResourceSetting';
 
@@ -307,7 +307,7 @@ function TrainingFormModal({
               value={modelTypeValue}
               options={[
                 { label: 'Custom', value: 0 },
-                { label: 'Jonathan Intelligence', value: 1 },
+                { label: 'Tango Intelligence', value: 1 },
                 { label: 'Hugging Face', value: 2 },
               ]}
               onChange={handleModelTypeValue}
@@ -317,7 +317,7 @@ function TrainingFormModal({
           </InputBoxWithLabel>
         </div>
         {modelTypeValue === 1 && (
-          <JonathanModelSearch
+          <TangoModelSearch
             selectCategory={selectedCategory}
             setSelectCategory={handleCategoryValue}
             selectModel={selectedModel}

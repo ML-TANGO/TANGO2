@@ -26,7 +26,7 @@ import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallowEqual, useDispatch, useSelector } from 'react-redux';
 
-import { ButtonV2, Loading } from '@jonathan/ui-react';
+import { ButtonV2, Loading } from '@tango/ui-react';
 
 import { openModal } from '@src/store/modules/modal';
 import { callApi, STATUS_SUCCESS } from '@src/network';
@@ -80,7 +80,7 @@ const ExternalTraining = memo(function ExternalTraining({
   const [_graphData, setGraphData] = useState(null);
 
   // ── Launch form state (only when external_job_id is null) ───────────────
-  const [namespaceInput, setNamespaceInput] = useState('jonathan-system');
+  const [namespaceInput, setNamespaceInput] = useState('tango-system');
   const [paramsInput, setParamsInput] = useState('{}');
   const [submitting, setSubmitting] = useState(false);
 

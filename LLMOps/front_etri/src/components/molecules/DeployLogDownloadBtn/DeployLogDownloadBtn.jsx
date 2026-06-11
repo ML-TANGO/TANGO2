@@ -1,5 +1,5 @@
 // Atoms
-import { Button, Checkbox, Tooltip } from '@jonathan/ui-react';
+import { Button, Checkbox, Tooltip } from '@tango/ui-react';
 
 import { useState } from 'react';
 // i18n

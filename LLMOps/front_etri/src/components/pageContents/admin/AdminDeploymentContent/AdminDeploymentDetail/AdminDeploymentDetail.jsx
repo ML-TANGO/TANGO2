@@ -1,5 +1,5 @@
 // Utils
-import { ButtonV2 } from '@jonathan/ui-react';
+import { ButtonV2 } from '@tango/ui-react';
 
 import { convertLocalTime } from '@src/datetimeUtils';
 import warningIcon from '@src/static/images/icon/ic-warning-yellow-white.svg';

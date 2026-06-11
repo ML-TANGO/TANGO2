@@ -1,7 +1,7 @@
 // i18n
 
 // Components
-import { InputText, Textarea } from '@jonathan/ui-react';
+import { InputText, Textarea } from '@tango/ui-react';
 
 import { withTranslation } from 'react-i18next';
 

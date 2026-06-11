@@ -1,6 +1,6 @@
 import { withTranslation } from 'react-i18next';
 
-import { InputNumber, InputText, Selectbox } from '@jonathan/ui-react';
+import { InputNumber, InputText, Selectbox } from '@tango/ui-react';
 
 import Radio from '@src/components/atoms/input/Radio';
 import GpuNodeSelectBox from '@src/components/molecules/GpuNodeSelectBox';

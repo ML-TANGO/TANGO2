@@ -6,7 +6,7 @@ import fileImage from '@src/static/images/icon/file-white.svg';
 // Components
 import SubMenu from '@src/components/molecules/SubMenu';
 import LogTable from './LogTable';
-import { InputText, Tab } from '@jonathan/ui-react';
+import { InputText, Tab } from '@tango/ui-react';
 
 // CSS Module
 import classNames from 'classnames/bind';

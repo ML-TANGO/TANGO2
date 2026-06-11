@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ButtonV2 } from '@jonathan/ui-react';
+import { ButtonV2 } from '@tango/ui-react';
 
 import DatasetIcon from '@src/components/icon/DatasetIcon';
 import ModelIcon from '@src/components/icon/ModelIcon';

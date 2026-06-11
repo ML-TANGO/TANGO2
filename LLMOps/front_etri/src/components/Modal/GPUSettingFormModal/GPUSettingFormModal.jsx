@@ -3,7 +3,7 @@ import { withTranslation } from 'react-i18next';
 
 // Components
 import ModalFrame from '../ModalFrame';
-import { InputNumber } from '@jonathan/ui-react';
+import { InputNumber } from '@tango/ui-react';
 import InputBoxWithLabel from '@src/components/molecules/InputBoxWithLabel';
 
 // CSS Module

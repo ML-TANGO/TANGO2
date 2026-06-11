@@ -1,5 +1,5 @@
 // Atoms
-import { Modal } from '@jonathan/ui-react';
+import { Modal } from '@tango/ui-react';
 
 function DeployWorkerStopModal({ data, type, t }) {
   const { headerRender, contentRender, footerRender, submit } = data;

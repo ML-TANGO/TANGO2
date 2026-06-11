@@ -8,7 +8,7 @@ import {
   useRouteMatch,
 } from 'react-router-dom';
 
-import { InputText } from '@jonathan/ui-react';
+import { InputText } from '@tango/ui-react';
 
 import _ from 'lodash';
 

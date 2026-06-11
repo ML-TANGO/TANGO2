@@ -2,7 +2,7 @@
 import { useTranslation } from 'react-i18next';
 
 // Components
-import { InputText, Button } from '@jonathan/ui-react';
+import { InputText, Button } from '@tango/ui-react';
 
 // CSS module
 import classNames from 'classnames/bind';

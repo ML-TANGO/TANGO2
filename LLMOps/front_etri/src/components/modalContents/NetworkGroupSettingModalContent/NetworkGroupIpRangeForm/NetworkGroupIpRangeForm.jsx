@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 // Components
 import InputLabel from '@src/components/atoms/input/InputLabel';
-import { InputNumber, Selectbox, Button } from '@jonathan/ui-react';
+import { InputNumber, Selectbox, Button } from '@tango/ui-react';
 
 // Icons
 import ErrorIcon from '@src/static/images/icon/icon-error-c-red.svg';

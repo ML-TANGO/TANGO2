@@ -6,9 +6,9 @@ import { useTranslation } from 'react-i18next';
 
 import {
   InputNumber,
-  Radio as JonathanRadio,
+  Radio as TangoRadio,
   Selectbox,
-} from '@jonathan/ui-react';
+} from '@tango/ui-react';
 
 // Type
 import { TRAINING_TOOL_TYPE } from '@src/types';

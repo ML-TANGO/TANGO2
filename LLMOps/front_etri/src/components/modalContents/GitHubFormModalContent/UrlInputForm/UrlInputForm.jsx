@@ -1,7 +1,7 @@
 // i18n
 
 // Components
-import { InputText, Tooltip } from '@jonathan/ui-react';
+import { InputText, Tooltip } from '@tango/ui-react';
 
 import { useTranslation } from 'react-i18next';
 

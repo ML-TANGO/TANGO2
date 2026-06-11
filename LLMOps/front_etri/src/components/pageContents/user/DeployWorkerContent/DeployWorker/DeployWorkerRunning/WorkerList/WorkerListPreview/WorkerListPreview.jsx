@@ -1,5 +1,5 @@
 // Atom
-import { BarChart, BarLineChart, Button, Tooltip } from '@jonathan/ui-react';
+import { BarChart, BarLineChart, Button, Tooltip } from '@tango/ui-react';
 
 import { getKoreaTime } from '@src/datetimeUtils';
 

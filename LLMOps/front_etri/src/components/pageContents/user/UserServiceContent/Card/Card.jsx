@@ -35,8 +35,8 @@ const calReturnJobStatus = (status) => {
 };
 
 const calIcon = (type) => {
-  if (type === 'Jonathan Intelligence')
-    return '/src/static/images/icon/jonathan-intell.svg';
+  if (type === 'Tango Intelligence')
+    return '/src/static/images/icon/tango-intell.svg';
   if (type === 'Hugging Face')
     return '/src/static/images/icon/hugging-face.svg';
   return '/src/static/images/icon/00-ic-deploy-project.svg';
@@ -71,7 +71,7 @@ function Card({ data, openTest, wid }) {
 
   const calCardType = (type) => {
     if (type === 'custom') return 'Custom';
-    if (type === 'built-in') return 'Jonathan Intelligence';
+    if (type === 'built-in') return 'Tango Intelligence';
     return 'Hugging Face';
   };
 

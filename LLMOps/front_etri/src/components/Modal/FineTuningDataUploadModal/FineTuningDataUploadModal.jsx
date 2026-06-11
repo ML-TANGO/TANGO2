@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
 
-import { InputText, Radio, Textarea } from '@jonathan/ui-react';
+import { InputText, Radio, Textarea } from '@tango/ui-react';
 
 import InputBoxWithLabel from '@src/components/molecules/InputBoxWithLabel';
 import { toast } from '@src/components/Toast';

@@ -1,4 +1,4 @@
-import { StatusCard } from '@jonathan/ui-react';
+import { StatusCard } from '@tango/ui-react';
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';

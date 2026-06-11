@@ -6,7 +6,7 @@ import ModalTemplate from '@src/components/templates/ModalTemplate';
 // Organisms
 import ModalHeader from '@src/components/organisms/modal/ModalHeader';
 import ModalFooter from '@src/components/organisms/modal/ModalFooter';
-import { InputText, Textarea } from '@jonathan/ui-react';
+import { InputText, Textarea } from '@tango/ui-react';
 
 // CSS Module
 import classNames from 'classnames/bind';

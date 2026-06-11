@@ -1,4 +1,4 @@
-import { InputText, Textarea } from '@jonathan/ui-react';
+import { InputText, Textarea } from '@tango/ui-react';
 
 import { getPromptItemInfo, postPromptCommit } from '@src/apis/llm/prompt';
 import React, { useMemo, useState } from 'react';

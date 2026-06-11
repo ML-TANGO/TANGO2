@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 // i18n
 import { useTranslation } from 'react-i18next';
 
-import { Selectbox } from '@jonathan/ui-react';
+import { Selectbox } from '@tango/ui-react';
 
 import PageTitle from '@src/components/atoms/PageTitle';
 import Table from '@src/components/molecules/Table';

@@ -1,5 +1,5 @@
 // Components
-import { ButtonV2 } from '@jonathan/ui-react';
+import { ButtonV2 } from '@tango/ui-react';
 
 import InfoIcon from '@src/static/images/icon/00-gray-tooltip-icon.svg';
 import copyIcon from '@src/static/images/icon/00-ic-basic-copy-o.svg';

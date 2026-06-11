@@ -1,7 +1,7 @@
 // i18n
 
 // Components
-import { Button, ButtonV2, Selectbox } from '@jonathan/ui-react';
+import { Button, ButtonV2, Selectbox } from '@tango/ui-react';
 
 import { useTranslation } from 'react-i18next';
 

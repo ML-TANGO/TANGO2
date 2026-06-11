@@ -1,4 +1,4 @@
-import { DateRangePicker } from '@jonathan/ui-react';
+import { DateRangePicker } from '@tango/ui-react';
 
 import { DATE_FORM, today } from '@src/datetimeUtils';
 import dayjs from 'dayjs';

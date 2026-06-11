@@ -1,5 +1,5 @@
 // Components
-import { InputText, Textarea, Tooltip } from '@jonathan/ui-react';
+import { InputText, Textarea, Tooltip } from '@tango/ui-react';
 import GroupSelectBox from '@src/components/organisms/GroupSelectBox';
 
 // CSS Module

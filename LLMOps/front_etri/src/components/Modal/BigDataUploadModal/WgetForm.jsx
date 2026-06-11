@@ -1,4 +1,4 @@
-import { InputText } from '@jonathan/ui-react';
+import { InputText } from '@tango/ui-react';
 
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';

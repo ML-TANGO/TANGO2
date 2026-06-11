@@ -2,7 +2,7 @@
 import { useTranslation } from 'react-i18next';
 
 // Components
-import { Button } from '@jonathan/ui-react';
+import { Button } from '@tango/ui-react';
 import PageTitle from '@src/components/atoms/PageTitle';
 import RoundList from './RoundList';
 

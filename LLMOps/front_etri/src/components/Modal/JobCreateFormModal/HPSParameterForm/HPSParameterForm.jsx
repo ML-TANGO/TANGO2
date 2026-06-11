@@ -1,5 +1,5 @@
 // Components
-import { Button, InputText } from '@jonathan/ui-react';
+import { Button, InputText } from '@tango/ui-react';
 
 import { useState } from 'react';
 

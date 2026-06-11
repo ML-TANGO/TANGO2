@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
-import { Textarea } from '@jonathan/ui-react';
+import { Textarea } from '@tango/ui-react';
 
 import InputBoxWithLabel from '@src/components/molecules/InputBoxWithLabel';
 

@@ -1,6 +1,6 @@
 // Icon
 
-import { Balloon } from '@jonathan/ui-react';
+import { Balloon } from '@tango/ui-react';
 
 import AlertIcon from '@src/static/images/icon/00-ic-alert-info-o.svg';
 import React, { useRef, useState } from 'react';

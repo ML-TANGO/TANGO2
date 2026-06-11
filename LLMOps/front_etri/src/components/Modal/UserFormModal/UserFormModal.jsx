@@ -2,7 +2,7 @@
 import { useCallback, useMemo } from 'react';
 import { withTranslation } from 'react-i18next';
 
-import { InputPassword, InputText, Selectbox } from '@jonathan/ui-react';
+import { InputPassword, InputText, Selectbox } from '@tango/ui-react';
 
 import InputBoxWithLabel from '@src/components/molecules/InputBoxWithLabel';
 

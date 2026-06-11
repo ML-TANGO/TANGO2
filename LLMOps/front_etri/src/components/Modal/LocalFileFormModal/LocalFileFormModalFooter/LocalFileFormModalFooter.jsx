@@ -1,5 +1,5 @@
 // Atoms
-import { Button } from '@jonathan/ui-react';
+import { Button } from '@tango/ui-react';
 
 import { useCallback, useEffect } from 'react';
 import { useDispatch } from 'react-redux';

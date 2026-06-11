@@ -2,7 +2,7 @@ import React, { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallowEqual, useDispatch, useSelector } from 'react-redux';
 
-import { ButtonV2, Switch, Textarea } from '@jonathan/ui-react';
+import { ButtonV2, Switch, Textarea } from '@tango/ui-react';
 
 import {
   handleSetPlaygroundState,

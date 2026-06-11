@@ -5,7 +5,7 @@ import {
   Selectbox,
   Textarea,
   Tooltip,
-} from '@jonathan/ui-react';
+} from '@tango/ui-react';
 
 import { Fragment } from 'react';
 // i18n

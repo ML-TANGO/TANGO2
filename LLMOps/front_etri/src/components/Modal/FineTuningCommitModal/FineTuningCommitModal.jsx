@@ -1,4 +1,4 @@
-import { InputText, Radio, Textarea } from '@jonathan/ui-react';
+import { InputText, Radio, Textarea } from '@tango/ui-react';
 
 import { loadModalComponent } from '@src/modal';
 import copyIcon from '@src/static/images/icon/00-ic-basic-copy-o.svg';

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 // Components
 import InputBoxWithLabel from '@src/components/molecules/InputBoxWithLabel';
-import { InputText, InputNumber, Textarea, Radio } from '@jonathan/ui-react';
+import { InputText, InputNumber, Textarea, Radio } from '@tango/ui-react';
 
 // CSS module
 import classNames from 'classnames/bind';

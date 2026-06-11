@@ -10,7 +10,7 @@ import { scrollToPrevPosition } from '@src/utils';
 import { network } from '@src/network';
 
 // Components
-import { InputNumber, Button } from '@jonathan/ui-react';
+import { InputNumber, Button } from '@tango/ui-react';
 import { toast } from '@src/components/Toast';
 
 // Test

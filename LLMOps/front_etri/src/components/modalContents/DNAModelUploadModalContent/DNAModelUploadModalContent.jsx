@@ -2,7 +2,7 @@
 import { useTranslation } from 'react-i18next';
 
 // Components
-import { Textarea, Selectbox } from '@jonathan/ui-react';
+import { Textarea, Selectbox } from '@tango/ui-react';
 import Radio from '@src/components/atoms/input/Radio';
 import InputBoxWithLabel from '@src/components/molecules/InputBoxWithLabel';
 import ModalTemplate from '@src/components/templates/ModalTemplate';

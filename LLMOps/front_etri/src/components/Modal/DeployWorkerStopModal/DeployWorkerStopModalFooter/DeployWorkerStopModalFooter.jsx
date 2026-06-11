@@ -1,7 +1,7 @@
 import { useDispatch } from 'react-redux';
 
 // Atom
-import { Button } from '@jonathan/ui-react';
+import { Button } from '@tango/ui-react';
 
 // module
 import { closeModal } from '@src/store/modules/modal';

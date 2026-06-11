@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 
-import { InputNumber } from '@jonathan/ui-react';
+import { InputNumber } from '@tango/ui-react';
 
 import Dropdown from '@src/components/atoms/Dropdown';
 import InputBoxWithLabel from '@src/components/molecules/InputBoxWithLabel';

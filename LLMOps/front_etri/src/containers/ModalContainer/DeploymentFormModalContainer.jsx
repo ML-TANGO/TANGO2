@@ -232,8 +232,8 @@ class DeploymentFormModalContainer extends PureComponent {
     deploymentTemplateType: null,
     jsonRef: createRef(),
     deploymentNoGroupSelected: false,
-    jonathanTraining: { name: '', value: 0 }, // jonathan 2개, hugging 2개 만들어야함,
-    jonathanModel: { name: '', value: 0 }, // jonathan 2개, hugging 2개 만들어야함,
+    tangoTraining: { name: '', value: 0 }, // tango 2개, hugging 2개 만들어야함,
+    tangoModel: { name: '', value: 0 }, // tango 2개, hugging 2개 만들어야함,
     huggingTraining: { name: '', value: 0 },
     huggingModel: { name: '', value: 0 },
 
@@ -241,11 +241,11 @@ class DeploymentFormModalContainer extends PureComponent {
     modelSelectType: 1,
     modelSelectOptions: [
       { label: 'Custom', value: 1 },
-      { label: 'Jonathan Intelligence', value: 0 },
+      { label: 'Tango Intelligence', value: 0 },
       { label: 'Hugging Face', value: 2 },
     ],
-    jonathanIntelligenceType: 1,
-    jonathanIntelligenceOptions: [
+    tangoIntelligenceType: 1,
+    tangoIntelligenceOptions: [
       { label: 'importNewModel.label', value: 1 },
       { label: 'loadFromTraining.label', value: 0 },
     ],
@@ -274,7 +274,7 @@ class DeploymentFormModalContainer extends PureComponent {
       this.setState({
         showSelectAgain: true,
         modelSelectStatus: false,
-        jonathanIntelligenceType: result?.is_new_model ? 1 : 0,
+        tangoIntelligenceType: result?.is_new_model ? 1 : 0,
       });
 
       let { workspaceId } = this.props.data;
@@ -291,9 +291,9 @@ class DeploymentFormModalContainer extends PureComponent {
       if (modelType === 'built-in' || modelType === 'huggingface') {
         // modelType에 따라 newState의 키 결정
         const trainingKey =
-          modelType === 'built-in' ? 'jonathanTraining' : 'huggingTraining';
+          modelType === 'built-in' ? 'tangoTraining' : 'huggingTraining';
         const modelKey =
-          modelType === 'built-in' ? 'jonathanModel' : 'huggingModel';
+          modelType === 'built-in' ? 'tangoModel' : 'huggingModel';
 
         // is_new_model 값에 따라 사용할 필드 결정
         const trainingField = result.is_new_model
@@ -866,8 +866,8 @@ class DeploymentFormModalContainer extends PureComponent {
       deploymentName,
       gpuSelectedOptions,
       gpuInputValues,
-      jonathanTraining,
-      jonathanModel,
+      tangoTraining,
+      tangoModel,
       huggingTraining,
       huggingModel,
       modelSelectType,
@@ -890,18 +890,18 @@ class DeploymentFormModalContainer extends PureComponent {
         return;
       }
 
-      //? jonathanTraining: { name: '', value: 0 }, // jonathan 2개, hugging 2개 만들어야함,
-      //? jonathanModel: { name: '', value: 0 }, // jonathan 2개, hugging 2개 만들어야함,
+      //? tangoTraining: { name: '', value: 0 }, // tango 2개, hugging 2개 만들어야함,
+      //? tangoModel: { name: '', value: 0 }, // tango 2개, hugging 2개 만들어야함,
       //? huggingTraining: { name: '', value: 0 },
       //? huggingModel: { name: '', value: 0 },
     }
     if (modelSelectType === 0) {
-      if (jonathanTraining.name === '') {
+      if (tangoTraining.name === '') {
         this.setState({
           footerMessage: `${this.props.t('selecteModel.placeholder')}`,
         });
         return;
-      } else if (jonathanModel.name === '') {
+      } else if (tangoModel.name === '') {
         this.setState({
           footerMessage: `${this.props.t('selecteModel.placeholder')}`,
         });
@@ -1068,12 +1068,12 @@ class DeploymentFormModalContainer extends PureComponent {
       variablesValues,
       templateId,
       modelSelectType,
-      jonathanTraining,
-      jonathanModel,
+      tangoTraining,
+      tangoModel,
       huggingTraining,
       huggingModel,
       huggingFaceToken,
-      jonathanIntelligenceType,
+      tangoIntelligenceType,
     } = this.state;
 
     const {
@@ -1113,8 +1113,8 @@ class DeploymentFormModalContainer extends PureComponent {
       return ''; // 기본값
     };
 
-    //? jonathanTraining
-    //? jonathanModel
+    //? tangoTraining
+    //? tangoModel
     //? huggingTraining
     //? huggingModel
     const body = {
@@ -1126,32 +1126,32 @@ class DeploymentFormModalContainer extends PureComponent {
       description,
       gpu_model: gpuModelType === 1 ? gpuModelNodeListJson : null,
       model_type: determineModelSelectType(modelSelectType),
-      is_new_model_type: jonathanIntelligenceType === 1,
+      is_new_model_type: tangoIntelligenceType === 1,
       //새모델 가져오기 일때 True, 학습에서 불러오기 False
     };
 
     // 인텔리젼스 학습에서 가져오기
-    if (modelSelectType === 0 && jonathanIntelligenceType === 0) {
-      body.project_id = jonathanTraining.value;
-      body.training_id = jonathanModel.value;
-      body.training_type = jonathanModel.type;
+    if (modelSelectType === 0 && tangoIntelligenceType === 0) {
+      body.project_id = tangoTraining.value;
+      body.training_id = tangoModel.value;
+      body.training_type = tangoModel.type;
     }
 
     // 인텔리젼스 새모델 가져오기
-    if (modelSelectType === 0 && jonathanIntelligenceType === 1) {
-      body.model_category = jonathanTraining.value;
-      body.huggingface_model_id = jonathanModel.value;
+    if (modelSelectType === 0 && tangoIntelligenceType === 1) {
+      body.model_category = tangoTraining.value;
+      body.huggingface_model_id = tangoModel.value;
     }
 
     // 허깅 학습에서 가져오기
-    if (modelSelectType === 2 && jonathanIntelligenceType === 0) {
+    if (modelSelectType === 2 && tangoIntelligenceType === 0) {
       body.project_id = huggingTraining.value;
       body.training_id = huggingModel.value;
       body.training_type = huggingModel.type;
     }
 
     // 허깅 새모델 가져오기
-    if (modelSelectType === 2 && jonathanIntelligenceType === 1) {
+    if (modelSelectType === 2 && tangoIntelligenceType === 1) {
       body.model_category = huggingTraining.name;
       body.huggingface_model_id = huggingModel.name;
       body.huggingface_model_token = huggingFaceToken;
@@ -1236,7 +1236,7 @@ class DeploymentFormModalContainer extends PureComponent {
         name === 'accessType' ||
         name === 'gpuModelType' ||
         name === 'modelSelectType' ||
-        name === 'jonathanIntelligenceType'
+        name === 'tangoIntelligenceType'
           ? parseInt(value, 10)
           : value,
     };
@@ -1280,9 +1280,9 @@ class DeploymentFormModalContainer extends PureComponent {
       }
     }
 
-    if (name === 'jonathanIntelligenceType') {
-      newState.jonathanTraining = { name: '', value: 0 };
-      newState.jonathanModel = { name: '', value: 0 };
+    if (name === 'tangoIntelligenceType') {
+      newState.tangoTraining = { name: '', value: 0 };
+      newState.tangoModel = { name: '', value: 0 };
       newState.huggingTraining = { name: '', value: 0 };
       newState.huggingModel = { name: '', value: 0 };
     }
@@ -1650,8 +1650,8 @@ class DeploymentFormModalContainer extends PureComponent {
       gpuSelectedOptions,
       gpuInputValues,
       modelSelectType,
-      jonathanTraining,
-      jonathanModel,
+      tangoTraining,
+      tangoModel,
       huggingTraining,
       huggingModel,
     } = state;
@@ -1689,7 +1689,7 @@ class DeploymentFormModalContainer extends PureComponent {
     }
 
     if (modelSelectType === 0) {
-      if (jonathanTraining.name === '' || jonathanModel.name === '') {
+      if (tangoTraining.name === '' || tangoModel.name === '') {
         validateCount += 1;
       }
     }

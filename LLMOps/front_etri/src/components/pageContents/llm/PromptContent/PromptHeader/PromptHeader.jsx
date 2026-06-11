@@ -1,4 +1,4 @@
-import { ButtonV2 } from '@jonathan/ui-react';
+import { ButtonV2 } from '@tango/ui-react';
 
 import BackIcon from '@src/static/images/icon/00-ic-basic-arrow-02-left.svg';
 import React from 'react';

@@ -1,4 +1,4 @@
-import { Badge, Selectbox, Switch } from '@jonathan/ui-react';
+import { Badge, Selectbox, Switch } from '@tango/ui-react';
 
 import SettingIcon from '@src/static/images/icon/00-setting.svg';
 import React, { Fragment, useCallback, useMemo, useRef, useState } from 'react';

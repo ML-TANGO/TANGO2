@@ -1,5 +1,5 @@
 // Components
-import { InputText } from '@jonathan/ui-react';
+import { InputText } from '@tango/ui-react';
 
 import arrowDown from '@src/static/images/icon/00-ic-basic-arrow-02-down-grey.svg';
 import arrowUp from '@src/static/images/icon/00-ic-basic-arrow-02-up-grey.svg';

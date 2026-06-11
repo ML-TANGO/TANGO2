@@ -5,7 +5,7 @@ import { useDispatch } from 'react-redux';
 import { closeModal } from '@src/store/modules/modal';
 
 // Atoms
-import { Button } from '@jonathan/ui-react';
+import { Button } from '@tango/ui-react';
 
 // CSS Module
 import classNames from 'classnames/bind';

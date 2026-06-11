@@ -1,5 +1,5 @@
 // components
-import { Button } from '@jonathan/ui-react';
+import { Button } from '@tango/ui-react';
 
 import builtInImage from '@src/static/images/icon/ic-builtIn-gray.svg';
 import jsonImage from '@src/static/images/icon/ic-json-gray.svg';

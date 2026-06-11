@@ -1,5 +1,5 @@
 // storybook
-import { Button } from '@jonathan/ui-react';
+import { Button } from '@tango/ui-react';
 
 // CSS module
 import classNames from 'classnames/bind';

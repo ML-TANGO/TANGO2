@@ -2,7 +2,7 @@
 import { useTranslation } from 'react-i18next';
 
 // Components
-import { IconArrowLeft } from '@jonathan/ui-react';
+import { IconArrowLeft } from '@tango/ui-react';
 
 // CSS Module
 import classNames from 'classnames/bind';

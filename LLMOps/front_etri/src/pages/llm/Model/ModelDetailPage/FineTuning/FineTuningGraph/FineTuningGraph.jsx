@@ -1,4 +1,4 @@
-import { Loading } from '@jonathan/ui-react';
+import { Loading } from '@tango/ui-react';
 
 import WarningIcon from '@src/static/images/icon/ic-warning-yellow.svg';
 import { useMemo } from 'react';

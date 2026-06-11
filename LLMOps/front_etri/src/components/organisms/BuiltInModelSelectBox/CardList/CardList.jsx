@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 
 // Components
 import Card from './Card';
-import { InputText } from '@jonathan/ui-react';
+import { InputText } from '@tango/ui-react';
 
 // CSS Module
 import style from './CardList.module.scss';

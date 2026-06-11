@@ -1,5 +1,5 @@
 // Components
-import { Badge, Button, InputText } from '@jonathan/ui-react';
+import { Badge, Button, InputText } from '@tango/ui-react';
 
 import SubMenuItem from './SubMenuItem';
 

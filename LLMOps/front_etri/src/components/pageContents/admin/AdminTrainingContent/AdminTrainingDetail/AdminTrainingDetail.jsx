@@ -1,4 +1,4 @@
-import { Badge, ButtonV2 } from '@jonathan/ui-react';
+import { Badge, ButtonV2 } from '@tango/ui-react';
 
 import warningIcon from '@src/static/images/icon/ic-warning-yellow-white.svg';
 import { Fragment, useEffect, useState } from 'react';

@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
 
-import { ButtonV2, Textarea } from '@jonathan/ui-react';
+import { ButtonV2, Textarea } from '@tango/ui-react';
 
 import { handleSetModelState } from '@src/store/modules/llmModel';
 // Hooks

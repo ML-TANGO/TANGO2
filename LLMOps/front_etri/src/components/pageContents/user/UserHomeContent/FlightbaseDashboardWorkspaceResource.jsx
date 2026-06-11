@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ButtonV2 } from '@jonathan/ui-react';
+import { ButtonV2 } from '@tango/ui-react';
 
 import DarkTooltip from '@src/components/molecules/DarkTooltip/DarkTooltip';
 import ListStack from '@src/components/molecules/ListStack';

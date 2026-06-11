@@ -2,7 +2,7 @@
 import { useTranslation } from 'react-i18next';
 
 // Components
-import { Textarea, Selectbox } from '@jonathan/ui-react';
+import { Textarea, Selectbox } from '@tango/ui-react';
 import File from '@src/components/molecules/File';
 import InputBoxWithLabel from '@src/components/molecules/InputBoxWithLabel';
 

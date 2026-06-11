@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
 import { useHistory, useRouteMatch } from 'react-router-dom';
 
-import { Button, Tooltip } from '@jonathan/ui-react';
+import { Button, Tooltip } from '@tango/ui-react';
 
 // Molecules
 import DropMenu from '@src/components/molecules/DropMenu';
@@ -43,8 +43,8 @@ import WarningIcon from '@src/static/images/icon/ic-warning-red.svg';
 
 const cx = classNames.bind(style);
 const calIcon = (type) => {
-  if (type === 'Jonathan Intelligence')
-    return '/src/static/images/icon/jonathan-intell.svg';
+  if (type === 'Tango Intelligence')
+    return '/src/static/images/icon/tango-intell.svg';
   if (type === 'Hugging Face')
     return '/src/static/images/icon/hugging-face.svg';
   return '/src/static/images/icon/00-ic-deploy-project.svg';
@@ -89,7 +89,7 @@ function Card({ data, refreshData }) {
 
   const calCardType = (type) => {
     if (type === 'custom') return 'Custom';
-    if (type === 'built-in') return 'Jonathan Intelligence';
+    if (type === 'built-in') return 'Tango Intelligence';
     return 'Hugging Face';
   };
 

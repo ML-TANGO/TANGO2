@@ -1,7 +1,7 @@
 // Components
 
 // Utils
-import { Tooltip } from '@jonathan/ui-react';
+import { Tooltip } from '@tango/ui-react';
 
 import { convertLocalTime } from '@src/datetimeUtils';
 import TrainingResultIcon from '@src/static/images/icon/00-ic-training-result-icon.svg';

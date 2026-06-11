@@ -5,7 +5,7 @@
 // i18n
 import { useTranslation } from 'react-i18next';
 
-import { Checkbox, InputNumber } from '@jonathan/ui-react';
+import { Checkbox, InputNumber } from '@tango/ui-react';
 
 import InstanceTooltip from '@src/components/organisms/InstanceTooltip';
 

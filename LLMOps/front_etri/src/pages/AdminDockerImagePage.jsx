@@ -1,4 +1,4 @@
-import { Button, ButtonV2, StatusCard } from '@jonathan/ui-react';
+import { Button, ButtonV2, StatusCard } from '@tango/ui-react';
 
 import { convertLocalTime } from '@src/datetimeUtils';
 import { loadModalComponent } from '@src/modal';

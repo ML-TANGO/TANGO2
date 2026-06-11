@@ -2,7 +2,7 @@ import { Fragment } from 'react';
 import { useDispatch } from 'react-redux';
 import { useTranslation } from 'react-i18next';
 
-import { Button, Tooltip } from '@jonathan/ui-react';
+import { Button, Tooltip } from '@tango/ui-react';
 import { openModal, closeModal } from '@src/store/modules/modal';
 import { capitalizeFirstLetter } from '@src/utils';
 

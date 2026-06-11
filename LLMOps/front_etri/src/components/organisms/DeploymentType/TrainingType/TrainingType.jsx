@@ -2,7 +2,7 @@
 import { useState } from 'react';
 
 // Components
-import { Badge, Button, InputText } from '@jonathan/ui-react';
+import { Badge, Button, InputText } from '@tango/ui-react';
 
 import InfiniteScrollDropDown from '@src/components/molecules/InfiniteScrollDropDown';
 import SubMenu from '@src/components/molecules/SubMenu';

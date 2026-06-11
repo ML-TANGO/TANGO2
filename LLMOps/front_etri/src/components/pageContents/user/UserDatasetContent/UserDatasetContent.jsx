@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button, ButtonV2, Selectbox, Checkbox } from '@jonathan/ui-react';
+import { Button, ButtonV2, Selectbox, Checkbox } from '@tango/ui-react';
 
 import PageTitle from '@src/components/atoms/PageTitle';
 import DatasetCheckModalContainer from '@src/components/Modal/DatasetCheckModal/DatasetCheckModalContainer';

@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { shallowEqual, useDispatch, useSelector } from 'react-redux';
 import { useHistory } from 'react-router-dom';
 
-import { Badge, Button } from '@jonathan/ui-react';
+import { Badge, Button } from '@tango/ui-react';
 
 // Utils
 import { convertLocalTime } from '@src/datetimeUtils';

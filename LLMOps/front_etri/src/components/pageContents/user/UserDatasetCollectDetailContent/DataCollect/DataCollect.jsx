@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useRouteMatch } from 'react-router-dom';
 import { toast } from 'react-toastify';
 
-import { ButtonV2 } from '@jonathan/ui-react';
+import { ButtonV2 } from '@tango/ui-react';
 
 import SelectBox from '@src/components/atoms/SelectBox';
 import Table from '@src/components/molecules/Table';

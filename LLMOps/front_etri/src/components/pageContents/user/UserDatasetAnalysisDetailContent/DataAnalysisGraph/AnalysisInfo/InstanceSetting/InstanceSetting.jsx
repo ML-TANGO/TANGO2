@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Badge, StatusCard, Tooltip } from '@jonathan/ui-react';
+import { Badge, StatusCard, Tooltip } from '@tango/ui-react';
 
 // CSS Module
 import classNames from 'classnames/bind';

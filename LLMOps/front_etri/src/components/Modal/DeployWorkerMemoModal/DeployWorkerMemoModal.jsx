@@ -1,5 +1,5 @@
 // Atom
-import { Modal } from '@jonathan/ui-react';
+import { Modal } from '@tango/ui-react';
 
 function DeployWorkerMemoModal({
   data,

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { withTranslation } from 'react-i18next';
 
 // Components
-import { Button } from '@jonathan/ui-react';
+import { Button } from '@tango/ui-react';
 
 // CSS module
 import classNames from 'classnames/bind';

@@ -1,4 +1,4 @@
-import { Textarea } from '@jonathan/ui-react';
+import { Textarea } from '@tango/ui-react';
 
 import { getPlaygroundTestLog } from '@src/apis/llm/playground';
 import React, { useEffect, useRef, useState } from 'react';

@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
 // Components
-import { Button, InputText, Textarea } from '@jonathan/ui-react';
+import { Button, InputText, Textarea } from '@tango/ui-react';
 import GroupList from './GroupList';
 import TemplateList from './TemplateList';
 import InputBoxWithLabel from '@src/components/molecules/InputBoxWithLabel';

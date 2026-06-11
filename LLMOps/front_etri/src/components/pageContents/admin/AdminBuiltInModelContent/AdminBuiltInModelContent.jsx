@@ -2,7 +2,7 @@
 import { useTranslation } from 'react-i18next';
 
 // Components
-import { Button, Selectbox } from '@jonathan/ui-react';
+import { Button, Selectbox } from '@tango/ui-react';
 import PageTitle from '@src/components/atoms/PageTitle';
 import Table from '@src/components/molecules/Table';
 

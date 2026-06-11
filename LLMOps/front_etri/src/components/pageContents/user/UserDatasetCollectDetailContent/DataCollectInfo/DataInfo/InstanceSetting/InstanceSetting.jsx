@@ -1,6 +1,6 @@
 import React from 'react';
 
-import { Badge } from '@jonathan/ui-react';
+import { Badge } from '@tango/ui-react';
 
 import PlaygroundFrame from '@src/components/pageContents/llm/PlaygroundContent/PlaygroundFrame';
 

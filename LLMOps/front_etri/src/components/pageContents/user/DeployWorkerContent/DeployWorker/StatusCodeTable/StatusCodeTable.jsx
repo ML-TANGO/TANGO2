@@ -2,7 +2,7 @@
 import { useTranslation } from 'react-i18next';
 
 // Components
-import { Tooltip } from '@jonathan/ui-react';
+import { Tooltip } from '@tango/ui-react';
 
 // CSS Module
 import classNames from 'classnames/bind';

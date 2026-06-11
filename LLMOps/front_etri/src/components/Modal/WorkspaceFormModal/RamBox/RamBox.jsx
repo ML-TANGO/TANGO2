@@ -1,4 +1,4 @@
-import { InputNumber, Tooltip } from '@jonathan/ui-react';
+import { InputNumber, Tooltip } from '@tango/ui-react';
 
 // CSS Module
 import classNames from 'classnames/bind';

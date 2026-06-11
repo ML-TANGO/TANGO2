@@ -1,4 +1,4 @@
-import { ButtonV2, Tooltip } from '@jonathan/ui-react';
+import { ButtonV2, Tooltip } from '@tango/ui-react';
 
 // Utils
 import { convertLocalTime } from '@src/datetimeUtils';

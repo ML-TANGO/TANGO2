@@ -9,7 +9,7 @@ import {
   InputText,
   Selectbox,
   Textarea,
-} from '@jonathan/ui-react';
+} from '@tango/ui-react';
 
 import dayjs from 'dayjs';
 

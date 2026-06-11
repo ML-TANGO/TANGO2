@@ -1,4 +1,4 @@
-import { Checkbox, InputNumber } from '@jonathan/ui-react';
+import { Checkbox, InputNumber } from '@tango/ui-react';
 
 import React from 'react';
 import { useTranslation } from 'react-i18next';

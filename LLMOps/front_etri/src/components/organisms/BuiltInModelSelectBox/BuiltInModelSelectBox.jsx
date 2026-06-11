@@ -1,5 +1,5 @@
 // Components
-import { Selectbox } from '@jonathan/ui-react';
+import { Selectbox } from '@tango/ui-react';
 import CardList from './CardList';
 
 // CSS module

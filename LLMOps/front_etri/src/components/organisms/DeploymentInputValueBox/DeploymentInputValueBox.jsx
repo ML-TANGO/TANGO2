@@ -1,7 +1,7 @@
 // i18n
 import { useTranslation } from 'react-i18next';
 
-import { Button, InputText, Textarea, Tooltip } from '@jonathan/ui-react';
+import { Button, InputText, Textarea, Tooltip } from '@tango/ui-react';
 
 import Radio from '@src/components/atoms/input/Radio';
 // Components

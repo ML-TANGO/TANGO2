@@ -1,4 +1,4 @@
-import { Badge, Switch } from '@jonathan/ui-react';
+import { Badge, Switch } from '@tango/ui-react';
 
 import { loadModalComponent } from '@src/modal';
 import { useCallback, useEffect, useState } from 'react';

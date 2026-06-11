@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { connect } from 'react-redux';
 
-import { Badge, StatusCard } from '@jonathan/ui-react';
+import { Badge, StatusCard } from '@tango/ui-react';
 
 import Spinner from '@src/components/atoms/Spinner';
 import DarkTooltip from '@src/components/molecules/DarkTooltip/DarkTooltip';

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 // Components
-import { Button, InputText } from '@jonathan/ui-react';
+import { Button, InputText } from '@tango/ui-react';
 import GroupList from '@src/components/organisms/GroupSelectBox/GroupList';
 import TemplateList from '@src/components/organisms/GroupSelectBox/TemplateList';
 

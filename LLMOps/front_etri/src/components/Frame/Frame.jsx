@@ -2,7 +2,7 @@
 import { useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 
-import { Footer } from '@jonathan/ui-react';
+import { Footer } from '@tango/ui-react';
 
 // import Footer from './Footer';
 import UploadListContainer from '@src/containers/UploadListContainer';

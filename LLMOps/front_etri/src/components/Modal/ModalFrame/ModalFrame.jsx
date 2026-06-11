@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { withTranslation } from 'react-i18next';
 import { connect } from 'react-redux';
 
-import { Button, Loading } from '@jonathan/ui-react';
+import { Button, Loading } from '@tango/ui-react';
 
 // Actions
 import { closeModal } from '@src/store/modules/modal';

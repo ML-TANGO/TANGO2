@@ -1,5 +1,5 @@
 // i18n
-import { Tooltip } from '@jonathan/ui-react';
+import { Tooltip } from '@tango/ui-react';
 
 // Utils
 import { convertLocalTime } from '@src/datetimeUtils';

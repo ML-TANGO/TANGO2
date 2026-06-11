@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 // Components
-import { Selectbox } from '@jonathan/ui-react';
+import { Selectbox } from '@tango/ui-react';
 import LineChart from '@src/d3chart/realtimeLineChart';
 import { toast } from '@src/components/Toast';
 

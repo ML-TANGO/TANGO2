@@ -1,5 +1,5 @@
 // Components
-import { Button, ButtonV2, Radio } from '@jonathan/ui-react';
+import { Button, ButtonV2, Radio } from '@tango/ui-react';
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';

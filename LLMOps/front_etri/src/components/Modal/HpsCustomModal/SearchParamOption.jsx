@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { InputNumber, InputText } from '@jonathan/ui-react';
+import { InputNumber, InputText } from '@tango/ui-react';
 
 import FbRadio from '@src/components/atoms/input/Radio';
 

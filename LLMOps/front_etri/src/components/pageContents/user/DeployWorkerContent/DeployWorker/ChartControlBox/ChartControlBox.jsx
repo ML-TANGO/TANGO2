@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 // Components
 import DeployLogDownloadBtn from '@src/components/molecules/DeployLogDownloadBtn/DeployLogDownloadBtn';
-import { Button, Selectbox, Tooltip } from '@jonathan/ui-react';
+import { Button, Selectbox, Tooltip } from '@tango/ui-react';
 import ChartControlBoxModal from './ChartControlBoxModal/ChartControlBoxModal';
 
 // Icon

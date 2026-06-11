@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 // Components
-import { Checkbox } from '@jonathan/ui-react';
+import { Checkbox } from '@tango/ui-react';
 import ArrowButton from '@src/components/atoms/button/ArrowButton';
 import CpuModelSelectBox from '@src/components/organisms/ResourceSettingBox/GpuModelDetail';
 

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 // Components
 import ModalFrame from '@src/components/Modal/ModalFrame';
-import { InputText, InputPassword } from '@jonathan/ui-react';
+import { InputText, InputPassword } from '@tango/ui-react';
 import InputBoxWithLabel from '@src/components/molecules/InputBoxWithLabel';
 
 // Type

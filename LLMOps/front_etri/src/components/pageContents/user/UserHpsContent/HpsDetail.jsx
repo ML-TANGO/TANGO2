@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
 
-import { Button, ButtonV2, InputText } from '@jonathan/ui-react';
+import { Button, ButtonV2, InputText } from '@tango/ui-react';
 
 import GrayDropDown from '@src/components/Modal/BasicFeeOptionModal/GrayDropDown';
 import UsecaseList from '@src/components/organisms/UsecaseList';

@@ -1,4 +1,4 @@
-import { ButtonV2, Textarea } from '@jonathan/ui-react';
+import { ButtonV2, Textarea } from '@tango/ui-react';
 
 import {
   getRagRetrievalInstance,

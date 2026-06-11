@@ -1,5 +1,5 @@
 // Components
-import { Button, StatusCard } from '@jonathan/ui-react';
+import { Button, StatusCard } from '@tango/ui-react';
 
 import { convertLocalTime } from '@src/datetimeUtils';
 import { loadModalComponent } from '@src/modal';

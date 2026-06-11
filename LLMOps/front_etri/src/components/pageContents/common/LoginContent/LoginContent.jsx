@@ -1,7 +1,7 @@
 // Utils
 
 // Components
-import { Footer } from '@jonathan/ui-react';
+import { Footer } from '@tango/ui-react';
 
 import { today } from '@src/datetimeUtils';
 // 커스텀 정의

@@ -3,7 +3,7 @@ import { withTranslation } from 'react-i18next';
 
 // Components
 import ModalFrame from '../ModalFrame';
-import { Textarea } from '@jonathan/ui-react';
+import { Textarea } from '@tango/ui-react';
 import InputBoxWithLabel from '@src/components/molecules/InputBoxWithLabel';
 
 // CSS Module

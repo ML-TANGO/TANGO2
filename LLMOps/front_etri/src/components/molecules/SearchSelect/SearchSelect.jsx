@@ -10,7 +10,7 @@ import checkIconGray from '@src/static/images/icon/00-ic-basic-check-gray.svg';
 import checkIconBlue from '@src/static/images/icon/00-ic-basic-check-blue.svg';
 
 // Components
-import { Tooltip } from '@jonathan/ui-react';
+import { Tooltip } from '@tango/ui-react';
 
 // CSS module
 import classNames from 'classnames/bind';

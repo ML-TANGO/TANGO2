@@ -2,7 +2,7 @@
 import { useTranslation } from 'react-i18next';
 
 // Components
-import { InputText, InputNumber, Selectbox } from '@jonathan/ui-react';
+import { InputText, InputNumber, Selectbox } from '@tango/ui-react';
 import InputBoxWithLabel from '@src/components/molecules/InputBoxWithLabel';
 
 // CSS Module

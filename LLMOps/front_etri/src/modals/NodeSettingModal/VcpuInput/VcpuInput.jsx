@@ -1,4 +1,4 @@
-import { InputNumber } from '@jonathan/ui-react';
+import { InputNumber } from '@tango/ui-react';
 
 import classNames from 'classnames/bind';
 import style from './VInput.module.scss';

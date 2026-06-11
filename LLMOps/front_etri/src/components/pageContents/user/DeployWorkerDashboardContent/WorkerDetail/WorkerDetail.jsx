@@ -1,5 +1,5 @@
 // Components
-import { Button } from '@jonathan/ui-react';
+import { Button } from '@tango/ui-react';
 
 import deleteIcon from '@src/static/images/icon/ic-delete-red.svg';
 import stopIcon from '@src/static/images/icon/ic-stop-red.svg';

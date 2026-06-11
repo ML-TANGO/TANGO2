@@ -1,4 +1,4 @@
-import { Emptybox, Loading } from '@jonathan/ui-react';
+import { Emptybox, Loading } from '@tango/ui-react';
 
 import WarningIcon from '@src/static/images/icon/ic-warning-yellow.svg';
 import { useEffect, useState } from 'react';

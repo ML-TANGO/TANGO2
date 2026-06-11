@@ -29,7 +29,7 @@ const config = ({ mode }) => {
       alias: {
         '@src': path.resolve(__dirname, './src'),
         '@images': path.resolve(__dirname, './src/static/images'),
-        '@jonathan': path.resolve(__dirname, './xlib'),
+        '@tango': path.resolve(__dirname, './xlib'),
       },
     },
     envDir: './',

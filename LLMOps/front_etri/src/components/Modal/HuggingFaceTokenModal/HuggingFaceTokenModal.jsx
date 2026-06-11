@@ -1,4 +1,4 @@
-import { Textarea } from '@jonathan/ui-react';
+import { Textarea } from '@tango/ui-react';
 
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';

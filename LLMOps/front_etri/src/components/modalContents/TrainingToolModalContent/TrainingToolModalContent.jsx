@@ -9,7 +9,7 @@ import ModalHeader from '@src/components/organisms/modal/ModalHeader';
 import ModalFooter from '@src/components/organisms/modal/ModalFooter';
 
 // Components
-import { Selectbox, Checkbox } from '@jonathan/ui-react';
+import { Selectbox, Checkbox } from '@tango/ui-react';
 
 // Type
 import { TRAINING_TOOL_TYPE } from '@src/types';

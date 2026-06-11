@@ -2,10 +2,10 @@
 import {
   InputNumber,
   InputText,
-  Radio as JonathanRadio,
+  Radio as TangoRadio,
   Selectbox,
   Textarea,
-} from '@jonathan/ui-react';
+} from '@tango/ui-react';
 
 // 아이콘 이미지
 import builtInImage from '@src/static/images/icon/ic-builtIn-gray.svg';
@@ -602,7 +602,7 @@ const EditWorkerModal = ({
                 {t('distributedLearningBackend.label')}
                 <div className={cx('label-right-item')}></div>
               </label>
-              <JonathanRadio
+              <TangoRadio
                 options={distributionLearningOption}
                 onChange={(e) => {
                   handleDistributionLearningOption(e.currentTarget.value);

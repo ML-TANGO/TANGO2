@@ -3,7 +3,7 @@ import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 // i18n
 import { useTranslation } from 'react-i18next';
 
-import { Badge, Button } from '@jonathan/ui-react';
+import { Badge, Button } from '@tango/ui-react';
 
 // CSS module
 import classNames from 'classnames/bind';

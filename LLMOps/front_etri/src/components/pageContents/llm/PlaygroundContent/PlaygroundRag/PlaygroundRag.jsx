@@ -1,4 +1,4 @@
-import { ButtonV2, Switch } from '@jonathan/ui-react';
+import { ButtonV2, Switch } from '@tango/ui-react';
 
 import IconClose from '@src/static/images/icon/00-ic-black-close.svg';
 import DisabledCloseIcon from '@src/static/images/icon/delete-x-gray.svg';

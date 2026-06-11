@@ -1,4 +1,4 @@
-import { Popup } from '@jonathan/ui-react';
+import { Popup } from '@tango/ui-react';
 
 import { useCallback, useEffect, useState } from 'react';
 // Plugin

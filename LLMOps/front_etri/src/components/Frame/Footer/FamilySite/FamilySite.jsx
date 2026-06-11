@@ -31,8 +31,8 @@ const FamilySite = ({ t }) => {
   const moveFamilySite = (siteName) => {
     if (siteName === 'acryl') {
       window.open('https://www.acryl.ai/', '_blank');
-    } else if (siteName === 'jonathan') {
-      window.open('https://jonathan.acryl.ai/', '_blank');
+    } else if (siteName === 'tango') {
+      window.open('https://tango.acryl.ai/', '_blank');
     } else if (siteName === 'hugbot') {
       window.open('https://hugbot.acryl.ai/', '_blank');
     }

@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { useDispatch } from 'react-redux';
 import { useHistory } from 'react-router-dom';
 
-import { ButtonV2, InputText, Selectbox } from '@jonathan/ui-react';
+import { ButtonV2, InputText, Selectbox } from '@tango/ui-react';
 
 import { openConfirm } from '@src/store/modules/confirm';
 import { loadModalComponent } from '@src/modal';

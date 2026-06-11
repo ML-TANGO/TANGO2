@@ -3,7 +3,7 @@
 // Atom
 import { useTranslation } from 'react-i18next';
 
-import { Button, Tooltip } from '@jonathan/ui-react';
+import { Button, Tooltip } from '@tango/ui-react';
 
 // lodash
 import _ from 'lodash';

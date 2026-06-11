@@ -1,5 +1,5 @@
 // Components
-import { Selectbox, Button } from '@jonathan/ui-react';
+import { Selectbox, Button } from '@tango/ui-react';
 import InputBoxWithLabel from '@src/components/molecules/InputBoxWithLabel';
 
 // CSS Module

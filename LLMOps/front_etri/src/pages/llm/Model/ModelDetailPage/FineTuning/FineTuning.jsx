@@ -5,7 +5,7 @@ import { shallowEqual, useDispatch, useSelector } from 'react-redux';
 
 import ExternalFineTuningView from './ExternalFineTuningView';
 
-import { ButtonV2, Checkbox, Radio, Switch } from '@jonathan/ui-react';
+import { ButtonV2, Checkbox, Radio, Switch } from '@tango/ui-react';
 
 import {
   handleSetModelRangeState,
@@ -54,6 +54,16 @@ const TlabelMM = {
   'Cutoff Length': 'cutoffLength',
   'Gradient Accumulation Steps': 'gradientAccumulationSteps',
 };
+
+const PROJECTOR_OPTIONS = [
+  { value: 'mlp2x_gelu',        label: 'mlp2x_gelu — 2-layer MLP + GELU (LLaVA 1.5)' },
+  { value: 'mlp3x_gelu',        label: 'mlp3x_gelu — 3-layer MLP + GELU' },
+  { value: 'linear',            label: 'linear — Single linear projection (LLaVA 1.0)' },
+  { value: 'llama3_2_vision',   label: 'llama3_2_vision — Llama 3.2 Vision cross-attention' },
+  { value: 'resampler',         label: 'resampler — Perceiver Resampler (Flamingo / Qwen-VL)' },
+  { value: 'qformer',           label: 'qformer — Q-Former (BLIP-2 / InstructBLIP)' },
+  { value: 'clip_mlp_gelu',     label: 'clip_mlp_gelu — CLIP MLP + GELU' },
+];
 
 const stage1Fields = [
   { label: 'Epochs', valueTitle: 'numberOfEpochs', min: 1, max: 100, step: 1 },
@@ -142,6 +152,8 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
     bit: false,
     lora: true,
   });
+
+  const [stage1ProjectorType, setStage1ProjectorType] = useState('mlp2x_gelu');
 
   const [stage1Enabled, setStage1Enabled] = useState(true);
   const [stage2Enabled, setStage2Enabled] = useState(true);
@@ -271,7 +283,7 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
 
     const fine_tuning_config = {
       fine_tuning_type: fineTuningType === 1 ? 'basic' : 'advanced', // basic, advanced
-      used_jonathan_accelerator: accelator ? 1 : 0,
+      used_tango_accelerator: accelator ? 1 : 0,
     };
 
     if (fineTuningType === 1) {
@@ -282,6 +294,7 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
             learning_rate: stage1.learningRate,
             per_device_train_batch_size: stage1.perDeviceTrainBatchSize,
             warmup_steps: stage1.warmupSteps,
+            projector_type: stage1ProjectorType,
           };
         }
         if (stage2Enabled) {
@@ -458,7 +471,7 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
           };
 
           if (!accelatorDirty) {
-            setAccelator(config?.used_jonathan_accelerator ?? 0);
+            setAccelator(config?.used_tango_accelerator ?? 0);
           }
 
           dispatch(
@@ -749,6 +762,19 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
                       </div>
                       <div className={cx('stage-desc')}>
                         Train the projection layer connecting vision encoder and LLM
+                      </div>
+                      <div className={cx('projector-select-row')}>
+                        <label className={cx('projector-label')}>Projector Architecture</label>
+                        <select
+                          className={cx('projector-select')}
+                          value={stage1ProjectorType}
+                          disabled={runningStatus || !stage1Enabled}
+                          onChange={(e) => setStage1ProjectorType(e.target.value)}
+                        >
+                          {PROJECTOR_OPTIONS.map(({ value, label }) => (
+                            <option key={value} value={value}>{label}</option>
+                          ))}
+                        </select>
                       </div>
                       <div className={cx('flex-16')}>
                         {stage1Fields.map(({ label, valueTitle, min, max, step }) => (

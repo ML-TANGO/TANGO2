@@ -1,5 +1,5 @@
 // Components
-import { Tooltip } from '@jonathan/ui-react';
+import { Tooltip } from '@tango/ui-react';
 
 import DeployLineChart from '@src/components/molecules/DeployChart/DeployLineChart';
 

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
 import { toast } from 'react-toastify';
 
-import { InputNumber, InputText } from '@jonathan/ui-react';
+import { InputNumber, InputText } from '@tango/ui-react';
 
 import Radio from '@src/components/atoms/input/Radio';
 import InputBoxWithLabel from '@src/components/molecules/InputBoxWithLabel';

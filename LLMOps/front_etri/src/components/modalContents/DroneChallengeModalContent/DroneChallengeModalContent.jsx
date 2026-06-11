@@ -2,7 +2,7 @@ import { useState, Fragment } from 'react';
 
 // Atoms
 import Button from '@src/components/atoms/button/Button';
-import { Checkbox } from '@jonathan/ui-react';
+import { Checkbox } from '@tango/ui-react';
 
 // Molecules
 import GuideBox from '@src/components/molecules/GuideBox/GuideBox';

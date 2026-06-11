@@ -4,7 +4,7 @@ import { shallowEqual, useDispatch, useSelector } from 'react-redux';
 import { useHistory, useRouteMatch } from 'react-router-dom';
 import { toast } from 'react-toastify';
 
-import { ButtonV2, Tooltip } from '@jonathan/ui-react';
+import { ButtonV2, Tooltip } from '@tango/ui-react';
 
 import { useEdges, useNodes, useNodesState } from '@xyflow/react';
 

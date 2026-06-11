@@ -4,7 +4,7 @@ import ReactDOM from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
 
-import { Button } from '@jonathan/ui-react';
+import { Button } from '@tango/ui-react';
 
 // Actions
 import { logoutRequest } from '@src/store/modules/auth';

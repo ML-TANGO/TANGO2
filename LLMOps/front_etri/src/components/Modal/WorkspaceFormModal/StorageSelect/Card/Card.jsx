@@ -1,5 +1,5 @@
 // Components
-import { InputNumber, StatusCard } from '@jonathan/ui-react';
+import { InputNumber, StatusCard } from '@tango/ui-react';
 
 import settingImage from '@images/icon/ic-lock.svg';
 

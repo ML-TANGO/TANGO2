@@ -10,7 +10,7 @@ import { callApi, STATUS_SUCCESS } from '@src/network';
 import { errorToastMessage } from '@src/utils';
 
 // Components
-import { Button } from '@jonathan/ui-react';
+import { Button } from '@tango/ui-react';
 
 // CSS module
 import style from './AdminNetworkDetail.module.scss';

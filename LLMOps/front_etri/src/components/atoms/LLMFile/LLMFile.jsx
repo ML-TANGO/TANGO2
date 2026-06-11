@@ -1,4 +1,4 @@
-import { ButtonV2 } from '@jonathan/ui-react';
+import { ButtonV2 } from '@tango/ui-react';
 
 import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
