@@ -6,12 +6,13 @@
 nohup.out
 
 # AI assistant / editor tool directories
-.omc/
-.gemini/
-.idea/
-.vscode/
-.cursor/
-.aider*
+*.omc/
+*.gemini/
+*.idea/
+*.vscode/
+*.cursor/
+*.aider*
+*.agents/
 
 # Python
 __pycache__/
