@@ -1,0 +1,133 @@
+@import '@src/styles/color.scss';
+
+.page {
+  padding: 32px;
+  min-height: 100%;
+  color: #e8eaf6;
+}
+
+.title-bar {
+  margin-bottom: 28px;
+}
+
+.title {
+  font-family: SpoqaB;
+  font-size: 24px;
+  color: #e8eaf6;
+  margin-bottom: 6px;
+}
+
+.sub {
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: #8890b0;
+}
+
+.loading {
+  font-family: SpoqaM;
+  font-size: 14px;
+  color: #8890b0;
+  padding: 40px 0;
+}
+
+/* Card grid — matches deployment CardList layout */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+  align-items: start;
+}
+
+/* Session card */
+.session-card {
+  border: 1px solid #2e3358;
+  border-radius: 10px;
+  background: #12152a;
+  padding: 20px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  min-height: 160px;
+
+  &:hover {
+    border-color: #4f6ef7;
+    box-shadow: 0 4px 16px rgba(79,110,247,0.12);
+  }
+}
+
+.card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.session-name {
+  font-family: SpoqaB;
+  font-size: 15px;
+  color: #e8eaf6;
+  line-height: 1.3;
+}
+
+.status {
+  font-family: SpoqaM;
+  font-size: 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.model-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.model-tag {
+  font-family: SpoqaM;
+  font-size: 12px;
+  border-radius: 6px;
+  padding: 3px 8px;
+
+  &.inference {
+    background: rgba(79,110,247,0.15);
+    color: #7b9fff;
+  }
+  &.prompt {
+    background: rgba(16,185,129,0.12);
+    color: #34d399;
+  }
+}
+
+.res-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.res-chip {
+  font-family: SpoqaM;
+  font-size: 11px;
+  color: #8890b0;
+  border: 1px solid #2e3358;
+  border-radius: 4px;
+  padding: 2px 7px;
+}
+
+.mode-badge {
+  align-self: flex-start;
+  font-family: SpoqaM;
+  font-size: 11px;
+  border-radius: 4px;
+  padding: 3px 8px;
+
+  &.single {
+    background: rgba(94,114,228,0.12);
+    color: #a0b0ff;
+  }
+  &.dual {
+    background: rgba(245,158,11,0.12);
+    color: #fbbf24;
+  }
+}

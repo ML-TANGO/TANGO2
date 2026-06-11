@@ -145,10 +145,8 @@ const PromptMenuPage = lazy(() =>
   import('@src/pages/llm/Prompt/PromptMenuPage/PromptMenuPage'),
 );
 
-const PlaygroundMenu = lazy(() => import('../llm/Playground/PlaygroundMenu'));
-const PlaygroundDetail = lazy(() =>
-  import('../llm/Playground/PlaygroundDetail'),
-);
+const InferencePage = lazy(() => import('@src/pages/InferencePage'));
+const InferenceDetailPage = lazy(() => import('@src/pages/InferenceDetailPage'));
 
 const LLMDatasetPage = lazy(() => import('@src/pages/llm/LLMDatasetPage'));
 
@@ -328,33 +326,23 @@ const llmRouteArr = [
     render: (props) => <ModelCommitListItem {...props} />,
   },
   {
-    name: 'Playground',
-    path: '/user/workspace/:id/llmplayground',
+    name: '추론',
+    path: '/user/workspace/:id/inference',
     exact: true,
     icon: IconNavPlayground,
     activeIcon: IconNavPlaygroundActive,
     platform: 'llm',
-    render: (props) => <PlaygroundMenu {...props} />,
+    render: (props) => <InferencePage {...props} />,
   },
   {
-    name: 'PlaygroundDetail',
-    path: '/user/workspace/:id/llmplayground/:did/llmplayground',
-    exact: false,
+    name: 'InferenceDetail',
+    path: '/user/workspace/:id/inference/:sid',
+    exact: true,
     disabled: true,
     icon: IconNavPlaygroundActive,
     activeIcon: IconNavPlaygroundActive,
     platform: 'llm',
-    render: (props) => <PlaygroundDetail {...props} />,
-  },
-  {
-    name: 'PlaygroundMonitoring',
-    path: '/user/workspace/:id/llmplayground/:did/detail/:newId/playgroundmonitor',
-    exact: false,
-    disabled: true,
-    icon: IconNavPlaygroundActive,
-    activeIcon: IconNavPlaygroundActive,
-    platform: 'llm',
-    render: (props) => <DeployDashboardPage {...props} />,
+    render: (props) => <InferenceDetailPage {...props} />,
   },
 ];
 
@@ -749,33 +737,23 @@ const routeArr = [
     render: (props) => <ModelCommitListItem {...props} />,
   },
   {
-    name: 'Playground',
-    path: '/user/workspace/:id/llmplayground',
+    name: '추론',
+    path: '/user/workspace/:id/inference',
     exact: true,
     icon: IconNavPlayground,
     activeIcon: IconNavPlaygroundActive,
     platform: 'flightbase',
-    render: (props) => <PlaygroundMenu {...props} />,
+    render: (props) => <InferencePage {...props} />,
   },
   {
-    name: 'PlaygroundDetail',
-    path: '/user/workspace/:id/llmplayground/:did/llmplayground',
-    exact: false,
+    name: 'InferenceDetail',
+    path: '/user/workspace/:id/inference/:sid',
+    exact: true,
     disabled: true,
     icon: IconNavPlaygroundActive,
     activeIcon: IconNavPlaygroundActive,
     platform: 'flightbase',
-    render: (props) => <PlaygroundDetail {...props} />,
-  },
-  {
-    name: 'PlaygroundMonitoring',
-    path: '/user/workspace/:id/llmplayground/:did/detail/:newId/playgroundmonitor',
-    exact: false,
-    disabled: true,
-    icon: IconNavPlaygroundActive,
-    activeIcon: IconNavPlaygroundActive,
-    platform: 'flightbase',
-    render: (props) => <DeployDashboardPage {...props} />,
+    render: (props) => <InferenceDetailPage {...props} />,
   },
   {
     name: 'Evaluation',

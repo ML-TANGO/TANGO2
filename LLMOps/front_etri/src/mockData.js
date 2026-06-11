@@ -2448,6 +2448,33 @@ export const mockResponses = {
     },
     message: 'Success',
   },
+  'inference/sessions': {
+    status: 1,
+    result: [
+      {
+        id: 'inf-1',
+        name: 'SDS VLM 단일 추론',
+        mode: 'single',
+        models: [{ role: 'inference', id: 'sds', name: 'SDS' }],
+        resources: { gpu: '1× NVIDIA A100 80GB SXM4', cpu: 8, memory: '32GB', replicas: 1 },
+        status: 'ready',
+        created_at: '2026-06-09T09:00:00Z',
+      },
+      {
+        id: 'inf-2',
+        name: 'SDF→SDS 이중 모델 추론',
+        mode: 'dual',
+        models: [
+          { role: 'prompt',    id: 'sdf', name: 'SDF' },
+          { role: 'inference', id: 'sds', name: 'SDS' },
+        ],
+        resources: { gpu: '2× NVIDIA A100 80GB SXM4', cpu: 16, memory: '64GB', replicas: 2 },
+        status: 'ready',
+        created_at: '2026-06-09T10:00:00Z',
+      },
+    ],
+    message: 'Success',
+  },
   'services': {
     status: 1,
     result: {
