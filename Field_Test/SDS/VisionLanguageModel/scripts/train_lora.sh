@@ -22,8 +22,8 @@ DATA_PATH="/home/yvvyee/data/LLaVA-CC3M-Pretrain-595K/chat.json"
 IMAGE_DIR="/home/yvvyee/data/LLaVA-CC3M-Pretrain-595K/images"
 #DATA_PATH="${1:-/home/ywlee/HDD/Dataset/LLaVA-CC3M-Pretrain-595K/chat.json}"
 #IMAGE_DIR="${2:-/home/ywlee/HDD/Dataset/LLaVA-CC3M-Pretrain-595K/images}"
-#OUTPUT_DIR="$ROOT/checkpoints/clip_llama31_lora"
-OUTPUT_DIR="$ROOT/checkpoints/clip_qwen3_lora"
+#OUTPUT_DIR="$ROOT/checkpoints/clip_llama31_proj_lora"
+OUTPUT_DIR="$ROOT/checkpoints/clip_qwen3_proj_lora"
 
 if [ ! -f "$PROJECTOR_PATH" ]; then
     echo "ERROR: projector not found at $PROJECTOR_PATH"
