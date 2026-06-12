@@ -1,298 +1,539 @@
 @import '@src/styles/color.scss';
 
 .wrapper {
-  .page-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid $mono203;
-    padding-bottom: 16px;
-    box-sizing: border-box;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  min-height: 100%;
+}
 
-    .btn {
-      display: flex;
-      align-items: center;
-      gap: 16px;
+/* ── 페이지 헤더 ── */
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
 
-      .create-btn {
-        all: unset;
-        box-sizing: border-box;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 132px;
-        height: 34px;
-        font-weight: 700;
-        font-size: 14px;
-        border-radius: 4px;
-        color: $blue104;
-        background-color: white;
-        box-shadow: 0px 3px 6px 0px rgba(45, 118, 248, 0.1);
-        cursor: pointer;
+.title-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
 
-        &:hover {
-          border: 1px solid $blue104;
-        }
-      }
-    }
-  }
-  .marker-btn {
-    width: 100%;
-    height: 80px;
-    position: absolute;
-    top: 78px;
-    right: 48px;
-    display: flex;
-    justify-content: flex-end;
-    @media (max-width: 1200px) {
-      position: relative;
-      top: -32px;
-      right: 0;
-    }
-  }
-  .content {
-    margin-top: 16px;
-    .btn-filter {
-      display: flex;
-      flex-direction: row;
-      button {
-        margin-right: 8px;
-      }
-      > div {
-        width: 184px;
-      }
-    }
-  }
-  .dataset-box {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    flex-direction: column;
-    z-index: 999;
-    width: 700px;
-    height: 100%;
-    border-radius: 5px;
-    .dataset-wrap {
-      padding-top: 15px;
-      height: 80px;
-    }
-  }
-  .modal-wrap {
-    position: relative;
-  }
+.title {
+  font-family: SpoqaB;
+  font-size: 22px;
+  color: $mono207;
+}
 
-  .delete-btn {
-    all: unset;
-    box-sizing: border-box;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 58px;
-    height: 32px;
-    border-radius: 4px;
-    background-color: $red501;
-    color: $red502;
-    font-size: 14px;
-    font-style: normal;
-    font-weight: 700;
-    cursor: pointer;
+.title-sub {
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: $mono205;
+}
 
-    &:disabled {
-      color: white;
-      background-color: #f0f0f0;
-      cursor: not-allowed;
-    }
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
 
-    &:hover {
-      background-color: $red502;
-      color: $red501;
-    }
+.primary-btn {
+  padding: 9px 20px;
+  border-radius: 8px;
+  border: none;
+  background: $blue104;
+  color: $mono200;
+  font-family: SpoqaB;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  &:hover { background: $blue105; }
+  &:disabled { background: $mono203; color: $mono205; cursor: not-allowed; }
+}
 
-    &:disabled:hover {
-      background-color: #f0f0f0;
-      color: white;
-    }
+.outline-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid $mono203;
+  background: $mono200;
+  color: $mono205;
+  font-family: SpoqaM;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  &:hover:not(:disabled) { border-color: $blue104; color: $blue104; }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+
+.delete-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid $mono203;
+  background: $mono200;
+  color: $mono205;
+  font-family: SpoqaM;
+  font-size: 13px;
+  cursor: pointer;
+  &:hover:not(.disabled):not(:disabled) { border-color: $red502; color: $red502; }
+  &.disabled, &:disabled { opacity: 0.4; cursor: not-allowed; }
+}
+
+/* ── 업로드 존 ── */
+.upload-zone {
+  border: 2px dashed $mono203;
+  border-radius: 14px;
+  background: $mono200;
+  padding: 36px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+
+  &:hover {
+    border-color: $blue104;
+    background: rgba($blue104, 0.03);
+    box-shadow: $card-hover-color;
   }
 
-  .section-divider {
-    height: 1px;
-    background-color: $mono203;
-    margin: 40px 0;
+  &.dragging {
+    border-color: $blue104;
+    background: rgba($blue104, 0.06);
+    box-shadow: $card-hover-color;
   }
+}
 
-  :global(.create-dataset-btn) {
-    box-sizing: border-box;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0 12px;
-    height: 28px;
-    font-weight: 700;
-    font-size: 12px;
-    border-radius: 4px;
-    color: $blue104;
-    background-color: white;
-    border: 1px solid $blue104;
-    cursor: pointer;
-    box-shadow: 0px 3px 6px 0px rgba(45, 118, 248, 0.1);
-    transition: all 0.2s ease;
+.upload-icon {
+  font-size: 36px;
+  line-height: 1;
+}
 
-    &:hover {
-      background-color: $blue104;
-      color: white;
+.upload-title {
+  font-family: SpoqaB;
+  font-size: 16px;
+  color: $mono207;
+}
+
+.upload-desc {
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: $mono205;
+}
+
+.fmt-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.fmt-chip {
+  font-family: SpoqaM;
+  font-size: 11px;
+  border-radius: 4px;
+  padding: 3px 10px;
+  background: $blue100;
+  color: $blue104;
+  border: 1px solid $blue101;
+}
+
+/* ── 섹션 공통 ── */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.section-title {
+  font-family: SpoqaB;
+  font-size: 16px;
+  color: $mono207;
+  border-left: 3px solid $blue104;
+  padding-left: 9px;
+}
+
+.section-desc {
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: $mono205;
+}
+
+.count-badge {
+  font-family: SpoqaM;
+  font-size: 12px;
+  background: $blue101;
+  color: $blue104;
+  border-radius: 12px;
+  padding: 2px 10px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+/* ── 테이블 래퍼 ── */
+.table-wrap {
+  border: 1px solid $mono203;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+/* ── 필터 버튼 ── */
+.btn-filter {
+  display: flex;
+  align-items: center;
+}
+
+.modal-wrap {
+  position: relative;
+}
+
+/* ── 변환 카드 그리드 ── */
+.transform-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.transform-card {
+  background: $mono200;
+  border: 1px solid $mono203;
+  border-radius: 12px;
+  padding: 18px 20px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+
+  &:hover {
+    border-color: $blue104;
+    box-shadow: $card-hover-color;
+  }
+}
+
+.tc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tc-name {
+  font-family: SpoqaB;
+  font-size: 14px;
+  color: $mono207;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tc-badge {
+  font-family: SpoqaM;
+  font-size: 11px;
+  background: $lime601;
+  color: $lime604;
+  border-radius: 4px;
+  padding: 2px 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.tc-arrow-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: SpoqaM;
+  font-size: 12px;
+}
+
+.tc-source {
+  color: $mono205;
+  max-width: 110px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tc-arrow {
+  color: $blue104;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.tc-target {
+  color: $blue104;
+  font-family: SpoqaB;
+  font-size: 12px;
+  max-width: 110px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tc-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: SpoqaM;
+  font-size: 11px;
+  color: $mono205;
+}
+
+/* ── 빈 상태 ── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 52px 0;
+  background: $mono200;
+  border: 1px dashed $mono203;
+  border-radius: 12px;
+}
+
+.empty-icon {
+  font-size: 36px;
+  line-height: 1;
+}
+
+.empty-title {
+  font-family: SpoqaB;
+  font-size: 15px;
+  color: $mono207;
+}
+
+.empty-desc {
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: $mono205;
+  margin-bottom: 4px;
+}
+
+/* ── 변환 모달 ── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(18, 22, 25, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.transform-modal {
+  background: $mono200;
+  border: 1px solid $mono203;
+  border-radius: 14px;
+  width: 500px;
+  max-width: 95vw;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.16);
+  animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid $mono203;
+}
+
+.modal-title {
+  font-family: SpoqaB;
+  font-size: 16px;
+  color: $mono207;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  opacity: 0.6;
+  border-radius: 4px;
+  transition: opacity 0.15s, background 0.15s;
+  &:hover { opacity: 1; background: $mono202; }
+  img { width: 18px; height: 18px; }
+}
+
+.modal-body {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-label {
+  font-family: SpoqaB;
+  font-size: 13px;
+  color: $mono207;
+}
+
+.fmt-check-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.fmt-check-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid $mono203;
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+
+  &:hover { border-color: $blue104; }
+
+  &.checked {
+    border-color: $blue104;
+    background: rgba($blue104, 0.06);
+  }
+}
+
+.check-box {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1.5px solid $mono204;
+  flex-shrink: 0;
+  position: relative;
+  transition: border-color 0.15s, background 0.15s;
+
+  &.on {
+    background: $blue104;
+    border-color: $blue104;
+    &::after {
+      content: '';
+      position: absolute;
+      left: 4px;
+      top: 2px;
+      width: 5px;
+      height: 8px;
+      border: 2px solid $mono200;
+      border-top: none;
+      border-left: none;
+      transform: rotate(40deg);
     }
   }
+}
 
-  .modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(4px);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
-    animation: fadeIn 0.2s ease-out;
+.check-label {
+  font-family: SpoqaM;
+  font-size: 12px;
+  color: $mono207;
+}
+
+.pipeline-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: $mono202;
+  border-radius: 10px;
+  border: 1px solid $mono203;
+}
+
+.pipe-node {
+  flex: 1;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-family: SpoqaM;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+
+  small {
+    font-size: 11px;
+    color: $mono205;
+    display: block;
   }
+}
 
-  .transform-modal {
-    background-color: white;
-    border-radius: 8px;
-    width: 520px;
-    max-width: 90%;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+.pipe-source {
+  background: $mono200;
+  border: 1px solid $mono203;
+  color: $mono207;
+}
 
-    .modal-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 16px 24px;
-      border-bottom: 1px solid $mono203;
+.pipe-target {
+  background: $blue109;
+  border: 1px solid $blue101;
+  color: $blue104;
+}
 
-      h3 {
-        margin: 0;
-        font-size: 18px;
-        font-weight: 700;
-        color: #121619;
-      }
+.pipe-arrow {
+  font-size: 18px;
+  color: $blue104;
+  flex-shrink: 0;
+}
 
-      .close-x-btn {
-        background: none;
-        border: none;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 4px;
-        border-radius: 4px;
-        transition: background-color 0.2s;
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 24px 20px;
+  border-top: 1px solid $mono203;
+}
 
-        &:hover {
-          background-color: #f5f5f5;
-        }
+.cancel-btn {
+  padding: 9px 20px;
+  border-radius: 8px;
+  border: 1px solid $mono203;
+  background: $mono200;
+  color: $mono205;
+  font-family: SpoqaM;
+  font-size: 13px;
+  cursor: pointer;
+  &:hover { border-color: $mono207; color: $mono207; }
+}
 
-        img {
-          width: 14px;
-          height: 14px;
-        }
-      }
-    }
-
-    .modal-body {
-      padding: 24px;
-      display: flex;
-      flex-direction: column;
-      gap: 24px;
-
-      .form-row {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-
-        .form-label {
-          font-size: 14px;
-          font-weight: 700;
-          color: $mono205;
-        }
-
-        .selectbox-container {
-          width: 100%;
-        }
-
-        .checkbox-grid {
-          display: grid;
-          grid-template-columns: repeat(2, 1fr);
-          row-gap: 16px;
-          column-gap: 24px;
-          padding-top: 4px;
-        }
-      }
-    }
-
-    .modal-footer {
-      display: flex;
-      justify-content: flex-end;
-      gap: 12px;
-      padding: 16px 24px;
-      background-color: #f8fafc;
-      border-top: 1px solid $mono203;
-
-      button {
-        box-sizing: border-box;
-        height: 36px;
-        padding: 0 16px;
-        font-weight: 700;
-        font-size: 14px;
-        border-radius: 4px;
-        cursor: pointer;
-        transition: all 0.2s;
-      }
-
-      .cancel-btn {
-        background-color: white;
-        border: 1px solid #ccc;
-        color: #555;
-
-        &:hover {
-          background-color: #f5f5f5;
-        }
-      }
-
-      .start-btn {
-        background-color: $blue104;
-        border: 1px solid $blue104;
-        color: white;
-        box-shadow: 0 2px 4px rgba(45, 118, 248, 0.2);
-
-        &:hover {
-          background-color: #1a5ecb;
-          border-color: #1a5ecb;
-        }
-
-        &:disabled {
-          background-color: #a0c0f8;
-          border-color: #a0c0f8;
-          cursor: not-allowed;
-        }
-      }
-    }
-  }
+.start-btn {
+  padding: 9px 24px;
+  border-radius: 8px;
+  border: none;
+  background: $blue104;
+  color: $mono200;
+  font-family: SpoqaB;
+  font-size: 13px;
+  cursor: pointer;
+  &:hover { background: $blue105; }
+  &.disabled, &:disabled { background: $mono203; color: $mono205; cursor: not-allowed; }
 }
 
 @keyframes fadeIn {
   from { opacity: 0; }
-  to { opacity: 1; }
+  to   { opacity: 1; }
 }
 
 @keyframes slideUp {
-  from { transform: translateY(20px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  from { transform: translateY(16px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
 }
-

@@ -1,22 +1,20 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Selectbox } from '@tango/ui-react';
 
-import { Button, ButtonV2, Selectbox, Checkbox } from '@tango/ui-react';
-
-import PageTitle from '@src/components/atoms/PageTitle';
 import DatasetCheckModalContainer from '@src/components/Modal/DatasetCheckModal/DatasetCheckModalContainer';
 import Table from '@src/components/molecules/Table';
 import { toast } from '@src/components/Toast';
+import { convertBinaryByte, numberWithCommas } from '@src/utils';
+import { convertLocalTime } from '@src/datetimeUtils';
 
 import classNames from 'classnames/bind';
-// CSS module
 import style from './UserDatasetContent.module.scss';
-
-// Icons
-import fileIcon from '@src/static/images/icon/file.svg';
 import closeIcon from '@src/static/images/icon/00-ic-black-close.svg';
 
 const cx = classNames.bind(style);
+
+const FORMAT_TYPES = ['CSV', 'JSON', 'JSONL', 'Parquet', 'TXT', 'ZIP'];
 
 function UserDatasetContent({
   columns,
@@ -54,13 +52,11 @@ function UserDatasetContent({
 }) {
   const { t } = useTranslation();
 
+  const [isDragging, setIsDragging]     = useState(false);
   const [isTransforming, setIsTransforming] = useState(false);
   const [selectedDataset, setSelectedDataset] = useState(null);
   const [outputFormats, setOutputFormats] = useState({
-    JSON: true,
-    CSV: false,
-    Parquet: false,
-    JSONL: false,
+    JSON: true, CSV: false, Parquet: false, JSONL: false,
   });
 
   const datasetOptions = datasets.map((item) => ({
@@ -70,33 +66,20 @@ function UserDatasetContent({
 
   useEffect(() => {
     if (isTransformModalOpen) {
-      setOutputFormats({
-        JSON: true,
-        CSV: false,
-        Parquet: false,
-        JSONL: false,
-      });
-      if (datasets && datasets.length > 0) {
-        const options = datasets.map((item) => ({
-          label: item.dataset_name,
-          value: item.id,
-        }));
-        const found = options.find((opt) => opt.label === 'SDS Dataset') || options[0];
-        setSelectedDataset(found);
+      setOutputFormats({ JSON: true, CSV: false, Parquet: false, JSONL: false });
+      if (datasets.length > 0) {
+        const opts = datasets.map((d) => ({ label: d.dataset_name, value: d.id }));
+        setSelectedDataset(opts.find((o) => o.label === 'SDS Dataset') || opts[0]);
       } else {
         setSelectedDataset(null);
       }
     }
   }, [isTransformModalOpen, datasets]);
 
-  const handleFormatChange = (format) => {
-    setOutputFormats((prev) => ({
-      ...prev,
-      [format]: !prev[format],
-    }));
-  };
+  const handleFormatChange = (fmt) =>
+    setOutputFormats((prev) => ({ ...prev, [fmt]: !prev[fmt] }));
 
-  const isAnyFormatSelected = Object.values(outputFormats).some((val) => val);
+  const isAnyFormatSelected = Object.values(outputFormats).some(Boolean);
 
   const handleStartTransformation = () => {
     setIsTransforming(true);
@@ -107,46 +90,28 @@ function UserDatasetContent({
     }, 1500);
   };
 
-  const handleCloseModal = () => {
-    setIsTransforming(false);
-    onCloseTransformModal();
-  };
+  const handleDragOver  = (e) => { e.preventDefault(); setIsDragging(true); };
+  const handleDragLeave = (e) => { e.preventDefault(); setIsDragging(false); };
+  const handleDrop      = (e) => { e.preventDefault(); setIsDragging(false); onCreate(); };
 
   const accessTypeOptions = [
     { label: 'allAccessType.label', value: 'all' },
-    { label: 'readAndWrite.label', value: 1 },
-    { label: 'readOnly.label', value: 0 },
+    { label: 'readAndWrite.label',  value: 1 },
+    { label: 'readOnly.label',      value: 0 },
   ];
 
   const searchOptions = [
     { label: 'datasetName.label', value: 'dataset_name' },
-    { label: 'creator.label', value: 'owner' },
+    { label: 'creator.label',     value: 'owner' },
   ];
 
   const filterList = (
     <div className={cx('btn-filter')}>
-      {/* <Button
-        type='primary-light'
-        size='medium'
-        onClick={onAllSync}
-        iconAlign='left'
-        icon={loading ? loadingIcon : syncIcon}
-        customStyle={{ width: '100%' }}
-      >
-        {t('syncAll.label')}
-      </Button> */}
       <Selectbox
         size='medium'
         list={accessTypeOptions}
         selectedItem={accessType}
-        customStyle={{
-          selectboxForm: {
-            width: '184px',
-          },
-          listForm: {
-            width: '184px',
-          },
-        }}
+        customStyle={{ selectboxForm: { width: '160px' }, listForm: { width: '160px' } }}
         onChange={onAccessTypeChange}
         t={t}
       />
@@ -154,196 +119,209 @@ function UserDatasetContent({
   );
 
   const topButtonList = (
-    <>
-      {/* <Button type='primary' onClick={() => onCreate()}>
-        {t('createDataset.label')}
-      </Button> */}
-      <div>
-        {/* <Button
-          type='primary-light'
-          onClick={builtInModalOpenHandler}
-          iconAlign='right'
-          icon={
-            builtInModalOpen
-              ? '/images/icon/00-ic-basic-arrow-02-up-blue.svg'
-              : '/images/icon/00-ic-basic-arrow-02-down-blue.svg'
-          }
-        >
-          {t('builtInModelDataset.label')}
-        </Button> */}
-        <div className={cx('modal-wrap')}>
-          {builtInModalOpen && (
-            <DatasetCheckModalContainer
-              list={builtInModelList}
-              closeFunc={builtInModalOpenHandler}
-              submit={{
-                func: builtInTemplateOpen,
-                text: t('openTemplate.label'),
-              }}
-            />
-          )}
-        </div>
-      </div>
-    </>
+    <div className={cx('modal-wrap')}>
+      {builtInModalOpen && (
+        <DatasetCheckModalContainer
+          list={builtInModelList}
+          closeFunc={builtInModalOpenHandler}
+          submit={{ func: builtInTemplateOpen, text: t('openTemplate.label') }}
+        />
+      )}
+    </div>
   );
 
   const bottomButtonList = (
-    <>
-      <button
-        onClick={openDeleteConfirmPopup}
-        className={cx('delete-btn', deleteBtnDisabled && 'disabled')}
-        disabled={deleteBtnDisabled}
-      >
-        {t('delete.label')}
-      </button>
-    </>
+    <button
+      className={cx('delete-btn', deleteBtnDisabled && 'disabled')}
+      onClick={openDeleteConfirmPopup}
+      disabled={deleteBtnDisabled}
+    >
+      {t('delete.label')}
+    </button>
   );
 
   return (
-    <div id='UserDatasetContent' className={cx('wrapper')}>
+    <div className={cx('wrapper')}>
+
+      {/* ── 페이지 헤더 ── */}
       <div className={cx('page-header')}>
-        <PageTitle>{t('datasetManagement.label')}</PageTitle>
-        <div className={cx('btn')}>
-          <ButtonV2
-            colorType='skyblue'
-            size='m'
-            label={t('dataResourceManagementSettings.label')}
-            disabled={true}
-            onClick={() => onClickDataResourceSetting()}
+        <div className={cx('title-box')}>
+          <h1 className={cx('title')}>데이터셋 관리</h1>
+          <p className={cx('title-sub')}>로컬 데이터를 업로드하고 학습 데이터셋으로 변환·관리합니다</p>
+        </div>
+        <div className={cx('header-actions')}>
+          <button className={cx('outline-btn')} onClick={onClickDataResourceSetting} disabled>
+            리소스 설정
+          </button>
+          <button className={cx('primary-btn')} onClick={onCreate}>
+            + 데이터셋 추가
+          </button>
+        </div>
+      </div>
+
+      {/* ── 업로드 존 ── */}
+      <div
+        className={cx('upload-zone', isDragging && 'dragging')}
+        onClick={onCreate}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        <div className={cx('upload-icon')}>📂</div>
+        <div className={cx('upload-title')}>로컬 데이터셋 업로드</div>
+        <div className={cx('upload-desc')}>파일을 이 영역으로 드래그하거나 클릭하여 업로드하세요</div>
+        <div className={cx('fmt-row')}>
+          {FORMAT_TYPES.map((fmt) => (
+            <span key={fmt} className={cx('fmt-chip')}>{fmt}</span>
+          ))}
+        </div>
+      </div>
+
+      {/* ── 데이터셋 목록 ── */}
+      <div className={cx('section')}>
+        <div className={cx('section-header')}>
+          <span className={cx('section-title')}>데이터셋 목록</span>
+          <span className={cx('count-badge')}>{totalRows}개</span>
+          <div className={cx('spacer')} />
+        </div>
+        <div className={cx('table-wrap')}>
+          <Table
+            columns={columns}
+            data={tableData}
+            totalRows={totalRows}
+            topButtonList={topButtonList}
+            bottomButtonList={tableData.length > 0 && bottomButtonList}
+            onRowClick={onRowClick}
+            onSelect={onSelect}
+            defaultSortField='create_datetime'
+            toggledClearRows={toggledClearRows}
+            filterList={filterList}
+            selectableRowDisabled={({ permission_level: pl }) => pl > 3}
+            searchOptions={searchOptions}
+            searchKey={searchKey}
+            keyword={keyword}
+            onSearchKeyChange={onSearchKeyChange}
+            onSearch={(e) => onSearch(e.target.value)}
+            onClear={onClear}
+            onSortHandler={onSortHandler}
           />
-          <button
-            className={cx('create-btn')}
-            onClick={() => {
-              onCreate();
-            }}
-          >
-            {t('createDataset.label')}
-          </button>
         </div>
       </div>
-      {/* {IS_MARKER && MARKER_VERSION === '2' && (
-        <div className={cx('marker-btn')}><NewMarkerBtn /></div>
-      )} */}
-      <div className={cx('content')}>
-        <Table
-          columns={columns}
-          data={tableData}
-          totalRows={totalRows}
-          topButtonList={topButtonList}
-          bottomButtonList={tableData.length > 0 && bottomButtonList}
-          onRowClick={onRowClick}
-          onSelect={onSelect}
-          defaultSortField='create_datetime'
-          toggledClearRows={toggledClearRows}
-          filterList={filterList}
-          selectableRowDisabled={({ permission_level: permissionLevel }) =>
-            permissionLevel > 3
-          }
-          searchOptions={searchOptions}
-          searchKey={searchKey}
-          keyword={keyword}
-          onSearchKeyChange={onSearchKeyChange}
-          onSearch={(e) => {
-            onSearch(e.target.value);
-          }}
-          onClear={onClear}
-          onSortHandler={onSortHandler}
-        />
-      </div>
 
-      {/* Transformation Section */}
-      <div className={cx('section-divider')} />
-      <div className={cx('page-header')}>
-        <PageTitle>Transformation</PageTitle>
-        <div className={cx('btn')}>
+      {/* ── 학습 데이터셋 변환 ── */}
+      <div className={cx('section')}>
+        <div className={cx('section-header')}>
+          <span className={cx('section-title')}>학습 데이터셋 변환</span>
+          <span className={cx('section-desc')}>원시 데이터를 학습용 포맷으로 변환합니다</span>
+          <div className={cx('spacer')} />
           <button
-            className={cx('create-btn')}
-            onClick={() => {
-              if (transformations && transformations.length > 0) {
-                onOpenTransformModal(transformations[0]);
-              }
-            }}
+            className={cx('primary-btn')}
+            onClick={() => transformations.length > 0 && onOpenTransformModal(transformations[0])}
           >
-            Create Dataset
+            + 새 변환 생성
           </button>
         </div>
-      </div>
-      <div className={cx('content')}>
-        <Table
-          columns={transformColumns}
-          data={transformations}
-          totalRows={transformations.length}
-          onRowClick={onTransformRowClick}
-        />
+
+        {transformations.length === 0 ? (
+          <div className={cx('empty-state')}>
+            <span className={cx('empty-icon')}>⚗️</span>
+            <p className={cx('empty-title')}>변환된 데이터셋이 없습니다</p>
+            <p className={cx('empty-desc')}>데이터셋을 선택하여 학습용 포맷으로 변환해 보세요</p>
+            <button className={cx('primary-btn')} onClick={() => onOpenTransformModal && onOpenTransformModal(null)}>
+              + 변환 시작하기
+            </button>
+          </div>
+        ) : (
+          <div className={cx('transform-grid')}>
+            {transformations.map((item) => (
+              <div
+                key={item.id}
+                className={cx('transform-card')}
+                onClick={() => onTransformRowClick(item)}
+              >
+                <div className={cx('tc-head')}>
+                  <span className={cx('tc-name')}>{item.dataset_name}</span>
+                  <span className={cx('tc-badge')}>학습 데이터셋</span>
+                </div>
+                <div className={cx('tc-arrow-row')}>
+                  <span className={cx('tc-source')}>{item.source_dataset_name || '원본 데이터셋'}</span>
+                  <span className={cx('tc-arrow')}>→</span>
+                  <span className={cx('tc-target')}>{item.dataset_name}</span>
+                </div>
+                <div className={cx('tc-meta')}>
+                  <span>{item.file_count ? `${numberWithCommas(item.file_count)}개 파일` : '-'}</span>
+                  <span>·</span>
+                  <span>{item.size ? convertBinaryByte(item.size) : '-'}</span>
+                  {item.created_at && (
+                    <>
+                      <span>·</span>
+                      <span>{convertLocalTime(item.created_at)}</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Transformation Modal */}
-      {isTransformModalOpen && selectedTransformItem && (
+      {/* ── 변환 모달 ── */}
+      {isTransformModalOpen && (
         <div className={cx('modal-overlay')}>
           <div className={cx('transform-modal')}>
             <div className={cx('modal-header')}>
-              <h3>Create Dataset</h3>
-              <button className={cx('close-x-btn')} onClick={handleCloseModal}>
-                <img src={closeIcon} alt="close" />
+              <span className={cx('modal-title')}>학습 데이터셋 생성</span>
+              <button className={cx('modal-close')} onClick={() => { setIsTransforming(false); onCloseTransformModal(); }}>
+                <img src={closeIcon} alt="닫기" />
               </button>
             </div>
             <div className={cx('modal-body')}>
-              <div className={cx('form-row')}>
-                <span className={cx('form-label')}>Input Dataset</span>
-                <div className={cx('selectbox-container')}>
-                  <Selectbox
-                    size='medium'
-                    list={datasetOptions}
-                    selectedItem={selectedDataset}
-                    onChange={(val) => setSelectedDataset(val)}
-                    customStyle={{
-                      selectboxForm: {
-                        width: '100%',
-                      },
-                      listForm: {
-                        width: '100%',
-                      },
-                    }}
-                    t={t}
-                  />
+              <div className={cx('form-group')}>
+                <label className={cx('form-label')}>입력 데이터셋</label>
+                <Selectbox
+                  size='medium'
+                  list={datasetOptions}
+                  selectedItem={selectedDataset}
+                  onChange={(val) => setSelectedDataset(val)}
+                  customStyle={{ selectboxForm: { width: '100%' }, listForm: { width: '100%' } }}
+                  t={t}
+                />
+              </div>
+              <div className={cx('form-group')}>
+                <label className={cx('form-label')}>출력 포맷</label>
+                <div className={cx('fmt-check-grid')}>
+                  {['JSON', 'CSV', 'Parquet', 'JSONL'].map((fmt) => (
+                    <label key={fmt} className={cx('fmt-check-item', outputFormats[fmt] && 'checked')} onClick={() => handleFormatChange(fmt)}>
+                      <span className={cx('check-box', outputFormats[fmt] && 'on')} />
+                      <span className={cx('check-label')}>{fmt}</span>
+                    </label>
+                  ))}
                 </div>
               </div>
-              <div className={cx('form-row')}>
-                <span className={cx('form-label')}>Output Format</span>
-                <div className={cx('checkbox-grid')}>
-                  <Checkbox
-                    label="JSON"
-                    checked={outputFormats.JSON}
-                    onChange={() => handleFormatChange('JSON')}
-                  />
-                  <Checkbox
-                    label="CSV"
-                    checked={outputFormats.CSV}
-                    onChange={() => handleFormatChange('CSV')}
-                  />
-                  <Checkbox
-                    label="Parquet"
-                    checked={outputFormats.Parquet}
-                    onChange={() => handleFormatChange('Parquet')}
-                  />
-                  <Checkbox
-                    label="JSONL"
-                    checked={outputFormats.JSONL}
-                    onChange={() => handleFormatChange('JSONL')}
-                  />
+              <div className={cx('pipeline-preview')}>
+                <div className={cx('pipe-node', 'pipe-source')}>
+                  📦 {selectedDataset?.label || '데이터셋 선택'}
+                </div>
+                <div className={cx('pipe-arrow')}>→</div>
+                <div className={cx('pipe-node', 'pipe-target')}>
+                  🎓 학습 데이터셋<br />
+                  <small>{Object.entries(outputFormats).filter(([,v]) => v).map(([k]) => k).join(' · ') || '포맷 선택'}</small>
                 </div>
               </div>
             </div>
             <div className={cx('modal-footer')}>
-              <button className={cx('cancel-btn')} onClick={handleCloseModal}>
-                Cancel
+              <button
+                className={cx('cancel-btn')}
+                onClick={() => { setIsTransforming(false); onCloseTransformModal(); }}
+              >
+                취소
               </button>
               <button
-                className={cx('start-btn')}
+                className={cx('start-btn', (isTransforming || !isAnyFormatSelected) && 'disabled')}
                 onClick={handleStartTransformation}
                 disabled={isTransforming || !isAnyFormatSelected}
               >
-                {isTransforming ? 'Transforming...' : 'Start Transformation'}
+                {isTransforming ? '변환 중...' : '변환 시작'}
               </button>
             </div>
           </div>
