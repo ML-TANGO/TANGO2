@@ -1,0 +1,106 @@
+@import '@src/styles/color.scss';
+
+.individual-storage-cont {
+  // min-width: 286px;
+  height: 100%;
+  border: 1px solid $blue101;
+  box-sizing: border-box;
+  text-wrap: nowrap;
+  background-color: #fff;
+  .header {
+    color: $mono205;
+    font-family: SpoqaB;
+    font-size: 14px;
+    line-height: 14px;
+    padding: 19px 32px;
+    border-bottom: 1px solid $blue101;
+  }
+  .contents-list {
+    max-height: 256px;
+    overflow: auto;
+
+    .contents-item {
+      padding: 17px 32px;
+      border-bottom: 1px solid $blue101;
+      &.last-border-none {
+        &:last-child {
+          border-bottom: none;
+        }
+      }
+      .item-header {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 16px;
+        .left-header {
+          display: flex;
+          align-items: center;
+          .workspace-name-txt {
+            display: inline-block;
+            margin-right: 8px;
+            color: $mono207;
+            font-family: SpoqaB;
+            font-size: 14px;
+            line-height: 14px;
+          }
+          .allocate-txt {
+            display: inline-block;
+            margin-right: 4px;
+            color: $mono205;
+            font-family: SpoqaM;
+            font-size: 12px;
+            line-height: 12px;
+            letter-spacing: -0.18px;
+          }
+          .allocate-unit {
+            display: inline-block;
+            color: $mono207;
+            font-family: SpoqaM;
+            font-size: 12px;
+            line-height: 12px;
+            letter-spacing: -0.18px;
+          }
+        }
+        .right-header {
+          color: $mono207;
+          font-family: SpoqaB;
+          font-size: 14px;
+          line-height: 14px;
+        }
+      }
+      .item-contents {
+        .upper-item {
+          display: flex;
+          justify-content: space-between;
+          font-family: SpoqaM;
+          font-size: 12px;
+          line-height: 12px;
+          letter-spacing: -0.18px;
+          margin-bottom: 8px;
+          .upper-left-item {
+            display: flex;
+            gap: 8px;
+            span {
+              &:first-child {
+                color: $mono205;
+              }
+              &:last-child {
+                color: $mono207;
+              }
+            }
+          }
+          .upper-right-item {
+            color: $mono205;
+          }
+        }
+      }
+    }
+  }
+}
+
+@media (max-width: 1024px) {
+  .individual-storage-cont {
+    .contents-list {
+      max-height: 400px;
+    }
+  }
+}

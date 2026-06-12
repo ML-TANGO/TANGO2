@@ -1,0 +1,284 @@
+@import '@src/styles/color.scss';
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wizard {
+  background: $mono200;
+  border-radius: 12px;
+  box-shadow: 0 3px 16px rgba(0, 0, 0, 0.12);
+  width: 680px;
+  max-width: 96vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 28px 0;
+  flex-shrink: 0;
+}
+
+.title {
+  font-family: SpoqaB;
+  font-size: 20px;
+  color: $mono207;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: $mono205;
+  font-size: 18px;
+  cursor: pointer;
+  &:hover { color: $mono207; }
+}
+
+.step-bar {
+  display: flex;
+  align-items: center;
+  padding: 20px 28px 16px;
+  gap: 0;
+  flex-shrink: 0;
+}
+
+.step-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.step-circle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid $mono203;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: SpoqaB;
+  font-size: 12px;
+  color: $mono204;
+  flex-shrink: 0;
+
+  .active & { border-color: $blue104; background: $blue104; color: $mono200; }
+  .done &   { border-color: $blue104; background: rgba($blue104, 0.1); color: $blue104; }
+}
+
+.step-label {
+  font-family: SpoqaM;
+  font-size: 12px;
+  color: $mono204;
+  white-space: nowrap;
+
+  .active & { color: $mono207; font-family: SpoqaB; }
+  .done &   { color: $blue104; }
+}
+
+.step-line {
+  flex: 1;
+  height: 1px;
+  background: $mono203;
+  margin: 0 8px;
+  &.filled { background: $blue104; }
+}
+
+.body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 28px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.section-title {
+  font-family: SpoqaB;
+  font-size: 14px;
+  color: $mono207;
+  border-left: 3px solid $blue104;
+  padding-left: 8px;
+}
+
+.mode-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.mode-card {
+  border: 1px solid $mono203;
+  border-radius: 12px;
+  padding: 16px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+
+  &:hover { border-color: $blue104; box-shadow: $card-hover-color; }
+  &.selected { border-color: $blue104; background: rgba($blue104, 0.06); }
+}
+
+.mode-icon { font-size: 26px; }
+
+.mode-name {
+  font-family: SpoqaB;
+  font-size: 14px;
+  color: $mono207;
+}
+
+.mode-desc {
+  font-family: SpoqaM;
+  font-size: 12px;
+  color: $mono205;
+  line-height: 1.4;
+}
+
+.res-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.res-card {
+  border: 1px solid $mono203;
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: $mono207;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+
+  &:hover { border-color: $blue104; }
+  &.selected { border-color: $blue104; background: rgba($blue104, 0.06); }
+}
+
+.chip-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  border: 1px solid $mono203;
+  border-radius: 8px;
+  padding: 8px 18px;
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: $mono205;
+  cursor: pointer;
+  transition: border-color 0.2s;
+
+  &:hover { border-color: $blue104; }
+  &.selected { border-color: $blue104; background: rgba($blue104, 0.06); color: $blue104; }
+}
+
+.name-input {
+  background: $mono200;
+  border: 1px solid $mono203;
+  border-radius: 8px;
+  color: $mono207;
+  padding: 10px 14px;
+  font-family: SpoqaM;
+  font-size: 14px;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+  &:focus { border-color: $blue104; }
+  &::placeholder { color: $mono204; }
+}
+
+.summary {
+  border: 1px solid $mono203;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.s-row {
+  display: flex;
+  padding: 10px 16px;
+  border-bottom: 1px solid $mono202;
+  &:last-child { border-bottom: none; }
+}
+
+.s-key {
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: $mono205;
+  width: 130px;
+  flex-shrink: 0;
+}
+
+.s-val {
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: $mono207;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 28px 24px;
+  flex-shrink: 0;
+  border-top: 1px solid $mono203;
+}
+
+.back-btn {
+  padding: 9px 20px;
+  border-radius: 8px;
+  border: 1px solid $mono203;
+  background: transparent;
+  color: $mono205;
+  font-family: SpoqaM;
+  font-size: 14px;
+  cursor: pointer;
+  margin-right: auto;
+  &:hover { border-color: $blue104; color: $blue104; }
+}
+
+.cancel-btn {
+  padding: 9px 20px;
+  border-radius: 8px;
+  border: 1px solid $mono203;
+  background: transparent;
+  color: $mono205;
+  font-family: SpoqaM;
+  font-size: 14px;
+  cursor: pointer;
+  &:hover { border-color: $blue104; color: $blue104; }
+}
+
+.next-btn, .create-btn {
+  padding: 9px 24px;
+  border-radius: 8px;
+  border: none;
+  background: $blue104;
+  color: $mono200;
+  font-family: SpoqaB;
+  font-size: 14px;
+  cursor: pointer;
+  &:hover { background: $blue105; }
+  &.disabled { background: $mono203; color: $mono205; cursor: not-allowed; }
+}

@@ -1,0 +1,51 @@
+html,
+body {
+  margin: 0;
+  box-sizing: border-box;
+}
+
+#app {
+  width: 100vw;
+  height: 100vh;
+}
+
+.react-flow {
+  overflow-y: auto;
+  // width: calc(100% - 226px) !important;
+  // height: 100%;
+  // position: absolute !important;
+  // background: none !important;
+}
+
+.react-flow__renderer {
+  overflow: hidden !important;
+  // overflow-x: auto;
+}
+
+// .react-flow__node {
+//   z-index: 999 !important;
+// }
+
+.react-flow__node-selectorNode {
+  font-size: 12px;
+  background: #eee;
+  border: 1px solid #555;
+  border-radius: 5px;
+  text-align: center;
+}
+
+.react-flow__panel {
+  display: none !important;
+}
+
+.box {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  border-radius: 4px;
+  color: white;
+  font-size: 16px;
+  padding: 10px;
+  text-align: center;
+}

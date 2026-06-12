@@ -1,0 +1,10 @@
+$padding-small: 20px;
+$padding-xsmall: 16px;
+
+.chart-area {
+  padding: $padding-xsmall $padding-small $padding-xsmall $padding-small;
+  & > div {
+    border-radius: 3px;
+    height: 32vw;
+  }
+}

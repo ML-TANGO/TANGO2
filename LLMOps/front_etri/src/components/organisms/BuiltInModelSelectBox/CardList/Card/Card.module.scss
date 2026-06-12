@@ -1,0 +1,129 @@
+@import '@src/styles/color.scss';
+
+.card {
+  display: grid;
+  grid-template-columns: 64px minmax(1px, 1502px) 118px;
+  align-items: center;
+  padding: 12px 16px;
+  grid-gap: 16px;
+  white-space: nowrap;
+  background-color: $mono201;
+  border: 1px solid $mono201;
+  margin-bottom: 8px;
+  margin-top: 8px;
+  border-radius: 2px;
+  box-sizing: border-box;
+  cursor: pointer;
+  .image {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: $blue101;
+    border: none;
+    border-radius: 4px;
+    width: 64px;
+    height: 64px;
+    overflow: hidden;
+
+    .thumbnail {
+      width: 100%;
+      height: 100%;
+    }
+    .default {
+      width: 40%;
+    }
+  }
+  .text-box {
+    .title {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      margin: 0;
+      font-family: SpoqaM;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 15px;
+
+      .model-name {
+        display: flex;
+        align-items: center;
+        font-size: 16px;
+        margin-right: 6px;
+        color: $mono207;
+      }
+    }
+
+    .desc {
+      display: flex;
+      align-items: center;
+      color: $mono205;
+      margin-top: 4px;
+      font-size: 12px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: normal;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      word-break: break-all;
+      .icon {
+        width: 22px;
+        height: 22px;
+        margin-right: 5px;
+        vertical-align: middle;
+        background-color: $blue101;
+        padding: 5px;
+        border-radius: 4px;
+        box-sizing: border-box;
+      }
+      .model {
+        margin-right: 6px;
+      }
+    }
+  }
+  .badge {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: none;
+    border-radius: 4px;
+    min-width: 64px;
+    height: 64px;
+  }
+  &.selected {
+    border: 1px solid $primary-color;
+    .title {
+      .badge > span {
+        border-color: $mono200;
+      }
+    }
+  }
+
+  &.disabled {
+    cursor: unset;
+    .title {
+      .model-name {
+        color: $mono207 !important;
+        opacity: 0.3;
+      }
+      .badge > span {
+        opacity: 0.3;
+      }
+    }
+    .desc {
+      color: $mono207 !important;
+      opacity: 0.3;
+    }
+    .image {
+      opacity: 0.3;
+    }
+    .badge {
+      opacity: 0.3;
+    }
+  }
+  &.read-only {
+    cursor: unset;
+    border: none;
+  }
+}

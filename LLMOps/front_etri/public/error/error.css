@@ -1,0 +1,182 @@
+@font-face {
+  font-family: SpoqaB;
+  font-style: normal;
+  src: local('Spoqa Han Sans Neo Bold'), local('SpoqaHanSansNeo-Bold'),
+    local('SpoqaB'),
+    url(../fonts/SpoqaHanSansNeo/SpoqaHanSansNeo-Bold.woff) format('woff'),
+    url(../fonts/SpoqaHanSansNeo/SpoqaHanSansNeo-Bold.woff2) format('woff'),
+    url(../fonts/SpoqaHanSansNeo/SpoqaHanSansNeo-Bold.otf) format('opentype'),
+    url(../fonts/SpoqaHanSansNeo/SpoqaHanSansNeo-Bold.ttf) format('truetype'),
+    /* IE 호환성 보기 */ url(../fonts/SpoqaHanSansNeo/SpoqaHanSansNeo-Bold.eot),
+    /* IE 6 ~ 8 */ url(../fonts/SpoqaHanSansNeo/SpoqaHanSansNeo-Bold.eot?#iefix)
+      format('embedded-opentype');
+}
+@font-face {
+  font-family: SpoqaM;
+  font-style: normal;
+  src: local('Spoqa Han Sans Neo Medium'), local('SpoqaHanSansNeo-Medium'),
+    local('SpoqaM'),
+    url(../fonts/SpoqaHanSansNeo/SpoqaHanSansNeo-Medium.woff) format('woff'),
+    url(../fonts/SpoqaHanSansNeo/SpoqaHanSansNeo-Medium.woff2) format('woff'),
+    url(../fonts/SpoqaHanSansNeo/SpoqaHanSansNeo-Medium.otf) format('opentype'),
+    url(../fonts/SpoqaHanSansNeo/SpoqaHanSansNeo-Medium.ttf) format('truetype'),
+    /* IE 호환성 보기 */
+      url(../fonts/SpoqaHanSansNeo/SpoqaHanSansNeo-Medium.eot),
+    /* IE 6 ~ 8 */
+      url(../fonts/SpoqaHanSansNeo/SpoqaHanSansNeo-Medium.eot?#iefix)
+      format('embedded-opentype');
+}
+@font-face {
+  font-family: SpoqaR;
+  font-style: normal;
+  src: local('Spoqa Han Sans Neo Regular'), local('SpoqaHanSansNeo-Regular'),
+    local('SpoqaR'),
+    url(../fonts/SpoqaHanSansNeo/SpoqaHanSansNeo-Regular.woff) format('woff'),
+    url(../fonts/SpoqaHanSansNeo/SpoqaHanSansNeo-Regular.woff2) format('woff'),
+    url(../fonts/SpoqaHanSansNeo/SpoqaHanSansNeo-Regular.otf) format('opentype'),
+    url(../fonts/SpoqaHanSansNeo/SpoqaHanSansNeo-Regular.ttf) format('truetype'),
+    /* IE 호환성 보기 */
+      url(../fonts/SpoqaHanSansNeo/SpoqaHanSansNeo-Regular.eot),
+    /* IE 6 ~ 8 */
+      url(../fonts/SpoqaHanSansNeo/SpoqaHanSansNeo-Regular.eot?#iefix)
+      format('embedded-opentype');
+}
+@font-face {
+  font-family: SpoqaL;
+  font-style: normal;
+  src: local('Spoqa Han Sans Neo Light'), local('SpoqaHanSansNeo-Light'),
+    local('SpoqaL'),
+    url(../fonts/SpoqaHanSansNeo/SpoqaHanSansNeo-Light.woff) format('woff'),
+    url(../fonts/SpoqaHanSansNeo/SpoqaHanSansNeo-Light.woff2) format('woff'),
+    url(../fonts/SpoqaHanSansNeo/SpoqaHanSansNeo-Light.otf) format('opentype'),
+    url(../fonts/SpoqaHanSansNeo/SpoqaHanSansNeo-Light.ttf) format('truetype'),
+    /* IE 호환성 보기 */ url(../fonts/SpoqaHanSansNeo/SpoqaHanSansNeo-Light.eot),
+    /* IE 6 ~ 8 */
+      url(../fonts/SpoqaHanSansNeo/SpoqaHanSansNeo-Light.eot?#iefix)
+      format('embedded-opentype');
+}
+@font-face {
+  font-family: SpoqaT;
+  font-style: normal;
+  src: local('Spoqa Han Sans Neo Thin'), local('SpoqaHanSansNeo-Thin'),
+    local('SpoqaT'),
+    url(../fonts/SpoqaHanSansNeo/SpoqaHanSansNeo-Thin.woff) format('woff'),
+    url(../fonts/SpoqaHanSansNeo/SpoqaHanSansNeo-Thin.woff2) format('woff'),
+    url(../fonts/SpoqaHanSansNeo/SpoqaHanSansNeo-Thin.otf) format('opentype'),
+    url(../fonts/SpoqaHanSansNeo/SpoqaHanSansNeo-Thin.ttf) format('truetype'),
+    /* IE 호환성 보기 */ url(../fonts/SpoqaHanSansNeo/SpoqaHanSansNeo-Thin.eot),
+    /* IE 6 ~ 8 */ url(../fonts/SpoqaHanSansNeo/SpoqaHanSansNeo-Thin.eot?#iefix)
+      format('embedded-opentype');
+}
+
+body {
+  margin: 0;
+}
+
+.container {
+  width: 100%;
+  height: 100vh;
+  padding: 30px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.logo {
+  margin-right: 100px;
+  content: url(../images/logo/BI_Jonathan_v.svg);
+  background-repeat: no-repeat;
+  width: 269px;
+}
+
+.message-box {
+  width: 432px;
+}
+
+.title {
+  width: 100%;
+  word-break: keep-all;
+  font-family: SpoqaB;
+  font-size: 36px;
+  color: #000;
+  margin: 0;
+}
+
+.blue {
+  color: #2d76f8;
+}
+
+.content {
+  width: 100%;
+  font-family: SpoqaM;
+  font-size: 16px;
+  line-height: 1.5;
+  color: #747474;
+  margin: 16px 0 32px;
+}
+
+.info {
+  padding: 24px 16px;
+  background-color: #f5f7fb;
+  font-family: SpoqaM;
+  font-size: 16px;
+  color: #3e3e3e;
+  line-height: 1.5;
+}
+
+.goback {
+  display: flex;
+  align-items: center;
+  height: 16px;
+  margin-top: 32px;
+  font-family: SpoqaM;
+  font-size: 16px;
+  line-height: 24px;
+  color: #2d76f8;
+  text-decoration: none;
+}
+
+.goback > img {
+  width: 24px;
+  height: 24px;
+  vertical-align: middle;
+}
+
+@media (max-width: 1100px) {
+  .container {
+    flex-direction: column;
+    margin: auto;
+  }
+
+  .logo {
+    margin-bottom: 40px;
+    content: url(../images/logo/BI_Jonathan.svg);
+    background-repeat: no-repeat;
+    width: 302px;
+  }
+}
+
+@media (max-width: 540px) {
+  .logo {
+    margin-bottom: 20px;
+    width: 210px;
+  }
+
+  .message-box {
+    width: 300px;
+  }
+
+  .title {
+    font-size: 24px;
+  }
+
+  .content {
+    font-size: 13px;
+  }
+
+  .info {
+    font-size: 12px;
+  }
+}

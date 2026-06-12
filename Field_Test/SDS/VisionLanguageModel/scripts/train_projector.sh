@@ -23,8 +23,8 @@ LLM_MODEL="/home/yvvyee/data/Llama-3.1-8B-Instruct"
 #IMAGE_DIR="/home/ywlee/HDD/Dataset/LLaVA-CC3M-Pretrain-595K/images"
 DATA_PATH="/home/yvvyee/data/LLaVA-CC3M-Pretrain-595K/chat.json"
 IMAGE_DIR="/home/yvvyee/data/LLaVA-CC3M-Pretrain-595K/images"
-OUTPUT_DIR="$ROOT/checkpoints/clip_llama31_projector"
-#OUTPUT_DIR="$ROOT/checkpoints/clip_qwen3_projector"
+OUTPUT_DIR="$ROOT/checkpoints/clip_llama31_proj"
+#OUTPUT_DIR="$ROOT/checkpoints/clip_qwen3_proj"
 
 # ── Detect number of GPUs ─────────────────────────────────────────────────────
 NUM_GPUS=$(python3 -c "import torch; print(torch.cuda.device_count())" 2>/dev/null || echo 1)

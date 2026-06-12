@@ -1,0 +1,87 @@
+@import '@src/styles/color.scss';
+
+.container {
+  min-width: 840px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  .top-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .border {
+    width: 100%;
+    height: 1px;
+    background-color: #dbdbdb;
+  }
+
+  .allStorage-cont {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 32px;
+    width: 100%;
+  }
+
+  .individual-storage-list {
+    display: flex;
+    flex-direction: column;
+    .individual-title-txt {
+      margin: initial;
+      color: #042659;
+      font-family: SpoqaB;
+      font-size: 24px;
+      line-height: 24px;
+      margin-bottom: 16px;
+    }
+    .individual-storage-item {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      margin-bottom: 24px;
+    }
+    .nodata,
+    .spinner-cont {
+      height: 200px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+  }
+}
+
+.name {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: initial;
+  cursor: pointer;
+  &:after {
+    content: '';
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    background-image: url(@src/static/images/icon/ic-shortcut-gray.svg);
+    background-size: contain;
+    background-repeat: no-repeat;
+  }
+}
+
+.flex-cont {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 16px 0;
+  .border {
+    height: 1px;
+    background-color: #dbdbdb;
+  }
+}
+
+@media (max-width: 1024px) {
+  .container {
+    .allStorage-cont {
+      grid-template-columns: 1fr;
+    }
+  }
+}

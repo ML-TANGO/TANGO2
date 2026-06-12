@@ -1,0 +1,17 @@
+@import '@src/styles/color.scss';
+
+.training-list-page {
+  position: relative;
+
+  &.loading-wrapper {
+    height: calc(100vh - 213px);
+
+    .loading-box {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      height: 100%;
+    }
+  }
+}

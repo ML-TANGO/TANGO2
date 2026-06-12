@@ -1,0 +1,154 @@
+@import '@src/components/atoms/input/input.scss';
+
+// Select Style
+@mixin select-input($height, $fontSize, $borderRadius) {
+  position: relative;
+  border-radius: $borderRadius;
+  .select-controller {
+    position: relative;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    height: $height;
+    padding: 0 0.94118em;
+    border-radius: $borderRadius;
+    border: 1px solid $mono204;
+    line-height: $height;
+    box-sizing: border-box;
+    transition-property: border-color, height, padding-right, color;
+    transition-duration: 0.2s, 0s;
+    outline: none;
+    background: $mono200;
+    vertical-align: middle;
+    color: $mono205;
+    font-size: $fontSize;
+    font-family: SpoqaM;
+    > label {
+      display: block;
+      width: 100%;
+    }
+    .input-item {
+      display: block;
+      width: calc(100% - 15px);
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      overflow: hidden;
+      border: none;
+      font-size: $fontSize;
+      background-color: transparent;
+      font-family: SpoqaM;
+      cursor: default;
+      color: transparent;
+      text-shadow: 0 0 0 $mono207;
+      &::placeholder {
+        color: $mono205;
+        text-shadow: none;
+      }
+      &:focus {
+        display: block;
+      }
+    }
+
+    .icon {
+      position: absolute;
+      top: calc(50% + 1px);
+      right: 10px;
+      transform: translateY(-50%);
+      display: flex;
+      align-items: center;
+    }
+
+    &.active {
+      // &.success {
+      border: 2px solid $primary-color;
+      line-height: ($height - 2px);
+      padding: 0 calc(0.94118em - 1px);
+      .icon {
+        right: 9px;
+        transform: translateY(-50%);
+      }
+    }
+    &.error {
+      border: 2px solid $error-color;
+      line-height: ($height - 2px);
+      padding: 0 calc(0.94118em - 1px);
+      .icon {
+        right: 9px;
+        transform: translateY(-50%);
+      }
+    }
+  }
+  .popup {
+    z-index: 2;
+    position: absolute;
+    top: ($height + 4px);
+    left: 0px;
+    width: 100%;
+    background-color: $mono200;
+    box-shadow: 0 3px 9px 0 rgba(18, 22, 25, 0.08), 0 2px 4px 1px rgba(18, 22, 25, 0.14);
+    border: 1px solid $mono202;
+    border-radius: $borderRadius;
+    padding: 12px 0;
+    box-sizing: border-box;
+    .popup-footer {
+      display: flex;
+      justify-content: flex-end;
+      padding: 12px 0 0 0;
+      margin: 0 12px;
+      border-top: 1px solid $mono203;
+    }
+  }
+  .select-options {
+    width: 100%;
+    margin-bottom: 4px;
+    .search-box {
+      padding-bottom: 12px;
+      margin: 0 16px 12px;
+      border-bottom: 1px solid $mono203;
+      box-sizing: border-box;
+    }
+    .option-list {
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .option {
+      box-sizing: border-box;
+      color: $mono207;
+      border: none;
+      border-radius: 0;
+      padding-left: 4px;
+      background-color: $mono200;
+      &:hover,
+      &:focus {
+        background-color: $hover-bg-color;
+      }
+      &.disabled {
+        color: $mono204;
+        &:hover {
+          background-color: $mono200;
+        }
+      }
+    }
+  }
+  &.read-only {
+    .select-controller {
+      background-color: $mono202;
+      border: 1px solid $mono202 !important;
+      padding: 0 0.94118em;
+      color: $mono205;
+    }
+  }
+}
+
+.fb {
+  &.select {
+    @include select-input(36px, 14px, 4px);
+    &.small {
+      @include select-input(36px, 14px, 4px);
+    }
+    &.large {
+      @include select-input(44px, 16px, 4px);
+    }
+  }
+}

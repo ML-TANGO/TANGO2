@@ -29,8 +29,8 @@ LORA_PATH="$ROOT/checkpoints/clip_llama31_lora"
 #DATA_PATH="/home/ywlee/HDD/Dataset/llamarine-sft/data/train-00000-of-00001.parquet"
 DATA_PATH="/home/yvvyee/data/llamarine-sft/train-00000-of-00001.parquet"
 
-OUTPUT_DIR="$ROOT/checkpoints/clip_llama31_lora_marine"
-#OUTPUT_DIR="$ROOT/checkpoints/clip_qwen3_lora_marine"
+OUTPUT_DIR="$ROOT/checkpoints/clip_llama31_proj_lora_marine"
+#OUTPUT_DIR="$ROOT/checkpoints/clip_qwen3_proj_lora_marine"
 
 # ── Detect GPUs ───────────────────────────────────────────────────────────────
 NUM_GPUS=$(python3 -c "import torch; print(torch.cuda.device_count())" 2>/dev/null || echo 1)

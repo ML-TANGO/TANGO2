@@ -1,0 +1,525 @@
+@import '@src/styles/color.scss';
+
+.page {
+  padding: 32px;
+  min-height: 100%;
+}
+
+.loading {
+  font-family: SpoqaM;
+  font-size: 14px;
+  color: $mono205;
+  padding: 60px 0;
+  text-align: center;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  margin-bottom: 28px;
+}
+
+.back-btn {
+  background: none;
+  border: 1px solid $mono203;
+  border-radius: 8px;
+  color: $mono205;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-family: SpoqaM;
+  cursor: pointer;
+  white-space: nowrap;
+  margin-top: 4px;
+  &:hover { border-color: $blue104; color: $blue104; }
+}
+
+.header-info {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.title {
+  font-family: SpoqaB;
+  font-size: 22px;
+  color: $mono207;
+}
+
+.meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.status-badge {
+  font-family: SpoqaM;
+  font-size: 12px;
+  border-radius: 4px;
+  padding: 3px 10px;
+  &.running  { background: $lime601; color: $lime604; }
+  &.stopped  { background: $mono202; color: $mono205; }
+}
+
+.meta-tag {
+  font-family: SpoqaM;
+  font-size: 12px;
+  border-radius: 4px;
+  padding: 3px 9px;
+  background: $blue101;
+  color: $blue104;
+}
+
+.method-badge {
+  font-family: SpoqaM;
+  font-size: 12px;
+  border-radius: 4px;
+  padding: 3px 9px;
+  &.auto   { background: $lime601; color: $lime604; }
+  &.manual { background: $yellow301; color: $yellow303; }
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid $mono203;
+  margin-bottom: 28px;
+}
+
+.tab {
+  padding: 10px 24px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-family: SpoqaM;
+  font-size: 14px;
+  color: $mono205;
+  cursor: pointer;
+  margin-bottom: -1px;
+  &.active { color: $blue104; border-bottom-color: $blue104; font-family: SpoqaB; }
+  &:hover:not(.active) { color: $mono207; }
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 860px;
+}
+
+.section-title {
+  font-family: SpoqaB;
+  font-size: 14px;
+  color: $mono207;
+  border-left: 3px solid $blue104;
+  padding-left: 8px;
+}
+
+.info-table {
+  border: 1px solid $mono203;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.info-row {
+  display: flex;
+  padding: 10px 16px;
+  border-bottom: 1px solid $mono202;
+  &:last-child { border-bottom: none; }
+}
+
+.info-key {
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: $mono205;
+  width: 120px;
+  flex-shrink: 0;
+}
+
+.info-val {
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: $mono207;
+}
+
+.worker-summary {
+  display: flex;
+  gap: 16px;
+}
+
+.worker-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 20px;
+  border-radius: 10px;
+  border: 1px solid $mono203;
+  min-width: 80px;
+  background: $mono200;
+  &.running  { border-color: $lime603; background: $lime601; }
+  &.error    { border-color: $red502; background: $red501; }
+  &.installing { border-color: $yellow303; background: $yellow301; }
+}
+
+.ws-count {
+  font-family: SpoqaB;
+  font-size: 24px;
+  color: $mono207;
+  .running & { color: $lime604; }
+  .error &   { color: $red502; }
+  .installing & { color: $yellow303; }
+}
+
+.ws-label {
+  font-family: SpoqaM;
+  font-size: 11px;
+  color: $mono205;
+}
+
+.worker-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: SpoqaM;
+  font-size: 13px;
+  border: 1px solid $mono203;
+  border-radius: 10px;
+  overflow: hidden;
+
+  th {
+    background: $mono202;
+    color: $mono205;
+    padding: 10px 16px;
+    text-align: left;
+    border-bottom: 1px solid $mono203;
+  }
+
+  td {
+    padding: 10px 16px;
+    border-bottom: 1px solid $mono202;
+    color: $mono207;
+  }
+
+  tr:last-child td { border-bottom: none; }
+}
+
+.ok  { color: $lime604 !important; font-family: SpoqaB; }
+.err { color: $red502  !important; font-family: SpoqaB; }
+.empty { font-family: SpoqaM; font-size: 13px; color: $mono205; }
+
+.script-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid $mono203;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.script-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: $mono202;
+  padding: 10px 16px;
+}
+
+.script-title {
+  font-family: SpoqaB;
+  font-size: 13px;
+  color: $mono207;
+}
+
+.copy-btn {
+  background: none;
+  border: 1px solid $mono203;
+  border-radius: 6px;
+  color: $mono205;
+  font-family: SpoqaM;
+  font-size: 12px;
+  padding: 4px 12px;
+  cursor: pointer;
+  &:hover  { border-color: $blue104; color: $blue104; }
+  &.copied { border-color: $lime603; color: $lime604; }
+}
+
+.code {
+  background: $mono207;
+  color: $lime602;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 16px;
+  margin: 0;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.manual-tip {
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: $mono207;
+  padding: 12px 16px;
+  border: 1px solid $blue101;
+  border-radius: 8px;
+  background: $blue109;
+  line-height: 1.6;
+  code {
+    background: $blue101;
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    color: $blue104;
+  }
+}
+
+.api-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field-label {
+  font-family: SpoqaB;
+  font-size: 13px;
+  color: $mono207;
+}
+
+.api-input {
+  background: $mono200;
+  border: 1px solid $mono203;
+  border-radius: 8px;
+  color: $mono207;
+  padding: 10px 14px;
+  font-family: SpoqaM;
+  font-size: 14px;
+  outline: none;
+  &:focus { border-color: $blue104; }
+  &::placeholder { color: $mono204; }
+}
+
+.api-textarea {
+  background: $mono200;
+  border: 1px solid $mono203;
+  border-radius: 8px;
+  color: $mono207;
+  padding: 10px 14px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  outline: none;
+  resize: vertical;
+  &:focus { border-color: $blue104; }
+}
+
+.run-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.run-btn {
+  padding: 10px 28px;
+  border-radius: 8px;
+  border: none;
+  background: $blue104;
+  color: $mono200;
+  font-family: SpoqaB;
+  font-size: 14px;
+  cursor: pointer;
+  &:hover { background: $blue105; }
+  &.disabled { background: $mono203; color: $mono205; cursor: not-allowed; }
+}
+
+.api-result {
+  border: 1px solid $mono203;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.api-result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: $mono202;
+  padding: 10px 16px;
+}
+
+.api-latency {
+  font-family: SpoqaM;
+  font-size: 12px;
+  color: $mono205;
+}
+
+/* ── 배포 구성 ── */
+
+.config-divider {
+  height: 1px;
+  background: $mono203;
+  margin: 8px 0 4px;
+}
+
+.config-section {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.config-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.config-label {
+  font-family: SpoqaB;
+  font-size: 14px;
+  color: $mono207;
+  border-left: 3px solid $blue104;
+  padding-left: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.config-hint {
+  font-family: SpoqaM;
+  font-size: 12px;
+  color: $mono205;
+}
+
+.artifact-select {
+  background: $mono200;
+  border: 1px solid $mono203;
+  border-radius: 8px;
+  color: $mono207;
+  padding: 10px 14px;
+  font-family: SpoqaM;
+  font-size: 14px;
+  outline: none;
+  width: 100%;
+  max-width: 400px;
+  cursor: pointer;
+  &:focus { border-color: $blue104; }
+}
+
+.runtime-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.runtime-card {
+  border: 1px solid $mono203;
+  border-radius: 10px;
+  padding: 14px 16px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+
+  &:hover { border-color: $blue104; box-shadow: $card-hover-color; }
+  &.selected { border-color: $blue104; background: rgba($blue104, 0.06); }
+}
+
+.runtime-icon { font-size: 22px; line-height: 1; }
+
+.runtime-name {
+  font-family: SpoqaB;
+  font-size: 14px;
+  color: $mono207;
+}
+
+.runtime-desc {
+  font-family: SpoqaM;
+  font-size: 11px;
+  color: $mono205;
+  line-height: 1.4;
+}
+
+.quant-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.quant-card {
+  border: 1px solid $mono203;
+  border-radius: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+
+  &:hover { border-color: $blue104; box-shadow: $card-hover-color; }
+  &.selected { border-color: $blue104; background: rgba($blue104, 0.06); }
+}
+
+.quant-name {
+  font-family: SpoqaB;
+  font-size: 14px;
+  color: $mono207;
+  margin-bottom: 3px;
+}
+
+.quant-desc {
+  font-family: SpoqaM;
+  font-size: 11px;
+  color: $mono205;
+  line-height: 1.4;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.config-chip {
+  border: 1px solid $mono203;
+  border-radius: 8px;
+  padding: 8px 18px;
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: $mono205;
+  cursor: pointer;
+  transition: border-color 0.2s;
+
+  &:hover { border-color: $blue104; }
+  &.selected { border-color: $blue104; background: rgba($blue104, 0.06); color: $blue104; }
+}
+
+.action-row {
+  display: flex;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.gen-btn {
+  padding: 10px 28px;
+  border-radius: 8px;
+  font-family: SpoqaB;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+
+  &.gen-image {
+    background: $blue104;
+    color: $mono200;
+    border: none;
+    &:hover { background: $blue105; }
+  }
+
+  &.gen-code {
+    background: transparent;
+    color: $blue104;
+    border: 1px solid $blue104;
+    &:hover { background: rgba($blue104, 0.06); }
+  }
+}

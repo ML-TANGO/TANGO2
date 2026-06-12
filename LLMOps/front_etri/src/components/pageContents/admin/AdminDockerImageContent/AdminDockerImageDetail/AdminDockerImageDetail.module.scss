@@ -1,0 +1,108 @@
+@import '@src/styles/color.scss';
+
+.detail {
+  padding: 32px;
+  background-color: $mono200;
+  .header {
+    border-bottom: 1px solid $mono203;
+    // margin: 0 40px;
+
+    .title {
+      margin: 0;
+      height: 31px;
+      font-family: SpoqaR;
+      font-size: 24px;
+      color: $blue107;
+      span:first-child {
+        font-size: 20px;
+        font-family: SpoqaB;
+        margin-right: 8px;
+      }
+      span:nth-child(2) {
+        font-family: SpoqaM;
+        font-size: 14px;
+      }
+    }
+    .desc {
+      font-family: SpoqaM;
+      font-size: 16px;
+      line-height: normal;
+      color: $mono205;
+    }
+  }
+  .horizon-box {
+    display: flex;
+    // margin: 24px 40px;
+    margin-top: 16px;
+    .box {
+      width: 25%;
+      font-family: SpoqaM;
+      .label {
+        display: block;
+        font-size: 14px;
+        color: $mono205;
+      }
+      .value {
+        display: block;
+        font-size: 16px;
+        color: $mono207;
+      }
+    }
+  }
+  .block {
+    margin-top: 56px;
+    background-color: $mono200;
+
+    .block-title {
+      font-family: SpoqaR;
+      font-size: 18px;
+      margin-top: 0;
+      color: $blue107;
+
+      span:first-child {
+        font-size: 18px;
+        font-family: SpoqaB;
+        margin-right: 8px;
+      }
+      span:nth-child(2) {
+        font-family: SpoqaM;
+        font-size: 14px;
+      }
+    }
+    .border {
+      margin: 16px 0;
+      border-bottom: 1px solid $mono203;
+    }
+    .info-list {
+      display: flex;
+      flex-direction: row;
+      flex-wrap: wrap;
+      .list-item {
+        margin-right: 24px;
+        width: calc(25% - 24px);
+        font-family: SpoqaM;
+        &:last-child {
+          flex: 2;
+        }
+        .label {
+          display: inline-block;
+          margin-bottom: 4px;
+          font-size: 14px;
+          color: $mono205;
+        }
+        .value {
+          font-size: 16px;
+          height: 21px;
+          color: $mono207;
+        }
+      }
+    }
+  }
+  .table-box {
+    margin-top: 36px;
+    .disabled {
+      color: $mono203;
+      cursor: not-allowed;
+    }
+  }
+}

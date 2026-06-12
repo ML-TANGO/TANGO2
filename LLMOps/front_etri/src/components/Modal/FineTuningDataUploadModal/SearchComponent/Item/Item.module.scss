@@ -1,0 +1,137 @@
+@import '@src/styles/color.scss';
+
+.bar {
+  display: flex;
+  padding: 0 16px;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+  height: 44px;
+
+  .title-box {
+    display: flex;
+    font-family: SpoqaM;
+    .title {
+      width: 78px;
+      color: $mono205;
+      font-size: 14px;
+    }
+    .content {
+      margin-left: 16px;
+      .name {
+        color: $mono204;
+        font-size: 14px;
+      }
+    }
+  }
+}
+.search-content {
+  display: flex;
+  background-color: $mono201;
+  justify-content: space-between;
+  align-items: center;
+  box-sizing: border-box;
+  height: 48px;
+  padding: 8px 16px;
+  min-height: 32px;
+
+  border-bottom: 1px solid $mono203;
+  border-top: 1px solid $mono203;
+
+  .input {
+    flex: 50%;
+    width: 403px;
+  }
+  .button-box {
+    // padding-left: 50px;
+    display: flex;
+    justify-content: flex-end;
+    flex: 30%;
+    .button {
+      display: flex;
+      align-items: center;
+
+      .type-title {
+        font-size: 12px;
+        color: $mono204;
+        font-family: SpoqaB;
+        white-space: nowrap;
+        margin: 0 8px;
+      }
+    }
+  }
+}
+.list-content {
+  background-color: $mono200;
+  height: 200px;
+  padding: 8px 16px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  position: relative;
+
+  // 스크롤바 너비만큼 공간 확보
+  // 스크롤이랑 텍스트  길어졌을때 처리
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 16px;
+    background-color: transparent;
+    // pointer-events: none;
+  }
+
+  .list {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border: 1px solid #dbdbdb;
+    padding: 10px 16px;
+    height: 36px;
+    box-sizing: border-box;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    white-space: normal;
+    word-break: break-word;
+    font-family: SpoqaM;
+    font-size: 14px;
+    font-style: normal;
+    font-weight: 500;
+    line-height: 14px;
+
+    &:hover {
+      cursor: pointer;
+    }
+    &.selected {
+      border: 1px solid $blue104;
+      background-color: rgba(222, 233, 255, 0.5);
+      color: $blue104;
+    }
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+    .left {
+      display: flex;
+      align-items: center;
+      color: $mono205;
+      flex-grow: 1;
+
+      img {
+        width: 16px;
+        height: 16px;
+        margin-right: 8px;
+      }
+      .name {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+    }
+    .user {
+      color: $mono204;
+    }
+  }
+}

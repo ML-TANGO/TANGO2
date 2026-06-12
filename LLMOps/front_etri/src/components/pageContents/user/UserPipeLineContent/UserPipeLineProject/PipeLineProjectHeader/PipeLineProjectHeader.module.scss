@@ -1,0 +1,101 @@
+@import '@src/styles/color.scss';
+
+.header-cont {
+  margin-bottom: 32px;
+  text-wrap: nowrap;
+  .back-btn {
+    color: $mono208;
+    font-family: SpoqaB;
+    font-size: 16px;
+    line-height: 16px;
+    display: flex;
+    gap: 4px;
+    margin-bottom: 24px;
+    cursor: pointer;
+  }
+  .header-content-cont {
+    display: flex;
+    justify-content: space-between;
+    height: 32px;
+    .title-cont {
+      display: flex;
+      justify-content: center;
+      margin-right: 8px;
+      .header-title {
+        display: inline-block;
+        margin: initial;
+        color: $mono207;
+        font-family: SpoqaB;
+        font-size: 24px;
+        line-height: 100%;
+      }
+    }
+    .header-content-right {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      .error-message-paragraph {
+        margin: initial;
+        color: $red502;
+        font-family: SpoqaM;
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 14px;
+        &.blue {
+          color: $blue104;
+        }
+      }
+    }
+  }
+}
+
+.tooltip-cont {
+  .project-name-txt {
+    color: $mono207;
+    font-family: SpoqaB;
+    font-size: 16px;
+    margin: initial;
+    margin-bottom: 12px;
+  }
+  .create-time-txt {
+    display: inline-block;
+    margin-bottom: 24px;
+    color: $mono205;
+    font-family: SpoqaM;
+    font-size: 12px;
+    line-height: 12px; /* 100% */
+    letter-spacing: -0.18px;
+  }
+  .owner-cont {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .border {
+    margin: 24px 0;
+    width: 100%;
+    height: 1px;
+    background-color: #dbdbdb;
+  }
+  .label-cont {
+    display: flex;
+    gap: 15px;
+  }
+  .desc-cont {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .label-txt {
+    color: $mono205;
+    font-family: SpoqaM;
+    font-size: 14px;
+    line-height: 22px; /* 157.143% */
+  }
+  .value-txt {
+    color: #121619;
+    font-family: SpoqaM;
+    font-size: 14px;
+    line-height: 22px; /* 157.143% */
+  }
+}

@@ -1,0 +1,152 @@
+@import '@src/styles/color.scss';
+
+.flex-32 {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  .label {
+    color: $mono205;
+    font-family: SpoqaM;
+    font-size: 14px;
+    line-height: 14px;
+  }
+  .value {
+    color: $mono207;
+    font-family: SpoqaM;
+    font-size: 14px;
+    line-height: 22px;
+
+    word-wrap: break-word; // 긴 단어를 줄바꿈
+    word-break: break-word; // 단어 단위로 줄바꿈
+    white-space: normal; // 텍스트를 기본 줄바꿈 규칙으로 설정
+  }
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 32px;
+  .title {
+    margin: initial;
+    color: $mono207;
+    font-family: SpoqaB;
+    font-size: 18px;
+    line-height: 18px; /* 100% */
+  }
+}
+
+.seleced-model-cont {
+  padding: 10px 16px;
+  background-color: #eff4fe;
+  border-radius: 7px;
+  margin-bottom: 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  &.disabled {
+    background-color: $mono202;
+  }
+
+  .left {
+    font-family: SpoqaM;
+    font-size: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+
+    .model {
+      color: $mono207;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      .icon {
+        width: 16px;
+        height: 16px;
+      }
+      &.disabled {
+        color: $mono204;
+      }
+    }
+    .version {
+      color: $mono205;
+      &.disabled {
+        color: $mono204;
+      }
+    }
+  }
+  .close {
+    cursor: pointer;
+  }
+}
+
+.border {
+  width: 100%;
+  height: 1px;
+  background-color: $mono203;
+  margin-bottom: 32px;
+}
+
+.scroll-cont {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  .scroll-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .slider-cont {
+    display: flex;
+    align-items: center;
+    height: 28px;
+    .slider {
+      -webkit-appearance: none; /* 기본 슬라이더 스타일 제거 */
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      background-color: $blue104;
+      outline: none;
+      &::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 17px;
+        height: 17px;
+        outline: 3px solid $blue104;
+        border-radius: 9px;
+        background-color: #fff;
+      }
+    }
+  }
+}
+
+.flex-cont {
+  display: flex;
+  justify-content: space-between;
+  .label {
+    color: $mono207;
+    font-family: SpoqaM;
+    font-size: 14px;
+    line-height: 14px;
+  }
+}
+
+.button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background-color: initial;
+  cursor: pointer;
+
+  &:focus {
+    outline: 1px solid $blue104;
+    border-radius: 8px;
+    outline-offset: 1px;
+  }
+}

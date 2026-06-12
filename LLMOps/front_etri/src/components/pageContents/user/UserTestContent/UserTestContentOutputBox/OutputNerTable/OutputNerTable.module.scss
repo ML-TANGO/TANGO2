@@ -1,0 +1,48 @@
+@import '@src/styles/color.scss';
+
+.result-table {
+  min-width: 580px;
+  width: max-content;
+  max-width: 100%;
+  margin-bottom: 20px;
+  .title {
+    font-family: SpoqaB;
+    font-size: 16px;
+    color: $mono207;
+    display: block;
+    padding-bottom: 12px;
+  }
+  .table {
+    font-family: SpoqaM;
+    font-size: 16px;
+    width: 100%;
+    border-collapse: collapse;
+    border-top: 3px solid $primary-color;
+    background-color: $mono200;
+    color: $mono207;
+    box-sizing: border-box;
+    th {
+      color: $primary-color;
+      background: $hover-bg-color;
+      text-align: center;
+    }
+    th,
+    td {
+      padding: 10px 16px;
+      border: 1px solid $mono203;
+      text-align: center;
+    }
+    th:first-child,
+    td:first-child {
+      border-left: 0;
+    }
+    th:last-child,
+    td:last-child {
+      border-right: 0;
+    }
+    .rowspan {
+      max-width: 250px;
+      word-break: keep-all;
+    }
+  }
+}

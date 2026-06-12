@@ -1,0 +1,73 @@
+@import '@src/styles/color.scss';
+
+.loading, .empty {
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: $mono205;
+  padding: 8px 0;
+}
+
+.grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.card {
+  border: 1px solid $mono203;
+  border-radius: 10px;
+  padding: 16px;
+  min-width: 160px;
+  max-width: 220px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+
+  &:hover {
+    border-color: $blue104;
+    box-shadow: $card-hover-color;
+  }
+
+  &.selected {
+    border-color: $blue104;
+    background: rgba($blue104, 0.06);
+  }
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.name {
+  font-family: SpoqaB;
+  font-size: 14px;
+  color: $mono207;
+}
+
+.badge {
+  font-family: SpoqaM;
+  font-size: 10px;
+  color: $blue104;
+  border: 1px solid $blue104;
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.desc {
+  font-family: SpoqaM;
+  font-size: 11px;
+  color: $mono205;
+  line-height: 1.4;
+}
+
+.meta {
+  display: flex;
+  gap: 8px;
+  font-family: SpoqaM;
+  font-size: 11px;
+  color: $mono204;
+}

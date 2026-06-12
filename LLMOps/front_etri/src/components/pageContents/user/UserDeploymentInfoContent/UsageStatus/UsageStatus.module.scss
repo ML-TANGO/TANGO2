@@ -1,0 +1,90 @@
+@import '@src/styles/color.scss';
+
+.deployment-usage-status {
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    .title {
+      color: $mono207;
+      font-size: 16px;
+      font-family: SpoqaB;
+    }
+    .btn-wrap {
+      display: flex;
+      gap: 10px;
+    }
+  }
+  .content {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 20px 0;
+    .item {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: flex-start;
+      .label {
+        font-family: SpoqaM;
+        font-size: 14px;
+        color: $mono205;
+        width: 150px;
+      }
+      .value {
+        flex: 1;
+        font-family: SpoqaR;
+        font-size: 14px;
+        color: $mono206;
+        display: block;
+      }
+      .value-box {
+        display: flex;
+        align-items: center;
+        width: calc(100% - 150px);
+        .api-address {
+          display: block;
+          width: 100%;
+          max-width: max-content;
+          font-size: 14px;
+          color: $mono206;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          word-break: break-all;
+          height: 28px;
+          line-height: 28px;
+        }
+      }
+    }
+  }
+}
+
+.btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 4px;
+  background-size: 75%;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-color: transparent;
+  vertical-align: middle;
+  cursor: pointer;
+  &:hover {
+    background-color: $mono202;
+  }
+  &:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+}
+
+.copy-btn {
+  background-image: url(@src/static/images/icon/00-ic-basic-copy-o.svg);
+  margin: 0 0 2px 4px;
+}
+.edit-btn {
+  background-image: url(@src/static/images/icon/00-ic-basic-pen.svg);
+  margin-left: 4px;
+}

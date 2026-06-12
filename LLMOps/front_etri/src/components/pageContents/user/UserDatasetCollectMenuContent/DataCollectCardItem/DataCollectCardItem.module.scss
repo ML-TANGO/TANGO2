@@ -1,0 +1,179 @@
+@import '@src/styles/color.scss';
+
+.card-cont {
+  position: relative;
+  padding: 24px;
+  background-color: #fff;
+  border: 1px solid $mono203;
+  border-radius: 12px;
+  box-sizing: border-box;
+  min-width: 360px;
+  height: 480px;
+  cursor: pointer;
+
+  &.active {
+    border: none;
+    z-index: 0;
+    overflow: hidden;
+    &::before {
+      content: '';
+      position: absolute;
+      z-index: -2;
+      left: -50%;
+      top: -50%;
+      width: 200%;
+      height: 200%;
+      background-color: $primary-color;
+      background-repeat: no-repeat;
+      background-size: 50% 50%, 50% 50%;
+      background-position: 0 0, 100% 0, 100% 100%, 0 100%;
+      background-image: linear-gradient($blue104, $blue102),
+        linear-gradient($blue101, $blue102), linear-gradient($blue102, $blue104),
+        linear-gradient($blue102, $blue101);
+      animation: rotate 2.5s linear infinite;
+    }
+    &::after {
+      content: '';
+      position: absolute;
+      z-index: -1;
+      left: 2px;
+      top: 2px;
+      width: calc(100% - 4px);
+      height: calc(100% - 4px);
+      background: white;
+      border-radius: 12px;
+    }
+    &.stop::before {
+      filter: grayscale(1);
+    }
+    @keyframes rotate {
+      100% {
+        transform: rotate(1turn);
+      }
+    }
+  }
+
+  .header-cont {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 32px;
+    .left-cont {
+      display: flex;
+      gap: 8px;
+      img {
+        width: 16px;
+        height: 16px;
+      }
+      .data-type-txt {
+        color: $mono205;
+        font-family: SpoqaM;
+        font-size: 16px;
+        line-height: 16px;
+      }
+    }
+    .right-cont {
+      display: flex;
+      gap: 4px;
+      button {
+        border: none;
+        background-color: inherit;
+        width: 24px;
+        height: 24px;
+        cursor: pointer;
+      }
+    }
+  }
+  .contents-cont {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    .owner-cont {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 24px;
+      .owner-txt {
+        color: $mono205;
+        font-family: SpoqaM;
+        font-size: 14px;
+        line-height: 14px;
+      }
+      .title-txt {
+        color: $mono207;
+        font-family: SpoqaB;
+        font-size: 24px;
+        line-height: 24px;
+        text-overflow: ellipsis;
+        overflow: hidden;
+        white-space: nowrap;
+      }
+      .instance-txt {
+        color: $mono207;
+        font-family: SpoqaM;
+        font-size: 14px;
+        line-height: 14px;
+        &.warn {
+          color: $red502;
+        }
+      }
+    }
+    .ingest-info-cont,
+    .instance-cont {
+      display: flex;
+      flex-direction: column;
+      .title-txt {
+        display: inline-block;
+        color: $mono205;
+        font-family: SpoqaM;
+        font-size: 14px;
+        line-height: 14px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid $mono203;
+      }
+      .info-cont {
+        display: flex;
+        flex-direction: column;
+        margin: 16px 0;
+        gap: 12px;
+        .row {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          .label {
+            display: inline-block;
+            min-width: 84px;
+            color: $mono207;
+            font-family: SpoqaB;
+            font-size: 14px;
+            line-height: 14px;
+            text-wrap: nowrap;
+          }
+          .value {
+            display: inline-block;
+            width: 100%;
+            width: calc(100% - 140px);
+            color: $mono207;
+            font-family: SpoqaM;
+            font-size: 14px;
+            line-height: 14px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+        }
+      }
+    }
+  }
+}
+
+.instance-warn-message {
+  display: flex;
+  justify-content: center;
+  margin: initial;
+  margin-top: 24px;
+  color: $red502;
+  font-family: SpqaM;
+  font-size: 14px;
+  line-height: 14px;
+}

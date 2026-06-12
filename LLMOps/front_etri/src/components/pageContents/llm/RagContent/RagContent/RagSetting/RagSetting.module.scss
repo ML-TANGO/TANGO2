@@ -1,0 +1,101 @@
+@import '@src/styles/color.scss';
+@mixin boxStyle {
+  box-sizing: border-box;
+  padding: 24px;
+  border: 1px solid $blue102;
+  border-radius: 16px;
+}
+
+.container {
+  margin-top: 32px;
+  display: flex;
+  gap: 24px;
+
+  height: 821px;
+  .input {
+    display: flex;
+    gap: 24px;
+    flex: 50%;
+
+    .left {
+      flex: 25%;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+
+      .left-top {
+        height: 100%;
+        @include boxStyle;
+        &.disabled {
+          background-color: $mono201;
+        }
+        .info {
+          margin-top: 32px;
+          font-size: 14px;
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+
+          .label {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            color: $mono205;
+            .desc {
+              display: flex;
+              gap: 8px;
+            }
+            img {
+              width: 16px;
+              height: 16px;
+              cursor: pointer;
+            }
+          }
+        }
+      }
+      .left-bottom {
+        @include boxStyle;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        .resource {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+
+          .label {
+            display: flex;
+            gap: 8px;
+            .instance {
+              color: $mono205;
+            }
+          }
+        }
+        .border {
+          height: 1px;
+          background-color: $mono203;
+        }
+        .gpu-box {
+          display: flex;
+          justify-content: space-between;
+          font-size: 14px;
+          .label {
+            color: $mono205;
+          }
+        }
+      }
+    }
+  }
+
+  @media screen and (max-width: 1365px) {
+    flex-direction: column;
+    height: 1668px;
+  }
+}
+
+.title {
+  font-size: 18px;
+  color: $mono207;
+  font-family: SpoqaB;
+}

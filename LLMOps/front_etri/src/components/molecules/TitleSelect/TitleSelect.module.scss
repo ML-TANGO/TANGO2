@@ -1,0 +1,93 @@
+@import '@src/styles/color.scss';
+
+.input-wrap {
+  width: 200px;
+  height: 36px;
+  background-color: #fff;
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 11px 16px;
+  border: 1px solid $mono203;
+  border-radius: 8px;
+  box-sizing: border-box;
+  .input {
+    border: none;
+    outline: none;
+    color: $mono207;
+    font-size: 20px;
+    font-family: SpoqaM;
+  }
+  .label {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    color: $mono205;
+    font-family: SpoqaM;
+    line-height: 14px;
+    cursor: pointer;
+    &:hover {
+      color: $primary-color;
+    }
+    .icon {
+      display: block;
+      align-items: center;
+      img {
+        width: 14px;
+        height: 14px;
+      }
+    }
+    .placeholder {
+      font-family: SpoqaM;
+      color: $mono205;
+    }
+  }
+
+  .select-options {
+    position: absolute;
+    top: 40px;
+    left: 0px;
+    width: max-content;
+    background-color: $mono200;
+    box-shadow: 0 3px 9px 0 rgba(18, 22, 25, 0.08),
+      0 2px 4px 1px rgba(18, 22, 25, 0.14);
+    border: 1px solid $mono202;
+    border-radius: 3px;
+    padding: 12px 0;
+    box-sizing: border-box;
+    z-index: 2;
+    margin-bottom: 4px;
+    .search-box {
+      padding-bottom: 12px;
+      margin: 0 16px 12px;
+      border-bottom: 1px solid $mono203;
+      box-sizing: border-box;
+    }
+    .option-list {
+      max-height: 150px;
+      overflow-y: auto;
+    }
+    .option {
+      width: 100%;
+      padding: 10px 16px;
+      box-sizing: border-box;
+      text-align: left;
+      font-size: 16px;
+      color: $mono207;
+      border: none;
+      border-radius: 0;
+      background-color: $mono200;
+      font-family: SpoqaM;
+      &:hover,
+      &:focus {
+        background-color: $hover-bg-color;
+      }
+      &.disabled {
+        color: $mono204;
+        &:hover {
+          background-color: $mono200;
+        }
+      }
+    }
+  }
+}

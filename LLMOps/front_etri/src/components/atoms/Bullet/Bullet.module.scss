@@ -1,0 +1,19 @@
+@import '@src/styles/color.scss';
+
+.box {
+  display: flex;
+  align-items: center;
+  .bullet {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    margin-right: 5px;
+    border-radius: 50%;
+    &.on {
+      background-color: $lime603;
+    }
+    &.off {
+      background-color: $mono204;
+    }
+  }
+}

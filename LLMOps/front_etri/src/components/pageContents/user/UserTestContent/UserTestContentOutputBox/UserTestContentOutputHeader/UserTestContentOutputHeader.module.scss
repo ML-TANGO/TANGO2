@@ -1,0 +1,33 @@
+@import '@src/styles/color.scss';
+
+.result-label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+  gap: 16px;
+  row-gap: 8px;
+  .label {
+    font-size: 20px;
+  }
+  .response-status {
+    font-size: 14px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    > div:first-of-type {
+      // tooltip
+      margin-right: 4px;
+    }
+    .key {
+      color: $mono207;
+      margin-right: 4px;
+    }
+    .value {
+      color: $blue104;
+      margin-right: 10px;
+      white-space: nowrap;
+    }
+  }
+}

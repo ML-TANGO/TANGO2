@@ -1,0 +1,8 @@
+.tool-list {
+  display: flex;
+  flex-wrap: wrap;
+  grid-gap: 48px;
+  @media screen and (max-width: 768px) {
+    grid-gap: 20px;
+  }
+}

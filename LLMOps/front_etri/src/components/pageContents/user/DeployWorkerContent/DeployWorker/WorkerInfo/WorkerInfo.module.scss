@@ -1,0 +1,84 @@
+@import '../DeployWorker.module.scss';
+
+.worker-info {
+  margin: 40px 0;
+  background-color: $mono200;
+  @include box-area();
+  .default {
+    padding: $padding-xsmall $padding-small;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    &.border-bottom {
+      border-bottom: 1px solid $card-border-color;
+    }
+    & > label {
+      display: flex;
+      align-items: center;
+      color: $mono205;
+    }
+  }
+  .worker-info-overview {
+    padding: $padding-small;
+    background-color: $mono201;
+    border-radius: 0 0 4px 4px;
+    .memo {
+      display: flex;
+      justify-content: space-between;
+      padding-bottom: $padding-xsmall;
+      border-bottom: 1px solid $mono203;
+      .label {
+        display: flex;
+        align-items: center;
+        width: 120px;
+        font-size: 16px;
+      }
+      .text {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        color: $mono205;
+        font-size: 14px;
+        box-sizing: border-box;
+        margin-right: 8px;
+      }
+    }
+    .resource,
+    .version-info {
+      padding-top: $padding-xsmall;
+      > .label {
+        font-size: 16px;
+        display: flex;
+        align-items: center;
+      }
+      & > ul {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(50%, auto));
+        & > li {
+          display: flex;
+          flex-direction: row;
+          font-size: 14px;
+          padding-top: $padding-xsmall;
+          .label {
+            color: $mono205;
+            width: 120px;
+          }
+          .value {
+            color: $mono205;
+            width: calc(100% - 140px);
+            word-break: break-all;
+            padding-right: 20px;
+          }
+        }
+      }
+    }
+    .resource {
+      padding-bottom: $padding-xsmall;
+      border-bottom: 1px solid $mono203;
+    }
+  }
+}
+
+.tooltip-contents-box {
+  margin-bottom: 8px;
+}

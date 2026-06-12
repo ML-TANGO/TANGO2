@@ -27,15 +27,15 @@ SCENARIO="${SCENARIO:-en}"
 case "$SCENARIO" in
   en)
     DATA_PATH="$ROOT/data/sds_train_en.json"
-    OUTPUT_DIR="$ROOT/checkpoints/sds_lora_en"
+    OUTPUT_DIR="$ROOT/checkpoints/clip_llama31_proj_lora_marine_sds_en"
     ;;
   ko)
     DATA_PATH="$ROOT/data/sds_train_ko.json"
-    OUTPUT_DIR="$ROOT/checkpoints/sds_lora_ko"
+    OUTPUT_DIR="$ROOT/checkpoints/clip_llama31_proj_lora_marine_sds_ko"
     ;;
   ko_compact)
     DATA_PATH="$ROOT/data/sds_train_ko_compact.json"
-    OUTPUT_DIR="$ROOT/checkpoints/sds_lora_ko_compact"
+    OUTPUT_DIR="$ROOT/checkpoints/clip_llama31_proj_lora_marine_sds_ko_compact"
     ;;
   *)
     echo "ERROR: SCENARIO must be one of: en | ko | ko_compact"
@@ -64,12 +64,12 @@ IMAGE_DIR="/home/ywlee/dev/TANGO2_main/SDS/dataset/20260227"
 # ① clip_llama31_lora_marine 이 있으면 우선 사용 (CC3M + LLaMarine 학습됨)
 # ② 없으면 clip_llama31_lora 로 폴백 (CC3M 학습됨)
 if [ -f "$ROOT/checkpoints/clip_llama31_lora_marine/adapter_config.json" ]; then
-    RESUME_LORA="$ROOT/checkpoints/clip_llama31_lora_marine"
-    PROJECTOR="$ROOT/checkpoints/clip_llama31_lora_marine/projector.bin"
+    RESUME_LORA="$ROOT/checkpoints/clip_llama31_proj_lora_marine"
+    PROJECTOR="$ROOT/checkpoints/clip_llama31_proj_lora_marine/projector.bin"
     echo "  Base LoRA : clip_llama31_lora_marine (CC3M + LLaMarine)"
 else
-    RESUME_LORA="$ROOT/checkpoints/clip_llama31_lora"
-    PROJECTOR="$ROOT/checkpoints/clip_llama31_lora/projector.bin"
+    RESUME_LORA="$ROOT/checkpoints/clip_llama31_proj_lora"
+    PROJECTOR="$ROOT/checkpoints/clip_llama31_proj_lora/projector.bin"
     echo "  Base LoRA : clip_llama31_lora (CC3M only)"
 fi
 

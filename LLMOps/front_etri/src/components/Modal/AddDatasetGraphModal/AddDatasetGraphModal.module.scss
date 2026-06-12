@@ -1,0 +1,22 @@
+@import '@src/styles/color.scss';
+
+.row {
+  margin-bottom: 32px;
+  .type-box {
+    display: flex;
+    justify-content: space-between;
+    img {
+      cursor: pointer;
+    }
+  }
+  .message {
+    color: $red502;
+    font-family: SpoqaM;
+    font-size: 12px;
+    font-style: normal;
+    font-weight: 500;
+    line-height: 12px;
+    letter-spacing: -0.18px;
+    margin-top: 8px;
+  }
+}

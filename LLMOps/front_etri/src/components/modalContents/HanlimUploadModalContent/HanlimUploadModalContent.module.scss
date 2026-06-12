@@ -1,0 +1,15 @@
+@import '@src/styles/color.scss';
+
+.wrapper {
+  margin: 0px 48px 22px 48px;
+  // background-color: rgba(25, 64, 255, 0.08) !important;
+
+  border-radius: 8px;
+
+  .row {
+    margin-bottom: 20px;
+  }
+  .noti {
+    color: $mono206;
+  }
+}

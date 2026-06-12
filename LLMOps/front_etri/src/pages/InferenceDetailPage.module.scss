@@ -1,0 +1,338 @@
+@import '@src/styles/color.scss';
+
+.page {
+  padding: 32px;
+  min-height: 100%;
+}
+
+.loading {
+  font-family: SpoqaM;
+  font-size: 14px;
+  color: $mono205;
+  padding: 60px 0;
+  text-align: center;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  margin-bottom: 28px;
+}
+
+.back-btn {
+  background: none;
+  border: 1px solid $mono203;
+  border-radius: 8px;
+  color: $mono205;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-family: SpoqaM;
+  cursor: pointer;
+  white-space: nowrap;
+  margin-top: 4px;
+  &:hover { border-color: $blue104; color: $blue104; }
+}
+
+.header-info {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.title {
+  font-family: SpoqaB;
+  font-size: 22px;
+  color: $mono207;
+}
+
+.meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.meta-tag {
+  font-family: SpoqaM;
+  font-size: 12px;
+  border-radius: 4px;
+  padding: 3px 9px;
+
+  &.inference { background: $blue101; color: $blue104; }
+  &.prompt    { background: $lime601; color: $lime604; }
+  &.res       { background: $mono202; border: 1px solid $mono203; color: $mono205; }
+}
+
+.mode-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid $mono203;
+  margin-bottom: 28px;
+}
+
+.tab {
+  padding: 10px 24px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-family: SpoqaM;
+  font-size: 14px;
+  color: $mono205;
+  cursor: pointer;
+  margin-bottom: -1px;
+
+  &.active {
+    color: $blue104;
+    border-bottom-color: $blue104;
+    font-family: SpoqaB;
+  }
+  &:hover:not(.active) { color: $mono207; }
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 900px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field-label {
+  font-family: SpoqaB;
+  font-size: 13px;
+  color: $mono207;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.model-hint {
+  font-family: SpoqaM;
+  font-size: 11px;
+  color: $blue104;
+}
+
+.textarea {
+  background: $mono200;
+  border: 1px solid $mono203;
+  border-radius: 8px;
+  color: $mono207;
+  padding: 12px 14px;
+  font-family: SpoqaM;
+  font-size: 14px;
+  line-height: 1.6;
+  outline: none;
+  resize: vertical;
+  &:focus { border-color: $blue104; }
+  &::placeholder { color: $mono204; }
+}
+
+.run-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.run-btn {
+  padding: 11px 32px;
+  border-radius: 8px;
+  border: none;
+  background: $blue104;
+  color: $mono200;
+  font-family: SpoqaB;
+  font-size: 14px;
+  cursor: pointer;
+  &:hover { background: $blue105; }
+  &.disabled { background: $mono203; color: $mono205; cursor: not-allowed; }
+}
+
+.result-box {
+  border: 1px solid $mono203;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: $mono202;
+  padding: 10px 16px;
+  font-family: SpoqaB;
+  font-size: 13px;
+  color: $mono207;
+}
+
+.result-meta {
+  font-family: SpoqaM;
+  font-size: 12px;
+  color: $mono205;
+}
+
+.result-body {
+  padding: 16px;
+  font-family: SpoqaM;
+  font-size: 14px;
+  color: $mono207;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.batch-config {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.section-title {
+  font-family: SpoqaB;
+  font-size: 14px;
+  color: $mono207;
+  border-left: 3px solid $blue104;
+  padding-left: 8px;
+}
+
+.empty {
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: $mono205;
+  padding: 8px 0;
+}
+
+.ds-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.ds-card {
+  border: 1px solid $mono203;
+  border-radius: 10px;
+  padding: 12px 16px;
+  min-width: 180px;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  &:hover { border-color: $blue104; box-shadow: $card-hover-color; }
+  &.selected { border-color: $blue104; background: rgba($blue104, 0.06); }
+}
+
+.ds-name {
+  font-family: SpoqaB;
+  font-size: 13px;
+  color: $mono207;
+  margin-bottom: 4px;
+}
+
+.ds-desc {
+  font-family: SpoqaM;
+  font-size: 11px;
+  color: $mono205;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.chip {
+  border: 1px solid $mono203;
+  border-radius: 8px;
+  padding: 7px 16px;
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: $mono205;
+  cursor: pointer;
+  &:hover { border-color: $blue104; }
+  &.selected { border-color: $blue104; background: rgba($blue104, 0.06); color: $blue104; }
+}
+
+.batch-results {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.summary-box {
+  border: 1px solid $blue101;
+  border-radius: 10px;
+  padding: 16px 20px;
+  background: $blue109;
+}
+
+.summary-title {
+  font-family: SpoqaB;
+  font-size: 14px;
+  color: $mono207;
+  margin-bottom: 14px;
+}
+
+.summary-metrics {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.summary-metric {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.sm-label {
+  font-family: SpoqaM;
+  font-size: 11px;
+  color: $mono205;
+}
+
+.sm-value {
+  font-family: SpoqaB;
+  font-size: 20px;
+  color: $blue104;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.result-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: SpoqaM;
+  font-size: 13px;
+  min-width: 500px;
+
+  th {
+    background: $mono202;
+    color: $mono205;
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid $mono203;
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 10px 14px;
+    border-bottom: 1px solid $mono202;
+    color: $mono207;
+  }
+
+  tr:hover td { background: rgba($blue104, 0.04); }
+}
+
+.score {
+  font-family: SpoqaB;
+  color: $blue104;
+  text-align: right;
+}

@@ -1,0 +1,63 @@
+@import '@src/styles/color.scss';
+
+.upload-group {
+  .group-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px;
+    box-sizing: border-box;
+    background-color: $mono202;
+    &.hover {
+      background-color: $mono205;
+    }
+    .group-name {
+      flex: 0 180px;
+      display: inline-block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .close-icon {
+      display: flex;
+      justify-content: center;
+      transition: 0.3s;
+      opacity: 0;
+      &:hover {
+        opacity: 1;
+        cursor: pointer;
+      }
+      & > img {
+        width: 18px;
+        height: 18px;
+      }
+    }
+    .total-progress {
+      flex: 1;
+      height: 6px;
+      margin-left: 10px;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .upload-status {
+      flex: 0 0 60px;
+      font-size: 12px;
+      color: $mono205;
+      margin-left: 4px;
+      text-align: right;
+    }
+    // .visible-controller {
+    //   flex: 0 0 30px;
+    //   margin-left: 10px;
+    // }
+  }
+  .upload-list {
+    background-color: $mono200;
+    padding-left: 10px;
+    li {
+      font-size: 12px;
+      padding: 10px 30px;
+      color: $mono205;
+      word-break: break-all;
+    }
+  }
+}

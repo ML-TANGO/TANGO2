@@ -1,0 +1,67 @@
+@import '@src/styles/color.scss';
+
+.flex-32 {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.flex-16 {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.title-cont {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  h3 {
+    color: #121619;
+    font-family: SpoqaB;
+    font-size: 14px;
+    line-height: 14px;
+    margin: initial;
+  }
+  span {
+    color: $orange403;
+    font-family: SpoqaM;
+    font-size: 14px;
+    line-height: 14px;
+    &.available {
+      color: #2d76f8;
+    }
+  }
+}
+
+.between-cont {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  text-wrap: nowrap;
+  .left-cont {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+}
+
+.label {
+  color: $mono205;
+  font-family: SpoqaM;
+  font-size: 14px;
+  line-height: 14px;
+}
+
+.value {
+  color: $mono207;
+  font-family: SpoqaM;
+  font-size: 14px;
+  line-height: 14px;
+}
+
+.border {
+  height: 1px;
+  background-color: $mono203;
+}

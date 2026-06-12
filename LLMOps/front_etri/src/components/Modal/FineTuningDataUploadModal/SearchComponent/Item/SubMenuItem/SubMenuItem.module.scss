@@ -1,0 +1,98 @@
+@import '@src/styles/color.scss';
+
+@mixin submenu-style($height, $font-size, $icon-height, $icon-width) {
+  display: flex;
+  // margin: 0 12px 12px 0;
+
+  // border-radius: 4px;
+  height: auto;
+  width: fit-content;
+  background-color: $mono200;
+  &.responsive {
+    flex-wrap: wrap;
+    .menu-item {
+      flex: auto;
+    }
+  }
+  .menu-item {
+    height: 28px;
+    // contain: content;
+    white-space: nowrap;
+    // border-right: solid 1px $mono204;
+    box-sizing: border-box;
+    .hide-input {
+      display: none;
+    }
+    &:first-child {
+      // border-radius: 4px 0 0 4px;
+    }
+    &:last-child {
+      // border-radius: 0 4px 4px 0;
+      border-right: none !important;
+    }
+    .btn {
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      height: $height;
+      font-family: SpoqaM;
+      font-size: 12px;
+      font-style: normal;
+      font-weight: 500;
+      line-height: 12px;
+      color: $mono204;
+      padding: 8px 12px;
+      border: 1px solid $mono204;
+
+      cursor: pointer;
+
+      &.selected {
+        color: $blue104 !important;
+        background-color: $blue101 !important;
+        border-color: $blue104 !important;
+      }
+      &:hover {
+        background-color: $hover-bg-color;
+        color: $blue104;
+      }
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .sub-menu.responsive {
+    margin: 0 0 12px 0;
+    .menu-item {
+      width: 100%;
+      border-right: none;
+      border-top: 1px solid $mono204;
+      &:first-child {
+        border-radius: 4px 4px 0 0;
+        border-top: none;
+      }
+      &:last-child {
+        border-radius: 0 0 4px 4px;
+      }
+    }
+  }
+}
+
+.sub-menu {
+  @include submenu-style(36px, 14px, 18px, 18px);
+  .menu-item:first-child .btn {
+    border-radius: 5px 0 0 5px;
+  }
+
+  .menu-item:last-child .btn {
+    border-radius: 0 5px 5px 0;
+  }
+  &.medium {
+    @include submenu-style(36px, 14px, 18px, 18px);
+  }
+  &.small {
+    @include submenu-style(32px, 12px, 16px, 16px);
+  }
+  &.xsmall {
+    @include submenu-style(28px, 12px, 16px, 16px);
+  }
+}

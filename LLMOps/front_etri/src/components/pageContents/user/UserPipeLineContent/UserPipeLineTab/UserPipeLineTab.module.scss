@@ -1,0 +1,25 @@
+@import '@src/styles/color.scss';
+
+.tab-list {
+  display: flex;
+  width: 100%;
+  gap: 16px;
+  border-bottom: 1px solid $mono203;
+  margin-bottom: 32px;
+  &.list {
+    margin-bottom: 15px;
+  }
+  .tab-item {
+    color: $mono205;
+    text-align: center;
+    font-family: SpoqaM;
+    font-size: 16px;
+    line-height: 150%; /* 24px */
+    padding: 0 16px 8px 16px;
+    cursor: pointer;
+    &.selected {
+      color: $blue104;
+      border-bottom: 3px solid $blue104;
+    }
+  }
+}

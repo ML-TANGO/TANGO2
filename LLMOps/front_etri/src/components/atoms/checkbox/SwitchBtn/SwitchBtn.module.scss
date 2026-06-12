@@ -1,0 +1,71 @@
+@import '@src/styles/color.scss';
+
+label.switch {
+  display: inline-block;
+  cursor: pointer;
+  margin-bottom: 0 !important;
+  vertical-align: middle;
+  input[type='checkbox'] {
+    display: none;
+
+    & + span {
+      position: relative;
+      display: inline-block;
+      width: 36px;
+      height: 18px;
+      border-radius: 16px;
+      background-color: $mono204;
+      box-sizing: border-box;
+      transition: background-color 0.3s;
+      cursor: pointer;
+
+      // &:hover {
+      //   &::before {
+      //     background-color: $blue102;
+      //   }
+      // }
+
+      &:before {
+        position: absolute;
+        display: inline-block;
+        content: '';
+        top: 50%;
+        left: -1px;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background-color: $mono200;
+        box-shadow: 0 1px 6px 0 rgba(0, 0, 0, 0.15);
+        transform: translateY(-50%);
+        transition: left 0.3s;
+      }
+    }
+
+    &:checked + span {
+      background-color: $primary-color;
+      // &:hover {
+      //   &:before {
+      //     background-color: $blue102;
+      //   }
+      // }
+
+      &:before {
+        left: calc(100% - 19px);
+      }
+    }
+
+    &:disabled + span {
+      background-color: $mono202;
+      cursor: not-allowed;
+      // &:hover {
+      //   &:before {
+      //     background-color: $mono200;
+      //   }
+      // }
+    }
+
+    &:disabled:checked + span {
+      background-color: $blue101 !important;
+    }
+  }
+}

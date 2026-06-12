@@ -1,0 +1,58 @@
+@import '@src/styles/color.scss';
+
+.template-box {
+  .form-type {
+    margin: 0 0 4px 0;
+    color: $mono207;
+    font-size: 16px;
+    font-family: SpoqaB;
+  }
+
+  .form-desc {
+    margin: 0 0 12px 0;
+    font-family: SpoqaM;
+    font-size: 14px;
+    color: $mono205;
+  }
+  .title {
+    margin: 0 0 24px 0;
+    font-family: SpoqaM;
+    font-size: 16px;
+    color: $mono207;
+    .model-name {
+      font-family: SpoqaB;
+    }
+  }
+  .form-item {
+    border-bottom: 1px solid rgba($blue102, 0.45);
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+    &:last-child {
+      border-bottom: none;
+      padding-bottom: 0px;
+      margin-bottom: 0px;
+    }
+    .form-type {
+      margin: 0 0 4px 0;
+      color: $mono207;
+      font-size: 16px;
+      font-family: SpoqaB;
+    }
+    .form-desc {
+      margin: 0 0 12px 0;
+      font-family: SpoqaM;
+      font-size: 14px;
+      color: $mono205;
+    }
+    .upload-box {
+      display: flex;
+      align-items: center;
+      flex-direction: row;
+      justify-content: flex-start;
+
+      & > div > div:first-child > button {
+        width: 103px !important;
+      }
+    }
+  }
+}

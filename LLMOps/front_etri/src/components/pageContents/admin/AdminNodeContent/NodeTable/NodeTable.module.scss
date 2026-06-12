@@ -1,0 +1,24 @@
+.nodetable-cont {
+  border-top: 1px solid #dbdbdb;
+}
+.master {
+  line-height: 1;
+}
+.master::before {
+  content: url(/images/icon/ic-master.svg);
+  display: inline-block;
+  width: 18px;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
+.setting-icon {
+  &.disabled {
+    cursor: not-allowed;
+    opacity: 0.3;
+  }
+}
+
+.flex-cont {
+  display: flex;
+}

@@ -1,0 +1,10 @@
+@import '@src/styles/color.scss';
+
+.wrapper {
+  background-color: rgba(25, 64, 255, 0.08) !important;
+  padding: 24px;
+  border-radius: 4px;
+  .upload-type {
+    margin-bottom: 16px;
+  }
+}

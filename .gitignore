@@ -4,3 +4,43 @@
 *.out
 *.log
 nohup.out
+
+# AI assistant / editor tool directories
+*.omc/
+*.gemini/
+*.idea/
+*.vscode/
+*.cursor/
+*.aider*
+*.agents/
+*.vite
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Env / secrets
+.env
+.env.*
+*.key
+
+# Build / dist
+dist/
+build/
+*.egg-info/
+
+# Model checkpoints & weights
+checkpoints/
+*.bin
+*.safetensors
+*.pt
+*.pth
+*.ckpt
+*.gguf
+*.serena

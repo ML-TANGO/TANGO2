@@ -1,0 +1,120 @@
+@import '@src/styles/color.scss';
+
+.title {
+  display: flex;
+  flex-direction: row;
+  margin-top: 0;
+  margin-bottom: 20px;
+  font-family: SpoqaB;
+  font-size: 24px;
+  .target-name {
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    width: fit-content;
+    background-color: $mono202;
+    color: $mono207;
+    margin-left: 12px;
+    padding: 4px 16px;
+    border-radius: 20px;
+    .icon {
+      width: 18px;
+      height: 18px;
+      padding: 0 5px 0 0;
+      &.arrow {
+        padding: 0 12px;
+      }
+    }
+  }
+}
+.modal-content {
+  padding: 0 44px 10px 0;
+  max-height: 60vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  .control-box {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-end;
+    margin-bottom: 12px;
+  }
+  .table-container {
+    width: 100%;
+    max-height: calc(100% - 42px);
+    overflow: auto;
+    .benchmark-history-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      text-align: left;
+      line-height: 1.5;
+      border-left: 1px solid $mono204;
+      font-size: 13px;
+      thead {
+        position: sticky;
+        top: 0px;
+        tr:first-child > th:first-child,
+        tr:last-child > th {
+          border-bottom: 1px solid $mono204;
+        }
+      }
+      tr {
+        th,
+        td {
+          min-width: 60px;
+          padding: 8px;
+          text-align: center;
+          vertical-align: middle;
+          border-right: 1px solid $mono204;
+          box-sizing: border-box;
+          &.disabled {
+            color: $mono204;
+            background-color: $mono202;
+          }
+          &.datetime {
+            width: 160px;
+          }
+        }
+        th {
+          border-top: 1px solid $mono204;
+          border-left: 1px solid $mono200;
+          background: $mono202;
+        }
+        td {
+          border-bottom: 1px solid $mono204;
+          background: $mono200;
+          .bandwith {
+            color: $mono207;
+          }
+          .error {
+            color: $error-color;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            img {
+              width: 20px;
+              height: 20px;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  .no-data-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: $mono206;
+    .icon {
+      width: 32px;
+      height: 32px;
+      margin-bottom: 8px;
+    }
+    .message {
+      margin-bottom: 20px;
+      font-size: 16px;
+    }
+  }
+}

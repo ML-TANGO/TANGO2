@@ -1,0 +1,106 @@
+@import '@src/components/atoms/input/input.scss';
+
+.flex-wrap {
+  width: 100%;
+}
+
+.file-input-wrap {
+  display: flex;
+  align-items: center;
+  .info-box {
+    display: flex;
+    flex-direction: column;
+  }
+  .check {
+    font-family: SpoqaM;
+    font-size: 12px;
+    color: $red503;
+  }
+  .error {
+    height: auto;
+    display: block;
+    box-sizing: border-box;
+    margin-left: 12px;
+    font-size: 14px;
+    font-weight: 500;
+    color: $error-color;
+  }
+  .progress {
+    margin-left: 12px;
+    font-size: 14px;
+    font-weight: 500;
+    color: $mono207;
+  }
+}
+
+.file-list {
+  margin-top: 20px;
+  min-height: 24px;
+
+  & > li {
+    display: flex;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .file-name {
+    display: inline-block;
+    max-width: calc(100% - 26px);
+    max-width: 100%;
+
+    width: fit-content;
+    color: $mono207;
+    font-size: 12px;
+    font-family: SpoqaM;
+    padding-right: 4px;
+    box-sizing: border-box;
+    &.file-size {
+      margin-left: 4px;
+      font-size: 10px;
+      color: $mono206;
+    }
+  }
+}
+
+.one-file-name {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  width: 547px;
+  overflow: hidden;
+  white-space: nowrap;
+  margin-top: 8px;
+  .file-name {
+    color: $primary-color;
+    font-size: 16px;
+    font-family: SpoqaM;
+    padding-right: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+.file-more {
+  color: $primary-color;
+  font-size: 16px;
+  font-family: SpoqaB;
+  padding-right: 4px;
+}
+.remove-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 4px;
+  border: none;
+  background-color: transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  & > img {
+    width: 16px;
+    height: 16px;
+  }
+  &:hover {
+    background-color: $hover-bg-color;
+  }
+}

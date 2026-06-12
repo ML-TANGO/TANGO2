@@ -1,0 +1,32 @@
+// @import '../modal.scss';
+@import '@src/styles/color.scss';
+
+.title {
+  position: absolute;
+  color: $mono207;
+  font-size: 18px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 16px; /* 88.889% */
+}
+
+.footer {
+  // position: absolute;
+  padding: 12px 0;
+  border-top: 1px solid $mono203;
+}
+
+// .input-wrap {
+//   .label {
+//     display: inline-block;
+//     font-size: 16px;
+//     font-family: SpoqaB;
+//     color: $title-color;
+//     margin-bottom: 8px;
+//     .optional {
+//       color: $mono205;
+//       font-size: 16px;
+//       font-family: SpoqaM;
+//     }
+//   }
+// }

@@ -1,0 +1,42 @@
+@import '@src/styles/color.scss';
+
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  .title {
+    margin-bottom: 20px;
+    color: $mono207;
+    font-size: 28px;
+    font-family: SpoqaB;
+  }
+}
+
+.header-cont {
+  display: flex;
+  justify-content: space-between;
+}
+
+.back-cont {
+  width: fit-content;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 24px;
+  cursor: pointer;
+  img {
+    width: 16px;
+    height: 16px;
+  }
+  span {
+    color: $mono208;
+    font-family: SpoqaB;
+    font-size: 16px;
+    line-height: 16px;
+  }
+}
+
+.title-cont {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 32px;
+}

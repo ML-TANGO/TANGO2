@@ -1,0 +1,32 @@
+@import '@src/styles/color.scss';
+
+.arrow-btn {
+  border: none;
+  display: flex;
+  align-items: center;
+  background-color: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  &.grey:hover {
+    background-color: $mono202;
+  }
+  &.blue:hover {
+    background-color: $hover-bg-color;
+  }
+  &.white:hover {
+    background-color: $mono204;
+  }
+  .text {
+    font-family: SpoqaB;
+    margin-right: 4px;
+    &.grey {
+      color: $mono205;
+    }
+    &.blue {
+      color: $blue104;
+    }
+    &.white {
+      color: $mono200;
+    }
+  }
+}

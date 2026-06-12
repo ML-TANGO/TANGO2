@@ -1,0 +1,58 @@
+@import '@src/styles/color.scss';
+
+.deploy-item {
+  padding: 10px;
+  border-radius: 4px;
+  box-shadow: 0 3px 9px 0 rgba(18, 22, 25, 0.08),
+    0 2px 4px 1px rgba(18, 22, 25, 0.14);
+  margin-bottom: 20px;
+  font-size: 12px;
+  background-color: $mono200;
+  &:last-child {
+    margin-bottom: 0;
+  }
+  .top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid $mono202;
+    padding-bottom: 10px;
+    .title-wrap {
+      display: flex;
+      align-items: center;
+      .title {
+        font-size: 14px;
+      }
+    }
+    .move-to-job-btn {
+      display: flex;
+      align-items: center;
+      padding: 0;
+      border: none;
+      background-color: $mono200;
+      cursor: pointer;
+      color: $mono206;
+      img {
+        width: 20px;
+        height: 20px;
+      }
+    }
+  }
+  .bottom {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+    .info-group {
+      flex: 1 0;
+      .label {
+        margin: 0 0 2px 0;
+        color: $mono205;
+        font-family: SpoqaB;
+      }
+      .value {
+        font-family: SpoqaB;
+        color: $mono207;
+      }
+    }
+  }
+}

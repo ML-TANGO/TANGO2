@@ -1,0 +1,89 @@
+@import '@src/styles/color.scss';
+
+.container {
+  display: flex;
+  flex-direction: column;
+
+  .back-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    margin-bottom: 24px;
+
+    .text {
+      font-size: 16px;
+      color: $mono208;
+      font-weight: 700;
+    }
+  }
+
+  .process-name {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: $blue107;
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 32px;
+
+    .left-side {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .warning {
+      font-size: 14px;
+      color: $red502;
+      font-weight: 500;
+    }
+
+    .guide-btn {
+      padding: 10px 20px;
+      border-radius: 7px;
+      background-color: white;
+      box-shadow: 0px 3px 6px 0px rgba(45, 118, 248, 0.1);
+      color: $blue104;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .job-btn {
+      width: 98px;
+      height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      background-color: $blue104;
+      border-radius: 7px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+  }
+
+  .tab-box {
+    display: flex;
+    gap: 16px;
+    border-bottom: 1px solid $mono203;
+    margin-bottom: 32px;
+
+    .tab {
+      color: $mono205;
+      font-size: 16px;
+      padding: 0px 12px 10px;
+      cursor: pointer;
+
+      &.selected {
+        color: $blue104;
+        border-bottom: 3px solid $blue104;
+      }
+
+      &.hide {
+        display: none;
+      }
+    }
+  }
+}

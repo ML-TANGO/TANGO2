@@ -1,0 +1,67 @@
+@import '@src/styles/color.scss';
+
+.wrapper {
+  padding-top: 8px;
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    .create-btn {
+      all: unset;
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 137px;
+      height: 36px;
+      font-weight: 700;
+      border-radius: 4px;
+      color: $blue104;
+      background-color: white;
+      box-shadow: 0px 3px 6px 0px rgba(45, 118, 248, 0.16);
+      cursor: pointer;
+      font-size: 14px;
+
+      &:active {
+        border: 1px solid $blue104;
+      }
+    }
+  }
+  .content {
+    margin-top: 12px;
+  }
+
+  .delete-btn {
+    all: unset;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 58px;
+    height: 32px;
+    border-radius: 4px;
+    background-color: $red501;
+    color: $red502;
+    font-size: 14px;
+    font-style: normal;
+    font-weight: 700;
+    cursor: pointer;
+
+    &:disabled {
+      color: white;
+      background-color: #f0f0f0;
+      cursor: not-allowed;
+    }
+
+    &:hover {
+      background-color: $red502;
+      color: $red501;
+    }
+
+    &:disabled:hover {
+      background-color: #f0f0f0;
+      color: white;
+    }
+  }
+}
