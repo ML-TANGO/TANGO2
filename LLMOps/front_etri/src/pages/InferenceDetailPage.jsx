@@ -4,6 +4,46 @@ import { callApi, STATUS_SUCCESS } from '@src/network';
 import classNames from 'classnames/bind';
 import style from './InferenceDetailPage.module.scss';
 
+function DomainOptPanel({ examples, onChange, onAdd, onRemove }) {
+  const cx = classNames.bind(style);
+  return (
+    <div className={cx('domain-panel')}>
+      {examples.map((ex, i) => (
+        <div key={i} className={cx('qa-set')}>
+          <div className={cx('qa-header')}>
+            <span className={cx('qa-index')}>예제 {i + 1}</span>
+            {examples.length > 1 && (
+              <button type="button" className={cx('qa-remove')} onClick={() => onRemove(i)}>
+                삭제
+              </button>
+            )}
+          </div>
+          <label className={cx('qa-label')}>예제 질의</label>
+          <textarea
+            className={cx('qa-input')}
+            placeholder="예제 질의를 입력하세요"
+            value={ex.query}
+            rows={2}
+            onChange={(e) => onChange(i, 'query', e.target.value)}
+          />
+          <label className={cx('qa-label')}>예제 답변</label>
+          <textarea
+            className={cx('qa-input')}
+            placeholder="예제 답변을 입력하세요"
+            value={ex.answer}
+            rows={2}
+            onChange={(e) => onChange(i, 'answer', e.target.value)}
+          />
+          <div className={cx('qa-divider')} />
+        </div>
+      ))}
+      <button type="button" className={cx('qa-add-btn')} onClick={onAdd}>
+        + 예제 추가
+      </button>
+    </div>
+  );
+}
+
 const cx = classNames.bind(style);
 
 const METRICS = [
@@ -27,10 +67,17 @@ export default function InferenceDetailPage() {
   const [mode, setMode]         = useState('direct');
 
   // direct inference state
-  const [systemPrompt, setSystemPrompt] = useState('');
-  const [userPrompt, setUserPrompt]     = useState('');
+  const [systemPrompt, setSystemPrompt]   = useState('');
+  const [userPrompt, setUserPrompt]       = useState('');
   const [directRunning, setDirectRunning] = useState(false);
   const [directResult, setDirectResult]   = useState(null);
+  const [domainOptOpen, setDomainOptOpen] = useState(false);
+  const [qaExamples, setQaExamples]       = useState([{ query: '', answer: '' }]);
+
+  const handleQaChange = (idx, field, value) =>
+    setQaExamples((prev) => prev.map((ex, i) => i === idx ? { ...ex, [field]: value } : ex));
+  const handleQaAdd    = () => setQaExamples((prev) => [...prev, { query: '', answer: '' }]);
+  const handleQaRemove = (idx) => setQaExamples((prev) => prev.filter((_, i) => i !== idx));
 
   // batch inference state
   const [selectedDataset, setSelectedDataset]   = useState(null);
@@ -157,10 +204,19 @@ export default function InferenceDetailPage() {
         <div className={cx('panel')}>
           {promptModel && (
             <div className={cx('field')}>
-              <label className={cx('field-label')}>
-                시스템 프롬프트
-                <span className={cx('model-hint')}>→ {promptModel.name}</span>
-              </label>
+              <div className={cx('prompt-row')}>
+                <label className={cx('field-label')}>
+                  시스템 프롬프트
+                  <span className={cx('model-hint')}>→ {promptModel.name}</span>
+                </label>
+                <button
+                  type="button"
+                  className={cx('domain-btn', domainOptOpen && 'domain-btn--active')}
+                  onClick={() => setDomainOptOpen((v) => !v)}
+                >
+                  도메인 최적화 {domainOptOpen ? '▲' : '▼'}
+                </button>
+              </div>
               <textarea
                 className={cx('textarea')}
                 rows={3}
@@ -168,6 +224,14 @@ export default function InferenceDetailPage() {
                 value={systemPrompt}
                 onChange={(e) => setSystemPrompt(e.target.value)}
               />
+              {domainOptOpen && (
+                <DomainOptPanel
+                  examples={qaExamples}
+                  onChange={handleQaChange}
+                  onAdd={handleQaAdd}
+                  onRemove={handleQaRemove}
+                />
+              )}
             </div>
           )}
           <div className={cx('field')}>

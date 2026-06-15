@@ -1,6 +1,8 @@
 // Components
 import { InputText, Radio, Selectbox, Textarea } from '@tango/ui-react';
 
+import DatasetUploadForm from './DatasetUploadForm';
+
 // CSS module
 import classNames from 'classnames/bind';
 import style from './DatasetFormModalContent.module.scss';
@@ -144,99 +146,20 @@ function DatasetFormModalContent({
           <span className={cx('error')}></span>
         </div>
       )}
-      {/* {type === 'CREATE_DATASET' && (
+      {type === 'CREATE_DATASET' && (
         <div className={cx('input-wrap')}>
           <label className={cx('label', 'input-group-title')}>
             {t('uploadData.label')}
             <span className={cx('optional')}> - {t('optional.label')}</span>
           </label>
-          <div className={cx('upload-option-box')}>
-            <div className={cx('radio-wrap')}>
-              <InputBoxWithLabel
-                labelText={t('builtInModelTemplate.label')}
-                labelSize='large'
-                disableErrorMsg
-              >
-                <Radio
-                  options={builtInModelTemplateOptions}
-                  onChange={(e) => {
-                    radioBtnHandler('builtInTemplate', e.currentTarget.value);
-                  }}
-                  selectedValue={builtInTemplate}
-                  name='builtInTemplate'
-                  t={t}
-                />
-              </InputBoxWithLabel>
-            </div>
-            <div className={cx('radio-wrap')}>
-              <InputBoxWithLabel
-                labelText={t('uploadType.label')}
-                labelSize='large'
-                disableErrorMsg
-              >
-                <Radio
-                  options={uploadMethodOptions}
-                  onChange={(e) => {
-                    radioBtnHandler('uploadMethod', e.currentTarget.value);
-                  }}
-                  selectedValue={uploadMethod}
-                  name='uploadMethod'
-                  t={t}
-                />
-              </InputBoxWithLabel>
-            </div>
-          </div>
-          <UploadFormWithPath datasetName={name} path='/'>
-            {Number(uploadMethod) === 0 && Number(builtInTemplate) === 0 && (
-              <DatasetUploadForm
-                onChange={templateFileFolderHandler}
-                progressRefs={progressRefs}
-                t={t}
-                datasetName={name}
-              />
-            )}
-            {Number(uploadMethod) === 1 && Number(builtInTemplate) === 0 && (
-              <GoogleDrive
-                onChange={googleDriveHandler}
-                t={t}
-                datasetName={name}
-                text={true}
-                googleAccessTokenHandler={googleAccessTokenHandler}
-              />
-            )}
-            {((Number(uploadMethod) === 0 && Number(builtInTemplate) === 1) ||
-              (Number(uploadMethod) === 1 &&
-                Number(builtInTemplate) === 1)) && (
-              <DatasetBuiltInModelForm
-                datasetName={name}
-                progressRefs={progressRefs}
-                onChange={templateFileFolderHandler}
-                uploadMethodNumber={uploadMethod}
-                googleDriveHandler={googleDriveHandler}
-                googleAccessTokenHandler={googleAccessTokenHandler}
-                builtInModelNamesHandler={builtInModelNamesHandler}
-                builtInModelIdHandler={builtInModelIdHandler}
-                templateData={templateData}
-                selectedOption={selectedOption}
-                t={t}
-              />
-            )}
-            {Number(uploadMethod) === 2 && (
-              <DroneWsDatasetSearchBox
-                droneBm={droneBm}
-                droneStartDate={droneStartDate}
-                droneEndDate={droneEndDate}
-                timeRangeHandler={timeRangeHandler}
-                droneArea={droneArea}
-                droneAreaError={droneAreaError}
-                selectInputHandler={selectInputHandler}
-                droneAccess={droneAccess}
-                droneOptionHandler={droneOptionHandler}
-              />
-            )}
-          </UploadFormWithPath>
+          <DatasetUploadForm
+            onChange={templateFileFolderHandler}
+            progressRefs={progressRefs}
+            t={t}
+            datasetName={name}
+          />
         </div>
-      )} */}
+      )}
     </div>
   );
 }

@@ -103,7 +103,6 @@
         justify-content: space-between;
         font-family: SpoqaM;
         font-size: 14px;
-        font-weight: 500;
         line-height: 14px;
         &.disabled {
           cursor: not-allowed;
@@ -148,7 +147,7 @@
           height: 24px;
           border-radius: 50%;
           background-color: $blue104;
-          color: white;
+          color: $mono200;
           font-family: SpoqaB;
           font-size: 12px;
         }
@@ -203,7 +202,7 @@
         }
 
         option {
-          background-color: #1e2130;
+          background-color: $mono202;
           color: $mono207;
         }
       }
@@ -215,7 +214,7 @@
         font-size: 20px;
         color: $blue104;
         margin: 8px 0;
-        font-weight: bold;
+        font-family: SpoqaB;
       }
     }
 

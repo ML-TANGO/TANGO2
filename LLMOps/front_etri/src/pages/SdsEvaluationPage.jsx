@@ -33,31 +33,27 @@ const CsvTable = ({ url }) => {
       });
   }, [url]);
 
-  if (loading) return <div style={{ padding: '10px', color: '#888', textAlign: 'center' }}>CSV Loading...</div>;
-  if (data.length === 0) return <div style={{ padding: '10px', color: '#888', textAlign: 'center' }}>No CSV Data</div>;
+  if (loading) return <div className={cx('csv-status')}>CSV Loading...</div>;
+  if (data.length === 0) return <div className={cx('csv-status')}>No CSV Data</div>;
 
   const headers = data[0];
   const rows = data.slice(1);
 
   return (
-    <div style={{ overflowX: 'auto', margin: '12px 0', borderRadius: '6px', border: '1px solid #dbdbdb' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '600px' }}>
-        <thead>
-          <tr style={{ backgroundColor: '#f0f0f0', borderBottom: '2px solid #dbdbdb' }}>
+    <div className={cx('csv-wrap')}>
+      <table className={cx('csv-table')}>
+        <thead className={cx('csv-thead')}>
+          <tr>
             {headers.map((h, i) => (
-              <th key={i} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: '600', color: '#747474' }}>
-                {h}
-              </th>
+              <th key={i} className={cx('csv-th')}>{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {rows.map((row, rowIndex) => (
-            <tr key={rowIndex} style={{ borderBottom: '1px solid #f0f0f0', backgroundColor: rowIndex % 2 === 0 ? '#ffffff' : '#f0f0f0' }}>
+            <tr key={rowIndex} className={cx(rowIndex % 2 === 0 ? 'csv-tr-even' : 'csv-tr-odd')}>
               {row.map((cell, cellIndex) => (
-                <td key={cellIndex} style={{ padding: '8px 12px', color: '#121619' }}>
-                  {cell}
-                </td>
+                <td key={cellIndex} className={cx('csv-td')}>{cell}</td>
               ))}
             </tr>
           ))}
@@ -114,7 +110,7 @@ const SdsEvaluationPage = () => {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
+      <div className={cx('loading-center')}>
         <DeferredComponent>
           <FBLoading />
         </DeferredComponent>
@@ -203,7 +199,7 @@ const SdsEvaluationPage = () => {
                   <img
                     src={imageUrl}
                     alt={`Input ${id}`}
-                    style={{ maxWidth: '100%', objectFit: 'contain', maxHeight: '400px' }}
+                    className={cx('sample-img')}
                     onError={(e) => { e.target.style.display = 'none'; }}
                   />
                 </div>
@@ -234,7 +230,7 @@ const SdsEvaluationPage = () => {
                       value="O"
                       checked={currentEval === 'O'}
                       onChange={() => handleEvaluate(index, 'O')}
-                      style={{ cursor: 'pointer' }}
+                      className={cx('eval-radio')}
                     />
                     적합 (O)
                   </label>
@@ -245,7 +241,7 @@ const SdsEvaluationPage = () => {
                       value="X"
                       checked={currentEval === 'X'}
                       onChange={() => handleEvaluate(index, 'X')}
-                      style={{ cursor: 'pointer' }}
+                      className={cx('eval-radio')}
                     />
                     부적합 (X)
                   </label>

@@ -73,14 +73,14 @@
           gap: 8px;
           .running-message-paragraph {
             margin: initial;
+            font-family: SpoqaM;
             font-size: 16px;
-            font-weight: 500;
             line-height: 22px;
             &.orange {
-              color: #ff7a00;
+              color: $yellow303;
             }
             &.green {
-              color: #00c775;
+              color: $lime603;
             }
           }
         }
@@ -111,7 +111,6 @@
         .param-label {
           font-family: SpoqaM;
           font-size: 14px;
-          font-weight: 500;
           color: $mono205;
           padding-bottom: 8px;
           white-space: nowrap;
@@ -121,8 +120,8 @@
           flex-direction: row;
           flex-wrap: wrap;
           .datetime {
+            font-family: SpoqaM;
             font-size: 16px;
-            font-weight: 500;
           }
           .item {
             margin-right: 12px;
@@ -141,19 +140,16 @@
             .param {
               margin-right: 4px;
               font-family: SpoqaM;
-              color: $mono205;
               word-break: break-word;
-              color: #3e3e3e;
+              color: $mono206;
               font-size: 16px;
-              font-weight: 500;
               line-height: 22px;
             }
             .value {
               font-family: SpoqaM;
               font-size: 16px;
-              font-weight: 500;
               line-height: 22px;
-              color: #121619;
+              color: $mono207;
               word-break: break-word;
             }
           }

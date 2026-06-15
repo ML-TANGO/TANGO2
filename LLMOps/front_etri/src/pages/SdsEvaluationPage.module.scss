@@ -231,9 +231,8 @@
   border: 1px solid $mono203;
   background: $mono200;
   color: $mono205;
-  font-family: SpoqaM;
+  font-family: SpoqaB;
   font-size: 14px;
-  font-weight: 600;
   transition: all 0.2s;
   user-select: none;
 
@@ -253,4 +252,72 @@
     border-color: $blue104;
     color: $blue104;
   }
+}
+
+/* ── CsvTable ── */
+.csv-wrap {
+  overflow-x: auto;
+  margin: 12px 0;
+  border-radius: 8px;
+  border: 1px solid $mono203;
+}
+
+.csv-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: SpoqaM;
+  font-size: 12px;
+  min-width: 600px;
+}
+
+.csv-thead tr {
+  background: $mono202;
+  border-bottom: 2px solid $mono203;
+}
+
+.csv-th {
+  padding: 8px 12px;
+  text-align: left;
+  font-family: SpoqaB;
+  color: $mono205;
+}
+
+.csv-tr-even {
+  background: $mono200;
+  border-bottom: 1px solid $mono202;
+}
+
+.csv-tr-odd {
+  background: $mono202;
+  border-bottom: 1px solid $mono202;
+}
+
+.csv-td {
+  padding: 8px 12px;
+  color: $mono207;
+}
+
+.csv-status {
+  padding: 10px;
+  color: $mono205;
+  text-align: center;
+  font-family: SpoqaM;
+  font-size: 13px;
+}
+
+.loading-center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 80vh;
+}
+
+.sample-img {
+  max-width: 100%;
+  object-fit: contain;
+  max-height: 400px;
+}
+
+.eval-radio {
+  cursor: pointer;
 }

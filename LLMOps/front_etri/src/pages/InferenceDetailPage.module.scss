@@ -336,3 +336,111 @@
   color: $blue104;
   text-align: right;
 }
+
+/* ── 시스템 프롬프트 + 도메인 최적화 ── */
+.prompt-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.domain-btn {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  border-radius: 7px;
+  border: 1px solid $blue104;
+  background: $mono200;
+  color: $blue104;
+  font-family: SpoqaB;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+  &:hover { background: rgba($blue104, 0.08); }
+  &--active { background: rgba($blue104, 0.12); }
+}
+
+.domain-panel {
+  border: 1px solid $blue101;
+  border-radius: 8px;
+  background: $blue109;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.qa-set {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.qa-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+
+.qa-index {
+  font-family: SpoqaB;
+  font-size: 12px;
+  color: $blue104;
+}
+
+.qa-remove {
+  background: none;
+  border: none;
+  color: $red502;
+  font-family: SpoqaM;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+  &:hover { text-decoration: underline; }
+}
+
+.qa-label {
+  font-family: SpoqaB;
+  font-size: 12px;
+  color: $mono206;
+}
+
+.qa-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: $mono200;
+  border: 1px solid $mono203;
+  border-radius: 6px;
+  color: $mono207;
+  padding: 8px 12px;
+  font-family: SpoqaM;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
+  &:focus { border-color: $blue104; }
+  &::placeholder { color: $mono204; }
+}
+
+.qa-divider {
+  height: 1px;
+  background: $blue101;
+  margin: 12px 0;
+}
+
+.qa-add-btn {
+  align-self: flex-start;
+  padding: 6px 14px;
+  border-radius: 7px;
+  border: 1px dashed $blue104;
+  background: transparent;
+  color: $blue104;
+  font-family: SpoqaB;
+  font-size: 13px;
+  cursor: pointer;
+  margin-top: 4px;
+  transition: background 0.15s;
+  &:hover { background: rgba($blue104, 0.08); }
+}

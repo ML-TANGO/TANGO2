@@ -8,9 +8,9 @@ import NewInferenceWizard from '@src/components/Modal/NewInferenceWizard/NewInfe
 const cx = classNames.bind(style);
 
 const STATUS_META = {
-  ready:   { label: '준비',   color: '#00c775' },
+  ready:   { label: '준비',    color: '#00c775' },
   running: { label: '실행 중', color: '#ffc500' },
-  error:   { label: '오류',   color: '#fa4e57' },
+  error:   { label: '오류',    color: '#fa4e57' },
 };
 
 export default function InferencePage() {
@@ -18,9 +18,9 @@ export default function InferencePage() {
   const location = useLocation();
   const wid      = location.pathname.split('/')[3];
 
-  const [sessions, setSessions]       = useState([]);
-  const [loading, setLoading]         = useState(true);
-  const [wizardOpen, setWizardOpen]   = useState(false);
+  const [sessions, setSessions]     = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   useEffect(() => {
     callApi({ url: `inference/sessions?workspace_id=${wid}`, method: 'GET' }).then((res) => {
@@ -52,7 +52,7 @@ export default function InferencePage() {
             <span className={cx('create-label')}>새 추론 생성</span>
           </div>
           {sessions.map((s) => {
-            const infModel   = s.models?.find((m) => m.role === 'inference');
+            const infModel    = s.models?.find((m) => m.role === 'inference');
             const promptModel = s.models?.find((m) => m.role === 'prompt');
             const st = STATUS_META[s.status] ?? STATUS_META.ready;
             return (
@@ -65,29 +65,20 @@ export default function InferencePage() {
                   <span className={cx('session-name')}>{s.name}</span>
                   <span className={cx('status')} style={{ color: st.color }}>● {st.label}</span>
                 </div>
-
                 <div className={cx('model-row')}>
                   {promptModel && (
-                    <span className={cx('model-tag', 'prompt')}>
-                      📝 {promptModel.name}
-                    </span>
+                    <span className={cx('model-tag', 'prompt')}>📝 {promptModel.name}</span>
                   )}
                   {infModel && (
-                    <span className={cx('model-tag', 'inference')}>
-                      🤖 {infModel.name}
-                    </span>
+                    <span className={cx('model-tag', 'inference')}>🤖 {infModel.name}</span>
                   )}
                 </div>
-
                 <div className={cx('res-row')}>
                   <span className={cx('res-chip')}>{s.resources?.gpu}</span>
                   <span className={cx('res-chip')}>CPU {s.resources?.cpu}코어</span>
                   <span className={cx('res-chip')}>{s.resources?.memory}</span>
                 </div>
-
-                <div className={cx('mode-badge', s.mode)}>
-                  {s.mode === 'dual' ? '이중 모델' : '단일 모델'}
-                </div>
+                <div className={cx('mode-badge')}>프롬프트 + 추론 이중 모델</div>
               </div>
             );
           })}
