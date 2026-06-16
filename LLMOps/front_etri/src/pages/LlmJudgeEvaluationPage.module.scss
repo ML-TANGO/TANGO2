@@ -33,18 +33,18 @@
 .body {
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  gap: 24px;
 }
 
 .section {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 .section-title {
   font-family: SpoqaB;
-  font-size: 16px;
+  font-size: 15px;
   color: $mono207;
   border-left: 3px solid $blue104;
   padding-left: 8px;
@@ -76,7 +76,7 @@
 .judge-area {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
 
 .judge-cards {
@@ -105,13 +105,13 @@
 
 .judge-label {
   font-family: SpoqaB;
-  font-size: 15px;
+  font-size: 14px;
   color: $mono207;
 }
 
 .judge-model {
   font-family: SpoqaM;
-  font-size: 11px;
+  font-size: 12px;
   color: $mono205;
 }
 
@@ -123,7 +123,7 @@
 
 .field-label {
   font-family: SpoqaB;
-  font-size: 13px;
+  font-size: 12px;
   color: $mono207;
 }
 
@@ -132,12 +132,255 @@
   border: 1px solid $mono203;
   border-radius: 8px;
   color: $mono207;
-  padding: 10px 14px;
+  padding: 9px 12px;
   font-family: SpoqaM;
-  font-size: 14px;
+  font-size: 13px;
   outline: none;
   &:focus { border-color: $blue104; }
   &::placeholder { color: $mono204; }
+}
+
+/* ── 데이터셋 선택기 ── */
+.ds-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid $mono202;
+}
+
+.ds-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ds-title {
+  font-family: SpoqaB;
+  font-size: 14px;
+  color: $mono207;
+  border-left: 3px solid $blue104;
+  padding-left: 8px;
+}
+
+.ds-count {
+  font-family: SpoqaM;
+  font-size: 12px;
+  background: $blue101;
+  color: $blue104;
+  border-radius: 12px;
+  padding: 2px 10px;
+}
+
+.ds-spacer { flex: 1; }
+
+.ds-selected-label {
+  font-family: SpoqaM;
+  font-size: 12px;
+  color: $mono205;
+  strong { color: $blue104; font-family: SpoqaB; }
+}
+
+.ds-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.ds-search-input {
+  width: 100%;
+  padding: 8px 32px 8px 12px;
+  border: 1px solid $mono203;
+  border-radius: 8px;
+  background: $mono200;
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: $mono207;
+  outline: none;
+  &:focus { border-color: $blue104; }
+  &::placeholder { color: $mono205; }
+}
+
+.ds-search-clear {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  color: $mono205;
+  padding: 2px 4px;
+  border-radius: 4px;
+  &:hover { color: $mono207; background: $mono202; }
+}
+
+.ds-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 360px;
+  overflow-y: auto;
+  padding-right: 4px;
+  &::-webkit-scrollbar { width: 4px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb { background: $mono203; border-radius: 2px; }
+}
+
+.ds-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  background: $mono200;
+  border: 1px solid $mono203;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+  &:hover { border-color: $blue104; box-shadow: $card-hover-color; }
+  &.ds-card--on { border-color: $blue104; background: rgba($blue104, 0.04); }
+}
+
+.ds-check {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1.5px solid $mono204;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: $mono200;
+  margin-top: 1px;
+  transition: border-color 0.15s, background 0.15s;
+  &.ds-check--on { background: $blue104; border-color: $blue104; }
+}
+
+.ds-card-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ds-card-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ds-card-name {
+  font-family: SpoqaB;
+  font-size: 14px;
+  color: $mono207;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ds-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: SpoqaM;
+  font-size: 12px;
+  color: $mono205;
+  flex-wrap: wrap;
+}
+
+.ds-card-desc {
+  font-family: SpoqaM;
+  font-size: 12px;
+  color: $mono204;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dot { color: $mono204; font-size: 11px; }
+
+.ds-format-badge {
+  font-family: SpoqaM;
+  font-size: 11px;
+  border-radius: 4px;
+  padding: 2px 8px;
+  background: $blue100;
+  color: $blue104;
+  border: 1px solid $blue101;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.ds-access-badge {
+  font-family: SpoqaM;
+  font-size: 11px;
+  border-radius: 4px;
+  padding: 2px 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  &.ds-ro { background: $mono202; color: $mono205; border: 1px solid $mono203; }
+  &.ds-rw { background: $lime601; color: $lime604; }
+}
+
+.ds-empty {
+  padding: 28px 0;
+  text-align: center;
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: $mono205;
+  background: $mono200;
+  border: 1px dashed $mono203;
+  border-radius: 10px;
+}
+
+/* ── 평가 메트릭 선택 ── */
+.metric-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid $mono202;
+}
+
+.metric-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.option-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.option-card {
+  border: 1px solid $mono203;
+  border-radius: 10px;
+  padding: 14px 16px;
+  min-height: 72px;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  &:hover { border-color: $blue104; box-shadow: $card-hover-color; }
+  &.selected { border-color: $blue104; background: rgba($blue104, 0.06); }
+}
+
+.option-name {
+  font-family: SpoqaB;
+  font-size: 14px;
+  color: $mono207;
+  margin-bottom: 4px;
+}
+
+.option-desc {
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: $mono205;
+  line-height: 1.4;
 }
 
 .criteria-grid {
@@ -160,14 +403,14 @@
 
 .criteria-label {
   font-family: SpoqaB;
-  font-size: 14px;
+  font-size: 13px;
   color: $mono207;
   margin-bottom: 4px;
 }
 
 .criteria-desc {
   font-family: SpoqaM;
-  font-size: 11px;
+  font-size: 12px;
   color: $mono205;
   line-height: 1.4;
 }
@@ -177,9 +420,9 @@
   border: 1px solid $mono203;
   border-radius: 8px;
   color: $mono207;
-  padding: 12px 14px;
+  padding: 10px 12px;
   font-family: SpoqaM;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.6;
   outline: none;
   resize: vertical;
@@ -192,13 +435,13 @@
 }
 
 .run-btn {
-  padding: 12px 32px;
+  padding: 10px 28px;
   border-radius: 8px;
   border: none;
   background: $blue104;
   color: $mono200;
   font-family: SpoqaB;
-  font-size: 15px;
+  font-size: 14px;
   cursor: pointer;
   &:hover { background: $blue105; }
   &.disabled { background: $mono203; color: $mono205; cursor: not-allowed; }

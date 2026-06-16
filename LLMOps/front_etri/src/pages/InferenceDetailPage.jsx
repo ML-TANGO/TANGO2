@@ -281,17 +281,33 @@ export default function InferenceDetailPage() {
               {datasets.length === 0 ? (
                 <div className={cx('empty')}>업로드된 데이터셋이 없습니다.</div>
               ) : (
-                <div className={cx('ds-grid')}>
-                  {datasets.map((d) => (
-                    <div
-                      key={d.id ?? d.name}
-                      className={cx('ds-card', selectedDataset === (d.id ?? d.name) && 'selected')}
-                      onClick={() => setSelectedDataset(d.id ?? d.name)}
-                    >
-                      <div className={cx('ds-name')}>{d.name}</div>
-                      <div className={cx('ds-desc')}>{d.description || '-'}</div>
-                    </div>
-                  ))}
+                <div className={cx('ds-list')}>
+                  {datasets.map((d) => {
+                    const key = d.id ?? d.name;
+                    const sel = selectedDataset === key;
+                    return (
+                      <div
+                        key={key}
+                        className={cx('ds-item', sel && 'ds-item--on')}
+                        onClick={() => setSelectedDataset(key)}
+                      >
+                        <div className={cx('ds-radio', sel && 'ds-radio--on')} />
+                        <div className={cx('ds-item-body')}>
+                          <span className={cx('ds-item-name')}>{d.name ?? d.dataset_name}</span>
+                          {(d.description ?? d.desc) && (
+                            <span className={cx('ds-item-desc')}>{d.description ?? d.desc}</span>
+                          )}
+                          <div className={cx('ds-item-meta')}>
+                            {d.size    && <span>{d.size}</span>}
+                            {d.size    && d.fmt    && <span className={cx('dot')}>·</span>}
+                            {d.fmt     && <span>{d.fmt}</span>}
+                            {d.samples && <><span className={cx('dot')}>·</span><span>{Number(d.samples).toLocaleString()}개 샘플</span></>}
+                            {d.owner   && <><span className={cx('dot')}>·</span><span>{d.owner}</span></>}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </section>

@@ -1,31 +1,969 @@
 @import '@src/styles/color.scss';
 
-.container {
-  padding: 8px 0;
-  .content {
-    // margin-top: 24px;
+// ── Page shell ──────────────────────────────────────────────────────────────────
+.page {
+  padding: 32px 40px 56px;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+// ── Back button ─────────────────────────────────────────────────────────────────
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 1px solid $mono203;
+  border-radius: 8px;
+  color: $mono205;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-family: SpoqaM;
+  cursor: pointer;
+  margin-bottom: 20px;
+  align-self: flex-start;
+  &:hover { border-color: $blue104; color: $blue104; }
+}
+
+// ── Model header ────────────────────────────────────────────────────────────────
+.model-header {
+  margin-bottom: 24px;
+}
+
+.model-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.model-title {
+  font-family: SpoqaB;
+  font-size: 24px;
+  color: $mono207;
+}
+
+.model-status {
+  font-family: SpoqaM;
+  font-size: 12px;
+  color: $mono205;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: $mono202;
+  border: 1px solid $mono203;
+  &.running { color: $lime604; background: $lime601; border-color: $lime603; }
+  &.done    { color: $blue104; background: $blue101; border-color: $blue101; }
+}
+
+.model-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.badge {
+  font-family: SpoqaM;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 4px;
+  &--hf     { background: #fff8e1; color: #e65c00; }
+  &--single { background: $lime601; color: $lime604; }
+  &--model  { background: $blue101; color: $blue104; }
+  &--size   { background: $mono202; color: $mono205; border: 1px solid $mono203; }
+}
+
+.model-desc {
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: $mono205;
+}
+
+// ── Tab bar ──────────────────────────────────────────────────────────────────────
+.tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid $mono203;
+  margin-bottom: 28px;
+}
+
+.tab {
+  padding: 13px 32px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-family: SpoqaM;
+  font-size: 15px;
+  color: $mono205;
+  cursor: pointer;
+  margin-bottom: -2px;
+  transition: color 0.15s;
+  &--active {
+    color: $blue104;
+    border-bottom-color: $blue104;
+    font-family: SpoqaB;
   }
+  &:hover:not(.tab--active) { color: $mono207; }
+}
 
-  .back-to-list {
-    margin-bottom: 12px;
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    width: max-content;
+// ── Panel (tab content) ──────────────────────────────────────────────────────────
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
 
+// ── Section ──────────────────────────────────────────────────────────────────────
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.section-label {
+  font-family: SpoqaB;
+  font-size: 16px;
+  color: $mono207;
+  padding-left: 12px;
+  border-left: 3px solid $blue104;
+}
+
+// ── Dataset list ─────────────────────────────────────────────────────────────────
+.dataset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 264px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.dataset-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px 20px;
+  border: 1px solid $mono203;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  &:hover { border-color: rgba($blue104, 0.5); }
+  &--on {
+    border-color: $blue104;
+    background: rgba($blue104, 0.04);
+  }
+}
+
+.ds-check {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1.5px solid $mono203;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: $mono200;
+  margin-top: 2px;
+  &--on { background: $blue104; border-color: $blue104; }
+}
+
+.ds-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ds-name {
+  font-family: SpoqaB;
+  font-size: 15px;
+  color: $mono207;
+}
+
+.ds-desc {
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: $mono205;
+}
+
+.ds-meta {
+  display: flex;
+  gap: 6px;
+  font-family: SpoqaM;
+  font-size: 12px;
+  color: $mono204;
+  margin-top: 2px;
+}
+
+.dot { color: $mono203; }
+
+.ds-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ds-dtype {
+  font-family: SpoqaM;
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  &--mm   { color: $blue104; background: $blue101; border: 1px solid rgba($blue104, 0.3); }
+  &--text { color: $mono205; background: $mono202; border: 1px solid $mono203; }
+}
+
+// ── Resource chips ───────────────────────────────────────────────────────────────
+.res-block {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 24px;
+  border: 1px solid $mono203;
+  border-radius: 12px;
+  background: $blue109;
+}
+
+.res-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.res-label {
+  font-family: SpoqaB;
+  font-size: 15px;
+  color: $mono206;
+  min-width: 90px;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  background: $mono200;
+  border: 1.5px solid $mono203;
+  border-radius: 8px;
+  padding: 8px 18px;
+  font-family: SpoqaM;
+  font-size: 14px;
+  color: $mono205;
+  cursor: pointer;
+  transition: all 0.15s;
+  &:hover { border-color: rgba($blue104, 0.5); }
+  &--on {
+    border-color: $blue104;
+    background: rgba($blue104, 0.08);
+    color: $blue104;
+    font-family: SpoqaB;
+  }
+}
+
+// ── Multimodal badge ──────────────────────────────────────────────────────────────
+.badge--multi { background: $lime601; color: $lime604; }
+
+// ── Multimodal panel wrapper ──────────────────────────────────────────────────────
+.mm-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+// ── Stage progress bar ────────────────────────────────────────────────────────────
+.stage-bar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 20px 0 4px;
+}
+
+.stage-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  cursor: default;
+  min-width: 120px;
+
+  &--done {
     cursor: pointer;
-    .back-btn-image {
-      width: 16px;
-      height: 16px;
-    }
-    .back-btn-label {
-      font-size: 16px;
-      font-style: normal;
-      font-weight: 700;
-      line-height: 16px;
-      color: $mono208;
-      font-family: SpoqaB;
-      margin-left: 4px;
-    }
+    .stage-circle { background: $lime603; border-color: $lime603; color: $mono200; }
+    .stage-label  { color: $lime604; }
+    &:hover .stage-circle { opacity: 0.85; }
   }
+  &--active {
+    .stage-circle { background: $blue104; border-color: $blue104; color: $mono200; }
+    .stage-label  { color: $blue104; font-family: SpoqaB; }
+  }
+  &--pending {
+    .stage-circle { background: $mono200; border-color: $mono203; color: $mono204; }
+    .stage-label  { color: $mono204; }
+  }
+}
+
+.stage-circle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid $mono203;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: SpoqaB;
+  font-size: 14px;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.stage-label {
+  font-family: SpoqaM;
+  font-size: 12px;
+  color: $mono205;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.stage-conn {
+  flex: 1;
+  height: 2px;
+  background: $mono203;
+  margin-bottom: 28px; // aligns with circle centers
+  &--done { background: $lime603; }
+}
+
+.stage-next-btn {
+  align-self: flex-start;
+  padding: 11px 24px;
+  border-radius: 8px;
+  border: none;
+  background: $blue104;
+  color: $mono200;
+  font-family: SpoqaB;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+  &:hover { background: $blue105; }
+}
+
+// ── Frozen/trainable banner ───────────────────────────────────────────────────────
+.freeze-banner {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 16px 0;
+}
+
+.freeze-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border-radius: 10px;
+  border: 1.5px solid $mono203;
+  background: $mono200;
+  min-width: 180px;
+
+  &--frozen {
+    border-color: $mono203;
+    background: $mono202;
+    .freeze-name { color: $mono205; }
+    .freeze-note { color: $mono204; }
+    .freeze-icon { opacity: 0.5; }
+  }
+  &--trainable {
+    border-color: $blue104;
+    background: rgba($blue104, 0.05);
+    .freeze-name { color: $blue104; font-family: SpoqaB; }
+    .freeze-note { color: $blue104; opacity: 0.75; }
+  }
+  &--lora {
+    border-color: $lime603;
+    background: $lime601;
+    .freeze-name { color: $lime604; font-family: SpoqaB; }
+    .freeze-note { color: $lime604; opacity: 0.75; }
+  }
+}
+
+.freeze-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.freeze-name {
+  font-family: SpoqaB;
+  font-size: 15px;
+  color: $mono207;
+}
+
+.freeze-note {
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: $mono205;
+  margin-top: 2px;
+}
+
+// ── VLM architecture SVG ──────────────────────────────────────────────────────────
+.vlm-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  border: 1px solid $mono203;
+  border-radius: 12px;
+}
+
+// ── Projector type block ──────────────────────────────────────────────────────────
+.proj-type-block {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  border: 1px solid $mono203;
+  border-radius: 12px;
+  background: $blue109;
+}
+
+.proj-type-title {
+  font-family: SpoqaB;
+  font-size: 15px;
+  color: $blue104;
+}
+
+
+.proj-cfg {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 4px;
+  border-top: 1px solid $mono203;
+}
+
+.proj-cfg-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.proj-cfg-label {
+  font-family: SpoqaB;
+  font-size: 15px;
+  color: $mono206;
+  min-width: 100px;
+}
+
+// ── LoRA config block ─────────────────────────────────────────────────────────────
+.lora-block {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 24px;
+  border: 1px solid $mono203;
+  border-radius: 12px;
+  background: $blue109;
+}
+
+.lora-targets-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.lora-targets-label {
+  font-family: SpoqaB;
+  font-size: 15px;
+  color: $mono206;
+  min-width: 120px;
+  padding-top: 4px;
+}
+
+// ── Model Graph Viewer ────────────────────────────────────────────────────────────
+.mg-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: $mono205;
+  padding: 48px 0;
+}
+
+.mg-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid $mono203;
+  border-top-color: $blue104;
+  border-radius: 50%;
+  animation: mg-spin 0.75s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes mg-spin {
+  to { transform: rotate(360deg); }
+}
+
+.mg-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 40px 32px;
+  border: 1px dashed $mono203;
+  border-radius: 12px;
+  background: $blue109;
+  text-align: center;
+}
+
+.mg-error-icon  { font-size: 30px; color: $mono204; line-height: 1; }
+.mg-error-title { font-family: SpoqaB; font-size: 15px; color: $mono207; }
+.mg-error-desc  { font-family: SpoqaM; font-size: 13px; color: $mono205; }
+
+.mg-wrapper {
+  border: 1px solid $mono203;
+  border-radius: 12px;
+  overflow: hidden;
+  max-width: 1100px;
+  margin: 0 auto;
+  width: 100%;
+  background: $mono200;
+}
+
+.mg-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+// ── Hyperparameter grid ──────────────────────────────────────────────────────────
+.params-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.param-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid $mono203;
+  border-radius: 10px;
+  background: $blue109;
+}
+
+.param-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.param-name {
+  font-family: SpoqaM;
+  font-size: 14px;
+  color: $mono205;
+}
+
+.param-val {
+  font-family: SpoqaB;
+  font-size: 16px;
+  color: $mono207;
+}
+
+.slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: $mono203;
+  outline: none;
+  cursor: pointer;
+  &::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: $blue104;
+    cursor: pointer;
+    border: 2px solid $mono200;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  }
+  &::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: $blue104;
+    cursor: pointer;
+    border: 2px solid $mono200;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  }
+}
+
+// ── Checkpoint config ────────────────────────────────────────────────────────────
+.ckpt-config {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 24px;
+  border: 1px solid $mono203;
+  border-radius: 12px;
+  background: $blue109;
+}
+
+.ckpt-cfg-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ckpt-cfg-label {
+  font-family: SpoqaM;
+  font-size: 14px;
+  color: $mono206;
+  min-width: 130px;
+}
+
+.ckpt-cfg-input {
+  width: 80px;
+  padding: 6px 10px;
+  border: 1.5px solid $mono203;
+  border-radius: 7px;
+  font-family: SpoqaM;
+  font-size: 14px;
+  color: $mono207;
+  background: $mono200;
+  outline: none;
+  text-align: center;
+  &:focus { border-color: $blue104; }
+}
+
+.ckpt-cfg-hint {
+  font-family: SpoqaM;
+  font-size: 12px;
+  color: $mono204;
+}
+
+// ── Training control ─────────────────────────────────────────────────────────────
+.train-control {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  border: 1px solid $mono203;
+  border-radius: 12px;
+  background: $mono200;
+}
+
+.train-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 10px;
+  border: 1px solid $mono203;
+  border-radius: 10px;
+  background: $blue109;
+}
+
+.stat-label {
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: $mono205;
+}
+
+.stat-val {
+  font-family: SpoqaB;
+  font-size: 20px;
+  color: $mono207;
+}
+
+.prog-track {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: $mono202;
+  overflow: hidden;
+}
+
+.prog-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: $blue104;
+  transition: width 0.2s;
+}
+
+.train-btn-row {
+  display: flex;
+  gap: 10px;
+}
+
+.train-btn {
+  padding: 12px 32px;
+  border-radius: 8px;
+  border: none;
+  font-family: SpoqaB;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+  &--start { background: $blue104; color: $mono200; &:hover { background: $blue105; } }
+  &--pause { background: $yellow301; color: $mono200; &:hover { opacity: 0.85; } }
+  &--done  { background: $mono202; color: $mono205; cursor: default; }
+}
+
+.reset-btn {
+  padding: 12px 22px;
+  border-radius: 8px;
+  border: 1.5px solid $mono203;
+  background: $mono200;
+  font-family: SpoqaM;
+  font-size: 14px;
+  color: $mono205;
+  cursor: pointer;
+  &:hover { border-color: $red502; color: $red502; }
+}
+
+// ── Charts ────────────────────────────────────────────────────────────────────────
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+  gap: 20px;
+}
+
+.chart-card {
+  border: 1px solid $mono203;
+  border-radius: 12px;
+  padding: 16px 16px 12px;
+  background: $mono200;
+}
+
+.chart-title {
+  font-family: SpoqaB;
+  font-size: 15px;
+  color: $mono206;
+  margin-bottom: 8px;
+}
+
+.chart-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+// ── Checkpoint list ──────────────────────────────────────────────────────────────
+.ckpt-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 310px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.ckpt-item {
+  border: 1px solid $mono203;
+  border-radius: 12px;
+  padding: 16px 20px;
+  background: $mono200;
+  &--best { border-color: $lime603; background: rgba($lime603, 0.04); }
+}
+
+.ckpt-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.ckpt-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ckpt-step {
+  font-family: SpoqaB;
+  font-size: 16px;
+  color: $mono207;
+}
+
+.ckpt-epoch {
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: $mono205;
+  padding: 2px 8px;
+  background: $mono202;
+  border-radius: 4px;
+}
+
+.best-badge {
+  font-family: SpoqaB;
+  font-size: 11px;
+  color: $lime604;
+  padding: 2px 8px;
+  background: $lime601;
+  border-radius: 4px;
+  border: 1px solid rgba($lime603, 0.4);
+}
+
+.ckpt-mode {
+  font-family: SpoqaM;
+  font-size: 10px;
+  color: $blue104;
+  background: $blue101;
+  border: 1px solid rgba($blue104, 0.3);
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+// ── Training mode selector (Multimodal) ──────────────────────────────────────────
+.train-mode-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: $mono201;
+  border: 1px solid $mono203;
+  border-radius: 10px;
+}
+
+.train-mode-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.train-mode-label {
+  font-family: SpoqaM;
+  font-size: 14px;
+  color: $mono205;
+  min-width: 80px;
+  flex-shrink: 0;
+}
+
+.train-warn {
+  margin-top: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: $yellow301;
+  border: 1px solid rgba($yellow303, 0.5);
+  font-family: SpoqaM;
+  font-size: 14px;
+  color: $yellow304;
+}
+
+.ckpt-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.best-btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid $lime603;
+  background: $mono200;
+  color: $lime604;
+  font-family: SpoqaM;
+  font-size: 13px;
+  cursor: pointer;
+  &:hover { background: $lime601; }
+}
+
+.del-btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid $mono203;
+  background: $mono200;
+  color: $mono205;
+  font-family: SpoqaM;
+  font-size: 13px;
+  cursor: pointer;
+  &:hover { border-color: $red502; color: $red502; }
+}
+
+.ckpt-metrics {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: $mono205;
+  b {
+    color: $mono207;
+    font-family: SpoqaB;
+    margin-left: 4px;
+  }
+}
+
+// ── Storage ───────────────────────────────────────────────────────────────────────
+.storage-box {
+  padding: 20px 24px;
+  border: 1px solid $mono203;
+  border-radius: 12px;
+  background: $blue109;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.storage-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.storage-label {
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: $mono205;
+}
+
+.storage-val {
+  font-family: SpoqaB;
+  font-size: 14px;
+  color: $mono207;
+}
+
+.storage-track {
+  width: 100%;
+  height: 8px;
+  border-radius: 4px;
+  background: $mono203;
+  overflow: hidden;
+}
+
+.storage-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: $blue104;
+  transition: width 0.3s;
+}
+
+.storage-total {
+  font-family: SpoqaM;
+  font-size: 11px;
+  color: $mono204;
+  text-align: right;
+}
+
+// ── Empty state ───────────────────────────────────────────────────────────────────
+.empty {
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: $mono205;
+  padding: 24px 0;
+  text-align: center;
 }

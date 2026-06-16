@@ -17,6 +17,40 @@ function I18nHotReload() {
   };
 }
 
+// Serves /api/model-config?model_id=xxx → returns config.json from the local
+// checkpoint directory so the browser can build the architecture graph directly.
+function ModelConfigPlugin() {
+  return {
+    name: 'model-config-api',
+    configureServer(server) {
+      const fs = require('fs');
+
+      const MODEL_PATHS = {
+        'llama-single': '/home/etri/Downloads/Llama-3.1-8B-Instruct',
+      };
+      const DEFAULT_DIR = '/home/etri/Downloads/Llama-3.1-8B-Instruct';
+
+      server.middlewares.use('/api/model-config', (req, res) => {
+        const url     = new URL(req.url, 'http://localhost');
+        const mId     = url.searchParams.get('model_id') ?? '';
+        const dir     = MODEL_PATHS[mId] ?? DEFAULT_DIR;
+        const cfgPath = path.join(dir, 'config.json');
+
+        try {
+          const data = fs.readFileSync(cfgPath, 'utf-8');
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.statusCode = 200;
+          res.end(data);
+        } catch (e) {
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.statusCode = 404;
+          res.end(JSON.stringify({ error: e.message }));
+        }
+      });
+    },
+  };
+}
+
 // https://vitejs.dev/config/
 const config = ({ mode }) => {
   // process.env = { ...process.env, ...loadEnv(mode, process.cwd()) };
@@ -33,7 +67,7 @@ const config = ({ mode }) => {
       },
     },
     envDir: './',
-    plugins: [react(), I18nHotReload()],
+    plugins: [react(), I18nHotReload(), ModelConfigPlugin()],
     build: {
       outDir: 'build',
     },
