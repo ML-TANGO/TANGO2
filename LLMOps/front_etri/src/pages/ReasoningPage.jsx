@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useHistory, useLocation } from 'react-router-dom';
 import { callApi, STATUS_SUCCESS } from '@src/network';
 import classNames from 'classnames/bind';
-import style from './InferencePage.module.scss';
+import style from './ReasoningPage.module.scss';
 import NewInferenceWizard from '@src/components/Modal/NewInferenceWizard/NewInferenceWizard';
 
 const cx = classNames.bind(style);
@@ -13,7 +13,7 @@ const STATUS_META = {
   error:   { label: '오류',    color: '#fa4e57' },
 };
 
-export default function InferencePage() {
+export default function ReasoningPage() {
   const history  = useHistory();
   const location = useLocation();
   const wid      = location.pathname.split('/')[3];

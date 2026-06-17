@@ -49,11 +49,13 @@ function UserTrainingInfoContent({
         )}
       </div>
       {/* <BasicInfo basicInfo={basicInfo} builtInModelInfo={builtInModelInfo} /> */}
-      <TrainingAuth
-        accessInfo={accessInfo}
-        basicInfo={basicInfo}
-        instanceInfo={instanceInfo}
-      />
+      <div className={cx('body')}>
+        <TrainingAuth
+          accessInfo={accessInfo}
+          basicInfo={basicInfo}
+          instanceInfo={instanceInfo}
+        />
+      </div>
     </div>
   );
 }

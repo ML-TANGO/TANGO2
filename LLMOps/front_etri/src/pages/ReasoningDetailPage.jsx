@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useHistory, useLocation, useParams } from 'react-router-dom';
 import { callApi, STATUS_SUCCESS } from '@src/network';
 import classNames from 'classnames/bind';
-import style from './InferenceDetailPage.module.scss';
+import style from './ReasoningDetailPage.module.scss';
 
 function DomainOptPanel({ examples, onChange, onAdd, onRemove }) {
   const cx = classNames.bind(style);
@@ -56,7 +56,7 @@ const METRICS = [
 
 const SAMPLE_COUNTS = [10, 50, 100, 500];
 
-export default function InferenceDetailPage() {
+export default function ReasoningDetailPage() {
   const history  = useHistory();
   const location = useLocation();
   const { sid }  = useParams();
