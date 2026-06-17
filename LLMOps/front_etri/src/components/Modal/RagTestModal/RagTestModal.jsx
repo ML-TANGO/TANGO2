@@ -41,7 +41,7 @@ const initial = {
 
 // ** post setting
 
-// POST Submit Model
+// POST Submit TrainingPage
 const postSetting = async (payload, dispatch) => {
   const res = await postRagDeployment(payload);
   const { result, error, message, status } = res;

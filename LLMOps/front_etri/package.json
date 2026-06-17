@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "vite",
-    "build": "rm -rf ./build/* && vite build",
+    "dev": "REACT_EDITOR=webstorm vite",
+    "build": "rm -rf ./build && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -80,9 +80,11 @@
   },
   "devDependencies": {
     "@ianvs/prettier-plugin-sort-imports": "^4.3.1",
+    "@react-dev-inspector/vite-plugin": "^2.0.1",
     "@types/react": "^18.0.17",
     "@types/react-dom": "^18.0.6",
     "@vitejs/plugin-react": "^3.0.1",
+    "react-dev-inspector": "^2.0.1",
     "vite": "^4.0.4"
   },
   "browserslist": {

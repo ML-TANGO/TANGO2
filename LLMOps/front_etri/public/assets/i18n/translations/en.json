@@ -1,6 +1,6 @@
 {
   "Home": "Dashboard",
-  "Playground": "Inference",
+  "Inference": "Inference",
   "Evaluation": "Evaluation",
   "Deployment": "Deployment",
   "korean.label": "Korean",

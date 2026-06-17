@@ -2860,7 +2860,7 @@ export const mockResponses = {
         { id: 'proj-2', name: 'LLM Deployment 1', status: 'Active', type: 'deployment' }
       ],
       history: [
-        { id: 'hist-1', action: 'Model deployed', user: 'admin', time: '2026-06-09T10:00:00Z' },
+        { id: 'hist-1', action: 'TrainingPage deployed', user: 'admin', time: '2026-06-09T10:00:00Z' },
         { id: 'hist-2', action: 'Dataset uploaded', user: 'admin', time: '2026-06-09T09:30:00Z' }
       ],
       detailed_timeline: [
@@ -2925,7 +2925,7 @@ export const mockResponses = {
     result: [
       {
         id: 'llama-single',
-        name: 'Single Model Example',
+        name: 'Single TrainingPage Example',
         description: 'Llama 3.1 8B Instruct · HuggingFace 다운로드',
         type: 'Single',
         status: { fine_tuning: 'ready' },
@@ -2945,7 +2945,7 @@ export const mockResponses = {
       },
       {
         id: 'multimodal-example',
-        name: 'Multimodal Model Example',
+        name: 'Multimodal TrainingPage Example',
         description: 'CLIP ViT-L/14 + Qwen3-8B · HuggingFace 다운로드',
         type: 'Multimodal',
         status: { fine_tuning: 'ready' },
@@ -4501,7 +4501,7 @@ export const getMockResponse = (url, method, body, params) => {
       }
       return {
         status: 0,
-        message: 'Model not found',
+        message: 'TrainingPage not found',
         error: { code: 'NOT_FOUND' },
       };
     }
@@ -4599,7 +4599,7 @@ export const getMockResponse = (url, method, body, params) => {
       status: 1,
       result: {
         name: modelId === 'sds' ? 'SDS' : (isExternal ? 'SDM' : 'SDF'),
-        description: modelId === 'sds' ? 'Llama 3 8B Instruction tuned model' : 'Model description',
+        description: modelId === 'sds' ? 'Llama 3 8B Instruction tuned model' : 'TrainingPage description',
         create_user_name: 'admin',
         create_datetime: '2026-06-09T01:00:00Z',
         update_datetime: '2026-06-09T01:00:00Z',
@@ -4885,7 +4885,7 @@ export const getMockResponse = (url, method, body, params) => {
             model_allm_commit_id: 'c1',
             model_allm_commit_name: 'Initial model weights',
             training_type: 'lora',
-            description: 'Mock Model Description',
+            description: 'Mock TrainingPage Description',
             commit: 'c1',
             access: 1,
             create_datetime: '2026-06-09T05:00:00Z',

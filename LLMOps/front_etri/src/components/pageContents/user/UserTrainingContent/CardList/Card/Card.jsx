@@ -310,7 +310,7 @@ function Card({ data, refreshData }) {
                 <div className={cx('deleted')}>
                   <img
                     src='/images/icon/ic-warning-red.svg'
-                    alt='Deleted Model'
+                    alt='Deleted TrainingPage'
                   />
                   <span>{t('modelDeleted.message')}</span>
                 </div>

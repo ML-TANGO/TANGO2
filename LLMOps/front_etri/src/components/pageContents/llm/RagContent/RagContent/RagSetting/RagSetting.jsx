@@ -77,7 +77,7 @@ const RagSetting = memo(function RagSetting({ navList, data, ...rest }) {
     );
   };
 
-  // GET Embedded Model
+  // GET Embedded TrainingPage
   const getEmbedded = useCallback(
     async ({ keyword = '' } = {}) => {
       setEmbeddedModel((prev) => ({

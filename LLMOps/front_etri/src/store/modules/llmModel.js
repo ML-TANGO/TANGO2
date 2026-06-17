@@ -10,7 +10,7 @@ export const handleSetModelRangeState = createAction(SET_MODEL_RANGE_STATE);
 export const handleGetModelState = createAction(GET_MODEL_STATE);
 export const handleModelReset = createAction(RESET_MODEL_STATE);
 
-// ** llm Model 값 조절 **
+// ** llm TrainingPage 값 조절 **
 // ** 다른 페이지와 맞춰서 점차 늘려갈 예정 **
 export const initialModelState = {
   info: {

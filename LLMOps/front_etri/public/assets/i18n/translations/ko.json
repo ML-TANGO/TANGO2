@@ -1,6 +1,6 @@
 {
   "Home": "대시보드",
-  "Playground": "추론",
+  "Inference": "추론",
   "Evaluation": "평가",
   "Deployment": "배포",
   "korean.label": "한글",

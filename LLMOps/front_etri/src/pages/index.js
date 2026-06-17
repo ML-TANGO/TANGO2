@@ -82,8 +82,6 @@ export const DeployWorkerDashboardPage = lazy(() => _DeployWorkerDashboardPage);
 export const DeployWorkerPage = lazy(() => import('./DeployWorkerPage'));
 export const UserServicePage = lazy(() => import('./UserServicePage'));
 
-const _UserTestPage = import('./UserTestPage');
-export const UserTestPage = lazy(() => _UserTestPage);
 
 const _DatasetDetailPage = import('./DatasetDetailPage');
 export const DatasetDetailPage = lazy(() => _DatasetDetailPage);
