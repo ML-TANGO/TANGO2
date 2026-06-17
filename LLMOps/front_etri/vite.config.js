@@ -51,12 +51,43 @@ function ModelConfigPlugin() {
   };
 }
 
+// Serves /sds-dataset/** from a local filesystem path configured via VITE_SDS_DATASET_PATH.
+// Each machine sets its own path in .env (gitignored).
+function SdsDatasetPlugin(datasetPath) {
+  return {
+    name: 'sds-dataset',
+    configureServer(server) {
+      const fs = require('fs');
+      const mime = {
+        '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+        '.gif': 'image/gif', '.webp': 'image/webp',
+        '.csv': 'text/csv', '.json': 'application/json', '.txt': 'text/plain',
+      };
+
+      server.middlewares.use('/sds-dataset', (req, res) => {
+        const filePath = path.join(datasetPath, req.url.split('?')[0]);
+        const ext = path.extname(filePath).toLowerCase();
+        try {
+          const data = fs.readFileSync(filePath);
+          res.setHeader('Content-Type', mime[ext] ?? 'application/octet-stream');
+          res.statusCode = 200;
+          res.end(data);
+        } catch (e) {
+          res.statusCode = 404;
+          res.end('Not found');
+        }
+      });
+    },
+  };
+}
+
 // https://vitejs.dev/config/
 const config = ({ mode }) => {
   // process.env = { ...process.env, ...loadEnv(mode, process.cwd()) };
   const envDir = path.resolve(__dirname, '.');
   const env = loadEnv(mode, envDir, '');
   const isLocal = env.VITE_REACT_APP_API_HOST === 'local';
+  const sdsDatasetPath = path.resolve(__dirname, env.VITE_SDS_DATASET_PATH ?? '../../Field_Test/SDS/dataset/20260227/');
 
   return defineConfig({
     resolve: {
@@ -67,7 +98,7 @@ const config = ({ mode }) => {
       },
     },
     envDir: './',
-    plugins: [react(), I18nHotReload(), ModelConfigPlugin()],
+    plugins: [react(), I18nHotReload(), ModelConfigPlugin(), SdsDatasetPlugin(sdsDatasetPath)],
     build: {
       outDir: 'build',
     },
