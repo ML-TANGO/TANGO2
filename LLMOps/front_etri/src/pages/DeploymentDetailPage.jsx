@@ -3,6 +3,7 @@ import { useHistory, useLocation, useParams } from 'react-router-dom';
 import { callApi, STATUS_SUCCESS } from '@src/network';
 import classNames from 'classnames/bind';
 import style from './DeploymentDetailPage.module.scss';
+import ModelSelector from '@src/components/ModelSelector/ModelSelector';
 
 const cx = classNames.bind(style);
 
@@ -93,11 +94,13 @@ export default function DeploymentDetailPage() {
   const [copied, setCopied]     = useState('');
 
   // 배포 구성 상태
-  const [selectedArtifact, setSelectedArtifact] = useState('');
-  const [selectedRuntime,  setSelectedRuntime]  = useState('');
-  const [selectedQuant,    setSelectedQuant]    = useState('');
-  const [selectedRag,      setSelectedRag]      = useState('none');
-  const [selectedOpts,     setSelectedOpts]     = useState([]);
+  const [selectedModel,     setSelectedModel]     = useState(null);
+  const [selectedModelData, setSelectedModelData] = useState(null);
+  const [selectedCheckpoint, setSelectedCheckpoint] = useState(null);
+  const [selectedRuntime,   setSelectedRuntime]   = useState('');
+  const [selectedQuant,     setSelectedQuant]     = useState('');
+  const [selectedRag,       setSelectedRag]       = useState('none');
+  const [selectedOpts,      setSelectedOpts]      = useState([]);
 
   useEffect(() => {
     callApi({ url: `deployments?workspace_id=${wid}`, method: 'GET' }).then((res) => {
@@ -203,18 +206,12 @@ export default function DeploymentDetailPage() {
             {/* 모델 아티팩트 */}
             <div className={cx('config-group')}>
               <div className={cx('config-label')}>모델 아티팩트</div>
-              <select
-                className={cx('artifact-select')}
-                value={selectedArtifact}
-                onChange={(e) => setSelectedArtifact(e.target.value)}
-              >
-                <option value="">아티팩트를 선택하세요</option>
-                <option value="model_fp16">model_fp16.bin</option>
-                <option value="model_int8">model_int8.bin</option>
-                <option value="model_gguf">model.gguf (GGUF)</option>
-                <option value="model_onnx">model.onnx (ONNX)</option>
-                <option value="model_trt">model.plan (TensorRT)</option>
-              </select>
+              <ModelSelector
+                wid={wid}
+                selected={selectedModel}
+                onSelect={(id, data) => { setSelectedModel(id); setSelectedModelData(data); setSelectedCheckpoint(null); }}
+                onCheckpointSelect={(id) => setSelectedCheckpoint(id)}
+              />
             </div>
 
             {/* 서빙 런타임 */}

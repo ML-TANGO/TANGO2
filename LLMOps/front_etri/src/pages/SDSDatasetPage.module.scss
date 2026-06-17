@@ -22,11 +22,11 @@
         justify-content: center;
         width: 132px;
         height: 34px;
-        font-weight: 700;
+        font-family: SpoqaB;
         font-size: 14px;
         border-radius: 4px;
         color: $blue104;
-        background-color: white;
+        background-color: $mono200;
         box-shadow: 0px 3px 6px 0px rgba(45, 118, 248, 0.1);
         cursor: pointer;
 
@@ -54,12 +54,12 @@
     color: $red502;
     font-size: 14px;
     font-style: normal;
-    font-weight: 700;
+    font-family: SpoqaB;
     cursor: pointer;
 
     &.disabled {
-      color: white;
-      background-color: #f0f0f0;
+      color: $mono200;
+      background-color: $mono202;
       cursor: not-allowed;
     }
 

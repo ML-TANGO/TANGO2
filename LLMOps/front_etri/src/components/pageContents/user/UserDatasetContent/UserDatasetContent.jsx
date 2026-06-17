@@ -49,11 +49,15 @@ function UserDatasetContent({
   onCloseTransformModal,
   onTransformRowClick,
   datasets = [],
+  onDownloadRow,
+  onEditRow,
+  downloadingIds = [],
 }) {
   const { t } = useTranslation();
 
-  const [isDragging, setIsDragging]     = useState(false);
+  const [isDragging, setIsDragging]         = useState(false);
   const [isTransforming, setIsTransforming] = useState(false);
+  const [localSelected, setLocalSelected]   = useState(new Set());
   const [selectedDataset, setSelectedDataset] = useState(null);
   const [outputFormats, setOutputFormats] = useState({
     JSON: true, CSV: false, Parquet: false, JSONL: false,
@@ -75,6 +79,19 @@ function UserDatasetContent({
       }
     }
   }, [isTransformModalOpen, datasets]);
+
+  useEffect(() => { setLocalSelected(new Set()); }, [toggledClearRows]);
+
+  const toggleSelect = (item) => {
+    if (item.permission_level > 3) return;
+    setLocalSelected((prev) => {
+      const s = new Set(prev);
+      s.has(item.id) ? s.delete(item.id) : s.add(item.id);
+      const rows = tableData.filter((r) => s.has(r.id));
+      onSelect({ selectedRows: rows });
+      return s;
+    });
+  };
 
   const handleFormatChange = (fmt) =>
     setOutputFormats((prev) => ({ ...prev, [fmt]: !prev[fmt] }));
@@ -183,29 +200,97 @@ function UserDatasetContent({
           <span className={cx('section-title')}>데이터셋 목록</span>
           <span className={cx('count-badge')}>{totalRows}개</span>
           <div className={cx('spacer')} />
+          {localSelected.size > 0 && (
+            <button className={cx('delete-btn')} onClick={openDeleteConfirmPopup}>
+              삭제 ({localSelected.size})
+            </button>
+          )}
         </div>
-        <div className={cx('table-wrap')}>
-          <Table
-            columns={columns}
-            data={tableData}
-            totalRows={totalRows}
-            topButtonList={topButtonList}
-            bottomButtonList={tableData.length > 0 && bottomButtonList}
-            onRowClick={onRowClick}
-            onSelect={onSelect}
-            defaultSortField='create_datetime'
-            toggledClearRows={toggledClearRows}
-            filterList={filterList}
-            selectableRowDisabled={({ permission_level: pl }) => pl > 3}
-            searchOptions={searchOptions}
-            searchKey={searchKey}
-            keyword={keyword}
-            onSearchKeyChange={onSearchKeyChange}
-            onSearch={(e) => onSearch(e.target.value)}
-            onClear={onClear}
-            onSortHandler={onSortHandler}
-          />
+
+        {/* 툴바 */}
+        <div className={cx('list-toolbar')}>
+          <div className={cx('search-wrap')}>
+            <input
+              className={cx('search-input')}
+              placeholder="데이터셋 이름 검색..."
+              value={keyword}
+              onChange={(e) => onSearch(e.target.value)}
+            />
+            {keyword && (
+              <button className={cx('search-clear')} onClick={onClear}>✕</button>
+            )}
+          </div>
+          <div className={cx('btn-filter')}>
+            <Selectbox
+              size='medium'
+              list={accessTypeOptions}
+              selectedItem={accessType}
+              customStyle={{ selectboxForm: { width: '160px' }, listForm: { width: '160px' } }}
+              onChange={onAccessTypeChange}
+              t={t}
+            />
+          </div>
         </div>
+
+        {/* 카드 리스트 */}
+        {tableData.length === 0 ? (
+          <div className={cx('empty-inline')}>등록된 데이터셋이 없습니다.</div>
+        ) : (
+          <div className={cx('ds-list')}>
+            {tableData.map((item) => {
+              const sel = localSelected.has(item.id);
+              const canEdit = item.permission_level < 4;
+              const isDown = downloadingIds.includes(item.id);
+              return (
+                <div
+                  key={item.id}
+                  className={cx('ds-card', sel && 'ds-card--on')}
+                  onClick={() => onRowClick(item)}
+                >
+                  <div
+                    className={cx('ds-check', sel && 'ds-check--on')}
+                    onClick={(e) => { e.stopPropagation(); toggleSelect(item); }}
+                  >
+                    {sel && '✓'}
+                  </div>
+                  <div className={cx('ds-card-body')}>
+                    <div className={cx('ds-card-name-row')}>
+                      <span className={cx('ds-card-name')}>{item.dataset_name}</span>
+                      <span className={cx('ds-access-badge', Number(item.access) === 0 ? 'ds-access--ro' : 'ds-access--rw')}>
+                        {Number(item.access) === 0 ? '읽기전용' : '읽기/쓰기'}
+                      </span>
+                    </div>
+                    <div className={cx('ds-card-meta')}>
+                      <span>{item.owner}</span>
+                      <span className={cx('dot')}>·</span>
+                      <span>{item.size ? convertBinaryByte(item.size) : '0 Bytes'}</span>
+                      <span className={cx('dot')}>·</span>
+                      <span>{item.diffTimeEdit || '-'}</span>
+                      <span className={cx('dot')}>·</span>
+                      <span>{item.create_datetime ? convertLocalTime(item.create_datetime) : '-'}</span>
+                    </div>
+                  </div>
+                  <div className={cx('ds-card-actions')} onClick={(e) => e.stopPropagation()}>
+                    {onEditRow && canEdit && (
+                      <button className={cx('icon-action-btn')} onClick={() => onEditRow(item)}>
+                        수정
+                      </button>
+                    )}
+                    {onDownloadRow && (
+                      <button
+                        className={cx('icon-action-btn', (!item.file_count || isDown) && 'icon-action-btn--disabled')}
+                        disabled={!item.file_count || isDown}
+                        onClick={() => item.file_count && !isDown && onDownloadRow(item.id, item.dataset_name)}
+                      >
+                        {isDown ? '다운로드 중...' : '다운로드'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* ── 학습 데이터셋 변환 ── */}
@@ -232,15 +317,15 @@ function UserDatasetContent({
             </button>
           </div>
         ) : (
-          <div className={cx('transform-grid')}>
+          <div className={cx('transform-list')}>
             {transformations.map((item) => (
               <div
                 key={item.id}
-                className={cx('transform-card')}
+                className={cx('trans-card')}
                 onClick={() => onTransformRowClick(item)}
               >
-                <div className={cx('tc-head')}>
-                  <span className={cx('tc-name')}>{item.dataset_name}</span>
+                <div className={cx('ds-card-name-row')}>
+                  <span className={cx('ds-card-name')}>{item.dataset_name}</span>
                   <span className={cx('tc-badge')}>학습 데이터셋</span>
                 </div>
                 <div className={cx('tc-arrow-row')}>
@@ -248,13 +333,13 @@ function UserDatasetContent({
                   <span className={cx('tc-arrow')}>→</span>
                   <span className={cx('tc-target')}>{item.dataset_name}</span>
                 </div>
-                <div className={cx('tc-meta')}>
+                <div className={cx('ds-card-meta')}>
                   <span>{item.file_count ? `${numberWithCommas(item.file_count)}개 파일` : '-'}</span>
-                  <span>·</span>
+                  <span className={cx('dot')}>·</span>
                   <span>{item.size ? convertBinaryByte(item.size) : '-'}</span>
                   {item.created_at && (
                     <>
-                      <span>·</span>
+                      <span className={cx('dot')}>·</span>
                       <span>{convertLocalTime(item.created_at)}</span>
                     </>
                   )}

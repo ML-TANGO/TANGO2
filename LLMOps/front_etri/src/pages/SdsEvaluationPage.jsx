@@ -7,6 +7,8 @@ import PageTitle from '@src/components/atoms/PageTitle';
 import FBLoading from '@src/components/organisms/FBLoading';
 import DeferredComponent from '@src/hooks/useDeferredComponent';
 import { useTranslation } from 'react-i18next';
+import { convertBinaryByte } from '@src/utils';
+import { convertLocalTime } from '@src/datetimeUtils';
 import style from './SdsEvaluationPage.module.scss';
 
 const cx = classNames.bind(style);
@@ -33,31 +35,27 @@ const CsvTable = ({ url }) => {
       });
   }, [url]);
 
-  if (loading) return <div style={{ padding: '10px', color: '#888', textAlign: 'center' }}>CSV Loading...</div>;
-  if (data.length === 0) return <div style={{ padding: '10px', color: '#888', textAlign: 'center' }}>No CSV Data</div>;
+  if (loading) return <div className={cx('csv-status')}>CSV Loading...</div>;
+  if (data.length === 0) return <div className={cx('csv-status')}>No CSV Data</div>;
 
   const headers = data[0];
   const rows = data.slice(1);
 
   return (
-    <div style={{ overflowX: 'auto', margin: '12px 0', borderRadius: '6px', border: '1px solid #dbdbdb' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '600px' }}>
-        <thead>
-          <tr style={{ backgroundColor: '#f0f0f0', borderBottom: '2px solid #dbdbdb' }}>
+    <div className={cx('csv-wrap')}>
+      <table className={cx('csv-table')}>
+        <thead className={cx('csv-thead')}>
+          <tr>
             {headers.map((h, i) => (
-              <th key={i} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: '600', color: '#747474' }}>
-                {h}
-              </th>
+              <th key={i} className={cx('csv-th')}>{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {rows.map((row, rowIndex) => (
-            <tr key={rowIndex} style={{ borderBottom: '1px solid #f0f0f0', backgroundColor: rowIndex % 2 === 0 ? '#ffffff' : '#f0f0f0' }}>
+            <tr key={rowIndex} className={cx(rowIndex % 2 === 0 ? 'csv-tr-even' : 'csv-tr-odd')}>
               {row.map((cell, cellIndex) => (
-                <td key={cellIndex} style={{ padding: '8px 12px', color: '#121619' }}>
-                  {cell}
-                </td>
+                <td key={cellIndex} className={cx('csv-td')}>{cell}</td>
               ))}
             </tr>
           ))}
@@ -73,6 +71,9 @@ const SdsEvaluationPage = () => {
   const location = useLocation();
   const wid = location.pathname.split('/')[3];
   const [selectedModel, setSelectedModel] = useState(null);
+  const [selectedDataset, setSelectedDataset] = useState(null);
+  const [datasets, setDatasets] = useState([]);
+  const [datasetKeyword, setDatasetKeyword] = useState('');
   const [samples, setSamples] = useState([]);
   const [loading, setLoading] = useState(true);
   const [evaluations, setEvaluations] = useState(() => {
@@ -83,20 +84,20 @@ const SdsEvaluationPage = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await callApi({ url: 'services/sds-eval/samples', method: 'GET' });
-        if (response.status === STATUS_SUCCESS) {
-          setSamples(response.result || []);
-        } else {
-          console.error('Failed to load samples:', response.message);
-        }
+        const [samplesRes, datasetsRes] = await Promise.all([
+          callApi({ url: 'services/sds-eval/samples', method: 'GET' }),
+          callApi({ url: `datasets?workspace_id=${wid}`, method: 'GET' }),
+        ]);
+        if (samplesRes.status === STATUS_SUCCESS) setSamples(samplesRes.result || []);
+        if (datasetsRes.status === STATUS_SUCCESS) setDatasets(datasetsRes.result?.list || []);
       } catch (error) {
-        console.error('Error fetching samples:', error);
+        console.error('Error fetching data:', error);
       } finally {
         setLoading(false);
       }
     };
     fetchData();
-  }, []);
+  }, [wid]);
 
   const handleEvaluate = (index, value) => {
     const nextEval = { ...evaluations, [index]: value };
@@ -114,7 +115,7 @@ const SdsEvaluationPage = () => {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
+      <div className={cx('loading-center')}>
         <DeferredComponent>
           <FBLoading />
         </DeferredComponent>
@@ -172,10 +173,93 @@ const SdsEvaluationPage = () => {
 
       <div className={cx('model-section')}>
         <div className={cx('section-label')}>평가 대상 모델</div>
-        <ModelSelector wid={wid} selected={selectedModel} onSelect={(id) => setSelectedModel(id)} />
+        <ModelSelector wid={wid} selected={selectedModel} onSelect={(id) => { setSelectedModel(id); setSelectedDataset(null); }} />
       </div>
 
-      <div className={cx('sample-list')}>
+      {selectedModel && (
+        <div className={cx('dataset-section')}>
+          <div className={cx('ds-section-header')}>
+            <span className={cx('ds-section-title')}>평가 데이터셋</span>
+            <span className={cx('ds-count-badge')}>{datasets.length}개</span>
+            <div className={cx('ds-spacer')} />
+            {selectedDataset && (
+              <span className={cx('ds-selected-label')}>
+                선택됨: <strong>{selectedDataset.dataset_name}</strong>
+              </span>
+            )}
+          </div>
+
+          <div className={cx('ds-toolbar')}>
+            <div className={cx('ds-search-wrap')}>
+              <input
+                className={cx('ds-search-input')}
+                placeholder="데이터셋 이름 검색..."
+                value={datasetKeyword}
+                onChange={(e) => setDatasetKeyword(e.target.value)}
+              />
+              {datasetKeyword && (
+                <button className={cx('ds-search-clear')} onClick={() => setDatasetKeyword('')}>✕</button>
+              )}
+            </div>
+          </div>
+
+          {datasets.filter((d) => d.dataset_name.includes(datasetKeyword)).length === 0 ? (
+            <div className={cx('ds-empty')}>등록된 데이터셋이 없습니다.</div>
+          ) : (
+            <div className={cx('ds-list')}>
+              {datasets
+                .filter((d) => d.dataset_name.includes(datasetKeyword))
+                .map((item) => {
+                  const isSelected = selectedDataset?.id === item.id;
+                  return (
+                    <div
+                      key={item.id}
+                      className={cx('ds-card', isSelected && 'ds-card--on')}
+                      onClick={() => setSelectedDataset(isSelected ? null : item)}
+                    >
+                      <div className={cx('ds-check', isSelected && 'ds-check--on')}>
+                        {isSelected && '✓'}
+                      </div>
+                      <div className={cx('ds-card-body')}>
+                        <div className={cx('ds-card-name-row')}>
+                          <span className={cx('ds-card-name')}>{item.dataset_name}</span>
+                          {item.format && (
+                            <span className={cx('ds-format-badge')}>{item.format}</span>
+                          )}
+                          <span className={cx('ds-access-badge', Number(item.access) === 0 ? 'ds-access--ro' : 'ds-access--rw')}>
+                            {Number(item.access) === 0 ? '읽기전용' : '읽기/쓰기'}
+                          </span>
+                        </div>
+                        <div className={cx('ds-card-meta')}>
+                          {item.owner && <span>{item.owner}</span>}
+                          {item.owner && <span className={cx('dot')}>·</span>}
+                          <span>{item.size ? convertBinaryByte(item.size) : '0 Bytes'}</span>
+                          {item.file_count != null && (
+                            <>
+                              <span className={cx('dot')}>·</span>
+                              <span>{item.file_count.toLocaleString()}개 파일</span>
+                            </>
+                          )}
+                          {item.create_datetime && (
+                            <>
+                              <span className={cx('dot')}>·</span>
+                              <span>{convertLocalTime(item.create_datetime)}</span>
+                            </>
+                          )}
+                        </div>
+                        {item.description && (
+                          <div className={cx('ds-card-desc')}>{item.description}</div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className={cx('sample-list')} style={{ display: selectedDataset ? undefined : 'none' }}>
         {samples.map((sample, index) => {
           const id = sample.id;
           const imageUrl = `/sds-dataset/${id}/input_image.png`;
@@ -203,7 +287,7 @@ const SdsEvaluationPage = () => {
                   <img
                     src={imageUrl}
                     alt={`Input ${id}`}
-                    style={{ maxWidth: '100%', objectFit: 'contain', maxHeight: '400px' }}
+                    className={cx('sample-img')}
                     onError={(e) => { e.target.style.display = 'none'; }}
                   />
                 </div>
@@ -234,7 +318,7 @@ const SdsEvaluationPage = () => {
                       value="O"
                       checked={currentEval === 'O'}
                       onChange={() => handleEvaluate(index, 'O')}
-                      style={{ cursor: 'pointer' }}
+                      className={cx('eval-radio')}
                     />
                     적합 (O)
                   </label>
@@ -245,7 +329,7 @@ const SdsEvaluationPage = () => {
                       value="X"
                       checked={currentEval === 'X'}
                       onChange={() => handleEvaluate(index, 'X')}
-                      style={{ cursor: 'pointer' }}
+                      className={cx('eval-radio')}
                     />
                     부적합 (X)
                   </label>

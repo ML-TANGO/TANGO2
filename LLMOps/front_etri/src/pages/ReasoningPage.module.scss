@@ -6,27 +6,28 @@
 }
 
 .title-bar {
-  margin-bottom: 28px;
+  margin-bottom: 32px;
 }
 
 .title {
   font-family: SpoqaB;
-  font-size: 24px;
+  font-size: 26px;
   color: $mono207;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .sub {
   font-family: SpoqaM;
-  font-size: 13px;
+  font-size: 15px;
   color: $mono205;
 }
 
 .loading {
   font-family: SpoqaM;
-  font-size: 14px;
+  font-size: 15px;
   color: $mono205;
   padding: 40px 0;
+  text-align: center;
 }
 
 .card-grid {
@@ -37,16 +38,16 @@
 
 .create-card {
   border: 1px dashed $blue103;
-  border-radius: 10px;
+  border-radius: 12px;
   background: $mono200;
-  padding: 20px 24px;
+  padding: 24px 28px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  min-height: 140px;
+  gap: 12px;
+  min-height: 160px;
   transition: border-color 0.2s, background 0.2s;
 
   &:hover {
@@ -56,27 +57,27 @@
 }
 
 .create-plus {
-  font-size: 28px;
+  font-size: 38px;
   color: $blue104;
   line-height: 1;
 }
 
 .create-label {
   font-family: SpoqaB;
-  font-size: 14px;
+  font-size: 16px;
   color: $blue104;
 }
 
 .session-card {
   border: 1px solid $mono203;
-  border-radius: 10px;
+  border-radius: 12px;
   background: $mono200;
-  padding: 20px 24px;
+  padding: 22px 26px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  min-height: 140px;
+  gap: 14px;
+  min-height: 160px;
   transition: box-shadow 0.2s;
 
   &:hover {
@@ -93,14 +94,14 @@
 
 .session-name {
   font-family: SpoqaB;
-  font-size: 15px;
+  font-size: 17px;
   color: $mono207;
   line-height: 1.3;
 }
 
 .status {
   font-family: SpoqaM;
-  font-size: 12px;
+  font-size: 14px;
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -108,14 +109,14 @@
 .model-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
 }
 
 .model-tag {
   font-family: SpoqaM;
-  font-size: 12px;
+  font-size: 14px;
   border-radius: 4px;
-  padding: 3px 8px;
+  padding: 5px 12px;
 
   &.inference {
     background: $blue101;
@@ -135,26 +136,19 @@
 
 .res-chip {
   font-family: SpoqaM;
-  font-size: 11px;
+  font-size: 13px;
   color: $mono205;
   border: 1px solid $mono203;
   border-radius: 4px;
-  padding: 2px 7px;
+  padding: 4px 10px;
 }
 
 .mode-badge {
   align-self: flex-start;
   font-family: SpoqaM;
-  font-size: 11px;
+  font-size: 13px;
   border-radius: 4px;
-  padding: 3px 8px;
-
-  &.single {
-    background: $blue101;
-    color: $blue104;
-  }
-  &.dual {
-    background: $yellow301;
-    color: $yellow303;
-  }
+  padding: 5px 12px;
+  background: $yellow301;
+  color: $yellow303;
 }

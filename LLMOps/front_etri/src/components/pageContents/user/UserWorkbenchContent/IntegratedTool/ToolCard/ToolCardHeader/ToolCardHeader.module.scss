@@ -50,17 +50,17 @@
     .tooltip-title {
       color: $mono207;
       font-size: 14px;
-      font-weight: 700;
+      font-family: SpoqaB;
       line-height: 12px;
     }
     .tooltip-contents {
       font-size: 13px;
-      font-weight: 500;
+      font-family: SpoqaM;
       line-height: 16px;
-      color: #000;
+      color: $mono207;
       label {
         font-family: SpoqaB;
-        color: #000;
+        color: $mono207;
         margin-right: 4px;
       }
       .error-resolution {

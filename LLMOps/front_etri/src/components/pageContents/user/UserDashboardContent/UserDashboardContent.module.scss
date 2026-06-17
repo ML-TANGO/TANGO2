@@ -11,14 +11,14 @@
     align-items: baseline;
     transition: left 0.7s;
     margin: 0 0 22px 0;
-    border-bottom: 1px solid #dbdbdb;
+    border-bottom: 1px solid $mono203;
     &.expand {
       left: 328px;
     }
     .welcome {
       font-size: 32px;
-      font-weight: 600;
-      color: #000;
+      font-family: SpoqaB;
+      color: $mono207;
       margin: initial;
       margin-bottom: 32px;
       @media (max-width: 1024px) {
@@ -104,7 +104,7 @@
           span {
             color: $blue104;
             font-size: 24px;
-            font-weight: 700;
+            font-family: SpoqaB;
             line-height: 28px;
             text-align: center;
           }

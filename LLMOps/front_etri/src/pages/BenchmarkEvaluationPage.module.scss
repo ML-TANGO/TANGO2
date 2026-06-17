@@ -33,108 +33,366 @@
 .body {
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  gap: 24px;
+  max-width: 960px;
+  margin: 0 auto;
 }
 
 .section {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 .section-title {
   font-family: SpoqaB;
-  font-size: 16px;
+  font-size: 15px;
   color: $mono207;
   border-left: 3px solid $blue104;
   padding-left: 8px;
 }
 
+/* ── 데이터셋 선택 헤더 ── */
+.ds-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ds-spacer { flex: 1; }
+
+.ds-count-badge {
+  font-family: SpoqaM;
+  font-size: 12px;
+  background: $blue101;
+  color: $blue104;
+  border-radius: 12px;
+  padding: 2px 10px;
+}
+
+.ds-selected-label {
+  font-family: SpoqaM;
+  font-size: 12px;
+  color: $mono205;
+  strong { color: $blue104; font-family: SpoqaB; }
+}
+
+/* ── 데이터셋 검색 ── */
+.ds-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.ds-search-input {
+  width: 100%;
+  padding: 8px 32px 8px 12px;
+  border: 1px solid $mono203;
+  border-radius: 8px;
+  background: $mono200;
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: $mono207;
+  outline: none;
+  &:focus { border-color: $blue104; }
+  &::placeholder { color: $mono205; }
+}
+
+.ds-search-clear {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  color: $mono205;
+  padding: 2px 4px;
+  border-radius: 4px;
+  &:hover { color: $mono207; background: $mono202; }
+}
+
+/* ── 데이터셋 카드 리스트 ── */
+.ds-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 360px;
+  overflow-y: auto;
+  padding-right: 4px;
+  &::-webkit-scrollbar { width: 4px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb { background: $mono203; border-radius: 2px; }
+}
+
+.ds-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  background: $mono200;
+  border: 1px solid $mono203;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+  &:hover { border-color: $blue104; box-shadow: $card-hover-color; }
+  &.ds-card--on { border-color: $blue104; background: rgba($blue104, 0.04); }
+}
+
+.ds-check {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1.5px solid $mono204;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: $mono200;
+  margin-top: 2px;
+  transition: border-color 0.15s, background 0.15s;
+  &.ds-check--on { background: $blue104; border-color: $blue104; }
+}
+
+.ds-card-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ds-card-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ds-card-name {
+  font-family: SpoqaB;
+  font-size: 14px;
+  color: $mono207;
+}
+
+.ds-card-desc {
+  font-family: SpoqaM;
+  font-size: 12px;
+  color: $mono205;
+  line-height: 1.4;
+}
+
+.ds-format-badge {
+  font-family: SpoqaM;
+  font-size: 11px;
+  border-radius: 4px;
+  padding: 2px 8px;
+  background: $blue100;
+  color: $blue104;
+  border: 1px solid $blue101;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.ds-empty {
+  padding: 28px 0;
+  text-align: center;
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: $mono205;
+  background: $mono200;
+  border: 1px dashed $mono203;
+  border-radius: 10px;
+}
+
+/* ── 평가 메트릭 선택 ── */
 .option-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
 }
 
 .option-card {
   border: 1px solid $mono203;
   border-radius: 10px;
-  padding: 14px 16px;
-  min-height: 72px;
+  padding: 12px 14px;
+  min-height: 64px;
   cursor: pointer;
   transition: border-color 0.2s, box-shadow 0.2s;
-
-  &:hover {
-    border-color: $blue104;
-    box-shadow: $card-hover-color;
-  }
-
-  &.selected {
-    border-color: $blue104;
-    background: rgba($blue104, 0.06);
-  }
+  &:hover { border-color: $blue104; box-shadow: $card-hover-color; }
+  &.selected { border-color: $blue104; background: rgba($blue104, 0.06); }
 }
 
 .option-name {
   font-family: SpoqaB;
-  font-size: 14px;
+  font-size: 13px;
   color: $mono207;
   margin-bottom: 4px;
 }
 
 .option-desc {
   font-family: SpoqaM;
-  font-size: 11px;
+  font-size: 12px;
   color: $mono205;
   line-height: 1.4;
 }
 
+/* ── 실행 버튼 ── */
 .run-row {
   display: flex;
   justify-content: flex-end;
 }
 
 .run-btn {
-  padding: 12px 32px;
+  padding: 10px 28px;
   border-radius: 8px;
   border: none;
   background: $blue104;
   color: $mono200;
   font-family: SpoqaB;
-  font-size: 15px;
+  font-size: 14px;
   cursor: pointer;
   &:hover { background: $blue105; }
-  &.disabled {
-    background: $mono203;
-    color: $mono205;
-    cursor: not-allowed;
-  }
+  &.disabled { background: $mono203; color: $mono205; cursor: not-allowed; }
+}
+
+/* ── 점수 요약 그리드 ── */
+.score-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.score-card {
+  background: $mono200;
+  border: 1px solid $mono203;
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+
+.score-rank {
+  font-family: SpoqaB;
+  font-size: 11px;
+  color: $blue104;
+  background: $blue101;
+  border-radius: 10px;
+  padding: 2px 8px;
+}
+
+.score-metric {
+  font-family: SpoqaB;
+  font-size: 13px;
+  color: $mono207;
+}
+
+.score-value {
+  font-family: SpoqaB;
+  font-size: 18px;
+  color: $blue104;
+}
+
+/* ── 막대 그래프 ── */
+.chart-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+  background: $mono200;
+  border: 1px solid $mono203;
+  border-radius: 12px;
+}
+
+.chart-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.chart-label {
+  font-family: SpoqaB;
+  font-size: 12px;
+  color: $mono207;
+  width: 90px;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.chart-bar-wrap {
+  flex: 1;
+  height: 20px;
+  background: $mono202;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.chart-bar {
+  height: 100%;
+  background: linear-gradient(90deg, $blue104 0%, $lime603 100%);
+  border-radius: 4px;
+  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  min-width: 4px;
+}
+
+.chart-value {
+  font-family: SpoqaB;
+  font-size: 13px;
+  color: $blue104;
+  width: 52px;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+/* ── 상세 결과 테이블 ── */
+.table-wrap {
+  overflow-x: auto;
+  border-radius: 10px;
+  border: 1px solid $mono203;
 }
 
 .result-table {
   width: 100%;
   border-collapse: collapse;
   font-family: SpoqaM;
-  font-size: 14px;
+  font-size: 13px;
 
   th {
     background: $mono202;
     color: $mono205;
+    font-family: SpoqaB;
     padding: 10px 16px;
-    text-align: left;
+    text-align: center;
     border-bottom: 1px solid $mono203;
+    white-space: nowrap;
   }
 
   td {
     padding: 10px 16px;
     border-bottom: 1px solid $mono202;
     color: $mono207;
+    text-align: center;
   }
 
   tr:hover td { background: rgba($blue104, 0.04); }
 }
 
+.metric-cell {
+  font-family: SpoqaB;
+  font-size: 13px;
+  color: $mono207;
+  text-align: left !important;
+  white-space: nowrap;
+}
+
 .score {
   font-family: SpoqaB;
   color: $blue104;
+}
+
+.avg {
+  background: rgba($blue104, 0.04);
+  border-left: 1px solid $blue101;
 }

@@ -145,8 +145,8 @@ const PromptMenuPage = lazy(() =>
   import('@src/pages/llm/Prompt/PromptMenuPage/PromptMenuPage'),
 );
 
-const InferencePage = lazy(() => import('@src/pages/InferencePage'));
-const InferenceDetailPage = lazy(() => import('@src/pages/InferenceDetailPage'));
+const ReasoningPage = lazy(() => import('@src/pages/ReasoningPage'));
+const ReasoningDetailPage = lazy(() => import('@src/pages/ReasoningDetailPage'));
 
 const LLMDatasetPage = lazy(() => import('@src/pages/llm/LLMDatasetPage'));
 
@@ -333,7 +333,7 @@ const llmRouteArr = [
     icon: IconNavPlayground,
     activeIcon: IconNavPlaygroundActive,
     platform: 'llm',
-    render: (props) => <InferencePage {...props} />,
+    render: (props) => <ReasoningPage {...props} />,
   },
   {
     name: 'InferenceDetail',
@@ -343,7 +343,7 @@ const llmRouteArr = [
     icon: IconNavPlaygroundActive,
     activeIcon: IconNavPlaygroundActive,
     platform: 'llm',
-    render: (props) => <InferenceDetailPage {...props} />,
+    render: (props) => <ReasoningDetailPage {...props} />,
   },
 ];
 
@@ -744,7 +744,7 @@ const routeArr = [
     icon: IconNavPlayground,
     activeIcon: IconNavPlaygroundActive,
     platform: 'flightbase',
-    render: (props) => <InferencePage {...props} />,
+    render: (props) => <ReasoningPage {...props} />,
   },
   {
     name: 'InferenceDetail',
@@ -754,7 +754,7 @@ const routeArr = [
     icon: IconNavPlaygroundActive,
     activeIcon: IconNavPlaygroundActive,
     platform: 'flightbase',
-    render: (props) => <InferenceDetailPage {...props} />,
+    render: (props) => <ReasoningDetailPage {...props} />,
   },
   {
     name: 'Evaluation',

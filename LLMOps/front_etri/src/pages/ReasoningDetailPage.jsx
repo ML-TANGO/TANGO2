@@ -2,7 +2,47 @@ import { useState, useEffect } from 'react';
 import { useHistory, useLocation, useParams } from 'react-router-dom';
 import { callApi, STATUS_SUCCESS } from '@src/network';
 import classNames from 'classnames/bind';
-import style from './InferenceDetailPage.module.scss';
+import style from './ReasoningDetailPage.module.scss';
+
+function DomainOptPanel({ examples, onChange, onAdd, onRemove }) {
+  const cx = classNames.bind(style);
+  return (
+    <div className={cx('domain-panel')}>
+      {examples.map((ex, i) => (
+        <div key={i} className={cx('qa-set')}>
+          <div className={cx('qa-header')}>
+            <span className={cx('qa-index')}>예제 {i + 1}</span>
+            {examples.length > 1 && (
+              <button type="button" className={cx('qa-remove')} onClick={() => onRemove(i)}>
+                삭제
+              </button>
+            )}
+          </div>
+          <label className={cx('qa-label')}>예제 질의</label>
+          <textarea
+            className={cx('qa-input')}
+            placeholder="예제 질의를 입력하세요"
+            value={ex.query}
+            rows={2}
+            onChange={(e) => onChange(i, 'query', e.target.value)}
+          />
+          <label className={cx('qa-label')}>예제 답변</label>
+          <textarea
+            className={cx('qa-input')}
+            placeholder="예제 답변을 입력하세요"
+            value={ex.answer}
+            rows={2}
+            onChange={(e) => onChange(i, 'answer', e.target.value)}
+          />
+          <div className={cx('qa-divider')} />
+        </div>
+      ))}
+      <button type="button" className={cx('qa-add-btn')} onClick={onAdd}>
+        + 예제 추가
+      </button>
+    </div>
+  );
+}
 
 const cx = classNames.bind(style);
 
@@ -16,7 +56,7 @@ const METRICS = [
 
 const SAMPLE_COUNTS = [10, 50, 100, 500];
 
-export default function InferenceDetailPage() {
+export default function ReasoningDetailPage() {
   const history  = useHistory();
   const location = useLocation();
   const { sid }  = useParams();
@@ -27,10 +67,17 @@ export default function InferenceDetailPage() {
   const [mode, setMode]         = useState('direct');
 
   // direct inference state
-  const [systemPrompt, setSystemPrompt] = useState('');
-  const [userPrompt, setUserPrompt]     = useState('');
+  const [systemPrompt, setSystemPrompt]   = useState('');
+  const [userPrompt, setUserPrompt]       = useState('');
   const [directRunning, setDirectRunning] = useState(false);
   const [directResult, setDirectResult]   = useState(null);
+  const [domainOptOpen, setDomainOptOpen] = useState(false);
+  const [qaExamples, setQaExamples]       = useState([{ query: '', answer: '' }]);
+
+  const handleQaChange = (idx, field, value) =>
+    setQaExamples((prev) => prev.map((ex, i) => i === idx ? { ...ex, [field]: value } : ex));
+  const handleQaAdd    = () => setQaExamples((prev) => [...prev, { query: '', answer: '' }]);
+  const handleQaRemove = (idx) => setQaExamples((prev) => prev.filter((_, i) => i !== idx));
 
   // batch inference state
   const [selectedDataset, setSelectedDataset]   = useState(null);
@@ -157,10 +204,19 @@ export default function InferenceDetailPage() {
         <div className={cx('panel')}>
           {promptModel && (
             <div className={cx('field')}>
-              <label className={cx('field-label')}>
-                시스템 프롬프트
-                <span className={cx('model-hint')}>→ {promptModel.name}</span>
-              </label>
+              <div className={cx('prompt-row')}>
+                <label className={cx('field-label')}>
+                  시스템 프롬프트
+                  <span className={cx('model-hint')}>→ {promptModel.name}</span>
+                </label>
+                <button
+                  type="button"
+                  className={cx('domain-btn', domainOptOpen && 'domain-btn--active')}
+                  onClick={() => setDomainOptOpen((v) => !v)}
+                >
+                  도메인 최적화 {domainOptOpen ? '▲' : '▼'}
+                </button>
+              </div>
               <textarea
                 className={cx('textarea')}
                 rows={3}
@@ -168,6 +224,14 @@ export default function InferenceDetailPage() {
                 value={systemPrompt}
                 onChange={(e) => setSystemPrompt(e.target.value)}
               />
+              {domainOptOpen && (
+                <DomainOptPanel
+                  examples={qaExamples}
+                  onChange={handleQaChange}
+                  onAdd={handleQaAdd}
+                  onRemove={handleQaRemove}
+                />
+              )}
             </div>
           )}
           <div className={cx('field')}>
@@ -217,17 +281,33 @@ export default function InferenceDetailPage() {
               {datasets.length === 0 ? (
                 <div className={cx('empty')}>업로드된 데이터셋이 없습니다.</div>
               ) : (
-                <div className={cx('ds-grid')}>
-                  {datasets.map((d) => (
-                    <div
-                      key={d.id ?? d.name}
-                      className={cx('ds-card', selectedDataset === (d.id ?? d.name) && 'selected')}
-                      onClick={() => setSelectedDataset(d.id ?? d.name)}
-                    >
-                      <div className={cx('ds-name')}>{d.name}</div>
-                      <div className={cx('ds-desc')}>{d.description || '-'}</div>
-                    </div>
-                  ))}
+                <div className={cx('ds-list')}>
+                  {datasets.map((d) => {
+                    const key = d.id ?? d.name;
+                    const sel = selectedDataset === key;
+                    return (
+                      <div
+                        key={key}
+                        className={cx('ds-item', sel && 'ds-item--on')}
+                        onClick={() => setSelectedDataset(key)}
+                      >
+                        <div className={cx('ds-radio', sel && 'ds-radio--on')} />
+                        <div className={cx('ds-item-body')}>
+                          <span className={cx('ds-item-name')}>{d.name ?? d.dataset_name}</span>
+                          {(d.description ?? d.desc) && (
+                            <span className={cx('ds-item-desc')}>{d.description ?? d.desc}</span>
+                          )}
+                          <div className={cx('ds-item-meta')}>
+                            {d.size    && <span>{d.size}</span>}
+                            {d.size    && d.fmt    && <span className={cx('dot')}>·</span>}
+                            {d.fmt     && <span>{d.fmt}</span>}
+                            {d.samples && <><span className={cx('dot')}>·</span><span>{Number(d.samples).toLocaleString()}개 샘플</span></>}
+                            {d.owner   && <><span className={cx('dot')}>·</span><span>{d.owner}</span></>}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </section>
