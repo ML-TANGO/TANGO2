@@ -1,12 +1,15 @@
-langchain==1.0.0
-langchain_community==0.4
-langchain_ollama==1.0.0
-pandas==2.3.3
-flask==3.1.2
-prompt_toolkit==3.0.52
-langchain-classic==1.0.0
-langchain-core==1.0.0
-pyyaml==6.0.1
-dspy-ai==3.0.4
-langchain-openai==1.0.1
-vllm==0.15.1
+# Few-Shot Prompt Optimization service (FastAPI backend).
+
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.12.5
+
+# Optimization stack:
+#   dspy 3.2.x     — MIPROv2 + the _MIPROv2RandomSubsets override signature
+#   textgrad 0.1.8 — Variable/TextLoss/TGD apparatus + the ollama-engine rebind
+dspy-ai==3.2.1
+textgrad==0.1.8
+openai>=2.0,<3.0
+
+# Optional: semantic metric. If absent, FewShotTask falls back to token_f1.
+bert-score==0.3.13
