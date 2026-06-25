@@ -15,12 +15,11 @@ SDS(Software-defined Ship) 해상 도메인 데이터셋에 특화된 학습 파
 5. [데이터셋 준비](#5-데이터셋-준비)
 6. [동작 확인 (로드 테스트)](#6-동작-확인-로드-테스트)
 7. [학습 파이프라인](#7-학습-파이프라인)
-8. [GAA — Geometric Attention Alignment](#8-gaa--geometric-attention-alignment)
-9. [추론 테스트](#9-추론-테스트)
-10. [데모 웹 앱](#10-데모-웹-앱)
-11. [프로젝트 구조](#11-프로젝트-구조)
-12. [W&B 학습 모니터링](#12-wb-학습-모니터링)
-13. [가중치 변환 — vLLM / llama.cpp](#13-가중치-변환--vllm--llamacpp)
+8. [추론 테스트](#8-추론-테스트)
+9. [데모 웹 앱](#9-데모-웹-앱)
+10. [프로젝트 구조](#10-프로젝트-구조)
+11. [W&B 학습 모니터링](#11-wb-학습-모니터링)
+12. [가중치 변환 — vLLM / llama.cpp](#12-가중치-변환--vllm--llamacpp)
 
 ---
 
@@ -193,7 +192,14 @@ pip install \
     tqdm==4.67.3  \
     requests==2.32.5  \
     psutil==7.2.2 \
-    triton==3.6.0
+    triton==3.6.0 \
+    pycocoevalcap==1.2
+```
+
+- `SPICE` 측정을 위해 `pycocoevalcap` 을 사용하며, 시스템에 `JAVA`가 설치되어 있어야 합니다.
+
+```bash
+sudo apt install openjdk-11-jdk
 ```
 
 ### 3-6. Flash Attntion 2 빌드 및 설치
@@ -641,55 +647,7 @@ python train.py \
 
 ---
 
-## 8. GAA — Geometric Attention Alignment
-
-- CLIP 비전 인코더의 CLS 어텐션이 배경에 집중되는 문제를 바운딩 박스 특권 정보로 억제하는 학습 기법입니다.  
-- 추론 시에는 바운딩 박스를 사용하지 않아 기존 VLM과 완전히 호환됩니다.
-- 상세 알고리즘 및 수식은 [`gaa/README.md`](gaa/README.md)를 참조하세요.
-
-### 데이터 준비
-
-- SDS 100개 샘플을 GAA 학습을 위한 포맷으로 변환합니다.
-
-```bash
-python gaa/sds_reformat.py \
-    --dataset_dir TANGO2/Field_Test/SDS/dataset/20260227 \
-    --output      data/sds_gaa_en.json \
-    --lang        en
-```
-
-- 단일 GPU 기준으로 학습 예시는 다음과 같습니다.
-
-```bash
-CUDA_VISIBLE_DEVICES=0 python gaa/train_gaa.py \
-    --llm_model        ~/Llama-3.1-8B-Instruct \
-    --projector_path   checkpoints/clip_llama31_proj_lora_marine/projector.bin \
-    --resume_lora_path checkpoints/clip_llama31_proj_lora_marine \
-    --data_path        data/sds_gaa_en.json \
-    --image_dir        TANGO2/Field_Test/SDS/dataset/20260227 \
-    --output_dir       checkpoints/gaa_sds_en \
-    --num_epochs 1 --batch_size 1 --grad_accum 16 \
-    --lora_r 16 --lora_alpha 32 \
-    --geo_loss_weight 0.5 --geo_tau 0.5 \
-    --dtype bfloat16
-```
-
-- 소규모 데이터셋(100개)에서는 과적합 방지를 위하여 `--num_epochs 1`, `--lora_r 16` 권장합니다.
-
-### Baseline vs GAA 비교
-
-```bash
-python gaa/compare_models.py \
-    --baseline  checkpoints/clip_llama31_proj_lora_marine_sds_en \
-    --gaa_model checkpoints/gaa_sds_en \
-    --data_path data/sds_gaa_en.json \
-    --image_dir TANGO2/Field_Test/SDS/dataset/20260227 \
-    --num_samples 10
-```
-
----
-
-## 9. 추론 테스트
+## 8. 추론 테스트
 
 - 사전 학습된 프로젝터와 LoRA 가중치 파일은 [TANGO2 허깅페이스 저장소](https://huggingface.co/ETRI-TANGO/tango2-sds-vlm-eva) 에서 다운로드 받을 수 있습니다. 
 
@@ -759,7 +717,7 @@ tango2-sds-vlm-eva
 └── README.md
 ```
 
-### 9-1. 단일 이미지 추론 (`test.py`)
+### 8-1. 단일 이미지 추론 (`test.py`)
 
 - 임의의 이미지 한 장에 대해 자유 형식 질문을 던지는 가장 간단한 추론 스크립트입니다.
 
@@ -809,7 +767,7 @@ The following generation flags are not valid and may be ignored: ['temperature',
 
 ---
 
-### 9-2. SDS 배치 추론 (`test_sds.py`)
+### 8-2. SDS 배치 추론 (`test_sds.py`)
 
 - SDS 3가지 데이터셋 (`20250922`, `20251031`, `20260227`) 에 모두 대응하여 일괄 추론을 수행합니다.
 
@@ -872,7 +830,7 @@ The following generation flags are not valid and may be ignored: ['temperature',
 ```
 ---
 
-## 10. 데모 웹 앱
+## 9. 데모 웹 앱
 
 - SDS 데이터셋을 탐색하고 모델 추론 결과를 채팅 형태로 확인하는 Gradio 앱입니다.
 
@@ -920,7 +878,7 @@ python demo/app.py --share
 
 ---
 
-## 11. 프로젝트 구조
+## 10. 프로젝트 구조
 
 ```
 VisionLanguageModel/
@@ -1002,7 +960,7 @@ VisionLanguageModel/
 
 ---
 
-## 12. W&B 학습 모니터링
+## 11. W&B 학습 모니터링
 
 - 모든 학습 스크립트에 `--wandb_project vlm-v2`가 기본 설정되어 있습니다.
 - `wandb` 로깅을 사용하기 위해서는 최초 1회 로그인 과정이 필요합니다.
@@ -1029,7 +987,7 @@ python model_summary.py --wandb_project vlm-v2 # W&B 아티팩트 업로드
 
 ---
 
-## 13. 가중치 변환 — vLLM / llama.cpp
+## 12. 가중치 변환 — vLLM / llama.cpp
 
 - 학습 후 생성된 체크포인트(Projector, LoRA)와 베이스모델(CLIP, Llama/Qwen) 을 프로덕션 추론 엔진용으로 변환합니다.
 - `adapter_config.json` 이 없어도 변환 스크립트가 weight 형상으로 자동 재구성합니다.  
