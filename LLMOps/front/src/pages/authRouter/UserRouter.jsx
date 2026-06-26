@@ -1,6 +1,7 @@
 import React, { lazy, useEffect, useState } from 'react';
 import { useDispatch } from 'react-redux';
 import {
+  NavLink,
   Redirect,
   Route,
   Switch,
@@ -11,12 +12,14 @@ import {
 
 import { loadModalComponent } from '@src/modal';
 
-import IconPipeLineActive from '@src/static/images/icon/00-ic-basic-renew-blue.svg';
-import IconPipeLine from '@src/static/images/icon/00-ic-basic-renew.svg';
+import IconPipeLineActive from '@src/static/images/nav/ic-pipeline-blue.svg';
+import IconPipeLine from '@src/static/images/nav/ic-pipeline-gray.svg';
 import IconNavPlaygroundActive from '@src/static/images/nav/00-ic-nav-playground-active.svg';
 import IconNavPlayground from '@src/static/images/nav/00-ic-nav-playground.svg';
 import IconDataCollectActive from '@src/static/images/nav/data-collect-active-icon.svg';
 import IconDataCollect from '@src/static/images/nav/data-collect-icon.svg';
+import IconSynthesisActive from '@src/static/images/nav/synthesis-active-icon.svg';
+import IconSynthesis from '@src/static/images/nav/synthesis-icon.svg';
 import IconHpsActive from '@src/static/images/nav/hps-active-blue.svg';
 import IconAnalysisActive from '@src/static/images/nav/ic-dataset-analysis-active.svg';
 import IconAnalysis from '@src/static/images/nav/ic-dataset-analysis.svg';
@@ -118,6 +121,10 @@ const UserDataCollectMenuPage = lazy(() =>
   import('@src/pages/UserDataCollectMenuPage'),
 );
 
+const UserDatasetLabelingPage = lazy(() =>
+  import('@src/pages/UserDatasetLabelingPage'),
+);
+
 const ModelCommitListItem = lazy(() =>
   import('@src/pages/llm/Model/ModelDetailPage/CommitList/ModelCommitListItem'),
 );
@@ -182,6 +189,21 @@ const UserFederatedLearningPage = lazy(() =>
   import('@src/pages/UserFederatedLearningPage'),
 );
 const UserDeploymentPage = lazy(() => import('@src/pages/UserDeploymentPage'));
+// SP-Deployment(D6) v3 §7.5 — 추론(Inference) 탭 (Playground test 소비 레이어)
+const InferenceMenu = lazy(() =>
+  import('@src/pages/llm/Inference/InferenceMenu/InferenceMenu'),
+);
+// D6 v3 Tier-1 — 추론 상세 (배포 config 없는 lean 채팅/데이터셋, TestComponent 재사용)
+const InferenceDetail = lazy(() =>
+  import('@src/pages/llm/Inference/InferenceDetail/InferenceDetail'),
+);
+// 평가(Evaluation, llm_evaluation P1c) — 허브 + 벤치마크 화면
+const EvaluationMenu = lazy(() =>
+  import('@src/pages/llm/Evaluation/EvaluationMenu/EvaluationMenu'),
+);
+const BenchmarkEvaluation = lazy(() =>
+  import('@src/pages/llm/Evaluation/BenchmarkEvaluation/BenchmarkEvaluation'),
+);
 const UserServicePage = lazy(() => import('@src/pages/UserServicePage'));
 const UserTestPage = lazy(() => import('@src/pages/UserTestPage'));
 const NotFoundPage = lazy(() => import('@src/pages/NotFoundPage'));
@@ -194,6 +216,22 @@ const UserDatasetPreprocessDetailPage = lazy(() =>
 
 const UserDatasetAnalysisPage = lazy(() =>
   import('@src/pages/UserDatasetAnalysisPage'),
+);
+const UserSynthesisPage = lazy(() => import('@src/pages/UserSynthesisPage'));
+const UserSynthesisDetailPage = lazy(() =>
+  import('@src/pages/UserSynthesisDetailPage'),
+);
+const UserSynthesisPromptOptimizePage = lazy(() =>
+  import('@src/pages/UserSynthesisPromptOptimizePage'),
+);
+const UserSynthesisPromptListPage = lazy(() =>
+  import('@src/pages/UserSynthesisPromptListPage'),
+);
+const UserSynthesisCanvasPage = lazy(() =>
+  import('@src/pages/UserSynthesisCanvasPage'),
+);
+const UserSynthesisWizardPage = lazy(() =>
+  import('@src/pages/UserSynthesisWizardPage'),
 );
 const UserDatasetAnalysisDetailPage = lazy(() =>
   import('@src/pages/UserDatasetAnalysisDetailPage'),
@@ -369,99 +407,175 @@ const routeArr = [
     name: 'Home',
     path: '/user/workspace/:id/home',
     exact: true,
-    disabled: false,
+    disabled: true,
     icon: IconLnbHomeGray,
     activeIcon: IconLnbHomeBlue,
     platform: 'flightbase',
     render: (props) => <Dashboard {...props} />,
   },
 
-  // {
-  //   name: 'Docker Image',
-  //   path: '/user/workspace/:id/docker_images',
-  //   exact: true,
-  //   icon: IconLnbDockerGray,
-  //   activeIcon: IconLnbDockerBlue,
-  //   platform: 'flightbase',
-  //   render: (props) => <UserDockerImagePage {...props} />,
-  // },
-  // {
-  //   name: 'Dataset',
-  //   path: '/user/workspace/:id/datasets',
-  //   exact: true,
-  //   isGroup: true,
-  //   icon: IconLnbDatasetsGray,
-  //   activeIcon: IconLnbDatasetsBlue,
-  //   platform: 'flightbase',
-  //   render: (props) => <UserDatasetRedirectPage {...props} />,
-  // },
-  // {
-  //   name: 'collect.label',
-  //   path: '/user/workspace/:id/datasets/collect/:did/detail',
-  //   disabled: true,
-  //   exact: false,
-  //   group: datasetGroup,
-  //   icon: IconDataCollect,
-  //   activeIcon: IconDataCollectActive,
-  //   platform: 'flightbase',
-  //   render: (props) => <UserDatasetCollectDetailPage {...props} />,
-  // },
-  // {
-  //   name: 'collect.label',
-  //   path: '/user/workspace/:id/datasets/collect',
-  //   group: datasetGroup,
-  //   isFirstGroup: true,
-  //   icon: IconDataCollect,
-  //   activeIcon: IconDataCollectActive,
-  //   platform: 'flightbase',
-  //   render: (props) => <UserDataCollectMenuPage {...props} />,
-  // },
-  // {
-  //   name: 'preprocess.label',
-  //   path: '/user/workspace/:id/datasets/process',
-  //   exact: true,
-  //   isGroup: true,
-  //   group: datasetGroup,
-  //   icon: IconPreProcess,
-  //   activeIcon: IconPreProcessActive,
-  //   platform: 'flightbase',
-  //   render: (props) => <UserDatasetPreprocessPage {...props} />,
-  // },
-  // {
-  //   name: '전처리 디테일',
-  //   path: '/user/workspace/:id/datasets/process/:did/detail',
-  //   exact: true,
-  //   isGroup: true,
-  //   group: datasetGroup,
-  //   disabled: true,
-  //   icon: IconPreProcess,
-  //   activeIcon: IconPreProcessActive,
-  //   platform: 'flightbase',
-  //   render: (props) => <UserDatasetPreprocessDetailPage {...props} />,
-  // },
-  // {
-  //   name: 'analyze.label',
-  //   path: '/user/workspace/:id/datasets/analysis',
-  //   exact: true,
-  //   isGroup: true,
-  //   group: datasetGroup,
-  //   icon: IconAnalysis,
-  //   activeIcon: IconAnalysisActive,
-  //   platform: 'flightbase',
-  //   render: (props) => <UserDatasetAnalysisPage {...props} />,
-  // },
-  // {
-  //   name: 'Data Analysis Detail',
-  //   path: '/user/workspace/:id/datasets/analysis/:did/detail',
-  //   exact: true,
-  //   isGroup: true,
-  //   group: datasetGroup,
-  //   disabled: true,
-  //   icon: IconAnalysis,
-  //   activeIcon: IconAnalysisActive,
-  //   platform: 'flightbase',
-  //   render: (props) => <UserDatasetAnalysisDetailPage {...props} />,
-  // },
+  {
+    name: 'Docker Image',
+    path: '/user/workspace/:id/docker_images',
+    exact: true,
+    icon: IconLnbDockerGray,
+    activeIcon: IconLnbDockerBlue,
+    platform: 'flightbase',
+    render: (props) => <UserDockerImagePage {...props} />,
+  },
+  {
+    name: 'Data',
+    path: '/user/workspace/:id/datasets',
+    exact: true,
+    isGroup: true,
+    icon: IconLnbDatasetsGray,
+    activeIcon: IconLnbDatasetsBlue,
+    platform: 'flightbase',
+    render: (props) => <UserDatasetRedirectPage {...props} />,
+  },
+  {
+    name: 'collect.label',
+    path: '/user/workspace/:id/datasets/collect/:did/detail',
+    disabled: true,
+    exact: false,
+    group: datasetGroup,
+    icon: IconDataCollect,
+    activeIcon: IconDataCollectActive,
+    platform: 'flightbase',
+    render: (props) => <UserDatasetCollectDetailPage {...props} />,
+  },
+  {
+    name: 'collect.label',
+    path: '/user/workspace/:id/datasets/collect',
+    group: datasetGroup,
+    isFirstGroup: true,
+    icon: IconDataCollect,
+    activeIcon: IconDataCollectActive,
+    platform: 'flightbase',
+    render: (props) => <UserDataCollectMenuPage {...props} />,
+  },
+  {
+    name: 'labeling.label',
+    path: '/user/workspace/:id/datasets/labeling',
+    exact: true,
+    group: datasetGroup,
+    icon: IconManagement,
+    activeIcon: IconManagementActive,
+    platform: 'flightbase',
+    render: (props) => <UserDatasetLabelingPage {...props} />,
+  },
+  {
+    name: 'preprocess.label',
+    path: '/user/workspace/:id/datasets/process',
+    exact: true,
+    isGroup: true,
+    group: datasetGroup,
+    icon: IconPreProcess,
+    activeIcon: IconPreProcessActive,
+    platform: 'flightbase',
+    render: (props) => <UserDatasetPreprocessPage {...props} />,
+  },
+  {
+    name: '전처리 디테일',
+    path: '/user/workspace/:id/datasets/process/:did/detail',
+    exact: true,
+    isGroup: true,
+    group: datasetGroup,
+    disabled: true,
+    icon: IconPreProcess,
+    activeIcon: IconPreProcessActive,
+    platform: 'flightbase',
+    render: (props) => <UserDatasetPreprocessDetailPage {...props} />,
+  },
+  {
+    name: 'analyze.label',
+    path: '/user/workspace/:id/datasets/analysis',
+    exact: true,
+    isGroup: true,
+    group: datasetGroup,
+    icon: IconAnalysis,
+    activeIcon: IconAnalysisActive,
+    platform: 'flightbase',
+    render: (props) => <UserDatasetAnalysisPage {...props} />,
+  },
+  {
+    name: 'synthesis.label',
+    path: '/user/workspace/:id/datasets/synthesis',
+    exact: true,
+    group: datasetGroup,
+    isLastGroup: true,
+    icon: IconSynthesis,
+    activeIcon: IconSynthesisActive,
+    platform: 'flightbase',
+    render: (props) => <UserSynthesisPage {...props} />,
+  },
+  {
+    name: 'synthesis.label',
+    path: '/user/workspace/:id/datasets/synthesis/:sid/overview',
+    exact: true,
+    disabled: true,
+    group: datasetGroup,
+    icon: IconSynthesis,
+    activeIcon: IconSynthesisActive,
+    platform: 'flightbase',
+    render: (props) => <UserSynthesisDetailPage {...props} />,
+  },
+  {
+    name: 'synthesis.label',
+    path: '/user/workspace/:id/datasets/synthesis/:sid/prompt-optimize',
+    exact: true,
+    disabled: true,
+    group: datasetGroup,
+    icon: IconSynthesis,
+    activeIcon: IconSynthesisActive,
+    platform: 'flightbase',
+    render: (props) => <UserSynthesisPromptOptimizePage {...props} />,
+  },
+  {
+    name: 'synthesis.label',
+    path: '/user/workspace/:id/datasets/synthesis/:sid/wizard',
+    exact: true,
+    disabled: true,
+    group: datasetGroup,
+    icon: IconSynthesis,
+    activeIcon: IconSynthesisActive,
+    platform: 'flightbase',
+    render: (props) => <UserSynthesisWizardPage {...props} />,
+  },
+  {
+    name: 'synthesis.label',
+    path: '/user/workspace/:id/datasets/synthesis/:sid/prompt-list',
+    exact: true,
+    disabled: true,
+    group: datasetGroup,
+    icon: IconSynthesis,
+    activeIcon: IconSynthesisActive,
+    platform: 'flightbase',
+    render: (props) => <UserSynthesisPromptListPage {...props} />,
+  },
+  {
+    name: 'synthesis.label',
+    path: '/user/workspace/:id/datasets/synthesis/:sid/canvas',
+    exact: true,
+    disabled: true,
+    group: datasetGroup,
+    icon: IconSynthesis,
+    activeIcon: IconSynthesisActive,
+    platform: 'flightbase',
+    render: (props) => <UserSynthesisCanvasPage {...props} />,
+  },
+  {
+    name: 'Data Analysis Detail',
+    path: '/user/workspace/:id/datasets/analysis/:did/detail',
+    exact: true,
+    isGroup: true,
+    group: datasetGroup,
+    disabled: true,
+    icon: IconAnalysis,
+    activeIcon: IconAnalysisActive,
+    platform: 'flightbase',
+    render: (props) => <UserDatasetAnalysisDetailPage {...props} />,
+  },
   // {
   //   name: 'management.label',
   //   path: '/user/workspace/:id/datasets/management',
@@ -487,9 +601,10 @@ const routeArr = [
   //   render: (props) => <DatasetDetailPage {...props} />,
   // },
   {
-    name: 'Dataset',
+    name: 'Drive',
     path: '/user/workspace/:id/datasets/management',
     exact: true,
+    disabled: true,
     icon: IconLnbDatasetsGray,
     activeIcon: IconLnbDatasetsBlue,
     platform: 'flightbase',
@@ -733,13 +848,88 @@ const routeArr = [
     render: (props) => <ModelCommitListItem {...props} />,
   },
   {
-    name: 'Playground',
+    // SP-Deployment(D6) v3: Playground → "배포" 탭으로 repurpose.
+    // 경로 /llmplayground 유지(딥링크·하위 라우트 보존), 라벨만 배포로.
+    name: 'Deployment',
     path: '/user/workspace/:id/llmplayground',
+    exact: true,
+    icon: IconLnbServingGray,
+    activeIcon: IconLnbServingBlue,
+    platform: 'flightbase',
+    render: (props) => <PlaygroundMenu {...props} />,
+  },
+  {
+    // D6 v3 §7.5: 추론(consume) 탭 — 활성 배포 선택 → 추론 상세(채팅/데이터셋)
+    name: 'Inference',
+    path: '/user/workspace/:id/inference',
     exact: true,
     icon: IconNavPlayground,
     activeIcon: IconNavPlaygroundActive,
     platform: 'flightbase',
-    render: (props) => <PlaygroundMenu {...props} />,
+    render: (props) => <InferenceMenu {...props} />,
+  },
+  {
+    // D6 v3 Tier-1: 추론 상세 — 배포 config 없는 lean 화면(TestComponent 인라인 재사용).
+    // detail 전용이라 사이드nav 비노출(disabled). :did = playground(배포) id.
+    name: 'InferenceDetail',
+    path: '/user/workspace/:id/inference/:did',
+    exact: true,
+    disabled: true,
+    icon: IconNavPlayground,
+    activeIcon: IconNavPlaygroundActive,
+    platform: 'flightbase',
+    render: (props) => <InferenceDetail {...props} />,
+  },
+  {
+    // 평가(Evaluation) 허브 — 벤치마크/judge/전문가 모드 picker (llm_evaluation)
+    name: 'Evaluation',
+    path: '/user/workspace/:id/evaluation',
+    exact: true,
+    icon: IconModel,
+    activeIcon: IconModelActive,
+    platform: 'flightbase',
+    render: (props) => <EvaluationMenu {...props} />,
+  },
+  {
+    // P1c: 벤치마크 평가 화면(모델+데이터셋+17메트릭→점수표). detail=사이드nav 비노출.
+    name: 'BenchmarkEvaluation',
+    path: '/user/workspace/:id/evaluation/benchmark',
+    exact: true,
+    disabled: true,
+    icon: IconModel,
+    activeIcon: IconModelActive,
+    platform: 'flightbase',
+    render: (props) => <BenchmarkEvaluation {...props} />,
+  },
+  {
+    name: 'AIPipeline',
+    path: '/user/workspace/:id/pipeline',
+    exact: true,
+    isGroup: true,
+    icon: IconPipeLine,
+    activeIcon: IconPipeLineActive,
+    platform: 'flightbase',
+    render: (props) => <UserPipeLineMenu {...props} />,
+  },
+  {
+    name: 'project.label',
+    path: '/user/workspace/:id/pipeline/:tid',
+    exact: true,
+    disabled: true,
+    icon: IconLnbTrainingsGray,
+    activeIcon: IconPipelineProjectActive,
+    platform: 'flightbase',
+    render: (props) => <UserPipeLineContent {...props} />,
+  },
+  {
+    name: 'project.label',
+    path: '/user/workspace/:id/pipeline/:tid/historydetail/:did',
+    exact: true,
+    disabled: true,
+    icon: IconLnbTrainingsGray,
+    activeIcon: IconPipelineProjectActive,
+    platform: 'flightbase',
+    render: (props) => <UserPipelineHistoryDetail {...props} />,
   },
   {
     name: 'PlaygroundDetail',
@@ -764,11 +954,11 @@ const routeArr = [
 ];
 
 const calSideNavList = (selectedPlatform) => {
-  if (!selectedPlatform) return routeArr.filter((route) => !route.platform);
-  if (selectedPlatform === 1) {
-    return routeArr.filter((route) => route.platform === 'flightbase');
+  // 단일 플랫폼(flightbase): 미선택/null이면 flightbase 기본 → 첫 진입 빈 사이드바 방지
+  if (selectedPlatform === 2) {
+    return routeArr.filter((route) => route.platform === 'llm');
   }
-  return routeArr.filter((route) => route.platform === 'llm');
+  return routeArr.filter((route) => route.platform === 'flightbase');
 };
 
 const RedirectRoute = ({ ...rest }) => (
@@ -794,6 +984,82 @@ const platFormList = [
   // { label: 'LLM', value: 2, icon: IconNavLLM, target: 'link' },
   // { label: 'service', value: 3, icon: IconNavService, target: 'link' },
 ];
+// 목업 사이드바 상단 카드 버튼 (대시보드 / 드라이브)
+const TOP_CARD_BASE = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  background: '#ffffff',
+  border: '1px solid #e2e6ee',
+  borderRadius: '10px',
+  padding: '12px 6px',
+  textAlign: 'center',
+  fontSize: '12px',
+  fontWeight: 500,
+  color: '#3e3e3e',
+  textDecoration: 'none',
+  boxShadow: '0 3px 6px rgba(0,0,0,0.1)',
+  transition: 'border-color 0.15s',
+};
+const TOP_CARD_ACTIVE = {
+  borderColor: '#3d6df6',
+  background: '#eef3ff',
+  fontWeight: 700,
+  color: '#3d6df6',
+};
+
+const TopCardNav = ({ workspaceId }) => {
+  if (!workspaceId) return null;
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: '8px',
+        padding: '0 16px',
+        margin: '8px 0 12px',
+      }}
+    >
+      <NavLink
+        to={`/user/workspace/${workspaceId}/home`}
+        exact
+        style={TOP_CARD_BASE}
+        activeStyle={TOP_CARD_ACTIVE}
+      >
+        <svg
+          viewBox="58 19 16 16"
+          width="22"
+          height="22"
+          fill="currentColor"
+          style={{ marginBottom: '6px' }}
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path d="M64.6658 31.6632V28.3299H67.3324V31.6632C67.3324 32.0299 67.6324 32.3299 67.9991 32.3299H69.9991C70.3658 32.3299 70.6658 32.0299 70.6658 31.6632V26.9966H71.7991C72.1058 26.9966 72.2524 26.6166 72.0191 26.4166L66.4458 21.3966C66.1924 21.1699 65.8058 21.1699 65.5524 21.3966L59.9791 26.4166C59.7524 26.6166 59.8924 26.9966 60.1991 26.9966H61.3324V31.6632C61.3324 32.0299 61.6324 32.3299 61.9991 32.3299H63.9991C64.3658 32.3299 64.6658 32.0299 64.6658 31.6632Z" />
+        </svg>
+        대시보드
+      </NavLink>
+      <NavLink
+        to={`/user/workspace/${workspaceId}/datasets/management`}
+        style={TOP_CARD_BASE}
+        activeStyle={TOP_CARD_ACTIVE}
+      >
+        <svg
+          viewBox="186 19 16 16"
+          width="22"
+          height="22"
+          fill="currentColor"
+          style={{ marginBottom: '6px' }}
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path d="M199.336 22.9974L194.003 22.9974L192.669 21.6641H188.669C187.936 21.6641 187.343 22.2641 187.343 22.9974L187.336 30.9974C187.336 31.7307 187.936 32.3307 188.669 32.3307H199.336C200.069 32.3307 200.669 31.7307 200.669 30.9974V24.3307C200.669 23.5974 200.069 22.9974 199.336 22.9974ZM199.336 30.9974L188.669 30.9974V29.2831L199.336 29.2831V30.9974Z" />
+        </svg>
+        드라이브
+      </NavLink>
+    </div>
+  );
+};
+
 const PlatformNav = ({
   selectedPlatform,
   setSelectedPlatform,
@@ -815,7 +1081,7 @@ const PlatformNav = ({
   }, [path, setSelectedPlatform]);
 
   useEffect(() => {
-    const curPlatform = routeArr.filter((v) => v.path === path)[0].platform;
+    const curPlatform = routeArr.filter((v) => v.path === path)[0]?.platform;
 
     if (curPlatform === 'flightbase') {
       setSelectedPlatform(1);
@@ -830,27 +1096,15 @@ const PlatformNav = ({
       {platFormList.map((info) => (
         <React.Fragment key={info.value}>
           {info.target === 'blank' && <div className={cx('border')} />}
-          <li
-            className={cx(
-              'item',
-              selectedPlatform === info.value && 'selected',
-              info.target === 'blank' && 'marker',
-            )}
-            onClick={() =>
-              handleSelectPlatform(
-                info.value,
-                setSelectedPlatform,
-                history,
-                workspaceId,
-                moveToMarker,
-              )
-            }
-          >
-            {/* <img src={info.icon} alt={info.label} /> */}
-            {/* {info.rightIcon && <img src={info.rightIcon} alt={info.label} />} */}
-            <div>GenAI Platform</div>
-          </li>
-          {selectedPlatform === info.value && <>{children}</>}
+          {/* 플랫폼 스위처 박스 제거: TANGO 단일 플랫폼이라 전환 대상이 없음
+              (Jonathan > modelbase/agentbase 전환 슬롯의 잔재). 상단 다크바가 브랜드 담당.
+              카드/네비/플랫폼 선택 로직은 유지. */}
+          {(selectedPlatform ?? 1) === info.value && (
+            <>
+              <TopCardNav workspaceId={workspaceId} />
+              {children}
+            </>
+          )}
         </React.Fragment>
       ))}
     </nav>
@@ -906,7 +1160,7 @@ function UserRouter({ trackingEvent }) {
   );
   const rightBoxWidth = element && element.getBoundingClientRect().width;
 
-  const [selectedPlatform, setSelectedPlatform] = useState(null);
+  const [selectedPlatform, setSelectedPlatform] = useState(1);
   const sideNavList = calSideNavList(selectedPlatform);
 
   return (

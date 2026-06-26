@@ -85,6 +85,21 @@ const AIPipeLineDeploySettingModal = React.lazy(() =>
 const AIPipeLineDeployModal = React.lazy(() =>
   import('@src/components/Modal/AIPipeLineDeployModal'),
 );
+const AddAIPipeLineGenerationModal = React.lazy(() =>
+  import('@src/components/Modal/AddAIPipeLineGenerationModal'),
+);
+const AddAIPipeLineFinetuningModal = React.lazy(() =>
+  import('@src/components/Modal/AddAIPipeLineFinetuningModal'),
+);
+const AddAIPipeLineQuantizeModal = React.lazy(() =>
+  import('@src/components/Modal/AddAIPipeLineQuantizeModal'),
+);
+const AddAIPipeLineLlmDeployModal = React.lazy(() =>
+  import('@src/components/Modal/AddAIPipeLineLlmDeployModal'),
+);
+const CreateSynthesisModal = React.lazy(() =>
+  import('@src/components/Modal/CreateSynthesisModal'),
+);
 const AIPipelineLogModal = React.lazy(() =>
   import('@src/modals/PipelineLogModal'),
 );
@@ -898,6 +913,33 @@ function ModalContainer() {
           )}
           {modalType === 'ADD_DEPLOY_DATA' && (
             <AIPipeLineDeployModal data={modal[modalType]} type={modalType} />
+          )}
+          {modalType === 'ADD_GENERATION_DATA' && (
+            <AddAIPipeLineGenerationModal
+              data={modal[modalType]}
+              type={modalType}
+            />
+          )}
+          {modalType === 'ADD_FINETUNING_DATA' && (
+            <AddAIPipeLineFinetuningModal
+              data={modal[modalType]}
+              type={modalType}
+            />
+          )}
+          {modalType === 'ADD_QUANTIZE_DATA' && (
+            <AddAIPipeLineQuantizeModal
+              data={modal[modalType]}
+              type={modalType}
+            />
+          )}
+          {modalType === 'ADD_LLM_DEPLOY_DATA' && (
+            <AddAIPipeLineLlmDeployModal
+              data={modal[modalType]}
+              type={modalType}
+            />
+          )}
+          {modalType === 'CREATE_SYNTHESIS_PROJECT' && (
+            <CreateSynthesisModal data={modal[modalType]} type={modalType} />
           )}
           {modalType === 'AI_PIPELINE_LOG' && (
             <AIPipelineLogModal data={modal[modalType]} type={modalType} />

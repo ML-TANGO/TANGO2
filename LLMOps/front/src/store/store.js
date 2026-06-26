@@ -34,6 +34,9 @@ const persistConfig = {
     'llmprompt',
     'llmRag',
     'llmModel',
+    // 파이프라인 캔버스 상태 = 진입 시 getPipelineDetail 로 항상 재조회되는 휘발성 슬라이스.
+    // persist 하면 옛 탭의 stale shape(신규 task 버킷 누락)가 rehydrate 되어 undefined.length 크래시.
+    'pipelineList',
   ],
 };
 

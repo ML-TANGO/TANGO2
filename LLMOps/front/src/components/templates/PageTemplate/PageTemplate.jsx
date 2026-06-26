@@ -215,7 +215,7 @@ function PageTemplate({
           ? () => (
               <>
                 <SideNav
-                  width={'184'}
+                  width={'280px'}
                   theme={theme.PRIMARY_THEME}
                   mainNavComponent={mainNavComponent}
                   navList={targetNavList}
