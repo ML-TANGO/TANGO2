@@ -1,0 +1,155 @@
+@import '@src/styles/color.scss';
+
+.benchmark {
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.back-btn {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 4px 0;
+  font-size: 13px;
+  color: $mono204;
+  cursor: pointer;
+
+  &:hover {
+    color: $blue104;
+  }
+}
+
+.title {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.empty {
+  color: $mono204;
+  font-size: 14px;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  padding: 7px 14px;
+  border: 1px solid $mono203;
+  border-radius: 16px;
+  background-color: #fff;
+  font-size: 13px;
+  color: $mono205;
+  cursor: pointer;
+  transition: border-color 0.12s, background-color 0.12s, color 0.12s;
+
+  &:hover {
+    border-color: $blue104;
+  }
+
+  &.selected {
+    border-color: $blue104;
+    background-color: $blue101;
+    color: $blue104;
+    font-weight: 600;
+  }
+}
+
+.run-row {
+  display: flex;
+}
+
+.run-btn {
+  padding: 11px 28px;
+  border: none;
+  border-radius: 8px;
+  background-color: $blue104;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &.disabled {
+    background-color: $mono203;
+    color: $mono204;
+    cursor: not-allowed;
+  }
+}
+
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mock-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: $mono204;
+  border: 1px solid $mono203;
+  border-radius: 8px;
+  padding: 2px 7px;
+}
+
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.result-table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 480px;
+  font-size: 13px;
+
+  th,
+  td {
+    border: 1px solid $mono203;
+    padding: 9px 12px;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  th {
+    background-color: $mono202;
+    font-weight: 600;
+    color: $mono205;
+  }
+
+  .score {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .avg-row {
+    td {
+      background-color: $blue101;
+      font-weight: 700;
+      color: $blue104;
+    }
+  }
+}

@@ -61,23 +61,29 @@ cd $BASE_DIR
 if [ "$MODE" == "true" ]; then
     helm dependency update llm_model/helm
     helm dependency update llm_playground/helm
+    helm dependency update llm_evaluation/helm
     kubectl create ns jonathan-system-image 2> /dev/null
 
     helm install -n $NAMESPACE model llm_model/helm      --values $VALUES
     helm install -n $NAMESPACE playground llm_playground/helm       --values $VALUES
+    helm install -n $NAMESPACE evaluation llm_evaluation/helm       --values $VALUES
 
 elif [ "$MODE" == "false" ]; then
     helm uninstall -n $NAMESPACE model
     helm uninstall -n $NAMESPACE playground
+    helm uninstall -n $NAMESPACE evaluation
 
 elif [ "$MODE" == "upgrade" ]; then
     helm dependency update llm_model/helm
     helm dependency update llm_playground/helm
+    helm dependency update llm_evaluation/helm
 
     helm upgrade -n $NAMESPACE model llm_model/helm        --values $VALUES
     helm upgrade -n $NAMESPACE playground llm_playground/helm --values $VALUES
+    helm upgrade -n $NAMESPACE evaluation llm_evaluation/helm --values $VALUES
 
 elif [ "$MODE" == "update" ]; then
-    helm dependency update llm_model/helm   
+    helm dependency update llm_model/helm
     helm dependency update llm_playground/helm
+    helm dependency update llm_evaluation/helm
 fi
