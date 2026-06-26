@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.pod_name }}
+  namespace: {{ .Values.namespace }}
+data:
+  pipeline.py: |-
+  {{ .Files.Get "code/pipeline.py" | nindent 4 }}
+  settings.py: |-
+  {{ .Files.Get "code/settings.py" | nindent 4 }}
+  db.py: |-
+  {{ .Files.Get "code/db.py" | nindent 4 }}
+  redis_con.py: |-
+  {{ .Files.Get "code/redis_con.py" | nindent 4 }}

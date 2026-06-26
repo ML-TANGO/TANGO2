@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.name }}-cm
+data:
+  json-data: |
+    {{ .Values.collect_info | quote }}

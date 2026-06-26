@@ -1,0 +1,13 @@
+namespace: jonathan-system
+pod_name: pipeline-test
+labels:
+  pipeline_id: 1
+  workspace_id: 39
+  owner_name: wyatt
+  helm_name: ""
+dataset:
+  workspace_name:
+  access:
+  dataset_name:
+  volume_name:
+image: 192.168.1.150:30500/jfb-system/pipeline_app:0.2.0

@@ -1,0 +1,59 @@
+piVersion: v1
+kind: Pod
+metadata:
+  name: "collect-test-22"
+  labels:
+    pod_type: "collect"
+    collect_id: "22"
+    dataset_id: ""
+    work_func_type: "public-api"
+    workspace_id: "4"
+    helm_name: collect-test
+spec:
+  containers:
+  - name: public-api
+    image: registry.jonathan.acryl.ai/jfb-system/collect_app:dev
+    ports:
+    - containerPort: 80
+    securityContext:
+      runAsUser: 0
+      allowPrivilegeEscalation: false
+    # env:
+    #
+    #     - name: COLLECT_ID
+    #       value: "22"
+    #
+    #     - name: DATA_PATH
+    #       value: "test"
+    #
+    #     - name: HELM_NAME
+    #       value: "collect-test"
+    #
+    #     - name: LIMIT_SIZE
+    #       value: "none"
+    #
+    #     - name: NAMESPACE
+    #       value: "jonathan-system4"
+    #
+    envFrom:
+    - configMapRef:
+        name: jfb-settings
+    command: ["sh", "-c", "while true; do sleep 30; done;"] #while true; do sleep 30; done; python3 /app/src/collect/public_api_request.py
+    resources:
+      limits:
+        cpu: 1
+        memory: 256Mi # 256 MiB
+    volumeMounts:
+    - name: data-pvc
+      mountPath: "/data"
+      subPath: ""
+    - name: jf-src
+      mountPath: "/app"
+  volumes:
+  - name: data-pvc
+    persistentVolumeClaim:
+      claimName: jonathan-system-4-data-pvc
+  - name: jf-src
+    persistentVolumeClaim:
+      claimName: jf-src-collect-pvc
+
