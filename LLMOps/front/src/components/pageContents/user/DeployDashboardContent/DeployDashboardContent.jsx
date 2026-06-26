@@ -56,7 +56,7 @@ const PlaygroundHeader = ({ title }) => {
 
   const selectList = [
     {
-      label: '플레이그라운드 모니터',
+      label: '배포 모니터',
       value: 0,
       disabled: !playground_id,
     },

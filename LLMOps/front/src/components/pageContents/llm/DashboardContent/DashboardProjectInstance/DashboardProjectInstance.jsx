@@ -23,8 +23,8 @@ const exampleArr = [
     countValue: 2,
   },
   {
-    instanceType: '플레이그라운드',
-    projectName: '플레이그라운드 카드 이름',
+    instanceType: '배포',
+    projectName: '배포 카드 이름',
     instanceName: 'TITAN RTX.1.1.4',
     countValue: 100,
   },

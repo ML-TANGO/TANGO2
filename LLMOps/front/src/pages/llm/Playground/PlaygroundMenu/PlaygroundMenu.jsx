@@ -6,6 +6,9 @@ import { toast } from 'react-toastify';
 
 import CardTemplate from '@src/components/molecules/CardTemplate/CardTemplate';
 
+import EdgeDeploymentSection from './EdgeDeploymentSection/EdgeDeploymentSection';
+import NewDeploymentModal from './NewDeploymentModal/NewDeploymentModal';
+
 import {
   deletePlayground,
   deletePlaygroundBookmark,
@@ -30,7 +33,8 @@ const breadCrumbHandler = (dispatch) => {
     startPath([
       {
         component: {
-          name: 'playground',
+          // D6 v3: Playground → "배포" 탭 repurpose (라벨 일관성)
+          name: 'Deployment',
         },
       },
     ]),
@@ -84,8 +88,15 @@ const PlaygroundMenu = () => {
   const { id: workspace_id } = match.params;
 
   const [playgroundInfo, setPlaygroundInfo] = useState([]);
+  // D6 v3: "+새 배포" → 타겟 chooser. 클러스터=기존 ADD_PLAYGROUND, 엣지/standalone=양자화 선행 안내.
+  const [showNewDeployment, setShowNewDeployment] = useState(false);
 
   const handleCreateCard = useCallback(() => {
+    setShowNewDeployment(true);
+  }, []);
+
+  // 현재 클러스터 배포 = 기존 Playground 생성 플로우.
+  const openClusterCreate = useCallback(() => {
     dispatch(
       openModal({
         modalType: 'ADD_PLAYGROUND',
@@ -231,7 +242,8 @@ const PlaygroundMenu = () => {
 
   return (
     <div className={cx('playground-cont')}>
-      <h1 className={cx('title')}>{t('playground.label')}</h1>
+      {/* D6 v3: Playground → "배포" 탭. CardTemplate=현재클러스터 / EdgeDeploymentSection=온디바이스 */}
+      <h1 className={cx('title')}>{t('Deployment')}</h1>
       <Suspense fallback={<>loading...</>}>
         <CardTemplate
           createLabel={t('playground.add.label')}
@@ -243,8 +255,15 @@ const PlaygroundMenu = () => {
           handleEdit={handleEdit}
           handleOnClickCard={handleOnClickCard}
           cardItems={playgroundInfo}
+          statusBadge
         />
       </Suspense>
+      <EdgeDeploymentSection />
+      <NewDeploymentModal
+        open={showNewDeployment}
+        onClose={() => setShowNewDeployment(false)}
+        onSelectCluster={openClusterCreate}
+      />
     </div>
   );
 };

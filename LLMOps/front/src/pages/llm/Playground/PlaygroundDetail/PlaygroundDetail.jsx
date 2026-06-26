@@ -150,7 +150,6 @@ const PlaygroundDetail = () => {
     loadModalComponent('IMPORT_RAG');
     loadModalComponent('IMPORT_PROMPT');
     loadModalComponent('PLAYGROUND_DEPLOY');
-    loadModalComponent('PLAYGROUND_TEST_MODAL');
 
     return () => {
       dispatch(handleReset());

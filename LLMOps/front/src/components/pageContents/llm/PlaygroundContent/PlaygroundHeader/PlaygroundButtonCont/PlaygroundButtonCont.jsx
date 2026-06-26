@@ -1,11 +1,8 @@
 import React, { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useDispatch } from 'react-redux';
-import { useRouteMatch } from 'react-router-dom';
+import { useHistory, useRouteMatch } from 'react-router-dom';
 
 import { ButtonV2 } from '@jonathan/ui-react';
-
-import { openModal } from '@src/store/modules/modal';
 
 import useDeployBtn from './hooks/useDelpoyBtn';
 import useSaveBtn from './hooks/useSaveBtn';
@@ -13,11 +10,12 @@ import useStopbtn from './hooks/useStopBtn';
 
 export default function PlaygroundButtonCont({ isFetchingStatus }) {
   const { t } = useTranslation();
-  const dispatch = useDispatch();
+  const history = useHistory();
 
   const match = useRouteMatch();
   const { params } = match;
   const playgroundId = params.did;
+  const workspaceId = params.id;
 
   const { isStopBtn, isStopLoading, handleStop } = useStopbtn();
   const { isSaveBtn, handleSave } = useSaveBtn(isFetchingStatus, playgroundId);
@@ -29,17 +27,10 @@ export default function PlaygroundButtonCont({ isFetchingStatus }) {
     handleDeploy,
   } = useDeployBtn();
 
-  // ** [액션] 테스트 버튼 핸들러 **
-  const handleTest = useCallback(() => {
-    dispatch(
-      openModal({
-        modalType: 'PLAYGROUND_TEST_MODAL',
-        modalData: {
-          playgroundId,
-        },
-      }),
-    );
-  }, [dispatch, playgroundId]);
+  // ** [액션] 추론 탭으로 이동 (D6: 추론은 별도 탭. running 배포만 질의 가능) **
+  const handleGoInference = useCallback(() => {
+    history.push(`/user/workspace/${workspaceId}/inference/${playgroundId}`);
+  }, [history, workspaceId, playgroundId]);
 
   return (
     <>
@@ -51,8 +42,8 @@ export default function PlaygroundButtonCont({ isFetchingStatus }) {
       />
       <ButtonV2
         colorType='skyblue'
-        label={t('Test')}
-        onClick={handleTest}
+        label={t('inference.goTo')}
+        onClick={handleGoInference}
         disabled={!isCompleteRunning || isFetchingStatus}
       />
       <ButtonV2

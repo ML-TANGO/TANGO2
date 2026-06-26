@@ -13,6 +13,15 @@ import IconTrash from '@src/static/images/icon/00-new-trash.svg';
 
 const cx = classNames.bind(style);
 
+// D6 v3 (Option A): 배포 상태 배지 색상 매핑. status 라벨은 기존 i18n(running/stop/pending) 재사용.
+//   배지는 status 가 있을 때만 렌더 → status 미전달 소비자(Rag/Prompt/Model 등)엔 무영향.
+const STATUS_BADGE_CLASS = {
+  running: 'running',
+  stop: 'stopped',
+  pending: 'pending',
+  error: 'error',
+};
+
 const Card = ({
   id,
   title,
@@ -30,6 +39,7 @@ const Card = ({
   handleEdit,
   width,
   height,
+  statusBadge = false,
 }) => {
   const { t } = useTranslation();
   return (
@@ -43,6 +53,17 @@ const Card = ({
         <div className={cx('owner-cont')}>
           <span className={cx('owner-txt')}>{constructor}</span>
           {!isAccess && <img src={IconLock} alt='private' />}
+          {/* 배포(D6) 카드만 statusBadge opt-in → Rag/Model 등 다른 소비자엔 미노출 */}
+          {statusBadge && status && (
+            <span
+              className={cx(
+                'status-badge',
+                STATUS_BADGE_CLASS[status] || 'pending',
+              )}
+            >
+              {t(status)}
+            </span>
+          )}
         </div>
         <div className={cx('btn-cont')}>
           {handleDelete && (

@@ -64,7 +64,7 @@ export default function PlaygroundNavigation({ isFetchingStatus }) {
       <button
         className={cx('back-btn', 'button')}
         onClick={() => handleBackGo(workspaceId, history)}
-        aria-label={'플레이 그라운드 메뉴로 이동'}
+        aria-label={'배포 메뉴로 이동'}
       >
         <img
           src={'/src/static/images/icon/00-ic-basic-arrow-02-left.svg'}

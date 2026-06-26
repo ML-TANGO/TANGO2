@@ -89,6 +89,37 @@
         width: 16px;
         height: 16px;
       }
+      // D6 v3 (Option A): 배포 상태 배지 — 점(dot)+라벨. 색상은 status 별 modifier.
+      .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-family: SpoqaM;
+        font-size: 12px;
+        line-height: 12px;
+        color: $mono204;
+
+        &::before {
+          content: '';
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background-color: currentColor;
+        }
+
+        &.running {
+          color: $lime604;
+        }
+        &.pending {
+          color: $blue104;
+        }
+        &.stopped {
+          color: $mono204;
+        }
+        &.error {
+          color: $red502;
+        }
+      }
     }
     .btn-cont {
       display: flex;

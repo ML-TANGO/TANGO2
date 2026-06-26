@@ -1,0 +1,60 @@
+@import '@src/styles/color.scss';
+
+.edge-section {
+  margin-top: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.empty {
+  color: $mono204;
+  font-size: 14px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  border: 1px solid $mono203;
+  border-radius: 10px;
+
+  .name {
+    font-weight: 500;
+  }
+
+  .sub {
+    color: $mono204;
+    font-size: 13px;
+  }
+
+  .state {
+    margin-left: auto;
+    font-size: 13px;
+    font-weight: 500;
+
+    &.running {
+      color: $lime604;
+    }
+
+    &.error {
+      color: $red502;
+    }
+
+    &.stopped {
+      color: $mono204;
+    }
+  }
+}

@@ -12,6 +12,7 @@ const CardTemplate = ({
   handleEdit,
   width,
   height = 340,
+  statusBadge = false,
 }) => {
   return (
     <CardList>
@@ -51,6 +52,7 @@ const CardTemplate = ({
             handleEdit={handleEdit}
             width={width}
             height={height}
+            statusBadge={statusBadge}
           />
         );
       })}

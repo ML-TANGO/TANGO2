@@ -1,0 +1,59 @@
+@import '@src/styles/color.scss';
+
+.inference-cont {
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.title {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.empty {
+  color: $mono204;
+  font-size: 14px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 18px;
+  border: 1px solid $mono203;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+
+  &:hover {
+    border-color: $blue104;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  }
+
+  .name {
+    font-weight: 600;
+  }
+
+  .sub {
+    color: $mono204;
+    font-size: 13px;
+  }
+
+  .status {
+    margin-left: auto;
+    font-size: 13px;
+    font-weight: 500;
+
+    &.running {
+      color: $lime604;
+    }
+  }
+}

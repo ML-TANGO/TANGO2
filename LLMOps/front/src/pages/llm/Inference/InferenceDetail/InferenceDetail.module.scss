@@ -1,0 +1,79 @@
+@import '@src/styles/color.scss';
+
+.inference-detail {
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.back-btn {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 4px 0;
+  font-size: 13px;
+  color: $mono204;
+  cursor: pointer;
+
+  &:hover {
+    color: $blue104;
+  }
+}
+
+.header-info {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.title {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.owner {
+  color: $mono204;
+  font-size: 13px;
+}
+
+.not-found {
+  color: $mono204;
+  font-size: 14px;
+}
+
+.mode-tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid $mono203;
+}
+
+.tab {
+  background: none;
+  border: none;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: $mono204;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+
+  &.active {
+    color: $blue104;
+    border-bottom-color: $blue104;
+  }
+}
+
+.test-panel {
+  // 모달 셸(664px) 밖에서 TestComponent 를 인라인 렌더 — 폭만 보정.
+  // PromptCom 은 자체 height(320px)/스크롤 보유 → 부모 높이 불필요.
+  width: 100%;
+  max-width: 720px;
+}
