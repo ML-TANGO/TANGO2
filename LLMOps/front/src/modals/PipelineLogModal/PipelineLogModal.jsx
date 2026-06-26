@@ -24,6 +24,11 @@ const calTaskTypeLabel = (taskType) => {
   if (taskType === 'pre')
     return { color: 'primary-2', label: '학습 데이터 전처리' };
   if (taskType === 'train') return { color: 'orange', label: '학습' };
+  if (taskType === 'generation')
+    return { color: 'primary-2', label: '생성 데이터' };
+  if (taskType === 'finetune') return { color: 'primary-2', label: '파인튜닝' };
+  if (taskType === 'quantize') return { color: 'orange', label: '양자화' };
+  if (taskType === 'llmdeploy') return { color: 'green', label: 'LLM 배포' };
   return { color: 'green', label: '배포' };
 };
 

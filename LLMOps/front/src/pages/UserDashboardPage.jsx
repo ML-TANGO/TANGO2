@@ -61,7 +61,7 @@ function UserDashboardPage({ trackingEvent }) {
       action: 'Move To Workspace Home Page',
     });
     history.push({
-      pathname: `workspace/${workspace.id}/selected`,
+      pathname: `workspace/${workspace.id}/home`,
       state: {
         id: workspace.id,
         name: workspace.name,

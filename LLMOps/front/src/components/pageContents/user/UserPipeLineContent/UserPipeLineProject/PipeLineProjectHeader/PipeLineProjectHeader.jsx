@@ -23,18 +23,19 @@ import BackIcon from '@src/static/images/icon/00-ic-basic-arrow-02-left.svg';
 
 const cx = classNames.bind(style);
 
-const calErrorMessage = (
-  preprocessing_task,
-  project_task,
-  deployment_task,
-  datasetValue,
-  isConnect,
-) => {
+// GenAI 통합 파이프라인 레인 순서(생성 → 전처리 → 파인튜닝 → 양자화 → LLM배포).
+// 마지막(터미널) 레인 = 노드가 존재하는 가장 뒤 레인. calIsConnect 연결성 판정에 사용.
+const LANE_ORDER = [
+  'generation',
+  'preprocessing',
+  'finetuning',
+  'quantize',
+  'llm_deploy',
+];
+
+const calErrorMessage = (taskCount, datasetValue, isConnect) => {
   if (!datasetValue) return '학습 데이터셋을 추가해주세요.';
-  if (preprocessing_task.length === 0)
-    return '데이터 전처리 작업을 추가해 주세요.';
-  if (project_task.length === 0) return '학습 작업을 추가해 주세요.';
-  if (deployment_task.length === 0) return '배포 작업을 추가해 주세요.';
+  if (taskCount === 0) return '작업을 추가해 주세요.';
   if (!isConnect) return '커넥터를 추가해 주세요.';
   return '';
 };
@@ -115,10 +116,20 @@ const PipeLineProjectHeader = React.memo(
     const { params } = match;
     const { tid: pipelineId } = params;
 
-    const { preprocessing_task, project_task, deployment_task } = useSelector(
-      (state) => state.pipelineList,
-      shallowEqual,
-    );
+    const {
+      generation_task,
+      preprocessing_task,
+      finetuning_task,
+      quantize_task,
+      llm_deploy_task,
+    } = useSelector((state) => state.pipelineList, shallowEqual);
+
+    const taskCount =
+      generation_task.length +
+      preprocessing_task.length +
+      finetuning_task.length +
+      quantize_task.length +
+      llm_deploy_task.length;
 
     const nodes = useNodes();
     const edges = useEdges();
@@ -136,6 +147,7 @@ const PipeLineProjectHeader = React.memo(
     const calIsConnect = (filterNodeList, edges, isStopBtn) => {
       if (filterNodeList.length === 0) return false;
       if (isStopBtn) return true;
+      if (filterNodeList.length === 1) return true; // 단일 노드 = 커넥터 불필요
       if (edges.length < filterNodeList.length - 1) return false;
 
       const edgeSourceMap = new Map();
@@ -146,12 +158,18 @@ const PipeLineProjectHeader = React.memo(
         edgeTargetMap.set(item.target, true);
       });
 
-      for (const filterNode of filterNodeList) {
-        if (filterNode.data.task_type === 'deployment') {
-          if (!edgeTargetMap.has(filterNode.id)) return false;
-        }
+      // 터미널 레인 = 노드가 존재하는 가장 뒤 레인(LANE_ORDER). 터미널=수신 필요, 그 외=송신 필요.
+      const maxLane = Math.max(
+        ...filterNodeList.map((node) =>
+          LANE_ORDER.indexOf(node.data.task_type),
+        ),
+      );
 
-        if (filterNode.data.task_type !== 'deployment') {
+      for (const filterNode of filterNodeList) {
+        const laneIdx = LANE_ORDER.indexOf(filterNode.data.task_type);
+        if (laneIdx === maxLane) {
+          if (!edgeTargetMap.has(filterNode.id)) return false;
+        } else {
           if (!edgeSourceMap.has(filterNode.id)) return false;
         }
       }
@@ -160,13 +178,7 @@ const PipeLineProjectHeader = React.memo(
     };
 
     const isConnect = calIsConnect(filterNodeList, edges, isStopBtn);
-    const errorMessage = calErrorMessage(
-      preprocessing_task,
-      project_task,
-      deployment_task,
-      datasetValue,
-      isConnect,
-    );
+    const errorMessage = calErrorMessage(taskCount, datasetValue, isConnect);
     const isRunBtn = !!errorMessage;
     const headerMessage = calHeaderMessage(isStopBtn, errorMessage);
 

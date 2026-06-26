@@ -1,0 +1,90 @@
+.cont {
+  padding: 32px 40px;
+}
+
+.back {
+  border: none;
+  background: none;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+  margin-bottom: 12px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.desc {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 8px 0 24px;
+}
+
+.mock {
+  color: #f59e0b;
+  font-weight: 600;
+}
+
+.empty {
+  padding: 32px;
+  text-align: center;
+  color: #9ca3af;
+  border: 1px dashed #d1d5db;
+  border-radius: 10px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+
+  th,
+  td {
+    border: 1px solid #e5e7eb;
+    padding: 8px 12px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background: #f3f4f6;
+    font-weight: 600;
+  }
+}
+
+.prompt-cell {
+  max-width: 640px;
+}
+
+.badge {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  padding: 2px 8px;
+  color: #6b7280;
+  background: #f3f4f6;
+
+  &.adopted {
+    color: #00824f;
+    background: #d1fae5;
+  }
+  &.discarded {
+    color: #9ca3af;
+    background: #f3f4f6;
+    text-decoration: line-through;
+  }
+  &.candidate {
+    color: #6d28d9;
+    background: #ede9fe;
+  }
+}

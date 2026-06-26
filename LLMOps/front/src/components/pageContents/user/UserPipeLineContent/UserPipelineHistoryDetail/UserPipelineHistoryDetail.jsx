@@ -34,15 +34,28 @@ const calTransformList = (list) => {
 
 const getPipelineHistoryDetailInfo = async (historyId, dispatch) => {
   const { result, message, status } = await getPipelineHistoryDetail(historyId);
-  // done, stop일때 백엔드에서 보내주는 키값이 서로 다름
+  // done, stop일때 백엔드에서 보내주는 키값이 서로 다름(generation/_task). 옛 히스토리
+  // 레코드(GenAI 레인 이전)는 신규 버킷이 없을 수 있어 ?? [] 방어.
+  const transformGeneration = calTransformList(
+    result.tasks.generation ?? result.tasks.generation_task ?? [],
+  );
   const transformProcessTask = calTransformList(
-    result.tasks.preprocessing ?? result.tasks.preprocessing_task,
+    result.tasks.preprocessing ?? result.tasks.preprocessing_task ?? [],
+  );
+  const transformFinetuning = calTransformList(
+    result.tasks.finetuning ?? result.tasks.finetuning_task ?? [],
+  );
+  const transformQuantize = calTransformList(
+    result.tasks.quantize ?? result.tasks.quantize_task ?? [],
+  );
+  const transformLlmDeploy = calTransformList(
+    result.tasks.llm_deploy ?? result.tasks.llm_deploy_task ?? [],
   );
   const transformProject = calTransformList(
-    result.tasks.project ?? result.tasks.project_task,
+    result.tasks.project ?? result.tasks.project_task ?? [],
   );
   const transformDeployment = calTransformList(
-    result.tasks.deployment ?? result.tasks.deployment_task,
+    result.tasks.deployment ?? result.tasks.deployment_task ?? [],
   );
 
   if (status === STATUS_SUCCESS) {
@@ -50,7 +63,11 @@ const getPipelineHistoryDetailInfo = async (historyId, dispatch) => {
       handleSetPipelineState({
         type: 'all',
         data: {
+          generation_task: transformGeneration,
           preprocessing_task: transformProcessTask,
+          finetuning_task: transformFinetuning,
+          quantize_task: transformQuantize,
+          llm_deploy_task: transformLlmDeploy,
           project_task: transformProject,
           deployment_task: transformDeployment,
         },

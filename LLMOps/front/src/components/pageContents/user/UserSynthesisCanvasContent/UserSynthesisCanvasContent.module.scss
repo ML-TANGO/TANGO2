@@ -1,0 +1,70 @@
+.cont {
+  padding: 32px 40px;
+}
+
+.back {
+  border: none;
+  background: none;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+  margin-bottom: 12px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.status {
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7280;
+
+  &.running { color: #8b5cf6; }
+  &.completed { color: #00c775; }
+  &.failed { color: #ef4444; }
+}
+
+.desc {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 8px 0 20px;
+}
+
+.canvas {
+  height: 480px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fafafa;
+}
+
+.node {
+  text-align: center;
+}
+
+.node-key {
+  font-size: 12px;
+  font-weight: 700;
+  color: #8b5cf6;
+}
+
+.node-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 2px 0;
+}
+
+.node-desc {
+  font-size: 11px;
+  color: #9ca3af;
+}

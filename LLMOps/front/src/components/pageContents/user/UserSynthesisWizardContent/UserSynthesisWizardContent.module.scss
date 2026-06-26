@@ -1,0 +1,152 @@
+.cont {
+  padding: 32px 40px;
+}
+
+.back {
+  border: none;
+  background: none;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+  margin-bottom: 12px;
+}
+
+.title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.jump {
+  font-size: 13px;
+  color: #8b5cf6;
+  margin: 6px 0 20px;
+}
+
+.stepper {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.step {
+  flex: 1;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 12px;
+  cursor: pointer;
+  text-align: center;
+
+  &.active {
+    border-color: #8b5cf6;
+    background: #f5f3ff;
+  }
+  &.done .num {
+    background: #00c775;
+  }
+}
+
+.num {
+  width: 24px;
+  height: 24px;
+  line-height: 24px;
+  border-radius: 50%;
+  background: #9ca3af;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0 auto 6px;
+
+  .active & {
+    background: #8b5cf6;
+  }
+}
+
+.step-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.step-sub {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.panel {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 24px;
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.row {
+  font-size: 14px;
+  color: #374151;
+  b { color: #1a1a1a; margin-right: 6px; }
+}
+
+.hint {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.mock {
+  color: #f59e0b;
+  font-weight: 600;
+}
+
+.adopted {
+  color: #00c775;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.cand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
+.score {
+  font-weight: 700;
+  color: #8b5cf6;
+}
+
+.prompt {
+  flex: 1;
+  font-size: 13px;
+}
+
+.result-count {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.placeholder {
+  color: #9ca3af;
+  text-align: center;
+  padding: 32px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  th, td { border: 1px solid #e5e7eb; padding: 6px 10px; text-align: left; }
+  th { background: #f3f4f6; }
+}
+
+.nav {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 24px;
+}

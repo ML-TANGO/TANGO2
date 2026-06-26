@@ -120,10 +120,10 @@ DATASET_FILEBROWSER_STATUS_READY="kube_pod_container_status_ready{{pod='{POD_NAM
 DATASET_FILEBROWSER_POD_LIST="kube_pod_labels{label_pod_type='filebrowser'}"
 REDIS_WORKSPACE_POD_LIST="kube_pod_labels{{label_workspace_id='{workspace_id}', label_work_func_type!=''}}"
 NAMESPACE_TOOL_LIST="kube_pod_labels{{label_work_func_type!='',namespace='{namespace}'}}"
-WORKSPACE_POD_RESOURCE_USAGE="kube_pod_labels{label_work_func_type=~'tool|training|deployment'}"
+WORKSPACE_POD_RESOURCE_USAGE="kube_pod_labels{label_work_func_type=~'tool|training|deployment|generation'}"
 WORKSPACE_NETWORK_OUTBOUND_USAGE="container_network_transmit_bytes_total" # return value Byte/s
 WORKSPACE_NETWORK_INBOUND_USAGE="container_network_receive_bytes_total" # return value Byte/s
-WORKSPACE_POD_INFO_JOIN_LABELS="kube_pod_info * on(pod) group_left(label_workspace_id, label_pod_type, label_helm_name, label_instance_id) kube_pod_labels{label_work_func_type=~'tool|training|deployment'}"
+WORKSPACE_POD_INFO_JOIN_LABELS="kube_pod_info * on(pod) group_left(label_workspace_id, label_pod_type, label_helm_name, label_instance_id) kube_pod_labels{label_work_func_type=~'tool|training|deployment|generation'}"
 TRAINING_POD_LIST="kube_pod_labels{label_work_func_type='training'}"
 HPS_POD_LIST="kube_pod_labels{label_work_func_type='hps'}"
 TOOL_POD_DNS = "http://{SERVICE_NAME}.{NAMESPACE}.svc.cluster.local"
@@ -320,6 +320,11 @@ def storage_lock(workspace_info):
                         # DB 업데이트
                         pass
                     pass
+                elif pod_info.label_pod_type==TYPE.GENERATION_TYPE:
+                    # 생성형 파이프라인 노드(external generate job) — storage quota
+                    # 초과 시 helm uninstall. WBS 1.1.
+                    delete_helm(name=pod_info.label_helm_name, namespace=namespace)
+                    pass
 
 
     if workspace_info['main_storage_lock'] == 3:
@@ -370,6 +375,11 @@ def storage_lock(workspace_info):
                         # TODO
                         # DB 업데이트
                         pass
+                    pass
+                elif pod_info.label_pod_type==TYPE.GENERATION_TYPE:
+                    # 생성형 파이프라인 노드(external generate job) — storage quota
+                    # 초과 시 helm uninstall. WBS 1.1.
+                    delete_helm(name=pod_info.label_helm_name, namespace=namespace)
                     pass
 
 
@@ -1767,6 +1777,18 @@ def set_workspace_pod_status():
                     "used_instance" : instance_id,
                     "used_deployment_worker": deployment_worker_id
                 }
+        elif item_type == TYPE.GENERATION_TYPE:
+            # 생성형 파이프라인 노드(external generate job) — 귀속 키 = label_job_id
+            # (model_id/deployment_id 가짜 라벨 불요). 누락 시 tick crash 방지 위해 .get. WBS 1.1.
+            job_id = pod_info.get("label_job_id", "")
+            for gpu_uuid in gpu_uuids:
+                gpu_status[node_name][gpu_uuid]["used"] = 1
+                gpu_status[node_name][gpu_uuid]["used_type"] = item_type
+                gpu_status[node_name][gpu_uuid]["used_info"] = {
+                    "used_workspace" : workspace_id,
+                    "used_job" : job_id,
+                    "used_instance" : instance_id
+                }
 
     def update_pod_gpu_usage_from_labels(pod_labels: dict) -> int:
         """
@@ -2198,7 +2220,27 @@ def set_workspace_pod_status():
                                         'phase' : pod_status[0]['metric']['phase'] if pod_status else "Unknown",
                                         'resource' : pod_resource
                                     }
-                    redis_client.hset(redis_key.WORKSPACE_PODS_STATUS, workspace["id"], json.dumps(workspace_pods))    
+                        elif pod_info["label_pod_type"] == TYPE.GENERATION_TYPE:
+                            # 생성형 파이프라인 노드(external generate job) — 단일 pod,
+                            # 귀속 키 = label_job_id. 누락 시 pod 명으로 fallback —
+                            # bare 인덱싱은 KeyError 로 workspace_usage 틱 전체를 죽인다
+                            # (SP-Ext.4 회귀). insert_gpu_usage 와 동일하게 방어. WBS 1.1.
+                            generation_key = pod_info.get("label_job_id") or pod_info.get("pod", "")
+                            pod_resource = {
+                                "gpu" : pod_resource.get("gpu", 0),
+                                "cpu" : pod_resource.get("cpu", 0),
+                                "ram" : pod_resource.get("ram", 0),
+                            }
+                            workspace_pods[TYPE.GENERATION_TYPE][generation_key] = {
+                                    'status' : status if status else TYPE.KUBE_POD_STATUS_PENDING,
+                                    'reason' : reason,
+                                    'instance_id' : instance_id,
+                                    'resolution' : resolution,
+                                    'restart_count' : pod_container_restart_count,
+                                    'phase' : pod_status[0]['metric']['phase'] if pod_status else "Unknown",
+                                    'resource' : pod_resource
+                                }
+                    redis_client.hset(redis_key.WORKSPACE_PODS_STATUS, workspace["id"], json.dumps(workspace_pods))
                     # redis_client.hset(redis_key.WORKSPACE_INSTANCE_USED, workspace["id"], json.dumps(workspace_instances))
                 redis_client.set(redis_key.GPU_INFO_RESOURCE, json.dumps(gpu_status))
         except:

@@ -5,8 +5,12 @@ import CardFrame from './CardFrame';
 import './ReactFlowComponent/ReactFlowComponent.scss';
 
 const TtaskType = {
+  generation: 'generation',
   preprocessing: 'pre',
   project: 'train',
+  finetuning: 'finetune',
+  quantize: 'quantize',
+  llm_deploy: 'llmdeploy',
   deployment: 'deployment',
 };
 

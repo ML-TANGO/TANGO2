@@ -24,15 +24,17 @@ import LineContent from '../../UserPipeLineProject/LineContent';
 import NodeHeader from '../../UserPipeLineProject/NodeHeader';
 
 import {
-  calDeloymentGroupList,
+  calFinetuningGroupList,
+  calGenerationGroupList,
   calHeight,
   calLastPosition,
   calLineColor,
   calListHeaderGroup,
+  calLlmDeployGroupList,
   calNodeDataList,
   calPreDataGroupList,
+  calQuantizeGroupList,
   calSwapArrayCoordinate,
-  calTrainGroupList,
   nodeLineColorStyle,
   xPositionList,
 } from '../../UserPipeLineProject/ReactFlowComponent/util';
@@ -52,10 +54,13 @@ const nodeTypes = {
 };
 
 const FlowHistoryComponent = ({ handleResetData, isStopBtn = true }) => {
-  const { preprocessing_task, project_task, deployment_task } = useSelector(
-    (state) => state.pipelineList,
-    shallowEqual,
-  );
+  const {
+    generation_task,
+    preprocessing_task,
+    finetuning_task,
+    quantize_task,
+    llm_deploy_task,
+  } = useSelector((state) => state.pipelineList, shallowEqual);
 
   const match = useRouteMatch();
   const { params } = match;
@@ -66,8 +71,22 @@ const FlowHistoryComponent = ({ handleResetData, isStopBtn = true }) => {
   const [height, setHeight] = useState(0);
 
   useEffect(() => {
-    const preDataHeaderGroup = calListHeaderGroup(
+    // 라이브 캔버스(ReactFlowComponent)와 동일 GenAI 레인셋 미러(읽기전용):
+    // 생성 → 전처리 → 파인튜닝 → 양자화 → LLM배포. (dataset_info/pipelineType=undefined: 히스토리=비편집)
+    const generationHeaderGroup = calListHeaderGroup(0, '생성 데이터', isStopBtn);
+    const generationGroupList = calGenerationGroupList(
+      generation_task,
+      handleResetData,
+      isStopBtn,
+      undefined,
+      undefined,
       0,
+    );
+    const generationGroupLastValue = _.last(generationGroupList);
+
+    const preDataStartPositionY = calLastPosition(generationGroupLastValue);
+    const preDataHeaderGroup = calListHeaderGroup(
+      preDataStartPositionY,
       '학습 데이터 전처리',
       isStopBtn,
     );
@@ -75,73 +94,116 @@ const FlowHistoryComponent = ({ handleResetData, isStopBtn = true }) => {
       preprocessing_task,
       handleResetData,
       isStopBtn,
+      undefined,
+      undefined,
+      preDataStartPositionY,
     );
     const preDataGroupLastValue = _.last(preDataGroupList);
 
-    const trainStartPositionY = calLastPosition(preDataGroupLastValue);
-    const trainListHeaderGroup = calListHeaderGroup(
-      trainStartPositionY,
-      '학습',
+    const finetuneStartPositionY = calLastPosition(preDataGroupLastValue);
+    const finetuneHeaderGroup = calListHeaderGroup(
+      finetuneStartPositionY,
+      '파인튜닝',
       isStopBtn,
     );
-    const trainGroupList = calTrainGroupList(
-      project_task,
+    const finetuneGroupList = calFinetuningGroupList(
+      finetuning_task,
       handleResetData,
-      trainStartPositionY,
       isStopBtn,
+      undefined,
+      undefined,
+      finetuneStartPositionY,
     );
-    const tarinGroupLastValue = _.last(trainGroupList);
+    const finetuneGroupLastValue = _.last(finetuneGroupList);
 
-    const deploymentPositionY = calLastPosition(tarinGroupLastValue);
-    const deplopmentListHeaderGroup = calListHeaderGroup(
-      deploymentPositionY,
-      '배포',
+    const quantizeStartPositionY = calLastPosition(finetuneGroupLastValue);
+    const quantizeHeaderGroup = calListHeaderGroup(
+      quantizeStartPositionY,
+      '양자화',
       isStopBtn,
     );
-    const deploymentGroupList = calDeloymentGroupList(
-      deployment_task,
+    const quantizeGroupList = calQuantizeGroupList(
+      quantize_task,
       handleResetData,
-      deploymentPositionY,
+      isStopBtn,
+      undefined,
+      undefined,
+      quantizeStartPositionY,
+    );
+    const quantizeGroupLastValue = _.last(quantizeGroupList);
+
+    const llmDeployPositionY = calLastPosition(quantizeGroupLastValue);
+    const llmDeployHeaderGroup = calListHeaderGroup(
+      llmDeployPositionY,
+      'LLM 배포',
       isStopBtn,
     );
+    const llmDeployGroupList = calLlmDeployGroupList(
+      llm_deploy_task,
+      handleResetData,
+      isStopBtn,
+      undefined,
+      undefined,
+      llmDeployPositionY,
+    );
 
+    const generationNodeList = calNodeDataList(
+      generation_task,
+      'generation-group',
+      handleResetData,
+      isStopBtn,
+    );
     const preDataListNodeList = calNodeDataList(
       preprocessing_task,
       'pre-group',
       handleResetData,
       isStopBtn,
     );
-    const trainDataListNodeList = calNodeDataList(
-      project_task,
-      'train-group',
+    const finetuneNodeList = calNodeDataList(
+      finetuning_task,
+      'finetuning-group',
       handleResetData,
       isStopBtn,
     );
-    const deploymentNodeList = calNodeDataList(
-      deployment_task,
-      'deployment-group',
+    const quantizeNodeList = calNodeDataList(
+      quantize_task,
+      'quantize-group',
+      handleResetData,
+      isStopBtn,
+    );
+    const llmDeployNodeList = calNodeDataList(
+      llm_deploy_task,
+      'llm-deploy-group',
       handleResetData,
       isStopBtn,
     );
 
-    const maxHeight = calHeight(deploymentGroupList);
+    const maxHeight = calHeight(llmDeployGroupList);
 
     const totalPreNodeList = [
+      generationHeaderGroup,
       preDataHeaderGroup,
-      trainListHeaderGroup,
-      deplopmentListHeaderGroup,
+      finetuneHeaderGroup,
+      quantizeHeaderGroup,
+      llmDeployHeaderGroup,
+      ...generationGroupList,
+      ...generationNodeList,
       ...preDataGroupList,
       ...preDataListNodeList,
-      ...trainGroupList,
-      ...trainDataListNodeList,
-      ...deploymentGroupList,
-      ...deploymentNodeList,
+      ...finetuneGroupList,
+      ...finetuneNodeList,
+      ...quantizeGroupList,
+      ...quantizeNodeList,
+      ...llmDeployGroupList,
+      ...llmDeployNodeList,
     ];
 
     const nodeList = [
+      ...generationNodeList,
       ...preDataListNodeList,
-      ...trainDataListNodeList,
-      ...deploymentNodeList,
+      ...finetuneNodeList,
+      ...quantizeNodeList,
+      ...llmDeployNodeList,
     ];
 
     const edgeList = [];
@@ -170,11 +232,13 @@ const FlowHistoryComponent = ({ handleResetData, isStopBtn = true }) => {
     setNodes(totalPreNodeList);
     setEdges(edgeList);
   }, [
+    generation_task,
     preprocessing_task,
-    deployment_task,
+    finetuning_task,
+    quantize_task,
+    llm_deploy_task,
     handleResetData,
     isStopBtn,
-    project_task,
     setEdges,
     setNodes,
   ]);

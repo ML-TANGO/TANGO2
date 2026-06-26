@@ -105,6 +105,28 @@ export const getPipelineOptionImages = async (workspaceId) => {
   return res;
 };
 
+// 생성형 데이터 파이프라인 노드용 외부 컨테이너 manifest 목록 (job_type=generate). WBS 1.2
+export const getGenerationManifests = async () => {
+  const res = await callApi({
+    url: 'pipelines/option/generation-manifests',
+    method: 'get',
+  });
+  return res;
+};
+
+// GenAI 통합 파이프라인 파인튜닝/양자화 노드용 워크스페이스 LLM 모델 목록.
+// 반환: [{ id, name, training_type, domain, external_manifest_name, external_manifest_version }]
+export const getLlmModels = async (workspaceId) => {
+  const res = await callApi({
+    url: 'pipelines/option/llm-models',
+    method: 'get',
+    params: {
+      workspace_id: +workspaceId,
+    },
+  });
+  return res;
+};
+
 export const deletePipeLines = async (pipelineId) => {
   const res = await callApi({
     url: `pipelines`,

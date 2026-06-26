@@ -10,9 +10,13 @@ export const handleReset = createAction(RESET_PIPELINE_STATE);
 
 // ** llm Playground 값 조절 **
 export const pipelineState = {
+  generation_task: [],
   preprocessing_task: [],
   deployment_task: [],
   project_task: [],
+  finetuning_task: [],
+  quantize_task: [],
+  llm_deploy_task: [],
   isStopBtn: false,
 };
 

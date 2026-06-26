@@ -73,6 +73,19 @@ async def get_task_items(workspace_id : int, task_type : str):
     res = await select_query(sql)
     return res
 
+async def get_generation_manifests():
+    # 생성형 파이프라인 노드용 외부 컨테이너 manifest 목록 (job_type=generate).
+    # external_container_manifest 는 같은 msa_jfb DB → 직접 조회. (WBS 1.2)
+    sql = """
+        SELECT name, version, execution_mode,
+               JSON_UNQUOTE(JSON_EXTRACT(raw_json, '$.metadata.description')) AS description
+        FROM external_container_manifest
+        WHERE job_type = 'generate'
+        ORDER BY name, version
+    """
+    res = await select_query(sql)
+    return res
+
 async def get_task_item(task_item_id : int, task_type : str):
     sql = f"""
         SELECT t.*, w.name as workspace_name, s.name as main_storage_name
@@ -362,7 +375,7 @@ async def update_pipeline_retraining(pipeline_id : int, retraining_type : str, r
 async def update_pipeline_task_reset(pipeline_id :int):
     try:
         sql = """
-                UPDATE pipeline_task set status = 'pending', start_datetime = Null, task_item_job_id=Null, end_datetime = Null WHERE pipeline_id=%s
+                UPDATE pipeline_task set status = 'pending', start_datetime = Null, task_item_job_id=Null, task_item_job_str_id=Null, end_datetime = Null WHERE pipeline_id=%s
             """
         res = await commit_query(query=sql, params=(pipeline_id,))
         return True

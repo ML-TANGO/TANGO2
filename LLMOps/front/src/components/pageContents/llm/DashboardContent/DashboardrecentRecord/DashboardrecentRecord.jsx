@@ -95,7 +95,7 @@ const FlagComponent = ({ historyList }) => {
 
 const DashboardrecentRecord = React.memo(({ title, historyList }) => {
   return (
-    <DashboardFrame title={title} style={{ height: '560px' }}>
+    <DashboardFrame title={title} style={{ height: '360px' }}>
       <FlagComponent historyList={historyList} />
     </DashboardFrame>
   );

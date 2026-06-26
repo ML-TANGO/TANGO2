@@ -28,21 +28,30 @@ import IconLink from '@src/static/images/icon/ic-shortcut-gray.svg';
 const cx = classNames.bind(style);
 
 const calCardLabel = (cardType, t) => {
+  if (cardType === 'generation') return '생성 데이터';
   if (cardType === 'pre') return '학습 데이터 전처리';
   if (cardType === 'train') return '학습';
+  if (cardType === 'finetune') return '파인튜닝';
+  if (cardType === 'quantize') return '양자화';
+  if (cardType === 'llmdeploy') return 'LLM 배포';
   if (cardType === 'deployment') return '배포';
   return '-';
 };
 
 export const calPointerColor = (cardType) => {
+  if (cardType === 'generation') return '#8B5CF6';
   if (cardType === 'pre') return '#2D76F8';
   if (cardType === 'train') return '#FF7A00';
+  if (cardType === 'finetune') return '#14B8A6';
+  if (cardType === 'quantize') return '#F59E0B';
+  if (cardType === 'llmdeploy') return '#10B981';
   return '#00C775';
 };
 
-const calLastTargetHandle = (cardType, deployMaxY, y_index) => {
-  if (cardType !== 'deployment') return true;
-  if (deployMaxY !== y_index) return true;
+// 터미널 레인(GenAI=LLM 배포)의 마지막 행은 아래 핸들 없음. ML/DL deployment 는 렌더 제외(보존).
+const calLastTargetHandle = (cardType, lastLaneMaxY, y_index) => {
+  if (cardType !== 'llmdeploy') return true;
+  if (lastLaneMaxY !== y_index) return true;
   return false;
 };
 
@@ -51,9 +60,17 @@ const calTypetoTypeList = (
   preprocessing_task,
   project_task,
   deployment_task,
+  generation_task,
+  finetuning_task,
+  quantize_task,
+  llm_deploy_task,
 ) => {
+  if (cardType === 'generation') return generation_task;
   if (cardType === 'pre') return preprocessing_task;
   if (cardType === 'train') return project_task;
+  if (cardType === 'finetune') return finetuning_task;
+  if (cardType === 'quantize') return quantize_task;
+  if (cardType === 'llmdeploy') return llm_deploy_task;
   return deployment_task;
 };
 
@@ -80,6 +97,10 @@ const calStatuscolor = (status, isStopBtn) => {
 
 const calIsTrainTool = (isStopBtn, cardType, task_item_type) => {
   if (isStopBtn) return false;
+  if (cardType === 'generation') return false;
+  if (cardType === 'finetune') return false;
+  if (cardType === 'quantize') return false;
+  if (cardType === 'llmdeploy') return false;
   if (cardType === 'deployment') return false;
   if (task_item_type === 'advanced') return true;
   if (task_item_type === 'built-in') return true;
@@ -225,10 +246,15 @@ export default function CardFrame({
   const history = useHistory();
   const dispatch = useDispatch();
 
-  const { preprocessing_task, project_task, deployment_task } = useSelector(
-    (state) => state.pipelineList,
-    shallowEqual,
-  );
+  const {
+    generation_task,
+    preprocessing_task,
+    project_task,
+    deployment_task,
+    finetuning_task,
+    quantize_task,
+    llm_deploy_task,
+  } = useSelector((state) => state.pipelineList, shallowEqual);
   const { y_index } = coordinate;
   const imgIcon = calTypeIcon(cardType, task_item_type, status, isStopBtn);
 
@@ -237,13 +263,18 @@ export default function CardFrame({
     preprocessing_task,
     project_task,
     deployment_task,
+    generation_task,
+    finetuning_task,
+    quantize_task,
+    llm_deploy_task,
   );
   const isLastXindex = calIsLastxIndex(myList, coordinate);
 
-  const deployYlist = deployment_task.map((el) => el.coordinate.y_index);
-  const deployMaxY = Math.max(...deployYlist);
+  // 터미널 레인 = LLM 배포(GenAI 최종 레인). 마지막 행은 아래(source) 핸들 숨김.
+  const llmDeployYlist = llm_deploy_task.map((el) => el.coordinate.y_index);
+  const llmDeployMaxY = Math.max(...llmDeployYlist);
 
-  const isLastHandle = calLastTargetHandle(cardType, deployMaxY, y_index);
+  const isLastHandle = calLastTargetHandle(cardType, llmDeployMaxY, y_index);
 
   const headerLabel = calCardLabel(cardType);
   const borderColor = calPointerColor(cardType);

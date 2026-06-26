@@ -6,7 +6,6 @@ import { Badge } from '@jonathan/ui-react';
 import dayjs from 'dayjs';
 
 import DashboardFrame from '../DashboardFrame';
-import DashboardPayment from '../DashboardPayment';
 
 // CSS Module
 import classNames from 'classnames/bind';
@@ -82,9 +81,6 @@ const DashboardInfo = React.memo(
               </div>
             </div>
           </div>
-        </DashboardFrame>
-        <DashboardFrame>
-          <DashboardPayment />
         </DashboardFrame>
       </div>
     );

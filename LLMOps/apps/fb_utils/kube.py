@@ -150,6 +150,27 @@ def get_pod_info(namespace, pod_name):
         print(f"Error getting pod: {e}")
         return None
 
+def get_pod_log(namespace, pod_name, tail_lines: int = 200, container: str = None):
+    """pod stdout 로그 tail. pod 미존재(GC/미생성) 시 None.
+    generation 등 외부 job 의 실시간 로그(stdout JSONL)용 — 결과는 NFS, 로그는 stdout."""
+    if not namespace or not pod_name:
+        return None
+    v1 = client.CoreV1Api()
+    try:
+        log = v1.read_namespaced_pod_log(
+            name=pod_name, namespace=namespace,
+            tail_lines=tail_lines, container=container, timestamps=False,
+        )
+        # pod 종료 직후 transient — 컨테이너 로그가 이미 GC됨(원문 노출 방지).
+        if log and log.startswith("unable to retrieve container logs"):
+            return None
+        return log
+    except ApiException as e:
+        if e.status == 404:
+            return None
+        print(f"Error getting pod log: {e}")
+        return None
+
 def get_all_pods(namespace : str, label_selector: str = ""):
     v1 = client.CoreV1Api()
     try:
