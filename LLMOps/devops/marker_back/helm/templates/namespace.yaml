@@ -1,0 +1,7 @@
+{{- $namespace := .Values.global.jfb.settings.marker_db.namespace }}
+{{- if not (lookup "v1" "Namespace" "" $namespace) }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $namespace }}
+{{- end }}

@@ -1,0 +1,96 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.global.jfb.name.marker_back }}
+  namespace: {{ .Values.global.jfb.namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.global.jfb.name.marker_back }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.global.jfb.name.marker_back }}
+        {{- include "lib.label.jfb" . | nindent 8 }}
+      annotations:
+        "acryl.ai/appType": system
+        checksum/config: {{ include "lib.lookup.settings" . }}
+    spec:
+      nodeSelector:
+      {{- include "lib.nodeSelector.manage" . | nindent 8 }}
+      # serviceAccountName: jfb-training-sa
+      {{- if .Values.global.jfb.image.pullSecrets.enabled }}
+      imagePullSecrets:
+      - name: {{ .Values.global.jfb.image.pullSecrets.name }}
+      {{- end }}
+      containers:
+      - name: {{ .Values.global.jfb.name.marker_back }}
+        image: {{ .Values.global.jfb.image.system.registry }}/{{ .Values.global.jfb.image.marker_back }}
+        imagePullPolicy: {{ .Values.global.jfb.image.pullPolicy }}
+        command: [ "/bin/bash", "-c"]
+        args: ["cd /app; python3 app.py;"]
+        resources:
+          limits:
+            cpu : 0.8
+            memory : "300M"
+          requests:
+            cpu : 0.8
+            memory : "200M"
+        ports:
+        - containerPort: 9123
+        envFrom:
+        - configMapRef:
+            name: marker-settings
+        volumeMounts:
+          - name: storage-local-nfs 
+            mountPath: /jf-data/storage-local-nfs
+          - name: src 
+            mountPath: /pdf
+            subPath: data/files/pdf                                                                                                                                                            
+          - name: src
+            mountPath: /app
+            # subPath: 
+      - name: image-server
+        image: nginx:latest
+        resources:
+          limits:
+            cpu : 0.8
+            memory : "300M"
+          requests:
+            cpu : 0.8
+            memory : "200M"
+        ports:
+        - containerPort: 9000
+        envFrom:
+        - configMapRef:
+            name: marker-settings
+        volumeMounts:
+          - name: storage-local-nfs
+            mountPath: /images
+            subPath: data
+          - name: src
+            mountPath: /guides
+            subPath: data/files/guides
+          - name: src
+            mountPath: /thumbnails
+            subPath: data/files/thumbnails
+          - name: src
+            mountPath: /exports
+            subPath: data/files/exports
+          - name: src
+            mountPath: /pdf
+            subPath: data/files/pdf
+          - name: src
+            mountPath: /etc/nginx/conf.d
+            subPath: installer/setting/nginx_conf/image
+      volumes:
+        - name: jf-data
+          persistentVolumeClaim:
+            claimName: jf-data-pvc
+        - name: storage-local-nfs                                                                                                                                                                                      
+          persistentVolumeClaim:                                                                                                                                                                                       
+            claimName: storage-local-nfs
+        - name: src
+          persistentVolumeClaim:
+            claimName: jf-src-marker-pvc

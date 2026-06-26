@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.global.jfb.name.marker_front }}
+  namespace: {{ .Values.global.jfb.namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.global.jfb.name.marker_front }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.global.jfb.name.marker_front }}
+    spec:
+      nodeSelector:
+        {{- include "lib.nodeSelector.manage" . | nindent 8 }}
+      containers:
+      - name: {{ .Values.global.jfb.name.marker_front }}
+        image: {{ .Values.global.jfb.image.system.registry }}/{{ .Values.global.jfb.image.marker_front }}
+        imagePullPolicy: {{ .Values.global.jfb.image.pullPolicy }}
+        ports:
+          - containerPort: 80
+
+{{/*
+# Dir 구조
+# 폴더: /marker_front-data (빌드, 실행), /marker_front-share (initContainer 와 Container 연결되는 지점)
+# init: /marker_front-data에서 빌드 -> /marker_front-share로 옮김 
+# container: /marker_front-share를 /marker_front-data로 복사 -> /marker_front-data을 사용하여 app 실행 
+
+# Build Volumes
+# 개발 : hostPath
+# 배포 : emptyDir
+*/}}

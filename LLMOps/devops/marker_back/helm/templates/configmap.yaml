@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: marker-settings
+  namespace: {{ .Values.global.jfb.namespace }}
+data:
+  # EXTERNAL_URL: showcase.acryl.ai/marker/\
+  # 외부 호스트는 values 의 settings.external 에서 주입 (구 하드코딩 115.71.28.72 제거)
+  {{- $ext := printf "%s://%s" .Values.global.jfb.settings.external.protocol .Values.global.jfb.settings.external.host }}
+  DOMAIN: {{ $ext }}
+  IMAGE_URL: {{ $ext }}/marker/images/
+  GUIDE_URL: {{ $ext }}/marker/guides/
+  EXPORT_URL: {{ $ext }}/marker/exports/
+  THUMBNAIL_URL: {{ $ext }}/marker/thumbnails/
+  PDF_URL: {{ $ext }}/marker/pdf/
+  JF_DEPLOYMENT_API_URL: http://jfb-app-deployment-svc/api
+  JF_WORKSPACE_API_URL: http://jfb-app-workspace-svc/api
+  JF_DATA_PATH: /jf-data/storage-local-nfs/data/
+  DATA_PATH : ./data/
+  DB_HOST: marker-mariadb.marker-mariadb.svc.cluster.local #192.168.0.20
+  DB_PORT: "3306"
+  API_PORT: "9123"
+  IMAGE_PORT: "9091"
