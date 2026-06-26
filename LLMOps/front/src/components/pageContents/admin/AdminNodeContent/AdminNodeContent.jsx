@@ -11,6 +11,7 @@ import RamUsageStatus from './CPUServerTab/RamUsageStatus';
 import GPUAllocationStatus from './GPUServerTab/GPUAllocationStatus';
 import InstanceDetail from './InstanceDetail';
 import NodeTable from './NodeTable';
+import EdgeWorkerSection from './EdgeWorkerSection';
 
 import { calIsIntervalErrorToast, executeWithLogging } from '@src/utils';
 import { initial } from './util';
@@ -196,6 +197,7 @@ function AdminNodeContent() {
           statusList={statusList}
           setStatusList={setStatusList}
         />
+        <EdgeWorkerSection />
       </div>
     </div>
   );

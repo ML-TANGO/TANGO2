@@ -1,0 +1,40 @@
+import { callApi } from '@src/network';
+
+// SP-8 / 수용계획서 3.1 — Edge 워커 노드 + 커스텀 레이블 (admin).
+
+export const getEdgeWorkers = async () => {
+  return await callApi({ url: 'edge/workers', method: 'get' });
+};
+
+export const registerEdgeWorker = async (body) => {
+  // body: { device_id, name?, device_type?, sdx_domain?, remote_manager_url }
+  return await callApi({ url: 'edge/workers', method: 'post', body });
+};
+
+export const refreshEdgeWorker = async (workerId) => {
+  // remoteManager /metrics 폴링 → 연결상태/자원/배포 갱신.
+  return await callApi({ url: `edge/workers/${workerId}/refresh`, method: 'post' });
+};
+
+export const deleteEdgeWorker = async (workerId) => {
+  return await callApi({ url: `edge/workers/${workerId}`, method: 'delete' });
+};
+
+// SP-6 / 3.10 — 양자화 패키지(GGUF)를 Edge 워커에 remoteManager /ops 로 배포.
+export const deployEdgeWorker = async (workerId, body) => {
+  // body: { image, model_name?, model_version?, gguf_path?, params? }
+  return await callApi({
+    url: `edge/workers/${workerId}/deploy`,
+    method: 'post',
+    body,
+  });
+};
+
+export const upsertEdgeLabel = async (body) => {
+  // body: { target_type, target_id, label_key, label_value? }
+  return await callApi({ url: 'edge/labels', method: 'post', body });
+};
+
+export const deleteEdgeLabel = async (labelId) => {
+  return await callApi({ url: `edge/labels/${labelId}`, method: 'delete' });
+};

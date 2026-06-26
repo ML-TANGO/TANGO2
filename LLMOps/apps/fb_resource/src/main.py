@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from node.route import nodes
+from edge.route import edge
 # from pod.route import pod
 # from gpu.route import gpu
 # from option.route import options
@@ -27,6 +28,7 @@ def initialize_app():
     )
 
     api.include_router(nodes, tags=["nodes"])
+    api.include_router(edge, tags=["edge"])
     # api.include_router(pod, tags=["pod"])
     # api.include_router(gpu, tags=["gpu"])
     # api.include_router(options, tags=["options"])
