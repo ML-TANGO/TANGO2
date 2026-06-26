@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS `model` (
     `start_datetime`            DATETIME,
     `end_datetime`              DATETIME,
     `commit_model_name`         LONGTEXT,
+    `domain`                    VARCHAR(16) DEFAULT NULL,
     `create_datetime`           DATETIME DEFAULT CURRENT_TIMESTAMP,
     `update_datetime`           DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY(`id`),
@@ -248,4 +249,39 @@ CREATE TABLE IF NOT EXISTS `user_prompt` (
     PRIMARY KEY(`user_id`,`prompt_id`),
     CONSTRAINT FOREIGN KEY (`prompt_id`) REFERENCES `jonathan_llm`.`prompt` (`id`) ON UPDATE CASCADE ON DELETE CASCADE,
     CONSTRAINT FOREIGN KEY (`user_id`) REFERENCES `msa_jfb`.`user` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+-- SP-4 양자화·포팅 lineage (v0.4 3.9). apps/fb_utils/llm_db/schema.sql 미러
+-- (fresh-install 정합 — 라이브 DB 에는 수동 적용됨).
+CREATE TABLE IF NOT EXISTS `quantize_lineage` (
+    `id`                INT(11) NOT NULL AUTO_INCREMENT,
+    `source_model_id`   INT(11) NOT NULL,
+    `workspace_id`      INT(11) NOT NULL,
+    `job_str_id`        VARCHAR(128) NOT NULL,
+    `quantization_type` VARCHAR(16) NOT NULL,
+    `target_device`     VARCHAR(64),
+    `prune`             TINYINT(1) DEFAULT 0,
+    `gguf_path`         VARCHAR(512),
+    `status`            VARCHAR(20) DEFAULT 'running',
+    `create_datetime`   DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(`id`),
+    UNIQUE KEY `uq_quantize_job` (`job_str_id`),
+    CONSTRAINT FOREIGN KEY (`source_model_id`) REFERENCES `jonathan_llm`.`model` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+-- SP-5 자동평가 결과 (v0.4 3.8). apps/fb_utils/llm_db/schema.sql 미러.
+CREATE TABLE IF NOT EXISTS `eval_result` (
+    `id`                INT(11) NOT NULL AUTO_INCREMENT,
+    `source_model_id`   INT(11) NOT NULL,
+    `workspace_id`      INT(11) NOT NULL,
+    `job_str_id`        VARCHAR(128) NOT NULL,
+    `dataset_id`        INT(11),
+    `dataset_name`      VARCHAR(255),
+    `metric_set`        VARCHAR(255),
+    `metrics`           JSON,
+    `status`            VARCHAR(20) DEFAULT 'running',
+    `create_datetime`   DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(`id`),
+    UNIQUE KEY `uq_eval_job` (`job_str_id`),
+    CONSTRAINT FOREIGN KEY (`source_model_id`) REFERENCES `jonathan_llm`.`model` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
 );

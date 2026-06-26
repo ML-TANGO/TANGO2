@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS `model` (
     `start_datetime`            DATETIME,
     `end_datetime`              DATETIME,
     `commit_model_name`         LONGTEXT,
+    `domain`                    VARCHAR(16) DEFAULT NULL,
     `create_datetime`           DATETIME DEFAULT CURRENT_TIMESTAMP,
     `update_datetime`           DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY(`id`),
@@ -79,6 +80,44 @@ CREATE TABLE IF NOT EXISTS `user_model` (
     PRIMARY KEY(`model_id`,`user_id`),
     CONSTRAINT FOREIGN KEY (`model_id`) REFERENCES `jonathan_llm`.`model` (`id`) ON UPDATE CASCADE ON DELETE CASCADE,
     CONSTRAINT FOREIGN KEY (`user_id`) REFERENCES `msa_jfb`.`user` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+-- SP-4 양자화·포팅 lineage (v0.4 3.9). model 테이블을 건드리지 않고 양자화 이력을
+-- 별도 추적: 원본 모델 1개에 대해 재양자화 시도마다 1 row (history 보존).
+CREATE TABLE IF NOT EXISTS `quantize_lineage` (
+    `id`                INT(11) NOT NULL AUTO_INCREMENT,
+    `source_model_id`   INT(11) NOT NULL,
+    `workspace_id`      INT(11) NOT NULL,
+    `job_str_id`        VARCHAR(128) NOT NULL,
+    `quantization_type` VARCHAR(16) NOT NULL,
+    `target_device`     VARCHAR(64),
+    `prune`             TINYINT(1) DEFAULT 0,
+    `gguf_path`         VARCHAR(512),
+    `status`            VARCHAR(20) DEFAULT 'running',
+    `create_datetime`   DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(`id`),
+    UNIQUE KEY `uq_quantize_job` (`job_str_id`),
+    CONSTRAINT FOREIGN KEY (`source_model_id`) REFERENCES `jonathan_llm`.`model` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+-- SP-5 자동평가 결과 (v0.4 3.8). model 테이블을 건드리지 않고 평가 이력을
+-- 별도 추적: 모델 1개를 여러 데이터셋/메트릭으로 평가하면 시도마다 1 row.
+-- 비교표·best 배지는 source_model_id 로 묶어 조회. metrics 는 자유 JSON
+-- (BLEU/ROUGE/perplexity + SDM 도메인 키 AUC/Dice 등 그대로 수용).
+CREATE TABLE IF NOT EXISTS `eval_result` (
+    `id`                INT(11) NOT NULL AUTO_INCREMENT,
+    `source_model_id`   INT(11) NOT NULL,
+    `workspace_id`      INT(11) NOT NULL,
+    `job_str_id`        VARCHAR(128) NOT NULL,
+    `dataset_id`        INT(11),
+    `dataset_name`      VARCHAR(255),
+    `metric_set`        VARCHAR(255),
+    `metrics`           JSON,
+    `status`            VARCHAR(20) DEFAULT 'running',
+    `create_datetime`   DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(`id`),
+    UNIQUE KEY `uq_eval_job` (`job_str_id`),
+    CONSTRAINT FOREIGN KEY (`source_model_id`) REFERENCES `jonathan_llm`.`model` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS `commit_model` (
@@ -224,13 +263,8 @@ CREATE TABLE IF NOT EXISTS `user_playground` (
     CONSTRAINT FOREIGN KEY (`user_id`) REFERENCES `msa_jfb`.`user` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS `user_model` (
-    `model_id` INT(11) NOT NULL,
-    `user_id`    INT(11) NOT NULL,
-    PRIMARY KEY(`user_id`,`model_id`),
-    CONSTRAINT FOREIGN KEY (`model_id`) REFERENCES `jonathan_llm`.`model` (`id`) ON UPDATE CASCADE ON DELETE CASCADE,
-    CONSTRAINT FOREIGN KEY (`user_id`) REFERENCES `msa_jfb`.`user` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
-);
+-- (중복 정의 제거) `user_model` 은 위(모델 테이블 블록)에서 이미 정의됨.
+-- CREATE TABLE IF NOT EXISTS 라 두 번째 정의는 dead 였고 PK 컬럼 순서만 달라 혼란 유발.
 
 CREATE TABLE IF NOT EXISTS `user_rag` (
     `rag_id` INT(11) NOT NULL,

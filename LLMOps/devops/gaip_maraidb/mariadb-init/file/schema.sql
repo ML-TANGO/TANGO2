@@ -147,6 +147,41 @@ CREATE TABLE IF NOT EXISTS `node_instance` (
     CONSTRAINT FOREIGN KEY (`instance_id`) REFERENCES `msa_jfb`.`instance` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
 );
 
+-- SP-8 / 수용계획서 3.1 — Edge 워커 노드 (인스턴스 없는 단일 노드, K8s join 안 함).
+CREATE TABLE IF NOT EXISTS `edge_worker` (
+    `id`                 INT(11) NOT NULL AUTO_INCREMENT,
+    `device_id`          VARCHAR(128) NOT NULL,
+    `name`               VARCHAR(128),
+    `device_type`        VARCHAR(32),
+    `sdx_domain`         VARCHAR(64),
+    `remote_manager_url` VARCHAR(512) NOT NULL,
+    `conn_status`        VARCHAR(16) DEFAULT 'offline',
+    `last_seen`          DATETIME DEFAULT NULL,
+    `deploy_model`       VARCHAR(128) DEFAULT NULL,
+    `deploy_version`     VARCHAR(64) DEFAULT NULL,
+    `deploy_state`       VARCHAR(16) DEFAULT NULL,
+    `cpu_cores`          INT(11) DEFAULT NULL,
+    `mem_total`          BIGINT DEFAULT NULL,
+    `gpu_info`           VARCHAR(256) DEFAULT NULL,
+    `container_count`    INT(11) DEFAULT NULL,
+    `create_datetime`    DATETIME DEFAULT CURRENT_TIMESTAMP,
+    `update_datetime`    DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY(`id`),
+    UNIQUE KEY `uq_edge_device` (`device_id`)
+);
+
+-- SP-8 자유 텍스트 커스텀 레이블 (키-값, 노드 + 엣지 워커 공용).
+CREATE TABLE IF NOT EXISTS `custom_label` (
+    `id`              INT(11) NOT NULL AUTO_INCREMENT,
+    `target_type`     VARCHAR(16) NOT NULL,
+    `target_id`       VARCHAR(128) NOT NULL,
+    `label_key`       VARCHAR(64) NOT NULL,
+    `label_value`     VARCHAR(255) DEFAULT NULL,
+    `create_datetime` DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(`id`),
+    UNIQUE KEY `uq_custom_label` (`target_type`, `target_id`, `label_key`)
+);
+
 CREATE TABLE IF NOT EXISTS `workspace` (
 	`id`	                INT(11)	NOT NULL AUTO_INCREMENT,
 	`name`	                VARCHAR(100) NOT	NULL,
@@ -503,6 +538,18 @@ CREATE TABLE IF NOT EXISTS `deployment_worker`(
     constraint foreign key (`instance_id`) references `msa_jfb`.`instance` (`id`) ON DELETE SET NULL
 );
 
+-- SP-Deployment(D6) §12: 클러스터 배포 API 게시 상태. 키 원본은 저장 안 함(Kong 보관, fetch).
+CREATE TABLE IF NOT EXISTS `deployment_api` (
+    `deployment_id`     INT(11) NOT NULL COMMENT '게시 대상 클러스터 배포(deployment.id)',
+    `api_consumer`      VARCHAR(128) NOT NULL COMMENT 'Kong consumer username (dep-{deployment_id})',
+    `api_route_id`      VARCHAR(64) COMMENT 'Kong route id (path /deployment/{api_path})',
+    `enabled`           TINYINT(1) NOT NULL DEFAULT 1 COMMENT '게시 활성(1)/해제(0)',
+    `published_at`      VARCHAR(50) DEFAULT current_timestamp(),
+    `update_datetime`   DATETIME DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+    PRIMARY KEY(`deployment_id`),
+    constraint foreign key (`deployment_id`) references `deployment` (`id`) on update cascade on delete cascade
+);
+
 CREATE TABLE IF NOT EXISTS `deployment_data_form` (
     `deployment_id`             INT(11) NOT NULL,
     `location`                  VARCHAR(11) NOT NULL COMMENT 'data location in API (body, args, file ...)',
@@ -652,6 +699,7 @@ CREATE TABLE IF NOT EXISTS `pipeline_task` (
     `start_datetime`             VARCHAR(50),
     `end_datetime`               VARCHAR(50),
     `task_item_job_id`           INT(11) COMMENT "training, worker id",
+    `task_item_job_str_id`       VARCHAR(64) COMMENT "external container job id (str/uuid) — generation 노드용",
     `dataset_data_path`          LONGTEXT,
     `x_index`                    INT(11) DEFAULT 0,
     `y_index`                    INT(11) DEFAULT 0,
@@ -675,6 +723,42 @@ CREATE TABLE IF NOT EXISTS `pipeline_history` (
     `is_retraining_setting`      TINYINT DEFAULT 0,
     PRIMARY KEY(`id`),
     CONSTRAINT FOREIGN KEY (`pipeline_id`) REFERENCES `msa_jfb`.`pipeline` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+-- 데이터 합성 프레임워크 단독 UI P1 (v0.4 3.3 / SP-7)
+CREATE TABLE IF NOT EXISTS `synthesis_project` (
+    `id`                  INT(11) NOT NULL AUTO_INCREMENT,
+    `workspace_id`        INT(11) NOT NULL,
+    `name`                VARCHAR(255) NOT NULL,
+    `field`               VARCHAR(50)  COMMENT 'SDS/SDF/SDM 등 분야',
+    `description`         VARCHAR(500),
+    `owner_id`            INT(11),
+    `owner_name`          VARCHAR(100),
+    `mode`                VARCHAR(20)  DEFAULT 'wizard' COMMENT 'wizard/canvas',
+    `manifest_name`       VARCHAR(128) COMMENT 'generate 외부 컨테이너 manifest',
+    `manifest_version`    VARCHAR(64),
+    `params`              LONGTEXT     COMMENT 'JSON: meta_prompt/optimize_method/count/instruction',
+    `gpu_count`           INT(11)      DEFAULT 0,
+    `dataset_id`          INT(11)      COMMENT '입력 데이터셋',
+    `output_subdir`       VARCHAR(255) COMMENT '생성 결과(result.jsonl) 하위 경로',
+    `job_str_id`          VARCHAR(64)  COMMENT '현재 external generate job id',
+    `status`              VARCHAR(50)  DEFAULT 'created' COMMENT 'created/running/completed/failed',
+    `result_count`        INT(11)      DEFAULT 0,
+    `create_datetime`     VARCHAR(50),
+    `update_datetime`     VARCHAR(50),
+    PRIMARY KEY(`id`)
+);
+
+CREATE TABLE IF NOT EXISTS `synthesis_candidate` (
+    `id`                  INT(11) NOT NULL AUTO_INCREMENT,
+    `project_id`          INT(11) NOT NULL,
+    `prompt`              LONGTEXT,
+    `score`               FLOAT        DEFAULT 0,
+    `method`              VARCHAR(50)  COMMENT 'OPRO/APE 등 최적화 방식',
+    `iteration`           INT(11)      DEFAULT 0,
+    `status`              VARCHAR(20)  DEFAULT 'candidate' COMMENT 'candidate/adopted/discarded',
+    `create_datetime`     VARCHAR(50),
+    PRIMARY KEY(`id`)
 );
 
 CREATE TABLE IF NOT EXISTS `collect` (
