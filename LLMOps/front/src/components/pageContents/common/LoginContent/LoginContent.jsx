@@ -22,6 +22,8 @@ import LoginForm from './LoginForm';
 import LoginHeader from './LoginHeader';
 
 const MODE = import.meta.env.VITE_REACT_APP_MODE?.toLowerCase();
+// 브랜딩 전용 스위치 — MODE(통합 스위치)와 분리.
+const BRAND = import.meta.env.VITE_REACT_APP_BRAND?.toLowerCase();
 const UPDATE_DATE = import.meta.env.VITE_REACT_APP_UPDATE_DATE || today();
 
 // Copyright 연도
@@ -62,8 +64,17 @@ function LoginContent() {
       footerRender={
         <Footer
           theme={theme.PRIMARY_THEME}
-          logoIcon={PARTNER[MODE]?.logo.footer || PARTNER['jp'].logo.footer}
-          copyrights={`© ${year} Acryl inc. All rights reserved.`}
+          logoIcon={
+            // BRAND=tango 푸터는 로고 없음(ETRI 저작권만) — MODE 폴백 Jonathan 로고 방지
+            BRAND === 'tango'
+              ? () => null
+              : PARTNER[MODE]?.logo.footer || PARTNER['jp'].logo.footer
+          }
+          copyrights={
+            BRAND === 'tango'
+              ? `© ${year} Electronics and Telecommunications Research Institute. All rights reserved.`
+              : `© ${year} Acryl inc. All rights reserved.`
+          }
           updated={UPDATE_DATE}
           language={<Language />}
         />

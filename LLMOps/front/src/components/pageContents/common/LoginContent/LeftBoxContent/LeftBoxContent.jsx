@@ -11,6 +11,8 @@ import style from './LeftBoxContent.module.scss';
 const cx = classNames.bind(style);
 
 const MODE = import.meta.env.VITE_REACT_APP_MODE?.toLowerCase();
+// 브랜딩 전용 스위치 — MODE(통합 스위치)와 분리. INTEGRATION 배포에서도 브랜딩만 독립 제어.
+const BRAND = import.meta.env.VITE_REACT_APP_BRAND?.toLowerCase();
 const SERVICE_LOGO = import.meta.env.VITE_REACT_APP_SERVICE_LOGO || 'Jonathan';
 const SERVICE_LOGO_IMG =
   import.meta.env.VITE_REACT_APP_SERVICE_LOGO_IMG ||
@@ -27,6 +29,24 @@ const SERVICE_LOGO_IMG =
  */
 function LeftBoxContent() {
   const { t } = useTranslation();
+
+  // TANGO 공동 프로젝트(ETRI) 로그인 브랜딩 — BRAND=tango 일 때만. 그 외 배포는 기존 그대로.
+  if (BRAND === 'tango') {
+    return (
+      <div className={cx('wrap')}>
+        <img
+          className={cx('service-logo')}
+          src='/images/logo/ETRI_TANGO_logo.svg'
+          alt='ETRI TANGO'
+        />
+        <span className={cx('welcome-sub-title')}>
+          <strong>T</strong>arget <strong>A</strong>ware <strong>N</strong>o-code
+          neural network <strong>G</strong>eneration and <strong>O</strong>peration
+          framework
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div className={cx('wrap')}>
