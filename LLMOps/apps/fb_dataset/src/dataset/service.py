@@ -16,6 +16,7 @@ from utils.PATH import JF_DATA_DATASET_PATH
 # from utils.lock import jf_dataset_lock
 import subprocess
 import os
+import re
 import fnmatch
 import traceback
 from datetime import datetime 
@@ -99,6 +100,71 @@ def create_dataset(body,headers_user):
         raise e
         #print(e.response())
         # return response(status = 0, result =e.response())
+
+
+def register_dataset_from_path(body):
+    """generate job 출력(result.jsonl)을 새 데이터셋으로 등록(생성+복사). 내부 호출용.
+    보안:
+      - source 경로는 caller 가 지정 불가 — job_str_id 로 서버가 job 출력 영역에서만 구성
+        (임의 /jf-data 파일 복사·교차 워크스페이스 유출 차단).
+      - dataset_name/access 화이트리스트 검증 후 경로 구성 + base 이탈 차단(path traversal 방지)."""
+    dataset_dir = None
+    try:
+        dataset_name = body['dataset_name']
+        access = str(body.get('access', '0'))
+        job_str_id = body['job_str_id']
+        jobs_base = os.environ.get(
+            "DATASET_REGISTER_JOBS_BASE", "/jf-data/storage-local-nfs/main/workspace/jobs")
+
+        # 입력 검증 — 경로/명령 조작 방지.
+        if dataset_name in ('.', '..') or not re.fullmatch(r'[A-Za-z0-9_.\-]{1,64}', dataset_name or ''):
+            raise Exception("invalid dataset_name")
+        if access not in ('0', '1'):
+            raise Exception("invalid access")
+        if not re.fullmatch(r'[A-Za-z0-9_\-]{1,128}', job_str_id or ''):
+            raise Exception("invalid job_str_id")
+
+        # source = job 출력 result.jsonl (caller 가 경로 못 지정). base 이탈 차단.
+        source_path = os.path.join(jobs_base, job_str_id, "output", "result.jsonl")
+        jobs_base_real = os.path.realpath(jobs_base)
+        if os.path.commonpath([os.path.realpath(source_path), jobs_base_real]) != jobs_base_real:
+            raise Exception("invalid source path")
+        if not os.path.isfile(source_path):
+            raise Exception("source file not found")
+        if dataset_db.get_dataset(dataset_name=dataset_name, workspace_id=body['workspace_id']) is not None:
+            raise Exception("Already Exists Dataset")
+
+        workspace_info = ws_db.get_workspace(workspace_id=body['workspace_id'])
+        storage_info = storage_db.get_storage(storage_id=workspace_info['data_storage_id'])
+        ds_parent = JF_DATA_DATASET_PATH.format(STORAGE_NAME=storage_info['name'],
+                                                WORKSPACE_NAME=workspace_info['name'],
+                                                ACCESS=access, DATASET_NAME='')
+        dataset_dir = Path(JF_DATA_DATASET_PATH.format(STORAGE_NAME=storage_info['name'],
+                                                       WORKSPACE_NAME=workspace_info['name'],
+                                                       ACCESS=access, DATASET_NAME=dataset_name))
+        # dataset_name 으로 인한 base 이탈 차단(이중 방어).
+        ds_base = os.path.realpath(ds_parent)
+        if os.path.commonpath([os.path.realpath(str(dataset_dir)), ds_base]) != ds_base:
+            raise Exception("invalid dataset path")
+
+        dataset_dir.mkdir(parents=True, exist_ok=True)
+        copy(source_path, str(dataset_dir))
+        dataset_db.insert_dataset(
+            name=dataset_name,
+            workspace_id=body['workspace_id'],
+            create_user_id=body.get('create_user_id'),
+            access=access,
+            description=body.get('description', ''))
+        return response(status=1, message="Dataset Create Complete", result={"name": dataset_name})
+    except Exception as e:
+        try:
+            # 셸 미경유(명령어 주입 회피).
+            if dataset_dir is not None and dataset_dir.exists():
+                rmtree(dataset_dir, ignore_errors=True)
+        except Exception:
+            traceback.print_exc()
+        return response(status=0, message=f"Dataset Register Fail '{e}'")
+
 
 ## front화면에서 datasets를 누르면 나오는 화면에 dataset들을 출력해주는 함수
 #@cache
