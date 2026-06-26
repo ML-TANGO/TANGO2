@@ -93,6 +93,7 @@ class ExternalContainerClient:
         gpu_count: int | None = None,
         platform_model_id: int | None = None,
         output_subdir: str | None = None,
+        secrets: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "manifest_name": manifest_name,
@@ -113,6 +114,10 @@ class ExternalContainerClient:
             payload["platform_model_id"] = platform_model_id
         if output_subdir is not None:
             payload["output_subdir"] = output_subdir
+        # I6 (SP-3): manifest.secrets.required 값(HF_TOKEN 등). params/env_overrides
+        # 와 별도 — fb_external_container 가 redacted 경로로 pod env 주입.
+        if secrets:
+            payload["secrets"] = secrets
         return await self._post(
             "/api/v1/jobs",
             json=payload,

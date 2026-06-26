@@ -95,6 +95,7 @@ function FineTuningGraph({
   fineTuningData,
   progressData,
   fineTuningType,
+  checkpoints,
 }) {
   // fineTuningType 1  / 2
   const {
@@ -252,6 +253,7 @@ function FineTuningGraph({
                 // steps={value.steps}
                 values={value.values}
                 stepsPerEpoch={stepsPerEpoch}
+                checkpoints={checkpoints}
               />
             ))}
           </div>

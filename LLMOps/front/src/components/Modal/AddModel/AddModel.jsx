@@ -67,7 +67,7 @@ const accessTypeOptions = [
     },
   },
   {
-    label: 'External Training',
+    label: 'Domain',
     value: 2,
     labelStyle: {
       fontSize: '14px',
@@ -75,6 +75,13 @@ const accessTypeOptions = [
       marginTop: '2px',
     },
   },
+];
+
+// domain(3.5) 옵션 — SDS 만 활성, SDM/SDF 비활성(준비중). loadType===2 일 때 노출.
+const domainOptions = [
+  { label: 'externalTraining.domain.sds.label', value: 'SDS' },
+  { label: 'externalTraining.domain.sdm.label', value: 'SDM', disabled: true },
+  { label: 'externalTraining.domain.sdf.label', value: 'SDF', disabled: true },
 ];
 
 const calFooterMessage = (
@@ -137,11 +144,11 @@ const AddModel = ({ data, type }) => {
 
   const { userName } = auth;
 
-  const [loadType, setLoadType] = useState(1); // 1=HF, 0=GenAI, 2=External
-  // External training 모드 — manifest dropdown (BFF /api/external/manifests).
-  const [externalManifests, setExternalManifests] = useState([]);
-  const [externalManifestKey, setExternalManifestKey] = useState('');
-  const [externalManifestsLoading, setExternalManifestsLoading] = useState(false);
+  const [loadType, setLoadType] = useState(1); // 1=HF, 0=GenAI, 2=Domain
+  // domain(3.5) — loadType===2 일 때 SDS/SDM/SDF 선택. SDS 만 활성.
+  // 사용자는 manifest 버전을 안 고른다 → BE create_model 이 domain=SDS 를
+  // 고정 manifest(settings.SDS_MANIFEST_*) 로 해석. (이전 manifest 드롭다운 대체)
+  const [domain, setDomain] = useState('SDS');
   const [huggingList, setHuggingList] = useState(null);
   const [modelBaseList, setModelBaseList] = useState([]);
   const [versionList, setVersionList] = useState([]);
@@ -214,38 +221,12 @@ const AddModel = ({ data, type }) => {
     }
   };
 
-  // 외부 학습 manifest 목록 fetch — 라디오에서 'External Training' 처음 선택 시 호출.
-  const getExternalManifests = useCallback(async () => {
-    if (externalManifests.length > 0) return; // 이미 캐시됨
-    setExternalManifestsLoading(true);
-    const response = await callApi({
-      url: 'external/manifests',
-      method: 'get',
-    });
-    const { status, result, message, error } = response;
-    if (status === STATUS_SUCCESS && Array.isArray(result)) {
-      const active = result.filter((m) => m && m.is_active !== false);
-      setExternalManifests(active);
-      if (active.length > 0 && !externalManifestKey) {
-        const first = active[0];
-        setExternalManifestKey(
-          `${first.manifest_name}@${first.manifest_version}`,
-        );
-      }
-    } else {
-      errorToastMessage(error, message);
-    }
-    setExternalManifestsLoading(false);
-  }, [externalManifests.length, externalManifestKey]);
-
   // 모달 Radio
   const radioBtnHandler = (value) => {
     const radioType = parseInt(value, 10);
     setLoadType(radioType);
     if (radioType === 0) {
       getModelBaseModel();
-    } else if (radioType === 2) {
-      getExternalManifests();
     }
   };
 
@@ -305,17 +286,16 @@ const AddModel = ({ data, type }) => {
   // POST Submit Model
   const postModel = async () => {
     setLoading(true);
-    // External training 분기 — manifest_name/version 만 보내고 huggingface 필드는
-    // 보내지 않음. backend service.create_model 의 training_type='external' 경로가
-    // metadata-only row 를 생성한다.
+    // domain(3.5) 분기 — domain 만 보내고 huggingface/manifest 필드는 보내지 않음.
+    // backend create_model 이 domain=SDS → training_type='external' + 고정 manifest
+    // 로 해석해 metadata-only row 를 생성한다. SDM/SDF 는 비활성(서버에서도 거부).
     let body;
     if (loadType === 2) {
-      if (!externalManifestKey) {
-        errorToastMessage(null, 'manifest required');
+      if (!domain) {
+        errorToastMessage(null, t('externalTraining.domain.required.label'));
         setLoading(false);
         return;
       }
-      const [name, version] = externalManifestKey.split('@');
       body = {
         workspace_id: workspaceId,
         description: modelData.modelDesc,
@@ -323,9 +303,7 @@ const AddModel = ({ data, type }) => {
         access: selectedAccessType,
         create_user_id: owner.value,
         users_id: userList.map(({ value }) => value),
-        training_type: 'external',
-        external_manifest_name: name,
-        external_manifest_version: version,
+        domain,
       };
     } else {
       body = {
@@ -617,35 +595,17 @@ const AddModel = ({ data, type }) => {
             {loadType === 2 && (
               <div className={cx('external-block')}>
                 <label className={cx('external-label')}>
-                  {t('externalTraining.start.manifest.label')}
+                  {t('externalTraining.domain.label')}
                 </label>
-                {externalManifestsLoading ? (
-                  <div className={cx('external-hint')}>
-                    {t('externalTraining.start.loadingManifests.label')}
-                  </div>
-                ) : externalManifests.length === 0 ? (
-                  <div className={cx('external-hint')}>
-                    {t('externalTraining.start.noManifests.label')}
-                  </div>
-                ) : (
-                  <select
-                    className={cx('external-select')}
-                    value={externalManifestKey}
-                    onChange={(e) => setExternalManifestKey(e.target.value)}
-                  >
-                    {externalManifests.map((m) => {
-                      const key = `${m.manifest_name}@${m.manifest_version}`;
-                      return (
-                        <option key={key} value={key}>
-                          {key}
-                          {m.service_family ? ` — ${m.service_family}` : ''}
-                        </option>
-                      );
-                    })}
-                  </select>
-                )}
+                <FbRadio
+                  name='domain'
+                  options={domainOptions}
+                  value={domain}
+                  onChange={(e) => setDomain(e.currentTarget.value)}
+                  isLabelColor
+                />
                 <div className={cx('external-hint')}>
-                  {t('externalTraining.start.subtitle.label')}
+                  {t('externalTraining.domain.subtitle.label')}
                 </div>
               </div>
             )}

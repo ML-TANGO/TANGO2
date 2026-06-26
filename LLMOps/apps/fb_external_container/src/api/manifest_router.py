@@ -7,6 +7,7 @@ honour, so it lives in this skeleton rather than waiting.
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, List, Optional
 
 import yaml
@@ -23,6 +24,7 @@ from manifest import (
     validate_manifest,
 )
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -74,6 +76,8 @@ class ManifestStored(BaseModel):
     contract_version: Optional[str] = None
     description: Optional[str] = None
     default_params: Dict[str, Any] = Field(default_factory=dict)
+    # 선택 — 다단계 학습 레시피(SP-10). spec.recipe 직렬화(없으면 None).
+    recipe: Optional[Dict[str, Any]] = None
     is_active: bool = True
 
 
@@ -101,6 +105,7 @@ def _to_response(manifest: ExternalContainerManifest) -> ManifestStored:
         contract_version=spec.contract_version,
         description=manifest.metadata.description,
         default_params={},  # 현재 manifest schema 에 default_params 없음 — TODO partner default 채워지면 spec.inputs.params.default 등에서 추출
+        recipe=spec.recipe.model_dump() if spec.recipe else None,
         is_active=True,
     )
 
@@ -190,21 +195,42 @@ async def get_manifest_by_name(
     rows = [r for r in await registry.list_all() if r.name == name]
     if not rows:
         raise HTTPException(status_code=404, detail=f"manifest {name!r} not found")
-    return [
-        ManifestStored(
-            name=r.name,
-            version=r.version,
-            job_type=r.job_type,
-            execution_mode=r.execution_mode,
-            image=r.image,
-            service_family=r.service_family,
-            contract_version=r.contract_version,
-            description=r.description,
-            default_params={},
-            is_active=True,
+    # 버전별 full manifest 를 가져와 spec.recipe(다단계 학습 레시피, SP-10)를 함께
+    # surface. raw_json 재파싱이라 추가 컬럼/마이그레이션 불필요. recipe 없는
+    # manifest 는 None — FE 가 기존 단일 launch 경로로 fallback.
+    out: List[ManifestStored] = []
+    for r in rows:
+        # per-version 격리: 한 버전의 raw_json 손상/transient DB 오류가 전체 엔드포인트
+        # 를 500 내지 않도록 recipe=None 으로 폴백(나머지 버전은 정상 반환).
+        try:
+            manifest = await registry.get(r.name, r.version)
+            recipe = (
+                manifest.spec.recipe.model_dump()
+                if manifest and manifest.spec.recipe
+                else None
+            )
+        except Exception:
+            logger.warning(
+                "get_manifest_by_name: failed to load recipe for %s@%s; recipe=None",
+                r.name, r.version,
+            )
+            recipe = None
+        out.append(
+            ManifestStored(
+                name=r.name,
+                version=r.version,
+                job_type=r.job_type,
+                execution_mode=r.execution_mode,
+                image=r.image,
+                service_family=r.service_family,
+                contract_version=r.contract_version,
+                description=r.description,
+                default_params={},
+                recipe=recipe,
+                is_active=True,
+            )
         )
-        for r in rows
-    ]
+    return out
 
 
 @router.get(

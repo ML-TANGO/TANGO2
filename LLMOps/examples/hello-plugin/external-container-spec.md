@@ -152,7 +152,7 @@ MASTER_PORT=29500
 
 > 멀티노드(노드 2개+) 분산학습은 v1 비대상 — 협력기관과 별도 협의. 현재 플랫폼 external 기본 지원 범위는 **단일노드 멀티GPU 까지**. 내부 LLM 파인튜닝은 노드당 pod + rank-0 deepspeed + RDMA/RoCE 로 멀티노드를 지원하나, 외부 컨테이너가 동등 기능을 가지려면 (a) 플랫폼 멀티-pod 차트 + (b) 컨테이너의 SSH/hostfile/deepspeed-multinode 둘 다 필요.
 
-> **라이브러리/CUDA 버전**: 컨테이너 base 의 torch/CUDA 는 배포 클러스터 GPU driver 와 호환되어야 한다. 운영 측이 클러스터 driver 에 맞춰 base 를 선택/조정한다 (예: driver CUDA 12.9 클러스터에서 cu128 빌드 torch 가 `cuda.is_available()==False` 로 init 실패 → cu124 base 사용). §7.1 참조.
+> **라이브러리/CUDA 버전**: 컨테이너 base 의 torch/CUDA 는 배포 클러스터 GPU driver 가 지원하는 CUDA 버전과 호환돼야 한다 — driver 의 `nvidia-smi` "CUDA Version"(지원 최대치)보다 높은 CUDA 로 빌드된 torch 는 init 실패할 수 있다. 운영 측이 driver 에 맞춰 base 를 선택한다. (참고: GPU 할당이 device-plugin 방식이 아니라 `NVIDIA_VISIBLE_DEVICES` env + nvidia 런타임인 클러스터에서는 그 방식으로 GPU 를 줘야 `cuda.is_available()==True`.) §7.1 참조.
 
 #### 컨테이너 코드 예시 — 환경변수 사용
 
@@ -342,6 +342,16 @@ livenessProbe:                         # 진짜 deadlock/crash만 검출
 }
 ```
 
+> **예약 필드 `result.wandb_url` (선택, 학습 컨테이너)**: 실험 추적(Weights &
+> Biases 등) run URL 을 `result.wandb_url` (또는 `wandb_run_url`/`tracking_url`)
+> 로 보고하면, 플랫폼이 학습 화면에 클릭 가능한 링크로 노출한다. **학습 중에도**
+> 보고 가능 (status=running 응답의 `result` 에 포함) — 완료까지 기다릴 필요 없음.
+> 플랫폼은 href 로만 사용하므로 `http`/`https` 스킴만 통과시키고 길이를 제한하며
+> 제어문자/백슬래시를 거부한다(그 외 스킴/초장문/제어문자는 무시). UI 는 링크에
+> **목적지 호스트명**을 함께 노출한다. 단 플랫폼은 보고된 URL 의 **도메인 소유권을
+> 보증하지 않으므로**, 운영자는 링크가 기대한 추적 도메인(예: `wandb.ai`)으로
+> 향하는지 확인할 것. 미보고 시 링크 미표시.
+
 > **URL 정책 (2026-05-13 명확화)**: `/jobs/{job_id}` 는 **권장 default 패턴**.
 > 협력기관이 자체 URL 컨벤션 (예: `/train/status?job_id=X`) 을 쓰시려면
 > `manifest.yaml` 의 `spec.endpoints.jobs` 에 URL 템플릿 명시 (예:
@@ -522,9 +532,9 @@ spec:
 
 ```dockerfile
 # 권장 베이스 이미지: NVIDIA CUDA + Python (Ubuntu 22.04)
-# ⚠️ CUDA/torch 버전은 배포 클러스터 GPU driver 와 호환되는 것으로. 운영 측이
-#    클러스터에 맞춰 조정한다 (예: driver CUDA 12.9 에서 cu128 torch init 실패
-#    → cu124 base). 자세한 건 §3.2 "라이브러리/CUDA 버전" 참조.
+# ⚠️ CUDA/torch 버전은 배포 클러스터 GPU driver 가 지원하는 CUDA 이하로.
+#    운영 측이 driver 에 맞춰 base 를 선택한다 (driver 의 nvidia-smi "CUDA
+#    Version" 이상으로 빌드된 torch 는 init 실패 가능). §3.2 참조.
 FROM nvidia/cuda:12.1.0-devel-ubuntu22.04
 
 # Non-root user 생성 (UID 1000 = securityContext 표준과 일치)
@@ -741,3 +751,51 @@ FastAPI + Pydantic 기반 권장 (1차년도 플랫폼 패턴과 일관, OpenAPI
 - v1은 NVIDIA GPU 가속기만 enforce. Hailo NPU / AMD ROCm은 v2
 - v1은 NetworkPolicy egress advisory only. 운영자 manifest 검토 + 자체 registry 강제로 mitigation
 - v1은 단일 컨테이너 pod 가정. multi-container (sidecar) 필요 시 별도 협의
+
+---
+
+## 14. 커스텀 체크포인트 탑재 (3.6 Custom — 런타임-바운드, by-reference)
+
+기관이 **자체 학습한 가중치(체크포인트)**를 실증에 쓰고 싶을 때의 경로. 플랫폼은
+no-code · '정해진 모델만' 원칙이라 **사용자 UI 자유 업로드는 지원하지 않는다.**
+대신 기관이 가중치를 **레지스트리(HF/Nexus 등)에 올려두면 플랫폼이 레퍼런스로
+당겨와(by-reference) 검증 후 탑재**한다(운영자 매개). "체크포인트용 SP-1".
+
+### 14.1 핵심 원칙
+- **런타임-바운드**: 체크포인트 단독은 못 받는다. 반드시 그걸 로드할 **탑재된 런타임
+  manifest**(1차 = `eva-vlm-infer` 호환)를 명시해야 한다. 호환 런타임이 없으면 → §12
+  컨테이너 onboarding 경로(자체 런타임 컨테이너 제출)로 라우팅.
+- **by-reference**: 파일 업로드 아님. HF repo id / 다운로드 URL 등 레퍼런스 제출 →
+  플랫폼이 pull. private 면 토큰은 별도 암호화 채널(K8s Secret 경로, pull 에만 사용·미저장).
+- **검증 게이트**: pull 후 아래 로더 계약 충족 검증 → 미충족 시 등록 거부.
+
+### 14.2 EVA infer 로더 계약 (1차 타깃)
+체크포인트 디렉터리(또는 HF repo 루트)에 아래가 있어야 한다:
+
+| 아티팩트 | 필수 | 비고 |
+|---|---|---|
+| `adapter_config.json` | ✅ | LoRA 어댑터 설정 |
+| `adapter_model.safetensors` 또는 `adapter_model.bin` 또는 `pytorch_model.bin` | ✅ (택1) | LoRA 가중치 |
+| `projector.bin` | 권장 | vision→LLM projector (멀티모달) |
+
+> 베이스 LLM/CLIP 은 런타임 이미지·HF 캐시가 제공. 기관은 **어댑터/프로젝터(델타)만**
+> 제출하면 된다. 포맷/구조가 EVA `train.py` 로더와 어긋나면 로드 실패 → 등록 거부.
+
+### 14.3 제출물
+| 필드 | 예 |
+|---|---|
+| 타깃 런타임 | `eva-vlm-infer@1.0.0` |
+| ref_type | `hf` \| `url` |
+| ref | `myorg/sds-custom-lora` (HF) 또는 `https://nexus.../sds-lora.tar.gz` |
+| (private) token | 별도 암호화 채널 |
+| 메타 | base arch, modality, 설명 |
+
+### 14.4 탑재 후 동작
+검증·머티리얼라이즈되면 플랫폼 `commit_models/<commit>/` 에 들어가 **일반 커밋과 동일**
+하게 취급된다 → 사용자는 워크스페이스에서 그 모델/커밋을 **선택**해 자동평가(SP-5)·
+양자화/포팅(SP-4)·**Edge 배포(SP-6/8)** 파이프라인에 그대로 태운다. (사용자 면은 끝까지
+"선택"만 — 업로드 위젯 없음.)
+
+> ⚠ **그냥 Edge 디바이스에서 자체 컨테이너로 돌리려는 것**이면 §12 컨테이너 onboarding
+> 또는 디바이스 직접 전달이 더 맞다. 본 경로의 가치는 **플랫폼 파이프라인(평가·양자화·
+> Edge 배포 오케스트레이션)을 기관 가중치에 태우는 것**이다.

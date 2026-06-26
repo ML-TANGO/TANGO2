@@ -28,6 +28,7 @@ from typing import Any, Optional
 import httpx
 
 from adapter import get_adapter_class
+from exceptions import ValidationError
 from manifest.schema import ExternalContainerManifest
 from normalize import (
     ExternalContainerStatus,
@@ -127,6 +128,7 @@ def _build_pod_info_dict(
     env_overrides: dict[str, str] | None = None,
     platform_model_id: int | None = None,
     instance_id: int | None = None,
+    secrets: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Build the JSON body that fb_scheduler's /external/launch expects.
 
@@ -150,6 +152,46 @@ def _build_pod_info_dict(
     dataset = _pop_reserved(params, _RESERVED_DATASET_KEY)
     base_model = _pop_reserved(params, _RESERVED_BASE_MODEL_KEY)
     built_in = _pop_reserved(params, _RESERVED_BUILTIN_KEY)
+
+    # 경로 안전성(defense-in-depth): base_model.name / built_in_checkpoint.name 은
+    # pod.yaml subPath(models/<name>/..., built_in_checkpoint/<name>)로 그대로
+    # 들어간다. 직접 API 호출자가 traversal 값을 넣어 다른 워크스페이스 디렉토리를
+    # mount 하지 못하게 단일 path 세그먼트만 허용(`/`·`\`·`..`·leading-dot 거부).
+    # K8s subPath 도 `..` 를 거부하지만 버전 의존이라 백엔드에서 명시 차단.
+    for _rk, _rv in (("_base_model", base_model), ("_built_in_checkpoint", built_in)):
+        _nm = str(_rv.get("name", "")) if isinstance(_rv, dict) else ""
+        if _nm and (
+            "/" in _nm or "\\" in _nm or "\x00" in _nm
+            or _nm in (".", "..") or _nm.startswith(".")
+        ):
+            raise ValidationError(
+                f"{_rk}.name must be a single path-safe segment; got {_nm!r}"
+            )
+
+    # I6 (SP-3): secrets passthrough. manifest 가 secrets.required 로 선언한 자격증명
+    # 이름 × 운영자가 launch 시 넘긴 값을 매핑해 pod env 로 주입한다.
+    # required 인데 값이 안 넘어오면 명시적 실패(미입력 컨테이너가 런타임에 알 수 없는
+    # 이유로 죽는 것 방지). manifest 가 required:[] 면(현 전 manifest) 변화 없음.
+    #
+    # SECURITY (SP-3 codex CRITICAL 하드닝 완료): secret 값은 평문 env 로 렌더되지
+    # 않는다. fb_scheduler(external_run._ensure_external_secret)가 helm install 전에
+    # helm 밖 K8s Secret 을 만들고, pod.yaml 은 valueFrom.secretKeyRef 로 참조한다.
+    # → 값이 PodSpec / Helm release manifest·history 에 평문으로 남지 않음(at-rest 차단).
+    # 여기서는 required × 운영자 입력 매핑 + 미입력 검증만 한다(값 전달은 그대로).
+    secrets_in = secrets or {}
+    required_secrets = list(spec.secrets.required or [])
+    missing = [name for name in required_secrets if not secrets_in.get(name)]
+    if missing:
+        # ValidationError(AppError) → 422 + logger.error(no traceback). 누락된
+        # secret 이름만 메시지에 들어가고(값 아님) FE 가 user-error 로 구분 가능.
+        raise ValidationError(
+            f"manifest {manifest.metadata.name!r} requires secrets {missing} "
+            "but no value was provided at launch"
+        )
+    # required 에 선언된 것만 통과(선언 안 된 임의 secret 주입 차단).
+    effective_secrets = {
+        name: str(secrets_in[name]) for name in required_secrets if name in secrets_in
+    }
 
     effective_gpu = (
         gpu_count_override
@@ -235,7 +277,7 @@ def _build_pod_info_dict(
         },
         "env": dict(spec.env or {}),
         "env_overrides": dict(env_overrides or {}),
-        "secrets": {},
+        "secrets": effective_secrets,
         "jf_env": {
             "JF_ITEM_ID": job_id,
             "JF_HOST": f"workspace-{workspace_id}",
@@ -332,6 +374,7 @@ class JobTracker:
         platform_model_id: int | None = None,
         output_subdir: str | None = None,
         env_overrides: dict[str, str] | None = None,
+        secrets: dict[str, str] | None = None,
     ) -> str:
         """Launch an external container and start the polling task.
 
@@ -384,6 +427,7 @@ class JobTracker:
             env_overrides=env_overrides,
             platform_model_id=platform_model_id,
             instance_id=instance_id,
+            secrets=secrets,
         )
 
         # codex #73-(a): provisional row 먼저 — scheduler.launch 와

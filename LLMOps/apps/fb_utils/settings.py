@@ -162,6 +162,37 @@ FB_EXTERNAL_CONTAINER_URL = os.getenv(
     'http://fb-external-container.jonathan-system.svc.cluster.local:8000',
 )
 
+# convert(양자화·포팅, SP-4) job 이 사용할 외부 컨테이너 manifest.
+# mock-convert(SP-4 Step1)로 시작 — 실제 llama.cpp convert 컨테이너 도착 시
+# 동일 계약(job_type=convert, /model 입력, /output 포팅 패키지)이라 env 만
+# 교체하면 플랫폼 코드 변경 없이 전환된다.
+CONVERT_MANIFEST_NAME = os.getenv('CONVERT_MANIFEST_NAME', 'mock-convert')
+CONVERT_MANIFEST_VERSION = os.getenv('CONVERT_MANIFEST_VERSION', '1.0.0')
+
+# evaluate(자동평가, SP-5) job 이 사용할 외부 컨테이너 manifest.
+# 기본=플랫폼 소유 evaluate-selfmetric(자체 메트릭). 고려대 평가 plugin(⑪) 도착 시
+# 동일 계약(job_type=evaluate, /model+/dataset 입력, /output/metrics.json)이라
+# env 만 교체하면 플랫폼 코드 변경 없이 전환된다.
+EVALUATE_MANIFEST_NAME = os.getenv('EVALUATE_MANIFEST_NAME', 'evaluate-selfmetric')
+EVALUATE_MANIFEST_VERSION = os.getenv('EVALUATE_MANIFEST_VERSION', '1.0.0')
+
+# benchmark(벤치마크 평가, llm_evaluation P1) job 이 사용할 외부 컨테이너 manifest.
+# 기본=mock(evaluate-benchmark-mock, P1a) — 오케스트레이션/FE e2e 테스트용. 정식 벤치마크
+# 컨테이너(고려대 plugin / 실측) 도착 시 동일 계약(job_type=evaluate)이라 env 만 교체하면
+# 플랫폼 코드 변경 없이 전환된다. (기본 메트릭은 evaluate-selfmetric 으로 라우팅 가능.)
+BENCHMARK_MANIFEST_NAME = os.getenv('BENCHMARK_MANIFEST_NAME', 'evaluate-benchmark-mock')
+BENCHMARK_MANIFEST_VERSION = os.getenv('BENCHMARK_MANIFEST_VERSION', '0.1.0')
+
+# SDS 도메인(3.5) 모델 생성 시 자동 바인딩되는 외부 컨테이너 manifest 의 고정 버전.
+# 사용자는 모델 생성에서 domain=SDS 만 고르고 버전은 안 고른다 → create_model 이
+# 이 상수로 external_manifest_name/version 을 해석. 바인딩 버전은 **env 로 flip**
+# (FE 리빌드/코드 커밋 없이). 아래는 fresh-install 용 기본값(canonical base)일 뿐,
+# 실 클러스터는 env `SDS_MANIFEST_VERSION` 로 운영 버전을 지정한다
+# (예: 운영 클러스터 = `1.0.0-acryl-patched-v7`, recipe 포함). recipe 가 있는
+# 버전이어야 FT 탭이 master-detail(레시피 파이프라인)로 렌더된다.
+SDS_MANIFEST_NAME = os.getenv('SDS_MANIFEST_NAME', 'eva-vlm-train')
+SDS_MANIFEST_VERSION = os.getenv('SDS_MANIFEST_VERSION', '1.0.0')
+
 # [KAFKA]
 JF_KAFKA_DNS = os.getenv('JF_KAFKA_DNS', None)
 

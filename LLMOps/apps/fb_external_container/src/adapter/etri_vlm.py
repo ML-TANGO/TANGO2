@@ -241,17 +241,22 @@ class ETRIAdapter(GenericHTTPAdapter):
                 result_payload = dict(val)
                 break
 
+        # wandb_url/wandb_run_url/tracking_url: reserved experiment-tracking run
+        # URL keys. ETRI surfaces these at the top level (like the scalars), so
+        # merge them into result_payload — the BFF (_extract_tracking_url) then
+        # validates + forwards to the FE as a W&B link.
         etri_scalars = {
             k: body.get(k)
             for k in ("current_step", "total_steps", "current_loss",
-                      "elapsed_sec", "phase", "output_dir")
+                      "elapsed_sec", "phase", "output_dir",
+                      "wandb_url", "wandb_run_url", "tracking_url")
             if body.get(k) is not None
         }
         if etri_scalars:
             if result_payload is None:
                 result_payload = etri_scalars
             else:
-                result_payload.update(etri_scalars)
+                result_payload = {**result_payload, **etri_scalars}
 
         error = _normalize_etri_error(body, status)
 

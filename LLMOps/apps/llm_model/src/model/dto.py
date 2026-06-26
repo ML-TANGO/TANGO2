@@ -21,6 +21,8 @@ class FineTuningConfig(BaseModel):
     auto_target_modules : Optional[int] = Field(default=1, description='LoRA 타겟 모듈 자동 감지: 1=auto(all-linear), 0=static map')
     dataset_format : Optional[str] = Field(default="auto", description='데이터셋 형식: "auto" | "text" | "chat" | "instruction"')
     zero_stage : Optional[int] = Field(default=1, description='DeepSpeed ZeRO stage: 1, 2, 3')
+    eval_steps : Optional[int] = Field(default=500, ge=1, description='평가(eval/loss) 실행 간격(step). ⑩ 체크포인트 점 마킹과 일치.')
+    save_steps : Optional[int] = Field(default=500, ge=1, description='체크포인트 저장 간격(step). ⑩ 점 마킹의 후보 step.')
 
 class FineTuningPodInfo(BaseModel):
     model_id : int
@@ -83,9 +85,28 @@ class PostModel(BaseModel):
     training_type : Optional[str] = Field(default='internal', description="'internal' | 'external'")
     external_manifest_name : Optional[str] = Field(default=None, description='manifest name (external only)')
     external_manifest_version : Optional[str] = Field(default=None, description='manifest version (external only)')
+    # domain(3.5) — SDS/SDM/SDF. 신규 모델 생성 UI 는 manifest 대신 domain 만 보내고,
+    # create_model 이 domain=SDS → training_type='external' + 고정 manifest 로 해석한다.
+    # SDM/SDF 는 현재 비활성(create_model 에서 거부).
+    domain : Optional[str] = Field(default=None, max_length=16, pattern=r'^[A-Za-z]{2,8}$', description="'SDS' | 'SDM' | 'SDF' (SDM/SDF disabled)")
     class Config:
         protected_namespaces = ()
         
+class IngestCheckpointBody(BaseModel):
+    # 3.6 Custom 모델 — 운영자 전용 by-reference 체크포인트 ingestion.
+    # 사용자 파일 업로드 아님(기관이 Nexus/HF 에 올린 걸 레퍼런스로 당겨옴).
+    workspace_id : int = Field(description='workspace id')
+    target_manifest_name : str = Field(description='bound runtime manifest (e.g. eva-vlm-infer)')
+    target_manifest_version : str = Field(description='runtime manifest version')
+    ref_type : str = Field(default='hf', description="'hf' | 'url'")
+    ref : str = Field(description='HF repo id or download URL')
+    token : Optional[str] = Field(default=None, description='private registry/HF token (pull only, not stored)')
+    commit_name : Optional[str] = Field(default=None, description='commit name (slug); auto if omitted')
+    description : Optional[str] = Field(default=None, description='commit message / note')
+    metadata : Optional[dict] = Field(default=None, description='provenance metadata')
+    class Config:
+        protected_namespaces = ()
+
 class PutModel(BaseModel):
     model_id: int = Field(description='llmops model id')
     description : str = Field(default=None, description='llmops model description')

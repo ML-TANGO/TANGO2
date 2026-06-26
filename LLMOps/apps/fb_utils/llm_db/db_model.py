@@ -116,6 +116,7 @@ async def get_model(model_id : int) -> dict:
         m.latest_commit_id,
         m.commit_status, m.pod_count, m.instance_count,
         m.training_type, m.external_manifest_name, m.external_manifest_version, m.external_job_id,
+        m.domain,
         DATE_FORMAT(m.create_datetime, %s) AS create_datetime,
         DATE_FORMAT(m.update_datetime, %s) AS update_datetime,
         DATE_FORMAT(m.start_datetime, %s) AS start_datetime,
@@ -200,7 +201,8 @@ async def get_models_option(workspace_id : int, model_name : str = None, create_
         SELECT m.id, m.name, u.name as create_user_name,
                m.training_type,
                m.external_manifest_name,
-               m.external_manifest_version
+               m.external_manifest_version,
+               m.domain
         FROM model m
         LEFT JOIN msa_jfb.user u ON u.id = m.create_user_id
         WHERE m.workspace_id = %s
@@ -451,9 +453,13 @@ async def create_favorite_model(**kwargs):
 
 async def create_model_user_list(model_id : int, user_list : List[int]):
     try:
-        sql = "INSERT INTO user_model (model_id, user_id) VALUES "
-        sql += ",".join([f"({model_id}, {user_id})" for user_id in user_list])
-        res = await commit_query(query=sql)
+        if not user_list:
+            return True
+        # 파라미터화 — f-string 인터폴레이션(SQLi 패턴) 제거.
+        placeholders = ",".join(["(%s, %s)"] * len(user_list))
+        sql = "INSERT INTO user_model (model_id, user_id) VALUES " + placeholders
+        params = [v for uid in user_list for v in (model_id, uid)]
+        res = await commit_query(query=sql, params=params)
         return res
     except Exception as e:
         traceback.print_exc()
@@ -584,3 +590,144 @@ async def update_model(model_id : int, description : str, access : str, create_u
     sql = "UPDATE model SET description = %s, access = %s, create_user_id = %s WHERE id = %s"
     res = await commit_query(query=sql, params=(description, access, create_user_id, model_id))
     return True
+
+
+# ── SP-4 양자화·포팅 lineage (v0.4 3.9) ──────────────────────────────────────
+
+async def insert_quantize_lineage(source_model_id : int, workspace_id : int,
+                                  job_str_id : str, quantization_type : str,
+                                  target_device : str = None, prune : bool = False) -> int:
+    """양자화 시도 1건 기록(launch 시점). 재양자화 시 새 row(history 보존)."""
+    sql = """
+        INSERT INTO quantize_lineage
+            (source_model_id, workspace_id, job_str_id, quantization_type,
+             target_device, prune, status)
+        VALUES (%s, %s, %s, %s, %s, %s, 'running')
+    """
+    return await commit_query(query=sql, params=(
+        source_model_id, workspace_id, job_str_id, quantization_type,
+        target_device, 1 if prune else 0,
+    ))
+
+
+async def complete_quantize_lineage(job_str_id : str, gguf_path : str,
+                                    source_model_id : int = None) -> bool:
+    """convert 완료 시 lineage 마감. running 행만 갱신 — 실패/취소 행을 completed 로
+    덮어쓰지 않도록 가드(`status='running'`). source_model_id 주면 교차모델 마킹 차단."""
+    sql = """
+        UPDATE quantize_lineage
+        SET status = 'completed', gguf_path = %s
+        WHERE job_str_id = %s AND status = 'running'
+    """
+    params = [gguf_path, job_str_id]
+    if source_model_id is not None:
+        sql += " AND source_model_id = %s"
+        params.append(source_model_id)
+    await commit_query(query=sql, params=params)
+    return True
+
+
+async def update_quantize_lineage_status(job_str_id : str, status : str,
+                                         source_model_id : int = None) -> bool:
+    """convert 실패/취소 시 lineage 상태 갱신(running 일 때만). idempotent.
+
+    완료(completed)는 complete_quantize_lineage 가 담당 — 여기선 failed/cancelled 만.
+    이게 없으면 실패한 양자화가 이력에 영원히 'running' 으로 남는다.
+    source_model_id 주면 다른 모델/워크스페이스의 job 을 마킹하지 못하게 바인딩.
+    """
+    sql = """
+        UPDATE quantize_lineage
+        SET status = %s
+        WHERE job_str_id = %s AND status = 'running'
+    """
+    params = [status, job_str_id]
+    if source_model_id is not None:
+        sql += " AND source_model_id = %s"
+        params.append(source_model_id)
+    await commit_query(query=sql, params=params)
+    return True
+
+
+async def list_quantize_lineage(source_model_id : int) -> list:
+    """원본 모델의 양자화 이력(최신순) — lineage 조회(원본+양자화 파라미터)."""
+    sql = """
+        SELECT id, source_model_id, workspace_id, job_str_id, quantization_type,
+               target_device, prune, gguf_path, status,
+               DATE_FORMAT(create_datetime, %s) AS create_datetime
+        FROM quantize_lineage
+        WHERE source_model_id = %s
+        ORDER BY id DESC
+    """
+    res = await select_query(sql, params=(TYPE.TIME_DATE_FORMAT_SQL, source_model_id),
+                             fetch_type=FetchType.ALL)
+    return res or []
+
+
+# ── SP-5 자동평가 결과 (v0.4 3.8) ────────────────────────────────────────────
+
+async def insert_eval_result(source_model_id : int, workspace_id : int,
+                             job_str_id : str, dataset_id : int = None,
+                             dataset_name : str = None, metric_set : str = None) -> int:
+    """평가 시도 1건 기록(launch 시점, status=running). 재평가 시 새 row(이력 보존)."""
+    sql = """
+        INSERT INTO eval_result
+            (source_model_id, workspace_id, job_str_id, dataset_id,
+             dataset_name, metric_set, status)
+        VALUES (%s, %s, %s, %s, %s, %s, 'running')
+    """
+    return await commit_query(query=sql, params=(
+        source_model_id, workspace_id, job_str_id, dataset_id,
+        dataset_name, metric_set,
+    ))
+
+
+async def complete_eval_result(job_str_id : str, metrics_json : str,
+                               source_model_id : int = None) -> bool:
+    """평가 완료 시 메트릭 마감. running 행만 갱신 — 실패/취소 행을 completed 로
+    덮어쓰지 않도록 가드. source_model_id 주면 교차모델 마킹 차단."""
+    sql = """
+        UPDATE eval_result
+        SET status = 'completed', metrics = %s
+        WHERE job_str_id = %s AND status = 'running'
+    """
+    params = [metrics_json, job_str_id]
+    if source_model_id is not None:
+        sql += " AND source_model_id = %s"
+        params.append(source_model_id)
+    await commit_query(query=sql, params=params)
+    return True
+
+
+async def update_eval_result_status(job_str_id : str, status : str,
+                                    source_model_id : int = None) -> bool:
+    """평가 실패/취소 시 상태 갱신(running 일 때만). idempotent.
+
+    완료(completed)는 complete_eval_result 가 담당 — 여기선 failed/cancelled 만.
+    source_model_id 주면 다른 모델/워크스페이스의 job 을 마킹하지 못하게 바인딩.
+    """
+    sql = """
+        UPDATE eval_result
+        SET status = %s
+        WHERE job_str_id = %s AND status = 'running'
+    """
+    params = [status, job_str_id]
+    if source_model_id is not None:
+        sql += " AND source_model_id = %s"
+        params.append(source_model_id)
+    await commit_query(query=sql, params=params)
+    return True
+
+
+async def list_eval_results(source_model_id : int) -> list:
+    """모델의 평가 이력(최신순) — 비교표·best 배지 조회용."""
+    sql = """
+        SELECT id, source_model_id, workspace_id, job_str_id, dataset_id,
+               dataset_name, metric_set, metrics, status,
+               DATE_FORMAT(create_datetime, %s) AS create_datetime
+        FROM eval_result
+        WHERE source_model_id = %s
+        ORDER BY id DESC
+    """
+    res = await select_query(sql, params=(TYPE.TIME_DATE_FORMAT_SQL, source_model_id),
+                             fetch_type=FetchType.ALL)
+    return res or []

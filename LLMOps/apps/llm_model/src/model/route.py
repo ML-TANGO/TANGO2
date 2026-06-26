@@ -1,14 +1,16 @@
-from fastapi import APIRouter, Request, UploadFile, Form, File, Body, HTTPException
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi import APIRouter, Request, UploadFile, Form, File, Body, HTTPException, BackgroundTasks
+from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
+from starlette.background import BackgroundTask
 from starlette.responses import RedirectResponse
-from pydantic import BaseModel, Field
-from typing import Optional
+from pydantic import BaseModel, Field, field_validator
+from typing import Optional, List
 from utils.resource import response, get_user_id, get_auth
 from utils.exception.exceptions import *
 import model.dto as dto
 import model.service as svc
 import traceback
 import io
+import os
 
 model = APIRouter(
     prefix = "/models"
@@ -165,7 +167,18 @@ async def get_model_fine_tuning_summary(model_id: int):
         return response(status=1, result=res)
     except Exception as e:
         traceback.print_exc()
-        return response(status=0, message="server error", result=[]) 
+        return response(status=0, message="server error", result=[])
+
+@model.get("/{model_id}/fine-tuning/status", summary='internal FT status (s2s poll)', tags=TAG_FINE_TUNING)
+async def get_model_fine_tuning_status(model_id: int):
+    # GenAI 통합 파이프라인 런타임 전용 s2s 폴링 엔드포인트 — get_auth 없음(s2s OK).
+    # latest_fine_tuning_status 만 반환(경량). 사용자 UI 는 sse-status 사용.
+    try:
+        res = await svc.get_fine_tuning_status(model_id=model_id)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message="server error", result=None)
 
 @model.get("/option/datasets",summary='setting - fine tuning', tags=TAG_OPTION)
 async def get_datasets(workspace_id : int, is_mine : bool = False, dataset_name : str = None):
@@ -447,6 +460,35 @@ async def get_models(workspace_id: int=None, model_id: int=None):
         traceback.print_exc()
         return response(status=0, message="server error", result=None)
     
+@model.post("/{model_id}/ingest-checkpoint", summary='admin - ingest custom checkpoint (3.6)', tags=TAG_MODEL)
+async def ingest_checkpoint(model_id: int, body: dto.IngestCheckpointBody, background: BackgroundTasks):
+    """운영자 전용 — 기관 제공 커스텀 체크포인트를 by-reference 로 탑재(3.6).
+    사용자 self-service 업로드 아님. 큰 pull 대비 background 실행 → 202, 완료는
+    commit 목록(`GET /models/commit-models`) 폴링으로 확인."""
+    # admin 게이트는 try 밖 — HTTPException(403)이 except 에서 500 으로 변질되지 않게.
+    username, _ = get_auth()
+    if username != 'admin':
+        raise HTTPException(status_code=403, detail="admin only — operator-mediated ingestion")
+    try:
+        background.add_task(
+            svc.ingest_external_checkpoint_safe,
+            workspace_id=body.workspace_id,
+            model_id=model_id,
+            target_manifest_name=body.target_manifest_name,
+            target_manifest_version=body.target_manifest_version,
+            ref_type=body.ref_type,
+            ref=body.ref,
+            token=body.token,
+            commit_name=body.commit_name,
+            description=body.description,
+            metadata=body.metadata,
+        )
+        return response(status=1, message="ingestion started", result={"accepted": True})
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message="server error", result=None)
+
+
 @model.post("",summary='create - model', tags=TAG_MODEL)
 async def create_models(body: dto.PostModel):
     try:
@@ -468,6 +510,7 @@ async def create_models(body: dto.PostModel):
             training_type=body.training_type or 'internal',
             external_manifest_name=body.external_manifest_name,
             external_manifest_version=body.external_manifest_version,
+            domain=body.domain,
         )
         return response(status=1, result=res)
     except Exception as e:
@@ -522,6 +565,170 @@ async def commit_external_artifacts(model_id: int, body: _ExternalCommitBody):
         traceback.print_exc()
         return response(status=0, message=str(e), result=None)
 
+
+class _QuantizeBody(BaseModel):
+    """Body for POST /models/{model_id}/quantize — 학습 완료 모델을 GGUF 로
+    양자화하는 convert job 을 띄운다 (SP-4 / 3.9, 명시 버튼 트리거).
+    target_quant 는 UI 의 Q4/Q5/Q6 에 대응 (q4/q5/q6).
+    """
+    model_config = {"protected_namespaces": ()}
+    target_quant: str = Field(..., pattern="^q[456]$")
+    target_device: Optional[str] = Field(default=None, pattern=r"^[A-Za-z0-9_\- ]{1,64}$")
+    prune: bool = False  # 4.7 placeholder — 실제 프루닝은 엣지 컨테이너 도착 시.
+
+
+@model.get("/quantize/devices", summary='device → recommended quantization map', tags=TAG_MODEL)
+async def quantize_device_recommendations():
+    # 4.5 — device 선택 시 권장 Q 배지/자동제안용. 모델 비의존(정적 매핑).
+    return response(status=1, result=svc.get_quantize_device_recommendations())
+
+
+@model.post("/{model_id}/quantize", summary='quantize model → GGUF convert job', tags=TAG_MODEL)
+async def quantize_model(model_id: int, body: _QuantizeBody):
+    try:
+        res = await svc.quantize_model(
+            model_id=model_id,
+            target_quant=body.target_quant,
+            target_device=body.target_device,
+            prune=body.prune,
+        )
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+
+@model.get("/{model_id}/quantize/lineage", summary='quantization lineage (history)', tags=TAG_MODEL)
+async def quantize_lineage(model_id: int):
+    # 4.6 — 원본 모델의 양자화 이력(원본+양자화 파라미터) 조회.
+    try:
+        res = await svc.list_quantize_lineage(model_id=model_id)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+
+class _LineageStatusBody(BaseModel):
+    model_config = {"protected_namespaces": ()}
+    status: str = Field(..., pattern="^(failed|cancelled)$")
+
+
+@model.post("/{model_id}/quantize/{job_id}/lineage-status", summary='mark lineage failed/cancelled', tags=TAG_MODEL)
+async def update_quantize_lineage_status(model_id: int, job_id: str, body: _LineageStatusBody):
+    # 4.6 — convert 실패/취소를 이력에 반영(FE terminal 감지 시). 완료는 package 조회가 마감.
+    try:
+        res = await svc.mark_quantize_lineage(model_id=model_id, job_id=job_id, status=body.status)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+
+@model.get("/{model_id}/quantize/{job_id}/package", summary='list porting package files', tags=TAG_MODEL)
+async def list_quantize_package(model_id: int, job_id: str):
+    try:
+        res = await svc.list_quantize_package(model_id=model_id, job_id=job_id)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+
+@model.get("/{model_id}/quantize/{job_id}/package/download", summary='download porting package (zip | ?file=)', tags=TAG_MODEL)
+async def download_quantize_package(model_id: int, job_id: str, file: Optional[str] = None):
+    try:
+        path, filename, media = await svc.get_quantize_package_path(
+            model_id=model_id, job_id=job_id, filename=file,
+        )
+    except ValueError as e:
+        # 잘못된 filename/job_id (경로조작 등) → 400. (FE 는 blob 다운로드라 에러
+        # JSON 을 200 으로 주면 파일로 저장돼버림 → HTTP 에러로 올려 catch 되게.)
+        traceback.print_exc()
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=404, detail=str(e))
+    # zip 은 임시파일 → 전송 후 삭제. 단일 파일(gguf 등)은 NFS 원본이라 삭제 X.
+    background = None
+    if media == "application/zip":
+        background = BackgroundTask(lambda p=path: os.path.exists(p) and os.remove(p))
+    return FileResponse(path, media_type=media, filename=filename, background=background)
+
+
+# ── SP-5 자동평가 (v0.4 3.8) ──────────────────────────────────────────────
+
+_EVAL_ALLOWED_METRICS = {"bleu", "rouge", "perplexity"}
+
+
+class _EvaluateBody(BaseModel):
+    """Body for POST /models/{model_id}/evaluate — 학습 완료 모델을 평가 데이터셋으로
+    채점하는 evaluate job 을 띄운다 (SP-5 / 3.8, 명시 버튼 트리거)."""
+    model_config = {"protected_namespaces": ()}
+    dataset_id: int = Field(..., gt=0)
+    metric_set: Optional[List[str]] = Field(default=None)
+    max_samples: Optional[int] = Field(default=None, gt=0, le=1000)
+
+    @field_validator("metric_set")
+    @classmethod
+    def _check_metrics(cls, v):
+        if v is None:
+            return v
+        bad = [m for m in v if m not in _EVAL_ALLOWED_METRICS]
+        if bad:
+            raise ValueError(f"unknown metric(s): {bad} (allowed: {sorted(_EVAL_ALLOWED_METRICS)})")
+        return v
+
+
+@model.post("/{model_id}/evaluate", summary='evaluate model → evaluate job (자체 메트릭)', tags=TAG_MODEL)
+async def evaluate_model(model_id: int, body: _EvaluateBody):
+    try:
+        res = await svc.evaluate_model(
+            model_id=model_id, dataset_id=body.dataset_id,
+            metric_set=body.metric_set, max_samples=body.max_samples,
+        )
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+
+@model.get("/{model_id}/evaluate/results", summary='evaluation results (비교표 + best)', tags=TAG_MODEL)
+async def list_eval_results(model_id: int):
+    # ⑪ — 모델의 평가 이력 + 메트릭별 best 마킹(비교표). SDM 도메인 키 자유 노출.
+    try:
+        res = await svc.list_eval_results(model_id=model_id)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+
+@model.get("/{model_id}/evaluate/{job_id}/result", summary='single evaluate job metrics (poll)', tags=TAG_MODEL)
+async def get_eval_result(model_id: int, job_id: str):
+    # FE 폴링 — metrics.json 준비되면 ready=True + eval_result lazy 마감.
+    try:
+        res = await svc.get_eval_result(model_id=model_id, job_id=job_id)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+
+class _EvalStatusBody(BaseModel):
+    model_config = {"protected_namespaces": ()}
+    status: str = Field(..., pattern="^(failed|cancelled)$")
+
+
+@model.post("/{model_id}/evaluate/{job_id}/status", summary='mark eval failed/cancelled', tags=TAG_MODEL)
+async def update_eval_status(model_id: int, job_id: str, body: _EvalStatusBody):
+    # FE terminal(failed/cancelled) 감지 시 호출. 완료는 result 조회가 lazy 마감.
+    try:
+        res = await svc.mark_eval_status(model_id=model_id, job_id=job_id, status=body.status)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
 
 
 @model.delete("",summary='delete - model', tags=TAG_MODEL)

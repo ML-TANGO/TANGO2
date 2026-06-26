@@ -3,6 +3,13 @@
   gap: 8px;
 }
 
+// SDS 레시피 master-detail 컨테이너 — 세로 풀폭 스택(메타 → 카드 행 → 상세).
+.recipe-box {
+  display: flex;
+  flex-direction: column;
+  margin-top: 16px;
+}
+
 .panel {
   padding: 20px;
   border: 1px solid #e5e7eb;
@@ -41,6 +48,13 @@
     color: #222;
     font-family: 'SpoqaM', sans-serif;
     word-break: break-all;
+  }
+  .wandb-link {
+    color: #3babff;
+    text-decoration: none;
+    &:hover {
+      text-decoration: underline;
+    }
   }
 }
 

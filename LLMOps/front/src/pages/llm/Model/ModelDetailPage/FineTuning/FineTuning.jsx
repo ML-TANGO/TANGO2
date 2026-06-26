@@ -64,6 +64,7 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
   const [fineTuningData, setFineTuningData] = useState(null);
   const [fineTuningType, setFineTuningType] = useState(1);
   const [graphData, setGraphData] = useState(null);
+  const [checkpoints, setCheckpoints] = useState([]); // ⑩ 체크포인트 점 마킹 (SP-5)
   const [progressData, setProgressData] = useState(null);
   const [commitId, setCommitId] = useState(null);
   const [accelator, setAccelator] = useState(false); // 0 1 Accelator 기능
@@ -380,7 +381,7 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
     [fineTuningStatus],
   );
 
-  useSSEGraph(modelId, userName, fineTuningStatus, setGraphData);
+  useSSEGraph(modelId, userName, fineTuningStatus, setGraphData, 'internal', setCheckpoints);
   useSSETime(modelId, userName, setProgressData, fineTuningStatus);
 
   // * A-LLM MODELBASE 용 모델이름과 커밋버전
@@ -639,6 +640,7 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
             fineStatus={fineStatus}
             fineTuningData={fineTuningData}
             progressData={progressData}
+            checkpoints={checkpoints}
           />
         </div>
       </div>

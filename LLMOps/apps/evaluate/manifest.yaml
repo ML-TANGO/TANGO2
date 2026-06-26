@@ -1,0 +1,62 @@
+# evaluate-selfmetric — 플랫폼 소유 자동평가 컨테이너 (SP-5 / v0.4 3.8).
+# 외부 SaaS judge 비의존 자체 메트릭(BLEU/ROUGE/perplexity). 동시에 ⑪ 고려대
+# 평가 plugin 슬롯의 참조 구현(같은 job_type=evaluate 계약). 플랫폼 소유·구현,
+# 배포는 external_container launch 재사용. 계약 전문:
+# ../../examples/hello-plugin/external-container-spec.md
+apiVersion: tango.acryl.ai/v1
+kind: ExternalContainer
+
+metadata:
+  name: evaluate-selfmetric
+  version: "1.0.0"
+  vendor: "Acryl (platform-owned)"
+  contact: "platform@acryl.ai"
+  description: |
+    플랫폼 소유 자동평가 컨테이너. 학습 완료 모델(/model)을 평가 데이터셋
+    (/dataset/<name>)으로 채점한다. prompt+reference 가 있으면 생성→BLEU/ROUGE,
+    텍스트가 있으면 perplexity 를 계산해 /output/metrics.json + result 로 보고.
+    외부 SaaS judge 비의존(순수 파이썬 + torch). ⑪ 고려대 평가 plugin 참조 구현.
+
+spec:
+  image: "docker.io/acrylaaai/evaluate-selfmetric:1.0.0"
+
+  job_type: evaluate
+  # async: HTTP 서버(/run + poll) — convert/generate 와 동일·검증된 와이어링.
+  execution_mode: async
+  port: 8000
+
+  resources:
+    cpu: "4"
+    memory: "16Gi"            # 모델 로드 + 생성 — 모델 크기에 맞춰 조정.
+    gpu: 0                    # 소형 모델은 CPU 로 충분. 대형은 gpu:1 로 상향.
+
+  inputs:
+    params:
+      required: false         # metric_set / max_samples / max_new_tokens / *_field
+    dataset:
+      required: true          # 평가 데이터셋 필수(_dataset 예약키로 /dataset/<name> 마운트). validator 가 evaluate=required:true 강제.
+
+  outputs:
+    metrics: true             # /output/metrics.json
+    artifacts: false
+
+  secrets:
+    required: []
+
+  network:
+    egress_whitelist: []
+
+  endpoints:
+    info: "/info"
+    health: "/health"
+    live: "/live"
+    run: "/run"
+    jobs: "/jobs/{id}"
+    cancel: "/jobs/{id}/cancel"
+
+  capabilities:
+    estimated_startup_seconds: 20
+    estimated_duration_seconds: 300
+    timeout_seconds: 3600
+
+  workspace_scope: per-workspace

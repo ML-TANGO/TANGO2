@@ -23,15 +23,18 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Optional
+from urllib.parse import urlparse
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from utils import settings
+from utils import errors_catalog
 from utils.resource import response as _envelope
 
 from .proxy import ExternalContainerClient, ExternalContainerError
@@ -61,6 +64,21 @@ class StartJobBody(BaseModel):
     # 의 terminal=COMPLETED hook 이 자동으로 /external-commit 호출.
     platform_model_id: Optional[int] = None
     output_subdir: Optional[str] = None
+    # I6 (SP-3): manifest.secrets.required 로 선언된 자격증명 값(예: HF_TOKEN).
+    # params/env_overrides 와 분리 — fb_external_container 가 redacted 경로로 pod env 주입.
+    secrets: Optional[dict[str, str]] = None
+
+    @field_validator("output_subdir")
+    @classmethod
+    def _output_subdir_shape(cls, v: Optional[str]) -> Optional[str]:
+        # /output/<여기>/ 단일 경로 세그먼트 — traversal 차단(첫 글자 영숫자로
+        # leading-dot 거부, `/`·`\` 불허) + 길이 cap. 기존 partner naming(대문자/
+        # 점)을 깨지 않게 phase.id slug 보다 permissive. security L5 defense-in-depth.
+        if v is not None and not re.match(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$", v):
+            raise ValueError(
+                f"output_subdir must be path-safe [A-Za-z0-9._-], no slashes; got {v!r}"
+            )
+        return v
 
 
 # ── Client helpers ───────────────────────────────────────────────────────
@@ -142,6 +160,41 @@ def _extract_etri_scalars(detail: dict) -> dict:
     return inner if isinstance(inner, dict) else {}
 
 
+# Reserved status field — a container surfaces its experiment-tracking run URL
+# (Weights & Biases, or any tracker) under result.{wandb_url|wandb_run_url|
+# tracking_url}. Generic adapters pass result.* through verbatim; the ETRI
+# adapter merges the same top-level keys (see etri_vlm._build_result). The BFF
+# only forwards it to the FE as an href, so we hard-restrict to http/https and
+# cap length — never trust the partner string enough to emit javascript:/data:
+# (stored-XSS via the link) or an unbounded value (SSE/FE DoS).
+_TRACKING_URL_KEYS = ("wandb_url", "wandb_run_url", "tracking_url")
+_MAX_TRACKING_URL = 2048
+
+
+def _extract_tracking_url(detail: Optional[dict]) -> Optional[str]:
+    if not detail:
+        return None
+    inner = (detail.get("result") or {}).get("result") or {}
+    if not isinstance(inner, dict):
+        return None
+    for key in _TRACKING_URL_KEYS:
+        val = inner.get(key)
+        if not isinstance(val, str):
+            continue
+        val = val.strip()
+        if not val or len(val) > _MAX_TRACKING_URL:
+            continue
+        # 제어문자/백슬래시 사전 거부: urlparse 와 브라우저 new URL() 의 정규화가
+        # 갈려(backslash→'/', CRLF 처리) 오픈리다이렉트(`https://host\@evil`) /
+        # SSE 라인주입 우회 여지. 정상 http(s) run URL 엔 없는 문자라 차단.
+        if any(c in val for c in ("\\", "\r", "\n", "\x00")):
+            continue
+        parsed = urlparse(val)  # CPython urlparse 는 str 입력에 raise 안 함
+        if parsed.scheme in ("http", "https") and parsed.netloc:
+            return val
+    return None
+
+
 def _build_fine_tuning_status(detail: Optional[dict]) -> dict:
     """Shape matches /api/models/fine-tuning/sse-status/{id}.
 
@@ -157,14 +210,25 @@ def _build_fine_tuning_status(detail: Optional[dict]) -> dict:
     raw_status = result.get("status") or "pending"
     err = result.get("error")
     reason: Optional[str] = None
+    error_detail: Optional[dict] = None
     if isinstance(err, dict):
         reason = err.get("message")
+        # I (SP-3): 컨테이너 발행 code 를 errors.yaml 4-튜플(problem/cause/fix)로
+        # 변환해 UI 친화 메시지 제공. err 가 dict 면 code 유무와 무관하게 enrich
+        # (무코드/미등록 → generic fallback). 항상 error_detail 채움.
+        error_detail = errors_catalog.enrich(err.get("code"), reason)
     elif isinstance(err, str):
         reason = err
+        error_detail = errors_catalog.enrich(None, err)
     return {
         "fine_tuning_status": {
             "status": _FT_STATUS_MAP.get(raw_status, raw_status),
             "reason": reason,
+            # 4-튜플(없으면 None) — FE 가 problem/cause/fix 표시(추가 필드, 하위호환).
+            "error_detail": error_detail,
+            # 컨테이너가 보고한 W&B run URL(없으면 None) — FE 가 학습 중/후 링크 노출.
+            # http/https 만 통과(추가 필드, 하위호환).
+            "wandb_url": _extract_tracking_url(detail),
         },
         # External jobs don't drive the platform's commit_model flow yet.
         "commit_status": {"status": None, "type": None, "reason": None},
@@ -400,11 +464,20 @@ async def _build_graph_payload(detail: Optional[dict], job_id: Optional[str] = N
 
     log_dir = run_dirs[0]
     try:
-        parsed, _ = await _model_svc.parse_tensorboard_scalars_async(log_dir, max_steps=50)
+        parsed, latest_step = await _model_svc.parse_tensorboard_scalars_async(log_dir, max_steps=50)
     except Exception:
         logger.exception("sse-graph: parse failed for %s", log_dir)
         return {"graph": {}}
-    return {"graph": parsed or {}}
+    # ⑩ 체크포인트 점 마킹 — runs/ 의 부모(output_subdir / commit_models/<name>)에
+    # checkpoint-<step> 디렉토리가 있으면 스캔(파트너가 HF 관례 사용 시). save_steps
+    # 를 모르는 외부 잡은 추정 안 함 → 디렉토리 없으면 빈 목록(가짜 점 방지).
+    import os
+    ckpt_root = os.path.dirname(os.path.dirname(log_dir)) if log_dir else None
+    try:
+        ckpt_steps = await _model_svc._resolve_checkpoint_steps(ckpt_root, None, latest_step)
+    except Exception:
+        ckpt_steps = []
+    return {"graph": parsed or {}, "checkpoints": ckpt_steps}
 
 
 # ── Manifest listings (BFF surface for frontend) ─────────────────────────
@@ -457,6 +530,9 @@ async def get_external_manifest_by_name(manifest_name: str) -> dict[str, Any]:
         {
             "manifest_version": (r.get("version") or _EMPTY_STR),
             "default_params": r.get("default_params") or {},
+            # 다단계 학습 레시피(SP-10 도메인 카드/프리셋) — 없으면 None.
+            # FE 가 phase 카드 파이프라인 렌더 + phase 별 params 실행에 사용.
+            "recipe": r.get("recipe"),
             "service_family": r.get("service_family") or _EMPTY_STR,
             "contract_version": r.get("contract_version") or _EMPTY_STR,
             "description": r.get("description"),
@@ -488,6 +564,7 @@ async def start_external_job(body: StartJobBody) -> dict[str, Any]:
             gpu_count=body.gpu_count,
             platform_model_id=body.platform_model_id,
             output_subdir=body.output_subdir,
+            secrets=body.secrets,
         )
         return _envelope(status=1, result=raw)
     except ExternalContainerError as exc:

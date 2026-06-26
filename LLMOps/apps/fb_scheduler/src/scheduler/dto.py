@@ -293,6 +293,8 @@ class FineTuningParam(BaseModel):
     auto_target_modules : Optional[int] = Field(default=1, description='LoRA 타겟 모듈 자동 감지: 1=auto(all-linear), 0=static map')
     dataset_format : Optional[str] = Field(default="auto", description='데이터셋 형식: "auto" | "text" | "chat" | "instruction"')
     zero_stage : Optional[int] = Field(default=1, description='DeepSpeed ZeRO stage: 1, 2, 3')
+    eval_steps : Optional[int] = Field(default=500, description='평가(eval/loss) 실행 간격(step) → --eval_steps')
+    save_steps : Optional[int] = Field(default=500, description='체크포인트 저장 간격(step) → --save_steps')
 
 
 #==========================================================================

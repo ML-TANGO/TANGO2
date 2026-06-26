@@ -1,0 +1,227 @@
+.pipeline {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 4px 2px 10px;
+}
+
+.connector {
+  display: flex;
+  align-items: center;
+  color: #9ca3af;
+  font-size: 18px;
+  flex: 0 0 auto;
+  padding: 0 2px;
+}
+
+.card {
+  flex: 0 0 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  border-top: 3px solid #d6dae0;
+  // 카드는 선택 버튼 — 버튼 기본 스타일 리셋.
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: box-shadow 0.12s, border-color 0.12s;
+
+  &.st-running { border-top-color: #3babff; }
+  &.st-done { border-top-color: #22c55e; }
+  &.st-error { border-top-color: #ef4444; }
+  &.st-pending { border-top-color: #f59e0b; }
+  &.st-stop { border-top-color: #9ca3af; }
+
+  &:hover {
+    border-color: #b9c2cc;
+  }
+
+  &.selected {
+    border-color: #3babff;
+    box-shadow: 0 0 0 2px rgba(59, 171, 255, 0.25);
+  }
+
+  &.excluded {
+    opacity: 0.5;
+  }
+}
+
+.opt-tag {
+  font-size: 11px;
+  color: #4b5563;
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.phase-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #222;
+}
+
+.badge {
+  flex: 0 0 auto;
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: #f3f4f6;
+  color: #6b7280;
+
+  &.badge-running { background: #e0f2fe; color: #0369a1; }
+  &.badge-done { background: #dcfce7; color: #15803d; }
+  &.badge-error { background: #fee2e2; color: #b91c1c; }
+  &.badge-pending { background: #fef3c7; color: #b45309; }
+  &.badge-stop { background: #f3f4f6; color: #6b7280; }
+}
+
+.phase-desc {
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.45;
+}
+
+.opt-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #4b5563;
+  cursor: pointer;
+
+  input {
+    cursor: pointer;
+  }
+}
+
+.params-toggle {
+  align-self: flex-start;
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 12px;
+  color: #3babff;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.params-textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 8px;
+  border: 1px solid #d6dae0;
+  border-radius: 6px;
+  font-family: 'Menlo', 'Consolas', 'Monaco', monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  background: #fff;
+  color: #1f2937;
+  resize: vertical;
+  white-space: pre;
+  overflow-x: auto;
+
+  &:focus {
+    outline: none;
+    border-color: #3babff;
+  }
+  &:disabled {
+    background: #f3f4f6;
+    color: #9ca3af;
+  }
+}
+
+.card-foot {
+  margin-top: auto;
+}
+
+.chain-hint {
+  font-size: 11px;
+  color: #b45309;
+  line-height: 1.4;
+}
+
+.params-error {
+  font-size: 11px;
+  color: #b91c1c;
+  line-height: 1.4;
+}
+
+// ── master-detail ─────────────────────────────────────────────
+.recipe {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fafbfc;
+}
+
+.detail-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.detail-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.detail-monitor {
+  min-height: 280px;
+}
+
+.detail-done {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.commit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.commit-label {
+  color: #6b7280;
+}
+
+.commit-name {
+  font-family: 'Menlo', 'Consolas', 'Monaco', monospace;
+  color: #15803d;
+  word-break: break-all;
+}
+
+.detail-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.detail-foot {
+  display: flex;
+  justify-content: flex-end;
+}

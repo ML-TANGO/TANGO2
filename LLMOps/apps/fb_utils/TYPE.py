@@ -390,9 +390,22 @@ PIPELINE_TYPE = "pipeline"
 PIPELINE_TYPE_A = "advanced"
 PIPELINE_TYPE_B = "built-in"
 
+# 생성형 데이터 파이프라인 노드 (고려대 LLM1/LLM2 = external_container generate job).
+# pod_type / work_func_type / pipeline task_type 공용. WBS 1.1 / v0.4 3.3.
+GENERATION_TYPE = "generation"
+
+# GenAI 통합 파이프라인 LLM 전용 노드 (ML/DL project/deployment 와 분리).
+FINETUNING_TYPE = "finetuning"   # LLM 파인튜닝 (external SDS / internal FT)
+QUANTIZE_TYPE = "quantize"       # 양자화·포팅 (SP-4 convert → GGUF)
+LLM_DEPLOY_TYPE = "llm_deploy"   # LLM 배포 (cluster=Playground / edge=SP-6)
+
 DEPLOYMENT_TASK = "deployment_task"
 PROJECT_TASK = "project_task"
 PREPROCESSING_TASK = "preprocessing_task"
+GENERATION_TASK = "generation_task"  # 생성형 데이터 파이프라인 노드 버킷 (WBS 1.2)
+FINETUNING_TASK = "finetuning_task"
+QUANTIZE_TASK = "quantize_task"
+LLM_DEPLOY_TASK = "llm_deploy_task"
 
 RETRAINING_DATA_TYPE = "data"
 RETRAINING_TIME_TYPE = "time"
@@ -408,8 +421,23 @@ RETRAINING_TIME_UNITS = ["hours", "minutes"]
 TASK_TYPES = {
     DEPLOYMENT_TYPE: DEPLOYMENT_TASK,
     PROJECT_TYPE: PROJECT_TASK,
-    PREPROCESSING_TYPE: PREPROCESSING_TASK
+    PREPROCESSING_TYPE: PREPROCESSING_TASK,
+    GENERATION_TYPE: GENERATION_TASK,
+    FINETUNING_TYPE: FINETUNING_TASK,
+    QUANTIZE_TYPE: QUANTIZE_TASK,
+    LLM_DEPLOY_TYPE: LLM_DEPLOY_TASK,
 }
+
+# backing item 테이블이 없는 노드(외부컨테이너 job / LLM model 참조) — get_task_item
+# (SELECT FROM {task_type}) 우회 대상. status 는 외부 job / pipeline_task.status 로 derive.
+NO_ITEM_TABLE_TASK_TYPES = (
+    GENERATION_TYPE, FINETUNING_TYPE, QUANTIZE_TYPE, LLM_DEPLOY_TYPE,
+)
+# task_item_id = LLM model_id 인 노드 — get_task_item 스킵으로 사라진 존재/소유 검증을
+# create_pipeline_task 가 llm_db 로 명시 수행(모델 존재 + 파이프라인 워크스페이스 일치).
+LLM_MODEL_BACKED_TASK_TYPES = (
+    FINETUNING_TYPE, QUANTIZE_TYPE, LLM_DEPLOY_TYPE,
+)
 
 class PipelineTask(str, Enum):
     PREPROCESSING_TYPE = PREPROCESSING_TYPE

@@ -22,7 +22,7 @@ image: ""
 image_digest: ""
 imagePullPolicy: IfNotPresent
 
-job_type: ""           # train | evaluate | preprocess | convert | infer
+job_type: ""           # train | evaluate | preprocess | convert | infer | generate
 execution_mode: ""     # sync | async | batch
 port: 8000
 workspace_scope: per-workspace
@@ -88,10 +88,12 @@ labels: {}
 # Partner-defined extra env (EVA_LLM_MODEL_PATH, EVA_CHECKPOINTS_ROOT, ...).
 env: {}
 
-# Secrets — declared in manifest.secrets.required, value injected at launch
-# time via --set spec.containers.env.{NAME}={VALUE}. Same env shape as `env`,
-# kept separate so values flow through a logged-redacted path.
-secrets: {}
+# Secrets — declared in manifest.secrets.required (SP-3 보안 하드닝).
+# 값은 더 이상 values/Helm 에 들어가지 않는다. fb_scheduler 가 install 전에 helm 밖
+# K8s Secret(secret_ref_name)을 만들고, 여기엔 그 이름 + 키 목록만 전달한다.
+# pod.yaml 이 valueFrom.secretKeyRef 로 마운트 → PodSpec/Helm history 평문 노출 X.
+secret_ref_name: ""
+secret_keys: []
 
 # Platform metadata env (JF_*) — fb_scheduler fills these per launch.
 jf_env:

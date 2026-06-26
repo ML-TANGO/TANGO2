@@ -9,8 +9,16 @@ from __future__ import annotations
 
 from typing import Any
 
+import re
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+# output_subdir 는 /output/<여기>/ 단일 경로 세그먼트 + commit metadata 로 흐른다.
+# traversal 차단(첫 글자 영숫자 → leading-dot 거부, `/`·`\`·null 불허) + 길이 cap.
+# recipe phase.id(소문자 slug)보다 permissive — 기존 단일 launch 의 partner
+# output_checkpoint_name(대문자/점 포함 가능)을 깨지 않기 위함. security L5.
+_OUTPUT_SUBDIR_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 from datetime import datetime
 from typing import Optional
@@ -85,6 +93,18 @@ class StartJobRequest(BaseModel):
     # EVA_CHECKPOINT_PATH (model.latest_commit) 같이 launch 시점에만 결정되는 값.
     # helm chart pod.yaml 이 spec.env + env_overrides 를 merge 해서 pod 에 주입.
     env_overrides: Optional[dict[str, str]] = None
+    # I6 (SP-3): manifest.secrets.required 로 선언된 자격증명 값(예: HF_TOKEN).
+    # env_overrides 와 분리 — values.yaml 의 secrets 경로(로그 redacted)로 흐른다.
+    secrets: Optional[dict[str, str]] = None
+
+    @field_validator("output_subdir")
+    @classmethod
+    def _output_subdir_shape(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and not _OUTPUT_SUBDIR_RE.match(v):
+            raise ValueError(
+                f"output_subdir must be a slug [a-z0-9_-] (max path-safe); got {v!r}"
+            )
+        return v
 
 
 class StartJobResponse(BaseModel):
@@ -145,6 +165,7 @@ async def start_job(
         platform_model_id=req.platform_model_id,
         output_subdir=req.output_subdir,
         env_overrides=req.env_overrides,
+        secrets=req.secrets,
     )
     record = tracker.get(job_id)
     return StartJobResponse(

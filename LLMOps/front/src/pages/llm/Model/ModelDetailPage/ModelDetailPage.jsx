@@ -12,8 +12,10 @@ import {
 
 import CommitList from './CommitList';
 import ModelCommitListItem from './CommitList/ModelCommitListItem';
+import Evaluate from './Evaluate';
 import FineTuning from './FineTuning';
 import ModelInfo from './ModelInfo';
+import Quantize from './Quantize';
 
 import classNames from 'classnames/bind';
 import style from './ModelDetailPage.module.scss';
@@ -74,6 +76,8 @@ const ModelDetailPage = memo(function ModelDetailPage({
       { label: 'information.label', path: `${url}/info` },
       { label: 'fineTuning.label', path: `${url}/fine-tuning` },
       { label: 'commitList.label', path: `${url}/commit-list` },
+      { label: 'evaluate.label', path: `${url}/evaluate` },
+      { label: 'quantize.label', path: `${url}/quantize` },
     ],
     [url],
   );
@@ -108,6 +112,12 @@ const ModelDetailPage = memo(function ModelDetailPage({
           </Route>
           <Route path={`${path}/fine-tuning`}>
             <FineTuning navList={navList} {...filteredRest} data={props} />
+          </Route>
+          <Route path={`${path}/evaluate`}>
+            <Evaluate navList={navList} {...filteredRest} data={props} />
+          </Route>
+          <Route path={`${path}/quantize`}>
+            <Quantize navList={navList} {...filteredRest} data={props} />
           </Route>
           <Route path={`${path}/commit-list/:cId`}>
             <ModelCommitListItem

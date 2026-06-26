@@ -1,0 +1,202 @@
+.evaluate-tab {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.container {
+  padding: 24px 4px;
+  overflow-y: auto;
+}
+
+.intro {
+  margin-bottom: 20px;
+}
+
+.intro-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.intro-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.intro-desc {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #888;
+  line-height: 1.5;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 56px 0;
+  border: 1px dashed #d8d8d8;
+  border-radius: 8px;
+}
+
+.empty-text {
+  font-size: 14px;
+  color: #999;
+}
+
+.job-card {
+  border: 1px solid #e6e6e6;
+  border-radius: 8px;
+  padding: 22px 24px;
+  margin-bottom: 24px;
+}
+
+.job-row {
+  display: flex;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #f2f2f2;
+}
+
+.job-label {
+  width: 110px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #666;
+}
+
+.job-value {
+  font-size: 14px;
+  color: #1a1a1a;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+
+  &.run {
+    color: #2f6fed;
+  }
+  &.done {
+    color: #1aa260;
+  }
+  &.fail {
+    color: #e0483e;
+  }
+}
+
+.spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #cfe0ff;
+  border-top-color: #2f6fed;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.error-box {
+  margin-top: 16px;
+  padding: 12px 14px;
+  background: #fdf2f1;
+  border: 1px solid #f5c6c2;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #c0392b;
+}
+
+.job-actions {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.comparison {
+  margin-top: 8px;
+}
+
+.comparison-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin-bottom: 12px;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.comparison-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+
+  th,
+  td {
+    padding: 9px 12px;
+    text-align: left;
+    border-bottom: 1px solid #f0f0f0;
+    white-space: nowrap;
+  }
+
+  th {
+    font-weight: 600;
+    color: #888;
+    background: #fafafa;
+  }
+
+  td {
+    color: #333;
+  }
+}
+
+.metric-cell {
+  &.best {
+    font-weight: 700;
+    color: #1aa260;
+  }
+}
+
+.best-badge {
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #1aa260;
+  background: #e6f6ee;
+  border-radius: 10px;
+  vertical-align: middle;
+}
+
+.run-status {
+  font-weight: 600;
+
+  &.completed {
+    color: #1aa260;
+  }
+  &.running {
+    color: #2f6fed;
+  }
+  &.failed,
+  &.cancelled {
+    color: #e0483e;
+  }
+}
+
+.comparison-hint {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #999;
+}

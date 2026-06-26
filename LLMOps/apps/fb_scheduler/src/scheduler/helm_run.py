@@ -636,6 +636,13 @@ def delete_helm_external(helm_release: str, namespace: str):
         release_reservations_for_release(helm_release)
     except Exception:
         pass
+    # SP-3 보안: helm 밖에서 만든 secret Secret 정리(best-effort). helm 이 소유하지
+    # 않으므로 uninstall 이 자동 삭제하지 않는다(orphan 방지).
+    try:
+        from scheduler.external_run import _delete_external_secret
+        _delete_external_secret(helm_release, namespace)
+    except Exception:
+        pass
     try:
         os.chdir("/app/helm_chart/")
         command = f"helm uninstall {helm_release} -n {namespace}"

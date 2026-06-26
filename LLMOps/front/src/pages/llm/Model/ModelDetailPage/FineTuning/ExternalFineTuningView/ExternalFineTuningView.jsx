@@ -32,6 +32,7 @@ import { errorToastMessage, defaultSuccessToastMessage } from '@src/utils';
 
 import SimpleNav from '../../SimpleNav';
 import FineTuningGraph from '../FineTuningGraph';
+import RecipePipeline from './RecipePipeline';
 import useSSEStatus from '../useSSEStatus';
 import useSSETime from '../useSSEFinetuningTime';
 import useSSEGraph from '../useSSEGraph';
@@ -42,6 +43,26 @@ import localStyle from './ExternalFineTuningView.module.scss';
 
 const cx = classNames.bind(style);
 const lx = classNames.bind(localStyle);
+
+// Defense in depth: the BFF already restricts wandb_url to http/https, but the
+// value lands in an href so we re-check the scheme client-side and surface the
+// destination host (anti-phishing — partner URL is untrusted). Returns
+// { url, host } when safe, else null.
+const parseSafeHttpUrl = (u) => {
+  if (typeof u !== 'string' || !u) return null;
+  try {
+    const parsed = new URL(u);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return { url: u, host: parsed.host };
+    }
+  } catch (_) {
+    /* invalid URL */
+  }
+  return null;
+};
+
+// 정규식 메타문자 이스케이프 — phase.id 를 anchored 커밋 매칭 패턴에 끼울 때 사용.
+const escapeRegExp = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const ExternalFineTuningView = memo(function ExternalFineTuningView({
   navList,
@@ -58,6 +79,7 @@ const ExternalFineTuningView = memo(function ExternalFineTuningView({
   const manifestName = fineTuningData?.external_manifest_name || '';
   const manifestVersion = fineTuningData?.external_manifest_version || '';
   const externalJobId = fineTuningData?.external_job_id || '';
+  const modelName = fineTuningData?.model_name || '';
 
   const [fineStatus, setFineStatus] = useState(null);
   const [progressData, setProgressData] = useState(null);
@@ -73,7 +95,16 @@ const ExternalFineTuningView = memo(function ExternalFineTuningView({
     : 'jonathan-system';
   const [namespaceInput, setNamespaceInput] = useState(defaultNamespace);
   const [paramsInput, setParamsInput] = useState('{}');
-  // 첫 마운트 시 manifest 의 default_params 로 textarea pre-fill.
+  // 다단계 학습 레시피(manifest.recipe, SP-10) — 있으면 phase 카드 파이프라인 렌더.
+  const [recipe, setRecipe] = useState(null);
+  // activePhaseId = 현재 externalJobId 에 묶인(실행 중) phase. 완료 phase 는
+  // 세션이 아니라 커밋(`{phase.id}-{ts}`)에서 derive → cross-reload 생존.
+  const [activePhaseId, setActivePhaseId] = useState(null);
+  const [commits, setCommits] = useState([]);
+  // 커밋 API 가 돌려주는 model_name(=model_info["name"], commit dir 에 쓰는 그 값)
+  // — _base_model.name 의 권위 source. client 추정(fineTuningData.model_name) 대체.
+  const [commitModelName, setCommitModelName] = useState('');
+  // 첫 마운트 시 manifest 의 default_params 로 textarea pre-fill + recipe 수신.
   useEffect(() => {
     if (!manifestName) return;
     let cancelled = false;
@@ -91,6 +122,12 @@ const ExternalFineTuningView = memo(function ExternalFineTuningView({
       ) {
         const match = result.versions.find(
           (v) => v.manifest_version === manifestVersion,
+        );
+        // recipe 없는 버전으로 전환 시에도 stale recipe 가 남지 않도록 무조건 set.
+        setRecipe(
+          match && match.recipe && Array.isArray(match.recipe.phases)
+            ? match.recipe
+            : null,
         );
         if (
           match &&
@@ -122,6 +159,126 @@ const ExternalFineTuningView = memo(function ExternalFineTuningView({
   );
   const isRunning = fineTuningStatus === 'running' || fineTuningStatus === 'pending';
 
+  // W&B run 링크 — 컨테이너가 result.wandb_url 로 보고하면 sse-status payload 의
+  // fine_tuning_status.wandb_url 로 흘러온다(학습 중/후 모두). 없으면 미표시.
+  const wandb = useMemo(
+    () => parseSafeHttpUrl(fineStatus?.fine_tuning_status?.wandb_url),
+    [fineStatus],
+  );
+
+  // externalJobId 변경 시 이전 job 의 status/graph/progress 잔상 제거 — 새 SSE
+  // 첫 메시지 도착 전 stale W&B 링크/그래프가 잠깐 보이는 것 방지.
+  useEffect(() => {
+    setFineStatus(null);
+    setProgressData(null);
+    setGraphData(null);
+  }, [externalJobId]);
+
+  // 모델/manifest 가 바뀌면 active/commits 초기화 — 이전 모델 상태 bleed 방지
+  // (리뷰 C1/codex#4).
+  useEffect(() => {
+    setActivePhaseId(null);
+    setCommits([]);
+    setCommitModelName('');
+  }, [modelId, manifestName, manifestVersion]);
+
+  // 실행 중 phase 식별 복구 — activePhaseId 는 로컬 state 라 학습 중 reload 하면
+  // 잃는다(codex HIGH). 모델에 바인딩된 job 의 output_subdir(=launch 시 phase.id
+  // 규약)로 복구해, reload 후에도 모니터링 상세가 실행 중 phase 를 따라가게 한다.
+  // job 이 cleanup(404)됐으면 그 phase 는 commit 으로 done 표시되므로 복구 불필요.
+  useEffect(() => {
+    if (
+      !externalJobId ||
+      activePhaseId ||
+      !recipe ||
+      !Array.isArray(recipe.phases)
+    ) {
+      return undefined;
+    }
+    let cancelled = false;
+    (async () => {
+      const res = await callApi({
+        url: `external/jobs/${externalJobId}`,
+        method: 'get',
+      });
+      if (cancelled) return;
+      const sub = res?.result?.output_subdir;
+      if (sub && recipe.phases.some((p) => p.id === sub)) {
+        setActivePhaseId(sub);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [externalJobId, activePhaseId, recipe]);
+
+  // recipe 모델의 커밋 목록 — phase 완료/체크포인트를 커밋 이름(`{phase.id}-{ts}`)
+  // prefix 로 derive(영속 — cross-reload 생존). 마운트 + done 도달 시 재조회.
+  const fetchRecipeCommits = useCallback(async () => {
+    if (!modelId) return;
+    const res = await callApi({
+      url: `models/commit-models?model_id=${modelId}`,
+      method: 'get',
+    });
+    if (res.status !== STATUS_SUCCESS) return;
+    // 응답 result = { list: [...commits], model_name } (svc.get_commit_models).
+    // 구버전(평면 배열)도 수용.
+    const data = res.result;
+    const list = Array.isArray(data)
+      ? data
+      : data && Array.isArray(data.list)
+        ? data.list
+        : null;
+    if (list) setCommits(list);
+    if (data && typeof data.model_name === 'string' && data.model_name) {
+      setCommitModelName(data.model_name);
+    }
+  }, [modelId]);
+
+  useEffect(() => {
+    if (recipe) fetchRecipeCommits();
+  }, [recipe, fetchRecipeCommits]);
+
+  // 활성 phase done → 서버 auto-commit 은 terminal 직후 비동기(commit row 아직
+  // 없을 수 있고 status 는 'done' 고정이라 1회 fetch 로는 놓친다). done 동안 제한
+  // 재시도(0/2/5/10s)로 commit 이 보일 때까지 재조회(code F5/codex HIGH).
+  useEffect(() => {
+    if (!recipe || fineTuningStatus !== 'done') return undefined;
+    let cancelled = false;
+    const timers = [0, 2000, 5000, 10000].map((d) =>
+      setTimeout(() => {
+        if (!cancelled) fetchRecipeCommits();
+      }, d),
+    );
+    return () => {
+      cancelled = true;
+      timers.forEach(clearTimeout);
+    };
+  }, [recipe, fineTuningStatus, fetchRecipeCommits]);
+
+  // phase.id → 최신 커밋 이름. 커밋명 = `{phase.id}-{YYYYMMDD-HHMMSS}`(service.py
+  // :1495). phase.id 가 하이픈을 허용하므로 startsWith(`${id}-`) 는 `lora` 가
+  // `lora-cc3m-...` 를 오매칭할 수 있다 → 타임스탬프까지 anchored 정규식으로 정확
+  // 매칭(code F2/codex HIGH). ts 고정폭이라 lexicographic 정렬=시간순.
+  const phaseCommitMap = useMemo(() => {
+    const m = {};
+    (recipe?.phases || []).forEach((p) => {
+      const re = new RegExp(`^${escapeRegExp(p.id)}-\\d{8}-\\d{6}$`);
+      const matched = commits
+        .map((c) => c && c.name)
+        .filter((n) => typeof n === 'string' && re.test(n))
+        .sort();
+      if (matched.length) m[p.id] = matched[matched.length - 1];
+    });
+    return m;
+  }, [commits, recipe]);
+
+  // 완료 phase = 커밋이 존재하는 phase (세션 아님 → reload 후에도 유지).
+  const donePhases = useMemo(
+    () => new Set(Object.keys(phaseCommitMap)),
+    [phaseCommitMap],
+  );
+
   useSSEStatus(externalJobId || null, userName, setFineStatus, 'external');
   useSSETime(
     externalJobId || null,
@@ -142,35 +299,14 @@ const ExternalFineTuningView = memo(function ExternalFineTuningView({
   // (backend 가 v1.0.0 에서 instance/gpu 를 helm resources override 로 쓰지
   // 않더라도 forward 자체는 안전 — fb_external_container 가 unknown 필드를
   // 무시한다. Phase 2 에서 chain 확장 시 자동으로 동작.)
-  const launchTraining = useCallback(
-    async ({ instanceId, instanceCount, gpuCount }) => {
-      let parsedParams;
-      try {
-        parsedParams = JSON.parse(paramsInput);
-        if (
-          parsedParams === null ||
-          typeof parsedParams !== 'object' ||
-          Array.isArray(parsedParams)
-        ) {
-          throw new Error('not an object');
-        }
-      } catch (_) {
-        errorToastMessage(null, t('externalTraining.start.invalidJson.label'));
-        return false;
-      }
+  // 공유 launch — params + outputSubdir + instance/gpu 받아 POST /external/jobs
+  // → PATCH external-job(활성 job 바인딩). 단일 launch 와 phase launch 가 모두 사용.
+  const submitExternalJob = useCallback(
+    async ({ params, outputSubdir, instanceId, instanceCount, gpuCount }) => {
       if (!namespaceInput.trim()) {
         errorToastMessage(null, t('externalTraining.start.failed.label'));
         return false;
       }
-      // Auto commit hook 활성화 — 학습 종료(COMPLETED) 시 fb_external_container
-      // 가 BFF /external-commit 자동 호출해서 commit_model row 생성.
-      // output_checkpoint_name 은 ETRI eva-vlm-train 의 출력 폴더 이름 키
-      // (partner-specific). 다른 manifest 면 manifest config 에서 매핑 필요.
-      const outputSubdir =
-        typeof parsedParams.output_checkpoint_name === 'string'
-          ? parsedParams.output_checkpoint_name.trim()
-          : null;
-
       const launch = await callApi({
         url: 'external/jobs',
         method: 'post',
@@ -179,7 +315,7 @@ const ExternalFineTuningView = memo(function ExternalFineTuningView({
           manifest_version: manifestVersion,
           workspace_id: Number(workspaceId),
           namespace: namespaceInput.trim(),
-          params: parsedParams,
+          params,
           instance_id: instanceId,
           instance_count: parseInt(instanceCount, 10),
           gpu_count: parseInt(gpuCount, 10),
@@ -209,16 +345,98 @@ const ExternalFineTuningView = memo(function ExternalFineTuningView({
       if (typeof refresh === 'function') refresh();
       return true;
     },
-    [
-      paramsInput,
-      namespaceInput,
-      manifestName,
-      manifestVersion,
-      workspaceId,
-      modelId,
-      refresh,
-      t,
-    ],
+    [namespaceInput, manifestName, manifestVersion, workspaceId, modelId, refresh, t],
+  );
+
+  // 단일 launch (recipe 없는 manifest) — 좌측 params textarea 사용.
+  const launchTraining = useCallback(
+    async ({ instanceId, instanceCount, gpuCount }) => {
+      let parsedParams;
+      try {
+        parsedParams = JSON.parse(paramsInput);
+        if (
+          parsedParams === null ||
+          typeof parsedParams !== 'object' ||
+          Array.isArray(parsedParams)
+        ) {
+          throw new Error('not an object');
+        }
+      } catch (_) {
+        errorToastMessage(null, t('externalTraining.start.invalidJson.label'));
+        return false;
+      }
+      // output_checkpoint_name 은 partner-specific 출력 폴더 이름 키.
+      const outputSubdir =
+        typeof parsedParams.output_checkpoint_name === 'string'
+          ? parsedParams.output_checkpoint_name.trim()
+          : null;
+      return submitExternalJob({
+        params: parsedParams,
+        outputSubdir,
+        instanceId,
+        instanceCount,
+        gpuCount,
+      });
+    },
+    [paramsInput, submitExternalJob, t],
+  );
+
+  // recipe phase launch — 해당 phase 의 (편집된) params 를 그대로 POST.
+  // chain_from 있으면 직전 phase 의 커밋을 `_base_model`(commit_models mount) +
+  // chain_inputs 치환으로 잇는다(output_subdir=phase.id 규약). 활성 phase 로 표시.
+  const launchPhase = useCallback(
+    (phase, editedParams) =>
+      async ({ instanceId, instanceCount, gpuCount }) => {
+        const base =
+          editedParams && typeof editedParams === 'object' ? editedParams : phase.params;
+        const params = { ...(base || {}) };
+        // 체이닝: chain_from phase 의 최신 커밋(`{phase.id}-{ts}`)을 직전 산출물로
+        // 잇는다. (1) `_base_model={name: <model>}` 로 그 모델의 commit_models 를
+        // /models/checkpoints 에 mount(pod.yaml). (2) chain_inputs 템플릿의
+        // {checkpoint_name} 을 커밋명으로 치환해 partner param(projector_path/
+        // resume_lora_path 등)에 주입. 커밋 경로 규약은 manifest recipe 가 소유.
+        if (phase.chain_from) {
+          const priorCommit = phaseCommitMap[phase.chain_from];
+          if (!priorCommit) {
+            errorToastMessage(
+              null,
+              t('externalTraining.recipe.chainMissing.label'),
+            );
+            return false;
+          }
+          // chain_inputs 를 먼저 적용한 뒤 _base_model 을 주입 — recipe 가
+          // chain_inputs 로 예약키(_base_model 등)를 덮어써 mount 를 무력화하지
+          // 못하게(codex MED, 스키마도 예약키 차단). {checkpoint_name} → 직전 커밋명.
+          const chainInputs = phase.chain_inputs || {};
+          Object.keys(chainInputs).forEach((key) => {
+            params[key] = String(chainInputs[key]).replace(
+              /\{checkpoint_name\}/g,
+              priorCommit,
+            );
+          });
+          // _base_model.name = 모델 실제 dir 이름. commit API 의 model_name(=
+          // model_info["name"], commit_external_artifacts 가 쓰는 그 값)을 권위
+          // source 로 사용 — client 추정(fineTuningData.model_name) 대비 안전
+          // (code F4/codex HIGH). 그 모델 commit_models 가 /models/checkpoints 마운트.
+          const baseName = commitModelName || modelName;
+          if (baseName) params._base_model = { name: baseName };
+        }
+        const ok = await submitExternalJob({
+          params,
+          outputSubdir: phase.id,
+          instanceId,
+          instanceCount,
+          gpuCount,
+        });
+        if (ok) {
+          // 직전 phase 의 stale done 상태가 새 phase 를 즉시 done 처리하는 레이스
+          // 방지 — 활성 전환 전 status 초기화. 새 SSE 가 다시 채운다(codex#3).
+          setFineStatus(null);
+          setActivePhaseId(phase.id);
+        }
+        return ok;
+      },
+    [submitExternalJob, phaseCommitMap, commitModelName, modelName, t],
   );
 
   const onClickRun = useCallback(() => {
@@ -234,6 +452,24 @@ const ExternalFineTuningView = memo(function ExternalFineTuningView({
       }),
     );
   }, [dispatch, workspaceId, modelId, launchTraining, refresh]);
+
+  // phase 실행 버튼 → instance/GPU 모달 → 해당 phase params 로 launch.
+  const onRunPhase = useCallback(
+    (phase, editedParams) => {
+      dispatch(
+        openModal({
+          modalType: 'FINETUNING_SETTING',
+          modalData: {
+            workspaceId,
+            modelId,
+            onSubmit: launchPhase(phase, editedParams),
+            refresh,
+          },
+        }),
+      );
+    },
+    [dispatch, workspaceId, modelId, launchPhase, refresh],
+  );
 
   // 중지 — confirm 후 POST /api/external/jobs/{jobId}/cancel.
   // ETRI 의 /train/stop 이 호출되고 fb_external_container 가 helm uninstall 까지 처리.
@@ -308,6 +544,9 @@ const ExternalFineTuningView = memo(function ExternalFineTuningView({
           label={t('externalTraining.stop.label')}
           onClick={onClickStop}
         />
+      ) : recipe ? (
+        // 레시피 학습은 phase 카드의 실행 버튼으로 단계별 시작 — 상단 단일 실행 숨김.
+        null
       ) : (
         <ButtonV2
           type='solid'
@@ -325,6 +564,70 @@ const ExternalFineTuningView = memo(function ExternalFineTuningView({
     </div>
   );
 
+  const recipeMode = !!(recipe && Array.isArray(recipe.phases));
+
+  // 라이브 모니터링(그래프/진행) — 단일 launch 의 우측 컬럼이자, recipe mode
+  // 에서 실행 중 phase 의 상세 패널에 주입되는 slot.
+  const monitoringSlot = (
+    <FineTuningGraph
+      fineTuningType={1}
+      data={graphData}
+      fineStatus={fineStatus}
+      fineTuningData={fineTuningData}
+      progressData={progressData}
+    />
+  );
+
+  const metadataPanel = (
+    <div className={lx('panel')}>
+      <div className={lx('panel-title')}>
+        {t('externalTraining.metadata.label')}
+      </div>
+      <ul className={lx('meta-list')}>
+        <Row label='Model' value={fineTuningData?.model_name || '-'} />
+        <Row label='Workspace' value={String(workspaceId ?? '')} />
+        <Row
+          label={t('externalTraining.model.manifest.label')}
+          value={`${manifestName}@${manifestVersion}`}
+        />
+        <Row label='Job ID' value={externalJobId || '-'} />
+        {wandb ? (
+          <li className={lx('meta-row')}>
+            <span className={lx('meta-label')}>
+              {t('externalTraining.wandb.label')}
+            </span>
+            <span className={lx('meta-value')}>
+              <a
+                className={lx('wandb-link')}
+                href={wandb.url}
+                target='_blank'
+                rel='noopener noreferrer'
+                title={t('externalTraining.wandb.viewRun.label')}
+              >
+                {wandb.host} ↗
+              </a>
+            </span>
+          </li>
+        ) : null}
+      </ul>
+    </div>
+  );
+
+  const namespacePanel = (
+    <div className={lx('panel')}>
+      <div className={lx('panel-title')}>
+        {t('externalTraining.start.namespace.label')}
+      </div>
+      <input
+        className={lx('text-input')}
+        type='text'
+        value={namespaceInput}
+        onChange={(e) => setNamespaceInput(e.target.value)}
+        disabled={isRunning}
+      />
+    </div>
+  );
+
   return (
     <div id='info-tab' className={cx('info-tab')}>
       <SimpleNav
@@ -335,65 +638,54 @@ const ExternalFineTuningView = memo(function ExternalFineTuningView({
         titleName={fineTuningData?.model_name}
         subTitle={`${manifestName}@${manifestVersion}`}
       />
-      <div className={cx('box')}>
-        <div className={cx('left', isRunning && 'disabled')}>
+      {recipeMode ? (
+        // SDS 레시피 = master-detail. 메타/네임스페이스 → 가로 phase 카드 →
+        // 선택 phase 상세(실행중=monitoringSlot / 완료=커밋 / 대기=params·실행).
+        <div className={lx('recipe-box')}>
+          {metadataPanel}
+          {namespacePanel}
           <div className={lx('panel')}>
             <div className={lx('panel-title')}>
-              {t('externalTraining.metadata.label')}
+              {recipe.label || t('externalTraining.recipe.label')}
             </div>
-            <ul className={lx('meta-list')}>
-              <Row label='Model' value={fineTuningData?.model_name || '-'} />
-              <Row label='Workspace' value={String(workspaceId ?? '')} />
-              <Row
-                label={t('externalTraining.model.manifest.label')}
-                value={`${manifestName}@${manifestVersion}`}
-              />
-              <Row
-                label='Job ID'
-                value={externalJobId || '-'}
-              />
-            </ul>
-          </div>
-
-          <div className={lx('panel')}>
-            <div className={lx('panel-title')}>
-              {t('externalTraining.start.namespace.label')}
-            </div>
-            <input
-              className={lx('text-input')}
-              type='text'
-              value={namespaceInput}
-              onChange={(e) => setNamespaceInput(e.target.value)}
-              disabled={isRunning}
+            <RecipePipeline
+              key={`${manifestName}@${manifestVersion}`}
+              phases={recipe.phases}
+              activePhaseId={activePhaseId}
+              activePhaseStatus={fineTuningStatus}
+              donePhases={donePhases}
+              phaseCommitMap={phaseCommitMap}
+              onRunPhase={onRunPhase}
+              monitoringSlot={monitoringSlot}
+              t={t}
             />
           </div>
-
-          <div className={lx('panel')}>
-            <div className={lx('panel-title')}>
-              {t('externalTraining.start.params.label')}
-            </div>
-            <textarea
-              className={lx('params-textarea')}
-              value={paramsInput}
-              onChange={(e) => setParamsInput(e.target.value)}
-              disabled={isRunning}
-              spellCheck={false}
-            />
-            <div className={lx('hint')}>
-              {t('externalTraining.start.params.hint')}
+        </div>
+      ) : (
+        // recipe 없는 external = 기존 단일 launch (좌: params / 우: 그래프).
+        <div className={cx('box')}>
+          <div className={cx('left', isRunning && 'disabled')}>
+            {metadataPanel}
+            {namespacePanel}
+            <div className={lx('panel')}>
+              <div className={lx('panel-title')}>
+                {t('externalTraining.start.params.label')}
+              </div>
+              <textarea
+                className={lx('params-textarea')}
+                value={paramsInput}
+                onChange={(e) => setParamsInput(e.target.value)}
+                disabled={isRunning}
+                spellCheck={false}
+              />
+              <div className={lx('hint')}>
+                {t('externalTraining.start.params.hint')}
+              </div>
             </div>
           </div>
+          <div className={cx('right')}>{monitoringSlot}</div>
         </div>
-        <div className={cx('right')}>
-          <FineTuningGraph
-            fineTuningType={1}
-            data={graphData}
-            fineStatus={fineStatus}
-            fineTuningData={fineTuningData}
-            progressData={progressData}
-          />
-        </div>
-      </div>
+      )}
     </div>
   );
 });

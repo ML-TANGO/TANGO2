@@ -51,13 +51,16 @@ metadata:
     # 위해 work_func_type=fine_tuning 사용.
     work_func_type: {{- if eq .Values.job_type "infer" }} "deployment"
     {{- else if or (eq .Values.job_type "train") (eq .Values.job_type "batch") }} "fine_tuning"
+    {{- else if eq .Values.job_type "generate" }} "generation"
     {{- else }} "tool"
     {{- end }}
     # pod_type — monitoring 의 insert_gpu_usage 분기에 쓰이는 enum
-    # (project / fine_tuning / preprocessing / deployment). train job 은
+    # (project / fine_tuning / preprocessing / deployment / generation). train job 은
     # fine_tuning 분기로 매핑 — label_model_id 도 같이 박혀야 used_info 채워짐.
+    # generate job(생성형 파이프라인 노드)은 generation 분기 — label_job_id 로 귀속(WBS 1.1).
     pod_type: {{- if eq .Values.job_type "infer" }} "deployment"
     {{- else if or (eq .Values.job_type "train") (eq .Values.job_type "batch") }} "fine_tuning"
+    {{- else if eq .Values.job_type "generate" }} "generation"
     {{- else }} "tool"
     {{- end }}
     helm_name: {{ .Values.helm_release | quote }}
@@ -175,11 +178,18 @@ spec:
     - name: {{ $key }}
       value: {{ $val | quote }}
     {{- end }}
-    # ── Secrets declared via manifest.secrets.required ───────────────────
-    # Values come from helm --set spec.containers.env.{NAME}=...
-    {{- range $key, $val := .Values.secrets }}
+    # ── Secrets declared via manifest.secrets.required (SP-3 보안 하드닝) ──
+    # 값은 helm 밖 K8s Secret(.Values.secret_ref_name)에 있고 여기선 참조만 한다.
+    # → secret 값이 PodSpec / Helm release manifest·history 에 평문으로 안 들어감
+    # (kubectl/helm read at-rest 노출 차단). fb_scheduler 가 install 전 Secret 생성.
+    {{- if .Values.secret_ref_name }}
+    {{- range $key := .Values.secret_keys }}
     - name: {{ $key }}
-      value: {{ $val | quote }}
+      valueFrom:
+        secretKeyRef:
+          name: {{ $.Values.secret_ref_name }}
+          key: {{ $key }}
+    {{- end }}
     {{- end }}
     # NVIDIA_VISIBLE_DEVICES — fb_scheduler external_run._ensure_gpu_allocation
     # 이 cluster[0].device.uuids 또는 top-level gpu_uuids 둘 다 채움. cluster
@@ -327,7 +337,13 @@ spec:
         path: params.json
   - name: scratch
     emptyDir:
-      sizeLimit: 4Gi
+      # /tmp 중간 산출물용. convert-llamacpp 은 f16 중간 GGUF(≈2바이트×파라미터,
+      # 8B 모델 ≈16G, 프루닝 시 pruned 모델 사본 추가)를 /tmp 에 쓴다 → 4Gi 면
+      # ephemeral-storage eviction("Usage of EmptyDir scratch exceeds limit").
+      # 노드 ephemeral-storage 여유(800Gi+) 충분 → 일반 모델 변환 커버하도록 상향.
+      # (sizeLimit 은 상한일 뿐 예약 아님 — 소량 사용 job 엔 영향 없음. 향후 manifest
+      #  per-job scratch 선언으로 세분화 가능.)
+      sizeLimit: 64Gi
   - name: hf-model-cache
     persistentVolumeClaim:
       claimName: hf-model-cache-pvc

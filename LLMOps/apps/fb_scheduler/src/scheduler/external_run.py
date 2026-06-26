@@ -25,13 +25,76 @@ import subprocess
 import sys
 import tempfile
 from collections import defaultdict
-from typing import Tuple
+from typing import Optional, Tuple
 
 import yaml
 
 from scheduler.dto import Accelerator, ExternalPodInfo, Node
 
 logger = logging.getLogger(__name__)
+
+# SP-3 보안 하드닝(K8s Secret) — secret 값을 helm values(→PodSpec/Helm history 평문)가
+# 아니라 helm 밖 K8s Secret 객체로 만들고 pod.yaml 은 valueFrom.secretKeyRef 로 참조.
+# CoreV1Api 는 lazy 초기화(모듈 import 시 kube-config 부재로 죽지 않게).
+_corev1 = None
+
+
+def _get_corev1():
+    global _corev1
+    if _corev1 is None:
+        from kubernetes import config, client
+        from utils import settings
+        config.load_kube_config(config_file=settings.KUBER_CONFIG_PATH)
+        _corev1 = client.CoreV1Api()
+    return _corev1
+
+
+def _external_secret_name(helm_release: str) -> str:
+    # helm_release 는 이미 RFC1123 — Secret 이름으로 그대로 안전.
+    return f"{helm_release}-secrets"
+
+
+def _ensure_external_secret(pod_info: ExternalPodInfo) -> Optional[str]:
+    """secret 값을 담은 K8s Secret 을 helm 밖에서 생성(있을 때만). 값은 PodSpec /
+    Helm release manifest 에 들어가지 않고 Secret 객체(etcd, RBAC)에만 존재한다.
+    helm install 전에 호출 — pod 가 valueFrom.secretKeyRef 로 마운트할 때 존재해야 함.
+    반환: Secret 이름(생성 시) 또는 None(secret 없음 → dormant 경로 무변화)."""
+    secrets = dict(pod_info.secrets or {})
+    if not secrets:
+        return None
+    from kubernetes import client as k8s
+    from kubernetes.client.rest import ApiException
+    name = _external_secret_name(pod_info.helm_release)
+    api = _get_corev1()
+    body = k8s.V1Secret(
+        metadata=k8s.V1ObjectMeta(
+            name=name,
+            labels={"app": "external-container", "helm-release": pod_info.helm_release},
+        ),
+        string_data={k: str(v) for k, v in secrets.items()},
+        type="Opaque",
+    )
+    try:
+        api.create_namespaced_secret(namespace=pod_info.namespace, body=body)
+    except ApiException as e:
+        if e.status == 409:  # 재launch idempotency — 기존 값 교체
+            api.replace_namespaced_secret(name=name, namespace=pod_info.namespace, body=body)
+        else:
+            raise
+    return name
+
+
+def _delete_external_secret(helm_release: str, namespace: str) -> None:
+    """uninstall 시 secret Secret 정리(best-effort, 없으면 무시)."""
+    from kubernetes.client.rest import ApiException
+    name = _external_secret_name(helm_release)
+    try:
+        _get_corev1().delete_namespaced_secret(name=name, namespace=namespace)
+    except ApiException as e:
+        if e.status != 404:
+            logger.warning("failed to delete external secret %s in %s: %s", name, namespace, e)
+    except Exception as e:
+        logger.warning("error deleting external secret %s: %s", name, e)
 
 # Where the chart lives inside the fb_scheduler image. fb_scheduler runs in
 # /app and bundles all helm charts under /app/helm_chart/<chart_name>/. This
@@ -148,6 +211,16 @@ def create_external_pod(pod_info: ExternalPodInfo) -> Tuple[bool, str]:
     # internal 과 동일한 번들 회계로 통일한다.
     _apply_instance_resource_bundle(pod_info)
 
+    # SP-3 보안: secret 값을 helm 밖 K8s Secret 으로 먼저 만든다(있을 때만). values
+    # 파일엔 ref 이름/키만 들어가고 값은 안 들어간다 → PodSpec/Helm history 평문 노출 X.
+    try:
+        _ensure_external_secret(pod_info)
+    except Exception as e:
+        logger.error("external secret creation failed for %s: %s",
+                     pod_info.helm_release, e)
+        release_reservations_for_release(pod_info.helm_release)
+        return False, f"secret provisioning failed: {e}"
+
     values_file = _write_values_file(pod_info)
     command: list[str] = []
     try:
@@ -183,6 +256,8 @@ def create_external_pod(pod_info: ExternalPodInfo) -> Tuple[bool, str]:
         # reservation 즉시 해제 (TTL 900s 안 기다리고 회수). idempotent 재launch
         # (위) 는 기존 pod 가 GPU 쓰므로 해제 안 함. 역인덱스 기반 통일 경로.
         release_reservations_for_release(pod_info.helm_release)
+        # SP-3: install 실패 → 방금 만든 secret Secret 도 정리(orphan 방지).
+        _delete_external_secret(pod_info.helm_release, pod_info.namespace)
         # Log without secrets — the values file path goes to the log; the
         # contents do not. tempfile perms are 0600 so on-disk inspection is
         # limited to the scheduler container's own UID.
@@ -530,6 +605,17 @@ def _write_values_file(pod_info: ExternalPodInfo) -> str:
     a file that may carry partner-supplied secret env values.
     """
     data = _model_dump(pod_info)
+
+    # SP-3 보안: secret 값은 values 파일/Helm release 에 절대 넣지 않는다. 값은 helm
+    # 밖 K8s Secret(_ensure_external_secret)에 있고, pod.yaml 은 이름+키로
+    # valueFrom.secretKeyRef 를 렌더한다. → 값 map 제거, ref 이름/키만 남김.
+    secret_vals = data.pop("secrets", None) or {}
+    if secret_vals:
+        data["secret_ref_name"] = _external_secret_name(pod_info.helm_release)
+        data["secret_keys"] = sorted(secret_vals.keys())
+    else:
+        data["secret_ref_name"] = ""
+        data["secret_keys"] = []
 
     raw_params = (data.get("inputs") or {}).get("params_json") or "{}"
     try:
