@@ -4,3 +4,4 @@
 *.out
 *.log
 nohup.out
+.gstack/
