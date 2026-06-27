@@ -29,6 +29,29 @@ export const STATUS_FAIL = 'STATUS_FAIL';
 export const STATUS_SUCCESS = 'STATUS_SUCCESS';
 export const STATUS_INTERNAL_SERVER_ERROR = 'STATUS_INTERNAL_SERVER_ERROR';
 
+// 세션/토큰 만료 → 자동 로그아웃. 기존엔 빨간 에러 토스트만 띄우고 화면에 머물러
+// 불편했음 → 세션 정리 + /login 이동(자동 로그아웃) + 부드러운 안내 토스트로 통일.
+// 동시 다발 401 응답에 토스트/리다이렉트가 중복되지 않도록 1회만 처리(잠시 후 해제 → 재로그인 대비).
+let sessionExpiredHandled = false;
+const handleSessionExpired = () => {
+  if (sessionExpiredHandled) return;
+  sessionExpiredHandled = true;
+  setTimeout(() => {
+    sessionExpiredHandled = false;
+  }, 3000);
+
+  resetSession(); // sessionStorage clear + auth 상태 초기화(isAuth=false)
+
+  if (MODE === 'INTEGRATION') {
+    // 통합 인증은 통합 로그아웃 엔드포인트가 세션/리다이렉트를 관장.
+    window.location.href = `${INTEGRATION_API_HOST}member/logout`;
+    return;
+  }
+  // standalone(TANGO): 부드러운 안내 후 로그인 화면으로 자동 이동(SPA — 토스트 유지).
+  toast.info(i18n.t('sessionExpired.message'));
+  storeObj.store.dispatch(goToHome('/login'));
+};
+
 export const network = (() => {
   const accessToken = cookies.get('access_token');
 
@@ -99,10 +122,7 @@ export const network = (() => {
     const headerToken = res.headers?.token;
     const { expired, token: bodyToken } = res.data;
     if (expired) {
-      toast.error(i18n.t('tokenExpired.message'));
-      resetSession();
-      if (MODE === 'INTEGRATION')
-        window.location.href = `${INTEGRATION_API_HOST}member/logout`;
+      handleSessionExpired();
       return res;
     }
     if (bodyToken || headerToken) {
@@ -178,11 +198,7 @@ export const network = (() => {
     })
       .then((res) => {
         if (res.data.expired) {
-          toast.error(i18n.t('tokenExpired.message'));
-          if (MODE === 'INTEGRATION') {
-            window.location.href = `${INTEGRATION_API_HOST}member/logout`;
-          }
-          resetSession();
+          handleSessionExpired();
         }
         if (
           (res.data?.token || res.headers?.token) &&
@@ -430,11 +446,7 @@ export async function callApi({
     if (expired) {
       response.status = STATUS_FAIL;
       response.message = MSG.TOKEN_EXPIRED;
-      toast.error(i18n.t('tokenExpired.message'));
-      // token expired
-      resetSession();
-      if (MODE === 'INTEGRATION')
-        window.location.href = `${INTEGRATION_API_HOST}member/logout`;
+      handleSessionExpired();
       return response;
     }
     if (bodyToken || headerToken) {
@@ -563,11 +575,7 @@ export async function upload({
     if (expired) {
       response.status = STATUS_FAIL;
       response.message = MSG.TOKEN_EXPIRED;
-      toast.error(i18n.t('tokenExpired.message'));
-      // token expired
-      resetSession();
-      if (MODE === 'INTEGRATION')
-        window.location.href = `${INTEGRATION_API_HOST}member/logout`;
+      handleSessionExpired();
       return response;
     }
     if (bodyToken || headerToken) {
@@ -653,10 +661,7 @@ export const download = async ({
   const headerToken = res.headers?.token;
   const { expired, token: bodyToken } = res.data;
   if (expired) {
-    toast.error(i18n.t('tokenExpired.message'));
-    resetSession();
-    if (MODE === 'INTEGRATION')
-      window.location.href = `${INTEGRATION_API_HOST}member/logout`;
+    handleSessionExpired();
     return res;
   }
   if (bodyToken || headerToken) {
