@@ -390,10 +390,50 @@ class TaskExecutor:
             await self._wait_for_playground_deploy(playground_id, task_info.id)
             return
         if target == "edge":
-            raise NotImplementedError(
-                "edge deploy in pipeline = P3 (admin-gated /workers/{id}/deploy → "
-                "needs /pipeline s2s endpoint + quantize 산출 GGUF 전제)"
-            )
+            # 엣지 배포(SP-6/3.10) — fb_resource s2s pipeline-deploy 가 remoteManager /ops 로
+            # 양자화 GGUF 패키지를 워커에 배포(quantize 노드 산출 GGUF 전제). admin deploy 와
+            # 동일 서비스, 게이트만 s2s. deploy_state running=즉시완료 / 그 외=폴링 확정.
+            # 재실행 idempotency — "edge-{worker_id}" 기록 시 재배포 없이 상태만 폴링.
+            existing = task_info.task_item_job_str_id
+            if existing and existing.startswith("edge-"):
+                try:
+                    wid = int(existing.split("-", 1)[1])
+                    logger.info(f"edge deploy resume existing worker_id: {wid}")
+                    await self._wait_for_edge_deploy(wid, task_info.id)
+                    return
+                except (ValueError, IndexError):
+                    pass  # 형식 이상 → 신규 배포로 진행
+            worker_id = cfg.get("worker_id")
+            if not worker_id:
+                raise ValueError("llm_deploy edge: built_in_params.worker_id is required")
+            image = cfg.get("image")
+            if not image:
+                raise ValueError("llm_deploy edge: built_in_params.image is required")
+            # DeployEdgeModel = image(필수) + model_name/model_version/gguf_path/params(선택).
+            body = {"image": image}
+            for k in ("model_name", "model_version", "gguf_path", "params"):
+                if cfg.get(k) is not None:
+                    body[k] = cfg[k]
+            # dispatch 전에 worker 키 기록 — POST 후 크래시해도 어느 워커에 배포를 시도했는지
+            # 가시성 확보(status=running). 단 run() 시작의 update_pipeline_task_reset 이 str_id 를
+            # 비우므로 풀 재실행 시엔 재배포가 일어날 수 있음(remoteManager /ops=교체 가정).
+            # cluster 분기와 동형 idempotency 패턴.
+            db.update_pipeline_task_str(
+                task_id=task_info.id, task_item_job_str_id=f"edge-{worker_id}")
+            url = f"http://{settings.RESOURCE_DNS}/api/edge/workers/{worker_id}/pipeline-deploy"
+            res = await self.http_client.post(url=url, data=body)
+            if not isinstance(res, dict) or res.get("status") != 1:
+                raise ValueError(f"edge pipeline-deploy failed: {res!r}")
+            deploy_state = (res.get("result") or {}).get("deploy_state")
+            logger.info(f"edge deploy worker {worker_id} state={deploy_state}")
+            if deploy_state == "error":
+                raise RuntimeError(f"edge deploy worker {worker_id} state=error")
+            if deploy_state == "running":
+                db.update_pipeline_task_end(task_id=task_info.id)
+                return
+            # deploying/stopped(미확정) → remoteManager /metrics 가 확정할 때까지 폴링
+            await self._wait_for_edge_deploy(worker_id, task_info.id)
+            return
         raise ValueError(f"unknown deploy_target: {target}")
 
     def _prepare_generation_data(self, task_info: TaskInfo) -> Dict:
@@ -476,6 +516,48 @@ class TaskExecutor:
             polls += 1
             if polls >= max_polls:
                 raise RuntimeError(f"{label} playground {playground_id} not running after {polls} polls")
+            await asyncio.sleep(2)
+
+    async def _wait_for_edge_deploy(self, worker_id: int, task_id: int,
+                                    label: str = "Edge deploy") -> None:
+        # fb_resource GET /api/edge/workers/{id}/pipeline-status → refresh(remoteManager /metrics)
+        # → worker.deploy_state. running=종료, error=실패, stopped/deploying(미확정)=계속 폴링.
+        # ⚠️ refresh 는 deploy_state 를 running/stopped/error 로만 매핑(deploying 미반환)하므로
+        # 초기 미기동 구간이 stopped 로 보일 수 있음 → 진행 상태로 간주하고 전체 폴링 상한으로 bound.
+        # 연속실패 상한(연결 단절) + 전체 폴링 상한(이미지 pull 여유). playground 폴러와 동형.
+        url = f"http://{settings.RESOURCE_DNS}/api/edge/workers/{worker_id}/pipeline-status"
+        consecutive_failures = 0
+        max_consecutive_failures = 60
+        polls = 0
+        max_polls = 300  # ~10분 (2s 간격)
+        while True:
+            try:
+                res = await self.http_client.get(url=url)
+                ok = isinstance(res, dict) and res.get("status") == 1
+                deploy_state = (res.get("result") or {}).get("deploy_state") if ok else None
+                if deploy_state == "error":
+                    raise RuntimeError(f"{label} worker {worker_id} state=error")
+                if deploy_state == "running":
+                    db.update_pipeline_task_end(task_id=task_id)
+                    break
+                if ok and deploy_state in ("stopped", "deploying"):
+                    consecutive_failures = 0  # 유효 진행 상태(미확정)
+                else:
+                    # bad 엔벨로프/None/offline → 일시 단절로 누적(무한 폴 방지).
+                    consecutive_failures += 1
+                    logger.warning(f"{label} unsettled poll (state={deploy_state!r}, {consecutive_failures}/{max_consecutive_failures})")
+                    if consecutive_failures >= max_consecutive_failures:
+                        raise RuntimeError(f"{label} worker {worker_id} unresolved after {consecutive_failures} attempts")
+            except RuntimeError:
+                raise
+            except Exception as e:
+                consecutive_failures += 1
+                logger.warning(f"{label} status check failed ({consecutive_failures}/{max_consecutive_failures}): {str(e)}")
+                if consecutive_failures >= max_consecutive_failures:
+                    raise RuntimeError(f"{label} worker {worker_id} unreachable after {consecutive_failures} attempts")
+            polls += 1
+            if polls >= max_polls:
+                raise RuntimeError(f"{label} worker {worker_id} not running after {polls} polls")
             await asyncio.sleep(2)
 
     def _prepare_preprocessing_data(self, task_info: TaskInfo) -> Dict:

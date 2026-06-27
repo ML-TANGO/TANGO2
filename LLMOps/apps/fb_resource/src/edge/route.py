@@ -71,6 +71,32 @@ async def deploy_worker(worker_id: int, body: model.DeployEdgeModel):
         return response(status=0, message=str(e), result=None)
 
 
+# ── 통합 파이프라인 s2s (llm_deploy edge 노드) ────────────────────────────────
+# fb_pipeline 런타임이 호출 — admin 세션이 없으므로 admin_access_check 미적용.
+# 위 admin deploy/get 과 동일 서비스 함수를 재사용하되 게이트만 s2s 로 연다
+# (llm_playground pipeline-deploy 선례와 동형). 클러스터 내부 DNS 전용.
+@edge.post('/workers/{worker_id}/pipeline-deploy')
+async def pipeline_deploy_worker(worker_id: int, body: model.DeployEdgeModel):
+    try:
+        res = await run_in_threadpool(edge_service.deploy_edge_worker, worker_id, body)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+
+@edge.get('/workers/{worker_id}/pipeline-status')
+async def pipeline_status_worker(worker_id: int):
+    # 배포 노드 폴러용 — refresh 가 remoteManager /metrics 를 폴링해 deploying→running/error
+    # 를 확정한다(deploy 가 202 async 면 deploy_state=deploying 으로 남으므로).
+    try:
+        res = await run_in_threadpool(edge_service.refresh_edge_worker, worker_id)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+
 @edge.delete('/workers/{worker_id}')
 @admin_access_check()
 async def delete_worker(worker_id: int):
