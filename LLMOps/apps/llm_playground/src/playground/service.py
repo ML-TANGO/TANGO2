@@ -106,6 +106,64 @@ async def create_playground(workspace_id, name, description, access, user_name=N
         traceback.print_exc()
         return False
 
+async def pipeline_deploy(workspace_id, model_id, user_name, model_instance_id,
+                          model_commit_id=None, name=None,
+                          model_instance_count=1, model_gpu_count=1):
+    """파이프라인(통합 파이프라인 llm_deploy 노드)의 s2s 클러스터 배포(spec #4).
+    create → 옵션(모델 바인딩 + deployment_run) → start 를 원자적으로 수행한다.
+    배포 로직 자체는 기존 서비스 함수(update_playground_options / start_playground)를
+    그대로 재사용(재구현 X) — FE 수동 배포와 동일 경로(internal helm / external 분기 포함).
+    반환: {"playground_id": ...}. 상태는 호출측이 GET /playgrounds/status/{id} 로 폴링."""
+    user = db.get_user(user_name=user_name)
+    if not user:
+        raise Exception(f"deploy user not found: {user_name}")
+    owner_id = user.get("id")
+
+    # commit 미지정 시 모델 latest_commit_id 로 해석 — internal helm 배포 경로
+    # (utils.llm_deployment)는 model_type=commit 에서 commit 을 무조건 deref 하므로
+    # None 이면 크래시. external 경로는 자체 폴백이 있으나 양쪽 안전하게 여기서 채운다.
+    if model_commit_id is None:
+        model_row = await db.get_model(model_id=model_id)
+        model_commit_id = (model_row or {}).get("latest_commit_id")
+    if model_commit_id is None:
+        raise Exception(f"model {model_id} has no commit to deploy")
+
+    deploy_name = name or f"pipeline-deploy-model{model_id}"
+    res, playground_id = await db.insert_playground(
+        workspace_id=workspace_id, name=deploy_name,
+        description="pipeline auto-deploy", create_user_id=owner_id, access=1)
+    if not res:
+        raise Exception("create playground failed")
+
+    # 옵션/start 부분 실패 시 orphan playground 방지 — 보상 정리(delete_playground 재사용).
+    try:
+        await db.insert_user_playground_list(playgrounds_id=[playground_id], users_id=[owner_id])
+        # 모델 바인딩 + deployment_run 세팅(start 전제) — 기존 옵션 저장 경로 재사용.
+        await update_playground_options(
+            playground_id=playground_id, is_rag=False, is_prompt=False, accelerator=False,
+            model_type="commit", model_huggingface_id=None, model_huggingface_token=None,
+            model_allm_id=str(model_id), model_allm_commit_id=str(model_commit_id),
+            model_info=None, model_temperature=None, model_top_p=None, model_top_k=None,
+            model_repetition_penalty=None, model_max_new_tokens=None,
+            rag_id=None, rag_chunk_max=0, prompt_id=None, prompt_name=None,
+            prompt_commit_name=None, prompt_system_message=None, prompt_user_message=None)
+        # 서빙 시작(자원 할당) — 기존 start 경로 재사용.
+        await start_playground(
+            user_name=user_name, playground_id=playground_id,
+            model_instance_id=model_instance_id, model_instance_count=model_instance_count,
+            model_gpu_count=model_gpu_count,
+            embedding_instance_id=0, embedding_instance_count=0, embedding_gpu_count=0,
+            reranker_instance_id=0, reranker_instance_count=0, reranker_gpu_count=0,
+            restart=False)
+    except Exception:
+        try:
+            await delete_playground(id_list=[playground_id])
+        except Exception:
+            traceback.print_exc()
+        raise
+
+    return {"playground_id": playground_id}
+
 async def delete_playground(id_list):
     try:
         # 배포 삭제

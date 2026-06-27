@@ -344,16 +344,51 @@ class TaskExecutor:
 
     async def execute_llm_deploy(self, task_info: TaskInfo) -> None:
         """LLM 배포 노드 — built_in_params.deploy_target 로 분기.
-        - cluster(=Playground 배포): 🔵 미배선(spec #4, Playground 배포 계약 확정 필요).
+        - cluster(=Playground 배포): llm_playground s2s POST /api/playgrounds/pipeline-deploy
+          (create+모델바인딩+start 원자) → playground_id → status 폴링 (spec #4).
         - edge(타겟 디바이스, SP-6): fb_resource `/api/edge/workers/{id}/deploy` (admin 게이트 →
           전용 /pipeline s2s 엔드포인트가 정석. P3)."""
         logger.info(f"LLM deploy {task_info.task_item_id} 실행")
         cfg = _parse_cfg(task_info.built_in_params)
         target = (cfg.get("deploy_target") or "cluster").lower()
         if target == "cluster":
-            raise NotImplementedError(
-                "cluster(Playground) deploy not yet wired (spec #4 — Playground 배포 계약 확정 필요)"
-            )
+            # 재실행 idempotency — 이미 배포한 playground 가 있으면 재생성 없이 상태만 폴링
+            # (노드 재시도 시 중복 playground 누수 방지).
+            existing = task_info.task_item_job_str_id
+            if existing and existing.startswith("playground-"):
+                try:
+                    pid = int(existing.split("-", 1)[1])
+                    logger.info(f"cluster deploy resume existing playground_id: {pid}")
+                    await self._wait_for_playground_deploy(pid, task_info.id)
+                    return
+                except (ValueError, IndexError):
+                    pass  # 형식 이상 → 신규 배포로 진행
+            # instance_id 필수 — None 이면 원격 422(불친절) 대신 명확한 설정 에러.
+            instance_id = cfg.get("instance_id")
+            if not instance_id:
+                raise ValueError("llm_deploy cluster: built_in_params.instance_id is required")
+            # 클러스터 배포(=Playground 서빙) — llm_playground s2s pipeline-deploy 가
+            # create+모델바인딩+start 를 원자 수행하고 playground_id 반환 → 상태 폴링.
+            body = {
+                "workspace_id": int(settings.WORKSPACE_ID),
+                "model_id": task_info.task_item_id,
+                "user_name": settings.OWNER_NAME,
+                "model_instance_id": instance_id,
+                "model_instance_count": cfg.get("instance_count", 1),
+                "model_gpu_count": cfg.get("gpu_count") or task_info.gpu_count or 1,
+            }
+            if cfg.get("commit_id") is not None:
+                body["model_commit_id"] = cfg["commit_id"]
+            url = f"http://{settings.LLM_PLAYGROUND_DNS}/api/playgrounds/pipeline-deploy"
+            res = await self.http_client.post(url=url, data=body)
+            playground_id = (res.get("result") or {}).get("playground_id")
+            if not playground_id:
+                raise ValueError(f"pipeline-deploy returned no playground_id: {res!r}")
+            logger.info(f"cluster deploy playground_id: {playground_id}")
+            db.update_pipeline_task_str(
+                task_id=task_info.id, task_item_job_str_id=f"playground-{playground_id}")
+            await self._wait_for_playground_deploy(playground_id, task_info.id)
+            return
         if target == "edge":
             raise NotImplementedError(
                 "edge deploy in pipeline = P3 (admin-gated /workers/{id}/deploy → "
@@ -407,6 +442,40 @@ class TaskExecutor:
                 logger.warning(f"{label} status check failed ({consecutive_failures}/{max_consecutive_failures}): {str(e)}")
                 if consecutive_failures >= max_consecutive_failures:
                     raise RuntimeError(f"{label} job {job_id} unreachable after {consecutive_failures} attempts")
+            await asyncio.sleep(2)
+
+    async def _wait_for_playground_deploy(self, playground_id: int, task_id: int,
+                                          label: str = "LLM deploy") -> None:
+        # llm_playground GET /api/playgrounds/status-sync/{id} → {status, init_deployment}.
+        # (/status 는 SSE 스트림이라 response.json() 불가 → 단건 JSON status-sync 사용.)
+        # status=running(서빙 준비 완료) 시 종료. installing/pending/stop(초기)=진행, error/failed=실패.
+        # 무한 hang 방지: 연속 실패 상한 + 전체 폴링 상한(helm release + 모델 load 시간 고려).
+        url = f"http://{settings.LLM_PLAYGROUND_DNS}/api/playgrounds/status-sync/{playground_id}"
+        consecutive_failures = 0
+        max_consecutive_failures = 60
+        polls = 0
+        max_polls = 300  # ~10분 (2s 간격)
+        while True:
+            try:
+                res = await self.http_client.get(url=url)
+                status = (res.get("result") or {}).get("status")
+                consecutive_failures = 0
+                if status == "running":
+                    db.update_pipeline_task_end(task_id=task_id)
+                    break
+                if status in ("error", "failed"):
+                    raise RuntimeError(f"{label} playground {playground_id} status={status}")
+                # installing / pending / stop(초기) → 계속 폴링
+            except RuntimeError:
+                raise
+            except Exception as e:
+                consecutive_failures += 1
+                logger.warning(f"{label} status check failed ({consecutive_failures}/{max_consecutive_failures}): {str(e)}")
+                if consecutive_failures >= max_consecutive_failures:
+                    raise RuntimeError(f"{label} playground {playground_id} unreachable after {consecutive_failures} attempts")
+            polls += 1
+            if polls >= max_polls:
+                raise RuntimeError(f"{label} playground {playground_id} not running after {polls} polls")
             await asyncio.sleep(2)
 
     def _prepare_preprocessing_data(self, task_info: TaskInfo) -> Dict:

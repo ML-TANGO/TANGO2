@@ -111,6 +111,21 @@ class RunPlaygroundInput(BaseModel):
     class Config:
         protected_namespaces = () 
     
+class PipelineDeployInput(BaseModel):
+    """파이프라인(통합 파이프라인 llm_deploy 노드)의 s2s 클러스터 배포 요청(spec #4).
+    create→옵션(모델 바인딩)→start 를 원자적으로 수행. FE 수동 배포와 동일 경로 재사용."""
+    workspace_id: int
+    model_id: int = Field(description="배포할 학습완료 모델(allm) id")
+    user_name: str = Field(description="배포 소유자(파이프라인 실행 사용자, OWNER_NAME)")
+    model_instance_id: int = Field(description="모델 자원 인스턴스 id")
+    model_commit_id: Optional[int] = Field(default=None, description="배포할 commit id(생략 시 미지정)")
+    name: Optional[str] = Field(default=None, description="배포명(생략 시 자동)")
+    model_instance_count: Optional[int] = Field(default=1, description="인스턴스 할당 개수")
+    model_gpu_count: Optional[int] = Field(default=1, description="GPU 할당 개수")
+
+    class Config:
+        protected_namespaces = ()
+
 class PlaygroundIdInput(BaseModel):
     playground_id: int
 

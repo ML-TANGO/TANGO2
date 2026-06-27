@@ -396,6 +396,22 @@ async def run_playground(body: dto.RunPlaygroundInput):
         traceback.print_exc()
         return response(status=0, message=str(e), result=None)
 
+@playgrounds.post("/pipeline-deploy", summary='배포 - 파이프라인 s2s 클러스터 배포(#4)', tags=TAG_DEPLOYMENT)
+async def pipeline_deploy(body: dto.PipelineDeployInput):
+    """통합 파이프라인 llm_deploy 노드의 클러스터 배포 — create+모델바인딩+start 원자 수행.
+    fb_pipeline executor 전용 s2s. 상태는 GET /status/{playground_id} 로 폴링."""
+    try:
+        res = await svc.pipeline_deploy(
+            workspace_id=body.workspace_id, model_id=body.model_id,
+            user_name=body.user_name, model_instance_id=body.model_instance_id,
+            model_commit_id=body.model_commit_id, name=body.name,
+            model_instance_count=body.model_instance_count,
+            model_gpu_count=body.model_gpu_count)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
 @playgrounds.post("/stop", summary='배포 - 중지', tags=TAG_DEPLOYMENT)
 async def stop_playground(body: dto.PlaygroundIdInput):
     """
@@ -549,6 +565,17 @@ async def get_playground_status(playground_id: int, request: Request):
             # 연결이 끊어졌을 때의 후속 처리
             print(f"Connection closed for playground {playground_id}")
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+@playgrounds.get("/status-sync/{playground_id}", summary='배포 상태 단건 JSON(s2s 폴링용)', tags=TAG_DEPLOYMENT)
+async def get_playground_status_sync(playground_id: int):
+    """SSE /status 와 동일 상태를 단건 JSON 으로 반환 — fb_pipeline executor 폴링용
+    (SSE 스트림은 executor 의 response.json() 으로 파싱 불가)."""
+    try:
+        res = await svc.get_playground_status(playground_id)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
 
 @playgrounds.get("/info/{playground_id}", summary='플레이그라운드 목록에서 수정할때 사용', tags=TAG_LIST)
 async def get_playground_info(playground_id: int):

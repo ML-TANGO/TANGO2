@@ -24,3 +24,5 @@ EXTERNAL_CONTAINER_DNS = "jfb-app-external-container-svc.jonathan-system.svc.clu
 # GenAI 통합 파이프라인 신규 task_type(finetuning/quantize/llm_deploy)용.
 LLM_MODEL_DNS = "jfb-llm-model-svc.jonathan-system.svc.cluster.local"
 RESOURCE_DNS = "jfb-app-resource-svc.jonathan-system.svc.cluster.local"
+# llm_deploy(cluster) 노드 → Playground s2s 배포(spec #4).
+LLM_PLAYGROUND_DNS = "jfb-llm-playground-svc.jonathan-system.svc.cluster.local"
