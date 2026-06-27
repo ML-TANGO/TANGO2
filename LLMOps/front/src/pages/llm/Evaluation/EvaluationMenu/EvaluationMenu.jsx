@@ -19,12 +19,12 @@ const MODES = [
     descKey: 'evaluation.mode.benchmark.desc',
   },
   {
-    id: 'judge', icon: '⚖️', ready: false,
+    id: 'judge', icon: '⚖️', ready: true,
     titleKey: 'evaluation.mode.judge.title',
     descKey: 'evaluation.mode.judge.desc',
   },
   {
-    id: 'expert', icon: '👤', ready: false,
+    id: 'expert', icon: '👤', ready: true,
     titleKey: 'evaluation.mode.expert.title',
     descKey: 'evaluation.mode.expert.desc',
   },

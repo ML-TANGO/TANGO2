@@ -5,9 +5,12 @@ import { useHistory, useRouteMatch } from 'react-router-dom';
 
 import ModelSelector from '@src/components/ModelSelector/ModelSelector';
 
+import EvalComparison from '../EvalComparison/EvalComparison';
+
 import {
   getEvalDatasets,
   getEvalResult,
+  getEvalResults,
   runBenchmark,
 } from '@src/apis/llm/evaluation';
 import { startPath } from '@src/store/modules/breadCrumb';
@@ -61,7 +64,21 @@ const BenchmarkEvaluation = () => {
   const [selMetrics, setSelMetrics] = useState([]);
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState(null);
+  const [evalHistory, setEvalHistory] = useState(null); // 모델 중심 이력 비교표(§14.12)
   const pollRef = useRef({ alive: true, timer: null });
+
+  // 선택 모델의 평가 이력(비교표) 조회 — 모델 선택 시 + 런 완료 후 갱신.
+  const fetchHistory = useCallback(async (mId) => {
+    if (!mId) return;
+    const res = await getEvalResults(mId);
+    if (res.status === STATUS_SUCCESS) setEvalHistory(res.result);
+  }, []);
+
+  // 모델 변경 시 이력 재조회(이전 모델 이력 잔상 방지).
+  useEffect(() => {
+    setEvalHistory(null);
+    if (modelId) fetchHistory(modelId);
+  }, [modelId, fetchHistory]);
 
   useEffect(() => {
     // workspaceId 변경/재마운트 시 liveness 복원 — cleanup 이 alive=false 로 둔 뒤
@@ -126,9 +143,16 @@ const BenchmarkEvaluation = () => {
           return;
         }
         const r = res.result || {};
+        // 컨테이너 실패/취소를 DB 상태로 조기 감지(파일 미생성 → 무한폴링 방지).
+        if (r.status === 'failed' || r.status === 'cancelled') {
+          setRunning(false);
+          errorToastMessage(null, t('evaluation.failed'));
+          return;
+        }
         if (r.ready) {
           setResults(r.metrics);
           setRunning(false);
+          fetchHistory(mId); // 새 런이 이력 비교표에도 반영(eval_result lazy 마감 후)
           return;
         }
         if (attempt >= POLL_MAX) {
@@ -142,7 +166,7 @@ const BenchmarkEvaluation = () => {
         );
       });
     },
-    [t],
+    [t, fetchHistory],
   );
 
   const handleRun = async () => {
@@ -279,6 +303,13 @@ const BenchmarkEvaluation = () => {
               </tbody>
             </table>
           </div>
+        </section>
+      )}
+
+      {modelId && (
+        <section className={cx('section')}>
+          <h3 className={cx('section-title')}>{t('evaluation.history.title')}</h3>
+          <EvalComparison comparison={evalHistory} />
         </section>
       )}
     </div>

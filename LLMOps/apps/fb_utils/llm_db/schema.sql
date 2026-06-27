@@ -120,6 +120,26 @@ CREATE TABLE IF NOT EXISTS `eval_result` (
     CONSTRAINT FOREIGN KEY (`source_model_id`) REFERENCES `jonathan_llm`.`model` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
 );
 
+-- P3 전문가 평가(sample-level 인간 채점). 세션 = eval_result row(job_str_id, metric_set='expert').
+-- (job_str_id, sample_idx) 유니크 → 재채점 upsert. 합격률은 집계 후 eval_result.metrics 로.
+CREATE TABLE IF NOT EXISTS `eval_expert_rating` (
+    `id`                INT(11) NOT NULL AUTO_INCREMENT,
+    `source_model_id`   INT(11) NOT NULL,
+    `job_str_id`        VARCHAR(128) NOT NULL,
+    `sample_idx`        INT(11) NOT NULL,
+    `input`             TEXT,
+    `output`            TEXT,
+    `reference`         TEXT,
+    `rater_user`        VARCHAR(128),
+    `verdict`           VARCHAR(8) NOT NULL,
+    `comment`           TEXT,
+    `create_datetime`   DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(`id`),
+    UNIQUE KEY `uq_expert_sample` (`job_str_id`, `sample_idx`),
+    CONSTRAINT FOREIGN KEY (`source_model_id`) REFERENCES `jonathan_llm`.`model` (`id`) ON UPDATE CASCADE ON DELETE CASCADE,
+    CONSTRAINT FOREIGN KEY (`job_str_id`) REFERENCES `jonathan_llm`.`eval_result` (`job_str_id`) ON UPDATE CASCADE ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS `commit_model` (
     `id`                    INT(11) NOT NULL AUTO_INCREMENT,
     `name`                  LONGTEXT,

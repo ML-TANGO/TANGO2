@@ -204,6 +204,12 @@ const EvaluationMenu = lazy(() =>
 const BenchmarkEvaluation = lazy(() =>
   import('@src/pages/llm/Evaluation/BenchmarkEvaluation/BenchmarkEvaluation'),
 );
+const JudgeEvaluation = lazy(() =>
+  import('@src/pages/llm/Evaluation/JudgeEvaluation/JudgeEvaluation'),
+);
+const ExpertEvaluation = lazy(() =>
+  import('@src/pages/llm/Evaluation/ExpertEvaluation/ExpertEvaluation'),
+);
 const UserServicePage = lazy(() => import('@src/pages/UserServicePage'));
 const UserTestPage = lazy(() => import('@src/pages/UserTestPage'));
 const NotFoundPage = lazy(() => import('@src/pages/NotFoundPage'));
@@ -900,6 +906,28 @@ const routeArr = [
     activeIcon: IconModelActive,
     platform: 'flightbase',
     render: (props) => <BenchmarkEvaluation {...props} />,
+  },
+  {
+    // P2: LLM-as-a-Judge 화면(모델+심판+기준→per-criterion). detail=사이드nav 비노출.
+    name: 'JudgeEvaluation',
+    path: '/user/workspace/:id/evaluation/judge',
+    exact: true,
+    disabled: true,
+    icon: IconModel,
+    activeIcon: IconModelActive,
+    platform: 'flightbase',
+    render: (props) => <JudgeEvaluation {...props} />,
+  },
+  {
+    // P3: 전문가 평가(샘플 O/X 채점). detail=사이드nav 비노출.
+    name: 'ExpertEvaluation',
+    path: '/user/workspace/:id/evaluation/expert',
+    exact: true,
+    disabled: true,
+    icon: IconModel,
+    activeIcon: IconModelActive,
+    platform: 'flightbase',
+    render: (props) => <ExpertEvaluation {...props} />,
   },
   {
     name: 'AIPipeline',

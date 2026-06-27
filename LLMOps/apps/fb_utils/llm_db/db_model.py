@@ -4,6 +4,7 @@ from utils.llm_db.db_base import get_db
 from typing import List
 
 
+import json
 import traceback
 
 #==========================================
@@ -730,4 +731,119 @@ async def list_eval_results(source_model_id : int) -> list:
     """
     res = await select_query(sql, params=(TYPE.TIME_DATE_FORMAT_SQL, source_model_id),
                              fetch_type=FetchType.ALL)
+    return res or []
+
+
+async def get_eval_result_by_job(job_str_id : str, source_model_id : int = None):
+    """job_str_id 로 eval_result 단건 조회 — 직접호출(judge) 결과 폴링용(컨테이너/NFS 미경유).
+    source_model_id 주면 교차모델 조회 차단."""
+    sql = """
+        SELECT id, source_model_id, workspace_id, job_str_id, dataset_id,
+               dataset_name, metric_set, metrics, status,
+               DATE_FORMAT(create_datetime, %s) AS create_datetime
+        FROM eval_result
+        WHERE job_str_id = %s
+    """
+    params = [TYPE.TIME_DATE_FORMAT_SQL, job_str_id]
+    if source_model_id is not None:
+        sql += " AND source_model_id = %s"
+        params.append(source_model_id)
+    sql += " ORDER BY id DESC LIMIT 1"
+    res = await select_query(sql, params=tuple(params), fetch_type=FetchType.ALL)
+    return (res or [None])[0]
+
+
+# 메트릭 방향(best 판정). 모르는 키는 max 기본(벤치마크 점수 대부분 higher=better).
+# perplexity 만 낮을수록 우수. (llm_model self-metric + llm_evaluation 벤치마크 공용)
+_EVAL_METRIC_DIRECTION = {
+    "bleu": "max", "rouge1": "max", "rouge2": "max", "rougel": "max", "rouge": "max",
+    "perplexity": "min", "auc": "max", "f1": "max", "accuracy": "max", "dice": "max",
+}
+
+
+def _flatten_eval_metrics(metrics) -> dict:
+    """비교표용 flat numeric 메트릭 추출.
+    벤치마크(nested {scores, averages, ...})는 averages(메트릭→평균)를 사용,
+    self-metric(SP-5)은 top-level flat numeric 을 사용 → 혼재 이력을 동일 shape 로(§14.12).
+    _ 접두 내부키·비수치·bool 은 제외."""
+    if isinstance(metrics, dict) and isinstance(metrics.get("averages"), dict):
+        source = metrics["averages"]    # 벤치마크 평탄화
+    else:
+        source = metrics if isinstance(metrics, dict) else {}
+    return {k: v for k, v in source.items()
+            if not str(k).startswith("_") and isinstance(v, (int, float))
+            and not isinstance(v, bool)}
+
+
+def build_eval_comparison(rows: list) -> dict:
+    """eval_result rows → 비교표 shape ``{metric_keys, best, runs}`` (§14.12).
+
+    self-metric(SP-5)·벤치마크·judge(후속) 런을 한 비교표에 누적. 벤치마크의 nested
+    metrics 는 averages 로 평탄화. best 는 completed 런 중 메트릭별 방향(min/max) 최적값.
+    llm_model / llm_evaluation 두 서비스가 동일 로직을 쓰도록 공용화(분기 drift 방지).
+    """
+    runs = []
+    metric_keys = set()
+    for r in rows:
+        metrics = r.get("metrics")
+        if isinstance(metrics, str):
+            try:
+                metrics = json.loads(metrics)
+            except (TypeError, json.JSONDecodeError):
+                metrics = None
+        clean = _flatten_eval_metrics(metrics)
+        metric_keys.update(clean.keys())
+        runs.append({
+            "id": r["id"], "job_id": r.get("job_str_id"), "dataset_id": r.get("dataset_id"),
+            "dataset_name": r.get("dataset_name"), "metric_set": r.get("metric_set"),
+            "status": r.get("status"), "create_datetime": r.get("create_datetime"),
+            "metrics": clean,
+        })
+    best = {}
+    for key in metric_keys:
+        direction = _EVAL_METRIC_DIRECTION.get(str(key).lower(), "max")
+        candidates = [(run["id"], run["metrics"][key]) for run in runs
+                      if run["status"] == "completed" and key in run["metrics"]]
+        if not candidates:
+            continue
+        best[key] = (min if direction == "min" else max)(candidates, key=lambda x: x[1])[0]
+    return {"metric_keys": sorted(metric_keys), "best": best, "runs": runs}
+
+
+# ── P3 전문가 평가 (sample-level 인간 채점) ──────────────────────────────────
+
+async def insert_expert_rating(source_model_id : int, job_str_id : str, sample_idx : int,
+                               verdict : str, input : str = None, output : str = None,
+                               reference : str = None, rater_user : str = None,
+                               comment : str = None) -> int:
+    """전문가 채점 1건 upsert — (job_str_id, sample_idx) 유니크라 재채점 시 갱신."""
+    sql = """
+        INSERT INTO eval_expert_rating
+            (source_model_id, job_str_id, sample_idx, input, output, reference,
+             rater_user, verdict, comment)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE
+            verdict = VALUES(verdict), comment = VALUES(comment),
+            rater_user = VALUES(rater_user), create_datetime = CURRENT_TIMESTAMP
+    """
+    return await commit_query(query=sql, params=(
+        source_model_id, job_str_id, sample_idx, input, output, reference,
+        rater_user, verdict, comment))
+
+
+async def list_expert_ratings(job_str_id : str, source_model_id : int = None) -> list:
+    """세션(job_str_id)의 전문가 채점 목록(sample_idx 순). source_model_id 주면 교차모델 차단."""
+    sql = """
+        SELECT id, source_model_id, job_str_id, sample_idx, input, output, reference,
+               rater_user, verdict, comment,
+               DATE_FORMAT(create_datetime, %s) AS create_datetime
+        FROM eval_expert_rating
+        WHERE job_str_id = %s
+    """
+    params = [TYPE.TIME_DATE_FORMAT_SQL, job_str_id]
+    if source_model_id is not None:
+        sql += " AND source_model_id = %s"
+        params.append(source_model_id)
+    sql += " ORDER BY sample_idx ASC"
+    res = await select_query(sql, params=tuple(params), fetch_type=FetchType.ALL)
     return res or []

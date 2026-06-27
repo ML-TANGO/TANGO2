@@ -1217,11 +1217,6 @@ _EVAL_JOB_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 # 모델/데이터셋 이름은 pod subPath(/dataset/<name>, models/<name>/...) 의 단일 segment 로
 # 들어가므로 path 조작 문자를 거부(잘못된 마운트/이탈 방지). 플랫폼 생성 이름은 통과.
 _EVAL_SAFE_SEGMENT_RE = re.compile(r"^[A-Za-z0-9._-]+$")
-# 비교표 best 배지 — 메트릭별 방향(높을수록 좋음 / 낮을수록 좋음).
-_EVAL_METRIC_DIRECTION = {
-    "bleu": "max", "rouge1": "max", "rouge2": "max", "rougeL": "max",
-    "perplexity": "min", "auc": "max", "f1": "max", "accuracy": "max", "dice": "max",
-}
 
 
 async def evaluate_model(model_id: int, dataset_id: int,
@@ -1378,43 +1373,11 @@ async def mark_eval_status(model_id: int, job_id: str, status: str) -> dict:
 
 async def list_eval_results(model_id: int) -> dict:
     """모델의 평가 이력 + 메트릭별 best 마킹(비교표 ⑪). SDM 도메인 키(AUC/Dice 등)는
-    자유 dict 그대로 노출(고정 스키마 X — normalize/dto 자유 result 정합, 4.6)."""
+    자유 dict 그대로 노출(고정 스키마 X — normalize/dto 자유 result 정합, 4.6).
+    벤치마크(llm_evaluation) 런도 동일 eval_result 에 누적 → 공용 빌더로 nested averages
+    평탄화 포함(§14.12, llm_evaluation 과 동일 shape)."""
     rows = await db_model.list_eval_results(source_model_id=model_id)
-    runs = []
-    metric_keys = set()
-    for r in rows:
-        metrics = r.get("metrics")
-        if isinstance(metrics, str):
-            try:
-                metrics = json.loads(metrics)
-            except (TypeError, json.JSONDecodeError):
-                metrics = None
-        # _ 로 시작하는 내부 키(_eval_samples 등)·비수치는 표시 메트릭에서 제외.
-        clean = {k: v for k, v in (metrics or {}).items()
-                 if not str(k).startswith("_") and isinstance(v, (int, float))
-                 and not isinstance(v, bool)}
-        metric_keys.update(clean.keys())
-        runs.append({
-            "id": r["id"], "job_id": r["job_str_id"], "dataset_id": r["dataset_id"],
-            "dataset_name": r["dataset_name"], "metric_set": r["metric_set"],
-            "status": r["status"], "create_datetime": r["create_datetime"],
-            "metrics": clean,
-        })
-    # 메트릭별 best run id(completed + 값 존재). 방향 모르면 max 기본.
-    best = {}
-    for key in metric_keys:
-        direction = _EVAL_METRIC_DIRECTION.get(str(key).lower(), "max")
-        candidates = [(run["id"], run["metrics"][key]) for run in runs
-                      if run["status"] == "completed" and key in run["metrics"]]
-        if not candidates:
-            continue
-        best[key] = (min if direction == "min" else max)(candidates, key=lambda x: x[1])[0]
-    return {
-        "model_id": model_id,
-        "metric_keys": sorted(metric_keys),
-        "best": best,
-        "runs": runs,
-    }
+    return {"model_id": model_id, **db_model.build_eval_comparison(rows)}
 
 
 async def get_quantize_package_path(model_id: int, job_id: str,
