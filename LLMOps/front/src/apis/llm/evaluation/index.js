@@ -21,6 +21,15 @@ export const getEvalResults = async (modelId) => {
   return await callApi({ url: `evaluations/${modelId}/results`, method: 'get' });
 };
 
+// 교차모델 비교(④ 경량 뷰) — 여러 모델 이력 합쳐 전역 best-per-metric. modelIds: number[].
+export const getEvalCompare = async (modelIds) => {
+  return await callApi({
+    url: 'evaluations/compare',
+    method: 'get',
+    params: { model_ids: (modelIds || []).join(',') },
+  });
+};
+
 // 평가 실패/취소 마킹 (cancelled 면 BE 가 컨테이너도 취소).
 export const markEvalStatus = async (modelId, jobId, status) => {
   return await callApi({

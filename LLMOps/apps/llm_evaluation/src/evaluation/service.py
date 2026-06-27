@@ -10,6 +10,7 @@ _base_model→/model, _dataset→/dataset/<name>. 멀티 데이터셋 이름은 
 from __future__ import annotations
 
 import asyncio
+import csv
 import hashlib
 import ipaddress
 import json
@@ -32,6 +33,7 @@ from evaluation.constants import (
     JUDGE_CRITERIA,
     JUDGE_DEFAULT_MODEL,
     JUDGE_PROVIDER_HOSTS,
+    MAX_COMPARE_MODELS,
     MAX_EXPERT_SAMPLES,
     MAX_JUDGE_RUN_SECONDS,
     MAX_JUDGE_SAMPLES,
@@ -212,6 +214,53 @@ async def list_eval_results(model_id: int) -> dict:
     return {"model_id": model_id, **db_model.build_eval_comparison(rows)}
 
 
+async def compare_models(model_ids: List[int]) -> dict:
+    """교차모델 비교 경량 뷰(④, §14.12). 여러 모델의 평가 이력을 한 표에 합쳐
+    메트릭별 best 를 **전역**(모델 무관) 으로 산출. 공용 빌더(build_eval_comparison)를
+    그대로 재사용하되, 행마다 model_name 을 주입해 어느 모델 런인지 라벨링한다.
+
+    단일모델 list_eval_results 와 달리 best 가 모델 경계를 넘어 계산되는 게 핵심
+    (서로 다른 모델의 같은 메트릭을 직접 비교). 알 수 없는/접근불가 model_id 는 조용히
+    건너뛰고(부분 성공) models 목록에 빠진다 — 비교는 best-effort 읽기 전용이라 단건 실패로
+    전체를 막지 않는다.
+    ⚠️ authZ: list_eval_results 와 동일하게 워크스페이스 ownership 미검증(IDOR) — 플랫폼
+    posture 일괄(SP-13). 모델 eval 이력 열람 한정.
+    """
+    # 중복 제거(순서 보존) + 상한. 0개면 빈 비교표.
+    seen: set = set()
+    ordered: List[int] = []
+    for mid in model_ids:
+        if mid not in seen:
+            seen.add(mid)
+            ordered.append(mid)
+    if len(ordered) > MAX_COMPARE_MODELS:
+        raise ValueError(
+            f"too many models to compare (max {MAX_COMPARE_MODELS})")
+
+    # 모델별 (이름, rows) 를 동시 조회 — select_query 가 호출마다 새 커넥션을 열어(풀 X)
+    # 직렬이면 모델당 connect 비용이 누적되므로 gather 로 병렬화. gather 는 입력 순서를
+    # 보존하므로 ordered 순서가 그대로 유지된다.
+    async def _fetch(mid: int):
+        model_info = await db_model.get_model(model_id=mid)
+        if not model_info:
+            return None    # 알 수 없는 모델 — 건너뜀(부분 성공)
+        model_name = model_info.get("name") or str(mid)
+        rows = await db_model.list_eval_results(source_model_id=mid)
+        # 공용 빌더가 run.model_name 으로 패스스루하도록 행에 라벨 주입(불변 — 새 dict).
+        return {"id": mid, "name": model_name,
+                "rows": [{**r, "model_name": model_name} for r in rows]}
+
+    fetched = await asyncio.gather(*[_fetch(mid) for mid in ordered])
+    models: list = []
+    all_rows: list = []
+    for item in fetched:
+        if item is None:
+            continue
+        models.append({"id": item["id"], "name": item["name"]})
+        all_rows.extend(item["rows"])
+    return {"models": models, **db_model.build_eval_comparison(all_rows)}
+
+
 # ── LLM-as-a-Judge (P2) ──────────────────────────────────────────────────────
 # 직접호출 오케스트레이션(컨테이너 X) — API 키가 transient·영속/로그 금지라 컨테이너 params/
 # pod env 로 넘기면 누출됨 → BE 백그라운드 태스크가 in-memory 로만 키 사용. 결과(per-criterion
@@ -282,18 +331,227 @@ async def list_judges() -> dict:
     }
 
 
-def _build_judge_samples(model_name: str, ds_names: List[str]) -> list:
-    """채점 대상 샘플. P2(A: mock 스캐폴딩) — 실 모델 출력 생성/데이터셋 파일 읽기는 후속.
-    데이터셋당 고정 샘플 수의 placeholder(실 provider 어댑터가 받을 input/output 골격)."""
+# ── A4 실 모델출력 배선 (실 데이터셋 읽기 + 배포모델 추론, mock 폴백) ──────────────
+# input/reference 컬럼 자동 감지(여러 데이터셋 스키마 수용). Alpaca 류 단일 text 필드는
+# "### Response:" 로 분리. 비수치 데이터셋은 첫 prompt 류 키를 input 으로.
+_PROMPT_KEYS = ("prompt", "input", "question", "instruction", "query", "text")
+_REFERENCE_KEYS = ("reference", "answer", "output", "completion", "response", "label", "target")
+_MAX_FIELD_LEN = 2000          # 샘플 필드 길이 cap(프롬프트/출력/참조)
+_INFER_TIMEOUT = 60.0          # 추론 1건 타임아웃(초)
+_DATA_EXTS = (".jsonl", ".json", ".csv")
+_MAX_DATA_FILE_BYTES = 50 * 1024 * 1024  # .json 전체 로드 상한(메모리 보호; jsonl/csv 는 스트리밍)
+_EXPERT_INFER_BUDGET = 90      # start_expert 인라인 추론 전체 예산(초) — HTTP 핸들러 점유 cap
+
+
+def _first_key(row: dict, keys) -> Optional[str]:
+    for k in keys:
+        v = row.get(k)
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            return str(v)
+    return None
+
+
+def _split_alpaca(text: str):
+    """Alpaca 류 '### Instruction:..\\n### Response:..' → (input, reference). 마커 없으면
+    전체를 input 으로(reference 없음)."""
+    resp_marker = re.search(r"###\s*Response\s*:\s*", text, re.IGNORECASE)
+    if not resp_marker:
+        instr = re.sub(r"###\s*Instruction\s*:\s*", "", text, flags=re.IGNORECASE)
+        return instr.strip(), ""
+    inp = text[:resp_marker.start()]
+    inp = re.sub(r"###\s*Instruction\s*:\s*", "", inp, flags=re.IGNORECASE).strip()
+    ref = text[resp_marker.end():].strip()
+    return inp, ref
+
+
+def _row_to_sample(row: dict):
+    """데이터셋 row(dict) → (input, reference) 또는 None. 명시 prompt/reference 컬럼 우선,
+    없고 text 단일 필드면 Alpaca 분리."""
+    if not isinstance(row, dict):
+        return None
+    # text 단일 필드(prompt 컬럼 부재) → Alpaca 분리
+    has_explicit = any(k in row for k in _PROMPT_KEYS if k != "text")
+    if not has_explicit and isinstance(row.get("text"), str):
+        inp, alpaca_ref = _split_alpaca(row["text"])
+        # 명시 reference 컬럼(output/answer 등)이 있으면 우선 — {"text":q,"output":a} 류에서
+        # Alpaca 마커가 없어도 reference 를 잃지 않도록.
+        ref = _first_key(row, _REFERENCE_KEYS) or alpaca_ref
+        return (inp, ref) if inp else None
+    inp = _first_key(row, _PROMPT_KEYS)
+    if not inp:
+        return None
+    ref = _first_key(row, _REFERENCE_KEYS) or ""
+    return inp, ref
+
+
+def _read_data_file(path: str, need: int) -> list:
+    """jsonl/json/csv 파일에서 (input, reference) 샘플을 need 개까지. 실패 시 빈 리스트."""
+    out = []
+    try:
+        if path.endswith(".jsonl"):
+            with open(path, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        s = _row_to_sample(json.loads(line))
+                    except (json.JSONDecodeError, TypeError):
+                        continue
+                    if s:
+                        out.append(s)
+                        if len(out) >= need:
+                            break
+        elif path.endswith(".json"):
+            if os.path.getsize(path) > _MAX_DATA_FILE_BYTES:
+                return out    # 과대 .json 전체 로드 회피(jsonl 과 달리 스트리밍 불가)
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+            rows = data if isinstance(data, list) else data.get("data") if isinstance(data, dict) else None
+            for row in (rows or []):
+                s = _row_to_sample(row)
+                if s:
+                    out.append(s)
+                    if len(out) >= need:
+                        break
+        elif path.endswith(".csv"):
+            with open(path, encoding="utf-8", newline="") as f:
+                for row in csv.DictReader(f):
+                    s = _row_to_sample(row)
+                    if s:
+                        out.append(s)
+                        if len(out) >= need:
+                            break
+    except (OSError, ValueError):
+        traceback.print_exc()
+    return out
+
+
+async def _read_dataset_samples(dataset_ids: List[int], limit: int) -> list:
+    """워크스페이스 NFS 데이터셋에서 (input, reference) 샘플을 limit 개까지 읽는다.
+    eval pod 가 /jf-data 를 마운트(get_eval_result 의 metrics.json 읽기와 동일 마운트).
+    파일 없음/포맷 불일치(arrow 등) → 빈 리스트 → 호출자가 mock 으로 폴백."""
+    samples = []
+    for did in dataset_ids:
+        if len(samples) >= limit:
+            break
+        try:
+            ds = await db_model.get_dataset_model(dataset_id=did)
+            if not ds:
+                continue
+            ws = await db_model.get_workspace_model(workspace_id=int(ds["workspace_id"]))
+            if not ws or not ws.get("data_storage_name"):
+                continue
+            # 경로 세그먼트 검증 — access/name/storage 가 DB 값이라도 '..'·'/' 가 섞이면
+            # ddir 자체가 NFS 루트를 이탈할 수 있고, 그러면 아래 commonpath 가드(ddir 기준)는
+            # 무력해진다. 안전 문자만 허용하고 아니면 스킵(→ mock 폴백). 비안전명 데이터셋은
+            # 실 데이터 미독해로 graceful degrade.
+            segs = [str(ds.get("access")), str(ds.get("name")),
+                    str(ws.get("data_storage_name")), str(ws.get("name"))]
+            if not all(_SAFE_SEGMENT_RE.match(s) for s in segs):
+                continue
+            ddir = PATH.JF_DATA_DATASET_PATH.format(
+                STORAGE_NAME=ws["data_storage_name"], WORKSPACE_NAME=ws["name"],
+                ACCESS=ds["access"], DATASET_NAME=ds["name"])
+            ddir_real = os.path.realpath(ddir)
+            if not os.path.isdir(ddir_real):
+                continue
+            files = sorted(
+                os.path.join(r, fn)
+                for r, _dirs, fns in os.walk(ddir_real)
+                for fn in fns if fn.lower().endswith(_DATA_EXTS))
+            for fp in files:
+                if len(samples) >= limit:
+                    break
+                # 경로 봉쇄(심링크 이탈 방지) — 다른 워크스페이스 파일 읽기 차단.
+                if os.path.commonpath([os.path.realpath(fp), ddir_real]) != ddir_real:
+                    continue
+                for inp, ref in _read_data_file(fp, limit - len(samples)):
+                    samples.append({
+                        "input": inp[:_MAX_FIELD_LEN],
+                        "reference": (ref or "")[:_MAX_FIELD_LEN],
+                        "dataset": str(ds["name"]),
+                    })
+                    if len(samples) >= limit:
+                        break
+        except Exception:
+            traceback.print_exc()
+            continue
+    return samples
+
+
+async def _resolve_inference_url(playground_id: Optional[int]) -> Optional[str]:
+    """배포(running) 모델의 추론 test_url 을 playground s2s(get_test_options)로 해석.
+    playground_id 미지정/해석 실패 → None(호출자가 mock output 폴백). 모델→배포 매핑은
+    배포 목록을 가진 FE 가 inference_playground_id 로 전달(명시 계약·magic 탐색 회피)."""
+    if not playground_id:
+        return None
+    try:
+        url = (f"http://{settings.LLM_PLAYGROUND_DNS}"
+               f"/api/playgrounds/test/options?playground_id={int(playground_id)}")
+        async with httpx.AsyncClient(timeout=10.0) as http:
+            r = await http.get(url)
+        if r.status_code != 200:
+            # 실 추론이 mock 으로 조용히 폴백된 원인을 운영에서 추적 가능하게(키 노출 없음).
+            print(f"_resolve_inference_url: playground {playground_id} HTTP {r.status_code}",
+                  flush=True)
+            return None
+        data = r.json()
+        if data.get("status") == 1:
+            return (data.get("result") or {}).get("test_url")
+        print(f"_resolve_inference_url: playground {playground_id} envelope status="
+              f"{data.get('status')}", flush=True)
+    except Exception:
+        traceback.print_exc()
+    return None
+
+
+async def _infer_output(test_url: str, prompt: str, session_id: str) -> Optional[str]:
+    """배포 모델 추론 1건 — test_url 로 {input_type:question, input, session_id} POST.
+    응답에서 출력 텍스트 추출(여러 키 수용). 실패/타임아웃 → None(mock 폴백)."""
+    try:
+        async with httpx.AsyncClient(timeout=_INFER_TIMEOUT) as http:
+            r = await http.post(test_url, json={
+                "input_type": "question", "input": prompt, "session_id": session_id})
+        try:
+            data = r.json()
+        except ValueError:
+            return (r.text or "").strip()[:_MAX_FIELD_LEN] or None
+        if isinstance(data, dict):
+            for k in ("output", "response", "answer", "result", "text", "content"):
+                v = data.get(k)
+                if isinstance(v, str) and v.strip():
+                    return v.strip()[:_MAX_FIELD_LEN]
+        elif isinstance(data, str) and data.strip():
+            return data.strip()[:_MAX_FIELD_LEN]
+    except Exception:
+        traceback.print_exc()
+    return None
+
+
+async def _build_judge_samples(model_id: int, model_name: str, dataset_ids: List[int],
+                               ds_names: List[str], inference_url: Optional[str]) -> list:
+    """채점 대상 샘플(A4) — 실 데이터셋(input/reference) + 배포모델 추론 output.
+    데이터셋을 못 읽으면 합성 input 으로, 추론 URL 없으면 mock output 으로 폴백."""
     n = min(MAX_JUDGE_SAMPLES, max(1, len(ds_names) * 5))
+    rows = await _read_dataset_samples(dataset_ids, n)
     base = ds_names[0] if ds_names else "dataset"
-    return [
-        {"id": f"{model_name}-{base}-{i}",
-         "input": f"[{base}] sample {i} prompt",
-         "output": f"[{model_name}] response {i}",
-         "reference": ""}
-        for i in range(n)
-    ]
+    if not rows:    # 실 데이터셋 못 읽음 → 합성 input 폴백(기존 스캐폴딩 동등)
+        rows = [{"input": f"[{base}] sample {i} prompt", "reference": "",
+                 "dataset": base} for i in range(n)]
+    samples = []
+    for i, row in enumerate(rows):
+        out = None
+        if inference_url:
+            out = await _infer_output(inference_url, row["input"], f"judge-{model_id}-{i}")
+        if not out:
+            out = f"[{model_name}] response {i}"    # 추론 불가 → mock output
+        samples.append({"id": f"{model_name}-{row.get('dataset', base)}-{i}",
+                        "input": row["input"], "output": out,
+                        "reference": row.get("reference", "")})
+    return samples
 
 
 def _build_judge_prompt(criteria: List[str], custom_prompt: Optional[str], sample: dict) -> str:
@@ -411,14 +669,17 @@ async def _judge_score(provider, judge_model, api_key, base_url,
     raise Exception(f"unsupported provider: {provider}")
 
 
-async def _run_judge_task(model_id, job_id, model_name, ds_names, provider, judge_model,
-                          api_key, base_url, criteria, custom_prompt) -> None:
+async def _run_judge_task(model_id, job_id, model_name, dataset_ids, ds_names, provider,
+                          judge_model, api_key, base_url, criteria, custom_prompt,
+                          inference_url=None) -> None:
     """백그라운드 judge 루프 — 샘플별 심판 호출 → 기준별 평균(0~100) → eval_result 마감.
     ⚠️ api_key 는 이 함수 인자로만 존재(in-memory). 절대 로그/DB 기록 금지.
-    전역 wall-clock 상한(MAX_JUDGE_RUN_SECONDS) 초과(hung provider 등) 시 failed 처리."""
+    전역 wall-clock 상한(MAX_JUDGE_RUN_SECONDS) 초과(hung provider 등) 시 failed 처리.
+    inference_url 있으면 대상 모델 실 추론으로 output 생성, 없으면 mock(A4)."""
     try:
         async def _score_all():
-            samples = _build_judge_samples(model_name, ds_names)
+            samples = await _build_judge_samples(
+                model_id, model_name, dataset_ids, ds_names, inference_url)
             agg = {c: [] for c in criteria}
             for s in samples:
                 scores = await _judge_score(provider, judge_model, api_key, base_url,
@@ -455,9 +716,11 @@ async def _run_judge_task(model_id, job_id, model_name, ds_names, provider, judg
 async def run_judge(model_id: int, dataset_ids: List[int], provider: str,
                     criteria: List[str], judge_model: Optional[str] = None,
                     api_key: Optional[str] = None, base_url: Optional[str] = None,
-                    custom_prompt: Optional[str] = None) -> dict:
+                    custom_prompt: Optional[str] = None,
+                    inference_playground_id: Optional[int] = None) -> dict:
     """LLM-as-a-Judge 런 생성(직접호출 비동기). 키/URL = transient. 즉시 job_id 반환 후
-    백그라운드 채점 → eval_result.metrics(judge_*) 마감. FE 는 get_judge_result 폴링."""
+    백그라운드 채점 → eval_result.metrics(judge_*) 마감. FE 는 get_judge_result 폴링.
+    inference_playground_id(배포 모델) 주면 대상 모델 실 출력으로 채점, 없으면 mock(A4)."""
     model_info = await db_model.get_model(model_id=model_id)
     if not model_info:
         raise Exception(f"model {model_id} not found")
@@ -487,6 +750,9 @@ async def run_judge(model_id: int, dataset_ids: List[int], provider: str,
     if len(dataset_name_csv) > 255:
         dataset_name_csv = f"{ds_names[0]} +{len(ds_names) - 1} more"[:255]
 
+    # 배포 모델 추론 URL 해석(실패/미지정 → None → mock output 폴백).
+    inference_url = await _resolve_inference_url(inference_playground_id)
+
     job_id = f"judge-{model_id}-{uuid.uuid4().hex[:16]}"
     await db_model.insert_eval_result(
         source_model_id=model_id, workspace_id=workspace_id, job_str_id=job_id,
@@ -494,14 +760,14 @@ async def run_judge(model_id: int, dataset_ids: List[int], provider: str,
         metric_set=f"judge:{provider}")
 
     task = asyncio.create_task(_run_judge_task(
-        model_id, job_id, model_name, ds_names, provider, judge_model,
-        api_key, base_url, crit, custom_prompt))
+        model_id, job_id, model_name, dataset_ids, ds_names, provider, judge_model,
+        api_key, base_url, crit, custom_prompt, inference_url))
     _judge_tasks.add(task)
     task.add_done_callback(_judge_tasks.discard)
 
     return {"model_id": model_id, "job_id": job_id, "provider": provider,
             "mode": "judge", "criteria": crit, "datasets": ds_names,
-            "mock": _judge_mock_enabled()}
+            "mock": _judge_mock_enabled(), "real_output": bool(inference_url)}
 
 
 async def get_judge_result(model_id: int, job_id: str) -> dict:
@@ -528,21 +794,40 @@ async def get_judge_result(model_id: int, job_id: str) -> dict:
 # (expert_pass_rate)로 마감 → 모델 이력 비교표 합류. 샘플=결정적 생성(idx 기반, 재로드 안정).
 # P2(A)와 동일 mock 스캐폴딩 — 실 모델출력 생성은 후속.
 
-def _build_expert_samples(model_name: str, ds_names: List[str]) -> list:
+async def _build_expert_samples(model_id: int, model_name: str, dataset_ids: List[int],
+                                ds_names: List[str], inference_url: Optional[str]) -> list:
+    """전문가 채점 샘플(A4) — 실 데이터셋(input/reference) + 배포모델 추론 output.
+    데이터셋 못 읽으면 합성(레거시 동등·결정적), 추론 URL 없으면 mock output 폴백."""
     n = min(MAX_EXPERT_SAMPLES, max(1, len(ds_names) * 5))
+    rows = await _read_dataset_samples(dataset_ids, n)
     base = ds_names[0] if ds_names else "dataset"
-    return [
-        {"idx": i,
-         "dataset": ds_names[i % len(ds_names)] if ds_names else base,
-         "input": f"[{base}] sample {i} 입력 프롬프트",
-         "output": f"[{model_name}] 응답 {i}",
-         "reference": f"참조 답변 {i}"}
-        for i in range(n)
-    ]
+    if not rows:    # 실 데이터셋 못 읽음 → 합성 폴백(구 스캐폴딩과 동일 문자열 = 레거시 안정)
+        rows = [{"input": f"[{base}] sample {i} 입력 프롬프트", "reference": f"참조 답변 {i}",
+                 "dataset": ds_names[i % len(ds_names)] if ds_names else base}
+                for i in range(n)]
+    # mock output baseline 먼저 — 항상 출력 보장. start_expert 가 HTTP 핸들러를 잡고 있으므로
+    # 실 추론은 전체 예산(_EXPERT_INFER_BUDGET) 내에서만 업그레이드(초과분은 mock 유지).
+    samples = [{"idx": i, "dataset": row.get("dataset", base), "input": row["input"],
+                "output": f"[{model_name}] 응답 {i}", "reference": row.get("reference", "")}
+               for i, row in enumerate(rows)]
+    if inference_url:
+        async def _upgrade():
+            for s in samples:
+                real = await _infer_output(
+                    inference_url, s["input"], f"expert-{model_id}-{s['idx']}")
+                if real:
+                    s["output"] = real
+        try:
+            await asyncio.wait_for(_upgrade(), _EXPERT_INFER_BUDGET)
+        except asyncio.TimeoutError:
+            pass    # 예산 초과 — 업그레이드된 샘플은 실출력, 나머지는 mock 유지
+    return samples
 
 
 async def _expert_session(model_id: int, job_id: str):
-    """세션 행 + (model_name, ds_names, samples) 재구성(결정적). 없으면 예외."""
+    """세션 행 + samples. start 시점 영속된 _samples(metrics)를 우선 사용 — 실 추론 출력은
+    비결정적이라 매 조회 재생성하면 사람이 채점한 출력과 표시 출력이 어긋난다(A4). 영속이
+    없으면(레거시) dataset_name 기반 결정적 합성으로 폴백."""
     if not job_id or not _JOB_ID_RE.match(job_id):
         raise ValueError(f"invalid job_id: {job_id!r}")
     row = await db_model.get_eval_result_by_job(job_str_id=job_id, source_model_id=model_id)
@@ -550,15 +835,28 @@ async def _expert_session(model_id: int, job_id: str):
     # complete_eval_result 로 덮어쓰는 교차모드 오염 차단.
     if not row or row.get("metric_set") != "expert":
         raise Exception("expert session not found")
+    metrics = row.get("metrics")
+    if isinstance(metrics, str):
+        try:
+            metrics = json.loads(metrics)
+        except (TypeError, json.JSONDecodeError):
+            metrics = None
+    persisted = (metrics or {}).get("_samples") if isinstance(metrics, dict) else None
+    if isinstance(persisted, list) and persisted:
+        return row, persisted
+    # 레거시(영속 전 세션) → 결정적 합성 재구성(추론/데이터셋 없이).
     model_info = await db_model.get_model(model_id=model_id)
     model_name = (model_info or {}).get("name", "model")
     ds_names = [s for s in str(row.get("dataset_name") or "").split(",") if s]
-    samples = _build_expert_samples(model_name, ds_names)
+    samples = await _build_expert_samples(model_id, model_name, [], ds_names, None)
     return row, samples
 
 
-async def start_expert(model_id: int, dataset_ids: List[int]) -> dict:
-    """전문가 평가 세션 시작 — 대상 모델 × 데이터셋 → 채점 샘플 생성 + 세션 행."""
+async def start_expert(model_id: int, dataset_ids: List[int],
+                       inference_playground_id: Optional[int] = None) -> dict:
+    """전문가 평가 세션 시작 — 대상 모델 × 데이터셋 → 채점 샘플 생성 + 세션 행.
+    inference_playground_id(배포 모델) 주면 실 출력으로, 없으면 mock(A4). 생성 샘플은
+    metrics._samples 로 영속 → 재로드 안정(실 추론 비결정성/배포 종료에도 표시 고정)."""
     model_info = await db_model.get_model(model_id=model_id)
     if not model_info:
         raise Exception(f"model {model_id} not found")
@@ -573,27 +871,30 @@ async def start_expert(model_id: int, dataset_ids: List[int]) -> dict:
         if int(d["workspace_id"]) != workspace_id:
             raise Exception("dataset and model belong to different workspaces")
         ds_name = str(d["name"])
-        # 샘플을 dataset_name(CSV)에서 재구성하므로 이름에 콤마/공백이 있으면 왕복이 깨짐.
-        # run_benchmark 와 동일 가드 → CSV 가 손실 없는 정본이 되도록 안전 문자만 허용.
+        # dataset_name(CSV)은 비교표/표시용. 안전 문자만(run_benchmark 동일 가드).
         if not _SAFE_SEGMENT_RE.match(ds_name):
             raise Exception("dataset name has unsafe characters")
         ds_names.append(ds_name)
 
-    samples = _build_expert_samples(model_name, ds_names)
+    inference_url = await _resolve_inference_url(inference_playground_id)
+    samples = await _build_expert_samples(
+        model_id, model_name, dataset_ids, ds_names, inference_url)
     dataset_name_csv = ",".join(ds_names)
     if len(dataset_name_csv) > 255:
-        # 전문가 평가는 dataset_name 으로 샘플을 결정적 재구성 → 요약 저장 시 재구성 불일치.
-        # (벤치마크는 재구성 안 해 요약 OK) 손실 방지로 거부.
-        raise Exception(
-            "dataset names too long to store; reduce dataset count or shorten names")
+        dataset_name_csv = f"{ds_names[0]} +{len(ds_names) - 1} more"[:255]
 
     job_id = f"expert-{model_id}-{uuid.uuid4().hex[:16]}"
     await db_model.insert_eval_result(
         source_model_id=model_id, workspace_id=workspace_id, job_str_id=job_id,
         dataset_id=dataset_ids[0], dataset_name=dataset_name_csv, metric_set="expert")
+    # 샘플 영속(running 유지) — get_expert_samples/submit 가 재생성 대신 이걸 읽는다.
+    await db_model.set_eval_result_metrics(
+        job_str_id=job_id, source_model_id=model_id,
+        metrics_json=json.dumps({"_mode": "expert", "_samples": samples}))
 
     return {"model_id": model_id, "job_id": job_id, "mode": "expert",
-            "datasets": ds_names, "samples": samples, "total": len(samples)}
+            "datasets": ds_names, "samples": samples, "total": len(samples),
+            "real_output": bool(inference_url)}
 
 
 async def get_expert_samples(model_id: int, job_id: str) -> dict:
@@ -631,8 +932,9 @@ async def submit_expert_rating(model_id: int, job_id: str, sample_idx: int,
 
     completed = False
     if rated >= total:  # 전부 채점 → 합격률 영속 + 완료(비교표 합류)
+        # _samples 보존 — 완료 후 get_expert_samples 가 표시 출력을 잃지 않도록.
         metrics = {"expert_pass_rate": pass_rate, "_mode": "expert",
-                   "_rated": rated, "_total": total}
+                   "_rated": rated, "_total": total, "_samples": samples}
         await db_model.complete_eval_result(
             job_str_id=job_id, metrics_json=json.dumps(metrics), source_model_id=model_id)
         completed = True

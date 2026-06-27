@@ -16,8 +16,11 @@ const fmtMetric = (v) => {
  * BE `list_eval_results` 의 `{ metric_keys, best, runs }` 를 소비(llm_evaluation/llm_model 동형).
  * 벤치마크의 nested metrics 는 BE 공용 빌더가 averages 로 평탄화해 동일 flat shape 로 들어온다.
  * i18n 은 SP-5 evaluate.* 키 재사용(모드 무관 공통 표).
+ *
+ * `showModel`(④ 교차모델 비교) 가 true 면 선두에 모델 컬럼 추가 — run.model_name 으로
+ * 어느 모델 런인지 라벨링. 단일모델(기본 false)은 기존 그대로(컬럼 없음).
  */
-const EvalComparison = ({ comparison }) => {
+const EvalComparison = ({ comparison, showModel = false }) => {
   const { t } = useTranslation();
   const metricKeys = comparison?.metric_keys ?? [];
   const best = comparison?.best ?? {};
@@ -33,6 +36,7 @@ const EvalComparison = ({ comparison }) => {
         <table className={cx('comparison-table')}>
           <thead>
             <tr>
+              {showModel && <th>{t('evaluate.model.label')}</th>}
               <th>{t('evaluate.dataset.label')}</th>
               {metricKeys.map((k) => (
                 <th key={k}>{k}</th>
@@ -44,6 +48,9 @@ const EvalComparison = ({ comparison }) => {
           <tbody>
             {runs.map((run) => (
               <tr key={run.id}>
+                {showModel && (
+                  <td className={cx('model-cell')}>{run.model_name || '-'}</td>
+                )}
                 <td>{run.dataset_name || '-'}</td>
                 {metricKeys.map((k) => {
                   const v = run.metrics?.[k];

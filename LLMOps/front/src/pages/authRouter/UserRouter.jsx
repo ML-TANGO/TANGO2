@@ -210,6 +210,9 @@ const JudgeEvaluation = lazy(() =>
 const ExpertEvaluation = lazy(() =>
   import('@src/pages/llm/Evaluation/ExpertEvaluation/ExpertEvaluation'),
 );
+const EvalCrossCompare = lazy(() =>
+  import('@src/pages/llm/Evaluation/EvalCrossCompare/EvalCrossCompare'),
+);
 const UserServicePage = lazy(() => import('@src/pages/UserServicePage'));
 const UserTestPage = lazy(() => import('@src/pages/UserTestPage'));
 const NotFoundPage = lazy(() => import('@src/pages/NotFoundPage'));
@@ -928,6 +931,17 @@ const routeArr = [
     activeIcon: IconModelActive,
     platform: 'flightbase',
     render: (props) => <ExpertEvaluation {...props} />,
+  },
+  {
+    // ④ 교차모델 비교(읽기 전용 뷰). detail=사이드nav 비노출.
+    name: 'EvalCrossCompare',
+    path: '/user/workspace/:id/evaluation/compare',
+    exact: true,
+    disabled: true,
+    icon: IconModel,
+    activeIcon: IconModelActive,
+    platform: 'flightbase',
+    render: (props) => <EvalCrossCompare {...props} />,
   },
   {
     name: 'AIPipeline',

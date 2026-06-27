@@ -59,6 +59,10 @@ class JudgeRunBody(BaseModel):
         ..., min_length=1, description="채점 기준(JUDGE_CRITERIA 부분집합)")
     custom_prompt: Optional[str] = Field(
         default=None, max_length=4000, description="심사 프롬프트(선택)")
+    inference_playground_id: Optional[int] = Field(
+        default=None, ge=1,
+        description="대상 모델의 배포(running) playground id — 주면 실 출력 추론, "
+                    "없으면 mock output(A4)")
 
     @field_validator("provider")
     @classmethod
@@ -84,6 +88,10 @@ class ExpertStartBody(BaseModel):
     dataset_ids: List[int] = Field(
         ..., min_length=1, max_length=MAX_BENCHMARK_DATASETS,
         description="대상 데이터셋 id(다중, 최대 %d)" % MAX_BENCHMARK_DATASETS)
+    inference_playground_id: Optional[int] = Field(
+        default=None, ge=1,
+        description="대상 모델의 배포(running) playground id — 주면 실 출력 추론, "
+                    "없으면 mock output(A4)")
 
 
 class ExpertRatingBody(BaseModel):

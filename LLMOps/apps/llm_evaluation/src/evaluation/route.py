@@ -44,6 +44,7 @@ async def run_judge(body: dto.JudgeRunBody):
             provider=body.provider, criteria=body.criteria,
             judge_model=body.judge_model, api_key=body.api_key,
             base_url=body.base_url, custom_prompt=body.custom_prompt,
+            inference_playground_id=body.inference_playground_id,
         )
         return response(status=1, result=res)
     except Exception as e:
@@ -56,8 +57,28 @@ async def run_judge(body: dto.JudgeRunBody):
 async def start_expert(body: dto.ExpertStartBody):
     try:
         res = await svc.start_expert(
-            model_id=body.model_id, dataset_ids=body.dataset_ids)
+            model_id=body.model_id, dataset_ids=body.dataset_ids,
+            inference_playground_id=body.inference_playground_id)
         return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+
+@evaluations.get("/compare", summary="교차모델 비교(전역 best-per-metric)", tags=TAG)
+async def compare_models(model_ids: str = ""):
+    """model_ids=1,2,3 (콤마구분). 1 세그먼트라 /{model_id}/... param 경로와 충돌 X 지만
+    명시 GET 들 앞에 두어 라우팅 의도를 분명히 한다."""
+    try:
+        ids = []
+        for tok in model_ids.split(","):
+            tok = tok.strip()
+            if tok:
+                ids.append(int(tok))    # 비정수 토큰 → ValueError → 422 대신 envelope 0
+        res = await svc.compare_models(model_ids=ids)
+        return response(status=1, result=res)
+    except ValueError as e:
+        return response(status=0, message=str(e), result=None)
     except Exception as e:
         traceback.print_exc()
         return response(status=0, message=str(e), result=None)

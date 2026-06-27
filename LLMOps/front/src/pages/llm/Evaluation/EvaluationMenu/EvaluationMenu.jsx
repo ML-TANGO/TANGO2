@@ -28,6 +28,12 @@ const MODES = [
     titleKey: 'evaluation.mode.expert.title',
     descKey: 'evaluation.mode.expert.desc',
   },
+  {
+    // 런 생성 모드가 아니라 누적 이력의 교차모델 비교(④ 읽기 전용 뷰).
+    id: 'compare', icon: '📈', ready: true,
+    titleKey: 'evaluation.mode.compare.title',
+    descKey: 'evaluation.mode.compare.desc',
+  },
 ];
 
 const EvaluationMenu = () => {

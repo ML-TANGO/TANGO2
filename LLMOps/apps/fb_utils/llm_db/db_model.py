@@ -699,6 +699,25 @@ async def complete_eval_result(job_str_id : str, metrics_json : str,
     return True
 
 
+async def set_eval_result_metrics(job_str_id : str, metrics_json : str,
+                                  source_model_id : int = None) -> bool:
+    """metrics 만 갱신(상태 불변, running 행 한정). 전문가 평가(A4)가 start 시점에 생성한
+    샘플(_samples)을 영속해 재로드 안정성을 확보하기 위함 — 실 모델출력은 비결정적이라
+    매 조회마다 재생성하면 사람이 채점한 출력과 표시 출력이 달라진다. complete_eval_result
+    (status→completed)와 달리 status 는 running 으로 둔다."""
+    sql = """
+        UPDATE eval_result
+        SET metrics = %s
+        WHERE job_str_id = %s AND status = 'running'
+    """
+    params = [metrics_json, job_str_id]
+    if source_model_id is not None:
+        sql += " AND source_model_id = %s"
+        params.append(source_model_id)
+    await commit_query(query=sql, params=params)
+    return True
+
+
 async def update_eval_result_status(job_str_id : str, status : str,
                                     source_model_id : int = None) -> bool:
     """평가 실패/취소 시 상태 갱신(running 일 때만). idempotent.
@@ -797,6 +816,9 @@ def build_eval_comparison(rows: list) -> dict:
             "id": r["id"], "job_id": r.get("job_str_id"), "dataset_id": r.get("dataset_id"),
             "dataset_name": r.get("dataset_name"), "metric_set": r.get("metric_set"),
             "status": r.get("status"), "create_datetime": r.get("create_datetime"),
+            # 교차모델 비교(④)용 라벨. 단일모델 호출은 한 모델이라 무시되는 잉여 필드.
+            # model_name 은 eval_result 에 없어 호출자가 row 에 주입할 때만 채워진다.
+            "model_id": r.get("source_model_id"), "model_name": r.get("model_name"),
             "metrics": clean,
         })
     best = {}

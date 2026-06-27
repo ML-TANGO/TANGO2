@@ -162,6 +162,13 @@ FB_EXTERNAL_CONTAINER_URL = os.getenv(
     'http://fb-external-container.jonathan-system.svc.cluster.local:8000',
 )
 
+# [LLM PLAYGROUND] — A4 실 모델출력 배선. 배포(running) 모델의 추론 test_url 해석을
+# playground s2s(get_test_options)에 위임하기 위한 ClusterIP DNS.
+LLM_PLAYGROUND_DNS = os.getenv(
+    'LLM_PLAYGROUND_DNS',
+    'jfb-llm-playground-svc.jonathan-system.svc.cluster.local',
+)
+
 # convert(양자화·포팅, SP-4) job 이 사용할 외부 컨테이너 manifest.
 # mock-convert(SP-4 Step1)로 시작 — 실제 llama.cpp convert 컨테이너 도착 시
 # 동일 계약(job_type=convert, /model 입력, /output 포팅 패키지)이라 env 만
