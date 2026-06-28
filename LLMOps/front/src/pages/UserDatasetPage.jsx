@@ -944,6 +944,9 @@ function UserDatasetPage({ trackingEvent }) {
       builtInTemplateOpen={builtInTemplateOpen}
       onSortHandler={onSortHandler}
       onClickDataResourceSetting={onClickDataResourceSetting}
+      onEditRow={onUpdate}
+      onDownloadRow={onDatasetDownload}
+      downloadIds={downloadIds}
     />
   );
 }

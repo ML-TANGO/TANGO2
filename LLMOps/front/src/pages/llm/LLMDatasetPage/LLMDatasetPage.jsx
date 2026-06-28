@@ -911,6 +911,9 @@ function LLMDatasetPage({ trackingEvent }) {
       builtInModelList={builtInModelList}
       builtInTemplateOpen={builtInTemplateOpen}
       onSortHandler={onSortHandler}
+      onEditRow={onUpdate}
+      onDownloadRow={onDatasetDownload}
+      downloadIds={downloadIds}
     />
   );
 }
