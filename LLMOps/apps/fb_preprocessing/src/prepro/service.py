@@ -1076,17 +1076,21 @@ async def get_jobs(preprocessing_id : int, search_key=None, size=None, page=None
             dataset_info = db_dataset.get_dataset(dataset_id=job["dataset_id"])
             # TODO 
             # 추후 수정
-            if preprocessing_info["built_in_data_tf"] == TYPE_BUILT_IN.MARKER_ANALYSIS:
+            if preprocessing_info["built_in_data_tf"] in (
+                TYPE_BUILT_IN.MARKER_ANALYSIS, TYPE_BUILT_IN.IMAGE_AUGMENT,
+                TYPE_BUILT_IN.FORMAT_CONVERT):
                 dataset_data_path = PATH.JF_DATA_DATASET_DATA_PATH.format(STORAGE_NAME=workspace_info["data_storage_name"], WORKSPACE_NAME=workspace_info["name"], \
                     ACCESS=dataset_info["access"], DATASET_NAME=dataset_info["name"], DATA_PATH=job["dataset_data_path"])
                 dataset_data_path = os.path.dirname(dataset_data_path)
-            elif preprocessing_info["built_in_data_tf"] == TYPE_BUILT_IN.IMAGE_AUGMENT:
-                dataset_data_path = PATH.JF_DATA_DATASET_DATA_PATH.format(STORAGE_NAME=workspace_info["data_storage_name"], WORKSPACE_NAME=workspace_info["name"], \
-                    ACCESS=dataset_info["access"], DATASET_NAME=dataset_info["name"], DATA_PATH=job["dataset_data_path"])
-                dataset_data_path = os.path.dirname(dataset_data_path)
-            file_name = parameter.get("result_file_name", None)
+            # result_file_name 미저장 시 스크립트 기본값("converted")과 맞추고 basename 으로
+            # 경로조작 차단(스크립트와 동일 정책).
+            file_name = os.path.basename(parameter.get("result_file_name") or "converted")
             try:
-                result_file_path = f"{dataset_data_path}/{file_name}.csv" 
+                # marker/augment 출력은 .csv, 포맷변환은 사용자 선택 output_format(json/jsonl).
+                ext = (parameter.get("output_format", "jsonl")
+                       if preprocessing_info["built_in_data_tf"] == TYPE_BUILT_IN.FORMAT_CONVERT
+                       else "csv")
+                result_file_path = f"{dataset_data_path}/{file_name}.{ext}"
                 # print(result_file_path)
                 job["log_file"] = os.path.exists(result_file_path)
             except Exception as e:
@@ -1140,7 +1144,22 @@ async def get_built_in_result_download(job_id : int):
         media_type="text/csv",
         filename=f"{file_name}.csv"
         )
-    
+    elif preprocessing_info["built_in_data_tf"] == TYPE_BUILT_IN.FORMAT_CONVERT:
+        # 포맷 변환 결과 = 원본 옆 {result_file_name}.{output_format}(json/jsonl).
+        dataset_data_path = PATH.JF_DATA_DATASET_DATA_PATH.format(STORAGE_NAME=workspace_info["data_storage_name"], WORKSPACE_NAME=workspace_info["name"], \
+            ACCESS=dataset_info["access"], DATASET_NAME=dataset_info["name"], DATA_PATH=preprocessing_job_info["dataset_data_path"])
+        # result_file_name 미저장 시 스크립트 기본값과 일치 + basename 경로조작 차단.
+        file_name = os.path.basename(parameter.get("result_file_name", "converted"))
+        out_fmt = parameter.get("output_format", "jsonl")
+        directory = os.path.dirname(dataset_data_path)
+        download_file_path = os.path.join(directory, f"{file_name}.{out_fmt}")
+        media_type = "application/json" if out_fmt == "json" else "application/x-ndjson"
+        return FileResponse(
+        path=download_file_path,
+        media_type=media_type,
+        filename=f"{file_name}.{out_fmt}"
+        )
+
     pass
 
 #=======================================================

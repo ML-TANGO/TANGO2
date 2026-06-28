@@ -54,6 +54,7 @@ PREPROCESSING_BUILT_IN_DATA_TYPES = [
 # TFS
 IMAGE_AUGMENT = "데이터셋 내 이미지 증강 (Image Augmentation in given dataset)"
 MARKER_ANALYSIS = "Marker 라벨링 json 데이터 csv 변환(Marker result json to csv)"
+FORMAT_CONVERT = "데이터 포맷 변환 (Format Conversion: CSV/TXT/Parquet → JSON/JSONL)"
 TEXT_AUGMENT = "텍스트 증강 (Text Augmentation)"
 TEXT_CLEANING = "텍스트 정제 (Text Cleaning)"
 TOKENIZATION_EMBEDDING = "토큰화 및 임베딩 생성 (Tokenization & Embedding Generation)"
@@ -88,6 +89,9 @@ DYNAMIC_RANGE_COMPRESSION = "다이나믹 레인지 압축 변형 (Dynamic Range
 PREPROCESSING_TFS_PARAM = {
     IMAGE_AUGMENT : ["image_dir", "result_file_name","result_dir_name","target_answer"], # "input_csv",
     MARKER_ANALYSIS : ["result_file_name"],
+    # 데이터 포맷 변환 — target_format(text/instruction/chat), output_format(json/jsonl),
+    # result_file_name. 입력 데이터(--input_data)는 스케줄러가 주입. 컬럼→필드는 규약 자동매핑.
+    FORMAT_CONVERT : ["target_format", "output_format", "result_file_name"],
     TEXT_AUGMENT: ["text_data", "augmentation_rules"],
     TEXT_CLEANING: ["text_data", "cleaning_rules"],
     TOKENIZATION_EMBEDDING: ["text_data", "tokenization_method"],
@@ -122,6 +126,7 @@ PREPROCESSING_TFS_PARAM = {
 PREPROCESSING_TFS_SCRIPT = {
     IMAGE_AUGMENT : "preprocessing_augment.py",
     MARKER_ANALYSIS : "preprocess_marker_json.py",
+    FORMAT_CONVERT : "format_convert.py",
     TEXT_AUGMENT: "text_augmentation.py",
     TEXT_CLEANING: "text_cleaning.py",
     TOKENIZATION_EMBEDDING: "tokenization_embedding.py",
@@ -171,6 +176,7 @@ PREPROCESSING_BUILT_IN_DATA_TYPE_TFS = {
     ],
     PREPROCESSING_BUILT_IN_TABULAR_TYPE : [
         MARKER_ANALYSIS,
+        FORMAT_CONVERT,
         # MISSING_VALUE_HANDLING,
         # SCALING_NORMALIZATION,
         # CATEGORICAL_ENCODING,
