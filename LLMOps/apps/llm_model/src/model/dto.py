@@ -23,6 +23,11 @@ class FineTuningConfig(BaseModel):
     zero_stage : Optional[int] = Field(default=1, description='DeepSpeed ZeRO stage: 1, 2, 3')
     eval_steps : Optional[int] = Field(default=500, ge=1, description='평가(eval/loss) 실행 간격(step). ⑩ 체크포인트 점 마킹과 일치.')
     save_steps : Optional[int] = Field(default=500, ge=1, description='체크포인트 저장 간격(step). ⑩ 점 마킹의 후보 step.')
+    # ── 내부 VLM 2-stage 파인튜닝(LLaVA류, ETRI 요구: SDS 외 별도 내부 VLM FT 로직) ──
+    # vlm=1 이면 스케줄러가 텍스트 FT(llm_model_fine_tuning.py) 대신 VLM 2-stage 스크립트
+    # (llm_model_vlm_fine_tuning.py)를 선택. used_lora 가 stage2 방식(1=LoRA, 0=full)을 결정.
+    vlm : Optional[int] = Field(default=0, description='내부 VLM 2-stage 파인튜닝 여부(0/1). 베이스 모델=VLM, 데이터셋=이미지+텍스트.')
+    vlm_stage1_epochs : Optional[float] = Field(default=1.0, ge=0, description='VLM stage1(projector 정렬) epoch 수. stage2(LM)는 num_train_epochs.')
 
 class FineTuningPodInfo(BaseModel):
     model_id : int

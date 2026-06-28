@@ -16,6 +16,8 @@ import subprocess
 import json
 
 FINE_TUNING_SCRIPT_NAME = "/llm_model_fine_tuning.py"
+# 내부 VLM 2-stage 파인튜닝(LLaVA류) — fine_tuning_config.vlm==1 일 때 텍스트 FT 대신 선택.
+VLM_FINE_TUNING_SCRIPT_NAME = "/llm_model_vlm_fine_tuning.py"
 
 def create_fine_tuning_pod(fine_tuning_pod : FineTuningPodInfo):
     try:
@@ -101,7 +103,22 @@ def create_fine_tuning_pod(fine_tuning_pod : FineTuningPodInfo):
 def fine_tuning_command(model_name : str, dataset_name : str, dataset_file_path: str,\
     fine_tuning_config : dict, used_dist : int = 0):
     
-    script_path = PATH.JF_POD_MODEL_FINE_TUNING_SCRIPT_PATH + FINE_TUNING_SCRIPT_NAME
+    # VLM 2-stage 면 별도 스크립트 선택(텍스트 FT 무손상). vlm 은 셀렉터일 뿐 텍스트 스크립트
+    # 인자로는 넘기지 않는다(텍스트 스크립트는 parse_args 엄격이라 미지정 인자에 실패).
+    # vlm 은 0/1 정수 셀렉터. 문자열 "0" 도 안전하게 거르도록 int 정규화(bool("0")==True 회피).
+    try:
+        is_vlm = int(fine_tuning_config.get("vlm") or 0) == 1
+    except (TypeError, ValueError):
+        is_vlm = False
+    # 셸 커맨드에 보간되므로 유한 float 으로 검증(DTO 우회 직접 DB 쓰기 등 방어).
+    try:
+        vlm_stage1_epochs = float(fine_tuning_config.get("vlm_stage1_epochs") or 1.0)
+        if vlm_stage1_epochs < 0 or vlm_stage1_epochs != vlm_stage1_epochs:    # 음수/NaN 거부
+            vlm_stage1_epochs = 1.0
+    except (TypeError, ValueError):
+        vlm_stage1_epochs = 1.0
+    script_name = VLM_FINE_TUNING_SCRIPT_NAME if is_vlm else FINE_TUNING_SCRIPT_NAME
+    script_path = PATH.JF_POD_MODEL_FINE_TUNING_SCRIPT_PATH + script_name
     config_path = None
     if fine_tuning_config["fine_tuning_type"] == TYPE.FINE_TUNING_ADVANCED:
         # config_path = PATH.JF_POD_MODEL_CONFIG_FILE_PATH.format(MODEL_NAME=model_name, FILE_NAME=fine_tuning_config["config_file_name"]) 
@@ -116,6 +133,9 @@ def fine_tuning_command(model_name : str, dataset_name : str, dataset_file_path:
     
     if config_path is not None:
         params += f" --config_path={config_path}"
+    # VLM stage1(projector) epoch 은 FineTuningParam 에 없으므로 VLM 일 때만 별도 주입.
+    if is_vlm:
+        params += f" --vlm_stage1_epochs={vlm_stage1_epochs}"
     # else:
     #     ds_config_path="/fine_tuning/ds_config.json"
     # if used_dist:
