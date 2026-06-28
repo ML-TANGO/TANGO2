@@ -1394,6 +1394,8 @@
   "finetuning.commit.error.message": "모델 다운로드 중 오류가 발생했습니다. 모델을 다시 생성해주세요.",
   "finetuning.config.warn.message": "고급 설정을 사용하여 파인튜닝을 진행하려면, Configuration 파일을 업로드해 주세요.",
   "finetuning.accelator": "Jonathan Accelator 사용",
+  "finetuning.vlm2stage": "VLM 2-stage 파인튜닝 (이미지+텍스트)",
+  "finetuning.vlmStage1Epochs": "VLM Stage1 (projector 정렬) Epochs",
   "finetuning.upload.message": "[안내] 아래 파일 이름에 포함된 제외문자가 _로 대체됩니다. (제외문자:?*<>#$%&()/\"|\\ 및 공백)",
   "finetuning.upload.warn.message": "“.json” 확장자만 업로드 가능합니다.",
   "finetuning.huggingface.message": "[안내] 모델 검색 시 Text-generation 테스크와 Transformers 라이브러리를 사용하는 모델만 검색됩니다.",

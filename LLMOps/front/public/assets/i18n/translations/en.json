@@ -1402,6 +1402,8 @@
   "finetuning.commit.error.message": "An error occurred while downloading the model. Please recreate the model.",
   "finetuning.config.warn.message": "To proceed with fine-tuning using advanced settings, please upload a Configuration file.",
   "finetuning.accelator": "Use Jonathan Accelator",
+  "finetuning.vlm2stage": "VLM 2-stage fine-tuning (image+text)",
+  "finetuning.vlmStage1Epochs": "VLM Stage1 (projector alignment) epochs",
   "finetuning.upload.message": "[Notice] The excluded characters in the file names below will be replaced with _. (Excluded characters: ?*<>#$%&()/\"|\\ and spaces)",
   "finetuning.upload.warn.message": "Only files with the \".json\" extension can be uploaded.",
   "finetuning.huggingface.message": "[Notice] Only models using the Text-generation task and the Transformers library can be searched.",

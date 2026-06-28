@@ -81,7 +81,9 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
   const [rangeCheckValue, setRangeCheckValue] = useState({
     bit: false,
     lora: true,
+    vlm: false, // 내부 VLM 2-stage 파인튜닝(LLaVA류). 베이스=VLM, 데이터셋=이미지+텍스트.
   });
+  const [vlmStage1Epochs, setVlmStage1Epochs] = useState(1.0); // stage1 projector 정렬 epoch
 
   const handleRangeBar = useCallback(
     (e, label) => {
@@ -168,6 +170,13 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
   };
 
   const runFineTuning = async ({ instanceId, instanceCount, gpuCount }) => {
+    // VLM 2-stage 는 basic(type 1) 전용 토글. advanced 로 전환해도 토글 state 가 잔존하므로
+    // fineTuningType 으로 게이트 — advanced/텍스트 런에 VLM 트레이너가 새지 않도록(codex).
+    const isVlmRun = fineTuningType === 1 && rangeCheckValue.vlm;
+    const stage1Epochs =
+      vlmStage1Epochs === '' || !Number.isFinite(Number(vlmStage1Epochs))
+        ? 1.0
+        : Number(vlmStage1Epochs);
     const body = {
       model_id: parseInt(modelId, 10),
       model_dataset_id: fineTuningData?.model_datasets[0]?.id ?? 0,
@@ -184,6 +193,10 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
         used_lora: rangeCheckValue.lora ? 1 : 0,
         warmup_steps: range.warmupSteps,
         used_jonathan_accelerator: accelator ? 1 : 0,
+        // 내부 VLM 2-stage(LLaVA류) — vlm=1 이면 스케줄러가 VLM 학습 스크립트 선택.
+        // used_lora 가 stage2 방식(LoRA/full) 결정. stage1=projector 정렬 epoch.
+        vlm: isVlmRun ? 1 : 0,
+        vlm_stage1_epochs: isVlmRun ? stage1Epochs : 1.0,
       },
     };
 
@@ -310,7 +323,9 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
         setRangeCheckValue({
           bit: config.load_in_8bit,
           lora: config.used_lora,
+          vlm: config.vlm ? true : false,
         });
+        setVlmStage1Epochs(config.vlm_stage1_epochs ?? 1.0);
 
         if (!userChangedFineTuningType) {
           setFineTuningType(config.fine_tuning_type === 'basic' ? 1 : 2);
@@ -605,6 +620,61 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
                       disabled={runningStatus}
                     />
                   </div>
+                  {/* 내부 VLM 2-stage(LLaVA류) — 베이스 모델=VLM, 데이터셋=이미지+텍스트 필요.
+                      stage1 projector 정렬 → stage2 LM(Use LoRA 체크 시 LoRA, 아니면 full). */}
+                  <div
+                    className={cx(
+                      'range-checkbox',
+                      runningStatus && 'disabled',
+                    )}
+                  >
+                    {t('finetuning.vlm2stage')}
+                    <Checkbox
+                      checked={rangeCheckValue.vlm}
+                      onChange={() => {
+                        if (!runningStatus) {
+                          handleRangeCheckbox('vlm');
+                        }
+                      }}
+                      disabled={runningStatus}
+                    />
+                  </div>
+                  {rangeCheckValue.vlm && (
+                    <div
+                      className={cx(
+                        'range-checkbox',
+                        runningStatus && 'disabled',
+                      )}
+                    >
+                      {t('finetuning.vlmStage1Epochs')}
+                      <input
+                        type='number'
+                        min={0}
+                        max={20}
+                        step={0.5}
+                        value={vlmStage1Epochs}
+                        disabled={runningStatus}
+                        onChange={(e) => {
+                          // 빈/중간 입력은 그대로 유지해 clear-and-retype 허용
+                          // (Number('')→0 스냅 방지). blur 시 정규화.
+                          const v = e.target.value;
+                          setVlmStage1Epochs(v === '' ? '' : Number(v));
+                        }}
+                        onBlur={(e) => {
+                          const n = parseFloat(e.target.value);
+                          setVlmStage1Epochs(
+                            Number.isFinite(n) && n >= 0 ? n : 1.0,
+                          );
+                        }}
+                        style={{
+                          width: 80,
+                          padding: '4px 8px',
+                          border: '1px solid #d8d8d8',
+                          borderRadius: 6,
+                        }}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
               {fineTuningType === 2 && (
