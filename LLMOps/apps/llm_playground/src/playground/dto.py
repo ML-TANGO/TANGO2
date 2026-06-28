@@ -146,6 +146,14 @@ class PlaygroundTestInput(BaseModel):
             "image_base64, ais_rows 등 partner 전용 필드. None 이면 internal 분기."
         ),
     )
+    prompt_gen_playground_id: Optional[int] = Field(
+        default=None,
+        description=(
+            "이중모델 추론(SP-7 슬라이스). 지정 시 이 playground(LLM1, 프롬프트 생성기)가 "
+            "test_question 을 최적 프롬프트로 재작성 → 현 playground(LLM2)가 그 프롬프트로 추론. "
+            "test_type=question 에서만 동작."
+        ),
+    )
 
 
 ######################KAFKA##########################

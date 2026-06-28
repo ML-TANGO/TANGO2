@@ -240,6 +240,7 @@ export const postPlaygroundTestChat = async ({
   test_question,
   session_id,
   external_payload,
+  prompt_gen_playground_id,
 }) => {
   let reqbody = {};
 
@@ -251,6 +252,10 @@ export const postPlaygroundTestChat = async ({
     reqbody['external_payload'] = external_payload;
   } else if (test_type === 'question') {
     reqbody['test_question'] = test_question;
+    // 이중모델 추론(SP-7): LLM1(프롬프트 생성기) playground id. 지정 시 BE 가 LLM1→LLM2 체인.
+    if (prompt_gen_playground_id) {
+      reqbody['prompt_gen_playground_id'] = +prompt_gen_playground_id;
+    }
   } else {
     reqbody['test_dataset_id'] = test_dataset_id;
     reqbody['test_dataset_filename'] = test_dataset_filename;

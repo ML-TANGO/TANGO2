@@ -524,6 +524,13 @@ async def post_test(body: dto.PlaygroundTestInput):
     network_load: 없음 0, 저 1, 중 2, 고3
     """
     try:
+        # 이중모델 추론(SP-7 슬라이스): prompt_gen_playground_id 지정 + question 타입이면 LLM1→LLM2 체인.
+        if body.prompt_gen_playground_id and (body.test_type or "question") == "question":
+            res, message = await svc.playground_dual_test(
+                playground_id=body.playground_id,
+                prompt_gen_playground_id=body.prompt_gen_playground_id,
+                test_question=body.test_question, session_id=body.session_id)
+            return response(status=1, result=res, message=message)
         res, message = await svc.playground_test(playground_id=body.playground_id, test_type=body.test_type,
                                         test_dataset_id=body.test_dataset_id, test_dataset_filename=body.test_dataset_filename,
                                         test_question=body.test_question, session_id=body.session_id,

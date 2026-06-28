@@ -1410,6 +1410,105 @@ async def get_test_download(playground_id):
         traceback.print_exc()
         return None
 
+# ── 이중모델 추론(SP-7 슬라이스) — LLM1(프롬프트 생성기) → LLM2(추론) 체인 ──────────────
+# 고려대 LLM1 프롬프트 생성기의 내부 baseline(메타프롬프트). 고려대 컨테이너 수령 전 동작.
+_PROMPT_GEN_META = (
+    "당신은 프롬프트 엔지니어입니다. 아래 사용자 요청을, AI 어시스턴트가 더 정확하고 구체적으로 "
+    "답변할 수 있도록 명확하고 상세한 한국어 프롬프트로 다시 작성하세요. 설명 없이 재작성된 "
+    "프롬프트만 출력하세요."
+)
+_DUAL_PROMPT_MAX = 8000   # LLM1 출력(→LLM2 프롬프트) 길이 cap(폭주 방지)
+
+
+async def _playground_test_url(playground_id):
+    """배포된 playground 의 추론 test_url 구성(playground_test 와 동일 규칙)."""
+    pg = await db.get_playground(playground_id=playground_id)
+    if not pg:
+        raise Exception(f"playground {playground_id} not found")
+    dep = pg.get("deployment")
+    if not dep:
+        raise Exception(f"playground {playground_id} has no deployment (not running)")
+    dep = json.loads(dep)
+    dpid = dep.get("deployment_playground_id")
+    if not dpid:
+        raise Exception(f"playground {playground_id} is not a running internal deployment")
+    dinfo = db.get_deployment(deployment_id=dpid)
+    api_path = (dinfo or {}).get("api_path")
+    if not api_path:
+        raise Exception(f"playground {playground_id} deployment has no api_path")
+    if settings.EXTERNAL_HOST_REDIRECT:
+        return f"{settings.INGRESS_PROTOCOL}://{settings.EXTERNAL_HOST}/deployment/{api_path}"
+    return (f"{settings.INGRESS_PROTOCOL}://{settings.EXTERNAL_HOST}:"
+            f"{settings.EXTERNAL_HOST_PORT}/deployment/{api_path}")
+
+
+async def _infer_question(test_url, question, session_id=None, timeout=1800):
+    """단일 질문 추론 1건 → 출력 텍스트. (test_url 로 question POST). timeout 은 호출별 지정
+    (LLM1 프롬프트 재작성은 짧게)."""
+    async with httpx.AsyncClient() as client:
+        r = await client.post(test_url, json={
+            "test_type": "question", "session_id": session_id,
+            "test_dataset_id": None, "test_dataset_filename": None,
+            "test_question": question}, timeout=timeout)
+    if r.status_code == 401:
+        raise Exception("Setting up the playground")
+    if r.status_code == 402:
+        raise Exception("Playground Model Error")
+    if r.status_code != 200:
+        # 에러 바디가 JSON 이 아닐 수 있음(nginx 502 HTML, 평문 등) → 원 에러 보존.
+        try:
+            body = r.json()
+        except Exception:
+            body = r.text
+        raise Exception(f"inference HTTP {r.status_code}: {str(body)[:300]}")
+    try:
+        data = r.json()
+    except Exception:
+        return (r.text or "").strip()
+    if isinstance(data, list) and data:
+        return (data[0] or {}).get("output", "")
+    if isinstance(data, dict):
+        return data.get("output", "")
+    return ""
+
+
+async def playground_dual_test(playground_id, prompt_gen_playground_id, test_question, session_id=None):
+    """이중모델 추론 — LLM1(prompt_gen_playground_id) 가 메타프롬프트로 사용자 질문을 최적
+    프롬프트로 재작성 → LLM2(playground_id, 현 배포모델) 가 그 프롬프트로 추론. 결과에
+    optimized_prompt 동봉(화면에 원질문→최적프롬프트→답변 표시). LLM1 실패 시 원 질문 폴백."""
+    if not test_question:
+        raise Exception("test_question is required for dual-model inference")
+    if not prompt_gen_playground_id:
+        raise Exception("prompt_gen_playground_id is required for dual-model inference")
+    # 같은 워크스페이스 가드 — request-supplied prompt_gen_playground_id 로 타 워크스페이스
+    # 배포모델을 체인(교차테넌트 추론·출력 누출)하는 것을 차단. run_benchmark 등과 동일 패턴.
+    pg2 = await db.get_playground(playground_id=playground_id)
+    pg1 = await db.get_playground(playground_id=prompt_gen_playground_id)
+    if not pg1 or not pg2:
+        raise Exception("playground not found")
+    if pg1.get("workspace_id") != pg2.get("workspace_id"):
+        raise Exception("prompt generator(LLM1) must be in the same workspace")
+    # 1) LLM1: 프롬프트 재작성 (재작성은 짧으므로 timeout 300s 로 핸들러 점유 제한)
+    try:
+        gen_url = await _playground_test_url(prompt_gen_playground_id)
+    except Exception as e:
+        raise Exception(f"프롬프트 생성기(LLM1) 사용 불가: {e}")
+    meta = f"{_PROMPT_GEN_META}\n\n[사용자 요청]\n{test_question}"
+    optimized = (await _infer_question(gen_url, meta, session_id, timeout=300) or "").strip()
+    if not optimized:
+        optimized = test_question    # LLM1 무출력 → 원 질문으로 폴백(추론 계속)
+    if len(optimized) > _DUAL_PROMPT_MAX:
+        optimized = optimized[:_DUAL_PROMPT_MAX]    # LLM1 출력(→LLM2 프롬프트) 길이 cap
+    # 2) LLM2: 최적 프롬프트로 추론
+    try:
+        ans_url = await _playground_test_url(playground_id)
+    except Exception as e:
+        raise Exception(f"추론 모델(LLM2) 사용 불가: {e}")
+    answer = await _infer_question(ans_url, optimized, session_id, timeout=1800)
+    return [{"output": answer, "optimized_prompt": optimized,
+             "original_question": test_question}], None
+
+
 async def playground_test(playground_id, test_type, test_dataset_id, test_dataset_filename, test_question, session_id=None, network_load=0, external_payload: dict = None):
     """
     network_load: 없음 0, 저 1, 중 2, 고3
