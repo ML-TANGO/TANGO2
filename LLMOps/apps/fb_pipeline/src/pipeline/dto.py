@@ -42,6 +42,9 @@ class ResponseTasks(BaseModel):
     finetuning_task: List[ResponseTaskInfo] = []   # GenAI 통합 파이프라인 LLM 파인튜닝
     quantize_task: List[ResponseTaskInfo] = []     # 양자화·포팅 (SP-4)
     llm_deploy_task: List[ResponseTaskInfo] = []   # LLM 배포 (cluster/edge)
+    prompt_gen_task: List[ResponseTaskInfo] = []   # SP-7 LLM1 프롬프트 생성기
+    data_gen_task: List[ResponseTaskInfo] = []     # SP-7 LLM2 데이터 생성기
+    algo_call_task: List[ResponseTaskInfo] = []    # SP-7 LLM3 알고리즘 호출자
 
 class RetrainingConfig(BaseModel):
     type : Optional[str] #= TYPE.RETRAINING_DATA_TYPE
@@ -131,7 +134,7 @@ class PipelinesResponse(Response):
 class CreatePipelineTask(BaseModel):
     pipeline_id : int
     task_item_id : int
-    task_type: Literal["project", "deployment", "preprocessing", "generation", "finetuning", "quantize", "llm_deploy"]
+    task_type: Literal["project", "deployment", "preprocessing", "generation", "finetuning", "quantize", "llm_deploy", "prompt_gen", "data_gen", "algo_call"]
     task_item_type: Literal["advanced", "built-in", "huggingface"]
     dataset_data_path: Optional[str] = None
     gpu_auto_select : Optional[dict] = None

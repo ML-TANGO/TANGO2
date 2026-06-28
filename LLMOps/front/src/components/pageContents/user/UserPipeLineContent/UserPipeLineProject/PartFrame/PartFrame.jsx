@@ -16,9 +16,15 @@ const calSubTitletoTypeList = (
   finetuning_task,
   quantize_task,
   llm_deploy_task,
+  prompt_gen_task,
+  data_gen_task,
+  algo_call_task,
 ) => {
   if (subTitle === '생성 데이터') return generation_task;
   if (subTitle === '학습 데이터 전처리') return preprocessing_task;
+  if (subTitle === '프롬프트 생성') return prompt_gen_task;
+  if (subTitle === '데이터 생성') return data_gen_task;
+  if (subTitle === '알고리즘 호출') return algo_call_task;
   if (subTitle === '파인튜닝') return finetuning_task;
   if (subTitle === '양자화') return quantize_task;
   if (subTitle === 'LLM 배포') return llm_deploy_task;
@@ -63,6 +69,9 @@ export default function PartFrame({ subTitle, isStopBtn }) {
     finetuning_task,
     quantize_task,
     llm_deploy_task,
+    prompt_gen_task,
+    data_gen_task,
+    algo_call_task,
   } = useSelector((state) => state.pipelineList, shallowEqual);
 
   const list = calSubTitletoTypeList(
@@ -74,6 +83,9 @@ export default function PartFrame({ subTitle, isStopBtn }) {
     finetuning_task,
     quantize_task,
     llm_deploy_task,
+    prompt_gen_task,
+    data_gen_task,
+    algo_call_task,
   );
   const statusList = calStatusList(list);
   const messageValue = calMessage(subTitle, statusList);

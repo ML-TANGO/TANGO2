@@ -8,6 +8,10 @@ export const nodeLineColorStyle = {
   quantize: '#F59E0B',
   llm_deploy: '#10B981',
   deployment_task: '#00C775',
+  // SP-7 프롬프트 최적화 3-모듈 (고려대 LLM1/2/3)
+  prompt_gen: '#6366F1',
+  data_gen: '#EC4899',
+  algo_call: '#0EA5E9',
 };
 
 export const TRevertaskType = {
@@ -19,6 +23,10 @@ export const TRevertaskType = {
   quantize: 'quantize',
   llmdeploy: 'llm_deploy',
   deployment: 'deployment',
+  // SP-7 — cardType(promptgen/datagen/algocall) → BE task_type
+  promptgen: 'prompt_gen',
+  datagen: 'data_gen',
+  algocall: 'algo_call',
 };
 
 export const xPositionList = [
@@ -67,6 +75,25 @@ export const typePosition = {
     width: 288,
     height: 0,
   },
+  // SP-7 3-모듈 노드 위치 (generation 과 동형)
+  prompt_gen: {
+    x: 0,
+    y: 24,
+    width: 288,
+    height: 0,
+  },
+  data_gen: {
+    x: 0,
+    y: 24,
+    width: 288,
+    height: 0,
+  },
+  algo_call: {
+    x: 0,
+    y: 24,
+    width: 288,
+    height: 0,
+  },
 };
 
 const calModalName = (type) => {
@@ -78,6 +105,10 @@ const calModalName = (type) => {
   if (type === 'finetune') return 'ADD_FINETUNING_DATA';
   if (type === 'quantize') return 'ADD_QUANTIZE_DATA';
   if (type === 'llmdeploy') return 'ADD_LLM_DEPLOY_DATA';
+  // SP-7 프롬프트 최적화 3-모듈
+  if (type === 'promptgen') return 'ADD_PROMPT_GEN_DATA';
+  if (type === 'datagen') return 'ADD_DATA_GEN_DATA';
+  if (type === 'algocall') return 'ADD_ALGO_CALL_DATA';
   return 'ADD_DEPLOY_DATA';
 };
 
@@ -113,6 +144,9 @@ export const handleAddData = (
 const subTitleObj = {
   '생성 데이터': 'headerGeneration',
   '학습 데이터 전처리': 'header0',
+  '프롬프트 생성': 'headerPromptGen',
+  '데이터 생성': 'headerDataGen',
+  '알고리즘 호출': 'headerAlgoCall',
   파인튜닝: 'headerFinetuning',
   양자화: 'headerQuantize',
   'LLM 배포': 'headerLlmDeploy',
@@ -456,6 +490,84 @@ export const calLlmDeployGroupList = (
       position: {
         x: 0,
         y: llmDeployStartPositionY + 44 + 390 * i,
+      },
+      style: {
+        width: '100%',
+        height: '390px',
+      },
+      draggable: false,
+      connectable: false,
+    });
+  }
+  return returnList;
+};
+
+// SP-7 프롬프트 최적화 3-모듈 레인 공용 빌더 — prompt_gen/data_gen/algo_call 의
+// cal*GroupList 가 idPrefix(group node id)/type(lane short type)만 다르고 동일하므로
+// 1개 제네릭으로 통합(기존 cal*GroupList 5종은 보존). type = promptgen|datagen|algocall.
+export const calModuleGroupList = (
+  list,
+  type,
+  idPrefix,
+  handleResetData,
+  isStopBtn,
+  dataset_info,
+  pipelineType,
+  moduleStartPositionY = 0,
+) => {
+  const returnList = [];
+
+  if (list.length === 0) {
+    returnList.push({
+      id: `${idPrefix}0`,
+      type: 'emptyGroup',
+      data: {
+        x: 0,
+        y: 0,
+        type,
+        handleResetData,
+        isStopBtn,
+        dataset_info,
+        pipelineType,
+      },
+      position: {
+        x: 0,
+        y: moduleStartPositionY + 60,
+      },
+      style: {
+        width: '100%',
+        height: '84px',
+      },
+      draggable: false,
+      connectable: false,
+    });
+    return returnList;
+  }
+
+  const yList = list.map((el) => el.coordinate.y_index);
+  const maxY = Math.max(...yList);
+
+  for (let i = 0; i < maxY + 1; i++) {
+    const filterList = list.filter((el) => el.coordinate.y_index === i);
+    const xList = filterList.map((el) => el.coordinate.x_index);
+    const sortXList = xList.sort((a, b) => a - b);
+    const xIndex = sortXList.findIndex((number, idx) => number !== idx);
+
+    returnList.push({
+      id: `${idPrefix}${i + 1}`,
+      type: 'lineGroup',
+      data: {
+        x: xIndex !== -1 ? xIndex : sortXList.length,
+        y: i,
+        type,
+        handleResetData,
+        isStopBtn,
+        dataset_info,
+        pipelineType,
+      },
+      position: {
+        x: 0,
+        y: moduleStartPositionY + 44 + 390 * i,
       },
       style: {
         width: '100%',

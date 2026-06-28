@@ -31,6 +31,7 @@ import {
   calLineColor,
   calListHeaderGroup,
   calLlmDeployGroupList,
+  calModuleGroupList,
   calNodeDataList,
   calPreDataGroupList,
   calQuantizeGroupList,
@@ -60,6 +61,9 @@ const FlowHistoryComponent = ({ handleResetData, isStopBtn = true }) => {
     finetuning_task,
     quantize_task,
     llm_deploy_task,
+    prompt_gen_task,
+    data_gen_task,
+    algo_call_task,
   } = useSelector((state) => state.pipelineList, shallowEqual);
 
   const match = useRouteMatch();
@@ -100,7 +104,62 @@ const FlowHistoryComponent = ({ handleResetData, isStopBtn = true }) => {
     );
     const preDataGroupLastValue = _.last(preDataGroupList);
 
-    const finetuneStartPositionY = calLastPosition(preDataGroupLastValue);
+    // SP-7 프롬프트 최적화 3-모듈 레인 미러(읽기전용): 프롬프트생성 → 데이터생성 → 알고리즘호출.
+    const promptGenStartPositionY = calLastPosition(preDataGroupLastValue);
+    const promptGenHeaderGroup = calListHeaderGroup(
+      promptGenStartPositionY,
+      '프롬프트 생성',
+      isStopBtn,
+    );
+    const promptGenGroupList = calModuleGroupList(
+      prompt_gen_task,
+      'promptgen',
+      'prompt-gen-group',
+      handleResetData,
+      isStopBtn,
+      undefined,
+      undefined,
+      promptGenStartPositionY,
+    );
+    const promptGenGroupLastValue = _.last(promptGenGroupList);
+
+    const dataGenStartPositionY = calLastPosition(promptGenGroupLastValue);
+    const dataGenHeaderGroup = calListHeaderGroup(
+      dataGenStartPositionY,
+      '데이터 생성',
+      isStopBtn,
+    );
+    const dataGenGroupList = calModuleGroupList(
+      data_gen_task,
+      'datagen',
+      'data-gen-group',
+      handleResetData,
+      isStopBtn,
+      undefined,
+      undefined,
+      dataGenStartPositionY,
+    );
+    const dataGenGroupLastValue = _.last(dataGenGroupList);
+
+    const algoCallStartPositionY = calLastPosition(dataGenGroupLastValue);
+    const algoCallHeaderGroup = calListHeaderGroup(
+      algoCallStartPositionY,
+      '알고리즘 호출',
+      isStopBtn,
+    );
+    const algoCallGroupList = calModuleGroupList(
+      algo_call_task,
+      'algocall',
+      'algo-call-group',
+      handleResetData,
+      isStopBtn,
+      undefined,
+      undefined,
+      algoCallStartPositionY,
+    );
+    const algoCallGroupLastValue = _.last(algoCallGroupList);
+
+    const finetuneStartPositionY = calLastPosition(algoCallGroupLastValue);
     const finetuneHeaderGroup = calListHeaderGroup(
       finetuneStartPositionY,
       '파인튜닝',
@@ -159,6 +218,24 @@ const FlowHistoryComponent = ({ handleResetData, isStopBtn = true }) => {
       handleResetData,
       isStopBtn,
     );
+    const promptGenNodeList = calNodeDataList(
+      prompt_gen_task,
+      'prompt-gen-group',
+      handleResetData,
+      isStopBtn,
+    );
+    const dataGenNodeList = calNodeDataList(
+      data_gen_task,
+      'data-gen-group',
+      handleResetData,
+      isStopBtn,
+    );
+    const algoCallNodeList = calNodeDataList(
+      algo_call_task,
+      'algo-call-group',
+      handleResetData,
+      isStopBtn,
+    );
     const finetuneNodeList = calNodeDataList(
       finetuning_task,
       'finetuning-group',
@@ -183,6 +260,9 @@ const FlowHistoryComponent = ({ handleResetData, isStopBtn = true }) => {
     const totalPreNodeList = [
       generationHeaderGroup,
       preDataHeaderGroup,
+      promptGenHeaderGroup,
+      dataGenHeaderGroup,
+      algoCallHeaderGroup,
       finetuneHeaderGroup,
       quantizeHeaderGroup,
       llmDeployHeaderGroup,
@@ -190,6 +270,12 @@ const FlowHistoryComponent = ({ handleResetData, isStopBtn = true }) => {
       ...generationNodeList,
       ...preDataGroupList,
       ...preDataListNodeList,
+      ...promptGenGroupList,
+      ...promptGenNodeList,
+      ...dataGenGroupList,
+      ...dataGenNodeList,
+      ...algoCallGroupList,
+      ...algoCallNodeList,
       ...finetuneGroupList,
       ...finetuneNodeList,
       ...quantizeGroupList,
@@ -201,6 +287,9 @@ const FlowHistoryComponent = ({ handleResetData, isStopBtn = true }) => {
     const nodeList = [
       ...generationNodeList,
       ...preDataListNodeList,
+      ...promptGenNodeList,
+      ...dataGenNodeList,
+      ...algoCallNodeList,
       ...finetuneNodeList,
       ...quantizeNodeList,
       ...llmDeployNodeList,
@@ -237,6 +326,9 @@ const FlowHistoryComponent = ({ handleResetData, isStopBtn = true }) => {
     finetuning_task,
     quantize_task,
     llm_deploy_task,
+    prompt_gen_task,
+    data_gen_task,
+    algo_call_task,
     handleResetData,
     isStopBtn,
     setEdges,

@@ -97,6 +97,9 @@ const AddAIPipeLineQuantizeModal = React.lazy(() =>
 const AddAIPipeLineLlmDeployModal = React.lazy(() =>
   import('@src/components/Modal/AddAIPipeLineLlmDeployModal'),
 );
+const AddAIPipeLineSP7ModuleModal = React.lazy(() =>
+  import('@src/components/Modal/AddAIPipeLineSP7ModuleModal'),
+);
 const CreateSynthesisModal = React.lazy(() =>
   import('@src/components/Modal/CreateSynthesisModal'),
 );
@@ -936,6 +939,27 @@ function ModalContainer() {
             <AddAIPipeLineLlmDeployModal
               data={modal[modalType]}
               type={modalType}
+            />
+          )}
+          {modalType === 'ADD_PROMPT_GEN_DATA' && (
+            <AddAIPipeLineSP7ModuleModal
+              data={modal[modalType]}
+              type={modalType}
+              moduleKind='prompt_gen'
+            />
+          )}
+          {modalType === 'ADD_DATA_GEN_DATA' && (
+            <AddAIPipeLineSP7ModuleModal
+              data={modal[modalType]}
+              type={modalType}
+              moduleKind='data_gen'
+            />
+          )}
+          {modalType === 'ADD_ALGO_CALL_DATA' && (
+            <AddAIPipeLineSP7ModuleModal
+              data={modal[modalType]}
+              type={modalType}
+              moduleKind='algo_call'
             />
           )}
           {modalType === 'CREATE_SYNTHESIS_PROJECT' && (

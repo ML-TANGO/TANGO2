@@ -30,6 +30,9 @@ spec:
               value: {{ .Values.labels.workspace_id | quote }}
             - name: OWNER_NAME
               value: {{ .Values.labels.owner_name | quote }}
+            # SP-7 Jump(노드 재실행) — 설정 시 해당 노드부터 단일패스 재실행(전체 리셋 스킵).
+            - name: RERUN_FROM_TASK
+              value: {{ .Values.rerun_from_task_id | default "" | quote }}
           envFrom:
             - configMapRef:
                 name: jfb-settings

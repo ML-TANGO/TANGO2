@@ -380,7 +380,26 @@ async def update_pipeline_task_reset(pipeline_id :int):
         res = await commit_query(query=sql, params=(pipeline_id,))
         return True
     except Exception as e:
-        return False     
+        return False
+
+async def reset_pipeline_tasks_subset(pipeline_id : int, task_ids : List[int]):
+    """SP-7 Jump(노드 재실행) — 특정 task 들만 pending 리셋(나머지는 done 유지 → 런타임이
+    스킵). pipeline_id 로도 스코프해 타 파이프라인 task 오염 방지. 빈 목록이면 no-op."""
+    try:
+        if not task_ids:
+            return True
+        # 정수만 통과(SQL injection 방어 — IN 절은 placeholder 동적 생성).
+        safe_ids = [int(i) for i in task_ids]
+        placeholders = ",".join(["%s"] * len(safe_ids))
+        sql = f"""
+                UPDATE pipeline_task SET status='pending', start_datetime=Null,
+                    task_item_job_id=Null, task_item_job_str_id=Null, end_datetime=Null
+                WHERE pipeline_id=%s AND id IN ({placeholders})
+            """
+        await commit_query(query=sql, params=(pipeline_id, *safe_ids))
+        return True
+    except Exception as e:
+        return False
   
 async def update_pipeline_reset(pipeline_id: int, start_datetime: str = None, dataset_size : int = 0):
     try:

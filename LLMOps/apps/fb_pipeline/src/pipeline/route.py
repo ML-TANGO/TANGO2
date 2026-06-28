@@ -185,6 +185,19 @@ async def run_pipeline(pipeline_id : int = Body(...)):
         traceback.print_exc()
         return dto.Response(status=0, message="server error", result=[])
 
+@pipeline.post("/task/{task_id}/rerun", response_model=dto.Response)
+async def rerun_pipeline_task(task_id : int):
+    """SP-7 Jump(노드 재실행) — 해당 노드+후행 task 만 재실행(단일패스). 상위 노드는 유지."""
+    try:
+        user_id = get_user_id()
+        res, msg = await svc.rerun_pipeline_from_task(task_id=task_id, start_user_id=user_id)
+        if not res:
+            return dto.Response(status=0, message=msg if isinstance(msg, str) else "rerun failed")
+        return dto.Response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return dto.Response(status=0, message="server error", result=[])
+
 @pipeline.post("/stop", response_model=dto.Response)
 async def stop_pipeline(pipeline_id : int = Body(...)):
     try:

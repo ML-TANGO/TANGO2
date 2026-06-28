@@ -109,6 +109,9 @@ async def get_pipeline_setting(pipeline_id: int, is_get_tasks : bool = False)->P
         TYPE.FINETUNING_TASK: [],
         TYPE.QUANTIZE_TASK: [],
         TYPE.LLM_DEPLOY_TASK: [],
+        TYPE.PROMPT_GEN_TASK: [],
+        TYPE.DATA_GEN_TASK: [],
+        TYPE.ALGO_CALL_TASK: [],
     }
 
     task_graph = pipeline_info.get("graph", "{}")
@@ -646,6 +649,9 @@ async def add_pipeline_history(pipeline_id : int, start_datetime : str, start_us
         TYPE.FINETUNING_TASK : [],
         TYPE.QUANTIZE_TASK : [],
         TYPE.LLM_DEPLOY_TASK : [],
+        TYPE.PROMPT_GEN_TASK : [],
+        TYPE.DATA_GEN_TASK : [],
+        TYPE.ALGO_CALL_TASK : [],
     }
 
     for task in pipeline_tasks:
@@ -712,7 +718,37 @@ async def add_pipeline_history(pipeline_id : int, start_datetime : str, start_us
     res = await db_pipeline.create_pipeline_history(pipeline_id=pipeline_id, start_datetime=start_datetime, start_user_id=start_user_id, pipeline_graph=pipeline_graph, pipeline_tasks=tasks, is_retraining_setting=is_retraining_setting)
     return res
 
-async def start_pipeline(pipeline_id : int, start_user_id : int):
+def _compute_task_subtree(graph_json : str, root_task_id : int):
+    """SP-7 Jump — graph JSON 의 successors 를 BFS 하여 root + 모든 후행 task id 집합 반환.
+    (재실행 시 이 서브트리만 pending 리셋하고 상위는 done 유지 → 런타임이 상위를 스킵)."""
+    try:
+        graph = json.loads(graph_json) if graph_json else {}
+    except Exception:
+        graph = {}
+    if not isinstance(graph, dict):
+        graph = {}
+    root = str(root_task_id)
+    if root not in graph:
+        return [int(root_task_id)]
+    visited = set()
+    queue = [root]
+    while queue:
+        cur = queue.pop(0)
+        if cur in visited:
+            continue
+        visited.add(cur)
+        for succ in (graph.get(cur, {}) or {}).get("successors", []) or []:
+            if str(succ) not in visited:
+                queue.append(str(succ))
+    out = []
+    for k in visited:
+        try:
+            out.append(int(k))
+        except (ValueError, TypeError):
+            continue
+    return out
+
+async def start_pipeline(pipeline_id : int, start_user_id : int, rerun_from_task_id : int = None):
     import sys
     try:
         redis_client = await get_redis_client_async()
@@ -726,7 +762,7 @@ async def start_pipeline(pipeline_id : int, start_user_id : int):
             return False, "Error:pipeline is running"
         start_datetime = datetime.today().strftime("%Y-%m-%d %H:%M:%S")
         await delete_helm_pipeline(pipeline_id=pipeline_id)
-        
+
         workspace_id = pipeline_info["workspace_id"]
         workspace_name = pipeline_info["workspace_name"]
         owner_name = pipeline_info["owner_name"]
@@ -742,9 +778,17 @@ async def start_pipeline(pipeline_id : int, start_user_id : int):
         # print(dataset_path)
         if not await db_pipeline.update_pipeline_reset(pipeline_id=pipeline_id, start_datetime=start_datetime, dataset_size=start_dataset_size):
             return False, "dataset 경로가 올바르지 않음"
-        await db_pipeline.update_pipeline_task_reset(pipeline_id=pipeline_id)
-        
-        
+        # SP-7 Jump(노드 재실행) — rerun_from_task_id 지정 시 해당 노드+후행만 pending 리셋
+        # (나머지 done 유지 → 런타임 스킵). 미지정(일반 실행)이면 전체 task 리셋.
+        if rerun_from_task_id:
+            subtree_ids = _compute_task_subtree(pipeline_info.get("graph"), rerun_from_task_id)
+            # 리셋 실패(DB 에러) 시 전 노드가 done 으로 남아 런타임이 전부 스킵 → silent
+            # no-op 성공 방지. raise → 하단 except 가 start_datetime 롤백+helm 정리(codex MED).
+            if not await db_pipeline.reset_pipeline_tasks_subset(pipeline_id=pipeline_id, task_ids=subtree_ids):
+                raise Exception("Error: rerun subtree reset failed")
+        else:
+            await db_pipeline.update_pipeline_task_reset(pipeline_id=pipeline_id)
+
         pod_name = kube.PodName(workspace_name=pipeline_info["workspace_name"], item_name=pipeline_info["name"], item_type=TYPE.PIPELINE_TYPE).unique_pod_name
         image_name =settings.SYSTEM_DOCKER_REGISTRY_URL + "jfb-system/pipeline_app:dev"
         # helm 실행
@@ -763,6 +807,7 @@ async def start_pipeline(pipeline_id : int, start_user_id : int):
             --set dataset.access={dataset_access} \
             --set dataset.dataset_name={dataset_name} \
             --set dataset.volume_name={volume_name} \
+            --set rerun_from_task_id={rerun_from_task_id or ''} \
             --set image={image_name}
         """
         process = await asyncio.create_subprocess_shell(
@@ -792,6 +837,34 @@ async def start_pipeline(pipeline_id : int, start_user_id : int):
         await delete_helm_pipeline(pipeline_id=pipeline_id)
         print(f"An unexpected error occurred: {e}")
         return False, str(e)
+
+async def rerun_pipeline_from_task(task_id : int, start_user_id : int):
+    """SP-7 Jump(노드 재실행) — task_id 의 파이프라인을 해당 노드부터 단일패스 재실행.
+    task → pipeline_id 해석 후 start_pipeline(rerun_from_task_id=task_id) 위임."""
+    task = await db_pipeline.get_pipeline_task(task_id=task_id)
+    if not task:
+        return False, "Error: not exist task"
+    pipeline_id = task["pipeline_id"]
+    pipeline_info = await db_pipeline.get_pipeline(pipeline_id=pipeline_id)
+    if not pipeline_info:
+        return False, "Error: not exist pipeline"
+    # 업스트림 안전성 — 단일패스 재실행은 서브트리(이 노드+후행)만 pending 리셋하고
+    # 런타임이 'done' 노드를 스킵한다. 서브트리 밖 노드가 미완료(never-run/실패)면 그
+    # pending 업스트림이 스킵되지 않고 의도치 않게 재실행된다 → 전부 done 일 때만 허용
+    # (codex MED). 완료된 실행 뒤 특정 단계 재실행이라는 기능 의도와도 일치.
+    subtree_set = set(_compute_task_subtree(pipeline_info.get("graph"), task_id))
+    all_tasks = await db_pipeline.get_pipeline_tasks(pipeline_id=pipeline_id)
+    not_done_upstream = [
+        t for t in (all_tasks or [])
+        if t.get("id") not in subtree_set and t.get("status") != TYPE.KUBE_POD_STATUS_DONE
+    ]
+    if not_done_upstream:
+        return False, "Error: 재실행하려면 이전(상위) 단계가 모두 완료되어야 합니다"
+    return await start_pipeline(
+        pipeline_id=pipeline_id,
+        start_user_id=start_user_id,
+        rerun_from_task_id=task_id,
+    )
 
 async def stop_pipeline(pipeline_id : int):
     

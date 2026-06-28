@@ -17,6 +17,9 @@ export const pipelineState = {
   finetuning_task: [],
   quantize_task: [],
   llm_deploy_task: [],
+  prompt_gen_task: [],
+  data_gen_task: [],
+  algo_call_task: [],
   isStopBtn: false,
 };
 

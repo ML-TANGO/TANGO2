@@ -21,6 +21,7 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallowEqual, useDispatch, useSelector } from 'react-redux';
+import { useHistory } from 'react-router-dom';
 
 import { ButtonV2 } from '@jonathan/ui-react';
 
@@ -75,6 +76,18 @@ const ExternalFineTuningView = memo(function ExternalFineTuningView({
   const { t } = useTranslation();
   const { userName } = useSelector((state) => state.auth, shallowEqual);
   const dispatch = useDispatch();
+  const history = useHistory();
+
+  // SP-7 딥링크 — SDS(레시피) FT 에서 프롬프트 최적화 3-모듈 파이프라인 빌더로 이동.
+  // 자동 노드 시딩은 레인 레이아웃·컨테이너(8/29 수령) 의존이라 미포함 — 진입만 연결.
+  // 라우터 state 로 진입 맥락(preset) 전달(파이프라인 페이지가 추후 배너/프리셋에 활용).
+  const goToSp7Pipeline = useCallback(() => {
+    if (!workspaceId) return;
+    history.push(`/user/workspace/${workspaceId}/pipeline`, {
+      from: 'sds-recipe',
+      preset: 'sp7',
+    });
+  }, [history, workspaceId]);
 
   const manifestName = fineTuningData?.external_manifest_name || '';
   const manifestVersion = fineTuningData?.external_manifest_version || '';
@@ -529,6 +542,14 @@ const ExternalFineTuningView = memo(function ExternalFineTuningView({
 
   const topButtonList = (
     <div className={lx('top-buttons')}>
+      {recipe && Array.isArray(recipe.phases) && (
+        <ButtonV2
+          type='outline'
+          size='l'
+          label='프롬프트 최적화 파이프라인'
+          onClick={goToSp7Pipeline}
+        />
+      )}
       <ButtonV2
         type='outline'
         size='l'

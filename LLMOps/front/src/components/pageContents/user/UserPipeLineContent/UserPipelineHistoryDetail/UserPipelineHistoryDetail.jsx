@@ -51,6 +51,15 @@ const getPipelineHistoryDetailInfo = async (historyId, dispatch) => {
   const transformLlmDeploy = calTransformList(
     result.tasks.llm_deploy ?? result.tasks.llm_deploy_task ?? [],
   );
+  const transformPromptGen = calTransformList(
+    result.tasks.prompt_gen ?? result.tasks.prompt_gen_task ?? [],
+  );
+  const transformDataGen = calTransformList(
+    result.tasks.data_gen ?? result.tasks.data_gen_task ?? [],
+  );
+  const transformAlgoCall = calTransformList(
+    result.tasks.algo_call ?? result.tasks.algo_call_task ?? [],
+  );
   const transformProject = calTransformList(
     result.tasks.project ?? result.tasks.project_task ?? [],
   );
@@ -68,6 +77,9 @@ const getPipelineHistoryDetailInfo = async (historyId, dispatch) => {
           finetuning_task: transformFinetuning,
           quantize_task: transformQuantize,
           llm_deploy_task: transformLlmDeploy,
+          prompt_gen_task: transformPromptGen,
+          data_gen_task: transformDataGen,
+          algo_call_task: transformAlgoCall,
           project_task: transformProject,
           deployment_task: transformDeployment,
         },

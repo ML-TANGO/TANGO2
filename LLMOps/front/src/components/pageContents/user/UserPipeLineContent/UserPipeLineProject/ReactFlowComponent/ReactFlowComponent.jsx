@@ -39,6 +39,7 @@ import {
   calLineColor,
   calListHeaderGroup,
   calLlmDeployGroupList,
+  calModuleGroupList,
   calNodeDataList,
   calPreDataGroupList,
   calQuantizeGroupList,
@@ -68,6 +69,9 @@ const ReactFlowComponent = ({
     finetuning_task,
     quantize_task,
     llm_deploy_task,
+    prompt_gen_task,
+    data_gen_task,
+    algo_call_task,
   } = useSelector((state) => state.pipelineList, shallowEqual);
 
   const match = useRouteMatch();
@@ -108,9 +112,67 @@ const ReactFlowComponent = ({
     );
     const preDataGroupLastValue = _.last(preDataGroupList);
 
-    // 파인튜닝 레인 — 전처리 다음(캐스케이드). 데이터셋 → 생성 → 전처리 → 파인튜닝 → 양자화 → LLM배포.
+    // SP-7 프롬프트 최적화 3-모듈 레인 (전처리 다음, 파인튜닝 앞 — 명령 데이터셋 생성 흐름).
+    // LLM1 프롬프트 생성 → LLM2 데이터 생성 → LLM3 알고리즘 호출. 전부 external_container
+    // manifest 노드(고려대 컨테이너). (SP-7 Phase 2 scaffolding, v0.4 3.3/3.5)
+    const promptGenStartPositionY = calLastPosition(preDataGroupLastValue);
+    const promptGenHeaderGroup = calListHeaderGroup(
+      promptGenStartPositionY,
+      '프롬프트 생성',
+      isStopBtn,
+    );
+    const promptGenGroupList = calModuleGroupList(
+      prompt_gen_task,
+      'promptgen',
+      'prompt-gen-group',
+      handleResetData,
+      isStopBtn,
+      dataset_info,
+      pipelineType,
+      promptGenStartPositionY,
+    );
+    const promptGenGroupLastValue = _.last(promptGenGroupList);
+
+    const dataGenStartPositionY = calLastPosition(promptGenGroupLastValue);
+    const dataGenHeaderGroup = calListHeaderGroup(
+      dataGenStartPositionY,
+      '데이터 생성',
+      isStopBtn,
+    );
+    const dataGenGroupList = calModuleGroupList(
+      data_gen_task,
+      'datagen',
+      'data-gen-group',
+      handleResetData,
+      isStopBtn,
+      dataset_info,
+      pipelineType,
+      dataGenStartPositionY,
+    );
+    const dataGenGroupLastValue = _.last(dataGenGroupList);
+
+    const algoCallStartPositionY = calLastPosition(dataGenGroupLastValue);
+    const algoCallHeaderGroup = calListHeaderGroup(
+      algoCallStartPositionY,
+      '알고리즘 호출',
+      isStopBtn,
+    );
+    const algoCallGroupList = calModuleGroupList(
+      algo_call_task,
+      'algocall',
+      'algo-call-group',
+      handleResetData,
+      isStopBtn,
+      dataset_info,
+      pipelineType,
+      algoCallStartPositionY,
+    );
+    const algoCallGroupLastValue = _.last(algoCallGroupList);
+
+    // 파인튜닝 레인 — SP-7 알고리즘 호출 다음(캐스케이드). 데이터셋 → 생성 → 전처리 →
+    // (SP-7 프롬프트생성 → 데이터생성 → 알고리즘호출) → 파인튜닝 → 양자화 → LLM배포.
     // (GenAI 통합 파이프라인 최종 레인셋. ML/DL project/deployment 는 코드/버킷 보존하되 렌더 제외)
-    const finetuneStartPositionY = calLastPosition(preDataGroupLastValue);
+    const finetuneStartPositionY = calLastPosition(algoCallGroupLastValue);
     const finetuneHeaderGroup = calListHeaderGroup(
       finetuneStartPositionY,
       '파인튜닝',
@@ -175,6 +237,30 @@ const ReactFlowComponent = ({
       dataset_info,
       pipelineType,
     );
+    const promptGenNodeList = calNodeDataList(
+      prompt_gen_task,
+      'prompt-gen-group',
+      handleResetData,
+      isStopBtn,
+      dataset_info,
+      pipelineType,
+    );
+    const dataGenNodeList = calNodeDataList(
+      data_gen_task,
+      'data-gen-group',
+      handleResetData,
+      isStopBtn,
+      dataset_info,
+      pipelineType,
+    );
+    const algoCallNodeList = calNodeDataList(
+      algo_call_task,
+      'algo-call-group',
+      handleResetData,
+      isStopBtn,
+      dataset_info,
+      pipelineType,
+    );
     const finetuneNodeList = calNodeDataList(
       finetuning_task,
       'finetuning-group',
@@ -205,6 +291,9 @@ const ReactFlowComponent = ({
     const totalPreNodeList = [
       generationHeaderGroup,
       preDataHeaderGroup,
+      promptGenHeaderGroup,
+      dataGenHeaderGroup,
+      algoCallHeaderGroup,
       finetuneHeaderGroup,
       quantizeHeaderGroup,
       llmDeployHeaderGroup,
@@ -212,6 +301,12 @@ const ReactFlowComponent = ({
       ...generationNodeList,
       ...preDataGroupList,
       ...preDataListNodeList,
+      ...promptGenGroupList,
+      ...promptGenNodeList,
+      ...dataGenGroupList,
+      ...dataGenNodeList,
+      ...algoCallGroupList,
+      ...algoCallNodeList,
       ...finetuneGroupList,
       ...finetuneNodeList,
       ...quantizeGroupList,
@@ -223,6 +318,9 @@ const ReactFlowComponent = ({
     const nodeList = [
       ...generationNodeList,
       ...preDataListNodeList,
+      ...promptGenNodeList,
+      ...dataGenNodeList,
+      ...algoCallNodeList,
       ...finetuneNodeList,
       ...quantizeNodeList,
       ...llmDeployNodeList,
@@ -260,6 +358,9 @@ const ReactFlowComponent = ({
     finetuning_task,
     quantize_task,
     llm_deploy_task,
+    prompt_gen_task,
+    data_gen_task,
+    algo_call_task,
     handleResetData,
     isStopBtn,
     setEdges,

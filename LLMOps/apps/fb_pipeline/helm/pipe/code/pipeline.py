@@ -198,6 +198,51 @@ class TaskExecutor:
             logger.error(f"Generation error: {str(e)}")
             raise
 
+    # ── SP-7 프롬프트 최적화 3-모듈 노드 (prompt_gen / data_gen / algo_call) ──
+    # 전부 external_container manifest 디스패치(generation 과 동형). 모듈 알고리즘은
+    # 고려대 컨테이너 안 — 플랫폼은 launch + 폴링만(Phase 2 scaffolding).
+    async def execute_sp7_module(self, task_info: TaskInfo, label: str, subdir_kind: str) -> None:
+        cfg = _parse_cfg(task_info.built_in_params)
+        body = {
+            "manifest_name": cfg.get("manifest_name"),
+            "manifest_version": cfg.get("manifest_version"),
+            "workspace_id": int(settings.WORKSPACE_ID),
+            # 프롬프트최적화 프리셋(OPRO/APE/PROMPTBOOSTING)·iteration 등은 params 안에
+            # 담겨 컨테이너로 verbatim passthrough(알고리즘은 고려대 컨테이너 소관).
+            "params": cfg.get("params", {}),
+            "output_subdir": cfg.get("output_subdir")
+                or f"{subdir_kind}/pipeline-{settings.PIPELINE_ID}-{task_info.id}",
+        }
+        if task_info.gpu_count:
+            body["gpu_count"] = task_info.gpu_count
+        url = f"http://{settings.EXTERNAL_CONTAINER_DNS}/api/v1/jobs"
+        try:
+            res = await self.http_client.post(url=url, data=body)
+            job_id = res.get("job_id")
+            if not job_id:
+                raise ValueError(f"{label} job_id is None")
+            logger.info(f"{label} job id: {job_id}")
+            db.update_pipeline_task_str(task_id=task_info.id, task_item_job_str_id=job_id)
+            await self._wait_for_external_job(job_id, task_info.id, label)
+        except Exception as e:
+            logger.error(f"{label} error: {str(e)}")
+            raise
+
+    async def execute_prompt_gen(self, task_info: TaskInfo) -> None:
+        """SP-7 LLM1 프롬프트 생성기 — 메타프롬프트·프롬프트최적화."""
+        logger.info("SP-7 prompt_gen 실행")
+        await self.execute_sp7_module(task_info, "PromptGen", "prompt-gen")
+
+    async def execute_data_gen(self, task_info: TaskInfo) -> None:
+        """SP-7 LLM2 데이터 생성기 — 라벨/주석 생성."""
+        logger.info("SP-7 data_gen 실행")
+        await self.execute_sp7_module(task_info, "DataGen", "data-gen")
+
+    async def execute_algo_call(self, task_info: TaskInfo) -> None:
+        """SP-7 LLM3 알고리즘 호출자 — 학습 알고리즘/타겟 환경 호출."""
+        logger.info("SP-7 algo_call 실행")
+        await self.execute_sp7_module(task_info, "AlgoCall", "algo-call")
+
     # ── GenAI 통합 파이프라인 신규 task_type (finetuning / quantize / llm_deploy) ──
     async def execute_finetuning(self, task_info: TaskInfo) -> None:
         """LLM 파인튜닝 노드. built_in_params.mode 로 분기.
@@ -725,6 +770,16 @@ class Graph:
                 if not running_tasks and len(completed_tasks) == len(self.in_degree.keys()):
                     logger.info("모든 태스크 실행 완료")
                     break
+                # 실행 가능/실행 중 둘 다 없는데 미완료가 남음 → 진행 불가(사이클/그래프 손상).
+                # 무한 sleep(파이프라인이 영구 running 으로 stuck) 대신 종료 에러로 전환 →
+                # run() except 가 pipeline failed 처리(codex MED). nothing-running 이면
+                # in_degree 가 더는 줄지 않으므로 일시 상태가 아닌 확정 데드락.
+                if not running_tasks:
+                    raise RuntimeError(
+                        f"pipeline graph deadlock: completed "
+                        f"{len(completed_tasks)}/{len(self.in_degree.keys())} "
+                        f"(cycle 또는 graph 손상)"
+                    )
                 # 실행 중인 태스크가 있으면 잠시 대기
                 logger.info("실행 가능한 태스크 없음, 대기 중...")
                 await asyncio.sleep(1)
@@ -795,8 +850,14 @@ class Pipeline:
         logger.info(f"{task_type} 실행")
         
         task_info = db.get_pipeline_task(task_id=task_id)
+        # SP-7 Jump(노드 재실행) — 이미 완료된 노드는 재실행 스킵(재실행 서브트리만 pending).
+        # 일반 실행은 run() 이 전체 pending 리셋하므로 done 노드가 없어 스킵 미발생.
+        # Graph 래퍼는 func 반환 후 successor in_degree 를 감소시키므로 스킵해도 후속 진행됨.
+        if (task_info or {}).get("status") == "done":
+            logger.info(f"Task {task_id} 이미 done — 재실행 스킵")
+            return
         task_info_obj = TaskInfo(**task_info)
-        
+
         if task_type == "project":
             await self.task_executor.execute_project(task_info_obj)
         elif task_type == "preprocessing":
@@ -811,6 +872,12 @@ class Pipeline:
             await self.task_executor.execute_quantize(task_info_obj)
         elif task_type == "llm_deploy":
             await self.task_executor.execute_llm_deploy(task_info_obj)
+        elif task_type == "prompt_gen":
+            await self.task_executor.execute_prompt_gen(task_info_obj)
+        elif task_type == "data_gen":
+            await self.task_executor.execute_data_gen(task_info_obj)
+        elif task_type == "algo_call":
+            await self.task_executor.execute_algo_call(task_info_obj)
         else:
             # 알 수 없는 task_type 이 조용히 no-op→"완료" 처리되어 후속 노드가
             # 진행되는 silent skip 방지(code-review C-1). DTO Literal 게이트가
@@ -821,13 +888,17 @@ class Pipeline:
         try:
             await self.initialize()
             pipeline_id = settings.PIPELINE_ID
+            # SP-7 Jump(노드 재실행) — 값이 있으면 전체 task 리셋을 건너뛰고(서비스가 서브트리만
+            # 이미 pending 리셋) 단일패스 실행 후 종료(재학습 루프 미진입).
+            rerun_from = getattr(settings, "RERUN_FROM_TASK", "") or ""
             while True:
                 before_total_size = self._get_total_size("/dataset")
                 logger.info(f"파이프라인 시작 전 총 크기: {before_total_size} 바이트")
-                
+
                 db.update_pipeline_start(pipeline_id=pipeline_id, dataset_size=before_total_size)
-                db.update_pipeline_task_reset(pipeline_id)
-                
+                if not rerun_from:
+                    db.update_pipeline_task_reset(pipeline_id)
+
                 pipeline_info = db.get_pipeline(pipeline_id)
                 pipe_graph = json.loads(pipeline_info.get("graph", "{}"))
                 logger.info(f"pipe_graph : {pipe_graph}")
@@ -851,8 +922,9 @@ class Pipeline:
                             )
                 logger.info(f"graph : {G.graph}")
                 await G.execute_graph()
-                
-                if not pipeline_info["retraining_type"]:
+
+                # rerun(Jump)은 단일패스 — 재학습 설정과 무관하게 1회 실행 후 종료.
+                if rerun_from or not pipeline_info["retraining_type"]:
                     after_total_size = self._get_total_size("/dataset")
                     increase_size = after_total_size - before_total_size
                     

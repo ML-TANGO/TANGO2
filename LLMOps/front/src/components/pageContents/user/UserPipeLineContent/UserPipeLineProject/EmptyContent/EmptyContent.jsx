@@ -20,6 +20,9 @@ const calBtnLabel = (type) => {
   if (type === 'finetune') return '파인튜닝 작업 추가';
   if (type === 'quantize') return '양자화 작업 추가';
   if (type === 'llmdeploy') return 'LLM 배포 작업 추가';
+  if (type === 'promptgen') return '프롬프트 생성 작업 추가';
+  if (type === 'datagen') return '데이터 생성 작업 추가';
+  if (type === 'algocall') return '알고리즘 호출 작업 추가';
   return '배포 작업 추가';
 };
 

@@ -216,6 +216,15 @@ export const putPipelinesDeleteRow = async (body) => {
   return res;
 };
 
+// SP-7 Jump(노드 재실행) — 해당 노드+후행만 단일패스 재실행. 상위 노드는 유지.
+export const postPipelineRerunTask = async (taskId) => {
+  const res = await callApi({
+    url: `pipelines/task/${taskId}/rerun`,
+    method: 'post',
+  });
+  return res;
+};
+
 export const postPipelineStop = async (pipelineId) => {
   const res = await callApi({
     url: 'pipelines/stop',

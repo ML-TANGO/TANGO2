@@ -11,6 +11,7 @@ import { calTypeImg } from '@src/components/Modal/AddAiPipeLinepreprocessModal/A
 
 import {
   deletePipelinesTask,
+  postPipelineRerunTask,
   putPipelinesDeleteRow,
 } from '@src/apis/flightbase/pipeline';
 import { closeModal, openModal } from '@src/store/modules/modal';
@@ -35,6 +36,9 @@ const calCardLabel = (cardType, t) => {
   if (cardType === 'quantize') return '양자화';
   if (cardType === 'llmdeploy') return 'LLM 배포';
   if (cardType === 'deployment') return '배포';
+  if (cardType === 'promptgen') return '프롬프트 생성';
+  if (cardType === 'datagen') return '데이터 생성';
+  if (cardType === 'algocall') return '알고리즘 호출';
   return '-';
 };
 
@@ -45,6 +49,9 @@ export const calPointerColor = (cardType) => {
   if (cardType === 'finetune') return '#14B8A6';
   if (cardType === 'quantize') return '#F59E0B';
   if (cardType === 'llmdeploy') return '#10B981';
+  if (cardType === 'promptgen') return '#6366F1';
+  if (cardType === 'datagen') return '#EC4899';
+  if (cardType === 'algocall') return '#0EA5E9';
   return '#00C775';
 };
 
@@ -64,6 +71,9 @@ const calTypetoTypeList = (
   finetuning_task,
   quantize_task,
   llm_deploy_task,
+  prompt_gen_task,
+  data_gen_task,
+  algo_call_task,
 ) => {
   if (cardType === 'generation') return generation_task;
   if (cardType === 'pre') return preprocessing_task;
@@ -71,6 +81,9 @@ const calTypetoTypeList = (
   if (cardType === 'finetune') return finetuning_task;
   if (cardType === 'quantize') return quantize_task;
   if (cardType === 'llmdeploy') return llm_deploy_task;
+  if (cardType === 'promptgen') return prompt_gen_task;
+  if (cardType === 'datagen') return data_gen_task;
+  if (cardType === 'algocall') return algo_call_task;
   return deployment_task;
 };
 
@@ -102,6 +115,10 @@ const calIsTrainTool = (isStopBtn, cardType, task_item_type) => {
   if (cardType === 'quantize') return false;
   if (cardType === 'llmdeploy') return false;
   if (cardType === 'deployment') return false;
+  // SP-7 3-모듈 노드는 backing item(학습/전처리 도구) 없음 → 바로가기 버튼 비표시.
+  if (cardType === 'promptgen') return false;
+  if (cardType === 'datagen') return false;
+  if (cardType === 'algocall') return false;
   if (task_item_type === 'advanced') return true;
   if (task_item_type === 'built-in') return true;
   return false;
@@ -254,6 +271,9 @@ export default function CardFrame({
     finetuning_task,
     quantize_task,
     llm_deploy_task,
+    prompt_gen_task,
+    data_gen_task,
+    algo_call_task,
   } = useSelector((state) => state.pipelineList, shallowEqual);
   const { y_index } = coordinate;
   const imgIcon = calTypeIcon(cardType, task_item_type, status, isStopBtn);
@@ -267,6 +287,9 @@ export default function CardFrame({
     finetuning_task,
     quantize_task,
     llm_deploy_task,
+    prompt_gen_task,
+    data_gen_task,
+    algo_call_task,
   );
   const isLastXindex = calIsLastxIndex(myList, coordinate);
 
@@ -286,6 +309,21 @@ export default function CardFrame({
   const statusColor = calStatuscolor(status, isStopBtn);
   const logtitleValue = status === 'running' ? '실행 로그' : '결과 로그';
   const isTrainTool = calIsTrainTool(isStopBtn, cardType, task_item_type);
+
+  // SP-7 Jump(노드 재실행) — 완료된 노드를 이 단계부터 다시 실행(후행 노드 함께 재실행,
+  // 상위는 유지). 실행 중/히스토리/빌트인에서는 비표시.
+  const isRerunable =
+    !isStopBtn && pipelineType !== 'built-in' && status === 'done';
+
+  const handleRerun = async () => {
+    const { status: rerunStatus, message } = await postPipelineRerunTask(id);
+    if (rerunStatus !== STATUS_SUCCESS) {
+      toast.error(message);
+      return;
+    }
+    toast.success('이 단계부터 재실행을 시작했습니다.');
+    await handleResetData();
+  };
 
   const handleRowDelete = async () => {
     if (isLastXindex) {
@@ -395,6 +433,16 @@ export default function CardFrame({
                   1-GPU 서버 x{gpuValue}
                 </span>
               )}
+            </div>
+          )}
+          {isRerunable && (
+            <div className={cx('rerun-cont')} style={{ marginTop: '8px' }}>
+              <ButtonV2
+                type='outline'
+                size='s'
+                label='↻ 이 단계부터 재실행'
+                onClick={handleRerun}
+              />
             </div>
           )}
           {isTrainTool && task_item_type === 'advanced' && (

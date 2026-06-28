@@ -16,6 +16,8 @@ JF_REDIS_SLAVES_DNS = os.environ["JF_REDIS_SLAVES_DNS"]
 WORKSPACE_ID = os.environ.get("WORKSPACE_ID")
 PIPELINE_ID = os.environ.get("PIPELINE_ID")
 OWNER_NAME = os.environ.get("OWNER_NAME")
+# SP-7 Jump — 빈 값이면 일반 실행(전체 리셋). 값(task_id)이면 해당 노드부터 단일패스 재실행.
+RERUN_FROM_TASK = os.environ.get("RERUN_FROM_TASK") or ""
 
 PROJECT_DNS = "jfb-app-training-svc.jonathan-system.svc.cluster.local"
 PREPROCESSING_DNS = "jfb-app-preprocessing-svc.jonathan-system.svc.cluster.local"
