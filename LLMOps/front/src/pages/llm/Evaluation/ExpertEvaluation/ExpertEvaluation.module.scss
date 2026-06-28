@@ -194,11 +194,60 @@
   }
 }
 
+.sample-img {
+  display: block;
+  max-width: 320px;
+  max-height: 240px;
+  width: auto;
+  height: auto;
+  margin-bottom: 10px;
+  border: 1px solid #e6e6e6;
+  border-radius: 6px;
+  object-fit: contain;
+  background: #fafafa;
+}
+
+.sample-img-loading {
+  width: 200px;
+  height: 140px;
+  margin-bottom: 10px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #f2f2f2 25%, #e8e8e8 37%, #f2f2f2 63%);
+  background-size: 400% 100%;
+  animation: img-shimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes img-shimmer {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
+
+.sample-img-err {
+  width: 200px;
+  padding: 16px 12px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: #aaa;
+  text-align: center;
+  border: 1px dashed #ddd;
+  border-radius: 6px;
+}
+
 .rate-row {
   display: flex;
   align-items: center;
   gap: 10px;
   margin-top: 12px;
+}
+
+.audit-line {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #999;
 }
 
 .verdict {

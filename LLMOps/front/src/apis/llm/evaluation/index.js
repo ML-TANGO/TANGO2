@@ -1,4 +1,4 @@
-import { callApi } from '@src/network';
+import { callApi, downloadBlob } from '@src/network';
 
 // llm_evaluation 서비스 (P1b) — Kong ingress /api/(evaluations).
 // 벤치마크 평가 런 생성/폴링/이력/상태. (LLM-judge=P2, 전문가=P3.)
@@ -91,10 +91,18 @@ export const submitExpertRating = async (modelId, jobId, body) => {
   });
 };
 
-// 세션 진행/결과(상태 + 채점 목록 + 합격률).
+// 세션 진행/결과(상태 + 채점 목록 + 채점 이력 + 합격률).
 export const getExpertResult = async (modelId, jobId) => {
   return await callApi({
     url: `evaluations/${modelId}/${jobId}/expert-result`,
     method: 'get',
+  });
+};
+
+// 멀티모달 — 전문가 샘플 이미지(서버 보관 NFS 이미지) blob. jf 헤더 인증 경유라 <img src>
+// 직접 GET(헤더 미탑재) 대신 blob 으로 받아 objectURL 로 렌더. URL 이미지는 FE 가 직접 렌더(미사용).
+export const fetchExpertImageBlob = async (modelId, jobId, idx) => {
+  return await downloadBlob({
+    url: `evaluations/${modelId}/${jobId}/expert-image/${idx}`,
   });
 };

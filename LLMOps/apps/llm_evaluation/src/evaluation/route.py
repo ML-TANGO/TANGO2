@@ -2,6 +2,7 @@
 import traceback
 
 from fastapi import APIRouter, Header
+from fastapi.responses import FileResponse, Response
 
 from utils.resource import response
 
@@ -145,6 +146,20 @@ async def get_expert_result(model_id: int, job_id: str):
     except Exception as e:
         traceback.print_exc()
         return response(status=0, message=str(e), result=None)
+
+
+@evaluations.get("/{model_id}/{job_id}/expert-image/{sample_idx}",
+                 summary="전문가 샘플 이미지(멀티모달)", tags=TAG)
+async def get_expert_image(model_id: int, job_id: str, sample_idx: int):
+    """VLM 샘플 이미지를 바이너리로 서빙(envelope 아님). NFS 상대경로 이미지만 — URL 이미지는
+    FE 가 직접 렌더. 없거나 검증 실패 → 404(FE 가 플레이스홀더 표시)."""
+    try:
+        path, media_type = await svc.get_expert_image(
+            model_id=model_id, job_id=job_id, sample_idx=sample_idx)
+        return FileResponse(path, media_type=media_type)
+    except Exception:
+        traceback.print_exc()
+        return Response(status_code=404)
 
 
 @evaluations.post("/{model_id}/{job_id}/status", summary="평가 실패/취소 마킹", tags=TAG)

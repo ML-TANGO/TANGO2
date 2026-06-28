@@ -869,3 +869,35 @@ async def list_expert_ratings(job_str_id : str, source_model_id : int = None) ->
     sql += " ORDER BY sample_idx ASC"
     res = await select_query(sql, params=tuple(params), fetch_type=FetchType.ALL)
     return res or []
+
+
+async def insert_expert_rating_history(source_model_id : int, job_str_id : str,
+                                       sample_idx : int, verdict : str,
+                                       comment : str = None, rater_user : str = None) -> int:
+    """전문가 채점 이력 1건(append-only, 감사추적). 메인 eval_expert_rating 은
+    (job_str_id, sample_idx) upsert 라 '현재' verdict 만 남지만, 누가 언제 어떻게 채점/재채점
+    했는지는 이 테이블에 채점 이벤트마다 누적해 불변 보존한다."""
+    sql = """
+        INSERT INTO eval_expert_rating_history
+            (source_model_id, job_str_id, sample_idx, rater_user, verdict, comment)
+        VALUES (%s, %s, %s, %s, %s, %s)
+    """
+    return await commit_query(query=sql, params=(
+        source_model_id, job_str_id, sample_idx, rater_user, verdict, comment))
+
+
+async def list_expert_rating_history(job_str_id : str, source_model_id : int = None) -> list:
+    """세션(job_str_id)의 전문가 채점 이력(시간순). source_model_id 주면 교차모델 차단."""
+    sql = """
+        SELECT id, source_model_id, job_str_id, sample_idx, rater_user, verdict, comment,
+               DATE_FORMAT(create_datetime, %s) AS create_datetime
+        FROM eval_expert_rating_history
+        WHERE job_str_id = %s
+    """
+    params = [TYPE.TIME_DATE_FORMAT_SQL, job_str_id]
+    if source_model_id is not None:
+        sql += " AND source_model_id = %s"
+        params.append(source_model_id)
+    sql += " ORDER BY id ASC"
+    res = await select_query(sql, params=tuple(params), fetch_type=FetchType.ALL)
+    return res or []

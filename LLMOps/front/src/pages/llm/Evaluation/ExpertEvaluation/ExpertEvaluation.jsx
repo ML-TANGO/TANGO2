@@ -8,6 +8,7 @@ import ModelSelector from '@src/components/ModelSelector/ModelSelector';
 import EvalComparison from '../EvalComparison/EvalComparison';
 
 import {
+  fetchExpertImageBlob,
   getEvalDatasets,
   getEvalResults,
   startExpert,
@@ -25,8 +26,52 @@ const cx = classNames.bind(style);
 
 const MAX_DATASETS = 10;
 
-// 전문가 평가(llm_evaluation P3). 모델 + 데이터셋 → 샘플(입력/출력/참조)을 사람이 O/X +
+// 멀티모달 — VLM 샘플 이미지 렌더. URL 이미지(image_url)는 직접, NFS 서버 이미지(image_served)는
+// jf 헤더 인증 blob 으로 받아 objectURL 로(직접 <img src> GET 은 헤더 미탑재라 인증 실패).
+// 언마운트/샘플 변경 시 objectURL revoke(누수 방지), 실패 시 플레이스홀더.
+const ExpertSampleImage = ({ modelId, jobId, sample, t }) => {
+  const [src, setSrc] = useState(null);
+  const [err, setErr] = useState(false);
+
+  useEffect(() => {
+    if (sample.image_url) {
+      setSrc(sample.image_url);
+      return undefined;
+    }
+    if (!sample.image_served || modelId == null || !jobId) return undefined;
+    let active = true;
+    let objectUrl = null;
+    setSrc(null);
+    setErr(false);
+    (async () => {
+      try {
+        const blob = await fetchExpertImageBlob(modelId, jobId, sample.idx);
+        if (!active) return;
+        objectUrl = URL.createObjectURL(blob);
+        setSrc(objectUrl);
+      } catch {
+        if (active) setErr(true);
+      }
+    })();
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [modelId, jobId, sample.idx, sample.image_url, sample.image_served]);
+
+  if (!sample.image_url && !sample.image_served) return null;
+  if (err) {
+    return <div className={cx('sample-img-err')}>{t('evaluation.expert.imageError')}</div>;
+  }
+  if (!src) return <div className={cx('sample-img-loading')} />;
+  return (
+    <img className={cx('sample-img')} src={src} alt={sample.image || 'sample'} />
+  );
+};
+
+// 전문가 평가(llm_evaluation P3). 모델 + 데이터셋 → 샘플(이미지/입력/출력/참조)을 사람이 O/X +
 //   코멘트로 채점 → eval_expert_rating 영속 → 합격률 집계 → 모델 이력 비교표 합류.
+//   채점자·시각·재채점 횟수를 표면화하고 이력을 영속(감사추적).
 const ExpertEvaluation = () => {
   const { t } = useTranslation();
   const dispatch = useDispatch();
@@ -105,8 +150,12 @@ const ExpertEvaluation = () => {
 
   const rate = async (idx, verdict) => {
     const comment = ratings[idx]?.comment || '';
-    const prevVerdict = ratings[idx]?.verdict;
-    setRatings((prev) => ({ ...prev, [idx]: { ...prev[idx], verdict } }));
+    const prev = ratings[idx] || {};
+    // 변경 없음(같은 verdict + 같은 코멘트)이면 재제출 안 함 — 무변경 blur 가 감사 이력을
+    // 중복 적재하고 rate_count 를 부풀리는 것 방지(codex). 정본은 마지막 영속값(savedVerdict).
+    if (prev.savedVerdict === verdict && (prev.savedComment || '') === comment) return;
+    const prevVerdict = prev.verdict;
+    setRatings((p) => ({ ...p, [idx]: { ...p[idx], verdict } }));
     const res = await submitExpertRating(Number(modelId), session.job_id, {
       sample_idx: idx,
       verdict,
@@ -114,11 +163,24 @@ const ExpertEvaluation = () => {
     });
     if (res.status !== STATUS_SUCCESS) {
       // 서버 반영 실패 → 낙관적 verdict 롤백(버튼 하이라이트 잔상 방지).
-      setRatings((prev) => ({ ...prev, [idx]: { ...prev[idx], verdict: prevVerdict } }));
+      setRatings((p) => ({ ...p, [idx]: { ...p[idx], verdict: prevVerdict } }));
       errorToastMessage(res.error, res.message);
       return;
     }
     setProgress(res.result);
+    // 채점자·시각·이 샘플 누적 채점 횟수 표면화(감사추적) + 마지막 영속값 기록(dedup 기준).
+    setRatings((p) => ({
+      ...p,
+      [idx]: {
+        ...p[idx],
+        verdict,
+        rater: res.result?.rater_user,
+        ratedAt: res.result?.rated_at,
+        count: res.result?.rate_count,
+        savedVerdict: verdict,
+        savedComment: comment,
+      },
+    }));
     if (res.result?.completed) fetchHistory(Number(modelId));
   };
 
@@ -213,10 +275,18 @@ const ExpertEvaluation = () => {
                 <div key={s.idx} className={cx('sample-card')}>
                   <div className={cx('sample-idx')}>#{s.idx + 1}</div>
                   <div className={cx('sample-body')}>
-                    <div className={cx('field-row')}>
-                      <span className={cx('field-key')}>{t('evaluation.expert.input')}</span>
-                      <span className={cx('field-val')}>{s.input}</span>
-                    </div>
+                    <ExpertSampleImage
+                      modelId={Number(modelId)}
+                      jobId={session.job_id}
+                      sample={s}
+                      t={t}
+                    />
+                    {s.input && (
+                      <div className={cx('field-row')}>
+                        <span className={cx('field-key')}>{t('evaluation.expert.input')}</span>
+                        <span className={cx('field-val')}>{s.input}</span>
+                      </div>
+                    )}
                     <div className={cx('field-row')}>
                       <span className={cx('field-key')}>{t('evaluation.expert.output')}</span>
                       <span className={cx('field-val')}>{s.output}</span>
@@ -254,6 +324,17 @@ const ExpertEvaluation = () => {
                         }}
                       />
                     </div>
+                    {r.verdict && (r.rater || r.ratedAt) && (
+                      <div className={cx('audit-line')}>
+                        {t('evaluation.expert.ratedBy', {
+                          rater: r.rater || t('evaluation.expert.unknownRater'),
+                        })}
+                        {r.ratedAt ? ` · ${r.ratedAt}` : ''}
+                        {r.count > 1
+                          ? ` · ${t('evaluation.expert.reRated', { count: r.count })}`
+                          : ''}
+                      </div>
+                    )}
                   </div>
                 </div>
               );

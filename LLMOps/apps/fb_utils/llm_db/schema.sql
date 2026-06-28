@@ -140,6 +140,24 @@ CREATE TABLE IF NOT EXISTS `eval_expert_rating` (
     CONSTRAINT FOREIGN KEY (`job_str_id`) REFERENCES `jonathan_llm`.`eval_result` (`job_str_id`) ON UPDATE CASCADE ON DELETE CASCADE
 );
 
+-- P3 전문가 평가 채점 이력(append-only, 감사추적). 메인 eval_expert_rating 은
+-- (job_str_id, sample_idx) upsert 라 '현재' verdict 만 유지 → 재채점 시 누가 언제 무엇을
+-- 바꿨는지 소실. 이 테이블에 채점 이벤트마다 1 row 누적(불변 이력).
+CREATE TABLE IF NOT EXISTS `eval_expert_rating_history` (
+    `id`                INT(11) NOT NULL AUTO_INCREMENT,
+    `source_model_id`   INT(11) NOT NULL,
+    `job_str_id`        VARCHAR(128) NOT NULL,
+    `sample_idx`        INT(11) NOT NULL,
+    `rater_user`        VARCHAR(128),
+    `verdict`           VARCHAR(8) NOT NULL,
+    `comment`           TEXT,
+    `create_datetime`   DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(`id`),
+    KEY `idx_expert_hist` (`job_str_id`, `sample_idx`),
+    CONSTRAINT FOREIGN KEY (`source_model_id`) REFERENCES `jonathan_llm`.`model` (`id`) ON UPDATE CASCADE ON DELETE CASCADE,
+    CONSTRAINT FOREIGN KEY (`job_str_id`) REFERENCES `jonathan_llm`.`eval_result` (`job_str_id`) ON UPDATE CASCADE ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS `commit_model` (
     `id`                    INT(11) NOT NULL AUTO_INCREMENT,
     `name`                  LONGTEXT,

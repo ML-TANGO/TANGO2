@@ -335,12 +335,51 @@ async def list_judges() -> dict:
 # input/reference 컬럼 자동 감지(여러 데이터셋 스키마 수용). Alpaca 류 단일 text 필드는
 # "### Response:" 로 분리. 비수치 데이터셋은 첫 prompt 류 키를 input 으로.
 _PROMPT_KEYS = ("prompt", "input", "question", "instruction", "query", "text")
-_REFERENCE_KEYS = ("reference", "answer", "output", "completion", "response", "label", "target")
+_REFERENCE_KEYS = ("reference", "answer", "output", "completion", "response", "label",
+                   "target", "caption")
 _MAX_FIELD_LEN = 2000          # 샘플 필드 길이 cap(프롬프트/출력/참조)
 _INFER_TIMEOUT = 60.0          # 추론 1건 타임아웃(초)
 _DATA_EXTS = (".jsonl", ".json", ".csv")
 _MAX_DATA_FILE_BYTES = 50 * 1024 * 1024  # .json 전체 로드 상한(메모리 보호; jsonl/csv 는 스트리밍)
 _EXPERT_INFER_BUDGET = 90      # start_expert 인라인 추론 전체 예산(초) — HTTP 핸들러 점유 cap
+
+# 멀티모달(VLM) 전문가 평가 — 데이터셋 row 의 이미지 컬럼을 surface 해 사람이 이미지를 보고
+# 채점. 강한 이미지 컬럼명은 값 그대로, 약한(범용) 컬럼명은 이미지 확장자일 때만 채택(오탐 방지).
+_IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp")
+_IMAGE_KEYS_STRONG = ("image", "image_url", "image_path", "img", "img_url", "img_path",
+                      "image_file")
+_IMAGE_KEYS_WEAK = ("file_name", "filename", "file", "path", "picture", "photo")
+_IMAGE_MEDIA = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+                ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp"}
+
+
+def _looks_like_image(v: str) -> bool:
+    path = urlparse(v).path if "://" in v else v
+    return os.path.splitext(path.split("?")[0])[1].lower() in _IMAGE_EXTS
+
+
+def _pick_image(row: dict) -> Optional[str]:
+    """row 에서 이미지 참조(URL 또는 상대경로) 1건. 강한 컬럼명은 값 그대로, 약한 컬럼명은
+    이미지 확장자일 때만. 못 찾으면 None(텍스트-only 데이터셋은 영향 없음)."""
+    lower = {str(k).lower(): k for k in row.keys()}
+
+    def _val(key):
+        actual = lower.get(key)
+        v = row.get(actual) if actual is not None else None
+        if not isinstance(v, str):
+            return None
+        v = v.strip()
+        return v[:_MAX_FIELD_LEN] if v else None
+
+    for k in _IMAGE_KEYS_STRONG:
+        v = _val(k)
+        if v:
+            return v
+    for k in _IMAGE_KEYS_WEAK:
+        v = _val(k)
+        if v and _looks_like_image(v):
+            return v
+    return None
 
 
 def _first_key(row: dict, keys) -> Optional[str]:
@@ -367,23 +406,29 @@ def _split_alpaca(text: str):
 
 
 def _row_to_sample(row: dict):
-    """데이터셋 row(dict) → (input, reference) 또는 None. 명시 prompt/reference 컬럼 우선,
-    없고 text 단일 필드면 Alpaca 분리."""
+    """데이터셋 row(dict) → {"input","reference", "image"?} 또는 None. 명시 prompt/reference
+    컬럼 우선, 없고 text 단일 필드면 Alpaca 분리. 이미지 컬럼이 있으면 image 부착 — VLM 은
+    이미지가 곧 입력이므로 텍스트 입력이 없어도(image-only) 샘플로 인정."""
     if not isinstance(row, dict):
         return None
+    img = _pick_image(row)
     # text 단일 필드(prompt 컬럼 부재) → Alpaca 분리
     has_explicit = any(k in row for k in _PROMPT_KEYS if k != "text")
     if not has_explicit and isinstance(row.get("text"), str):
         inp, alpaca_ref = _split_alpaca(row["text"])
-        # 명시 reference 컬럼(output/answer 등)이 있으면 우선 — {"text":q,"output":a} 류에서
-        # Alpaca 마커가 없어도 reference 를 잃지 않도록.
+        # 명시 reference 컬럼(output/answer/caption 등)이 있으면 우선 — {"text":q,"output":a}
+        # 류에서 Alpaca 마커가 없어도 reference 를 잃지 않도록.
         ref = _first_key(row, _REFERENCE_KEYS) or alpaca_ref
-        return (inp, ref) if inp else None
-    inp = _first_key(row, _PROMPT_KEYS)
-    if not inp:
+    else:
+        inp = _first_key(row, _PROMPT_KEYS) or ""
+        ref = _first_key(row, _REFERENCE_KEYS) or ""
+    # 텍스트 입력도 이미지도 없으면 샘플 아님.
+    if not inp and not img:
         return None
-    ref = _first_key(row, _REFERENCE_KEYS) or ""
-    return inp, ref
+    out = {"input": inp, "reference": ref}
+    if img:
+        out["image"] = img
+    return out
 
 
 def _read_data_file(path: str, need: int) -> list:
@@ -429,6 +474,35 @@ def _read_data_file(path: str, need: int) -> list:
     return out
 
 
+def _attach_image(sample: dict, raw: str, data_file_path: str, ddir_real: str) -> None:
+    """이미지 참조를 샘플에 부착. http(s) URL 은 image_url 로 그대로(FE 직접 렌더). 상대경로는
+    데이터파일 디렉터리(없으면 데이터셋 루트) 기준으로 해석하되 데이터셋 디렉터리 내부로 봉쇄
+    (다른 워크스페이스/시스템 파일 노출 차단) 후 절대경로를 _image_abs(서버측 전용, FE 미노출)
+    에 보관 — 서빙 엔드포인트가 이 경로만 스트리밍. 해석 실패 시 image(raw)만 남고 텍스트 채점은
+    계속(렌더는 FE 가 무시)."""
+    low = raw.lower()
+    is_url = low.startswith("http://") or low.startswith("https://")
+    # 공개 image 필드(FE alt 표시용)는 URL 은 그대로, 로컬 경로는 basename 만 — NFS 절대경로/
+    # 디렉터리 구조 누출 차단. 실제 절대경로는 _image_abs(서버 전용)에만.
+    sample["image"] = raw if is_url else (os.path.basename(raw) or "image")
+    if is_url:
+        sample["image_url"] = raw
+        return
+    try:
+        for cand in (os.path.join(os.path.dirname(data_file_path), raw),
+                     os.path.join(ddir_real, raw)):
+            real = os.path.realpath(cand)
+            if (os.path.commonpath([real, ddir_real]) == ddir_real
+                    and os.path.isfile(real)
+                    and os.path.splitext(real)[1].lower() in _IMAGE_EXTS):
+                sample["_image_abs"] = real
+                sample["_image_dir"] = ddir_real    # 서빙 시 재봉쇄(심링크 스왑 방어)
+                sample["image_served"] = True
+                return
+    except (ValueError, OSError):
+        pass    # commonpath 드라이브 불일치/접근 오류 — 렌더 불가(텍스트 채점 계속)
+
+
 async def _read_dataset_samples(dataset_ids: List[int], limit: int) -> list:
     """워크스페이스 NFS 데이터셋에서 (input, reference) 샘플을 limit 개까지 읽는다.
     eval pod 가 /jf-data 를 마운트(get_eval_result 의 metrics.json 읽기와 동일 마운트).
@@ -468,12 +542,15 @@ async def _read_dataset_samples(dataset_ids: List[int], limit: int) -> list:
                 # 경로 봉쇄(심링크 이탈 방지) — 다른 워크스페이스 파일 읽기 차단.
                 if os.path.commonpath([os.path.realpath(fp), ddir_real]) != ddir_real:
                     continue
-                for inp, ref in _read_data_file(fp, limit - len(samples)):
-                    samples.append({
-                        "input": inp[:_MAX_FIELD_LEN],
-                        "reference": (ref or "")[:_MAX_FIELD_LEN],
+                for rec in _read_data_file(fp, limit - len(samples)):
+                    sample = {
+                        "input": rec["input"][:_MAX_FIELD_LEN],
+                        "reference": (rec.get("reference") or "")[:_MAX_FIELD_LEN],
                         "dataset": str(ds["name"]),
-                    })
+                    }
+                    if rec.get("image"):
+                        _attach_image(sample, rec["image"], fp, ddir_real)
+                    samples.append(sample)
                     if len(samples) >= limit:
                         break
         except Exception:
@@ -544,7 +621,7 @@ async def _build_judge_samples(model_id: int, model_name: str, dataset_ids: List
     samples = []
     for i, row in enumerate(rows):
         out = None
-        if inference_url:
+        if inference_url and row["input"]:    # image-only(빈 input)는 텍스트 추론 스킵
             out = await _infer_output(inference_url, row["input"], f"judge-{model_id}-{i}")
         if not out:
             out = f"[{model_name}] response {i}"    # 추론 불가 → mock output
@@ -784,6 +861,11 @@ async def get_judge_result(model_id: int, job_id: str) -> dict:
             metrics = json.loads(metrics)
         except (TypeError, json.JSONDecodeError):
             metrics = None
+    # 내부키 제거 — judge-result 가 metric_set 게이트 없이 raw metrics 를 반환하므로, expert
+    # job_id 로 호출되면 metrics._samples 의 서버 전용 _image_abs(NFS 절대경로)가 누출될 수
+    # 있다. _ 접두 top-level 키(_samples/_mode/_rated/_total)는 FE 가 안 쓰므로 제거.
+    if isinstance(metrics, dict):
+        metrics = {k: v for k, v in metrics.items() if not str(k).startswith("_")}
     return {"job_id": job_id, "metrics": metrics,
             "ready": status == "completed", "status": status}
 
@@ -794,9 +876,15 @@ async def get_judge_result(model_id: int, job_id: str) -> dict:
 # (expert_pass_rate)로 마감 → 모델 이력 비교표 합류. 샘플=결정적 생성(idx 기반, 재로드 안정).
 # P2(A)와 동일 mock 스캐폴딩 — 실 모델출력 생성은 후속.
 
+# 이미지 등 서버 내부키(_image_abs)는 FE 로 내보내지 않는다(NFS 절대경로 누출 차단). 공개
+# 키만 통과 — image_url(URL 직접 렌더)·image_served(서빙 엔드포인트 사용 플래그)·image(원본 참조).
+def _public_sample(s: dict) -> dict:
+    return {k: v for k, v in s.items() if not str(k).startswith("_")}
+
+
 async def _build_expert_samples(model_id: int, model_name: str, dataset_ids: List[int],
                                 ds_names: List[str], inference_url: Optional[str]) -> list:
-    """전문가 채점 샘플(A4) — 실 데이터셋(input/reference) + 배포모델 추론 output.
+    """전문가 채점 샘플(A4) — 실 데이터셋(input/reference/이미지) + 배포모델 추론 output.
     데이터셋 못 읽으면 합성(레거시 동등·결정적), 추론 URL 없으면 mock output 폴백."""
     n = min(MAX_EXPERT_SAMPLES, max(1, len(ds_names) * 5))
     rows = await _read_dataset_samples(dataset_ids, n)
@@ -807,12 +895,20 @@ async def _build_expert_samples(model_id: int, model_name: str, dataset_ids: Lis
                 for i in range(n)]
     # mock output baseline 먼저 — 항상 출력 보장. start_expert 가 HTTP 핸들러를 잡고 있으므로
     # 실 추론은 전체 예산(_EXPERT_INFER_BUDGET) 내에서만 업그레이드(초과분은 mock 유지).
-    samples = [{"idx": i, "dataset": row.get("dataset", base), "input": row["input"],
-                "output": f"[{model_name}] 응답 {i}", "reference": row.get("reference", "")}
-               for i, row in enumerate(rows)]
+    samples = []
+    for i, row in enumerate(rows):
+        s = {"idx": i, "dataset": row.get("dataset", base), "input": row["input"],
+             "output": f"[{model_name}] 응답 {i}", "reference": row.get("reference", "")}
+        for k in ("image", "image_url", "image_served", "_image_abs", "_image_dir"):
+            if k in row:
+                s[k] = row[k]
+        samples.append(s)
     if inference_url:
         async def _upgrade():
             for s in samples:
+                if not s["input"]:
+                    continue    # image-only(VLM) 샘플 — 텍스트 추론은 이미지 미전달이라
+                    #             무의미. mock output 유지(실 VLM 추론은 A4 GPU 후속).
                 real = await _infer_output(
                     inference_url, s["input"], f"expert-{model_id}-{s['idx']}")
                 if real:
@@ -893,16 +989,19 @@ async def start_expert(model_id: int, dataset_ids: List[int],
         metrics_json=json.dumps({"_mode": "expert", "_samples": samples}))
 
     return {"model_id": model_id, "job_id": job_id, "mode": "expert",
-            "datasets": ds_names, "samples": samples, "total": len(samples),
-            "real_output": bool(inference_url)}
+            "datasets": ds_names, "samples": [_public_sample(s) for s in samples],
+            "total": len(samples), "real_output": bool(inference_url)}
 
 
 async def get_expert_samples(model_id: int, job_id: str) -> dict:
-    """세션 샘플 + 기존 채점(재개용)."""
+    """세션 샘플 + 기존 채점 + 채점 이력(재개·감사추적용)."""
     row, samples = await _expert_session(model_id, job_id)
     ratings = await db_model.list_expert_ratings(job_str_id=job_id, source_model_id=model_id)
-    return {"job_id": job_id, "status": row.get("status"), "samples": samples,
-            "total": len(samples), "ratings": ratings}
+    history = await db_model.list_expert_rating_history(
+        job_str_id=job_id, source_model_id=model_id)
+    return {"job_id": job_id, "status": row.get("status"),
+            "samples": [_public_sample(s) for s in samples],
+            "total": len(samples), "ratings": ratings, "history": history}
 
 
 async def submit_expert_rating(model_id: int, job_id: str, sample_idx: int,
@@ -924,11 +1023,21 @@ async def submit_expert_rating(model_id: int, job_id: str, sample_idx: int,
         source_model_id=model_id, job_str_id=job_id, sample_idx=sample_idx,
         verdict=verdict, input=s.get("input"), output=s.get("output"),
         reference=s.get("reference"), rater_user=rater_user, comment=comment)
+    # 감사추적 — 메인 행은 (job_str_id,sample_idx) upsert 라 '현재' verdict 만 남지만, 이력
+    # 테이블엔 채점 이벤트마다 누적(누가 언제 어떻게 바꿨는지 불변 보존).
+    await db_model.insert_expert_rating_history(
+        source_model_id=model_id, job_str_id=job_id, sample_idx=sample_idx,
+        verdict=verdict, comment=comment, rater_user=rater_user)
 
     ratings = await db_model.list_expert_ratings(job_str_id=job_id, source_model_id=model_id)
     rated = len(ratings)
     passed = sum(1 for r in ratings if r.get("verdict") == "O")
     pass_rate = round(passed / rated * 100.0, 2) if rated else 0.0
+    # 방금 채점의 채점자·시각 + 이 샘플의 누적 채점 횟수(재채점 표면화)를 반환 → FE 즉시 표시.
+    this = next((r for r in ratings if r.get("sample_idx") == sample_idx), None)
+    history = await db_model.list_expert_rating_history(
+        job_str_id=job_id, source_model_id=model_id)
+    rate_count = sum(1 for h in history if h.get("sample_idx") == sample_idx)
 
     completed = False
     if rated >= total:  # 전부 채점 → 합격률 영속 + 완료(비교표 합류)
@@ -940,7 +1049,9 @@ async def submit_expert_rating(model_id: int, job_id: str, sample_idx: int,
         completed = True
 
     return {"job_id": job_id, "rated": rated, "total": total,
-            "pass_rate": pass_rate, "completed": completed}
+            "pass_rate": pass_rate, "completed": completed,
+            "rater_user": (this or {}).get("rater_user", rater_user),
+            "rated_at": (this or {}).get("create_datetime"), "rate_count": rate_count}
 
 
 async def get_expert_result(model_id: int, job_id: str) -> dict:
@@ -951,8 +1062,33 @@ async def get_expert_result(model_id: int, job_id: str) -> dict:
     if not row or row.get("metric_set") != "expert":
         return {"job_id": job_id, "status": "pending", "ratings": [], "pass_rate": None}
     ratings = await db_model.list_expert_ratings(job_str_id=job_id, source_model_id=model_id)
+    history = await db_model.list_expert_rating_history(
+        job_str_id=job_id, source_model_id=model_id)
     rated = len(ratings)
     passed = sum(1 for r in ratings if r.get("verdict") == "O")
     pass_rate = round(passed / rated * 100.0, 2) if rated else None
     return {"job_id": job_id, "status": row.get("status"), "ratings": ratings,
-            "rated": rated, "pass_rate": pass_rate}
+            "history": history, "rated": rated, "pass_rate": pass_rate}
+
+
+async def get_expert_image(model_id: int, job_id: str, sample_idx: int):
+    """샘플 이미지 1건의 (절대경로, media_type). NFS 상대경로 이미지(서버 보관 _image_abs)만
+    서빙 — URL 이미지는 FE 가 직접 렌더하므로 여기로 오지 않는다. 없거나 검증 실패 시 예외
+    (라우트가 404). 경로 봉쇄는 build 시 데이터셋 디렉터리 commonpath 로 완료했고, 영속값이라도
+    재검증(파일 존재 + 이미지 확장자)해 방어."""
+    row, samples = await _expert_session(model_id, job_id)
+    if sample_idx < 0 or sample_idx >= len(samples):
+        raise ValueError(f"sample_idx out of range: {sample_idx}")
+    abs_path = samples[sample_idx].get("_image_abs")
+    if not abs_path:
+        raise FileNotFoundError("no served image for sample")
+    real = os.path.realpath(abs_path)
+    # 서빙 시 데이터셋 디렉터리 재봉쇄 — start 이후 파일이 디렉터리 밖을 가리키는 심링크로
+    # 교체돼도(symlink-swap) 이탈 차단(build 시 commonpath 가드의 시점 외 보강).
+    image_dir = samples[sample_idx].get("_image_dir")
+    if image_dir and os.path.commonpath([real, image_dir]) != image_dir:
+        raise FileNotFoundError("image escapes dataset dir")
+    ext = os.path.splitext(real)[1].lower()
+    if not os.path.isfile(real) or ext not in _IMAGE_MEDIA:
+        raise FileNotFoundError("image not available")
+    return real, _IMAGE_MEDIA[ext]
