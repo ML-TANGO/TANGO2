@@ -117,7 +117,7 @@ async def get_model(model_id : int) -> dict:
         m.latest_commit_id,
         m.commit_status, m.pod_count, m.instance_count,
         m.training_type, m.external_manifest_name, m.external_manifest_version, m.external_job_id,
-        m.domain,
+        m.domain, m.load_type,
         DATE_FORMAT(m.create_datetime, %s) AS create_datetime,
         DATE_FORMAT(m.update_datetime, %s) AS update_datetime,
         DATE_FORMAT(m.start_datetime, %s) AS start_datetime,

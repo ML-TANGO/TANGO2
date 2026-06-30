@@ -49,8 +49,19 @@ const menuOptions = [
 // value=1 Hugging Face / value=0 GenAI Platform / value=2 External Training (외부 협력기관 컨테이너)
 const accessTypeOptions = [
   {
-    label: 'Hugging Face',
+    // 단일 HF 모델(텍스트 LLM) — ETRI 목업 명칭 'Single'. value=1 유지.
+    label: 'Single',
     value: 1,
+    labelStyle: {
+      fontSize: '14px',
+      fontFamily: 'SpoqaM',
+      marginTop: '2px',
+    },
+  },
+  {
+    // 멀티모달(VLM) — 비전 인코더 + LLM 두 모델 선택(고려대 프레임워크/ETRI 목업). value='multimodal'
+    label: 'Multimodal',
+    value: 'multimodal',
     labelStyle: {
       fontSize: '14px',
       fontFamily: 'SpoqaM',
@@ -88,6 +99,7 @@ const calFooterMessage = (
   modelName,
   type,
   huggingData,
+  huggingData2,
   modelBaseData,
   versionData,
   firstNameInput,
@@ -109,6 +121,9 @@ const calFooterMessage = (
 
   if (type === 1) {
     if (!huggingData) return t('model.select.message');
+  } else if (type === 'multimodal') {
+    // 멀티모달(VLM) — 비전 인코더 + LLM 둘 다 선택해야 함.
+    if (!huggingData || !huggingData2) return t('model.select.message');
   } else {
     if (!modelBaseData) return t('model.select.message');
     if (!versionData) return t('version.select.warning.message');
@@ -150,6 +165,7 @@ const AddModel = ({ data, type }) => {
   // 고정 manifest(settings.SDS_MANIFEST_*) 로 해석. (이전 manifest 드롭다운 대체)
   const [domain, setDomain] = useState('SDS');
   const [huggingList, setHuggingList] = useState(null);
+  const [huggingList2, setHuggingList2] = useState(null); // 멀티모달 2번째(LLM) HF 검색결과
   const [modelBaseList, setModelBaseList] = useState([]);
   const [versionList, setVersionList] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -160,6 +176,17 @@ const AddModel = ({ data, type }) => {
   });
 
   const [huggingData, setHuggingData] = useState({
+    keyword: '',
+    token: '',
+    private: 0,
+    selectedModel: null,
+    selectedOption: {
+      label: 'Public',
+      value: 'public',
+    },
+  });
+  // 멀티모달(VLM) 2번째 모델(LLM). huggingData=비전 인코더, huggingData2=LLM.
+  const [huggingData2, setHuggingData2] = useState({
     keyword: '',
     token: '',
     private: 0,
@@ -196,12 +223,19 @@ const AddModel = ({ data, type }) => {
     }));
   };
 
-  // hugging list 선택
-  const onSelectHugging = (name) => {
-    setHuggingData((prev) => ({
-      ...prev,
-      selectedModel: name,
-    }));
+  // hugging list 선택 (id='second' → 멀티모달 LLM 슬롯)
+  const onSelectHugging = (name, id) => {
+    if (id === 'second') {
+      setHuggingData2((prev) => ({
+        ...prev,
+        selectedModel: name,
+      }));
+    } else {
+      setHuggingData((prev) => ({
+        ...prev,
+        selectedModel: name,
+      }));
+    }
   };
 
   // model base select 함수
@@ -223,18 +257,35 @@ const AddModel = ({ data, type }) => {
 
   // 모달 Radio
   const radioBtnHandler = (value) => {
-    const radioType = parseInt(value, 10);
+    const radioType = value === 'multimodal' ? 'multimodal' : parseInt(value, 10);
     setLoadType(radioType);
+    // 모드 전환 시 HF 슬롯 선택 초기화 — 이전 모드의 selectedModel 이 새 모드 UI 에
+    // 선택된 것처럼 표시되거나 submit body 로 새는 것 방지(리뷰 MED).
+    setHuggingData((prev) => ({ ...prev, selectedModel: null }));
+    setHuggingData2((prev) => ({ ...prev, selectedModel: null }));
     if (radioType === 0) {
       getModelBaseModel();
+    } else if (radioType === 1) {
+      // 단일(text LLM) 복귀 — 멀티모달에서 비전 목록으로 덮였을 수 있어 text 로 재로드.
+      postHuggingFace({ kind: 'text' });
+    } else if (radioType === 'multimodal') {
+      // 비전 슬롯 = CLIP/SigLIP(vision), LLM 슬롯 = text. 둘 다 초기 목록 로드.
+      postHuggingFace({ kind: 'vision' });
+      postHuggingFace2();
     }
   };
 
   const { t } = useTranslation();
 
-  const onClickHuggingSubMenu = (selectedItem) => {
+  const onClickHuggingSubMenu = (selectedItem, id) => {
     if (selectedItem.value === 'private') {
-      openTokenModal(selectedItem);
+      openTokenModal(selectedItem, id);
+    } else if (id === 'second') {
+      setHuggingData2((prev) => ({
+        ...prev,
+        private: 0,
+        selectedOption: selectedItem,
+      }));
     } else {
       setHuggingData((prev) => ({
         ...prev,
@@ -245,24 +296,41 @@ const AddModel = ({ data, type }) => {
   };
 
   /**
-   * Hugging Token 모달
+   * Hugging Token 모달 (id='second' → 멀티모달 LLM 슬롯 토큰)
    */
-  const openTokenModal = async (selectedItem) => {
+  const openTokenModal = async (selectedItem, id) => {
     dispatch(
       openModal({
         modalType: 'HUGGINGFACE_TOKEN_MODAL',
         modalData: {
           onSubmit: (token) => {
-            // postHuggingFace({ token });
-            setHuggingData((prev) => ({
-              ...prev,
-              token,
-              private: 1,
-              selectedOption: selectedItem,
-            }));
+            if (id === 'second') {
+              setHuggingData2((prev) => ({
+                ...prev,
+                token,
+                private: 1,
+                selectedOption: selectedItem,
+              }));
+            } else {
+              setHuggingData((prev) => ({
+                ...prev,
+                token,
+                private: 1,
+                selectedOption: selectedItem,
+              }));
+            }
             dispatch(closeModal('HUGGINGFACE_TOKEN_MODAL'));
           },
-          postHuggingFace,
+          // 첫 슬롯 private 토큰 재조회 시 필터 유지 — 멀티모달이면 vision(CLIP/SigLIP),
+          // 단일이면 text. (text 기본으로 새면 비전 슬롯에 LLM 이 뜨는 버그, 리뷰 #3)
+          postHuggingFace:
+            id === 'second'
+              ? postHuggingFace2
+              : (args) =>
+                  postHuggingFace({
+                    ...(args || {}),
+                    kind: loadType === 'multimodal' ? 'vision' : 'text',
+                  }),
         },
       }),
     );
@@ -305,6 +373,26 @@ const AddModel = ({ data, type }) => {
         users_id: userList.map(({ value }) => value),
         domain,
       };
+    } else if (loadType === 'multimodal') {
+      // 멀티모달(VLM) — 비전 인코더 + LLM 두 HF 모델. id 는 "{vision},{llm}" 콤마결합,
+      // load_type='multimodal' 명시(BE 가 콤마 sniff 대신 명시 플래그로 분기).
+      if (!huggingData.selectedModel || !huggingData2.selectedModel) {
+        errorToastMessage(null, t('model.select.message'));
+        setLoading(false);
+        return;
+      }
+      body = {
+        workspace_id: workspaceId,
+        description: modelData.modelDesc,
+        model_name: modelData.modelName,
+        load_type: 'multimodal',
+        huggingface_model_id: `${huggingData.selectedModel.name},${huggingData2.selectedModel.name}`,
+        huggingface_token: huggingData.token || huggingData2.token || '',
+        private: huggingData.private || huggingData2.private || 0,
+        access: selectedAccessType,
+        create_user_id: owner.value,
+        users_id: userList.map(({ value }) => value),
+      };
     } else {
       body = {
         workspace_id: workspaceId,
@@ -343,11 +431,13 @@ const AddModel = ({ data, type }) => {
 
   // POST Hugging Data
   const postHuggingFace = useCallback(
-    async ({ keyword = '', token } = {}) => {
+    async ({ keyword = '', token, kind = 'text' } = {}) => {
       const body = {
         model_name: keyword,
         huggingface_token: token ? token : huggingData.token,
         private: huggingData.private,
+        // 멀티모달 비전 슬롯이면 'vision'(CLIP/SigLIP), 그 외 'text'(LLM). BE 필터 분기.
+        model_kind: kind,
       };
 
       setHuggingData((prev) => ({
@@ -372,6 +462,38 @@ const AddModel = ({ data, type }) => {
       }
     },
     [huggingData.private, huggingData.token],
+  );
+
+  // 멀티모달 2번째(LLM) HF 검색 — postHuggingFace 와 동형, huggingData2/huggingList2 타깃.
+  const postHuggingFace2 = useCallback(
+    async ({ keyword = '', token } = {}) => {
+      const body = {
+        model_name: keyword,
+        huggingface_token: token ? token : huggingData2.token,
+        private: huggingData2.private,
+      };
+
+      setHuggingData2((prev) => ({
+        ...prev,
+        keyword,
+      }));
+      const response = await callApi({
+        url: `models/option/huggingface-models`,
+        method: 'post',
+        body,
+      });
+
+      const { status, result, message, error } = response;
+      if (status === STATUS_SUCCESS) {
+        const formattedResult = result.map((item) => ({
+          name: item,
+        }));
+        setHuggingList2(formattedResult);
+      } else {
+        errorToastMessage(error, message);
+      }
+    },
+    [huggingData2.private, huggingData2.token],
   );
 
   // GET ModelBase - model
@@ -455,6 +577,7 @@ const AddModel = ({ data, type }) => {
     modelData.modelName,
     loadType,
     huggingData.selectedModel,
+    huggingData2.selectedModel,
     modelBaseData.selectedModel,
     versionData.selectedModel,
     firstNameInput,
@@ -561,6 +684,40 @@ const AddModel = ({ data, type }) => {
                   menuOptions={menuOptions}
                   title={{
                     first: 'model.label',
+                  }}
+                  t={t}
+                />
+                <span className={cx('hugging-message')}>
+                  {t('finetuning.huggingface.message')}
+                </span>
+              </>
+            )}
+            {loadType === 'multimodal' && (
+              <>
+                <SearchComponent
+                  key='multimodal'
+                  firstData={huggingData}
+                  firstList={huggingList}
+                  secondData={huggingData2}
+                  secondList={huggingList2}
+                  firstSelectedItem={huggingData.selectedModel}
+                  secondSelectedItem={huggingData2.selectedModel}
+                  onClick={onSelectHugging}
+                  onSearchFirst={(args) =>
+                    postHuggingFace({ ...(args || {}), kind: 'vision' })
+                  }
+                  onSearchSecond={postHuggingFace2}
+                  onClickSubMenu={onClickHuggingSubMenu}
+                  noSelectedDataMessage={{
+                    first: 'modelSelect.message',
+                    second: 'modelSelect.message',
+                  }}
+                  firstIcon={IconSmile}
+                  secondIcon={IconSmile}
+                  menuOptions={menuOptions}
+                  title={{
+                    first: '비전 인코더',
+                    second: 'LLM',
                   }}
                   t={t}
                 />

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { shallowEqual, useDispatch, useSelector } from 'react-redux';
 
 import ExternalFineTuningView from './ExternalFineTuningView';
+import MultimodalFineTuningView from './MultimodalFineTuningView';
 
 import { ButtonV2, Checkbox, Radio, Switch } from '@jonathan/ui-react';
 
@@ -291,6 +292,11 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
         if (result?.training_type === 'external') {
           return;
         }
+        // 멀티모달(VLM) 모델은 internal hyperparameter dispatch 를 건너뛰고
+        // MultimodalFineTuningView 로 render 분기(설정은 그 뷰가 자체 관리).
+        if (result?.load_type === 'multimodal') {
+          return;
+        }
 
         const { fine_tuning_config: config } = result;
 
@@ -455,6 +461,25 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
   // 같은 SimpleNav + box{left, right} 레이아웃을 유지한 채 내용만 교체한다.
   // (별도 탭으로 분리하지 않음 — internal 과 동일한 운영 UX.)
   const isExternalModel = fineTuningData?.training_type === 'external';
+  const isMultimodalModel = fineTuningData?.load_type === 'multimodal';
+
+  if (isMultimodalModel) {
+    return (
+      <MultimodalFineTuningView
+        navList={navList}
+        fineTuningData={fineTuningData}
+        workspaceId={workspaceId}
+        modelId={modelId}
+        refresh={() => getFineTuningData()}
+        filteredRest={filteredRest}
+        // SSE 는 부모가 이미 구독(391·405·406) → MM 뷰는 props 로 소비(이중 구독/6커넥션 방지).
+        fineStatus={fineStatus}
+        graphData={graphData}
+        progressData={progressData}
+        checkpoints={checkpoints}
+      />
+    );
+  }
 
   if (isExternalModel) {
     return (

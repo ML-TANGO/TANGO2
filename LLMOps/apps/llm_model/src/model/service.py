@@ -31,7 +31,8 @@ from utils.msa_db import db_workspace, db_user, db_instance
 from model.dto import FineTuningConfig, FineTuningPodInfo
 from utils.crypt import session_cipher, front_cipher
 # from utils.mongodb_async import urls_collection
-from utils.kube import PodName
+from utils.kube import PodName, create_or_replace_secret, delete_secret
+from utils.access_check import is_workspace_user
 
 
 def _redact_secrets(cmd: str) -> str:
@@ -105,7 +106,8 @@ async def parse_tensorboard_scalars_async(log_dir, max_steps=20):
             for event in events
         ]
        
-        latest_steps = steps[-1]
+        # 태그별 max step 의 최댓값(eval/loss 등 희소 태그가 마지막에 처리돼도 진행률이 역행하지 않게).
+        latest_steps = max(latest_steps, steps[-1])
 
         # 스텝 수를 최대 max_steps로 제한하고 평균값 계산
         if len(steps) > max_steps:
@@ -240,7 +242,8 @@ async def delete_helm_repo(
         return False, str(e)
 
 async def create_model_helm(workspace_id : int, model_id : int, model_name:str, commit_model : str = None , commit_name : str = None,\
-    huggingface_model_id : str = None, huggingface_token : str = None, save_commit_name : str = None) -> Tuple[bool, str]:
+    huggingface_model_id : str = None, huggingface_token : str = None, save_commit_name : str = None,
+    compose_vlm : bool = False, compose_dtype : str = "bfloat16") -> Tuple[bool, str]:
     """
     model_name : commit 되는 모델이 저장되는 모델
     commit_model : commit 하려는 모델 이름
@@ -251,8 +254,33 @@ async def create_model_helm(workspace_id : int, model_id : int, model_name:str, 
         namespace = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=workspace_id)
         command = ""
         mode = ""
+        # HF 토큰을 helm --set(release secret)·pod command 평문 대신 사전 생성 K8s Secret→env(HF_TOKEN)
+        # 으로 주입(보안리뷰 C-4). 토큰 없으면(offline/nexus) Secret 미생성 → tokenSecretName="".
+        token_secret_name = ""
+        if huggingface_token:
+            token_secret_name = f"hf-token-{model_id}".lower()
+            try:
+                create_or_replace_secret(namespace=namespace, name=token_secret_name,
+                                         string_data={"token": huggingface_token})
+            except Exception as e:
+                print(f"Error: failed to create HF token secret: {e}")
+                return False, "HF 토큰 시크릿 생성 실패"
+        command += f' --set command.tokenSecretName="{token_secret_name}"'
         command += f' --set command.latest_checkpoint_path="{PATH.JF_POD_MODEL_LATEST_CHECKPOINT_PATH.format(MODEL_NAME=model_name)}"'
-        if commit_model:
+        if compose_vlm:
+            # 멀티모달: 비전+LLM 두 HF id("{vision},{llm}") → LLaVA 조립(projector 자동생성).
+            mode = "compose_vlm"
+            # helm --set 는 콤마를 key 구분자로 해석 → "{vision},{llm}" 의 콤마를 \, 로 이스케이프
+            # (HF repo id 자체엔 콤마 없음). 안 하면 "key has no value" 로 helm install 실패.
+            escaped_id = (huggingface_model_id or '').replace(',', '\\,')
+            command += f' --set command.model_id="{escaped_id}"'
+            # command.token 평문 --set 제거 — 토큰은 tokenSecretName Secret→env(HF_TOKEN)로 주입(C-4).
+            command += f' --set command.dst_model_path="{PATH.JF_POD_MODEL_SOURCE_MODEL_PATH.format(MODEL_NAME=model_name)}"'
+            command += f' --set command.dtype="{compose_dtype}"'
+            # 두 모델 RAM 적재(최대 ~8B) → 다운로드 기본 한도(6Gi) 초과. compose 전용 상향.
+            command += ' --set resources.limits.memory=32Gi --set resources.requests.memory=24Gi'
+            command += ' --set resources.limits.cpu=2 --set resources.requests.cpu=1'
+        elif commit_model:
             mode = "copy_commit_model"
             
             if save_commit_name is None: # model 생성
@@ -271,7 +299,7 @@ async def create_model_helm(workspace_id : int, model_id : int, model_name:str, 
         elif huggingface_model_id:
             mode = "download_model"
             command += f' --set command.model_id="{huggingface_model_id}"'
-            command += f' --set command.token="{huggingface_token}"'
+            # command.token 평문 --set 제거 — 토큰은 tokenSecretName Secret→env(HF_TOKEN)로 주입(C-4).
             command += f' --set command.dst_model_path="{PATH.JF_POD_MODEL_SOURCE_MODEL_PATH.format(MODEL_NAME=model_name)}"'
             # command += f' --set command.tokenizer_dir="{PATH.JF_POD_MODEL_TOKENIZER_PATH.format(MODEL_NAME=model_name)}"'
             
@@ -281,7 +309,8 @@ async def create_model_helm(workspace_id : int, model_id : int, model_name:str, 
             save_commit_name = TYPE.MODEL_FIRST_COMMIT_NAME
 
         helm_name = TYPE.MODEL_COMMIT_JOB_HELM_NAME.format(MODEL_ID=model_id)
-        image = settings.SYSTEM_DOCKER_REGISTRY_URL + "acrylaaai/llm-finetune:dev"
+        # compose_vlm 은 transformers/torch 가 필요 → FT 이미지(transformers 4.52.4) 사용(경량 다운로드 이미지 X).
+        image = settings.FINE_TUNING_IMAGE if compose_vlm else settings.SYSTEM_DOCKER_REGISTRY_URL + "acrylaaai/llm-finetune:dev"
         helm_command = f"""helm install {helm_name} ./model_download \
             -n {namespace}  \
             --set namespace="{namespace}" \
@@ -313,7 +342,7 @@ async def create_model_helm(workspace_id : int, model_id : int, model_name:str, 
                 return True, ""
             print(stdout)
             print(err_msg)
-            print(command)
+            print(_redact_secrets(command))
             return False, err_msg
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
@@ -366,7 +395,7 @@ async def load_or_stop_helm(workspace_id : int, model_id: int, latest_checkpoint
                 return True, ""
             print(stdout)
             print(err_msg)
-            print(command)
+            print(_redact_secrets(command))
             return False, err_msg
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
@@ -454,6 +483,31 @@ async def check_file_exists(file_path: str) -> bool:
     """
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, os.path.exists, file_path)
+
+
+def _is_under(path: str, root: str) -> bool:
+    """path 가 root 디렉터리 내부인지(traversal 차단). SSE TB 로그 경로 봉쇄용(보안리뷰 M-4)."""
+    try:
+        rp, rr = os.path.realpath(path), os.path.realpath(root)
+        return os.path.commonpath([rp, rr]) == rr
+    except (ValueError, OSError):
+        return False
+
+
+async def user_can_access_model(user_id: int, model_id: int) -> bool:
+    """모델 카드 접근 권한 — 소유자 OR (공유(access=1) → 워크스페이스 멤버). 비공개(access!=1)는 소유자만.
+    SSE(학습 그래프/시간/상태) 구독 게이팅(보안리뷰 H-3). model/route.py 의 기존 get_user_id() 패턴과
+    동형(데코레이터 아님). is_workspace_user 는 db_workspace.get_user_workspace 로 멤버십 확인."""
+    if not user_id:
+        return False
+    model = await db_model.get_model(model_id=model_id)
+    if not model:
+        return False
+    if model.get("create_user_id") == user_id:
+        return True
+    if model.get("access") == 1:
+        return is_workspace_user(user_id=user_id, workspace_id=model["workspace_id"])
+    return False
 
 
 async def move_checkpoint_files_to_parent(path):
@@ -573,14 +627,22 @@ async def get_instance_list(workspace_id : int) -> List[dict]:
         instance["available_instance"] = instance["instance_allocate"]
     return instance_list
 
-async def get_models_by_huggingface(model_name : str = None, huggingface_token : str = None, private : int = 0) -> List[str]:
+async def get_models_by_huggingface(model_name : str = None, huggingface_token : str = None, private : int = 0, model_kind : str = 'text') -> List[str]:
     api = HfApi()
-    
+
+    # model_kind 별 HF pipeline_tag 필터 — 멀티모달(VLM) 비전 인코더 슬롯은 CLIP/SigLIP
+    # (zero-shot-image-classification) 를 검색해야 한다(text-generation 필터로는 안 잡힘).
+    # 그 외(단일 모델 / LLM 슬롯)는 기존대로 text-generation transformers.
+    if (model_kind or 'text').strip().lower() == 'vision':
+        hf_filter = ["zero-shot-image-classification"]
+    else:
+        hf_filter = ["text-generation", "transformers"]
+
     if private:
         huggingface_token = front_cipher.decrypt(huggingface_token)
-        models = api.list_models(limit=10, filter=["text-generation", "transformers"], search=model_name, expand=["private"], token=huggingface_token)
+        models = api.list_models(limit=10, filter=hf_filter, search=model_name, expand=["private"], token=huggingface_token)
     else:
-        models = api.list_models(limit=10, filter=["text-generation", "transformers"], search=model_name)
+        models = api.list_models(limit=10, filter=hf_filter, search=model_name)
     parse_model_ids = [ model.id for model in models]
     return parse_model_ids
 
@@ -676,9 +738,17 @@ async def add_dataset(model_id: int, dataset_id : int, training_data_path : str)
     workspace_info = await db_model.get_workspace_model(workspace_id=dataset_info["workspace_id"])
     training_data_full_path = PATH.JF_DATA_DATASET_DATA_PATH.format(STORAGE_NAME=workspace_info["data_storage_name"] ,WORKSPACE_NAME=workspace_info["name"] , \
             ACCESS=dataset_info["access"] , DATASET_NAME=dataset_info["name"], DATA_PATH=training_data_path)
-    if check_file_exists(file_path=training_data_full_path):
+    # training_data_path traversal(`../`) 차단 — 데이터셋 루트 내부로 봉쇄(codex: 검증이 no-op 였음).
+    dataset_root = PATH.JF_DATA_DATASET_PATH.format(STORAGE_NAME=workspace_info["data_storage_name"], WORKSPACE_NAME=workspace_info["name"],
+            ACCESS=dataset_info["access"], DATASET_NAME=dataset_info["name"])
+    _real_full = os.path.realpath(training_data_full_path)
+    _real_root = os.path.realpath(dataset_root)
+    if os.path.commonpath([_real_full, _real_root]) != _real_root:
+        return False
+    # ⚠️ check_file_exists 는 async — await 누락 시 코루틴이 항상 truthy 가 되어 검증이 무력화됐음(codex).
+    if await check_file_exists(file_path=training_data_full_path):
         await db_model.create_fine_tuning_dataset(training_data_path=training_data_path, dataset_id=dataset_id, model_id=model_id)
-    
+
         return True
     return False
 #==========
@@ -882,10 +952,11 @@ async def create_commit_model(commit_name : str, commit_message : str, model_id 
 async def create_model(workspace_id : int, model_name : str, description : str, create_user_id : int, private : int, huggingface_model_id : str = None, \
     commit_model_id : int = None, huggingface_token : str = None, access : int = 0, users_id : List[int] = [], \
     training_type : str = 'internal', external_manifest_name : str = None, external_manifest_version : str = None,
-    domain : str = None) -> bool:
+    domain : str = None, load_type : str = None) -> bool:
     commit_model_info = {}
     model_id = None
     huggingface_git = None
+    workspace_info = {}  # except 핸들러에서 미바인딩(NameError) 방지(리뷰 HIGH)
     try:
         # ── domain(3.5) 분류 → 학습 백엔드 라우팅. SDS=외부컨테이너(고정 manifest),
         # SDM/SDF=현재 비활성. 사용자는 domain 만 고르고 버전은 안 고른다 → 여기서
@@ -931,9 +1002,70 @@ async def create_model(workspace_id : int, model_name : str, description : str, 
                 await db_model.create_model_user_list(model_id=model_id, user_list=users_id)
             return bool(model_id)
 
+        # ── Multimodal(VLM) — 비전 인코더 + LLM 두 HF 모델. 텍스트 모델과 동일하게 생성 시
+        # NFS 에 받아둠: 메타행 생성(load_type='multimodal', hf_id="{vision},{llm}") → compose_vlm
+        # 잡(둘 다 다운로드 + LLaVA 조립, projector 자동생성) → NFS source/latest_checkpoint 적재
+        # → 초기 커밋. FT 가 /model(=latest_checkpoint) 로 읽음. 조립=llm_model_download.py
+        # compose_vlm 서브커맨드(FT 이미지=transformers 4.52.4).
+        if (load_type or '').strip().lower() == 'multimodal':
+            # 정확히 2개 모델 id("{vision},{llm}") 강제 — partition(첫 콤마)은 "a,b,c" 를
+            # 통과시켜 llm_id="b,c" 로 오파싱하므로 split 로 part 개수까지 검증(리뷰 MED).
+            parts = [p.strip() for p in (huggingface_model_id or '').split(',')]
+            if len(parts) != 2 or not all(parts):
+                raise Exception("Error: multimodal requires huggingface_model_id='{vision},{llm}' (정확히 2개)")
+            vision_id, llm_id = parts
+            # 셸/helm 인젝션 차단 — HF repo id 는 'org/name'(안전 문자만)만 허용(리뷰 CRITICAL).
+            # 이후 helm --set / bash -c 로 보간되므로 $()·백틱·공백 등 메타문자 원천 차단.
+            _hf_id_re = re.compile(r'^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$')
+            if not (_hf_id_re.match(vision_id) and _hf_id_re.match(llm_id)):
+                raise Exception("Error: invalid HF model id — expected 'org/name' for each of {vision},{llm}")
+            normalized_hf_id = f"{vision_id},{llm_id}"
+            # 토큰 resolve — 단일-HF 경로와 동형. public=회사 토큰, private=복호화.
+            # (Phase 3 base pull 대비 저장. 슬롯별 private 토큰 분리는 후속 — FE 가 병합 전송.)
+            if not private:
+                resolved_token = settings.HUGGINGFACE_TOKEN
+            else:
+                resolved_token = front_cipher.decrypt(huggingface_token)
+            model_id = await db_model.create_model(
+                workspace_id=workspace_id,
+                name=model_name,
+                create_user_id=create_user_id,
+                huggingface_model_id=normalized_hf_id,  # "{vision},{llm}" (정규화)
+                huggingface_token=resolved_token,
+                huggingface_git='',  # NOT NULL — 실제 git/다운로드는 학습 시점 해석
+                description=description,
+                access=access,
+                load_type='multimodal',
+            )
+            if model_id and users_id:
+                await db_model.create_model_user_list(model_id=model_id, user_list=users_id)
+            # 텍스트 흐름과 동일: 폴더 생성 → compose_vlm 잡(비전+LLM→LLaVA) → 초기 커밋.
+            await create_model_folder(storage_name=workspace_info["main_storage_name"],
+                                      workspace_name=workspace_info["name"], model_name=model_name)
+            res, message = await create_model_helm(
+                workspace_id=workspace_id, model_id=model_id, model_name=model_name,
+                huggingface_model_id=normalized_hf_id, huggingface_token=resolved_token,
+                compose_vlm=True)
+            if res == False:
+                import sys
+                print(f"Error: {message}", file=sys.stderr)
+                raise Exception
+            commit_id = await db_model.create_commit_model(
+                model_id=model_id, create_user_id=create_user_id, workspace_id=workspace_id,
+                fine_tuning_config=FineTuningConfig().model_dump_json(), commit_message="",
+                name=TYPE.MODEL_FIRST_COMMIT_NAME, model_description=description)
+            await db_model.update_model_commit_status(
+                commit_status=TYPE.KUBE_POD_STATUS_RUNNING, model_id=model_id,
+                latest_commit_id=commit_id, commit_type=TYPE.COMMIT_TYPE_DOWNLOAD)
+            return bool(model_id)
+
         if huggingface_model_id: # huggingface model download
+            # repo-id 형식 검증(보안 M-3) — 멀티모달 경로와 동형이되, 단일 HF id 는 'name' 또는
+            # 'org/name' 둘 다 유효(예: gpt2 / Qwen/Qwen2.5)하므로 슬래시는 선택. 셸/경로 인젝션 방어.
+            if not re.fullmatch(r'[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)?', huggingface_model_id or ''):
+                raise Exception(f"Error: invalid huggingface_model_id '{huggingface_model_id}'")
             # 유효한 token인지 확인하는 작업 필요
-            if not private: # 퍼블릭일 경우 회사 계정을 사용 
+            if not private: # 퍼블릭일 경우 회사 계정을 사용
                 huggingface_token = settings.HUGGINGFACE_TOKEN
             else:
                 huggingface_token = front_cipher.decrypt(huggingface_token)
@@ -1834,6 +1966,13 @@ async def delete_model(model_id : int) -> bool:
     model_commit_helm_repo_name = TYPE.MODEL_COMMIT_JOB_HELM_NAME.format(MODEL_ID=model_id)
     await delete_helm_repo(helm_repo_name=model_commit_helm_repo_name, workspace_id=model_info["workspace_id"])
 
+    # compose/download 때 만든 HF 토큰 Secret(C-4) 정리 — 모델 삭제 시 함께 제거(누적 방지, 없으면 무시).
+    try:
+        delete_secret(namespace=TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=model_info["workspace_id"]),
+                      name=f"hf-token-{model_id}")
+    except Exception as e:
+        print(f"Warning: failed to delete HF token secret for model {model_id}: {e}")
+
     await db_model.delete_model(model_id=model_id)
     await delete_model_folder(storage_name=workspace_info["main_storage_name"], workspace_name=workspace_info["name"], model_name=model_info["name"])
     
@@ -1948,6 +2087,40 @@ async def get_model_fine_tuning(model_id : int) -> dict:
             "fine_tuning_config" : None,
         }
 
+    # 멀티모달(VLM) 모델은 메타데이터-only 행(commit/folder 없음, training_type='internal').
+    # 내부 FT 경로가 latest_commit_id(=NULL) 를 deref 하면 TypeError(리뷰 CRITICAL) →
+    # external 과 동형으로 minimal payload 조기 반환. (Phase 2 에서 Multimodal 탭 전용 surface)
+    if (model_info or {}).get("load_type") == "multimodal":
+        # 데이터셋 바인딩은 commit deref 와 무관 → 실제 조회해 surface(스텁이 []로 하드코딩해
+        # 바인딩돼도 "없음"으로 보이던 버그 수정). commit/folder 의존 필드만 None 유지.
+        mm_datasets = await db_model.get_model_datasets(model_id=model_id)
+        mm_dataset_parse = []
+        for md in mm_datasets:
+            dpath = md["training_data_path"]
+            full = PATH.JF_DATA_DATASET_DATA_PATH.format(STORAGE_NAME=md["data_storage_name"],
+                WORKSPACE_NAME=md["workspace_name"], ACCESS=md["access"],
+                DATASET_NAME=md["dataset_name"], DATA_PATH=dpath)
+            mm_dataset_parse.append({
+                "id": md["id"], "dataset_name": md["dataset_name"],
+                "model_file_path": dpath, "data_exist": await check_file_exists(file_path=full),
+            })
+        return {
+            "model_id" : model_info["id"],
+            "model_name" : model_info["name"],
+            "training_type" : "internal",
+            "load_type" : "multimodal",
+            "huggingface_model_id" : model_info.get("huggingface_model_id"),
+            # 엔진이 update_steps_per_epoch 로 기록한 실값(=샘플수). FineTuningGraph "1 Epoch = N steps"
+            # + sse-time 진행률 분모. 스텁 0 하드코딩이 "1 Epoch = 0 steps" 로 보이던 버그 수정.
+            "steps_per_epoch" : model_info.get("steps_per_epoch") or 0,
+            "commit_model_count" : 0,
+            "model_datasets" : mm_dataset_parse,
+            "model_config_file_list" : [],
+            "latest_commit_info" : None,
+            "resource_info" : None,
+            "fine_tuning_config" : None,
+        }
+
     workspace_info = await db_model.get_workspace_model(workspace_id=model_info["workspace_id"])
     if model_info["latest_fine_tuning_config"] is None:
         fine_tuning_config = FineTuningConfig().model_dump()
@@ -2052,9 +2225,17 @@ async def running_fine_tuning(model_id : int, model_dataset_id : int, instance_i
     # 3. pod info에 추가 
     redis_client = await get_redis_client_async()
     model_info = await db_model.get_model(model_id=model_id)
+    # 멀티모달(VLM): 생성 시 compose_vlm 잡이 비전+LLM 을 LLaVA 로 조립해 NFS(latest_checkpoint)
+    # 적재 + 초기 커밋 생성 → 일반 FT 경로 진입 가능. VLM 2-stage 엔진을 타도록 vlm=1 강제
+    # (FE config 누락 방어; 스케줄러가 vlm=1 → VLM 스크립트 디스패치).
+    if (model_info or {}).get("load_type") == "multimodal":
+        fine_tuning_config.vlm = 1
+        # vlm_stage1_epochs=0 은 FE 의 "stage1(projector) 스킵" 의도 → 보존. 미전송(None)만 기본값.
+        if getattr(fine_tuning_config, "vlm_stage1_epochs", None) is None:
+            fine_tuning_config.vlm_stage1_epochs = 1.0
     workspace_info = await db_model.get_workspace_model(workspace_id=model_info["workspace_id"])
-    
-    model_pod_status = await redis_client.hget(redis_key.WORKSPACE_PODS_STATUS, model_info["workspace_id"]) 
+
+    model_pod_status = await redis_client.hget(redis_key.WORKSPACE_PODS_STATUS, model_info["workspace_id"])
     if model_pod_status:
         model_pod_status = json.loads(model_pod_status)
     else:
@@ -2356,7 +2537,11 @@ async def sse_get_fine_tuning_result_graph(model_id : int, request : Request):
                     workspace_info = await db_model.get_workspace_model(workspace_id=model_info["workspace_id"])
                     log_path = PATH.JF_MODEL_LOG_PATH.format(STORAGE_NAME=workspace_info["main_storage_name"], \
                         WORKSPACE_NAME=workspace_info["name"], MODEL_NAME=model_info["name"])
-                    
+                    # 모델명 traversal 방어 — 로그 경로가 워크스페이스 models 루트 밖이면 거부(보안 M-4).
+                    _models_root = PATH.JF_MAIN_STORAGE_PATH.format(STORAGE_NAME=workspace_info["main_storage_name"], WORKSPACE_NAME=workspace_info["name"]) + "/models"
+                    if not _is_under(log_path, _models_root):
+                        break
+
                     result = None
                     if model_info["steps_per_epoch"]:
                         try:
@@ -2433,14 +2618,37 @@ async def sse_get_fine_tuning_time(model_id : int, request : Request):
             workspace_info = await db_model.get_workspace_model(workspace_id=model_info["workspace_id"])
             log_path = PATH.JF_MODEL_LOG_PATH.format(STORAGE_NAME=workspace_info["main_storage_name"], \
                 WORKSPACE_NAME=workspace_info["name"], MODEL_NAME=model_info["name"])
+            # 모델명 traversal 방어 — 로그 경로가 워크스페이스 models 루트 밖이면 거부(보안 M-4).
+            _models_root = PATH.JF_MAIN_STORAGE_PATH.format(STORAGE_NAME=workspace_info["main_storage_name"], WORKSPACE_NAME=workspace_info["name"]) + "/models"
+            if not _is_under(log_path, _models_root):
+                break
             config_json =model_info.get("latest_fine_tuning_config") if model_info.get("latest_fine_tuning_config") else "{}"
             config = json.loads(config_json)
             
             if model_info["steps_per_epoch"]:
-                total_step = model_info["steps_per_epoch"] * config["num_train_epochs"]
+                spe = model_info["steps_per_epoch"]
+                # VLM 2-stage 는 stage1(projector)+stage2(LM) 가 단일 연속 step 타임라인(엔진이 step
+                # 누적 기록) → 전체 epoch = stage2(num_train_epochs) + stage1(vlm_stage1_epochs).
+                # 텍스트 FT(vlm 미설정)는 num_train_epochs 그대로 → 동작 불변.
+                total_epochs = config.get("num_train_epochs", 0) or 0
+                if config.get("vlm"):
+                    s1 = config.get("vlm_stage1_epochs", 0) or 0
+                    if s1 and s1 > 0:
+                        total_epochs += s1
+                total_step = spe * total_epochs if total_epochs else spe
                 _, latest_steps = await parse_tensorboard_scalars_async(log_dir=log_path)
                 latest_step = latest_steps
-                if latest_steps:
+                if latest_steps and total_step and latest_step >= total_step:
+                    # 완료 도달 — calculate_remaining_time_with_ema 는 total<=current 에서 ValueError 를
+                    # 던져 SSE 스트림이 100% 직전에 끊겼음(codex). EMA 호출 없이 완료 페이로드 반환.
+                    result = {
+                        "total_epoch" : total_epochs,
+                        "start_datetime" : model_info["start_datetime"],
+                        "progress_epoch" : total_epochs,
+                        "percent" : 100,
+                        "remaining_time" : 0,
+                    }
+                elif latest_steps:
                     remaining_time, new_time_per_step = calculate_remaining_time_with_ema(
                         start_time=datetime.datetime.strptime(model_info["start_datetime"], TYPE.TIME_DATE_FORMAT),
                         current_time=datetime.datetime.now().timestamp(),
@@ -2451,15 +2659,16 @@ async def sse_get_fine_tuning_time(model_id : int, request : Request):
                     )
                     last_time_per_step = new_time_per_step
                     result = {
-                        "total_epoch" : config.get("num_train_epochs", 0),
+                        "total_epoch" : total_epochs,
                         "start_datetime" : model_info["start_datetime"],
-                        "progress_epoch" : latest_step//total_step,
-                        "percent" : round((latest_step/total_step) * 100, 2),
+                        # 완료 epoch 수(기존 latest_step//total_step 은 완료 직전까지 0 인 버그) → //spe.
+                        "progress_epoch" : min(total_epochs, latest_step // spe) if spe else 0,
+                        "percent" : round(min(100.0, (latest_step / total_step) * 100), 2) if total_step else 0,
                         "remaining_time" : remaining_time,
                     }
                 else:
                     result = {
-                        "total_epoch" : config.get("num_train_epochs", 0),
+                        "total_epoch" : total_epochs,
                         "start_datetime" : model_info["start_datetime"],
                         "progress_epoch" : 0,
                         "percent" : 0,

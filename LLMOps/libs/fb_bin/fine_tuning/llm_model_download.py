@@ -40,7 +40,7 @@ def download_model(model_id: str, token: str, dst_model_path: str, latest_checkp
     try:
         from transformers import AutoTokenizer, AutoModelForCausalLM
         # Hugging Face 로그인 (토큰 기반)
-        login(token=token, add_to_git_credential=True)
+        login(token=token, add_to_git_credential=False)
 
         # 저장할 디렉토리 생성
         os.makedirs(dst_model_path, exist_ok=True)
@@ -59,18 +59,18 @@ def download_model(model_id: str, token: str, dst_model_path: str, latest_checkp
     except HTTPError as e:
         # 허깅페이스 API 관련 오류 처리 (모델 ID가 잘못되었을 경우 포함)
         print(f"Error: Hugging Face model '{model_id}' not found or invalid token.")
-        print(f"Details: {e}")
+        print(f"Details: {str(e).replace(token, '***') if token else e}")
         sys.exit(0)
     
     except (ConnectionError, Timeout) as e:
         # 네트워크 연결 문제
         print(f"Error: Network issue occurred while downloading the model '{model_id}'.")
-        print(f"Details: {e}")
+        print(f"Details: {str(e).replace(token, '***') if token else e}")
         sys.exit(0)
     except OSError as e:
         # 파일 시스템 오류 (디렉토리 생성, 저장 문제 등)
         print(f"Error: Problem with saving the model to '{dst_model_path}'.")
-        print(f"Details: {e}")
+        print(f"Details: {str(e).replace(token, '***') if token else e}")
         sys.exit(0)
     except Exception as e:
         # 기타 예상치 못한 예외 상황 처리
@@ -78,6 +78,200 @@ def download_model(model_id: str, token: str, dst_model_path: str, latest_checkp
         sys.exit(0)
     
     
+def _ensure_safetensors(model_dir):
+    """torch<2.6 + transformers>=4.52 는 CVE-2025-32434 가드로 .bin(torch.load) 로딩을 차단.
+    safetensors 가 없고 .bin 만 있는 repo 는 변환 — torch.load 직접 호출은 torch 2.5.x 에서 허용
+    (가드는 transformers from_pretrained 내부에만 있음). 이후 from_pretrained 가 safetensors 사용."""
+    import glob
+    from safetensors.torch import save_file
+    if glob.glob(os.path.join(model_dir, "*.safetensors")):
+        return  # 이미 safetensors 보유 → 변환 불필요
+    bins = sorted(glob.glob(os.path.join(model_dir, "pytorch_model*.bin")))
+    if not bins:
+        return  # .bin 도 없음(이미 다른 포맷) → from_pretrained 에 위임
+    sd = {}
+    for b in bins:
+        sd.update(torch.load(b, map_location="cpu", weights_only=True))
+    # 공유메모리(타이) 텐서는 save_file 가 거부 → clone 으로 분리(로드 시 tie 재구성).
+    sd = {k: v.clone().contiguous() for k, v in sd.items() if hasattr(v, "clone")}
+    save_file(sd, os.path.join(model_dir, "model.safetensors"))
+    for b in bins:
+        os.remove(b)
+    idx = os.path.join(model_dir, "pytorch_model.bin.index.json")
+    if os.path.exists(idx):
+        os.remove(idx)
+    print(f".bin -> safetensors converted in '{model_dir}'")
+
+
+def compose_vlm(model_id: str, token: str, dst_model_path: str, latest_checkpoint_path: str,
+                dtype: str = "bfloat16"):
+    """비전 인코더 + LLM 두 HF 모델을 받아 학습 가능한 LLaVA(VLM)로 조립.
+
+    model_id : "{vision_repo_id},{llm_repo_id}" (콤마 결합, 정확히 2개).
+    - 둘 다 snapshot_download → LlavaConfig(vision_config, text_config) 로 LLaVA 구성.
+      multi_modal_projector 는 랜덤 초기화(엔진 Stage1 이 정렬) — 직접 합성 불필요.
+    - vision 가중치 → vision_tower / LLM 가중치 → language_model 적재.
+    - <image> 토큰 / image_token_index / image_seq_length / select_strategy 배선
+      (없으면 forward 에서 image-token-count mismatch 로 학습 크래시).
+    - dst_model_path 저장 후 latest_checkpoint_path 로 복사 — FT 파드가 /model=latest_checkpoint
+      로 마운트해 읽음(download_model 선례와 동일). 조립 결과는 기존 VLM 2-stage 엔진
+      (llm_model_vlm_fine_tuning.py)이 무수정으로 로드.
+    ⚠️ CPU-only(GPU 불필요). 풀 GPU e2e 는 A6000(3.4)에서 확인 예정.
+    """
+    try:
+        from contextlib import nullcontext
+
+        from transformers import (
+            AutoConfig, AutoImageProcessor, AutoModelForCausalLM, AutoTokenizer,
+            LlavaConfig, LlavaForConditionalGeneration, LlavaProcessor,
+        )
+        from transformers.models.llava.modeling_llava import LlavaMultiModalProjector
+
+        parts = [p.strip() for p in (model_id or "").split(",")]
+        if len(parts) != 2 or not all(parts):
+            print(f"Error: compose_vlm requires model_id='{{vision}},{{llm}}' (정확히 2개), got '{model_id}'")
+            sys.exit(1)
+        vision_repo_id, llm_repo_id = parts
+
+        torch_dtype = {"float32": torch.float32, "bfloat16": torch.bfloat16,
+                       "float16": torch.float16}.get(dtype, torch.bfloat16)
+
+        # 빈 토큰(offline/nexus 모드)에서는 login 생략 — login("") 은 huggingface_hub 예외.
+        if token:
+            login(token=token, add_to_git_credential=False)
+        hf_token = token or None
+
+        # 재실행/재사용 컨테이너에서 stale snapshot 혼입 방지 — work_dir 초기화.
+        work_dir = "/tmp/compose_vlm"
+        shutil.rmtree(work_dir, ignore_errors=True)
+        vision_dir = os.path.join(work_dir, "vision")
+        llm_dir = os.path.join(work_dir, "llm")
+        print(f"Downloading vision encoder '{vision_repo_id}'...")
+        snapshot_download(repo_id=vision_repo_id, local_dir=vision_dir,
+                          local_dir_use_symlinks=False, token=hf_token)
+        _ensure_safetensors(vision_dir)
+        print(f"Downloading LLM '{llm_repo_id}'...")
+        snapshot_download(repo_id=llm_repo_id, local_dir=llm_dir,
+                          local_dir_use_symlinks=False, token=hf_token)
+        _ensure_safetensors(llm_dir)
+
+        # ── 비전 서브config 추출 (full CLIP/SigLIP 이면 .vision_config) ──
+        # 보안: trust_remote_code=False — 표준 CLIP/SigLIP/Qwen/Llama 만 지원(생성 UI 제약과 일치,
+        # 악성 HF repo 임의코드 실행 차단). 커스텀 아키텍처는 admin 의 의도적 결정 사항.
+        raw_vision_cfg = AutoConfig.from_pretrained(vision_dir, trust_remote_code=False)
+        vision_cfg = getattr(raw_vision_cfg, "vision_config", raw_vision_cfg)
+        is_siglip = "siglip" in (getattr(vision_cfg, "model_type", "") or "").lower()
+        # SigLIP=CLS 토큰 없음 → 전체 패치 유지("full"). CLIP=CLS 있음 → "default"(마지막 드롭).
+        select_strategy = "full" if is_siglip else "default"
+        num_extra = 0 if is_siglip else 1
+        image_size = getattr(vision_cfg, "image_size", None)
+        patch_size = getattr(vision_cfg, "patch_size", None)
+        if isinstance(image_size, (tuple, list)):
+            image_size = image_size[0]
+        if not image_size or not patch_size:
+            print("Error: vision config must expose image_size and patch_size")
+            sys.exit(1)
+        # 실제 선택 피처 길이 = 패치 수(CLIP default 는 CLS 드롭, SigLIP full 도 패치 수).
+        # 추가 토큰(CLS 등)은 processor 의 num_additional_image_tokens 가 처리.
+        image_seq_length = (int(image_size) // int(patch_size)) ** 2
+
+        # ── 토크나이저 + <image> 토큰 ──
+        tokenizer = AutoTokenizer.from_pretrained(llm_dir, trust_remote_code=False, use_fast=True)
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+        if tokenizer.convert_tokens_to_ids("<image>") == tokenizer.unk_token_id:
+            tokenizer.add_special_tokens({"additional_special_tokens": ["<image>"]})
+        image_token_id = tokenizer.convert_tokens_to_ids("<image>")
+        image_processor = AutoImageProcessor.from_pretrained(vision_dir, trust_remote_code=False)
+
+        # ── 비전 타워(비전 전용 클래스) + LLM 로드 ──
+        # CLIPVisionModel/SiglipVisionModel.from_pretrained 는 full CLIP/SigLIP repo 에서도
+        # 비전부만 적재(텍스트부 무시) — full*Model 로딩 시 키 mismatch 회피.
+        if is_siglip:
+            from transformers import SiglipVisionModel as _VisionTower
+        else:
+            from transformers import CLIPVisionModel as _VisionTower
+        vision_tower = _VisionTower.from_pretrained(
+            vision_dir, torch_dtype=torch_dtype, low_cpu_mem_usage=True, trust_remote_code=False)
+        lm = AutoModelForCausalLM.from_pretrained(
+            llm_dir, torch_dtype=torch_dtype, low_cpu_mem_usage=True, trust_remote_code=False)
+        lm.resize_token_embeddings(len(tokenizer))
+        lm.config.vocab_size = len(tokenizer)
+        lm.config.pad_token_id = tokenizer.pad_token_id
+
+        # ── LLaVA config + 빈 모델(meta) → 서브모듈 결합 ──
+        config = LlavaConfig(
+            vision_config=vision_cfg.to_dict(),
+            text_config=lm.config.to_dict(),
+            image_token_index=image_token_id,
+            vision_feature_select_strategy=select_strategy,
+            vision_feature_layer=-2,
+            image_seq_length=image_seq_length,
+        )
+        config.image_token_id = image_token_id   # 신버전 modeling_llava 내부 alias
+        config.pad_token_id = tokenizer.pad_token_id
+
+        # init_empty_weights: 빈 LLaVA 를 meta 에 만들어(랜덤 8B 중복할당 회피) 실제 서브모듈로 교체.
+        # vision_tower/language_model/multi_modal_projector/lm_head 4개가 전 파라미터 → meta 잔여 없음.
+        try:
+            from accelerate import init_empty_weights
+            init_ctx = init_empty_weights()
+        except Exception:
+            init_ctx = nullcontext()
+        with init_ctx:
+            model = LlavaForConditionalGeneration(config)
+
+        # transformers 4.52.x = 서브모듈이 model.model.* 아래. 엔진 get_submodules 가 별칭으로 흡수.
+        target = model.model if hasattr(model, "model") else model
+        target.vision_tower = vision_tower
+        # 디코더-only LLM(Llama/Qwen)은 get_decoder()=백본. 미보유 아키텍처는 .model 폴백.
+        target.language_model = lm.get_decoder() if hasattr(lm, "get_decoder") else getattr(lm, "model", lm)
+        target.multi_modal_projector = LlavaMultiModalProjector(config).to(dtype=torch_dtype)
+        if hasattr(model, "lm_head"):
+            model.lm_head = lm.get_output_embeddings()
+
+        # ── processor (생성자 kwargs 로 전달해야 processor_config.json 에 영속) ──
+        try:
+            processor = LlavaProcessor(
+                image_processor=image_processor, tokenizer=tokenizer,
+                patch_size=int(patch_size), vision_feature_select_strategy=select_strategy,
+                image_token="<image>", num_additional_image_tokens=num_extra)
+        except TypeError:
+            # 구버전 시그니처 폴백 — 속성으로 세팅.
+            processor = LlavaProcessor(image_processor=image_processor, tokenizer=tokenizer)
+            processor.patch_size = int(patch_size)
+            processor.vision_feature_select_strategy = select_strategy
+            processor.image_token = "<image>"
+
+        # 임베딩 타이 모델은 lm_head 재타이(도너 가중치와 일관). 이후 meta 잔여 점검 — 있으면
+        # save_pretrained 가 garbage 를 쓰므로 명시 실패(빈/손상 모델 DONE 마킹 방지).
+        if getattr(lm.config, "tie_word_embeddings", False):
+            model.tie_weights()
+        meta_params = [n for n, p in model.named_parameters() if p.device.type == "meta"]
+        if meta_params:
+            print(f"Error: composed model has unmaterialized meta params: {meta_params[:5]}")
+            sys.exit(1)
+
+        os.makedirs(dst_model_path, exist_ok=True)
+        model.save_pretrained(dst_model_path, safe_serialization=True)
+        processor.save_pretrained(dst_model_path)
+        print(f"Composed VLM saved to '{dst_model_path}' "
+              f"(vision={vision_repo_id}, llm={llm_repo_id}, img_seq={image_seq_length}).")
+
+        shutil.copytree(dst_model_path, latest_checkpoint_path, dirs_exist_ok=True)
+        print(f"Folder '{dst_model_path}' has been copied to '{latest_checkpoint_path}'.")
+    # SystemExit(=sys.exit) 는 BaseException 이라 아래 except Exception 이 삼키지 않음 → exit code 보존.
+    except HTTPError as e:
+        print(f"Error: Hugging Face access failed for '{model_id}'. Details: {e}")
+        sys.exit(1)
+    except (ConnectionError, Timeout) as e:
+        print(f"Error: Network issue occurred while composing VLM '{model_id}'. Details: {e}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"An unexpected error occurred composing VLM: {e}")
+        sys.exit(1)
+
+
 def copy_commit_model(  dst_model_path: str,  latest_checkpoint_path : str, \
     src_model_path: str = "", src_model_log_path : str = "", dst_log_dir : str ="", is_commit: int = 0):
     try:
@@ -136,6 +330,14 @@ if __name__ == "__main__":
     download_parser.add_argument("--dst_model_path", type=str, help="The directory where the model will be saved (default: './model').")
     download_parser.add_argument("--latest_checkpoint_path", type=str, help="The directory for the latest model checkpoint.")
 
+    # compose_vlm 서브커맨드 (멀티모달: 비전+LLM → LLaVA 조립)
+    compose_parser = subparsers.add_parser("compose_vlm", help="Compose a LLaVA VLM from a vision encoder + LLM.")
+    compose_parser.add_argument("--model_id", type=str, help="'{vision_repo_id},{llm_repo_id}' (콤마 결합).")
+    compose_parser.add_argument("--token", type=str, default="", help="Your Hugging Face API token (빈 값=offline).")
+    compose_parser.add_argument("--dst_model_path", type=str, help="The directory where the composed VLM will be saved.")
+    compose_parser.add_argument("--latest_checkpoint_path", type=str, help="The directory for the latest model checkpoint.")
+    compose_parser.add_argument("--dtype", type=str, default="bfloat16", choices=["float32", "bfloat16", "float16"], help="Assembly dtype.")
+
     # copy_commit_model 서브커맨드
     commit_parser = subparsers.add_parser("copy_commit_model", help="Copy or commit model and related files.")
     commit_parser.add_argument("--dst_model_path", type=str, help="The target directory for the model.")
@@ -165,6 +367,15 @@ if __name__ == "__main__":
             token=args.token,
             dst_model_path=args.dst_model_path,
             latest_checkpoint_path=args.latest_checkpoint_path
+        )
+    elif args.command == "compose_vlm":
+        # compose_vlm 함수 호출
+        compose_vlm(
+            model_id=args.model_id,
+            token=args.token,
+            dst_model_path=args.dst_model_path,
+            latest_checkpoint_path=args.latest_checkpoint_path,
+            dtype=args.dtype,
         )
     elif args.command == "copy_commit_model":
         # copy_commit_model 함수 호출

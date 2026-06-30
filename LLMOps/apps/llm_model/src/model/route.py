@@ -96,23 +96,30 @@ async def download_default_configuration():
 @model.get("/fine-tuning/sse-graph/{model_id}", summary='graph - fine tuning', tags=TAG_FINE_TUNING)
 async def sse_fine_tuning_graph( model_id : int, request : Request):
     try:
+        # 접근 제어(보안 H-3): 소유자 OR 공유 모델의 워크스페이스 멤버만 학습 그래프 구독 가능.
+        if not await svc.user_can_access_model(get_user_id(), model_id):
+            return response(status=0, message="forbidden", result=[])
         return StreamingResponse(svc.sse_get_fine_tuning_result_graph(model_id=model_id, request=request), media_type="text/event-stream")
     except Exception as e:
         traceback.print_exc()
-        return response(status=0, message="server error", result=[]) 
+        return response(status=0, message="server error", result=[])
 
 @model.get("/fine-tuning/sse-time/{model_id}", summary='time - fine tuning', tags=TAG_FINE_TUNING)
 async def sse_fine_tuning_time( model_id : int, request : Request):
     try:
+        if not await svc.user_can_access_model(get_user_id(), model_id):
+            return response(status=0, message="forbidden", result=[])
         return StreamingResponse(svc.sse_get_fine_tuning_time(model_id=model_id, request=request), media_type="text/event-stream")
     except Exception as e:
         traceback.print_exc()
-        return response(status=0, message="server error", result=[]) 
+        return response(status=0, message="server error", result=[])
 
-    
+
 @model.get("/fine-tuning/sse-status/{model_id}", summary='status - fine tuning', tags=TAG_FINE_TUNING)
 async def sse_fine_tuning_status( model_id : int, request : Request):
     try:
+        if not await svc.user_can_access_model(get_user_id(), model_id):
+            return response(status=0, message="forbidden", result=[])
         return StreamingResponse(svc.sse_get_fine_tuning_status(model_id=model_id, request=request), media_type="text/event-stream")
     except Exception as e:
         traceback.print_exc()
@@ -236,7 +243,7 @@ async def get_instances(workspace_id : int):
 async def get_models_by_huggingface(body : dto.PostHuggingface):
     try:
         res = None
-        res = await svc.get_models_by_huggingface(model_name=body.model_name, huggingface_token=body.huggingface_token, private=body.private)
+        res = await svc.get_models_by_huggingface(model_name=body.model_name, huggingface_token=body.huggingface_token, private=body.private, model_kind=body.model_kind)
         return response(status=1, result=res)
     except Exception as e:
         traceback.print_exc()
@@ -511,6 +518,7 @@ async def create_models(body: dto.PostModel):
             external_manifest_name=body.external_manifest_name,
             external_manifest_version=body.external_manifest_version,
             domain=body.domain,
+            load_type=body.load_type,
         )
         return response(status=1, result=res)
     except Exception as e:

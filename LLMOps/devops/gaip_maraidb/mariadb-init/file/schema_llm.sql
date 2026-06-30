@@ -68,6 +68,7 @@ CREATE TABLE IF NOT EXISTS `model` (
     `end_datetime`              DATETIME,
     `commit_model_name`         LONGTEXT,
     `domain`                    VARCHAR(16) DEFAULT NULL,
+    `load_type`                 VARCHAR(32) DEFAULT NULL,
     `create_datetime`           DATETIME DEFAULT CURRENT_TIMESTAMP,
     `update_datetime`           DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY(`id`),

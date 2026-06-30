@@ -11,6 +11,7 @@ import useIntervalCall from '@src/hooks/useIntervalCall';
 import { callApi, STATUS_SUCCESS } from '@src/network';
 
 import SimpleNav from '../SimpleNav';
+import MultimodalArchDiagram from '../MultimodalArchDiagram/MultimodalArchDiagram';
 
 import { addNineHours, errorToastMessage } from '@src/utils';
 
@@ -33,6 +34,12 @@ const ModelInfo = memo(function ModelInfo({ navList, data, ...rest }) {
   const [description, setDescription] = useState(null);
 
   const { modelId } = data;
+
+  // 멀티모달 모델(hf_id="{vision},{llm}")이면 정보 하단에 구조 다이어그램 표시.
+  const mmHf = infoData?.huggingface_model_id || '';
+  const isMultimodal = mmHf.includes(',');
+  const mmVision = isMultimodal ? mmHf.slice(0, mmHf.indexOf(',')) : '';
+  const mmLlm = isMultimodal ? mmHf.slice(mmHf.indexOf(',') + 1) : '';
 
   const filteredRest = useMemo(() => {
     const { tReady, dispatch, ...remainingProps } = rest;
@@ -175,6 +182,14 @@ const ModelInfo = memo(function ModelInfo({ navList, data, ...rest }) {
             ? addNineHours(infoData?.update_datetime)
             : '-'}
         </div>
+        {isMultimodal && (
+          <>
+            <div className={cx('label')}>모델 구조</div>
+            <div className={cx('value')}>
+              <MultimodalArchDiagram visionName={mmVision} llmName={mmLlm} />
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

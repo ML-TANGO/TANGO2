@@ -28,6 +28,16 @@ class FineTuningConfig(BaseModel):
     # (llm_model_vlm_fine_tuning.py)를 선택. used_lora 가 stage2 방식(1=LoRA, 0=full)을 결정.
     vlm : Optional[int] = Field(default=0, description='내부 VLM 2-stage 파인튜닝 여부(0/1). 베이스 모델=VLM, 데이터셋=이미지+텍스트.')
     vlm_stage1_epochs : Optional[float] = Field(default=1.0, ge=0, description='VLM stage1(projector 정렬) epoch 수. stage2(LM)는 num_train_epochs.')
+    # VLM 하이퍼파라미터 — 엔진(llm_model_vlm_fine_tuning.py)이 --key 로 수신. vlm_ 프리픽스라 텍스트 FT 무영향.
+    vlm_stage1_lr : Optional[float] = Field(default=None, description='VLM stage1(projector) LR. 미지정 시 learning_rate 공용.')
+    vlm_batch_size : Optional[int] = Field(default=1, ge=1, description='VLM per-device 배치 크기(이미지 메모리 주의).')
+    vlm_weight_decay : Optional[float] = Field(default=0.0, ge=0, description='VLM stage2 weight decay.')
+    vlm_lora_r : Optional[int] = Field(default=8, ge=1, description='VLM stage2 LoRA rank.')
+    vlm_lora_alpha : Optional[int] = Field(default=16, ge=1, description='VLM stage2 LoRA alpha.')
+    vlm_lora_dropout : Optional[float] = Field(default=0.05, ge=0, description='VLM stage2 LoRA dropout.')
+    vlm_lora_target_modules : Optional[str] = Field(default=None, description='VLM stage2 LoRA 타겟 모듈(콤마구분). 미지정 시 q,k,v,o_proj.')
+    vlm_max_samples : Optional[int] = Field(default=0, ge=0, description='VLM 학습 샘플 수 제한(0=전체). 대용량 데이터셋(예: CC3M 595K) 데모/스모크용.')
+    vlm_image_folder : Optional[str] = Field(default=None, description='VLM 이미지 루트(데이터셋 디렉터리 기준 상대 경로). 미지정 시 직속→images/ 자동 폴백(표준 HF VLM 데이터셋 무수정 소비).')
 
 class FineTuningPodInfo(BaseModel):
     model_id : int
@@ -71,8 +81,11 @@ class PostFineTuningRun(BaseModel):
 class PostHuggingface(BaseModel):
     model_name : str = None
     huggingface_token : str = None
-    private : int = 0  
-    
+    private : int = 0
+    # 검색 대상 — 'text'(텍스트 LLM, text-generation) | 'vision'(비전 인코더, CLIP/SigLIP).
+    # 멀티모달(VLM) 비전 슬롯은 'vision', 그 외(단일/LLM 슬롯)는 기본 'text'.
+    model_kind : str = 'text'
+
 class PostModel(BaseModel):
     workspace_id : int = Field(description='llmops workspace id')
     create_user_id : int = Field(default=0,description='llmops user id')
@@ -94,6 +107,9 @@ class PostModel(BaseModel):
     # create_model 이 domain=SDS → training_type='external' + 고정 manifest 로 해석한다.
     # SDM/SDF 는 현재 비활성(create_model 에서 거부).
     domain : Optional[str] = Field(default=None, max_length=16, pattern=r'^[A-Za-z]{2,8}$', description="'SDS' | 'SDM' | 'SDF' (SDM/SDF disabled)")
+    # 멀티모달(VLM) — 비전 인코더 + LLM 두 HF 모델. load_type='multimodal' 이면
+    # huggingface_model_id='{vision},{llm}' 콤마결합. composite VLM 파인튜닝 진입(생성은 메타행).
+    load_type : Optional[str] = Field(default=None, max_length=16, pattern=r'^[a-z]{2,16}$', description="None(단일) | 'multimodal'(VLM)")
     class Config:
         protected_namespaces = ()
         

@@ -15,11 +15,22 @@ spec:
     image: {{ .Values.image }}
     resources:
       limits:
-        cpu: 1
-        memory: "6Gi"
+        cpu: {{ .Values.resources.limits.cpu }}
+        memory: {{ .Values.resources.limits.memory | quote }}
       requests:
-        cpu: 1
-        memory: "3Gi"
+        cpu: {{ .Values.resources.requests.cpu }}
+        memory: {{ .Values.resources.requests.memory | quote }}
+    {{- if .Values.command.tokenSecretName }}
+    # HF 토큰은 helm --set/pod command 평문 대신 사전 생성 Secret 에서 env 로 주입(보안리뷰 C-4).
+    # command 의 --token="$HF_TOKEN" 가 런타임(bash -c)에 이 env 를 확장 → 토큰이 release history·
+    # pod spec 어디에도 평문으로 남지 않음.
+    env:
+    - name: HF_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: {{ .Values.command.tokenSecretName }}
+          key: token
+    {{- end }}
     command:
       - /bin/bash
       - -c
@@ -29,7 +40,7 @@ spec:
         {{- if eq .Values.command.mode "download_model" }}
           --dst_model_path="{{ .Values.command.dst_model_path }}" \
           --model_id={{ .Values.command.model_id }} \
-          --token={{ .Values.command.token }} \
+          --token="$HF_TOKEN" \
         {{- else if eq .Values.command.mode "copy_commit_model" }}
           --dst_model_path="{{ .Values.command.dst_model_path }}" \
           --dst_log_dir="{{ .Values.command.dst_log_dir }}" \
@@ -40,6 +51,11 @@ spec:
           --tmp_model_path="{{ .Values.command.tmp_model_path }}" \
         {{- else if eq .Values.command.mode "load_commit_model" }}
           --load_commit_model_path="{{ .Values.command.load_commit_model_path }}" \
+        {{- else if eq .Values.command.mode "compose_vlm" }}
+          --dst_model_path="{{ .Values.command.dst_model_path }}" \
+          --model_id="{{ .Values.command.model_id }}" \
+          --token="$HF_TOKEN" \
+          --dtype="{{ .Values.command.dtype }}" \
         {{- end }}
     volumeMounts:
     - name: jf-main

@@ -270,7 +270,8 @@ async def get_dataset_data_list(dataset_id, extension_list=[], search=None, hier
         
         if hierarchy:
             # 계층구조 
-            result = await get_data_hierarchy_list(directory=directory, extension_list=extension_list, search=search, base_path=directory)
+            # max_depth 제한 — 이미지 하위트리로 무한 재귀 방지(매니페스트는 보통 최상위/얕은 곳).
+            result = await get_data_hierarchy_list(directory=directory, extension_list=extension_list, search=search, base_path=directory, max_depth=2)
         else:
             # name을 fullPath로 출력하여 리스트로 내려줌 
             result = await get_data_simple_list(directory=directory, extension_list=extension_list, search=search)
@@ -286,13 +287,21 @@ async def get_data_hierarchy_list(directory, extension_list, search, base_path="
     result = []
     try:
         root = Path(directory)
+        MAX_DIR_ENTRIES = 500  # 디렉터리당 최대 열거 수 — 대용량 이미지셋(수백만 파일) 전체 적재→OOM 방지
 
         def build_tree(path: Path, depth: int):
             items = []
             # 깊이 제한을 넘으면 빈 리스트 반환
             if max_depth is not None and depth > max_depth:
                 return items
-            for entry in sorted(path.iterdir()):
+            # 지연 열거 + cap: sorted(path.iterdir())는 디렉터리 전 항목을 메모리에 적재(정렬)하므로
+            # 수백만 파일 디렉터리에서 OOM. 항목을 cap 까지만 모아 정렬(메모리 bounded).
+            entries = []
+            for _i, _e in enumerate(path.iterdir()):
+                if _i >= MAX_DIR_ENTRIES:
+                    break
+                entries.append(_e)
+            for entry in sorted(entries, key=lambda e: e.name):
                 # 검색어가 있으면 이름에 포함된 항목만
                 if search and search not in entry.name:
                     continue

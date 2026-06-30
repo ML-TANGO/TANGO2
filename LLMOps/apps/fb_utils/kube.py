@@ -150,6 +150,34 @@ def get_pod_info(namespace, pod_name):
         print(f"Error getting pod: {e}")
         return None
 
+
+def create_or_replace_secret(namespace, name, string_data: dict):
+    """Opaque Secret 생성(있으면 교체). HF 토큰을 helm --set/pod command 평문 대신 secretKeyRef 로
+    주입하기 위함(보안리뷰 C-4). string_data 는 평문 dict(k8s 가 base64 인코딩해 저장)."""
+    v1 = client.CoreV1Api()
+    body = client.V1Secret(
+        metadata=client.V1ObjectMeta(name=name),
+        string_data=string_data,
+        type="Opaque",
+    )
+    try:
+        v1.replace_namespaced_secret(name=name, namespace=namespace, body=body)
+    except ApiException as e:
+        if e.status == 404:
+            v1.create_namespaced_secret(namespace=namespace, body=body)
+        else:
+            raise
+
+
+def delete_secret(namespace, name):
+    """Secret 삭제(없으면 무시). 토큰 Secret 정리용."""
+    v1 = client.CoreV1Api()
+    try:
+        v1.delete_namespaced_secret(name=name, namespace=namespace)
+    except ApiException as e:
+        if e.status != 404:
+            print(f"Error deleting secret: {e}")
+
 def get_pod_log(namespace, pod_name, tail_lines: int = 200, container: str = None):
     """pod stdout 로그 tail. pod 미존재(GC/미생성) 시 None.
     generation 등 외부 job 의 실시간 로그(stdout JSONL)용 — 결과는 NFS, 로그는 stdout."""

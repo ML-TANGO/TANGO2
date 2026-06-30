@@ -11,6 +11,7 @@ from utils.kube import PodName
 from datetime import datetime
 
 import re
+import os
 import sys
 import subprocess
 import json
@@ -117,12 +118,37 @@ def fine_tuning_command(model_name : str, dataset_name : str, dataset_file_path:
             vlm_stage1_epochs = 1.0
     except (TypeError, ValueError):
         vlm_stage1_epochs = 1.0
+    # VLM 추가 하이퍼파라미터 — 셸 보간되므로 유한/안전값으로 검증(DTO 우회 직접쓰기 방어).
+    # FineTuningParam(text 스키마)에 없으므로 raw dict 에서 뽑아 is_vlm 일 때만 주입.
+    def _vlm_num(key, default, cast):
+        try:
+            raw = fine_tuning_config.get(key)
+            v = cast(raw if raw is not None else default)    # 명시적 0.0(dropout/wd 등) 보존
+            return v if (v == v and v >= 0) else default     # NaN/음수 거부
+        except (TypeError, ValueError):
+            return default
+    vlm_stage1_lr = _vlm_num("vlm_stage1_lr", 0.0, float)        # 0=learning_rate 공용
+    vlm_batch_size = max(1, _vlm_num("vlm_batch_size", 1, int))
+    vlm_weight_decay = _vlm_num("vlm_weight_decay", 0.0, float)
+    vlm_lora_r = max(1, _vlm_num("vlm_lora_r", 8, int))
+    vlm_lora_alpha = max(1, _vlm_num("vlm_lora_alpha", 16, int))
+    vlm_lora_dropout = _vlm_num("vlm_lora_dropout", 0.05, float)
+    _tgt_raw = str(fine_tuning_config.get("vlm_lora_target_modules") or "")
+    vlm_lora_target_modules = _tgt_raw if re.fullmatch(r"[A-Za-z0-9_,]*", _tgt_raw) else ""
+    vlm_max_samples = max(0, _vlm_num("vlm_max_samples", 0, int))      # 0=전체, 대용량셋 데모 캡
+    # 이미지 루트(셸/helm 안전 문자만) — 절대경로(/)·상위참조(..)는 거부(보안리뷰 H-1, defense-in-depth;
+    # 엔진 _resolve_image 도 containment 하지만 스케줄러 레이어를 진짜 방어막으로).
+    _imgf_raw = str(fine_tuning_config.get("vlm_image_folder") or "")
+    vlm_image_folder = _imgf_raw if (re.fullmatch(r"[A-Za-z0-9_.-][A-Za-z0-9_./-]*", _imgf_raw)
+                                     and ".." not in _imgf_raw and not _imgf_raw.startswith("/")) else ""
     script_name = VLM_FINE_TUNING_SCRIPT_NAME if is_vlm else FINE_TUNING_SCRIPT_NAME
     script_path = PATH.JF_POD_MODEL_FINE_TUNING_SCRIPT_PATH + script_name
     config_path = None
     if fine_tuning_config["fine_tuning_type"] == TYPE.FINE_TUNING_ADVANCED:
-        # config_path = PATH.JF_POD_MODEL_CONFIG_FILE_PATH.format(MODEL_NAME=model_name, FILE_NAME=fine_tuning_config["config_file_name"]) 
-        config_path = fine_tuning_config["config_file_name"]
+        # config_path = PATH.JF_POD_MODEL_CONFIG_FILE_PATH.format(MODEL_NAME=model_name, FILE_NAME=fine_tuning_config["config_file_name"])
+        # config_file_name 은 --config_path 로 명령에 보간 → basename + 파일명 화이트리스트로 셸 인젝션 차단(보안리뷰 C-2).
+        _cfg_raw = os.path.basename(str(fine_tuning_config.get("config_file_name") or ""))
+        config_path = _cfg_raw if re.fullmatch(r"[A-Za-z0-9._-]+", _cfg_raw) else None
     dataset_path = PATH.JF_POD_MODEL_FINE_TUNING_DATASET_PATH.format(DATASET_NAME=dataset_name, FILE_PATH=dataset_file_path)
         
     fine_tuning_config = FineTuningParam(**fine_tuning_config)
@@ -136,6 +162,19 @@ def fine_tuning_command(model_name : str, dataset_name : str, dataset_file_path:
     # VLM stage1(projector) epoch 은 FineTuningParam 에 없으므로 VLM 일 때만 별도 주입.
     if is_vlm:
         params += f" --vlm_stage1_epochs={vlm_stage1_epochs}"
+        params += (f" --vlm_stage1_lr={vlm_stage1_lr} --vlm_batch_size={vlm_batch_size}"
+                   f" --vlm_weight_decay={vlm_weight_decay} --vlm_lora_r={vlm_lora_r}"
+                   f" --vlm_lora_alpha={vlm_lora_alpha} --vlm_lora_dropout={vlm_lora_dropout}")
+        if vlm_lora_target_modules:
+            # 이 command 는 FT helm install 에 --set command="..." 로 통째 전달됨 → q_proj,v_proj 의
+            # 콤마를 helm 이 key 구분자로 봐 "v_proj has no value" 로 파싱 실패. \, 로 이스케이프
+            # (helm 이 단일 콤마로 복원 → 엔진 argparse 는 q_proj,v_proj 수신).
+            params += f" --vlm_lora_target_modules={vlm_lora_target_modules.replace(',', '\\,')}"
+        # 대용량 VLM 데이터셋(예: CC3M 595K) 캡 + 이미지 루트(미지정 시 엔진이 직속→images/ 자동 폴백).
+        # image_folder 는 콤마 없는 경로 문자만 통과(위 정규식) → helm --set 콤마 이슈 없음.
+        params += f" --max_samples={vlm_max_samples}"
+        if vlm_image_folder:
+            params += f" --image_folder={vlm_image_folder}"
     # else:
     #     ds_config_path="/fine_tuning/ds_config.json"
     # if used_dist:
