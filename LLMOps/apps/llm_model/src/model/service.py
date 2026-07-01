@@ -264,6 +264,14 @@ async def create_model_helm(workspace_id : int, model_id : int, model_name:str, 
             if not re.fullmatch(r'[A-Za-z0-9._-]{1,80}', _seg) or '..' in _seg:
                 print(f"Error: invalid {_label} for helm launch: {_seg!r}")
                 return False, f"invalid {_label}"
+        # huggingface_model_id 는 --set command.model_id 로 셸 f-string 에 보간됨(download·compose). HF repo id
+        # 라 '/'(namespace)·','(compose '{vision},{llm}') 허용하되 셸 메타문자($ ` " ; | & 공백 등)·'..' 차단.
+        # create_model 진입부에서 이미 검증하지만(다운로드 1440·compose 1394), 셸 경계에서 재봉쇄(defense-in-depth,
+        # model_name 과 동일 패턴; 미래 호출자 대비). 콤마는 셸 메타문자 아님(helm --set 용 이스케이프는 아래서 처리).
+        if huggingface_model_id is not None:
+            if not re.fullmatch(r'[A-Za-z0-9._/,-]{1,200}', huggingface_model_id) or '..' in huggingface_model_id:
+                print(f"Error: invalid huggingface_model_id for helm launch: {huggingface_model_id!r}")
+                return False, "invalid huggingface_model_id"
         command = ""
         mode = ""
         # HF 토큰을 helm --set(release secret)·pod command 평문 대신 사전 생성 K8s Secret→env(HF_TOKEN)
