@@ -186,7 +186,10 @@ async def delete_commit_model_checkpoint(model_id: int, commit_id: int, step: in
         return response(status=1, result=res)
     except Exception as e:
         traceback.print_exc()
-        return response(status=0, message="server error", result=False)
+        # 큐레이션된 검증 메시지만 노출(promote 라우트와 동일 처리), 예기치 못한 예외는 generic.
+        _m = str(e)
+        _um = _m[len("Error:"):].strip() if _m.startswith("Error:") else "server error"
+        return response(status=0, message=_um, result=False)
 
 
 @model.post("/{model_id}/commit-models/{commit_id}/checkpoints/{step}/promote", summary='promote a commit checkpoint to a new version', tags=TAG_COMMIT_MODEL)
@@ -201,7 +204,11 @@ async def promote_commit_model_checkpoint(model_id: int, commit_id: int, step: i
         return response(status=1, result=res)
     except Exception as e:
         traceback.print_exc()
-        return response(status=0, message="server error", result=False)
+        # 큐레이션된 사용자 검증 메시지("Error: ...", 예: 중복/이미-best/step없음)는 그대로 노출, 예기치 못한
+        # 예외는 generic(내부 노출 방지). 검증 실패가 "server error" 로 뭉개져 원인 안 보이던 문제 해소.
+        _m = str(e)
+        _um = _m[len("Error:"):].strip() if _m.startswith("Error:") else "server error"
+        return response(status=0, message=_um, result=False)
 
 
 @model.get("/fine-tuning/system-log", summary='log - fine tuning', tags=TAG_FINE_TUNING)
