@@ -252,6 +252,18 @@ async def create_model_helm(workspace_id : int, model_id : int, model_name:str, 
     """
     try:
         namespace = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=workspace_id)
+        # 셸 인젝션·경로 탈출 방어(보안리뷰) — 모델명/커밋명은 아래 helm --set f-string(shell=True) + NFS
+        # 경로 세그먼트로 들어간다. create_model/create_commit_model 에서 이미 allowlist 를 걸지만, 모든 호출
+        # 경로(compose/커스텀 체크포인트 ingestion 등)를 셸 경계에서 재차 봉쇄(promote_model_helm 동일 패턴).
+        # '..'·셸 메타문자 차단. (save_commit_name=source_model 도 통과.) 주의: huggingface_model_id 는 HF repo
+        # id('/'·','·'@' 포함)라 별도 charset 필요 → 이번 범위 외(별도 처리 권장).
+        for _seg, _label in ((model_name, "model_name"), (commit_model, "commit_model"),
+                             (commit_name, "commit_name"), (save_commit_name, "save_commit_name")):
+            if _seg is None:
+                continue
+            if not re.fullmatch(r'[A-Za-z0-9._-]{1,80}', _seg) or '..' in _seg:
+                print(f"Error: invalid {_label} for helm launch: {_seg!r}")
+                return False, f"invalid {_label}"
         command = ""
         mode = ""
         # HF 토큰을 helm --set(release secret)·pod command 평문 대신 사전 생성 K8s Secret→env(HF_TOKEN)
@@ -1329,6 +1341,11 @@ async def create_model(workspace_id : int, model_name : str, description : str, 
                 raise Exception(f"Error: domain '{domain}' is not yet supported")
             else:
                 raise Exception(f"Error: unknown domain '{domain}'")
+        # model_name 은 이후 create_model_helm 의 helm --set f-string(shell=True) + NFS 경로 세그먼트에
+        # 그대로 들어간다. FE 우회 직접 API 호출로 `$(...)`·백틱 등을 이름에 넣으면 helm 잡 런치 파드(kube/helm
+        # 자격증명)에서 RCE. 생성 시점에 차단(commit_name allowlist·C-1/C-2 와 동일 클래스). 영문/숫자/._- 1~50자.
+        if not re.fullmatch(r'[A-Za-z0-9._-]{1,50}', model_name or '') or '..' in (model_name or ''):
+            raise Exception("Error: invalid model name (영문/숫자/._- 1~50자, '..' 불가)")
         # check duplicate model name
         if await db_model.check_model_by_model_name(model_name=model_name, workspace_id=workspace_id):
             raise Exception(f"Error: model name duplicated")
