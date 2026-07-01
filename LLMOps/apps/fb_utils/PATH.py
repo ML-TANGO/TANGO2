@@ -40,6 +40,9 @@ JF_PREPROCESSING_DATA_PATH = "/dataset/{DATA_PATH}"
 ## MODEL APP PATH
 JF_MODEL_COMMIT_PATH = JF_MAIN_MODEL_PATH + "/commit_models"
 JF_MODEL_COMMIT_LOG_PATH = JF_MAIN_MODEL_PATH + "/commit_logs"
+# 커밋별 체크포인트 스냅샷(Phase 2-C) — 커밋 시 models/<name>/checkpoints/ 를 여기로 서버측 복사.
+# 별도 top-level 이라 커밋 헬름 잡(commit_models)과 레이스 없음. 어댑터가 작아 커밋당 ~50MB.
+JF_MODEL_COMMIT_CHECKPOINT_PATH = JF_MAIN_MODEL_PATH + "/commit_checkpoints"
 JF_MODEL_LATEST_CHECKPOINT_PATH = JF_MAIN_MODEL_PATH + "/latest_checkpoint"
 JF_MODEL_TMP_PATH = JF_MAIN_MODEL_PATH + "/tmp_model"
 JF_MODEL_TOKENIZER_PATH = JF_MAIN_MODEL_PATH + "/tokenizer"
@@ -58,6 +61,8 @@ JF_POD_MODEL_TMP_MODEL_PATH = JF_POD_MODEL_PATH + "/tmp_model"
 JF_POD_MODEL_LATEST_CHECKPOINT_PATH = JF_POD_MODEL_PATH + "/latest_checkpoint"
 JF_POD_MODEL_LATEST_LOG_PATH = JF_POD_MODEL_PATH + "/logs"
 JF_POD_MODEL_COMMIT_LOG_PATH = JF_POD_MODEL_PATH + "/commit_logs/{COMMIT_NAME}"
+# Phase 2-C promote: 커밋별 체크포인트 스냅샷(파드 마운트 /models 기준).
+JF_POD_MODEL_COMMIT_CHECKPOINT_PATH = JF_POD_MODEL_PATH + "/commit_checkpoints"
 JF_POD_MODEL_FINE_TUNING_SCRIPT_PATH = "/fine_tuning"
 JF_POD_MODEL_CONFIG_FILE_PATH = JF_POD_MODELS_PATH + "/configurations/{FILE_NAME}"
 JF_POD_MODEL_FINE_TUNING_DATASET_PATH = "/dataset/{DATASET_NAME}/{FILE_PATH}"

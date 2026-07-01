@@ -19,6 +19,7 @@
 import argparse
 import json
 import os
+import shutil
 import sys
 import traceback
 
@@ -38,6 +39,10 @@ except Exception:    # pragma: no cover - 테스트/오프라인 폴백
 
 MODEL_DIR = "/model"
 LOG_DIR = "/logs"
+# 체크포인트 레지스트리(Phase1) 전용 마운트(models/{name}/checkpoints). tmp_model 과 분리 —
+# stop_fine_tuning 의 move_checkpoint_files_to_parent 에 휩쓸리지 않고 영속(레지스트리 API 가 NFS 로 읽음).
+# stage2 가 step 마다 경량 체크포인트(LoRA=어댑터)를 여기 저장 + _projector.pt(stage1 projector) 1회.
+CKPT_DIR = "/checkpoints"
 _IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp")
 _IMAGE_KEYS = ("image", "image_path", "image_url", "img", "img_path", "image_file",
                "file_name", "filename", "file")
@@ -266,13 +271,22 @@ def get_submodules(model):
 # ── 학습 (stage 1: projector / stage 2: LM) ──────────────────────────────────
 def _train(model, dataset, collator, *, epochs, lr, grad_accum, warmup, stage_label,
            report_steps, batch_size=1, weight_decay=0.0, callbacks=None, hf_tensorboard=True,
-           eval_dataset=None, eval_steps=0):
+           eval_dataset=None, eval_steps=0, ckpt_dir=None, save_steps=0, save_total_limit=0,
+           load_best=False):
     from transformers import Trainer, TrainingArguments
     use_bf16 = torch.cuda.is_available() and torch.cuda.is_bf16_supported()
     # held-out 검증셋이 있으면 step 단위 평가 → eval_loss 로깅(콜백이 eval/loss 태그로 기록). 없으면 끔.
     do_eval = eval_dataset is not None and eval_steps and eval_steps > 0
+    # 체크포인트 레지스트리(Phase1): ckpt_dir+save_steps 지정 시 step 마다 경량 저장(LoRA=어댑터).
+    # save_total_limit 로 캡, eval 있으면 load_best_model_at_end 로 과적합 전 best 보존(prune 면제) +
+    # train() 후 best 어댑터를 메모리에 복원 → 이어지는 merge_and_unload 결과=best. HF 제약상 load_best
+    # 면 save_strategy==eval_strategy & save_steps==eval_steps 정렬 필요 → 호출부가 save_steps=eval_steps.
+    do_save = bool(ckpt_dir) and save_steps and save_steps > 0
+    use_load_best = do_save and do_eval and load_best
     args = TrainingArguments(
-        output_dir=os.path.join("/tmp_model", stage_label),
+        # 어댑터 체크포인트는 ckpt_dir/adapters 하위에 — _projector.pt(ckpt_dir 루트)가 Trainer 의
+        # output_dir 정리/overwrite 영향 밖에 있도록 분리(리뷰 HIGH). 레지스트리=adapters/checkpoint-*.
+        output_dir=(os.path.join(ckpt_dir, "adapters") if do_save else os.path.join("/tmp_model", stage_label)),
         overwrite_output_dir=True,
         num_train_epochs=epochs,
         per_device_train_batch_size=max(1, batch_size),
@@ -284,7 +298,12 @@ def _train(model, dataset, collator, *, epochs, lr, grad_accum, warmup, stage_la
         logging_dir=LOG_DIR,
         logging_strategy="steps",
         logging_steps=max(1, report_steps),
-        save_strategy="no",
+        save_strategy=("steps" if do_save else "no"),
+        save_steps=(save_steps if do_save else None),
+        save_total_limit=(save_total_limit if (do_save and save_total_limit) else None),
+        load_best_model_at_end=use_load_best,
+        metric_for_best_model=("eval_loss" if use_load_best else None),
+        greater_is_better=(False if use_load_best else None),
         eval_strategy=("steps" if do_eval else "no"),
         eval_steps=(eval_steps if do_eval else None),
         bf16=use_bf16,
@@ -349,6 +368,22 @@ def run(args):
                 except OSError:
                     pass
         cont_cb, tb_writer = _build_continuous_tb_callback(LOG_DIR)
+        # 체크포인트 레지스트리 디렉터리 초기화 — 이전 run 의 후보만 정리(adapters/ + _projector.pt).
+        # 전체 rmtree 대신 한정 — 향후 레지스트리에 사용자 선택/메타가 생겨도 비소유 상태를 지우지
+        # 않도록(codex LOW). 폴더 자체는 마운트라 유지.
+        try:
+            os.makedirs(CKPT_DIR, exist_ok=True)
+            for _e in ("adapters", "_projector.pt"):
+                _p = os.path.join(CKPT_DIR, _e)
+                try:
+                    if os.path.isdir(_p):
+                        shutil.rmtree(_p)
+                    elif os.path.exists(_p):
+                        os.remove(_p)
+                except OSError:
+                    pass
+        except OSError:
+            pass
         if args.num_gpus and args.num_gpus > 1:
             # 타겟=단일 GPU(과제: 학습 PEFT/경량 지향). 다GPU 는 DDP full-replica 로 동작하나
             # VLM 2-stage 다GPU 동등성은 미검증 — 데모 스코프 밖.
@@ -409,9 +444,30 @@ def run(args):
     else:
         _log("STAGE 1 skipped (vlm_stage1_epochs<=0)")
 
+    # ── stage1 projector 1회 영속(LoRA 경로) ──────────────────────────────────────
+    # stage2 어댑터 체크포인트(PeftModel save)는 projector(비-LoRA·frozen)를 담지 않음(스파이크 #2) →
+    # CKPT_DIR/_projector.pt 에 1회 저장(stage2 내내 동일). Phase2 promote 재조립의 building block.
+    # ⚠️ run 종료 시 /model(base)이 merged best 로 덮어써지므로(하단 save_pretrained), 임의 step 재현엔
+    # _projector+adapter 만으론 부족 — Phase2 promote 는 pre-stage2 base 스냅샷이 추가로 필요(codex HIGH).
+    # Phase1 자체는 재조립 불요(auto-best 가 이미 /model). full-FT 는 체크포인트=풀웨이트라 projector 불요.
+    if args.used_lora and _is_primary():
+        try:
+            os.makedirs(CKPT_DIR, exist_ok=True)
+            torch.save({k: v.detach().cpu() for k, v in projector.state_dict().items()},
+                       os.path.join(CKPT_DIR, "_projector.pt"))
+            _log("persisted stage1 projector → _projector.pt (for adapter-checkpoint reload)")
+        except Exception as _e:
+            _log(f"WARNING: projector persist failed: {_e}")
+
     # ── Stage 2: LM 지시 튜닝 (vision + projector freeze) ──
     if not (args.num_train_epochs and args.num_train_epochs > 0):
         raise RuntimeError("num_train_epochs must be > 0 (stage2 LM tuning)")
+    # 체크포인트 보관 개수(캡): 명시값 우선, 없으면 LoRA=5(경량)/full=2(풀웨이트 디스크 부담).
+    _ckpt_n = (args.vlm_save_total_limit if getattr(args, "vlm_save_total_limit", 0)
+               else (5 if args.used_lora else 2))
+    # stage2 저장 주기: load_best 정렬을 위해 eval_steps 와 일치(eval 있을 때). eval 없으면 epoch당 1회.
+    _stage2_eval = _eval_every(args.num_train_epochs)
+    _stage2_save = _stage2_eval if _stage2_eval > 0 else max(1, _per_epoch)
     _set_requires_grad(model, False)
     merged_after = False
     if args.used_lora:
@@ -441,12 +497,17 @@ def run(args):
         _set_requires_grad(vision, False)
         _set_requires_grad(projector, False)
         _log("STAGE 2 (full language_model) start")
-    _train(model, dataset, collator, epochs=args.num_train_epochs,
+    t2 = _train(model, dataset, collator, epochs=args.num_train_epochs,
            lr=args.learning_rate, grad_accum=args.gradient_accumulation_steps,
            warmup=args.warmup_steps, stage_label="stage2_lm", report_steps=10,
            batch_size=args.vlm_batch_size, weight_decay=args.vlm_weight_decay,
            callbacks=([cont_cb] if cont_cb else None), hf_tensorboard=(cont_cb is None),
-           eval_dataset=eval_dataset, eval_steps=_eval_every(args.num_train_epochs))
+           eval_dataset=eval_dataset, eval_steps=_stage2_eval,
+           # 체크포인트 레지스트리: step 마다 어댑터 저장(CKPT_DIR/adapters), N개 캡, eval 있으면 best 보존+복원.
+           ckpt_dir=CKPT_DIR, save_steps=_stage2_save, save_total_limit=_ckpt_n, load_best=True)
+    # load_best_model_at_end 가 best 어댑터를 trainer.model 에 복원 → 명시적으로 그 객체를 merge 대상으로
+    # 채택(PeftModel in-place 복원이라 outer ref 와 동일하지만, HF/peft 버전 변동에도 best 보장; 리뷰 MEDIUM).
+    model = getattr(t2, "model", model)
     _log("STAGE 2 done")
 
     # ── 저장 (단독 로드 가능한 full 모델 + 프로세서) ──
@@ -485,6 +546,7 @@ def main():
     p.add_argument("--vlm_lora_alpha", type=int, default=16)
     p.add_argument("--vlm_lora_dropout", type=float, default=0.05)
     p.add_argument("--vlm_lora_target_modules", type=str, default="")
+    p.add_argument("--vlm_save_total_limit", type=int, default=0)     # 체크포인트 보관 캡(0=기본: LoRA5/full2)
     # 스케줄러가 FineTuningConfig 의 모든 키를 --key=value 로 넘기므로 미지정 인자는 무시.
     args, _unknown = p.parse_known_args()
 

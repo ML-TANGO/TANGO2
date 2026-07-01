@@ -128,6 +128,9 @@ const MultimodalFineTuningView = memo(function MultimodalFineTuningView({
   const [maxSamples, setMaxSamples] = useState(0);
   const [dsFilesLoading, setDsFilesLoading] = useState(false); // 데이터 파일 조회 중(빈목록 깜빡임 방지)
   const [stopping, setStopping] = useState(false);             // 중지 요청 in-flight(중복 클릭 방지)
+  const [starting, setStarting] = useState(false);             // 재학습 시작 optimistic 락(SSE running tick 전 gap 차단)
+  // 체크포인트 레지스트리 UI 는 커밋(버전) 상세(ModelCommitListItem)로 이전(Phase 2-C) — 이 화면은
+  // 학습/모니터링 전용. 체크포인트=버전에 귀속(커밋 시 commit_checkpoints 로 스냅샷).
 
   // 학습 모니터링 데이터(부모 SSE 구독에서 props 로 수신). 차트 소스=엔진 TensorBoard
   // (llm_model_vlm_fine_tuning.py 연속-step 콜백). 진행률=sse-time(TB latest_step + DB config).
@@ -139,6 +142,19 @@ const MultimodalFineTuningView = memo(function MultimodalFineTuningView({
   // 완료 시 sse-time(running 게이팅)이 끊겨 progressData 가 null/동결(<100%) → 정의상 완료=100%로 표시.
   const isDone = fineTuningStatus === 'done';
   const sMeta = STATUS_META[fineTuningStatus];
+  // 커밋(저장) 상태 — sse-status(commit_status) 는 modality 무관(get_model 직접 읽음)이라 VLM 모델도
+  // 그대로 수신. 학습 done 후 merged LLaVA(latest_checkpoint)를 버전드 commit_model 로 저장.
+  const commitStatusVal = fineStatus?.commit_status?.status;
+  const isCommitting = commitStatusVal === 'running';                 // 커밋 잡(copy_commit_model) 실제 진행 중(라벨/스피너)
+  // 커밋 버튼 비활성 게이트: SSE 첫 tick 전(null)·running 이면 차단 — 중복 커밋/상태 미확정 방지
+  // (텍스트 FT 의 TopButtonList.isCalCommitLoad: !commitStatus||running → disabled 와 동형).
+  const commitBlocked = !commitStatusVal || isCommitting;
+  // 커밋 불러오기 / 시스템 로그 게이팅.
+  // 시스템 로그: 상태 미확정 외엔 항상 노출 — 학습/커밋 에러 시에도 파드 로그로 진단해야 하므로
+  // download-error 게이트는 두지 않음(텍스트 FT isCalSystemlog 와 의도적 차이, 리뷰 반영).
+  const logBlocked = !commitStatusVal || !fineTuningStatus;
+  // 커밋 불러오기: 학습 active(running/pending/installing)·커밋 in-flight·상태 미확정 시 비활성.
+  const loadBlocked = logBlocked || isActive || isCommitting;
   const hasDataset = datasets.length > 0;
   const percent = progressData?.percent;
   const totalEpoch = progressData?.total_epoch;       // VLM=stage1+stage2 합산(BE sse-time)
@@ -158,6 +174,10 @@ const MultimodalFineTuningView = memo(function MultimodalFineTuningView({
   const epochShown = isDone
     ? (totalEpoch ? `${totalEpoch}/${totalEpoch}` : '완료')
     : (Number.isFinite(progressEpoch) && totalEpoch ? `${progressEpoch}/${totalEpoch}` : '—');
+
+  // 재학습 optimistic 락 해제 — SSE 가 active(pending/installing/running) tick 을 전달하면 해제.
+  // done→running gap(수 초) 동안 커밋/재학습 버튼 노출·재진입을 막는 로컬 가드(stopping 패턴 동형, 리뷰 HIGH).
+  useEffect(() => { if (isActive) setStarting(false); }, [isActive]);
 
   // 실 run — vlm_* 하이퍼파라미터를 fine_tuning_config 로 전송(엔진 llm_model_vlm_fine_tuning.py 수신).
   const runVlm = async ({ instanceId, instanceCount, gpuCount }) => {
@@ -213,7 +233,10 @@ const MultimodalFineTuningView = memo(function MultimodalFineTuningView({
           modelId,
           onSubmit: async ({ instanceId, instanceCount, gpuCount }) => {
             const ok = await runVlm({ instanceId, instanceCount, gpuCount });
-            if (ok && refresh) refresh();    // 성공 후 모델 메타 재조회(상태/그래프는 SSE 가 별도 구독)
+            if (ok) {
+              setStarting(true);             // SSE running tick 전까지 커밋/재학습 버튼 잠금(done→running 레이스 차단)
+              if (refresh) refresh();        // 성공 후 모델 메타 재조회(상태/그래프는 SSE 가 별도 구독)
+            }
             return ok;
           },
           refresh,
@@ -242,6 +265,43 @@ const MultimodalFineTuningView = memo(function MultimodalFineTuningView({
       setStopping(false);
     }
   };
+
+  // 학습 완료 후 결과 저장(커밋) — merged LLaVA(latest_checkpoint)를 버전드 commit_model 로 복사.
+  // 텍스트 FT 와 동일한 modality-agnostic 경로: FINETUNING_COMMIT 모달(부모 FineTuning 이 loadModalComponent
+  // 등록) → POST models/commit-models → copy_commit_model 헬름(is_commit=0, shutil.copytree 로 LLaVA
+  // config/processor/tokenizer 전부 복사). 저장본은 상위 '커밋 리스트' 탭에서 평가·양자화에 재사용.
+  const handleCommit = useCallback(() => {
+    dispatch(
+      openModal({
+        modalType: 'FINETUNING_COMMIT',
+        // modelId 는 라우트 파라미터(문자열) → 다른 호출부(runVlm/stopVlm)와 동일하게 정수화(리뷰 HIGH).
+        // stop:false 명시 — 모달은 stop truthy 면 stopURL 로 분기(falsy=commit). 암묵 undefined 제거.
+        modalData: { workspaceId, modelId: parseInt(modelId, 10), refresh, stop: false },
+      }),
+    );
+  }, [dispatch, workspaceId, modelId, refresh]);
+
+  // 커밋 불러오기 — 저장된 commit_model 을 활성 모델(latest_checkpoint)로 로드(텍스트 FT 와 동일 모달/엔드포인트).
+  // 부모 FineTuning 이 FINETUNING_COMMIT_LOAD 등록. 모달이 commit 목록 조회→선택→POST models/commit-models/load.
+  // VLM 은 항상 latest_checkpoint 에서 학습하므로 getCommitId(이어학습 commit_id 피드)는 불필요 → no-op.
+  const handleCommitLoad = useCallback(() => {
+    dispatch(
+      openModal({
+        modalType: 'FINETUNING_COMMIT_LOAD',
+        modalData: { workspaceId, modelId: parseInt(modelId, 10), getCommitId: () => {}, refresh },
+      }),
+    );
+  }, [dispatch, workspaceId, modelId, refresh]);
+
+  // 시스템 로그 — 학습 파드 로그 조회(텍스트 FT 와 동일 모달). 내부 모델이라 models/fine-tuning/system-log 경로.
+  const handleSystemLog = useCallback(() => {
+    dispatch(
+      openModal({
+        modalType: 'FINETUNING_SYSTEM_LOG',
+        modalData: { workspaceId, modelId: parseInt(modelId, 10), modelName: fineTuningData?.model_name },
+      }),
+    );
+  }, [dispatch, workspaceId, modelId, fineTuningData]);
 
   // 데이터셋 바인딩 — 모달 대신 인라인. 워크스페이스 전체 데이터셋을 마운트 시 조회.
   const fetchWsDatasets = useCallback(async () => {
@@ -517,6 +577,17 @@ const MultimodalFineTuningView = memo(function MultimodalFineTuningView({
           <div className={lx('control-head')}>
             <SectionLabel>학습 제어</SectionLabel>
             {sMeta && <span className={lx('status-badge', `status-badge--${sMeta.cls}`)}>{sMeta.label}</span>}
+            {/* 유틸 액션(텍스트 FT TopButtonList 미러): 커밋 불러오기 + 시스템 로그. 우측 정렬. */}
+            <div className={lx('head-actions')}>
+              <button type='button' className={lx('head-btn')} onClick={handleCommitLoad} disabled={loadBlocked}
+                title={loadBlocked ? '학습/저장 중에는 불러올 수 없습니다.' : '저장된 커밋을 활성 모델로 불러옵니다.'}>
+                <span aria-hidden='true'>⤓</span>  커밋 불러오기
+              </button>
+              <button type='button' className={lx('head-btn')} onClick={handleSystemLog} disabled={logBlocked}
+                title={logBlocked ? '학습 기록이 아직 없습니다.' : '학습 파드 시스템 로그를 확인합니다.'}>
+                <span aria-hidden='true'>📄</span>  시스템 로그
+              </button>
+            </div>
           </div>
           {fineTuningStatus === 'error' && fineStatus?.fine_tuning_status?.reason && (
             <div className={lx('train-warn')}>실패 사유: {fineStatus.fine_tuning_status.reason}</div>
@@ -536,11 +607,33 @@ const MultimodalFineTuningView = memo(function MultimodalFineTuningView({
               ) : isPreparing ? (
                 <button type='button' className={lx('train-btn', 'train-btn--start')} disabled>● 준비 중…</button>
               ) : (
-                <button type='button' className={lx('train-btn', 'train-btn--start')} onClick={handleTrain} disabled={!hasDataset} title={!hasDataset ? '학습 데이터셋을 먼저 바인딩하세요.' : undefined}>▶  학습 시작</button>
+                <button type='button' className={lx('train-btn', 'train-btn--start')} onClick={handleTrain} disabled={!hasDataset || isCommitting || starting} title={!hasDataset ? '학습 데이터셋을 먼저 바인딩하세요.' : isCommitting ? '저장(커밋) 중에는 학습을 시작할 수 없습니다.' : undefined}>{isDone ? '↻  다시 학습' : '▶  학습 시작'}</button>
+              )}
+              {/* 학습 완료 시에만 저장(커밋) — merged LLaVA 는 stage2 정상 완료 후에만 latest_checkpoint 에
+                  존재(중지/실패 시점엔 머지 산출물 없음) → done 게이트(텍스트 FT 의 done/stop/error 와 의도적
+                  차이). 재학습 시작 직후(starting)엔 숨김 + 커밋 잡 in-flight/상태 미확정(commitBlocked)이면 비활성. */}
+              {isDone && !starting && (
+                <button
+                  type='button'
+                  className={lx('train-btn', 'train-btn--commit')}
+                  onClick={handleCommit}
+                  disabled={commitBlocked}
+                  title={isCommitting ? '저장(커밋) 작업이 진행 중입니다.' : '학습 결과를 버전으로 저장합니다.'}
+                >
+                  <span aria-hidden='true'>{isCommitting ? '⏳' : '💾'}</span>
+                  {isCommitting ? '  저장 중…' : '  학습 결과 저장'}
+                </button>
               )}
             </div>
             {!hasDataset && !isActive && (
               <div className={lx('train-hint')}>학습 데이터셋을 먼저 바인딩하면 시작할 수 있습니다.</div>
+            )}
+            {isDone && !starting && (
+              <div className={lx('train-hint')}>
+                {isCommitting
+                  ? '저장(커밋) 작업이 진행 중입니다. 완료 후 ‘커밋 리스트’ 탭에서 확인할 수 있습니다.'
+                  : '학습 결과를 저장하면 ‘커밋 리스트’ 탭에서 평가·양자화에 사용할 수 있습니다.'}
+              </div>
             )}
           </div>
         </section>
@@ -569,6 +662,7 @@ const MultimodalFineTuningView = memo(function MultimodalFineTuningView({
             </div>
           )}
         </section>
+
         </div>{/* /monitor-col */}
       </div>
     </div>

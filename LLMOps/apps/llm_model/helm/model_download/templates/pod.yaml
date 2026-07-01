@@ -56,6 +56,13 @@ spec:
           --model_id="{{ .Values.command.model_id }}" \
           --token="$HF_TOKEN" \
           --dtype="{{ .Values.command.dtype }}" \
+        {{- else if eq .Values.command.mode "promote_checkpoint" }}
+          --src_model_path="{{ .Values.command.src_model_path }}" \
+          --best_adapter_path="{{ .Values.command.best_adapter_path }}" \
+          --target_adapter_path="{{ .Values.command.target_adapter_path }}" \
+          --dst_model_path="{{ .Values.command.dst_model_path }}" \
+          --dst_log_dir="{{ .Values.command.dst_log_dir }}" \
+          --src_model_log_path="{{ .Values.command.src_model_log_path }}" \
         {{- end }}
     volumeMounts:
     - name: jf-main

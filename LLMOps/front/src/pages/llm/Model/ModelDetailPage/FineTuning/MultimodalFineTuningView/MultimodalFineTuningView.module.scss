@@ -762,6 +762,8 @@
   &--pause { background: $yellow301; color: $mono200; &:hover { opacity: 0.85; } }
   &--done  { background: $mono202; color: $mono205; cursor: default; }
   &--stop  { background: $red502; color: $mono200; &:hover { opacity: 0.85; } }
+  // 학습 결과 저장(커밋) — done 상태에서만 노출. 저장/완료 의미의 그린 계열로 학습 시작(blue)과 구분.
+  &--commit { background: $lime603; color: $mono200; &:hover { background: $lime604; } }
   &:disabled { opacity: 0.5; cursor: default; }
 }
 
@@ -1054,6 +1056,26 @@
   gap: 10px;
 }
 
+// 학습 제어 헤더 우측 유틸 액션(커밋 불러오기 / 시스템 로그) — 메인 액션과 구분되는 ghost 버튼.
+.head-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+.head-btn {
+  padding: 6px 12px;
+  border-radius: 7px;
+  border: 1px solid $mono203;
+  background: $mono200;
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: $mono206;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  &:hover:not(:disabled) { border-color: $blue104; color: $blue104; background: $blue100; }
+  &:disabled { opacity: 0.45; cursor: default; }
+}
+
 .status-badge {
   padding: 2px 10px;
   border-radius: 999px;
@@ -1148,3 +1170,5 @@
   flex-shrink: 0;
   margin-left: 12px;
 }
+
+// 체크포인트 레지스트리 UI 는 커밋 상세(ModelCommitListItem)로 이전(Phase 2-C).

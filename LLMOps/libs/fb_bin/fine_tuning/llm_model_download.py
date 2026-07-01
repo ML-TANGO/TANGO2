@@ -314,6 +314,81 @@ def commit_load(latest_checkpoint_path : str, load_commit_model_path : str):
         print(f"Error occurred while copying folder: {e}")
         sys.exit(0)
 
+
+def promote_checkpoint(src_model_path: str, best_adapter_path: str, target_adapter_path: str,
+                       dst_model_path: str, dst_log_dir: str = "", src_model_log_path: str = "",
+                       latest_checkpoint_path: str = ""):
+    """체크포인트 promote (Phase 2-C C안) — 커밋 merged 모델(=base+best_delta)을 임의 step 으로 재타겟.
+
+    base 스냅샷 없이 LoRA 델타 산술로 재현(스파이크 검증, peft 0.18.1):
+      add_weighted_adapter(["best","target"], [-1.0, +1.0], combination_type="cat") → merge_and_unload()
+      = (base + best_delta) + (target_delta - best_delta) = base + target_delta.
+    ⚠️ combination_type 은 반드시 "cat" (rank 2r, 정확). linear/svd 는 rank 절단 lossy(스파이크 ~0.2~0.4 오차).
+    VLM: vision LoRA 는 frozen(δ=0)이라 -best+target 에서 상쇄, projector 는 커밋 모델에 이미 포함 → LM 만 재타겟.
+    어댑터=safetensors 라 torch.load(.bin) 신뢰 이슈 없음. trust_remote_code=False(엔진 정합)."""
+    import traceback as _tb
+    try:
+        import torch
+        import transformers
+        from peft import PeftModel
+        from transformers import AutoProcessor
+
+        # 1. 커밋 merged 모델 + 프로세서 로드 (엔진과 동일 클래스 fallback·trust_remote_code=False)
+        processor = None
+        try:
+            processor = AutoProcessor.from_pretrained(src_model_path, trust_remote_code=False)
+        except Exception as e:
+            print(f"[promote] processor load skipped: {e}")
+        model = None
+        last_err = None
+        for cls_name in ("AutoModelForImageTextToText", "AutoModelForVision2Seq",
+                         "LlavaForConditionalGeneration", "AutoModelForCausalLM"):
+            cls = getattr(transformers, cls_name, None)
+            if cls is None:
+                continue
+            try:
+                # bfloat16 명시 — float32 fallback 시 CPU 메모리 2배(merge 피크 OOM 위험, 리뷰 MEDIUM).
+                # 학습이 bf16 이라 커밋 모델도 bf16, 정밀도 동일. cat merge 의 미세 오차는 추론 허용 범위.
+                model = cls.from_pretrained(src_model_path, trust_remote_code=False, torch_dtype=torch.bfloat16)
+                print(f"[promote] loaded committed model via {cls_name}")
+                break
+            except Exception as e:
+                last_err = e
+        if model is None:
+            raise RuntimeError(f"failed to load committed model at {src_model_path}: {last_err}")
+
+        # 2. best·target 어댑터 attach (cat 결합엔 둘 다 로드돼 있어야 함)
+        pm = PeftModel.from_pretrained(model, best_adapter_path, adapter_name="best")
+        pm.load_adapter(target_adapter_path, adapter_name="target")
+
+        # 3. cat[-best, +target] → merge (cat 필수)
+        pm.add_weighted_adapter(["best", "target"], [-1.0, 1.0], "promote", combination_type="cat")
+        pm.set_adapter("promote")
+        merged = pm.merge_and_unload()
+
+        # 4. 새 커밋 위치에 저장 (+프로세서)
+        os.makedirs(dst_model_path, exist_ok=True)
+        merged.save_pretrained(dst_model_path, safe_serialization=True)
+        if processor is not None:
+            processor.save_pretrained(dst_model_path)
+        print(f"[promote] saved promoted model → {dst_model_path}")
+
+        # 5. (옵션) 학습 로그 복사 — 커밋 상세 그래프(result_log) 재사용
+        if src_model_log_path and dst_log_dir:
+            try:
+                shutil.copytree(src_model_log_path, dst_log_dir, dirs_exist_ok=True)
+                print(f"[promote] copied logs '{src_model_log_path}' → '{dst_log_dir}'.")
+            except Exception as e:
+                print(f"[promote] log copy skipped: {e}")
+        # 6. (옵션) 즉시 서빙 활성화 (latest_checkpoint 로 복사)
+        if latest_checkpoint_path:
+            shutil.copytree(dst_model_path, latest_checkpoint_path, dirs_exist_ok=True)
+            print(f"[promote] copied '{dst_model_path}' → '{latest_checkpoint_path}' (serving).")
+    except Exception as e:
+        _tb.print_exc()
+        print(f"[promote] FAILED: {e}")
+        sys.exit(1)
+
 if __name__ == "__main__":
     import argparse
     import sys
@@ -357,6 +432,16 @@ if __name__ == "__main__":
     load_parser.add_argument("--latest_checkpoint_path", type=str, help="The path to the latest model checkpoint.")
     load_parser.add_argument("--load_commit_model_path", type=str, help="The path to the committed model.")
 
+    # promote_checkpoint 서브커맨드 (Phase 2-C: 커밋의 step 체크포인트를 새 버전으로 promote)
+    promote_parser = subparsers.add_parser("promote_checkpoint", help="Promote a commit's step checkpoint to a new merged model via LoRA delta arithmetic (cat).")
+    promote_parser.add_argument("--src_model_path", type=str, help="Committed merged model dir (=base+best_delta).")
+    promote_parser.add_argument("--best_adapter_path", type=str, help="The commit's best adapter dir (checkpoint-{best}).")
+    promote_parser.add_argument("--target_adapter_path", type=str, help="The target step adapter dir (checkpoint-{step}).")
+    promote_parser.add_argument("--dst_model_path", type=str, help="The new commit's model output dir.")
+    promote_parser.add_argument("--dst_log_dir", type=str, default="", help="Optional log dir for the new commit.")
+    promote_parser.add_argument("--src_model_log_path", type=str, default="", help="Optional source log dir to copy.")
+    promote_parser.add_argument("--latest_checkpoint_path", type=str, default="", help="Optional: also copy to latest_checkpoint (serve).")
+
     # 인자 파싱
     args = parser.parse_args()
 
@@ -398,6 +483,17 @@ if __name__ == "__main__":
         commit_load(
             latest_checkpoint_path=args.latest_checkpoint_path,
             load_commit_model_path=args.load_commit_model_path,
+        )
+    elif args.command == "promote_checkpoint":
+        # promote_checkpoint 함수 호출 (Phase 2-C)
+        promote_checkpoint(
+            src_model_path=args.src_model_path,
+            best_adapter_path=args.best_adapter_path,
+            target_adapter_path=args.target_adapter_path,
+            dst_model_path=args.dst_model_path,
+            dst_log_dir=args.dst_log_dir,
+            src_model_log_path=args.src_model_log_path,
+            latest_checkpoint_path=args.latest_checkpoint_path,
         )
     else:
         print("Invalid command. Use 'download_model', 'copy_commit_model', 'stop_fine_tuning', or 'load_commit_model'.")

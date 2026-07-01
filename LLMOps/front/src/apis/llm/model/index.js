@@ -29,6 +29,29 @@ export const getModelsCommitModels = async (id) => {
   return res;
 };
 
+// Phase 2-C — 커밋(버전)에 귀속된 체크포인트 스냅샷 레지스트리(커밋 시 commit_checkpoints 로 보존).
+export const getCommitCheckpoints = async (modelId, commitId) => {
+  return await callApi({
+    url: `models/${modelId}/commit-models/${commitId}/checkpoints`,
+    method: 'get',
+  });
+};
+
+export const deleteCommitCheckpoint = async (modelId, commitId, step) => {
+  return await callApi({
+    url: `models/${modelId}/commit-models/${commitId}/checkpoints/${step}`,
+    method: 'delete',
+  });
+};
+
+// Phase 2-C promote — 커밋의 step 체크포인트를 새 버전 `<commit>-step<step>` 으로 적용(LoRA cat 재머지).
+export const promoteCommitCheckpoint = async (modelId, commitId, step) => {
+  return await callApi({
+    url: `models/${modelId}/commit-models/${commitId}/checkpoints/${step}/promote`,
+    method: 'post',
+  });
+};
+
 // 양자화·포팅 (SP-4 / v0.4 3.9) — 학습 완료 모델 → GGUF convert job → 포팅 패키지.
 export const startQuantize = async (modelId, body) => {
   // body: { target_quant: 'q4'|'q5'|'q6', target_device?: string }

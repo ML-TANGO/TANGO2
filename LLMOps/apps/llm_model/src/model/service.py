@@ -348,6 +348,75 @@ async def create_model_helm(workspace_id : int, model_id : int, model_name:str, 
         print(f"An unexpected error occurred: {e}")
         return False, str(e)
 
+async def promote_model_helm(workspace_id: int, model_id: int, model_name: str, src_commit_name: str,
+                             best_step: int, target_step: int, new_commit_name: str) -> Tuple[bool, str]:
+    """Phase 2-C promote 잡 런치 — 커밋의 step 체크포인트를 새 버전으로 재머지(LoRA cat 델타 산술).
+    입력: commit_models/<src>(merged=base+best_delta) + commit_checkpoints/<src>/adapters/{best,target}.
+    출력: commit_models/<new>(=base+target_delta) + commit_logs/<new>. 서빙(latest_checkpoint) 미변경(비파괴).
+    peft 필요 → FT 이미지. create_model_helm 과 동일 subprocess/멱등 처리."""
+    try:
+        namespace = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=workspace_id)
+        mode = "promote_checkpoint"
+        # 셸 인젝션·경로 탈출 차단(보안리뷰) — 이 값들은 helm --set f-string(subprocess_shell) + NFS 경로
+        # 세그먼트로 들어간다. model_name 은 플랫폼 차원 allowlist 미적용(create_model)이고, src_commit_name
+        # 은 구 커밋이 비검증일 수 있어 여기서 재검증(C-1/C-2·commit_name 하드닝 동일 클래스). best/target 은
+        # 아래 f-string 에서 int() 강제라 안전.
+        for _seg, _label in ((model_name, "model_name"), (src_commit_name, "src_commit_name"),
+                             (new_commit_name, "new_commit_name")):
+            if not re.fullmatch(r'[A-Za-z0-9._-]{1,80}', _seg or '') or '..' in (_seg or ''):
+                print(f"Error: invalid {_label} for promote: {_seg!r}")
+                return False, f"invalid {_label}"
+        ckpt_adapters = PATH.JF_POD_MODEL_COMMIT_CHECKPOINT_PATH.format(MODEL_NAME=model_name) + f"/{src_commit_name}/adapters"
+        command = ""
+        # 새 커밋만 생성(비파괴) → latest_checkpoint 빈 값 = 엔진이 서빙 복사 skip.
+        command += ' --set command.latest_checkpoint_path=""'
+        command += f' --set command.src_model_path="{PATH.JF_POD_MODEL_COMMIT_MODEL_PATH.format(MODEL_NAME=model_name, COMMIT_NAME=src_commit_name)}"'
+        command += f' --set command.best_adapter_path="{ckpt_adapters}/checkpoint-{int(best_step)}"'
+        command += f' --set command.target_adapter_path="{ckpt_adapters}/checkpoint-{int(target_step)}"'
+        command += f' --set command.dst_model_path="{PATH.JF_POD_MODEL_COMMIT_MODEL_PATH.format(MODEL_NAME=model_name, COMMIT_NAME=new_commit_name)}"'
+        command += f' --set command.dst_log_dir="{PATH.JF_POD_MODEL_COMMIT_LOG_PATH.format(MODEL_NAME=model_name, COMMIT_NAME=new_commit_name)}"'
+        command += f' --set command.src_model_log_path="{PATH.JF_POD_MODEL_COMMIT_LOG_PATH.format(MODEL_NAME=model_name, COMMIT_NAME=src_commit_name)}"'
+
+        os.chdir("/app/helm/")
+        helm_name = TYPE.MODEL_COMMIT_JOB_HELM_NAME.format(MODEL_ID=model_id)
+        image = settings.FINE_TUNING_IMAGE   # promote = 모델 로드+PEFT merge → FT 이미지
+        helm_command = f"""helm install {helm_name} ./model_download \
+            -n {namespace}  \
+            --set namespace="{namespace}" \
+            --set image="{image}" \
+            --set labels.model_id={model_id} \
+            --set labels.workspace_id={workspace_id} \
+            --set labels.model_commit_type="{mode}" \
+            --set labels.helm_name={helm_name} \
+            --set labels.pod_type={TYPE.FINE_TUNING_TYPE} \
+            --set labels.work_func_type="commit" \
+            --set command.mode="{mode}" \
+            --set resources.limits.memory=32Gi --set resources.requests.memory=24Gi \
+            --set resources.limits.cpu=2 --set resources.requests.cpu=1 \
+            {command} \
+        """
+        print(_redact_secrets(helm_command))    # create_model_helm 과 동일 마스킹(로그 위생, 리뷰 HIGH)
+        process = await asyncio.create_subprocess_shell(
+            helm_command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await process.communicate()
+        if process.returncode == 0:
+            return 1, stdout
+        err_msg = stderr.decode().strip()
+        # promote 맥락: release 이미 존재 = 다른 커밋/promote 잡 실행 중 → 실패로 처리(호출부 롤백). create_model_helm
+        # 의 멱등(True) 처리와 다름 — promote 는 commit_status 게이트로 재시도가 막히므로 collision=경쟁 상황.
+        if "cannot re-use a name that is still in use" in err_msg:
+            return False, "another commit/promote job is running"
+        print(stdout)
+        print(err_msg)
+        return False, err_msg
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+        return False, str(e)
+
+
 async def load_or_stop_helm(workspace_id : int, model_id: int, latest_checkpoint_path : str, tmp_model_path: str = None, load_commit_model_path : str = None):
     try:
         namespace = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=workspace_id)
@@ -410,7 +479,10 @@ async def create_model_folder(storage_name : str, workspace_name : str , model_n
     model_log_dir = PATH.JF_MODEL_LOG_PATH.format(STORAGE_NAME=storage_name, WORKSPACE_NAME=workspace_name, MODEL_NAME=model_name)
     model_commit_log_dir = PATH.JF_MODEL_COMMIT_LOG_PATH.format(STORAGE_NAME=storage_name, WORKSPACE_NAME=workspace_name, MODEL_NAME=model_name)
     model_latest_checkpoint_dir = PATH.JF_MODEL_LATEST_CHECKPOINT_PATH.format(STORAGE_NAME=storage_name, WORKSPACE_NAME=workspace_name, MODEL_NAME=model_name)
-    paths = [model_commit_dir, model_source_dir, model_config_dir, model_log_dir, model_commit_log_dir, model_latest_checkpoint_dir]
+    # 체크포인트 레지스트리(Phase1) 디렉터리 — fine_tuning 차트의 /checkpoints subPath 가 마운트되므로
+    # 모델 생성 시 미리 생성(subPath 자동생성 안 되는 클러스터에서 마운트 실패 방지, codex MEDIUM).
+    model_checkpoints_dir = os.path.join(os.path.dirname(model_latest_checkpoint_dir), "checkpoints")
+    paths = [model_commit_dir, model_source_dir, model_config_dir, model_log_dir, model_commit_log_dir, model_latest_checkpoint_dir, model_checkpoints_dir]
     
     # mkdir
     for path in paths:
@@ -469,6 +541,54 @@ async def delete_commit_model_folder(storage_name : str, workspace_name : str, m
     try:
         await common.async_rmtree(commit_model_dir_path)
     except Exception as e:
+        traceback.print_exc()
+        return False
+    return True
+
+
+def _commit_checkpoints_dir(storage_name: str, workspace_name: str, model_name: str, commit_name: str) -> Tuple[str, str]:
+    """(base, dst) — commit_checkpoints 베이스와 그 하위 <commit_name> 스냅샷 경로. commit_name 은
+    create_commit_model 의 allowlist(영문/숫자/._-, '..' 금지)를 이미 통과하지만, 베이스 이탈은
+    방어적으로 호출부에서 _is_under 로 재확인."""
+    base = PATH.JF_MODEL_COMMIT_CHECKPOINT_PATH.format(
+        STORAGE_NAME=storage_name, WORKSPACE_NAME=workspace_name, MODEL_NAME=model_name)
+    return base, os.path.join(base, commit_name)
+
+
+async def snapshot_commit_checkpoints(storage_name: str, workspace_name: str, model_name: str, commit_name: str) -> bool:
+    """커밋 시점에 학습 체크포인트(어댑터 레지스트리)를 커밋(버전)에 귀속 — models/<name>/checkpoints/
+    전체(adapters/ + VLM _projector.pt 등)를 commit_checkpoints/<commit>/ 로 서버측 스냅샷.
+    어댑터가 작아(LoRA 수MB×N + projector) 커밋당 ~50MB. 별도 top-level 디렉터리라 커밋 헬름 잡
+    (commit_models, latest_checkpoint→merged)과 레이스 없음. 체크포인트 부재/빈 경우 graceful skip
+    (커밋 자체는 성공). 경로는 commit_checkpoints 베이스 하위로 봉쇄."""
+    model_root = os.path.dirname(PATH.JF_MODEL_LATEST_CHECKPOINT_PATH.format(
+        STORAGE_NAME=storage_name, WORKSPACE_NAME=workspace_name, MODEL_NAME=model_name))
+    src = os.path.join(model_root, "checkpoints")
+    base, dst = _commit_checkpoints_dir(storage_name, workspace_name, model_name, commit_name)
+    # src·dst 모두 베이스 하위로 봉쇄(방어적 일관성, 리뷰 MEDIUM). commit_name 은 호출부 allowlist 통과본.
+    if "/" in commit_name or commit_name in (".", "..") or not _is_under(dst, base) or not _is_under(src, model_root):
+        raise Exception("Error: invalid commit checkpoint path")
+    # 어댑터 디렉터리가 없으면 스냅샷할 게 없음(외부/구 모델, full-merge-only 등) → graceful skip.
+    if not await asyncio.to_thread(os.path.isdir, os.path.join(src, "adapters")):
+        return False
+    await asyncio.to_thread(os.makedirs, base, exist_ok=True)
+    if await asyncio.to_thread(os.path.isdir, dst):    # 중복 커밋명은 상위에서 막지만 방어적 정리.
+        await asyncio.to_thread(common.rm_rf, dst)
+    # symlinks=True: src 내 심링크를 (대상 내용 복제 대신) 링크로 보존 → 학습 파드가 심어둔 심링크를 통한
+    # NFS 임의 파일 내용 유출 차단(보안리뷰 H-2). ignore_dangling_symlinks: 끊긴 링크는 무시(복사 실패 방지).
+    await asyncio.to_thread(shutil.copytree, src, dst, symlinks=True, ignore_dangling_symlinks=True)
+    return True
+
+
+async def delete_commit_checkpoints_folder(storage_name: str, workspace_name: str, model_name: str, commit_name: str) -> bool:
+    """커밋 롤백/삭제 시 commit_checkpoints/<commit> 스냅샷 정리. 베이스 이탈 차단."""
+    base, dst = _commit_checkpoints_dir(storage_name, workspace_name, model_name, commit_name)
+    if "/" in commit_name or commit_name in (".", "..") or not _is_under(dst, base):
+        return False
+    try:
+        if await asyncio.to_thread(os.path.isdir, dst):
+            await asyncio.to_thread(common.rm_rf, dst)
+    except Exception:
         traceback.print_exc()
         return False
     return True
@@ -903,7 +1023,14 @@ async def create_commit_model(commit_name : str, commit_message : str, model_id 
     tmp_path = PATH.JF_MODEL_TMP_PATH.format(STORAGE_NAME=workspace_info["main_storage_name"], WORKSPACE_NAME=workspace_info["name"], MODEL_NAME=model_info["name"])
     if not model_info:
         raise Exception(f"Error: not exist model")
-    
+
+    # commit_name 은 create_model_helm 의 helm --set f-string(shell=True 실행) + NFS 경로
+    # (commit_models/<name>, commit_logs/<name>)에 그대로 들어간다. FE 정규식이 일부 특수문자만
+    # 막고 '/'·'..' 는 통과(직접 API 호출은 FE 우회) → 서버측 allowlist 로 셸 인젝션·경로 탈출 차단
+    # (보안리뷰 Finding1; C-1/C-2 RCE 하드닝과 동일 클래스). 영문/숫자/._- 1~50자, '..' 금지.
+    if not re.fullmatch(r'[A-Za-z0-9._-]{1,50}', commit_name or '') or '..' in (commit_name or ''):
+        raise Exception("Error: invalid commit name (영문/숫자/._- 1~50자, '..' 불가)")
+
     # duplicate check
     if await db_model.check_commit_model_by_name(model_id=model_id, commit_name=commit_name):
         raise Exception(f"Error: duplicate commit model name")
@@ -938,17 +1065,248 @@ async def create_commit_model(commit_name : str, commit_message : str, model_id 
                     save_commit_name=commit_name)
             if res:
                 await db_model.update_model_commit_status(commit_status=TYPE.KUBE_POD_STATUS_RUNNING, model_id=model_id, latest_commit_id=commit_model_id, commit_type=TYPE.COMMIT_TYPE_COMMIT)
-            
+                # 학습 체크포인트(어댑터 레지스트리)를 이 커밋(버전)에 귀속(Phase 2-C) — best-effort.
+                # 스냅샷 실패는 커밋을 막지 않음(commit_models 머티리얼라이즈가 핵심 경로). 체크포인트
+                # 부재(외부/구 모델)는 graceful skip.
+                try:
+                    await snapshot_commit_checkpoints(storage_name=workspace_info["main_storage_name"], workspace_name=workspace_info["name"], model_name=model_info["name"], commit_name=commit_name)
+                except Exception:
+                    traceback.print_exc()
+
             return res
         return False
-            
+
     except Exception as e:
         if commit_model_id:
             await db_model.delete_commit_model(commit_model_id=commit_model_id)
             workspace_info = await db_model.get_workspace_model(workspace_id=model_info["workspace_id"])
             await delete_commit_model_folder(storage_name=workspace_info["main_storage_name"], workspace_name=workspace_info["name"], model_name=model_info["name"], commit_name=commit_name)
+            await delete_commit_checkpoints_folder(storage_name=workspace_info["main_storage_name"], workspace_name=workspace_info["name"], model_name=model_info["name"], commit_name=commit_name)
         return False
             
+def _ckpt_metric(log_history, step, field):
+    """log_history(체크포인트 trainer_state.json)에서 step 이하 최신 non-None field 값.
+    train loss/grad 는 logging_steps 주기라 save 주기와 어긋남 → nearest-prior. eval_loss 는 보통 save
+    주기와 일치(정확). 작은 리스트라 선형 스캔."""
+    found = None
+    for h in (log_history or []):
+        s = h.get("step")
+        if s is None or s > step:
+            continue
+        v = h.get(field)
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            found = v
+    return found
+
+
+def _read_text_capped(path: str, cap: int = 4 * 1024 * 1024) -> str:
+    """trainer_state.json 등 파드-기록 파일 읽기 — context-manager(FD 누수 방지, 리뷰 MEDIUM) +
+    크기 cap(악성/거대 출력 메모리 DoS 차단, 보안 LOW; 정상 trainer_state 는 수 KB). 초과 시 예외."""
+    with open(path, encoding="utf-8") as f:
+        data = f.read(cap + 1)
+    if len(data) > cap:
+        raise ValueError("file too large")
+    return data
+
+
+async def list_checkpoints(model_id: int, commit_name: str = None) -> dict:
+    """체크포인트 레지스트리 — checkpoint-{step} 어댑터 나열. commit_name 없으면 라이브 학습본
+    (models/{name}/checkpoints/adapters), 있으면 커밋 스냅샷(commit_checkpoints/{commit}/adapters,
+    Phase 2-C — 커밋=버전에 귀속). 메트릭/best 는 최고 step 체크포인트의 trainer_state.json
+    (가장 완전한 log_history + best_model_checkpoint)에서 추출. 크기=adapter 가중치(실 산출물)."""
+    model_info = await db_model.get_model(model_id=model_id)
+    if not model_info:
+        raise Exception("Error: not exist model")
+    workspace_info = await db_model.get_workspace_model(workspace_id=model_info["workspace_id"])
+    model_root = os.path.dirname(PATH.JF_MODEL_LATEST_CHECKPOINT_PATH.format(
+        STORAGE_NAME=workspace_info["main_storage_name"], WORKSPACE_NAME=workspace_info["name"],
+        MODEL_NAME=model_info["name"]))
+    empty = {"list": [], "best_step": None, "steps_per_epoch": model_info.get("steps_per_epoch") or 0}
+    if commit_name:
+        # Phase 2-C: 커밋별 스냅샷. commit_name 은 라우트에서 DB(get_commit_model)로 해소되지만 방어적 봉쇄.
+        if "/" in commit_name or commit_name in (".", ".."):
+            return empty
+        _ckpt_base, _commit_dir = _commit_checkpoints_dir(workspace_info["main_storage_name"], workspace_info["name"],
+                                                          model_info["name"], commit_name)
+        adapters_dir = os.path.join(_commit_dir, "adapters")
+        _containment_root = _ckpt_base    # 커밋 스냅샷은 commit_checkpoints 베이스 하위로 봉쇄(의도 명확)
+    else:
+        adapters_dir = os.path.join(model_root, "checkpoints", "adapters")
+        _containment_root = model_root
+    if not _is_under(adapters_dir, _containment_root):    # 경로 봉쇄(방어)
+        return empty
+    try:
+        entries = await asyncio.to_thread(os.listdir, adapters_dir)
+    except (FileNotFoundError, NotADirectoryError):
+        return empty
+    ckpt_names = sorted(
+        [e for e in entries if e.startswith("checkpoint-") and e[len("checkpoint-"):].isdigit()],
+        key=lambda e: int(e[len("checkpoint-"):]))
+    if not ckpt_names:
+        return empty
+    best_step, log_history = None, []
+    ts_path = os.path.join(adapters_dir, ckpt_names[-1], "trainer_state.json")
+    try:
+        ts = json.loads(await asyncio.to_thread(_read_text_capped, ts_path))
+        bmc = ts.get("best_model_checkpoint") or ""
+        base = os.path.basename(bmc)
+        if base.startswith("checkpoint-") and base[len("checkpoint-"):].isdigit():
+            best_step = int(base[len("checkpoint-"):])
+        log_history = ts.get("log_history") or []
+    except Exception:
+        pass
+    out = []
+    for name in ckpt_names:
+        step = int(name[len("checkpoint-"):])
+        fpath = os.path.join(adapters_dir, name)
+        try:
+            saved_at = int(await asyncio.to_thread(os.path.getmtime, fpath))
+        except OSError:
+            saved_at = None
+        try:
+            size_bytes = await asyncio.to_thread(os.path.getsize, os.path.join(fpath, "adapter_model.safetensors"))
+        except OSError:
+            size_bytes = None    # full-FT 는 adapter 파일 없음 → None(FE 가 폴더 표기)
+        out.append({
+            "step": step,
+            "epoch": _ckpt_metric(log_history, step, "epoch"),
+            "loss": _ckpt_metric(log_history, step, "loss"),
+            "grad_norm": _ckpt_metric(log_history, step, "grad_norm"),
+            "learning_rate": _ckpt_metric(log_history, step, "learning_rate"),
+            "eval_loss": _ckpt_metric(log_history, step, "eval_loss"),
+            "size_bytes": size_bytes,
+            "saved_at": saved_at,    # epoch seconds
+            "is_best": (best_step is not None and step == best_step),
+        })
+    return {"list": out, "best_step": best_step, "steps_per_epoch": model_info.get("steps_per_epoch") or 0}
+
+
+async def delete_checkpoint(model_id: int, step: int, commit_name: str = None) -> bool:
+    """체크포인트(어댑터) 폴더 삭제 — 경로는 adapters_dir 봉쇄, step int 강제(인젝션 차단).
+    라이브 학습본(commit_name 없음)은 학습/커밋 active 중 거부(trainer rotation 레이스 회피).
+    커밋 스냅샷(commit_name)은 frozen(트레이너 미관여)이라 active-gate 불요(Phase 2-C)."""
+    model_info = await db_model.get_model(model_id=model_id)
+    if not model_info:
+        raise Exception("Error: not exist model")
+    workspace_info = await db_model.get_workspace_model(workspace_id=model_info["workspace_id"])
+    model_root = os.path.dirname(PATH.JF_MODEL_LATEST_CHECKPOINT_PATH.format(
+        STORAGE_NAME=workspace_info["main_storage_name"], WORKSPACE_NAME=workspace_info["name"],
+        MODEL_NAME=model_info["name"]))
+    if commit_name:
+        if "/" in commit_name or commit_name in (".", ".."):
+            raise Exception("Error: invalid commit name")
+        _, _commit_dir = _commit_checkpoints_dir(workspace_info["main_storage_name"], workspace_info["name"],
+                                                 model_info["name"], commit_name)
+        adapters_dir = os.path.join(_commit_dir, "adapters")
+    else:
+        # active(학습/커밋 진행) 중 삭제 차단 — trainer rotation 과 레이스 회피. scheduling 까지 포함(현재
+        # FT 가 안 쓰지만 방어; error/done/stop 은 허용=정리 가능, 그래서 인라인 set 사용·KUBER_RUNNING_STATUS X).
+        _active = (TYPE.KUBE_POD_STATUS_RUNNING, TYPE.KUBE_POD_STATUS_PENDING,
+                   TYPE.KUBE_POD_STATUS_INSTALLING, TYPE.KUBE_POD_STATUS_SCHEDULING)
+        if model_info.get("latest_fine_tuning_status") in _active \
+           or model_info.get("commit_status") == TYPE.KUBE_POD_STATUS_RUNNING:
+            raise Exception("Error: cannot delete checkpoint while training/commit is active")
+        adapters_dir = os.path.join(model_root, "checkpoints", "adapters")
+    target = os.path.join(adapters_dir, "checkpoint-{}".format(int(step)))    # int 강제 → 경로 인젝션 차단
+    if not _is_under(target, adapters_dir):
+        raise Exception("Error: invalid checkpoint path")
+    if not await asyncio.to_thread(os.path.isdir, target):
+        raise Exception("Error: checkpoint not found")
+    await asyncio.to_thread(common.rm_rf, target)
+    return True
+
+
+async def _resolve_commit_name(model_id: int, commit_id: int) -> str:
+    """commit_id → commit_name 해소 + commit 이 해당 model 소속인지 검증(교차참조 차단). Phase 2-C."""
+    commit = await db_model.get_commit_model(commit_id=commit_id)
+    if not commit or commit.get("model_id") != model_id:
+        raise Exception("Error: commit not found for model")
+    return commit["name"]
+
+
+async def list_commit_checkpoints(model_id: int, commit_id: int) -> dict:
+    """커밋(버전)에 귀속된 체크포인트 스냅샷 나열(Phase 2-C)."""
+    commit_name = await _resolve_commit_name(model_id=model_id, commit_id=commit_id)
+    return await list_checkpoints(model_id=model_id, commit_name=commit_name)
+
+
+async def delete_commit_checkpoint(model_id: int, commit_id: int, step: int) -> bool:
+    """커밋 스냅샷에서 체크포인트 삭제(Phase 2-C) — 커밋 frozen 이라 active-gate 불요."""
+    commit_name = await _resolve_commit_name(model_id=model_id, commit_id=commit_id)
+    return await delete_checkpoint(model_id=model_id, step=step, commit_name=commit_name)
+
+
+async def promote_commit_checkpoint(model_id: int, commit_id: int, step: int, create_user_id: int) -> bool:
+    """커밋의 특정 step 체크포인트를 새 버전으로 promote(Phase 2-C, "수동 best 적용").
+
+    base 스냅샷 없이 LoRA 델타 산술(스파이크 검증, cat): 새 commit_model `<src>-step<step>` row 생성 →
+    promote 잡(commit_models/<src> + adapters{best,target} → cat[-best,+target] merge → commit_models/<new>).
+    비파괴(서빙 latest_checkpoint 미변경). 실패 시 row+폴더 롤백. commit_status RUNNING 중엔 거부."""
+    model_info = await db_model.get_model(model_id=model_id)
+    if not model_info:
+        raise Exception("Error: not exist model")
+    if model_info.get("commit_status") == TYPE.KUBE_POD_STATUS_RUNNING:
+        raise Exception("Error: commit/promote already running")
+    commit = await db_model.get_commit_model(commit_id=commit_id)
+    if not commit or commit.get("model_id") != model_id:
+        raise Exception("Error: commit not found for model")
+    src_commit_name = commit["name"]
+
+    # 커밋 스냅샷에서 best/target step 검증.
+    ck = await list_checkpoints(model_id=model_id, commit_name=src_commit_name)
+    best_step = ck.get("best_step")
+    steps = {c["step"] for c in ck.get("list", [])}
+    if best_step is None:
+        raise Exception("Error: 이 커밋엔 best 체크포인트가 없어 promote 할 수 없습니다")
+    if int(best_step) not in steps:
+        # trainer_state 가 가리키는 best 어댑터가 스냅샷에서 삭제됨 → 재머지 불가(엔진이 best adapter 로드 실패).
+        raise Exception("Error: best 체크포인트 어댑터가 스냅샷에 없어 promote 할 수 없습니다")
+    if int(step) not in steps:
+        raise Exception("Error: target step 이 커밋 스냅샷에 없습니다")
+    if int(step) == int(best_step):
+        raise Exception("Error: 이미 best 인 체크포인트입니다")
+
+    new_commit_name = "{}-step{}".format(src_commit_name, int(step))
+    # create_commit_model 과 동일 allowlist(셸/경로 하드닝) — src + 접미사가 50자/charset 넘으면 거부.
+    if not re.fullmatch(r'[A-Za-z0-9._-]{1,50}', new_commit_name) or '..' in new_commit_name:
+        raise Exception("Error: promote 커밋명 '{}'이 유효하지 않습니다({}자, 영문/숫자/._- 50자 이내). "
+                        "원본 커밋명을 짧게 만들거나 step 을 확인하세요.".format(new_commit_name, len(new_commit_name)))
+    if await db_model.check_commit_model_by_name(model_id=model_id, commit_name=new_commit_name):
+        raise Exception("Error: 이미 promote 된 버전이 있습니다")
+
+    workspace_info = await db_model.get_workspace_model(workspace_id=model_info["workspace_id"])
+    new_commit_id = None
+    try:
+        new_commit_id = await db_model.create_commit_model(
+            model_id=model_id, workspace_id=model_info["workspace_id"], create_user_id=create_user_id,
+            fine_tuning_config=commit.get("fine_tuning_config") or "{}",
+            commit_message="promote step {} (from '{}')".format(int(step), src_commit_name),
+            name=new_commit_name, model_description=model_info["description"],
+            steps_per_epoch=model_info["steps_per_epoch"])
+        if not new_commit_id:
+            return False
+        res, message = await promote_model_helm(
+            workspace_id=model_info["workspace_id"], model_id=model_id, model_name=model_info["name"],
+            src_commit_name=src_commit_name, best_step=int(best_step), target_step=int(step),
+            new_commit_name=new_commit_name)
+        if res:
+            await db_model.update_model_commit_status(commit_status=TYPE.KUBE_POD_STATUS_RUNNING,
+                model_id=model_id, latest_commit_id=new_commit_id, commit_type=TYPE.COMMIT_TYPE_COMMIT)
+            return res
+        # 잡 런치 실패(False 반환) → 고아 row/폴더 롤백(throw 경로와 동일; 재시도 차단·목록 노출 방지, 리뷰 HIGH).
+        await db_model.delete_commit_model(commit_model_id=new_commit_id)
+        await delete_commit_model_folder(storage_name=workspace_info["main_storage_name"], workspace_name=workspace_info["name"], model_name=model_info["name"], commit_name=new_commit_name)
+        await delete_commit_checkpoints_folder(storage_name=workspace_info["main_storage_name"], workspace_name=workspace_info["name"], model_name=model_info["name"], commit_name=new_commit_name)
+        return False
+    except Exception as e:
+        if new_commit_id:
+            await db_model.delete_commit_model(commit_model_id=new_commit_id)
+            await delete_commit_model_folder(storage_name=workspace_info["main_storage_name"], workspace_name=workspace_info["name"], model_name=model_info["name"], commit_name=new_commit_name)
+            await delete_commit_checkpoints_folder(storage_name=workspace_info["main_storage_name"], workspace_name=workspace_info["name"], model_name=model_info["name"], commit_name=new_commit_name)
+        traceback.print_exc()
+        return False
+
+
 async def create_model(workspace_id : int, model_name : str, description : str, create_user_id : int, private : int, huggingface_model_id : str = None, \
     commit_model_id : int = None, huggingface_token : str = None, access : int = 0, users_id : List[int] = [], \
     training_type : str = 'internal', external_manifest_name : str = None, external_manifest_version : str = None,

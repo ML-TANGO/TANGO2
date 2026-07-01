@@ -134,6 +134,76 @@ async def sse_fine_tuning_log(model_id : int):
         traceback.print_exc()
         return response(status=0, message="server error", result=[])  
 
+@model.get("/{model_id}/checkpoints", summary='list training checkpoints', tags=TAG_FINE_TUNING)
+async def list_model_checkpoints(model_id: int):
+    """학습 step별 체크포인트(어댑터) 레지스트리 — step·epoch·loss·grad·eval·크기·시각·best."""
+    try:
+        # 접근 제어(H-3): 소유자 OR 공유 모델 워크스페이스 멤버만.
+        if not await svc.user_can_access_model(get_user_id(), model_id):
+            return response(status=0, message="forbidden", result={"list": []})
+        res = await svc.list_checkpoints(model_id=model_id)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message="server error", result={"list": []})
+
+
+@model.delete("/{model_id}/checkpoints/{step}", summary='delete a training checkpoint', tags=TAG_FINE_TUNING)
+async def delete_model_checkpoint(model_id: int, step: int):
+    """체크포인트 삭제 — step:int(경로 allowlist), active 중 차단·경로봉쇄는 서비스에서."""
+    try:
+        if not await svc.user_can_access_model(get_user_id(), model_id):
+            return response(status=0, message="forbidden", result=False)
+        res = await svc.delete_checkpoint(model_id=model_id, step=step)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message="server error", result=False)
+
+
+@model.get("/{model_id}/commit-models/{commit_id}/checkpoints", summary='list commit checkpoints', tags=TAG_COMMIT_MODEL)
+async def list_commit_model_checkpoints(model_id: int, commit_id: int):
+    """커밋(버전)에 귀속된 체크포인트 스냅샷 레지스트리(Phase 2-C) — 커밋 시 commit_checkpoints/<commit>
+    로 보존된 어댑터를 step·epoch·loss·grad·eval·크기·시각·best 로 나열. commit 이 model 소속인지 검증."""
+    try:
+        if not await svc.user_can_access_model(get_user_id(), model_id):
+            return response(status=0, message="forbidden", result={"list": []})
+        res = await svc.list_commit_checkpoints(model_id=model_id, commit_id=commit_id)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message="server error", result={"list": []})
+
+
+@model.delete("/{model_id}/commit-models/{commit_id}/checkpoints/{step}", summary='delete a commit checkpoint', tags=TAG_COMMIT_MODEL)
+async def delete_commit_model_checkpoint(model_id: int, commit_id: int, step: int):
+    """커밋 스냅샷에서 체크포인트 삭제(Phase 2-C) — step:int(allowlist), 경로봉쇄는 서비스에서.
+    커밋 frozen 이라 active-gate 불요."""
+    try:
+        if not await svc.user_can_access_model(get_user_id(), model_id):
+            return response(status=0, message="forbidden", result=False)
+        res = await svc.delete_commit_checkpoint(model_id=model_id, commit_id=commit_id, step=step)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message="server error", result=False)
+
+
+@model.post("/{model_id}/commit-models/{commit_id}/checkpoints/{step}/promote", summary='promote a commit checkpoint to a new version', tags=TAG_COMMIT_MODEL)
+async def promote_commit_model_checkpoint(model_id: int, commit_id: int, step: int):
+    """커밋의 step 체크포인트를 새 버전 `<commit>-step<step>` 으로 promote(Phase 2-C, 수동 best 적용).
+    LoRA cat 델타 산술로 재머지(base 스냅샷 불요). 비파괴(새 커밋 생성, 서빙 미변경). step:int allowlist,
+    user_can_access_model 게이트, commit_status RUNNING 중 거부는 서비스에서."""
+    try:
+        if not await svc.user_can_access_model(get_user_id(), model_id):
+            return response(status=0, message="forbidden", result=False)
+        res = await svc.promote_commit_checkpoint(model_id=model_id, commit_id=commit_id, step=step, create_user_id=get_user_id())
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message="server error", result=False)
+
+
 @model.get("/fine-tuning/system-log", summary='log - fine tuning', tags=TAG_FINE_TUNING)
 async def get_fine_tuning_system_log(model_id: int):
     try:

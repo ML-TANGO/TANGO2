@@ -166,6 +166,11 @@ spec:
     - name: jf-main
       mountPath: /configurations
       subPath: models/{{ $.Values.labels.model_name }}/configurations
+    # 체크포인트 레지스트리(Phase1): 학습 step 마다 경량 체크포인트(LoRA=어댑터)+_projector.pt 저장.
+    # tmp_model 과 분리(stop_fine_tuning move 에 안 휩쓸림) → 레지스트리 API 가 NFS 로 영속 조회.
+    - name: jf-main
+      mountPath: /checkpoints
+      subPath: models/{{ $.Values.labels.model_name }}/checkpoints
     - name: jf-bin
       mountPath: /fine_tuning
       subPath: fine_tuning
