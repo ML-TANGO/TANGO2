@@ -180,6 +180,38 @@ export const postPlaygroundDeployStart = async ({
   return res;
 };
 
+// 이중모델 추론 세션 동시 배포(WBS 추론 4.2) — 프롬프트생성 모델(LLM1) + 추론 모델(LLM2)을
+// 한 세션으로 co-provision. BE 가 부모(추론)/자식(프롬프트생성) playground 2개를 올리고 링크.
+// 반환 result: { session_playground_id, prompt_gen_playground_id }. 상태는 status/{session_playground_id} 폴링.
+export const postDualSession = async ({
+  workspace_id,
+  name,
+  prompt_gen_model_id,
+  inference_model_id,
+  model_instance_id,
+  prompt_gen_commit_id,
+  inference_commit_id,
+  model_instance_count,
+  model_gpu_count,
+}) => {
+  const res = await callApi({
+    url: 'playgrounds/dual-session',
+    method: 'post',
+    body: {
+      workspace_id: +workspace_id,
+      name,
+      prompt_gen_model_id: +prompt_gen_model_id,
+      inference_model_id: +inference_model_id,
+      model_instance_id: +model_instance_id,
+      prompt_gen_commit_id: prompt_gen_commit_id ? +prompt_gen_commit_id : null,
+      inference_commit_id: inference_commit_id ? +inference_commit_id : null,
+      model_instance_count: +(model_instance_count ?? 1),
+      model_gpu_count: +(model_gpu_count ?? 1),
+    },
+  });
+  return res;
+};
+
 export const postPlaygroundsStop = async (playgroundId) => {
   const res = await callApi({
     url: 'playgrounds/stop',
@@ -241,6 +273,8 @@ export const postPlaygroundTestChat = async ({
   session_id,
   external_payload,
   prompt_gen_playground_id,
+  system_prompt,
+  dual_examples,
 }) => {
   let reqbody = {};
 
@@ -253,8 +287,16 @@ export const postPlaygroundTestChat = async ({
   } else if (test_type === 'question') {
     reqbody['test_question'] = test_question;
     // 이중모델 추론(SP-7): LLM1(프롬프트 생성기) playground id. 지정 시 BE 가 LLM1→LLM2 체인.
+    // (이중 세션은 서버가 자동 파생하므로 미지정 가능.)
     if (prompt_gen_playground_id) {
       reqbody['prompt_gen_playground_id'] = +prompt_gen_playground_id;
+    }
+    // 예시기반 최적화(WBS 4.2): 시스템 지침 + few-shot 예시를 LLM1 에 주입.
+    if (system_prompt) {
+      reqbody['system_prompt'] = system_prompt;
+    }
+    if (Array.isArray(dual_examples) && dual_examples.length) {
+      reqbody['dual_examples'] = dual_examples;
     }
   } else {
     reqbody['test_dataset_id'] = test_dataset_id;
@@ -265,6 +307,36 @@ export const postPlaygroundTestChat = async ({
     url: 'playgrounds/test',
     method: 'post',
     body: reqbody,
+  });
+  return res;
+};
+
+// 이중모델 데이터셋 일괄 추론(WBS 4.3 배치) — N 샘플에 LLM1→LLM2 체인 + BLEU/ROUGE 채점.
+// prompt_gen 은 BE 가 세션 링크에서 자동 파생. 반환 result: {samples, summary, has_reference, ...}.
+export const postDualBatch = async ({
+  playground_id,
+  test_dataset_id,
+  test_dataset_filename,
+  sample_count,
+  metrics,
+  session_id,
+  system_prompt,
+  dual_examples,
+}) => {
+  const res = await callApi({
+    url: 'playgrounds/dual-batch',
+    method: 'post',
+    body: {
+      playground_id: +playground_id,
+      test_dataset_id: +test_dataset_id,
+      test_dataset_filename,
+      sample_count: sample_count ?? 5,
+      metrics: metrics ?? null,
+      session_id,
+      system_prompt: system_prompt || null,
+      dual_examples:
+        Array.isArray(dual_examples) && dual_examples.length ? dual_examples : null,
+    },
   });
   return res;
 };

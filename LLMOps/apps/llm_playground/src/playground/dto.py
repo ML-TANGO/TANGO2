@@ -126,6 +126,41 @@ class PipelineDeployInput(BaseModel):
     class Config:
         protected_namespaces = ()
 
+class CreateDualSessionInput(BaseModel):
+    """이중모델 추론 세션 생성(WBS 추론 4.2) — 프롬프트생성 모델(LLM1) + 추론 모델(LLM2)을
+    한 세션으로 동시 배포(co-provision). 각 모델은 기존 배포 경로(pipeline_deploy)로 올라가고,
+    추론 playground(부모)-프롬프트생성 playground(자식)를 JSON 링크한다.
+    자원 블록은 두 모델에 각각 적용(a안)."""
+    workspace_id: int
+    name: str = Field(min_length=1, max_length=64, description="세션 이름")
+    prompt_gen_model_id: int = Field(description="프롬프트 생성 모델(LLM1, allm) id")
+    inference_model_id: int = Field(description="추론 모델(LLM2, allm) id")
+    model_instance_id: int = Field(description="자원 인스턴스 id (두 모델 공통 적용)")
+    prompt_gen_commit_id: Optional[int] = Field(default=None, description="LLM1 배포 commit id(생략 시 latest)")
+    inference_commit_id: Optional[int] = Field(default=None, description="LLM2 배포 commit id(생략 시 latest)")
+    # instance/gpu 상한 = 폭주 입력 backstop(실제 상한은 워크스페이스 쿼터가 다운스트림 강제). gpu 0=CPU 허용.
+    model_instance_count: Optional[int] = Field(default=1, ge=1, le=16, description="인스턴스 할당 개수(모델당)")
+    model_gpu_count: Optional[int] = Field(default=1, ge=0, le=16, description="GPU 할당 개수(모델당)")
+
+    class Config:
+        protected_namespaces = ()
+
+class DualBatchInput(BaseModel):
+    """이중모델 데이터셋 일괄 추론(WBS 4.3 배치). N 샘플에 LLM1→LLM2 체인 실행 + 인-프로세스
+    BLEU/ROUGE 채점(reference 있을 때). 동기 배치라 sample_count 상한 10."""
+    playground_id: int
+    test_dataset_id: int
+    test_dataset_filename: str = Field(description="데이터셋 파일명(데이터셋 디렉터리 하위 상대경로)")
+    sample_count: Optional[int] = Field(default=5, ge=1, le=10, description="샘플 수(동기 배치 상한 10)")
+    metrics: Optional[List[str]] = Field(default=None, description="채점 메트릭 [bleu, rouge] (reference 필요)")
+    session_id: Optional[str] = None
+    system_prompt: Optional[str] = Field(default=None, max_length=4000, description="LLM1 시스템 지침(예시기반 최적화)")
+    dual_examples: Optional[List[Dict[str, Any]]] = Field(default=None, max_length=10, description="LLM1 few-shot 예시")
+    prompt_gen_playground_id: Optional[int] = Field(default=None, description="미지정 시 세션 링크에서 서버 파생")
+
+    class Config:
+        protected_namespaces = ()
+
 class PlaygroundIdInput(BaseModel):
     playground_id: int
 
@@ -151,8 +186,18 @@ class PlaygroundTestInput(BaseModel):
         description=(
             "이중모델 추론(SP-7 슬라이스). 지정 시 이 playground(LLM1, 프롬프트 생성기)가 "
             "test_question 을 최적 프롬프트로 재작성 → 현 playground(LLM2)가 그 프롬프트로 추론. "
-            "test_type=question 에서만 동작."
+            "test_type=question 에서만 동작. (이중 세션은 서버가 자동 파생)"
         ),
+    )
+    system_prompt: Optional[str] = Field(
+        default=None,
+        max_length=4000,
+        description="이중모델: LLM1 에 줄 시스템 지침(예시기반 최적화, WBS 4.2).",
+    )
+    dual_examples: Optional[List[Dict[str, Any]]] = Field(
+        default=None,
+        max_length=10,
+        description="이중모델: LLM1 few-shot 예시 [{query, answer}, ...] (예시기반 최적화, WBS 4.2).",
     )
 
 

@@ -7,9 +7,21 @@
   gap: 20px;
 }
 
+.title-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .title {
   font-size: 22px;
   font-weight: 700;
+  color: $mono207;
+}
+
+.sub {
+  color: $mono205;
+  font-size: 14px;
 }
 
 .empty {
@@ -17,43 +29,132 @@
   font-size: 14px;
 }
 
-.list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
 }
 
-.item {
+.create-card {
+  border: 1.5px dashed $blue104;
+  border-radius: 12px;
+  min-height: 130px;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 16px;
-  padding: 16px 18px;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  color: $blue104;
+  transition: background 0.15s;
+
+  &:hover {
+    background: rgba($blue104, 0.06);
+  }
+
+  .create-plus {
+    font-size: 34px;
+    line-height: 1;
+  }
+
+  .create-label {
+    font-size: 14px;
+    font-weight: 600;
+  }
+}
+
+.session-card {
   border: 1px solid $mono203;
-  border-radius: 10px;
+  border-radius: 12px;
+  padding: 18px;
+  min-height: 130px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   cursor: pointer;
   transition: border-color 0.15s, box-shadow 0.15s;
 
   &:hover {
     border-color: $blue104;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.07);
   }
 
-  .name {
-    font-weight: 600;
+  .card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
   }
 
-  .sub {
-    color: $mono204;
-    font-size: 13px;
+  .session-name {
+    font-size: 16px;
+    font-weight: 700;
+    color: $mono207;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .status {
-    margin-left: auto;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 500;
+    white-space: nowrap;
 
     &.running {
       color: $lime604;
+    }
+    &.installing {
+      color: $yellow303;
+    }
+    &.stop {
+      color: $mono204;
+    }
+  }
+
+  .owner {
+    font-size: 13px;
+    color: $mono205;
+  }
+
+  .model-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .model-tag {
+    font-size: 12px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+
+    &.prompt {
+      background: rgba($lime604, 0.14);
+      color: $lime604;
+    }
+
+    &.inference {
+      background: rgba($blue104, 0.1);
+      color: $blue104;
+    }
+  }
+
+  .mode-badge {
+    align-self: flex-start;
+    margin-top: auto;
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: $mono202;
+    color: $mono205;
+
+    &.dual {
+      background: rgba($blue104, 0.1);
+      color: $blue104;
+      font-weight: 600;
     }
   }
 }

@@ -412,6 +412,24 @@ async def pipeline_deploy(body: dto.PipelineDeployInput):
         traceback.print_exc()
         return response(status=0, message=str(e), result=None)
 
+@playgrounds.post("/dual-session", summary='추론 - 이중모델 세션 동시 배포(4.2)', tags=TAG_DEPLOYMENT)
+async def create_dual_session(body: dto.CreateDualSessionInput):
+    """이중모델 추론 세션 생성 — 프롬프트생성 모델(LLM1)+추론 모델(LLM2)을 동시 배포(co-provision).
+    각 모델은 기존 배포 경로로 올라가고 부모(추론)-자식(프롬프트생성) playground 를 링크한다.
+    상태는 GET /status/{session_playground_id} 로 폴링(부모+자식 둘 다 running 시 running)."""
+    try:
+        user_name, _ = get_auth()
+        res = await svc.create_dual_session(
+            workspace_id=body.workspace_id, name=body.name, user_name=user_name,
+            prompt_gen_model_id=body.prompt_gen_model_id, inference_model_id=body.inference_model_id,
+            model_instance_id=body.model_instance_id,
+            prompt_gen_commit_id=body.prompt_gen_commit_id, inference_commit_id=body.inference_commit_id,
+            model_instance_count=body.model_instance_count, model_gpu_count=body.model_gpu_count)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
 @playgrounds.post("/stop", summary='배포 - 중지', tags=TAG_DEPLOYMENT)
 async def stop_playground(body: dto.PlaygroundIdInput):
     """
@@ -524,18 +542,39 @@ async def post_test(body: dto.PlaygroundTestInput):
     network_load: 없음 0, 저 1, 중 2, 고3
     """
     try:
-        # 이중모델 추론(SP-7 슬라이스): prompt_gen_playground_id 지정 + question 타입이면 LLM1→LLM2 체인.
-        if body.prompt_gen_playground_id and (body.test_type or "question") == "question":
-            res, message = await svc.playground_dual_test(
-                playground_id=body.playground_id,
-                prompt_gen_playground_id=body.prompt_gen_playground_id,
-                test_question=body.test_question, session_id=body.session_id)
-            return response(status=1, result=res, message=message)
+        # 이중모델 추론: question 타입에서 LLM1→LLM2 체인.
+        #  - 이중 세션(부모=추론)이면 prompt_gen 을 세션 링크에서 서버 파생(request-supplied 불요).
+        #  - Phase1 하위호환: body.prompt_gen_playground_id 명시 시 그대로 사용.
+        if (body.test_type or "question") == "question":
+            prompt_gen_id = body.prompt_gen_playground_id or await svc.resolve_dual_prompt_gen(body.playground_id)
+            if prompt_gen_id:
+                res, message = await svc.playground_dual_test(
+                    playground_id=body.playground_id,
+                    prompt_gen_playground_id=prompt_gen_id,
+                    test_question=body.test_question, session_id=body.session_id,
+                    system_prompt=body.system_prompt, examples=body.dual_examples)
+                return response(status=1, result=res, message=message)
         res, message = await svc.playground_test(playground_id=body.playground_id, test_type=body.test_type,
                                         test_dataset_id=body.test_dataset_id, test_dataset_filename=body.test_dataset_filename,
                                         test_question=body.test_question, session_id=body.session_id,
                                         network_load=body.network_load,
                                         external_payload=body.external_payload)
+        return response(status=1, result=res, message=message)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+@playgrounds.post("/dual-batch", summary='추론 - 이중모델 데이터셋 일괄(4.3)', tags=TAG_TEST)
+async def dual_batch_test(body: dto.DualBatchInput):
+    """이중모델 세션의 데이터셋 일괄 추론 — N 샘플에 LLM1→LLM2 체인 + BLEU/ROUGE 채점.
+    prompt_gen 미지정 시 세션 링크에서 서버 파생(교차테넌트 벡터 회피)."""
+    try:
+        prompt_gen_id = body.prompt_gen_playground_id or await svc.resolve_dual_prompt_gen(body.playground_id)
+        res, message = await svc.dual_batch_test(
+            playground_id=body.playground_id, prompt_gen_playground_id=prompt_gen_id,
+            dataset_id=body.test_dataset_id, filename=body.test_dataset_filename,
+            sample_count=body.sample_count, metrics=body.metrics, session_id=body.session_id,
+            system_prompt=body.system_prompt, examples=body.dual_examples)
         return response(status=1, result=res, message=message)
     except Exception as e:
         traceback.print_exc()

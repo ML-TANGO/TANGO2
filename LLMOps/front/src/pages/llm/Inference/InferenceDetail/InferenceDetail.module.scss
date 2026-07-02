@@ -30,7 +30,31 @@
 .header-info {
   display: flex;
   align-items: baseline;
+  flex-wrap: wrap;
   gap: 12px;
+}
+
+.meta-row {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.meta-tag {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+
+  &.prompt {
+    background: rgba($lime604, 0.14);
+    color: $lime604;
+  }
+
+  &.inference {
+    background: rgba($blue104, 0.1);
+    color: $blue104;
+  }
 }
 
 .title {

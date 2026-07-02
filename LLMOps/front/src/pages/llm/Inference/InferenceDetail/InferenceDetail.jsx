@@ -4,6 +4,8 @@ import { useDispatch } from 'react-redux';
 import { useHistory, useRouteMatch } from 'react-router-dom';
 
 import TestComponent from '@src/components/Modal/PlaygroundTestModal/TestComponent';
+import DualDirectInference from './DualDirectInference';
+import DualBatchInference from './DualBatchInference';
 import { getDetailPlayground } from '@src/apis/llm/playground';
 import { startPath } from '@src/store/modules/breadCrumb';
 import { STATUS_SUCCESS } from '@src/network';
@@ -32,12 +34,14 @@ const InferenceDetail = () => {
 
   const [info, setInfo] = useState(null); // { name, owner }
   const [trainingType, setTrainingType] = useState('');
+  const [dual, setDual] = useState(null); // 이중 세션이면 { prompt_gen_model_name, inference_model_name, ... }
   const [loading, setLoading] = useState(true);
   // 모드: 'realtime'(실시간 질문) | 'dataset'(데이터셋 일괄)
   // 기존 모달 규약 매핑 → integratedTestValue: true=DatasetCom / false=PromptCom
   const [mode, setMode] = useState('realtime');
 
   const isExternal = trainingType === 'external';
+  const isDual = dual?.mode === 'dual';
   const integratedTestValue = mode === 'dataset';
 
   const fetchDetail = useCallback(async () => {
@@ -50,6 +54,7 @@ const InferenceDetail = () => {
         owner: result?.info?.owner ?? '-',
       });
       setTrainingType(result?.model?.training_type ?? '');
+      setDual(result?.dual ?? null);
       setLoading(false);
       return;
     }
@@ -76,6 +81,20 @@ const InferenceDetail = () => {
           <h1 className={cx('title')}>{info?.name ?? ''}</h1>
           {info?.owner && info.owner !== '-' && (
             <span className={cx('owner')}>{info.owner}</span>
+          )}
+          {isDual && (
+            <div className={cx('meta-row')}>
+              {dual?.prompt_gen_model_name && (
+                <span className={cx('meta-tag', 'prompt')}>
+                  📝 프롬프트: {dual.prompt_gen_model_name}
+                </span>
+              )}
+              {dual?.inference_model_name && (
+                <span className={cx('meta-tag', 'inference')}>
+                  🤖 추론: {dual.inference_model_name}
+                </span>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -106,11 +125,23 @@ const InferenceDetail = () => {
             </div>
           )}
           <div className={cx('test-panel')}>
-            <TestComponent
-              integratedTestValue={integratedTestValue}
-              playgroundId={playgroundId}
-              isExternal={isExternal}
-            />
+            {isDual && !isExternal ? (
+              mode === 'realtime' ? (
+                <DualDirectInference
+                  playgroundId={playgroundId}
+                  promptModelName={dual?.prompt_gen_model_name}
+                  inferenceModelName={dual?.inference_model_name}
+                />
+              ) : (
+                <DualBatchInference playgroundId={playgroundId} />
+              )
+            ) : (
+              <TestComponent
+                integratedTestValue={integratedTestValue}
+                playgroundId={playgroundId}
+                isExternal={isExternal}
+              />
+            )}
           </div>
         </>
       )}

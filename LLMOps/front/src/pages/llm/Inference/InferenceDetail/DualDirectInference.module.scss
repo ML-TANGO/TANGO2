@@ -1,0 +1,170 @@
+@import '@src/styles/color.scss';
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  max-width: 900px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.prompt-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.field-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: $mono207;
+
+  .model-hint {
+    font-size: 12px;
+    font-weight: 500;
+    color: $blue104;
+  }
+}
+
+.domain-btn {
+  border: 1px solid $mono203;
+  background: $mono200;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: $mono206;
+  cursor: pointer;
+
+  &.active {
+    border-color: $blue104;
+    color: $blue104;
+  }
+}
+
+.textarea {
+  width: 100%;
+  border: 1px solid $mono203;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.6;
+  resize: vertical;
+
+  &:focus {
+    outline: none;
+    border-color: $blue104;
+  }
+}
+
+.domain-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid $mono203;
+  border-radius: 8px;
+  background: rgba($blue104, 0.03);
+}
+
+.qa-set {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.qa-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  .qa-index {
+    font-size: 12px;
+    font-weight: 600;
+    color: $mono205;
+  }
+
+  .qa-remove {
+    border: none;
+    background: none;
+    font-size: 12px;
+    color: $red502;
+    cursor: pointer;
+  }
+}
+
+.qa-add {
+  align-self: flex-start;
+  border: 1px dashed $blue104;
+  background: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: $blue104;
+  cursor: pointer;
+}
+
+.run-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.run-btn {
+  border: none;
+  background: $blue104;
+  color: $mono200;
+  border-radius: 8px;
+  padding: 10px 24px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &.disabled {
+    background: $mono203;
+    cursor: not-allowed;
+  }
+}
+
+.result {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.result-box {
+  border: 1px solid $mono203;
+  border-radius: 8px;
+  overflow: hidden;
+
+  &.optimized {
+    border-color: rgba($lime604, 0.5);
+  }
+
+  &.answer {
+    border-color: rgba($blue104, 0.4);
+  }
+
+  .result-head {
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    background: $mono202;
+    color: $mono206;
+  }
+
+  .result-body {
+    padding: 14px;
+    font-size: 14px;
+    line-height: 1.7;
+    color: $mono207;
+    white-space: pre-wrap;
+  }
+}
