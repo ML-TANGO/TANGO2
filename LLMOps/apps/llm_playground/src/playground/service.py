@@ -306,6 +306,10 @@ async def delete_playground(id_list):
                 continue
             playground_deployment_info = json.loads(playground_deployment_info)
 
+            playground_deployment_id = playground_deployment_info.get("deployment_playground_id")
+            playground_embedding_id = playground_deployment_info.get("deployment_embedding_id")
+            playground_reranker_id = playground_deployment_info.get("deployment_reranker_id")
+
             # External partner job 이 살아있으면 cancel 먼저 — 그러지 않으면
             # helm release / partner pod 가 orphan 으로 남는다 (codex High-1).
             external_job_id = playground_deployment_info.get("external_job_id")
@@ -315,10 +319,33 @@ async def delete_playground(id_list):
                 except ExternalInferError:
                     # BFF 404 (이미 정리됨) 등은 무시 — best-effort cleanup
                     traceback.print_exc()
+            else:
+                # 내부 배포: helm 릴리스가 살아있으면 uninstall 먼저 — DB 레코드만 지우면
+                # helm 릴리스+GPU 파드가 orphan 으로 남는다(외부 cancel 과 대칭, stop_playground 동형).
+                # STOP 없이 실행 중 playground 를 DELETE 하는 경로 방어(GPU 누수 차단). uninstall_worker
+                # 는 deployment 레코드를 읽어 helm 이름을 만들므로 반드시 delete_deployments 前에 호출.
+                # 이미 stop 된 경우 helm 릴리스가 없어 uninstall 이 no-op(멱등) — best-effort.
+                rag_id = None
+                if playground_embedding_id or playground_reranker_id:
+                    playground_rag_info = playground_info.get("rag")
+                    if playground_rag_info is not None:
+                        rag_id = json.loads(playground_rag_info).get("rag_id")
+                if playground_deployment_id is not None:
+                    try:
+                        await llm_deployment.uninstall_worker(deployment_id=playground_deployment_id, llm_type="playground", llm_id=playground_id)
+                    except Exception:
+                        traceback.print_exc()
+                if playground_embedding_id is not None:
+                    try:
+                        await llm_deployment.uninstall_worker(deployment_id=playground_embedding_id, llm_type=TYPE.PLAYGROUND_RAG_EMBEDDING, llm_id=rag_id)
+                    except Exception:
+                        traceback.print_exc()
+                if playground_reranker_id is not None:
+                    try:
+                        await llm_deployment.uninstall_worker(deployment_id=playground_reranker_id, llm_type=TYPE.PLAYGROUND_RAG_RERANKER, llm_id=rag_id)
+                    except Exception:
+                        traceback.print_exc()
 
-            playground_deployment_id = playground_deployment_info.get("deployment_playground_id")
-            playground_embedding_id = playground_deployment_info.get("deployment_embedding_id")
-            playground_reranker_id = playground_deployment_info.get("deployment_reranker_id")
             deployment_ids = [x for x in [playground_deployment_id, playground_embedding_id, playground_reranker_id] if x]
             db.delete_deployments(deployment_ids=deployment_ids)
 
@@ -1646,6 +1673,19 @@ def _build_dual_meta(test_question, system_prompt=None, examples=None):
     return "\n\n".join(meta_parts)
 
 
+def _dual_optimized_or_fallback(optimized, question):
+    """LLM1 재작성 출력이 비었거나 퇴행적이면 원 질문으로 폴백.
+    baseline 메타프롬프트(고려대 실 LLM1 컨테이너 수령 前 stopgap)가 약한 모델에서
+    '[재작성된 프롬프트]' 같은 헤더만 뱉고 멈추는 케이스 방어 — LLM2 가 그 조각을 이어받아
+    딴소리하는 것을 차단한다. 재작성은 '명확하고 상세한' 프롬프트라 원 질문보다 길어야 정상 →
+    원 질문보다 길지 않으면(무출력·에코·플레이스홀더) 원 질문 사용(LLM2 가 직접 답변 = 안전 폴백)."""
+    opt = (optimized or "").strip()
+    q = (question or "").strip()
+    if not opt or len(opt) <= len(q):
+        return q
+    return opt
+
+
 async def resolve_dual_prompt_gen(playground_id):
     """추론 playground 가 이중 세션의 부모면 링크된 프롬프트생성 playground_id, 아니면 None.
     prompt_gen 을 request-supplied 가 아니라 세션 링크에서 서버 파생 → 교차테넌트 벡터 제거."""
@@ -1737,9 +1777,9 @@ async def playground_dual_test(playground_id, prompt_gen_playground_id, test_que
         raise Exception(f"프롬프트 생성기(LLM1) 사용 불가: {e}")
     # 예시기반 최적화(WBS 4.2): 시스템 지침 + few-shot 예시를 LLM1 메타프롬프트에 주입.
     meta = _build_dual_meta(test_question, system_prompt, examples)
-    optimized = (await _infer_question(gen_url, meta, session_id, timeout=300) or "").strip()
-    if not optimized:
-        optimized = test_question    # LLM1 무출력 → 원 질문으로 폴백(추론 계속)
+    # LLM1 재작성 → 퇴행(무출력·플레이스홀더 헤더·에코) 시 원 질문 폴백(LLM2 가 직접 답변)
+    optimized = _dual_optimized_or_fallback(
+        await _infer_question(gen_url, meta, session_id, timeout=300), test_question)
     if len(optimized) > _DUAL_PROMPT_MAX:
         optimized = optimized[:_DUAL_PROMPT_MAX]    # LLM1 출력(→LLM2 프롬프트) 길이 cap
     # 2) LLM2: 최적 프롬프트로 추론
@@ -1830,7 +1870,9 @@ async def dual_batch_test(playground_id, prompt_gen_playground_id, dataset_id, f
         q = s["input"]
         ref = s.get("reference") or ""
         meta = _build_dual_meta(q, system_prompt, examples)
-        optimized = (await _infer_question(gen_url, meta, session_id, timeout=300) or "").strip() or q
+        # LLM1 재작성 → 퇴행 시 원 질문 폴백(playground_dual_test 동형)
+        optimized = _dual_optimized_or_fallback(
+            await _infer_question(gen_url, meta, session_id, timeout=300), q)
         if len(optimized) > _DUAL_PROMPT_MAX:
             optimized = optimized[:_DUAL_PROMPT_MAX]
         answer = await _infer_question(ans_url, optimized, session_id, timeout=1800)
