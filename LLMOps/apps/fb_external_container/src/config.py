@@ -48,6 +48,30 @@ class Settings(BaseSettings):
     # raises this back off as partner runtime stretches.
     poll_interval_seconds: float = 5.0
 
+    # MariaDB startup connect retry (SP-Ext.3). On a node reboot this pod can
+    # start before MariaDB-galera accepts connections; a one-shot connect would
+    # then strand the service on the empty in-memory registry permanently (every
+    # external-container job 404s until a manual pod restart). Retry with capped
+    # exponential backoff so a slow MariaDB at boot is tolerated, then degrade to
+    # in-memory only as a last resort. Defaults ≈ 3 min total budget
+    # (1+2+4+8s then 10s each), which covers galera quorum after a cold reboot.
+    db_init_max_attempts: int = Field(default=20, alias="JF_DB_INIT_MAX_ATTEMPTS")
+    db_init_backoff_base_seconds: float = Field(
+        default=1.0, alias="JF_DB_INIT_BACKOFF_BASE"
+    )
+    db_init_backoff_cap_seconds: float = Field(
+        default=10.0, alias="JF_DB_INIT_BACKOFF_CAP"
+    )
+    # Per-attempt connect timeout. aiomysql defaults connect_timeout=None
+    # (unbounded): a plain connection-refused fails fast, but if a reboot leaves
+    # the MariaDB Service routing to a not-yet-ready pod the SYN can be dropped
+    # and the connect would hang for the OS TCP timeout (~1-2 min) — stalling the
+    # lifespan back into the CrashLoop this design avoids and wrecking the
+    # backoff schedule. Bound every attempt so both stay predictable.
+    db_connect_timeout_seconds: float = Field(
+        default=5.0, alias="JF_DB_CONNECT_TIMEOUT"
+    )
+
     log_level: str = "INFO"
 
     # populate_by_name lets tests / direct construction also use the field
