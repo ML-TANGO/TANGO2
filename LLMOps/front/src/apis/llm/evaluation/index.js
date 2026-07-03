@@ -39,6 +39,14 @@ export const markEvalStatus = async (modelId, jobId, status) => {
   });
 };
 
+// 평가 런 1건 삭제(이력 관리). expert 세션이면 BE 가 FK CASCADE 로 채점/이력 자식행도 정리.
+export const deleteEvalRun = async (modelId, jobId) => {
+  return await callApi({
+    url: `evaluations/${modelId}/${jobId}`,
+    method: 'delete',
+  });
+};
+
 // 벤치마크 대상 워크스페이스 데이터셋 목록 (fb_option, get_dataset_model 과 동일 소스).
 export const getEvalDatasets = async (workspaceId) => {
   return await callApi({

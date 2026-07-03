@@ -37,6 +37,7 @@ from evaluation.constants import (
     MAX_EXPERT_SAMPLES,
     MAX_JUDGE_RUN_SECONDS,
     MAX_JUDGE_SAMPLES,
+    STALE_RUNNING_MAX_HOURS,
 )
 
 # pod subPath 단일 segment(/dataset/<name>, models/<name>)에 들어가므로 조작문자 거부.
@@ -210,8 +211,39 @@ async def list_eval_results(model_id: int) -> dict:
     ⚠️ authZ: 호출자 워크스페이스 ownership 미검증(IDOR) — 단, 플랫폼 authZ posture 가
     전 서비스 비활성(workspace_access_check 주석)이라 단일앱 분기 패치 안 함. 플랫폼 차원
     (SP-13) 일괄 해소 대상(레퍼런스 llm_model 동일). 모델별 eval 이력 열람 한정이라 영향 제한."""
+    # 방치된 running 런을 조회 직전 정리(expert 제외). 벤치마크 완료는 lazy(폴링 시 metrics.json
+    # 마감)라 'running' 이 곧 '고착'을 뜻하진 않는다 — 성공했으나 폴링 전 창을 닫으면 running 에
+    # 남는다. 그래서 fail 전에 각 후보에 get_eval_result(재확인) 를 한 번 태워, metrics.json 이
+    # 있으면 completed 로 마감하고(오분류 방지), 그 뒤에도 running 인 진짜 미완만 failed 로 넘긴다.
+    # 전부 best-effort: 실패해도 이력 조회는 진행.
+    try:
+        stale = await db_model.list_stale_running_eval_results(
+            source_model_id=model_id, max_age_hours=STALE_RUNNING_MAX_HOURS)
+        for r in stale:
+            try:
+                await get_eval_result(model_id=model_id, job_id=r["job_str_id"])
+            except Exception:
+                traceback.print_exc()
+        await db_model.fail_stale_eval_results(
+            source_model_id=model_id, max_age_hours=STALE_RUNNING_MAX_HOURS)
+    except Exception:
+        traceback.print_exc()
     rows = await db_model.list_eval_results(source_model_id=model_id)
     return {"model_id": model_id, **db_model.build_eval_comparison(rows)}
+
+
+async def delete_eval_run(model_id: int, job_id: str) -> dict:
+    """평가 런 1건 삭제(이력 관리). 존재확인 후 삭제 — source_model_id 바인딩으로 다른 모델의
+    런은 삭제 불가(없으면 not-found). expert 세션이면 FK ON DELETE CASCADE 로 채점/이력
+    자식행도 함께 정리된다. authZ: list_eval_results 와 동일 IDOR posture(플랫폼 SP-13 일괄),
+    단 source_model_id 바인딩으로 모델 경계 밖 삭제는 차단."""
+    if not job_id or not _JOB_ID_RE.match(job_id):
+        raise ValueError(f"invalid job_id: {job_id!r}")
+    row = await db_model.get_eval_result_by_job(job_str_id=job_id, source_model_id=model_id)
+    if not row:
+        return {"job_id": job_id, "deleted": False, "reason": "not-found"}
+    await db_model.delete_eval_result(job_str_id=job_id, source_model_id=model_id)
+    return {"job_id": job_id, "deleted": True}
 
 
 async def compare_models(model_ids: List[int]) -> dict:

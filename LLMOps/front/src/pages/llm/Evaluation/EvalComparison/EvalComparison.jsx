@@ -19,12 +19,16 @@ const fmtMetric = (v) => {
  *
  * `showModel`(④ 교차모델 비교) 가 true 면 선두에 모델 컬럼 추가 — run.model_name 으로
  * 어느 모델 런인지 라벨링. 단일모델(기본 false)은 기존 그대로(컬럼 없음).
+ *
+ * `onDelete(run)` 를 주면 행마다 삭제 버튼 컬럼을 노출(이력 관리). 미제공(교차모델 비교 등)이면
+ * 컬럼 없음 — 삭제 확인/호출/재조회는 부모가 소유(표는 순수 프레젠테이션).
  */
-const EvalComparison = ({ comparison, showModel = false }) => {
+const EvalComparison = ({ comparison, showModel = false, onDelete }) => {
   const { t } = useTranslation();
   const metricKeys = comparison?.metric_keys ?? [];
   const best = comparison?.best ?? {};
   const runs = comparison?.runs ?? [];
+  const canDelete = typeof onDelete === 'function';
 
   if (runs.length === 0) {
     return <div className={cx('empty')}>{t('evaluate.empty')}</div>;
@@ -43,6 +47,7 @@ const EvalComparison = ({ comparison, showModel = false }) => {
               ))}
               <th>{t('evaluate.status.label')}</th>
               <th>{t('createdAt.label')}</th>
+              {canDelete && <th className={cx('action-col')}>{t('evaluate.action.label')}</th>}
             </tr>
           </thead>
           <tbody>
@@ -68,6 +73,18 @@ const EvalComparison = ({ comparison, showModel = false }) => {
                   {t(`evaluate.status.${run.status || 'pending'}`)}
                 </td>
                 <td>{run.create_datetime || '-'}</td>
+                {canDelete && (
+                  <td className={cx('action-col')}>
+                    <button
+                      type="button"
+                      className={cx('delete-btn')}
+                      title={t('evaluate.action.delete')}
+                      onClick={() => onDelete(run)}
+                    >
+                      {t('evaluate.action.delete')}
+                    </button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

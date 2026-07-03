@@ -47,3 +47,12 @@ MAX_EXPERT_SAMPLES = 10
 # ── 교차모델 비교 (④ 경량 뷰) ──────────────────────────────────────────────────
 # 한 비교 뷰가 합칠 모델 상한(표 가독성 + 모델별 get_model/list_eval_results N쿼리 가드).
 MAX_COMPARE_MODELS = 6
+
+# ── 이력 관리 ────────────────────────────────────────────────────────────────
+# 'running' 으로 방치된 벤치마크/judge 런을 실패로 간주하는 나이 임계(시간). 컨테이너
+# 파드 크래시나 폴러 재시작으로 완료 콜백이 유실되면 런이 running 에 영구 고착되는데,
+# eval_result 엔 updated_at 이 없어(create_datetime 만) 나이는 생성시각 기준으로 잰다.
+# judge 는 자체 300s 타임아웃이 있고 벤치마크는 분 단위라 6h 면 정상 런엔 절대 안 걸린다.
+# 사람이 시간에 걸쳐 채점하는 expert(metric_set='expert') 세션은 정당히 오래 running
+# 이므로 스윕에서 제외한다.
+STALE_RUNNING_MAX_HOURS = 6

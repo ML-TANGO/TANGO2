@@ -171,3 +171,13 @@ async def update_eval_status(model_id: int, job_id: str, body: dto.EvalStatusBod
     except Exception as e:
         traceback.print_exc()
         return response(status=0, message=str(e), result=None)
+
+
+@evaluations.delete("/{model_id}/{job_id}", summary="평가 런 삭제(이력 관리)", tags=TAG)
+async def delete_eval_run(model_id: int, job_id: str):
+    try:
+        res = await svc.delete_eval_run(model_id=model_id, job_id=job_id)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)

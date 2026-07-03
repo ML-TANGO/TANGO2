@@ -8,12 +8,14 @@ import ModelSelector from '@src/components/ModelSelector/ModelSelector';
 import EvalComparison from '../EvalComparison/EvalComparison';
 
 import {
+  deleteEvalRun,
   getEvalDatasets,
   getEvalResult,
   getEvalResults,
   runBenchmark,
 } from '@src/apis/llm/evaluation';
 import { startPath } from '@src/store/modules/breadCrumb';
+import { openConfirm } from '@src/store/modules/confirm';
 import { STATUS_SUCCESS } from '@src/network';
 
 import { errorToastMessage } from '@src/utils';
@@ -89,6 +91,35 @@ const BenchmarkEvaluation = () => {
     const res = await getEvalResults(mId);
     if (res.status === STATUS_SUCCESS) setEvalHistory(res.result);
   }, []);
+
+  // 평가 런 삭제(이력 관리) — 확인 후 삭제, 성공 시 이력 재조회. BE 가 FK CASCADE 로
+  // expert 채점/이력 자식행도 정리. run.job_id 로 삭제(모델 바인딩은 BE 가 강제).
+  const handleDeleteRun = useCallback(
+    (run) => {
+      if (!run?.job_id || !modelId) return;
+      dispatch(
+        openConfirm({
+          title: 'evaluate.delete.title',
+          content: 'evaluate.delete.message',
+          testid: 'eval-run-delete-modal',
+          submit: {
+            text: 'delete.label',
+            func: async () => {
+              const res = await deleteEvalRun(modelId, run.job_id);
+              if (res.status !== STATUS_SUCCESS) {
+                errorToastMessage(res.error, res.message);
+                return;
+              }
+              await fetchHistory(modelId);
+            },
+          },
+          cancel: { text: 'cancel.label' },
+          confirmMessage: run.dataset_name || run.job_id,
+        }),
+      );
+    },
+    [dispatch, modelId, fetchHistory],
+  );
 
   // 모델 변경 시 이력 재조회(이전 모델 이력 잔상 방지).
   useEffect(() => {
@@ -440,7 +471,7 @@ const BenchmarkEvaluation = () => {
           <h3 className={cx('section-title')}>
             {t('evaluation.history.title')}
           </h3>
-          <EvalComparison comparison={evalHistory} />
+          <EvalComparison comparison={evalHistory} onDelete={handleDeleteRun} />
         </section>
       )}
     </div>

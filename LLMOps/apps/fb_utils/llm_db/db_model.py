@@ -772,6 +772,60 @@ async def get_eval_result_by_job(job_str_id : str, source_model_id : int = None)
     return (res or [None])[0]
 
 
+async def delete_eval_result(job_str_id : str, source_model_id : int = None) -> bool:
+    """평가 런 1건 삭제(이력 관리). expert 세션이면 (job_str_id) FK ON DELETE CASCADE 로
+    eval_expert_rating / eval_expert_rating_history 자식행도 함께 정리된다. source_model_id
+    주면 다른 모델의 런을 삭제하지 못하게 바인딩(호출부에서 존재확인 후 호출)."""
+    sql = "DELETE FROM eval_result WHERE job_str_id = %s"
+    params = [job_str_id]
+    if source_model_id is not None:
+        sql += " AND source_model_id = %s"
+        params.append(source_model_id)
+    await commit_query(query=sql, params=params)
+    return True
+
+
+async def list_stale_running_eval_results(source_model_id : int, max_age_hours : int) -> list:
+    """스윕 후보(방치된 running 벤치마크/judge 런) 의 job_str_id 목록. fail_stale_eval_results
+    로 마감하기 *전에* 호출부가 각 후보에 lazy 완료(metrics.json 재확인)를 한 번 시도하기 위한
+    것 — 실제로는 성공했으나 폴링 전 창을 닫아 running 에 남은 벤치마크 런을 failed 로 오분류하지
+    않게 한다. WHERE 절은 fail_stale_eval_results 와 동일(expert 제외)."""
+    sql = """
+        SELECT job_str_id
+        FROM eval_result
+        WHERE source_model_id = %s
+          AND status = 'running'
+          AND (metric_set IS NULL OR metric_set <> 'expert')
+          AND TIMESTAMPDIFF(HOUR, create_datetime, NOW()) >= %s
+    """
+    res = await select_query(sql, params=(source_model_id, max_age_hours),
+                             fetch_type=FetchType.ALL)
+    return res or []
+
+
+async def fail_stale_eval_results(source_model_id : int, max_age_hours : int) -> bool:
+    """방치된 running 런을 failed 로 마감(lazy 스윕, list 조회 시 호출). 컨테이너 크래시/폴러
+    재시작으로 완료 콜백이 유실돼 running 에 고착된 런을 정리한다. eval_result 엔 updated_at 이
+    없어 나이는 create_datetime 기준(TIMESTAMPDIFF). 사람이 시간에 걸쳐 채점하는
+    expert(metric_set='expert') 세션은 정당히 오래 running 이므로 제외.
+
+    ⚠️ 벤치마크 완료는 lazy(FE 가 get_eval_result 폴링 시 metrics.json 을 읽어 마감)라 'running'
+    이 곧 '고착'을 뜻하지 않는다(성공했으나 폴링 전 창을 닫은 경우도 running). 그래서 호출부는
+    이 함수 전에 list_stale_running_eval_results 후보에 lazy 완료를 먼저 시도해야 한다 — 그러면
+    metrics.json 이 있는 런은 completed 로 마감되고, 그 뒤에도 running 인(진짜 미완) 런만 여기서
+    failed 로 넘어간다. (한 번 failed 되면 complete_eval_result 가 running 가드라 복구 불가.)"""
+    sql = """
+        UPDATE eval_result
+        SET status = 'failed'
+        WHERE source_model_id = %s
+          AND status = 'running'
+          AND (metric_set IS NULL OR metric_set <> 'expert')
+          AND TIMESTAMPDIFF(HOUR, create_datetime, NOW()) >= %s
+    """
+    await commit_query(query=sql, params=(source_model_id, max_age_hours))
+    return True
+
+
 # 메트릭 방향(best 판정). 모르는 키는 max 기본(벤치마크 점수 대부분 higher=better).
 # perplexity 만 낮을수록 우수. (llm_model self-metric + llm_evaluation 벤치마크 공용)
 _EVAL_METRIC_DIRECTION = {
