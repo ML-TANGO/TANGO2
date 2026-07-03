@@ -31,7 +31,7 @@
 
 .card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 20px;
 }
 
@@ -97,17 +97,22 @@
 
   .status {
     font-size: 12px;
-    font-weight: 500;
+    font-weight: 600;
     white-space: nowrap;
+    padding: 3px 10px;
+    border-radius: 12px;
 
     &.running {
       color: $lime604;
+      background: rgba($lime604, 0.14);
     }
     &.installing {
       color: $yellow303;
+      background: rgba($yellow303, 0.16);
     }
     &.stop {
-      color: $mono204;
+      color: $mono205;
+      background: $mono202;
     }
   }
 
