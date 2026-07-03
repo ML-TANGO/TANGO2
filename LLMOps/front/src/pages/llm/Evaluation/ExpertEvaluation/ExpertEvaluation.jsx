@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
 import { useHistory, useRouteMatch } from 'react-router-dom';
@@ -61,11 +61,19 @@ const ExpertSampleImage = ({ modelId, jobId, sample, t }) => {
 
   if (!sample.image_url && !sample.image_served) return null;
   if (err) {
-    return <div className={cx('sample-img-err')}>{t('evaluation.expert.imageError')}</div>;
+    return (
+      <div className={cx('sample-img-err')}>
+        {t('evaluation.expert.imageError')}
+      </div>
+    );
   }
   if (!src) return <div className={cx('sample-img-loading')} />;
   return (
-    <img className={cx('sample-img')} src={src} alt={sample.image || 'sample'} />
+    <img
+      className={cx('sample-img')}
+      src={src}
+      alt={sample.image || 'sample'}
+    />
   );
 };
 
@@ -82,6 +90,7 @@ const ExpertEvaluation = () => {
   const [datasets, setDatasets] = useState([]);
   const [modelId, setModelId] = useState(null);
   const [selDatasets, setSelDatasets] = useState([]);
+  const [datasetKeyword, setDatasetKeyword] = useState('');
   const [session, setSession] = useState(null); // { job, samples, total }
   const [ratings, setRatings] = useState({}); // idx → { verdict, comment }
   const [progress, setProgress] = useState(null); // { rated, total, pass_rate, completed }
@@ -93,10 +102,15 @@ const ExpertEvaluation = () => {
     (async () => {
       const res = await getEvalDatasets(workspaceId);
       if (res.status === STATUS_SUCCESS) {
-        const raw = Array.isArray(res.result) ? res.result : res.result?.list ?? [];
+        const raw = Array.isArray(res.result)
+          ? res.result
+          : (res.result?.list ?? []);
         setDatasets(
           raw
-            .map((d) => ({ id: d.id ?? d.dataset_id, name: d.name ?? d.dataset_name }))
+            .map((d) => ({
+              id: d.id ?? d.dataset_id,
+              name: d.name ?? d.dataset_name,
+            }))
             .filter((d) => d.id != null),
         );
       } else {
@@ -122,11 +136,20 @@ const ExpertEvaluation = () => {
       return;
     }
     if (selDatasets.length >= MAX_DATASETS) {
-      errorToastMessage(null, t('evaluation.datasetCap', { max: MAX_DATASETS }));
+      errorToastMessage(
+        null,
+        t('evaluation.datasetCap', { max: MAX_DATASETS }),
+      );
       return;
     }
     setSelDatasets([...selDatasets, id]);
   };
+
+  const filteredDatasets = useMemo(() => {
+    const kw = datasetKeyword.trim().toLowerCase();
+    if (!kw) return datasets;
+    return datasets.filter((d) => (d.name || '').toLowerCase().includes(kw));
+  }, [datasets, datasetKeyword]);
 
   const handleStart = async () => {
     if (!modelId || selDatasets.length === 0 || starting) return;
@@ -142,7 +165,12 @@ const ExpertEvaluation = () => {
     }
     setSession(res.result);
     setRatings({});
-    setProgress({ rated: 0, total: res.result.total, pass_rate: 0, completed: false });
+    setProgress({
+      rated: 0,
+      total: res.result.total,
+      pass_rate: 0,
+      completed: false,
+    });
   };
 
   const setComment = (idx, comment) =>
@@ -153,7 +181,8 @@ const ExpertEvaluation = () => {
     const prev = ratings[idx] || {};
     // 변경 없음(같은 verdict + 같은 코멘트)이면 재제출 안 함 — 무변경 blur 가 감사 이력을
     // 중복 적재하고 rate_count 를 부풀리는 것 방지(codex). 정본은 마지막 영속값(savedVerdict).
-    if (prev.savedVerdict === verdict && (prev.savedComment || '') === comment) return;
+    if (prev.savedVerdict === verdict && (prev.savedComment || '') === comment)
+      return;
     const prevVerdict = prev.verdict;
     setRatings((p) => ({ ...p, [idx]: { ...p[idx], verdict } }));
     const res = await submitExpertRating(Number(modelId), session.job_id, {
@@ -196,7 +225,9 @@ const ExpertEvaluation = () => {
         <button
           type='button'
           className={cx('back-btn')}
-          onClick={() => history.push(`/user/workspace/${workspaceId}/evaluation`)}
+          onClick={() =>
+            history.push(`/user/workspace/${workspaceId}/evaluation`)
+          }
         >
           ← {t('evaluation.backToHub')}
         </button>
@@ -206,7 +237,9 @@ const ExpertEvaluation = () => {
       {!session ? (
         <>
           <section className={cx('section')}>
-            <h3 className={cx('section-title')}>{t('evaluation.selectModel')}</h3>
+            <h3 className={cx('section-title')}>
+              {t('evaluation.selectModel')}
+            </h3>
             <ModelSelector
               wid={workspaceId}
               selected={modelId}
@@ -215,23 +248,62 @@ const ExpertEvaluation = () => {
           </section>
 
           <section className={cx('section')}>
-            <h3 className={cx('section-title')}>
-              {t('evaluation.selectDatasets')} ({selDatasets.length}/{MAX_DATASETS})
-            </h3>
+            <div className={cx('ds-section-header')}>
+              <h3 className={cx('section-title')}>
+                {t('evaluation.selectDatasets')}
+              </h3>
+              <span className={cx('ds-count-badge')}>{datasets.length}</span>
+              <div className={cx('ds-spacer')} />
+              {selDatasets.length > 0 && (
+                <span className={cx('ds-selected-label')}>
+                  <strong>{selDatasets.length}</strong> / {MAX_DATASETS}
+                </span>
+              )}
+            </div>
+            {datasets.length > 0 && (
+              <div className={cx('ds-search-wrap')}>
+                <input
+                  className={cx('ds-search-input')}
+                  placeholder={t('evaluation.searchDataset')}
+                  value={datasetKeyword}
+                  onChange={(e) => setDatasetKeyword(e.target.value)}
+                />
+                {datasetKeyword && (
+                  <button
+                    type='button'
+                    className={cx('ds-search-clear')}
+                    onClick={() => setDatasetKeyword('')}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            )}
             {datasets.length === 0 ? (
               <p className={cx('empty')}>{t('evaluation.noDatasets')}</p>
+            ) : filteredDatasets.length === 0 ? (
+              <div className={cx('ds-empty')}>
+                {t('evaluation.noSearchResult')}
+              </div>
             ) : (
-              <div className={cx('chip-row')}>
-                {datasets.map((d) => (
-                  <button
-                    key={d.id}
-                    type='button'
-                    className={cx('chip', selDatasets.includes(d.id) && 'selected')}
-                    onClick={() => toggleDataset(d.id)}
-                  >
-                    {d.name}
-                  </button>
-                ))}
+              <div className={cx('ds-list')}>
+                {filteredDatasets.map((d) => {
+                  const isSel = selDatasets.includes(d.id);
+                  return (
+                    <div
+                      key={d.id}
+                      className={cx('ds-card', isSel && 'ds-card--on')}
+                      onClick={() => toggleDataset(d.id)}
+                    >
+                      <div className={cx('ds-check', isSel && 'ds-check--on')}>
+                        {isSel && '✓'}
+                      </div>
+                      <div className={cx('ds-card-body')}>
+                        <div className={cx('ds-card-name')}>{d.name}</div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </section>
@@ -239,11 +311,16 @@ const ExpertEvaluation = () => {
           <div className={cx('run-row')}>
             <button
               type='button'
-              className={cx('run-btn', (!modelId || selDatasets.length === 0) && 'disabled')}
+              className={cx(
+                'run-btn',
+                (!modelId || selDatasets.length === 0) && 'disabled',
+              )}
               disabled={!modelId || selDatasets.length === 0 || starting}
               onClick={handleStart}
             >
-              {starting ? t('evaluation.running') : t('evaluation.expert.start')}
+              {starting
+                ? t('evaluation.running')
+                : t('evaluation.expert.start')}
             </button>
           </div>
         </>
@@ -257,13 +334,20 @@ const ExpertEvaluation = () => {
               })}
             </span>
             <span className={cx('pass-rate')}>
-              {t('evaluation.expert.passRate')}: <strong>{progress?.pass_rate ?? 0}%</strong>
+              {t('evaluation.expert.passRate')}:{' '}
+              <strong>{progress?.pass_rate ?? 0}%</strong>
             </span>
             {progress?.completed && (
-              <span className={cx('done-badge')}>{t('evaluation.expert.completed')}</span>
+              <span className={cx('done-badge')}>
+                {t('evaluation.expert.completed')}
+              </span>
             )}
             <div className={cx('spacer')} />
-            <button type='button' className={cx('reset-btn')} onClick={handleReset}>
+            <button
+              type='button'
+              className={cx('reset-btn')}
+              onClick={handleReset}
+            >
               {t('evaluation.expert.newSession')}
             </button>
           </div>
@@ -283,31 +367,47 @@ const ExpertEvaluation = () => {
                     />
                     {s.input && (
                       <div className={cx('field-row')}>
-                        <span className={cx('field-key')}>{t('evaluation.expert.input')}</span>
+                        <span className={cx('field-key')}>
+                          {t('evaluation.expert.input')}
+                        </span>
                         <span className={cx('field-val')}>{s.input}</span>
                       </div>
                     )}
                     <div className={cx('field-row')}>
-                      <span className={cx('field-key')}>{t('evaluation.expert.output')}</span>
+                      <span className={cx('field-key')}>
+                        {t('evaluation.expert.output')}
+                      </span>
                       <span className={cx('field-val')}>{s.output}</span>
                     </div>
                     {s.reference && (
                       <div className={cx('field-row')}>
-                        <span className={cx('field-key')}>{t('evaluation.expert.reference')}</span>
-                        <span className={cx('field-val', 'ref')}>{s.reference}</span>
+                        <span className={cx('field-key')}>
+                          {t('evaluation.expert.reference')}
+                        </span>
+                        <span className={cx('field-val', 'ref')}>
+                          {s.reference}
+                        </span>
                       </div>
                     )}
                     <div className={cx('rate-row')}>
                       <button
                         type='button'
-                        className={cx('verdict', 'pass', r.verdict === 'O' && 'on')}
+                        className={cx(
+                          'verdict',
+                          'pass',
+                          r.verdict === 'O' && 'on',
+                        )}
                         onClick={() => rate(s.idx, 'O')}
                       >
                         O {t('evaluation.expert.pass')}
                       </button>
                       <button
                         type='button'
-                        className={cx('verdict', 'fail', r.verdict === 'X' && 'on')}
+                        className={cx(
+                          'verdict',
+                          'fail',
+                          r.verdict === 'X' && 'on',
+                        )}
                         onClick={() => rate(s.idx, 'X')}
                       >
                         X {t('evaluation.expert.fail')}
@@ -320,7 +420,8 @@ const ExpertEvaluation = () => {
                         onChange={(e) => setComment(s.idx, e.target.value)}
                         onBlur={() => {
                           // 이미 채점된 샘플의 코멘트 수정은 blur 시 영속(미완료 세션 한정).
-                          if (r.verdict && !progress?.completed) rate(s.idx, r.verdict);
+                          if (r.verdict && !progress?.completed)
+                            rate(s.idx, r.verdict);
                         }}
                       />
                     </div>
@@ -345,7 +446,9 @@ const ExpertEvaluation = () => {
 
       {modelId && (
         <section className={cx('section')}>
-          <h3 className={cx('section-title')}>{t('evaluation.history.title')}</h3>
+          <h3 className={cx('section-title')}>
+            {t('evaluation.history.title')}
+          </h3>
           <EvalComparison comparison={evalHistory} />
         </section>
       )}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
 import { useHistory, useRouteMatch } from 'react-router-dom';
@@ -44,6 +44,7 @@ const JudgeEvaluation = () => {
   const [datasets, setDatasets] = useState([]);
   const [modelId, setModelId] = useState(null);
   const [selDatasets, setSelDatasets] = useState([]);
+  const [datasetKeyword, setDatasetKeyword] = useState('');
   const [judgeType, setJudgeType] = useState('commercial'); // commercial | local
   const [provider, setProvider] = useState('chatgpt');
   const [apiKey, setApiKey] = useState(''); // transient
@@ -67,10 +68,13 @@ const JudgeEvaluation = () => {
       if (dsRes.status === STATUS_SUCCESS) {
         const raw = Array.isArray(dsRes.result)
           ? dsRes.result
-          : dsRes.result?.list ?? [];
+          : (dsRes.result?.list ?? []);
         setDatasets(
           raw
-            .map((d) => ({ id: d.id ?? d.dataset_id, name: d.name ?? d.dataset_name }))
+            .map((d) => ({
+              id: d.id ?? d.dataset_id,
+              name: d.name ?? d.dataset_name,
+            }))
             .filter((d) => d.id != null),
         );
       }
@@ -103,11 +107,20 @@ const JudgeEvaluation = () => {
       return;
     }
     if (selDatasets.length >= MAX_DATASETS) {
-      errorToastMessage(null, t('evaluation.datasetCap', { max: MAX_DATASETS }));
+      errorToastMessage(
+        null,
+        t('evaluation.datasetCap', { max: MAX_DATASETS }),
+      );
       return;
     }
     setSelDatasets([...selDatasets, id]);
   };
+
+  const filteredDatasets = useMemo(() => {
+    const kw = datasetKeyword.trim().toLowerCase();
+    if (!kw) return datasets;
+    return datasets.filter((d) => (d.name || '').toLowerCase().includes(kw));
+  }, [datasets, datasetKeyword]);
 
   const mock = !!judges?.mock;
   // 상용=키 필요(mock 면 생략 가능) / 로컬=URL 필요(BE SSRF 검증).
@@ -195,7 +208,9 @@ const JudgeEvaluation = () => {
         <button
           type='button'
           className={cx('back-btn')}
-          onClick={() => history.push(`/user/workspace/${workspaceId}/evaluation`)}
+          onClick={() =>
+            history.push(`/user/workspace/${workspaceId}/evaluation`)
+          }
         >
           ← {t('evaluation.backToHub')}
         </button>
@@ -213,7 +228,9 @@ const JudgeEvaluation = () => {
       </section>
 
       <section className={cx('section')}>
-        <h3 className={cx('section-title')}>{t('evaluation.judge.selectJudge')}</h3>
+        <h3 className={cx('section-title')}>
+          {t('evaluation.judge.selectJudge')}
+        </h3>
         <div className={cx('tabs')}>
           <button
             type='button'
@@ -247,7 +264,9 @@ const JudgeEvaluation = () => {
               ))}
             </div>
             <div className={cx('field')}>
-              <label className={cx('field-label')}>{t('evaluation.judge.apiKey')}</label>
+              <label className={cx('field-label')}>
+                {t('evaluation.judge.apiKey')}
+              </label>
               <input
                 className={cx('field-input')}
                 type='password'
@@ -256,13 +275,17 @@ const JudgeEvaluation = () => {
                 onChange={(e) => setApiKey(e.target.value)}
                 autoComplete='off'
               />
-              <p className={cx('field-hint')}>{t('evaluation.judge.keyHint')}</p>
+              <p className={cx('field-hint')}>
+                {t('evaluation.judge.keyHint')}
+              </p>
             </div>
           </>
         ) : (
           <>
             <div className={cx('field')}>
-              <label className={cx('field-label')}>{t('evaluation.judge.endpoint')}</label>
+              <label className={cx('field-label')}>
+                {t('evaluation.judge.endpoint')}
+              </label>
               <input
                 className={cx('field-input')}
                 type='text'
@@ -270,10 +293,14 @@ const JudgeEvaluation = () => {
                 value={baseUrl}
                 onChange={(e) => setBaseUrl(e.target.value)}
               />
-              <p className={cx('field-hint')}>{t('evaluation.judge.endpointHint')}</p>
+              <p className={cx('field-hint')}>
+                {t('evaluation.judge.endpointHint')}
+              </p>
             </div>
             <div className={cx('field')}>
-              <label className={cx('field-label')}>{t('evaluation.judge.modelName')}</label>
+              <label className={cx('field-label')}>
+                {t('evaluation.judge.modelName')}
+              </label>
               <input
                 className={cx('field-input')}
                 type='text'
@@ -287,29 +314,68 @@ const JudgeEvaluation = () => {
       </section>
 
       <section className={cx('section')}>
-        <h3 className={cx('section-title')}>
-          {t('evaluation.selectDatasets')} ({selDatasets.length}/{MAX_DATASETS})
-        </h3>
+        <div className={cx('ds-section-header')}>
+          <h3 className={cx('section-title')}>
+            {t('evaluation.selectDatasets')}
+          </h3>
+          <span className={cx('ds-count-badge')}>{datasets.length}</span>
+          <div className={cx('ds-spacer')} />
+          {selDatasets.length > 0 && (
+            <span className={cx('ds-selected-label')}>
+              <strong>{selDatasets.length}</strong> / {MAX_DATASETS}
+            </span>
+          )}
+        </div>
+        {datasets.length > 0 && (
+          <div className={cx('ds-search-wrap')}>
+            <input
+              className={cx('ds-search-input')}
+              placeholder={t('evaluation.searchDataset')}
+              value={datasetKeyword}
+              onChange={(e) => setDatasetKeyword(e.target.value)}
+            />
+            {datasetKeyword && (
+              <button
+                type='button'
+                className={cx('ds-search-clear')}
+                onClick={() => setDatasetKeyword('')}
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        )}
         {datasets.length === 0 ? (
           <p className={cx('empty')}>{t('evaluation.noDatasets')}</p>
+        ) : filteredDatasets.length === 0 ? (
+          <div className={cx('ds-empty')}>{t('evaluation.noSearchResult')}</div>
         ) : (
-          <div className={cx('chip-row')}>
-            {datasets.map((d) => (
-              <button
-                key={d.id}
-                type='button'
-                className={cx('chip', selDatasets.includes(d.id) && 'selected')}
-                onClick={() => toggleDataset(d.id)}
-              >
-                {d.name}
-              </button>
-            ))}
+          <div className={cx('ds-list')}>
+            {filteredDatasets.map((d) => {
+              const isSel = selDatasets.includes(d.id);
+              return (
+                <div
+                  key={d.id}
+                  className={cx('ds-card', isSel && 'ds-card--on')}
+                  onClick={() => toggleDataset(d.id)}
+                >
+                  <div className={cx('ds-check', isSel && 'ds-check--on')}>
+                    {isSel && '✓'}
+                  </div>
+                  <div className={cx('ds-card-body')}>
+                    <div className={cx('ds-card-name')}>{d.name}</div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </section>
 
       <section className={cx('section')}>
-        <h3 className={cx('section-title')}>{t('evaluation.judge.criteriaTitle')}</h3>
+        <h3 className={cx('section-title')}>
+          {t('evaluation.judge.criteriaTitle')}
+        </h3>
         <div className={cx('chip-row')}>
           {CRITERIA.map((c) => (
             <button
@@ -369,7 +435,9 @@ const JudgeEvaluation = () => {
 
       {modelId && (
         <section className={cx('section')}>
-          <h3 className={cx('section-title')}>{t('evaluation.history.title')}</h3>
+          <h3 className={cx('section-title')}>
+            {t('evaluation.history.title')}
+          </h3>
           <EvalComparison comparison={evalHistory} />
         </section>
       )}
