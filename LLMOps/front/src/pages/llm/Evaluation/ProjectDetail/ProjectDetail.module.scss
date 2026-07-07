@@ -1,0 +1,282 @@
+@import '@src/styles/color.scss';
+
+.project-detail {
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+}
+
+.back-btn {
+  border: none;
+  background-color: transparent;
+  color: $mono204;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px 0;
+
+  &:hover {
+    color: $blue104;
+  }
+}
+
+.placeholder {
+  padding: 48px 0;
+  text-align: center;
+  color: $mono204;
+  font-size: 14px;
+}
+
+.fixed-header {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 22px 24px;
+  border: 1px solid $mono203;
+  border-radius: 12px;
+  background-color: #fff;
+}
+
+.name-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.name {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.type-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  color: #fff;
+  background-color: $mono204;
+
+  &.type-benchmark {
+    background-color: #3d6df6;
+  }
+  &.type-judge {
+    background-color: #8b5cf6;
+  }
+  &.type-expert {
+    background-color: #0ea5a3;
+  }
+}
+
+.status-chip {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid $mono203;
+  color: $mono204;
+  background-color: $mono202;
+
+  &.status-created {
+    color: #6b7280;
+    border-color: #d1d5db;
+    background-color: #f3f4f6;
+  }
+  &.status-running {
+    color: #b45309;
+    border-color: #fcd34d;
+    background-color: #fffbeb;
+  }
+  &.status-completed {
+    color: #047857;
+    border-color: #6ee7b7;
+    background-color: #ecfdf5;
+  }
+}
+
+.meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+}
+
+.meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.meta-label {
+  font-size: 12px;
+  color: $mono204;
+}
+
+.meta-value {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* ── 하위 뷰 back(실행 목록으로) ── */
+.sub-back {
+  align-self: flex-start;
+  border: 1px solid $mono203;
+  background: #fff;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: $mono205;
+  cursor: pointer;
+
+  &:hover {
+    border-color: $blue104;
+    color: $blue104;
+  }
+}
+
+/* ── 실행(run) 목록 ── */
+.runs {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.runs-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.runs-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.runs-count {
+  font-size: 12px;
+  font-weight: 600;
+  background: $blue101;
+  color: $blue104;
+  border-radius: 12px;
+  padding: 2px 10px;
+}
+
+.runs-spacer {
+  flex: 1;
+}
+
+.compare-btn {
+  border: 1px solid $blue104;
+  background: #fff;
+  color: $blue104;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    background: $blue101;
+  }
+}
+
+.new-run-btn {
+  border: none;
+  background: $blue104;
+  color: #fff;
+  border-radius: 8px;
+  padding: 9px 18px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:disabled {
+    background: $mono203;
+    color: $mono204;
+    cursor: not-allowed;
+  }
+}
+
+.runs-empty {
+  padding: 40px 24px;
+  text-align: center;
+  color: $mono204;
+  font-size: 13px;
+  border: 1px dashed $mono203;
+  border-radius: 12px;
+  background-color: $mono202;
+}
+
+.run-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.run-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  border: 1px solid $mono203;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+
+  &:hover {
+    border-color: $blue104;
+    background: $blue101;
+  }
+}
+
+.run-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.run-dataset {
+  font-size: 14px;
+  font-weight: 700;
+  color: $mono207;
+}
+
+.run-config {
+  font-size: 12px;
+  color: $mono205;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 420px;
+}
+
+.run-side {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.run-metrics {
+  font-size: 12px;
+  font-weight: 600;
+  color: $blue104;
+  font-variant-numeric: tabular-nums;
+}
+
+.run-date {
+  font-size: 12px;
+  color: $mono204;
+}
+
+.run-open {
+  font-size: 12px;
+  font-weight: 700;
+  color: $blue104;
+}

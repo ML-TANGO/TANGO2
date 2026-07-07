@@ -11,6 +11,21 @@ const fmtMetric = (v) => {
   return v >= 1000 ? v.toFixed(0) : v.toFixed(2);
 };
 
+// 전문가 평가 메트릭 키 → i18n 라벨. 헤더가 raw 키 문자열을 그대로 찍으므로 매핑.
+// (신규 expert_avg_score 1~5 · 레거시 expert_pass_rate 0~100 스케일 혼재 — 라벨·포맷으로 구분.)
+const METRIC_LABEL_KEYS = {
+  expert_avg_score: 'evaluate.metric.expertAvgScore',
+  expert_pass_rate: 'evaluate.metric.expertPassRate',
+};
+
+// 스케일 혼재 구분: avg_score 는 `/5`, pass_rate 는 `%`, 그 외는 기본 포맷.
+const fmtMetricValue = (k, v) => {
+  if (typeof v !== 'number' || Number.isNaN(v)) return '-';
+  if (k === 'expert_avg_score') return `${v.toFixed(2)} / 5`;
+  if (k === 'expert_pass_rate') return `${v.toFixed(2)}%`;
+  return fmtMetric(v);
+};
+
 /**
  * 모델 중심 평가 이력 비교표 (§14.12) — self-metric(SP-5)·벤치마크·judge(후속) 런 누적.
  * BE `list_eval_results` 의 `{ metric_keys, best, runs }` 를 소비(llm_evaluation/llm_model 동형).
@@ -29,6 +44,8 @@ const EvalComparison = ({ comparison, showModel = false, onDelete }) => {
   const best = comparison?.best ?? {};
   const runs = comparison?.runs ?? [];
   const canDelete = typeof onDelete === 'function';
+  const metricLabel = (k) =>
+    METRIC_LABEL_KEYS[k] ? t(METRIC_LABEL_KEYS[k]) : k;
 
   if (runs.length === 0) {
     return <div className={cx('empty')}>{t('evaluate.empty')}</div>;
@@ -43,11 +60,15 @@ const EvalComparison = ({ comparison, showModel = false, onDelete }) => {
               {showModel && <th>{t('evaluate.model.label')}</th>}
               <th>{t('evaluate.dataset.label')}</th>
               {metricKeys.map((k) => (
-                <th key={k}>{k}</th>
+                <th key={k}>{metricLabel(k)}</th>
               ))}
               <th>{t('evaluate.status.label')}</th>
               <th>{t('createdAt.label')}</th>
-              {canDelete && <th className={cx('action-col')}>{t('evaluate.action.label')}</th>}
+              {canDelete && (
+                <th className={cx('action-col')}>
+                  {t('evaluate.action.label')}
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -62,9 +83,11 @@ const EvalComparison = ({ comparison, showModel = false, onDelete }) => {
                   const isBest = best[k] === run.id && v !== undefined;
                   return (
                     <td key={k} className={cx('metric-cell', isBest && 'best')}>
-                      {v !== undefined ? fmtMetric(v) : '-'}
+                      {v !== undefined ? fmtMetricValue(k, v) : '-'}
                       {isBest && (
-                        <span className={cx('best-badge')}>{t('evaluate.best.badge')}</span>
+                        <span className={cx('best-badge')}>
+                          {t('evaluate.best.badge')}
+                        </span>
                       )}
                     </td>
                   );
@@ -76,7 +99,7 @@ const EvalComparison = ({ comparison, showModel = false, onDelete }) => {
                 {canDelete && (
                   <td className={cx('action-col')}>
                     <button
-                      type="button"
+                      type='button'
                       className={cx('delete-btn')}
                       title={t('evaluate.action.delete')}
                       onClick={() => onDelete(run)}
@@ -90,7 +113,9 @@ const EvalComparison = ({ comparison, showModel = false, onDelete }) => {
           </tbody>
         </table>
       </div>
-      <div className={cx('comparison-hint')}>{t('evaluate.comparison.hint')}</div>
+      <div className={cx('comparison-hint')}>
+        {t('evaluate.comparison.hint')}
+      </div>
     </div>
   );
 };

@@ -668,16 +668,19 @@ async def list_quantize_lineage(source_model_id : int) -> list:
 
 async def insert_eval_result(source_model_id : int, workspace_id : int,
                              job_str_id : str, dataset_id : int = None,
-                             dataset_name : str = None, metric_set : str = None) -> int:
-    """평가 시도 1건 기록(launch 시점, status=running). 재평가 시 새 row(이력 보존)."""
+                             dataset_name : str = None, metric_set : str = None,
+                             eval_project_id : int = None) -> int:
+    """평가 시도 1건 기록(launch 시점, status=running). 재평가 시 새 row(이력 보존).
+    eval_project_id 주면 평가 프로젝트(불변 model/dataset 묶음)에 링크(1:N) — 미지정 시
+    NULL(레거시/프로젝트 밖 런 보존)."""
     sql = """
         INSERT INTO eval_result
-            (source_model_id, workspace_id, job_str_id, dataset_id,
+            (source_model_id, workspace_id, eval_project_id, job_str_id, dataset_id,
              dataset_name, metric_set, status)
-        VALUES (%s, %s, %s, %s, %s, %s, 'running')
+        VALUES (%s, %s, %s, %s, %s, %s, %s, 'running')
     """
     return await commit_query(query=sql, params=(
-        source_model_id, workspace_id, job_str_id, dataset_id,
+        source_model_id, workspace_id, eval_project_id, job_str_id, dataset_id,
         dataset_name, metric_set,
     ))
 
@@ -750,6 +753,39 @@ async def list_eval_results(source_model_id : int) -> list:
     """
     res = await select_query(sql, params=(TYPE.TIME_DATE_FORMAT_SQL, source_model_id),
                              fetch_type=FetchType.ALL)
+    return res or []
+
+
+async def list_eval_results_by_project(eval_project_id : int) -> list:
+    """프로젝트에 속한 평가 런(run) 목록(최신순) — 프로젝트 내 run 비교표용. list_eval_results
+    와 동일 shape, 필터만 eval_project_id. job_str_id IN 목록 대신 FK 필터라 IDOR 회피."""
+    sql = """
+        SELECT id, source_model_id, workspace_id, job_str_id, dataset_id,
+               dataset_name, metric_set, metrics, status,
+               DATE_FORMAT(create_datetime, %s) AS create_datetime
+        FROM eval_result
+        WHERE eval_project_id = %s
+        ORDER BY id DESC
+    """
+    res = await select_query(sql, params=(TYPE.TIME_DATE_FORMAT_SQL, eval_project_id),
+                             fetch_type=FetchType.ALL)
+    return res or []
+
+
+async def count_run_statuses_by_projects(project_ids : list) -> list:
+    """프로젝트별 run 상태 집계(GROUP BY eval_project_id, status). list_projects 가 표시
+    상태를 read-time 파생할 때 프로젝트마다 run 을 조회하는 N+1 을 피하려고 한 번에 읽는다.
+    반환: [{eval_project_id, status, cnt}, ...] (run 0개 프로젝트는 결과에 없음)."""
+    if not project_ids:
+        return []
+    placeholders = ",".join(["%s"] * len(project_ids))
+    sql = f"""
+        SELECT eval_project_id, status, COUNT(*) AS cnt
+        FROM eval_result
+        WHERE eval_project_id IN ({placeholders})
+        GROUP BY eval_project_id, status
+    """
+    res = await select_query(sql, params=tuple(project_ids), fetch_type=FetchType.ALL)
     return res or []
 
 
@@ -886,32 +922,101 @@ def build_eval_comparison(rows: list) -> dict:
     return {"metric_keys": sorted(metric_keys), "best": best, "runs": runs}
 
 
+# ── 평가 프로젝트 관리 (2026-07-07) ──────────────────────────────────────────
+# 관리 단위 = 프로젝트(모델·데이터셋·유형·이름 잠금). 1:N 으로 eval_result(run)를 묶는다
+# (eval_result.eval_project_id FK). 삭제 시 FK ON DELETE CASCADE 로 자식 run
+# (+expert rating/history) 전 체인이 함께 정리된다.
+
+async def create_eval_project(workspace_id : int, name : str, model_id : int,
+                              dataset_ids_json : str, eval_type : str,
+                              creator : str = None) -> int:
+    """평가 프로젝트 생성(status='created', run 0개). dataset_ids 는 JSON 문자열로 저장
+    (불변 — 이후 run 이 상속). 생성된 project id 반환."""
+    # 'created' 리터럴 유지 — 대응 상수 PROJECT_STATUS_CREATED 는 앱 레이어
+    # (llm_evaluation.evaluation.constants)에 있어, 공유 lib 인 fb_utils 가 특정 앱을
+    # import 하면 레이어 역의존이 된다. 리터럴로 두는 게 계층 규율상 옳다.
+    sql = """
+        INSERT INTO eval_project
+            (workspace_id, name, model_id, dataset_ids, eval_type, status, creator)
+        VALUES (%s, %s, %s, %s, %s, 'created', %s)
+    """
+    return await commit_query(query=sql, params=(
+        workspace_id, name, model_id, dataset_ids_json, eval_type, creator,
+    ))
+
+
+async def list_eval_projects(workspace_id : int) -> list:
+    """워크스페이스의 평가 프로젝트 목록(최신순). dataset_ids 는 JSON 컬럼(문자열 반환) —
+    호출부(서비스)가 파싱."""
+    sql = """
+        SELECT id, workspace_id, name, model_id, dataset_ids, eval_type, status, creator,
+               DATE_FORMAT(create_datetime, %s) AS create_datetime
+        FROM eval_project
+        WHERE workspace_id = %s
+        ORDER BY id DESC
+    """
+    res = await select_query(sql, params=(TYPE.TIME_DATE_FORMAT_SQL, workspace_id),
+                             fetch_type=FetchType.ALL)
+    return res or []
+
+
+async def get_eval_project(project_id : int) -> dict:
+    """평가 프로젝트 단건 조회(불변 model/dataset/type — run-start 시 주입원)."""
+    sql = """
+        SELECT id, workspace_id, name, model_id, dataset_ids, eval_type, status, creator,
+               DATE_FORMAT(create_datetime, %s) AS create_datetime
+        FROM eval_project
+        WHERE id = %s
+    """
+    res = await select_query(sql, params=(TYPE.TIME_DATE_FORMAT_SQL, project_id),
+                             fetch_type=FetchType.ONE)
+    return res
+
+
+async def update_eval_project_status(project_id : int, status : str) -> bool:
+    """프로젝트 상태 갱신(created→running→completed). run 생성/집계 마감 시 호출."""
+    sql = "UPDATE eval_project SET status = %s WHERE id = %s"
+    await commit_query(query=sql, params=(status, project_id))
+    return True
+
+
+async def delete_eval_project(project_id : int) -> bool:
+    """프로젝트 삭제. FK ON DELETE CASCADE 로 자식 eval_result(run) + expert rating/history
+    전 체인이 함께 정리된다(존재확인은 호출부)."""
+    sql = "DELETE FROM eval_project WHERE id = %s"
+    await commit_query(query=sql, params=(project_id,))
+    return True
+
+
 # ── P3 전문가 평가 (sample-level 인간 채점) ──────────────────────────────────
 
 async def insert_expert_rating(source_model_id : int, job_str_id : str, sample_idx : int,
-                               verdict : str, input : str = None, output : str = None,
+                               verdict : str, score : int = None, score_json : str = None,
+                               input : str = None, output : str = None,
                                reference : str = None, rater_user : str = None,
                                comment : str = None) -> int:
-    """전문가 채점 1건 upsert — (job_str_id, sample_idx) 유니크라 재채점 시 갱신."""
+    """전문가 채점 1건 upsert — (job_str_id, sample_idx) 유니크라 재채점 시 갱신.
+    score(1~5, D2)가 신규 기본이고 verdict 는 score 에서 파생돼 함께 기록(NOT NULL 보존)."""
     sql = """
         INSERT INTO eval_expert_rating
             (source_model_id, job_str_id, sample_idx, input, output, reference,
-             rater_user, verdict, comment)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+             rater_user, verdict, score, score_json, comment)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON DUPLICATE KEY UPDATE
-            verdict = VALUES(verdict), comment = VALUES(comment),
+            verdict = VALUES(verdict), score = VALUES(score),
+            score_json = VALUES(score_json), comment = VALUES(comment),
             rater_user = VALUES(rater_user), create_datetime = CURRENT_TIMESTAMP
     """
     return await commit_query(query=sql, params=(
         source_model_id, job_str_id, sample_idx, input, output, reference,
-        rater_user, verdict, comment))
+        rater_user, verdict, score, score_json, comment))
 
 
 async def list_expert_ratings(job_str_id : str, source_model_id : int = None) -> list:
     """세션(job_str_id)의 전문가 채점 목록(sample_idx 순). source_model_id 주면 교차모델 차단."""
     sql = """
         SELECT id, source_model_id, job_str_id, sample_idx, input, output, reference,
-               rater_user, verdict, comment,
+               rater_user, verdict, score, score_json, comment,
                DATE_FORMAT(create_datetime, %s) AS create_datetime
         FROM eval_expert_rating
         WHERE job_str_id = %s
@@ -927,23 +1032,25 @@ async def list_expert_ratings(job_str_id : str, source_model_id : int = None) ->
 
 async def insert_expert_rating_history(source_model_id : int, job_str_id : str,
                                        sample_idx : int, verdict : str,
+                                       score : int = None, score_json : str = None,
                                        comment : str = None, rater_user : str = None) -> int:
     """전문가 채점 이력 1건(append-only, 감사추적). 메인 eval_expert_rating 은
     (job_str_id, sample_idx) upsert 라 '현재' verdict 만 남지만, 누가 언제 어떻게 채점/재채점
-    했는지는 이 테이블에 채점 이벤트마다 누적해 불변 보존한다."""
+    했는지는 이 테이블에 채점 이벤트마다 누적해 불변 보존한다. score/score_json 도 이벤트마다 동결."""
     sql = """
         INSERT INTO eval_expert_rating_history
-            (source_model_id, job_str_id, sample_idx, rater_user, verdict, comment)
-        VALUES (%s, %s, %s, %s, %s, %s)
+            (source_model_id, job_str_id, sample_idx, rater_user, verdict, score, score_json, comment)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
     """
     return await commit_query(query=sql, params=(
-        source_model_id, job_str_id, sample_idx, rater_user, verdict, comment))
+        source_model_id, job_str_id, sample_idx, rater_user, verdict, score, score_json, comment))
 
 
 async def list_expert_rating_history(job_str_id : str, source_model_id : int = None) -> list:
     """세션(job_str_id)의 전문가 채점 이력(시간순). source_model_id 주면 교차모델 차단."""
     sql = """
-        SELECT id, source_model_id, job_str_id, sample_idx, rater_user, verdict, comment,
+        SELECT id, source_model_id, job_str_id, sample_idx, rater_user, verdict,
+               score, score_json, comment,
                DATE_FORMAT(create_datetime, %s) AS create_datetime
         FROM eval_expert_rating_history
         WHERE job_str_id = %s

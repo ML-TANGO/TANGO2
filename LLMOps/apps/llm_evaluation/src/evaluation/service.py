@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import asyncio
 import csv
+import glob
 import hashlib
+import io
 import ipaddress
 import json
 import os
@@ -30,6 +32,21 @@ from utils.llm_db import db_model
 from external.proxy import ExternalContainerClient, ExternalContainerError
 from evaluation.constants import (
     BENCHMARK_METRICS,
+    EVAL_TYPES,
+    MAX_BENCHMARK_DATASETS,
+    PROJECT_STATUS_COMPLETED,
+    PROJECT_STATUS_CREATED,
+    PROJECT_STATUS_RUNNING,
+    EXPERT_CSV_FILENAME,
+    EXPERT_IMAGE_FILENAME,
+    EXPERT_OUTPUT_GLOB,
+    EXPERT_PROMPT_DEFAULT,
+    EXPERT_PROMPT_SDS,
+    EXPERT_REFERENCE_FILENAME,
+    EXPERT_SCORE_JSON_MAX_LEN,
+    EXPERT_SCORE_MAX,
+    EXPERT_SCORE_MIN,
+    EXPERT_VERDICT_PASS_THRESHOLD,
     JUDGE_CRITERIA,
     JUDGE_DEFAULT_MODEL,
     JUDGE_PROVIDER_HOSTS,
@@ -37,6 +54,7 @@ from evaluation.constants import (
     MAX_EXPERT_SAMPLES,
     MAX_JUDGE_RUN_SECONDS,
     MAX_JUDGE_SAMPLES,
+    SDS_SAMPLE_DIR_GLOB,
     STALE_RUNNING_MAX_HOURS,
 )
 
@@ -45,9 +63,13 @@ _SAFE_SEGMENT_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 _JOB_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 
 
-async def run_benchmark(model_id: int, dataset_ids: List[int],
+async def run_benchmark(project_id: int,
                         metric_set: Optional[List[str]] = None) -> dict:
-    """벤치마크 평가 런 — 대상 모델 × 데이터셋(다중) × 메트릭 → evaluate 컨테이너 런치."""
+    """벤치마크 평가 런 — 프로젝트에서 model/dataset(잠금) 상속 → evaluate 컨테이너 런치.
+    model_id·dataset_ids 는 프로젝트에서 주입(요청 바디 미수취 → 불변 강제, P3). 유형별
+    설정(metric_set)만 body 에서 받는다. run 생성 시 프로젝트를 'running' 으로 전이."""
+    project, dataset_ids = await _load_project_for_run(project_id, "benchmark")
+    model_id = int(project["model_id"])
     model_info = await db_model.get_model(model_id=model_id)
     if not model_info:
         raise Exception(f"model {model_id} not found")
@@ -114,11 +136,14 @@ async def run_benchmark(model_id: int, dataset_ids: List[int],
         await db_model.insert_eval_result(
             source_model_id=model_id, workspace_id=workspace_id,
             job_str_id=job_id, dataset_id=dataset_ids[0],
-            dataset_name=dataset_name_csv, metric_set=metric_csv)
+            dataset_name=dataset_name_csv, metric_set=metric_csv,
+            eval_project_id=project_id)
+        await db_model.update_eval_project_status(project_id, PROJECT_STATUS_RUNNING)
     except Exception:
         traceback.print_exc()
 
     return {
+        "project_id": project_id,
         "model_id": model_id, "model_name": model_name, "workspace_id": workspace_id,
         "dataset_ids": dataset_ids, "datasets": ds_names, "metric_set": metrics,
         "manifest_name": settings.BENCHMARK_MANIFEST_NAME,
@@ -291,6 +316,157 @@ async def compare_models(model_ids: List[int]) -> dict:
         models.append({"id": item["id"], "name": item["name"]})
         all_rows.extend(item["rows"])
     return {"models": models, **db_model.build_eval_comparison(all_rows)}
+
+
+# ── 평가 프로젝트 관리 (2026-07-07) ──────────────────────────────────────────
+# 관리 단위 = 프로젝트(모델·데이터셋·유형·이름 잠금, P3). 생성=대기(created·run 0개, P5),
+# run-start(benchmark/judge/expert)는 프로젝트에서 잠긴 model/dataset 를 주입해 불변 강제.
+# authZ: 워크스페이스 ownership 미검증(IDOR) — 플랫폼 posture 일괄(SP-13), 기존 eval
+# 엔드포인트와 동일하게 단일앱 분기 패치 안 함.
+
+def _parse_dataset_ids(raw) -> List[int]:
+    """eval_project.dataset_ids(JSON 컬럼)를 int 리스트로 정규화. 드라이버가 문자열/리스트
+    어느 쪽으로 주든 방어(비정수 토큰은 조용히 스킵)."""
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except (TypeError, json.JSONDecodeError):
+            raw = None
+    if not isinstance(raw, list):
+        return []
+    out: List[int] = []
+    for v in raw:
+        try:
+            out.append(int(v))
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def _derive_project_status(statuses) -> str:
+    """자식 run 상태에서 프로젝트 표시 상태를 파생(설계 §5). run 0개→created,
+    running/pending 하나라도 있으면→running, run 이 있고 전부 종료면→completed.
+    DB 의 status 컬럼은 run-start 시 'running' write 만 남는 레거시라, 표시는 읽기 시점
+    파생이 정본(그래야 완료 프로젝트가 'completed' 에 도달)."""
+    norm = [str(s or "").lower() for s in statuses]
+    if not norm:
+        return PROJECT_STATUS_CREATED
+    if any(s in ("running", "pending") for s in norm):
+        return PROJECT_STATUS_RUNNING
+    return PROJECT_STATUS_COMPLETED
+
+
+async def _load_project_for_run(project_id: int, eval_type: str):
+    """run-start 공통 — 프로젝트 로드 + 잠긴 dataset_ids 반환. 프로젝트 유형과 다른 run
+    생성은 거부(benchmark 프로젝트에 judge run 등 교차유형 차단)."""
+    project = await db_model.get_eval_project(project_id=project_id)
+    if not project:
+        raise Exception(f"eval project {project_id} not found")
+    if project.get("eval_type") != eval_type:
+        raise Exception(
+            f"project eval_type is {project.get('eval_type')!r}, not {eval_type!r}")
+    dataset_ids = _parse_dataset_ids(project.get("dataset_ids"))
+    if not dataset_ids:
+        raise Exception("eval project has no dataset_ids")
+    return project, dataset_ids
+
+
+async def create_project(name: str, model_id: int, dataset_ids: List[int],
+                         eval_type: str, creator: Optional[str] = None) -> dict:
+    """평가 프로젝트 생성(대기 상태 created, run 0개, P5). 모델의 워크스페이스를 상속하고
+    데이터셋(들)이 모두 그 워크스페이스에 속하는지 검증(잠금 전 1회 — run 마다 재검증도 유지).
+    이후 model/dataset/type/name 불변(P3). creator 는 라우트가 jf-User 헤더로 주입."""
+    if eval_type not in EVAL_TYPES:
+        raise ValueError(f"unknown eval_type: {eval_type}")
+    if not name or not name.strip():
+        raise ValueError("project name required")
+    if len(name) > 255:
+        raise ValueError("project name too long")
+    if not dataset_ids:
+        raise ValueError("at least one dataset required")
+    if len(dataset_ids) > MAX_BENCHMARK_DATASETS:
+        raise ValueError(f"too many datasets (max {MAX_BENCHMARK_DATASETS})")
+    model_info = await db_model.get_model(model_id=model_id)
+    if not model_info:
+        raise Exception(f"model {model_id} not found")
+    workspace_id = int(model_info["workspace_id"])
+    # 중복 제거(순서 보존) + 워크스페이스 경계 검증(잠금 전 1회).
+    seen: set = set()
+    locked: List[int] = []
+    for did in dataset_ids:
+        if did in seen:
+            continue
+        seen.add(did)
+        d = await db_model.get_dataset_model(dataset_id=did)
+        if not d:
+            raise Exception(f"dataset {did} not found")
+        if int(d["workspace_id"]) != workspace_id:
+            raise Exception("dataset and model belong to different workspaces")
+        locked.append(did)
+    project_id = await db_model.create_eval_project(
+        workspace_id=workspace_id, name=name.strip(), model_id=model_id,
+        dataset_ids_json=json.dumps(locked), eval_type=eval_type, creator=creator)
+    if not project_id:
+        raise Exception("eval project create failed")
+    # Galera service load-balances separate INSERT/SELECT connections. Give a
+    # just-created row a short read-after-write window before surfacing not-found.
+    for attempt in range(5):
+        try:
+            return await get_project(project_id=project_id)
+        except Exception as e:
+            if str(e) != f"eval project {project_id} not found" or attempt == 4:
+                raise
+            await asyncio.sleep(0.05 * (2 ** attempt))
+
+
+async def list_projects(workspace_id: int) -> dict:
+    """워크스페이스의 평가 프로젝트 목록(최신순). dataset_ids 는 JSON → 리스트로 정규화.
+    표시 상태는 자식 run 상태에서 파생(§5) — N+1 회피 위해 run 상태를 한 번의 GROUP BY
+    집계로 읽어 프로젝트별로 파생한다(집계에 없는 프로젝트=run 0개→created)."""
+    projects = await db_model.list_eval_projects(workspace_id=workspace_id)
+    project_ids = [int(p["id"]) for p in projects if p.get("id") is not None]
+    status_rows = await db_model.count_run_statuses_by_projects(project_ids)
+    by_project: dict = {}
+    for row in status_rows:
+        by_project.setdefault(int(row["eval_project_id"]), []).append(row.get("status"))
+    out = [{**p, "dataset_ids": _parse_dataset_ids(p.get("dataset_ids")),
+            "status": _derive_project_status(by_project.get(int(p["id"]), []))}
+           for p in projects]
+    return {"workspace_id": workspace_id, "projects": out}
+
+
+async def get_project(project_id: int) -> dict:
+    """프로젝트 단건(불변 헤더) + 자식 run 목록(프로젝트 내 비교표 shape). dataset_ids 는
+    JSON → 리스트. runs 는 build_eval_comparison 재사용(run.id 키 best)."""
+    project = await db_model.get_eval_project(project_id=project_id)
+    if not project:
+        raise Exception(f"eval project {project_id} not found")
+    rows = await db_model.list_eval_results_by_project(eval_project_id=project_id)
+    # 표시 상태는 자식 run 상태에서 파생(§5) — DB 의 raw status 를 오버라이드.
+    derived_status = _derive_project_status([r.get("status") for r in rows])
+    return {"project": {**project, "dataset_ids": _parse_dataset_ids(project.get("dataset_ids")),
+                        "status": derived_status},
+            "runs": db_model.build_eval_comparison(rows)}
+
+
+async def delete_project(project_id: int) -> dict:
+    """프로젝트 삭제 — FK ON DELETE CASCADE 로 자식 run + expert rating/history 전 체인 정리.
+    존재확인 후 삭제(없으면 not-found)."""
+    project = await db_model.get_eval_project(project_id=project_id)
+    if not project:
+        return {"project_id": project_id, "deleted": False, "reason": "not-found"}
+    await db_model.delete_eval_project(project_id=project_id)
+    return {"project_id": project_id, "deleted": True}
+
+
+async def compare_project_runs(project_id: int) -> dict:
+    """프로젝트 내 run 비교(same model+dataset = apples-to-apples). run 단위 비교표
+    (build_eval_comparison 재사용 — best 를 run.id 에 키)."""
+    project = await db_model.get_eval_project(project_id=project_id)
+    if not project:
+        raise Exception(f"eval project {project_id} not found")
+    rows = await db_model.list_eval_results_by_project(eval_project_id=project_id)
+    return {"project_id": project_id, **db_model.build_eval_comparison(rows)}
 
 
 # ── LLM-as-a-Judge (P2) ──────────────────────────────────────────────────────
@@ -535,6 +711,105 @@ def _attach_image(sample: dict, raw: str, data_file_path: str, ddir_real: str) -
         pass    # commonpath 드라이브 불일치/접근 오류 — 렌더 불가(텍스트 채점 계속)
 
 
+# ── SDS 샘플당 디렉토리 레이아웃 빌더 (tango_sds-*/ = csv + png + txt) ──────────
+# 실측상 SDS 데이터셋은 행/열이 아니라 샘플당 서브디렉토리로 저장돼 기존 파일-워크 빌더가
+# 0 샘플 → mock 폴백(미동작)이었다. 여기서 디렉토리 1개=샘플 1개로 CSV 인라인 + 이미지
+# blob(_attach_image 재사용) + output_*.txt reference 로 실 샘플을 만든다.
+_MAX_CSV_BYTES = 1 * 1024 * 1024   # per-sample input_data.csv 전량 로드 상한(실측 ~수백B)
+_MAX_CSV_ROWS = 200                # 표 행 상한(과대 CSV 방어)
+_MAX_CSV_COLS = 50                 # 표 열 상한
+_MAX_CSV_CELL = 500                # 셀 문자열 길이 상한
+
+
+def _read_csv_grid(path: str, ddir_real: str):
+    """input_data.csv → (rows2d, raw_text). 작은 표라 전량 로드하되 크기/행/열/셀 상한으로
+    방어. 선택 파일은 데이터셋 디렉터리 내부로 재봉쇄(심링크 이탈 차단) 후 읽는다.
+    실패/부재 시 (None, None) — 호출자가 CSV 없는 샘플로 graceful 처리."""
+    try:
+        real = os.path.realpath(path)
+        if os.path.commonpath([real, ddir_real]) != ddir_real:
+            return None, None    # csv 가 데이터셋 디렉터리 밖을 가리키는 심링크 — 스킵
+        if not os.path.isfile(real) or os.path.getsize(real) > _MAX_CSV_BYTES:
+            return None, None
+        with open(real, encoding="utf-8", newline="") as f:
+            text = f.read()
+        rows = []
+        for i, row in enumerate(csv.reader(io.StringIO(text))):
+            if i >= _MAX_CSV_ROWS:
+                break
+            rows.append([str(c)[:_MAX_CSV_CELL] for c in row[:_MAX_CSV_COLS]])
+        return (rows or None), text[:_MAX_FIELD_LEN]
+    except (OSError, ValueError, csv.Error, UnicodeDecodeError):
+        return None, None
+
+
+def _sds_reference(sd_real: str, ddir_real: str) -> str:
+    """SDS 서브디렉토리의 output_*.txt 에서 reference 선택 — advice_kor 우선, 없으면 정렬 첫.
+    선택 파일은 데이터셋 디렉터리 내부로 재봉쇄(심링크 이탈 차단) 후 읽는다. 없으면 ''."""
+    try:
+        cands = sorted(glob.glob(os.path.join(sd_real, EXPERT_OUTPUT_GLOB)))
+    except (OSError, ValueError):
+        return ""
+    if not cands:
+        return ""
+    preferred = os.path.join(sd_real, EXPERT_REFERENCE_FILENAME)
+    path = preferred if preferred in cands else cands[0]
+    try:
+        real = os.path.realpath(path)
+        if os.path.commonpath([real, ddir_real]) != ddir_real:
+            return ""    # output 파일이 데이터셋 디렉터리 밖을 가리키는 심링크 — 스킵
+        if not os.path.isfile(real) or os.path.getsize(real) > _MAX_DATA_FILE_BYTES:
+            return ""
+        with open(real, encoding="utf-8") as f:
+            return f.read()[:_MAX_FIELD_LEN].strip()
+    except (OSError, ValueError, UnicodeDecodeError):
+        return ""
+
+
+def _read_sds_samples(ddir_real: str, ds_name: str, need: int):
+    """SDS 레이아웃(tango_sds-*/ 서브디렉토리)이면 디렉토리 1개=샘플 1개 리스트를, 아니면
+    None(레이아웃 부재 — 호출자가 기존 파일-워크로 폴백)을 반환. 각 샘플: input_data.csv 인라인
+    (csv_rows 2D + csv_text), input_image.png 는 _attach_image 재사용(image_served·commonpath
+    봉쇄·_image_abs 서버전용), reference 는 output_*.txt(D4 로 FE 미표시하나 계약 유지)."""
+    try:
+        subdirs = sorted(
+            d for d in glob.glob(os.path.join(ddir_real, SDS_SAMPLE_DIR_GLOB))
+            if os.path.isdir(d))
+    except (OSError, ValueError):
+        return None
+    if not subdirs:
+        return None    # SDS 레이아웃 아님 → 파일-워크 폴백
+    out = []
+    for sd in subdirs:
+        if len(out) >= need:
+            break
+        # 서브디렉토리 봉쇄 — ddir 밖을 가리키는 심링크면 스킵(다른 워크스페이스 노출 차단).
+        sd_real = os.path.realpath(sd)
+        try:
+            if os.path.commonpath([sd_real, ddir_real]) != ddir_real:
+                continue
+        except (ValueError, OSError):
+            continue
+        csv_path = os.path.join(sd_real, EXPERT_CSV_FILENAME)
+        csv_rows, csv_text = _read_csv_grid(csv_path, ddir_real)
+        sample = {"input": "", "reference": _sds_reference(sd_real, ddir_real),
+                  "dataset": ds_name}
+        if csv_rows:
+            sample["csv_rows"] = csv_rows
+            sample["csv_text"] = csv_text
+        img_path = os.path.join(sd_real, EXPERT_IMAGE_FILENAME)
+        if os.path.isfile(img_path):
+            # raw=basename, data_file_path=csv_path → _attach_image 후보1(csv 디렉터리 기준)
+            # 이 sd_real/input_image.png 로 해석·봉쇄. _image_dir=ddir_real 로 서빙 재봉쇄.
+            _attach_image(sample, EXPERT_IMAGE_FILENAME, csv_path, ddir_real)
+        # csv·이미지 둘 다 없으면 빈 디렉터리 — 샘플로 인정 안 함(mock 오염 방지).
+        if not csv_rows and not sample.get("image_served"):
+            continue
+        out.append(sample)
+    # 유효 샘플 0 개면 None 반환 — 호출자가 기존 행/열 파일-워크로 폴백(빈 리스트는 폴백 shadow).
+    return out or None
+
+
 async def _read_dataset_samples(dataset_ids: List[int], limit: int) -> list:
     """워크스페이스 NFS 데이터셋에서 (input, reference) 샘플을 limit 개까지 읽는다.
     eval pod 가 /jf-data 를 마운트(get_eval_result 의 metrics.json 읽기와 동일 마운트).
@@ -563,6 +838,13 @@ async def _read_dataset_samples(dataset_ids: List[int], limit: int) -> list:
                 ACCESS=ds["access"], DATASET_NAME=ds["name"])
             ddir_real = os.path.realpath(ddir)
             if not os.path.isdir(ddir_real):
+                continue
+            # SDS(샘플당 디렉토리) 레이아웃 우선 — tango_sds-*/ 서브디렉토리가 있으면
+            # 디렉토리-워크 빌더(CSV 인라인 + 이미지 blob)로. 레이아웃 부재 시 None → 기존
+            # 행/열 파일-워크로 자연 폴백(graceful, 일반 데이터셋 무영향).
+            sds = _read_sds_samples(ddir_real, str(ds["name"]), limit - len(samples))
+            if sds is not None:
+                samples.extend(sds)
                 continue
             files = sorted(
                 os.path.join(r, fn)
@@ -822,14 +1104,18 @@ async def _run_judge_task(model_id, job_id, model_name, dataset_ids, ds_names, p
             traceback.print_exc()
 
 
-async def run_judge(model_id: int, dataset_ids: List[int], provider: str,
+async def run_judge(project_id: int, provider: str,
                     criteria: List[str], judge_model: Optional[str] = None,
                     api_key: Optional[str] = None, base_url: Optional[str] = None,
                     custom_prompt: Optional[str] = None,
                     inference_playground_id: Optional[int] = None) -> dict:
-    """LLM-as-a-Judge 런 생성(직접호출 비동기). 키/URL = transient. 즉시 job_id 반환 후
-    백그라운드 채점 → eval_result.metrics(judge_*) 마감. FE 는 get_judge_result 폴링.
-    inference_playground_id(배포 모델) 주면 대상 모델 실 출력으로 채점, 없으면 mock(A4)."""
+    """LLM-as-a-Judge 런 생성(직접호출 비동기). model/dataset 는 프로젝트에서 상속(불변, P3),
+    유형별 설정(provider/criteria/judge_model/api_key/base_url/custom_prompt)만 body.
+    키/URL = transient. 즉시 job_id 반환 후 백그라운드 채점 → eval_result.metrics(judge_*)
+    마감. FE 는 get_judge_result 폴링. inference_playground_id(배포 모델) 주면 대상 모델 실
+    출력으로 채점, 없으면 mock(A4)."""
+    project, dataset_ids = await _load_project_for_run(project_id, "judge")
+    model_id = int(project["model_id"])
     model_info = await db_model.get_model(model_id=model_id)
     if not model_info:
         raise Exception(f"model {model_id} not found")
@@ -866,7 +1152,11 @@ async def run_judge(model_id: int, dataset_ids: List[int], provider: str,
     await db_model.insert_eval_result(
         source_model_id=model_id, workspace_id=workspace_id, job_str_id=job_id,
         dataset_id=dataset_ids[0], dataset_name=dataset_name_csv,
-        metric_set=f"judge:{provider}")
+        metric_set=f"judge:{provider}", eval_project_id=project_id)
+    try:
+        await db_model.update_eval_project_status(project_id, PROJECT_STATUS_RUNNING)
+    except Exception:
+        traceback.print_exc()
 
     task = asyncio.create_task(_run_judge_task(
         model_id, job_id, model_name, dataset_ids, ds_names, provider, judge_model,
@@ -874,9 +1164,10 @@ async def run_judge(model_id: int, dataset_ids: List[int], provider: str,
     _judge_tasks.add(task)
     task.add_done_callback(_judge_tasks.discard)
 
-    return {"model_id": model_id, "job_id": job_id, "provider": provider,
-            "mode": "judge", "criteria": crit, "datasets": ds_names,
-            "mock": _judge_mock_enabled(), "real_output": bool(inference_url)}
+    return {"project_id": project_id, "model_id": model_id, "job_id": job_id,
+            "provider": provider, "mode": "judge", "criteria": crit,
+            "datasets": ds_names, "mock": _judge_mock_enabled(),
+            "real_output": bool(inference_url)}
 
 
 async def get_judge_result(model_id: int, job_id: str) -> dict:
@@ -914,11 +1205,57 @@ def _public_sample(s: dict) -> dict:
     return {k: v for k, v in s.items() if not str(k).startswith("_")}
 
 
+def _expert_prompt(samples: list) -> str:
+    """시나리오 결속 고정 프롬프트(D3) — SDS(샘플에 csv_rows) 는 SDS 상수, 그 외 일반 상수.
+    빌더가 만든 프리즈 샘플의 shape 로 판별하므로 세션 내내 결정적(고정)."""
+    if any(isinstance(s, dict) and s.get("csv_rows") for s in samples):
+        return EXPERT_PROMPT_SDS
+    return EXPERT_PROMPT_DEFAULT
+
+
+def _session_prompt(row: dict, samples: list) -> str:
+    """세션 고정 프롬프트 — start 시점에 metrics._expert_prompt 로 동결한 값을 우선(진짜 freeze),
+    없으면(레거시 세션) 프리즈 샘플에서 재도출. 상수 텍스트가 이후 바뀌어도 기존 세션은 유지."""
+    m = row.get("metrics") if isinstance(row, dict) else None
+    if isinstance(m, str):
+        try:
+            m = json.loads(m)
+        except (TypeError, json.JSONDecodeError):
+            m = None
+    if isinstance(m, dict) and isinstance(m.get("_expert_prompt"), str):
+        return m["_expert_prompt"]
+    return _expert_prompt(samples)
+
+
+def _aggregate_expert(ratings: list):
+    """채점 목록 → (avg_score, distribution, pass_rate). avg_score(1~5, 2dp)가 신규 기본
+    집계, distribution 은 1~5 카운트, pass_rate(0~100)는 verdict=="O" 기반 backward-compat."""
+    scores = []
+    for r in ratings:
+        sc = r.get("score")
+        if sc is None:
+            continue
+        try:
+            scores.append(int(sc))
+        except (TypeError, ValueError):
+            continue
+    avg_score = round(sum(scores) / len(scores), 2) if scores else 0.0
+    distribution = {str(i): 0 for i in range(EXPERT_SCORE_MIN, EXPERT_SCORE_MAX + 1)}
+    for sc in scores:
+        if EXPERT_SCORE_MIN <= sc <= EXPERT_SCORE_MAX:
+            distribution[str(sc)] += 1
+    rated = len(ratings)
+    passed = sum(1 for r in ratings if r.get("verdict") == "O")
+    pass_rate = round(passed / rated * 100.0, 2) if rated else 0.0
+    return avg_score, distribution, pass_rate
+
+
 async def _build_expert_samples(model_id: int, model_name: str, dataset_ids: List[int],
                                 ds_names: List[str], inference_url: Optional[str]) -> list:
     """전문가 채점 샘플(A4) — 실 데이터셋(input/reference/이미지) + 배포모델 추론 output.
     데이터셋 못 읽으면 합성(레거시 동등·결정적), 추론 URL 없으면 mock output 폴백."""
-    n = min(MAX_EXPERT_SAMPLES, max(1, len(ds_names) * 5))
+    # 데이터셋 전량 로드(ceiling 까지). 구 `len(ds_names)*5` 휴리스틱 제거 — 전문가는 전 샘플 리뷰.
+    n = MAX_EXPERT_SAMPLES
     rows = await _read_dataset_samples(dataset_ids, n)
     base = ds_names[0] if ds_names else "dataset"
     if not rows:    # 실 데이터셋 못 읽음 → 합성 폴백(구 스캐폴딩과 동일 문자열 = 레거시 안정)
@@ -931,7 +1268,8 @@ async def _build_expert_samples(model_id: int, model_name: str, dataset_ids: Lis
     for i, row in enumerate(rows):
         s = {"idx": i, "dataset": row.get("dataset", base), "input": row["input"],
              "output": f"[{model_name}] 응답 {i}", "reference": row.get("reference", "")}
-        for k in ("image", "image_url", "image_served", "_image_abs", "_image_dir"):
+        for k in ("image", "image_url", "image_served", "_image_abs", "_image_dir",
+                  "csv_rows", "csv_text"):
             if k in row:
                 s[k] = row[k]
         samples.append(s)
@@ -980,11 +1318,13 @@ async def _expert_session(model_id: int, job_id: str):
     return row, samples
 
 
-async def start_expert(model_id: int, dataset_ids: List[int],
+async def start_expert(project_id: int,
                        inference_playground_id: Optional[int] = None) -> dict:
-    """전문가 평가 세션 시작 — 대상 모델 × 데이터셋 → 채점 샘플 생성 + 세션 행.
-    inference_playground_id(배포 모델) 주면 실 출력으로, 없으면 mock(A4). 생성 샘플은
-    metrics._samples 로 영속 → 재로드 안정(실 추론 비결정성/배포 종료에도 표시 고정)."""
+    """전문가 평가 세션 시작 — model/dataset 는 프로젝트에서 상속(불변, P3). 채점 샘플 생성
+    + 세션 행. inference_playground_id(배포 모델) 주면 실 출력으로, 없으면 mock(A4). 생성
+    샘플은 metrics._samples 로 영속 → 재로드 안정(실 추론 비결정성/배포 종료에도 표시 고정)."""
+    project, dataset_ids = await _load_project_for_run(project_id, "expert")
+    model_id = int(project["model_id"])
     model_info = await db_model.get_model(model_id=model_id)
     if not model_info:
         raise Exception(f"model {model_id} not found")
@@ -1011,18 +1351,28 @@ async def start_expert(model_id: int, dataset_ids: List[int],
     if len(dataset_name_csv) > 255:
         dataset_name_csv = f"{ds_names[0]} +{len(ds_names) - 1} more"[:255]
 
+    # 시나리오 결속 고정 프롬프트(D3) — 샘플 shape(SDS=csv_rows)로 판별해 세션에 동결.
+    expert_prompt = _expert_prompt(samples)
     job_id = f"expert-{model_id}-{uuid.uuid4().hex[:16]}"
     await db_model.insert_eval_result(
         source_model_id=model_id, workspace_id=workspace_id, job_str_id=job_id,
-        dataset_id=dataset_ids[0], dataset_name=dataset_name_csv, metric_set="expert")
-    # 샘플 영속(running 유지) — get_expert_samples/submit 가 재생성 대신 이걸 읽는다.
+        dataset_id=dataset_ids[0], dataset_name=dataset_name_csv, metric_set="expert",
+        eval_project_id=project_id)
+    # 샘플 + 고정 프롬프트 영속(running 유지) — get_expert_samples/submit 가 재생성 대신 이걸 읽는다.
     await db_model.set_eval_result_metrics(
         job_str_id=job_id, source_model_id=model_id,
-        metrics_json=json.dumps({"_mode": "expert", "_samples": samples}))
+        metrics_json=json.dumps({"_mode": "expert", "_samples": samples,
+                                 "_expert_prompt": expert_prompt}))
+    try:
+        await db_model.update_eval_project_status(project_id, PROJECT_STATUS_RUNNING)
+    except Exception:
+        traceback.print_exc()
 
-    return {"model_id": model_id, "job_id": job_id, "mode": "expert",
-            "datasets": ds_names, "samples": [_public_sample(s) for s in samples],
-            "total": len(samples), "real_output": bool(inference_url)}
+    return {"project_id": project_id, "model_id": model_id, "job_id": job_id,
+            "mode": "expert", "datasets": ds_names,
+            "samples": [_public_sample(s) for s in samples],
+            "total": len(samples), "real_output": bool(inference_url),
+            "expert_prompt": expert_prompt}
 
 
 async def get_expert_samples(model_id: int, job_id: str) -> dict:
@@ -1033,15 +1383,30 @@ async def get_expert_samples(model_id: int, job_id: str) -> dict:
         job_str_id=job_id, source_model_id=model_id)
     return {"job_id": job_id, "status": row.get("status"),
             "samples": [_public_sample(s) for s in samples],
-            "total": len(samples), "ratings": ratings, "history": history}
+            "total": len(samples), "ratings": ratings, "history": history,
+            "expert_prompt": _session_prompt(row, samples)}
 
 
 async def submit_expert_rating(model_id: int, job_id: str, sample_idx: int,
-                               verdict: str, comment: str = None,
+                               score: int, score_json=None, comment: str = None,
                                rater_user: str = None) -> dict:
-    """채점 1건 upsert → 합격률 재계산 → 전부 채점 시 세션 완료(eval_result 마감)."""
-    if verdict not in ("O", "X"):
-        raise ValueError(f"invalid verdict: {verdict!r}")
+    """채점 1건(1~5 별점) upsert → 평균/분포 재계산 → 전부 채점 시 세션 완료(eval_result 마감).
+    verdict 는 score 에서 파생 기록(NOT NULL 보존·레거시 pass_rate/verdict 카운팅 유지)."""
+    try:
+        score = int(score)
+    except (TypeError, ValueError):
+        raise ValueError(f"invalid score: {score!r}")
+    if score < EXPERT_SCORE_MIN or score > EXPERT_SCORE_MAX:
+        raise ValueError(
+            f"score out of range({EXPERT_SCORE_MIN}~{EXPERT_SCORE_MAX}): {score}")
+    # score→verdict 파생 — 임계 이상은 합격(O). ⚠️ 임계값(EXPERT_VERDICT_PASS_THRESHOLD)은 잠정.
+    verdict = "O" if score >= EXPERT_VERDICT_PASS_THRESHOLD else "X"
+    # 확장 JSON(무스키마) — 직렬화 + 길이 상한(입력 경계 검증). None 이면 그대로 NULL.
+    score_json_str = None
+    if score_json is not None:
+        score_json_str = json.dumps(score_json, ensure_ascii=False)
+        if len(score_json_str) > EXPERT_SCORE_JSON_MAX_LEN:
+            raise ValueError("score_json too large")
     row, samples = await _expert_session(model_id, job_id)
     # 완료된 세션 재채점 차단 — complete_eval_result 가 running 만 갱신해 metrics 가
     # stale 해지고 completed=True 가 반복 반환되는 문제 방지(재평가는 새 세션).
@@ -1053,18 +1418,19 @@ async def submit_expert_rating(model_id: int, job_id: str, sample_idx: int,
     s = samples[sample_idx]
     await db_model.insert_expert_rating(
         source_model_id=model_id, job_str_id=job_id, sample_idx=sample_idx,
-        verdict=verdict, input=s.get("input"), output=s.get("output"),
+        verdict=verdict, score=score, score_json=score_json_str,
+        input=s.get("input"), output=s.get("output"),
         reference=s.get("reference"), rater_user=rater_user, comment=comment)
-    # 감사추적 — 메인 행은 (job_str_id,sample_idx) upsert 라 '현재' verdict 만 남지만, 이력
+    # 감사추적 — 메인 행은 (job_str_id,sample_idx) upsert 라 '현재' 채점만 남지만, 이력
     # 테이블엔 채점 이벤트마다 누적(누가 언제 어떻게 바꿨는지 불변 보존).
     await db_model.insert_expert_rating_history(
         source_model_id=model_id, job_str_id=job_id, sample_idx=sample_idx,
-        verdict=verdict, comment=comment, rater_user=rater_user)
+        verdict=verdict, score=score, score_json=score_json_str,
+        comment=comment, rater_user=rater_user)
 
     ratings = await db_model.list_expert_ratings(job_str_id=job_id, source_model_id=model_id)
     rated = len(ratings)
-    passed = sum(1 for r in ratings if r.get("verdict") == "O")
-    pass_rate = round(passed / rated * 100.0, 2) if rated else 0.0
+    avg_score, distribution, pass_rate = _aggregate_expert(ratings)
     # 방금 채점의 채점자·시각 + 이 샘플의 누적 채점 횟수(재채점 표면화)를 반환 → FE 즉시 표시.
     this = next((r for r in ratings if r.get("sample_idx") == sample_idx), None)
     history = await db_model.list_expert_rating_history(
@@ -1072,35 +1438,43 @@ async def submit_expert_rating(model_id: int, job_id: str, sample_idx: int,
     rate_count = sum(1 for h in history if h.get("sample_idx") == sample_idx)
 
     completed = False
-    if rated >= total:  # 전부 채점 → 합격률 영속 + 완료(비교표 합류)
-        # _samples 보존 — 완료 후 get_expert_samples 가 표시 출력을 잃지 않도록.
-        metrics = {"expert_pass_rate": pass_rate, "_mode": "expert",
-                   "_rated": rated, "_total": total, "_samples": samples}
+    if rated >= total:  # 전부 채점 → 집계 영속 + 완료(비교표 합류)
+        # expert_avg_score(1~5) = 신규 기본 metric(_flatten 자동 노출·방향 max). _distribution 은
+        # _ 접두라 비교표 미노출(서버측). expert_pass_rate 는 backward-compat 병기.
+        # _samples/_expert_prompt 보존 — 완료 후 get_expert_samples 가 표시 출력·프롬프트 유지.
+        metrics = {"expert_avg_score": avg_score, "expert_pass_rate": pass_rate,
+                   "_distribution": distribution, "_mode": "expert",
+                   "_rated": rated, "_total": total, "_samples": samples,
+                   "_expert_prompt": _session_prompt(row, samples)}
         await db_model.complete_eval_result(
             job_str_id=job_id, metrics_json=json.dumps(metrics), source_model_id=model_id)
         completed = True
 
     return {"job_id": job_id, "rated": rated, "total": total,
+            "avg_score": avg_score, "distribution": distribution,
             "pass_rate": pass_rate, "completed": completed,
             "rater_user": (this or {}).get("rater_user", rater_user),
             "rated_at": (this or {}).get("create_datetime"), "rate_count": rate_count}
 
 
 async def get_expert_result(model_id: int, job_id: str) -> dict:
-    """세션 진행/결과 — 상태 + 채점 목록 + 합격률."""
+    """세션 진행/결과 — 상태 + 채점 목록 + 평균점수/분포(+ backward-compat pass_rate)."""
     if not job_id or not _JOB_ID_RE.match(job_id):
         raise ValueError(f"invalid job_id: {job_id!r}")
     row = await db_model.get_eval_result_by_job(job_str_id=job_id, source_model_id=model_id)
     if not row or row.get("metric_set") != "expert":
-        return {"job_id": job_id, "status": "pending", "ratings": [], "pass_rate": None}
+        return {"job_id": job_id, "status": "pending", "ratings": [],
+                "avg_score": None, "distribution": None, "pass_rate": None}
     ratings = await db_model.list_expert_ratings(job_str_id=job_id, source_model_id=model_id)
     history = await db_model.list_expert_rating_history(
         job_str_id=job_id, source_model_id=model_id)
     rated = len(ratings)
-    passed = sum(1 for r in ratings if r.get("verdict") == "O")
-    pass_rate = round(passed / rated * 100.0, 2) if rated else None
+    avg_score, distribution, pass_rate = _aggregate_expert(ratings)
+    if rated == 0:    # 미채점 세션은 평균·합격률 미정(None) — 레거시 shape 보존.
+        avg_score, pass_rate = None, None
     return {"job_id": job_id, "status": row.get("status"), "ratings": ratings,
-            "history": history, "rated": rated, "pass_rate": pass_rate}
+            "history": history, "rated": rated, "avg_score": avg_score,
+            "distribution": distribution, "pass_rate": pass_rate}
 
 
 async def get_expert_image(model_id: int, job_id: str, sample_idx: int):

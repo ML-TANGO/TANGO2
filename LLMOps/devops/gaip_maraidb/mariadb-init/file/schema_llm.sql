@@ -270,11 +270,30 @@ CREATE TABLE IF NOT EXISTS `quantize_lineage` (
     CONSTRAINT FOREIGN KEY (`source_model_id`) REFERENCES `jonathan_llm`.`model` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
 );
 
+-- 평가 프로젝트 관리 (2026-07-07). apps/fb_utils/llm_db/schema.sql 미러
+-- (라이브 DB 에는 수동 적용됨). 관리 단위 = 프로젝트(모델·데이터셋·유형·이름 잠금),
+-- 1:N 으로 eval_result(run)를 묶는다.
+CREATE TABLE IF NOT EXISTS `eval_project` (
+    `id`                INT(11) NOT NULL AUTO_INCREMENT,
+    `workspace_id`      INT(11) NOT NULL,
+    `name`              VARCHAR(255) NOT NULL,
+    `model_id`          INT(11) NOT NULL,
+    `dataset_ids`       JSON,
+    `eval_type`         VARCHAR(20) NOT NULL,
+    `status`            VARCHAR(20) DEFAULT 'created',
+    `creator`           VARCHAR(128),
+    `create_datetime`   DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(`id`),
+    CONSTRAINT FOREIGN KEY (`model_id`) REFERENCES `jonathan_llm`.`model` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
+);
+
 -- SP-5 자동평가 결과 (v0.4 3.8). apps/fb_utils/llm_db/schema.sql 미러.
+-- 2026-07-07: eval_project_id 추가(프로젝트 1:N run 링크, 레거시 런은 NULL).
 CREATE TABLE IF NOT EXISTS `eval_result` (
     `id`                INT(11) NOT NULL AUTO_INCREMENT,
     `source_model_id`   INT(11) NOT NULL,
     `workspace_id`      INT(11) NOT NULL,
+    `eval_project_id`   INT(11),
     `job_str_id`        VARCHAR(128) NOT NULL,
     `dataset_id`        INT(11),
     `dataset_name`      VARCHAR(255),
@@ -284,7 +303,8 @@ CREATE TABLE IF NOT EXISTS `eval_result` (
     `create_datetime`   DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY(`id`),
     UNIQUE KEY `uq_eval_job` (`job_str_id`),
-    CONSTRAINT FOREIGN KEY (`source_model_id`) REFERENCES `jonathan_llm`.`model` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
+    CONSTRAINT FOREIGN KEY (`source_model_id`) REFERENCES `jonathan_llm`.`model` (`id`) ON UPDATE CASCADE ON DELETE CASCADE,
+    CONSTRAINT FOREIGN KEY (`eval_project_id`) REFERENCES `jonathan_llm`.`eval_project` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
 );
 
 -- P3 전문가 평가(sample-level 인간 채점). 세션 = eval_result row(metric_set='expert').
@@ -299,6 +319,8 @@ CREATE TABLE IF NOT EXISTS `eval_expert_rating` (
     `rater_user`        VARCHAR(128),
     `verdict`           VARCHAR(8) NOT NULL,
     `comment`           TEXT,
+    `score`             TINYINT,      -- 전문가 별점 1~5 (D2). 신규 기본. `verdict` 는 이 값에서 파생.
+    `score_json`        JSON,         -- 확장 지점(다기준/구조화 피드백·플라이휠, 무스키마 확장)
     `create_datetime`   DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY(`id`),
     UNIQUE KEY `uq_expert_sample` (`job_str_id`, `sample_idx`),
@@ -317,6 +339,8 @@ CREATE TABLE IF NOT EXISTS `eval_expert_rating_history` (
     `rater_user`        VARCHAR(128),
     `verdict`           VARCHAR(8) NOT NULL,
     `comment`           TEXT,
+    `score`             TINYINT,      -- 전문가 별점 1~5 (D2). `verdict` 는 파생.
+    `score_json`        JSON,         -- 확장 지점(무스키마 확장)
     `create_datetime`   DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY(`id`),
     KEY `idx_expert_hist` (`job_str_id`, `sample_idx`),

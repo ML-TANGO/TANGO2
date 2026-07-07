@@ -41,12 +41,55 @@ MAX_JUDGE_SAMPLES = 20
 MAX_JUDGE_RUN_SECONDS = 300
 
 # ── 전문가 평가 (P3) ──────────────────────────────────────────────────────────
-# 한 세션이 사람에게 보여줄 샘플 상한(손 채점이라 작게).
-MAX_EXPERT_SAMPLES = 10
+# 한 세션이 사람에게 보여줄 샘플 상한 = 데이터셋 전량 리뷰 의도(런어웨이 방지 안전 ceiling).
+MAX_EXPERT_SAMPLES = 1000
+
+# 점수 체계(D2) — 단일 1~5 별점. score_json 은 무스키마 확장 지점(다기준/구조화 피드백,
+# 플라이휠 선호도쌍). 서비스에서 범위 검증(기존 O/X 화이트리스트 미러).
+EXPERT_SCORE_MIN = 1
+EXPERT_SCORE_MAX = 5
+# score→verdict 파생 임계 — verdict VARCHAR(8) NOT NULL 을 보존하고 get_expert_result 의
+# verdict=="O" 카운팅·레거시 pass_rate 경로가 계속 유효하도록 score 에서 파생 기록한다.
+# ⚠️ 임계 4(=4·5 를 합격) 는 잠정값 — 검토 대상(도메인에 따라 3 이상으로 조정 가능).
+EXPERT_VERDICT_PASS_THRESHOLD = 4
+# score_json 직렬화 길이 상한(무스키마라 남용 방지 — 입력 경계 검증).
+EXPERT_SCORE_JSON_MAX_LEN = 4096
+
+# 시나리오 결속 고정 프롬프트(D3) — 사용자 입력 없음. SDS(선박 도메인)는 전용 프롬프트,
+# 그 외 데이터셋은 일반 기본값. 세션에 결속(빌더가 샘플 shape 로 시나리오 판별).
+EXPERT_PROMPT_SDS = (
+    "아래는 선박 운항 상황 이미지와 계측 데이터(표)를 바탕으로 모델이 생성한 조언입니다. "
+    "조언이 상황에 비추어 정확하고 안전하며 실무에 유용한지 1~5점으로 평가해 주세요. "
+    "(1 = 매우 부적절, 5 = 매우 우수)"
+)
+EXPERT_PROMPT_DEFAULT = (
+    "아래 입력에 대한 모델 출력의 품질(정확성·적절성·유용성)을 1~5점으로 평가해 주세요. "
+    "(1 = 매우 미흡, 5 = 매우 우수)"
+)
+
+# SDS 데이터셋 레이아웃 규약(실측) — 샘플당 서브디렉토리 tango_sds-*/ 에
+# input_data.csv(표) + input_image.png(멀티모달) + output_*.txt(참조 출력)를 담는다.
+# 디렉토리-워크 빌더가 이 규약으로 디렉토리 1개=샘플 1개를 만든다.
+SDS_SAMPLE_DIR_GLOB = "tango_sds-*"
+EXPERT_CSV_FILENAME = "input_data.csv"
+EXPERT_IMAGE_FILENAME = "input_image.png"
+EXPERT_OUTPUT_GLOB = "output_*.txt"
+# reference 로 우선 채택할 output 파일(없으면 정렬상 첫 output_*.txt).
+EXPERT_REFERENCE_FILENAME = "output_advice_kor.txt"
 
 # ── 교차모델 비교 (④ 경량 뷰) ──────────────────────────────────────────────────
 # 한 비교 뷰가 합칠 모델 상한(표 가독성 + 모델별 get_model/list_eval_results N쿼리 가드).
 MAX_COMPARE_MODELS = 6
+
+# ── 평가 프로젝트 관리 (2026-07-07) ────────────────────────────────────────────
+# 프로젝트 = 관리 단위(모델·데이터셋·유형·이름 잠금, 1:N run). 유형은 생성 시 확정·불변
+# 이며 run-start 시 프로젝트 유형과 일치해야 한다(교차유형 run 생성 차단).
+EVAL_TYPES = ("benchmark", "judge", "expert")
+
+# 프로젝트 상태(created=구성만 확정·run 0 / running=run 존재 / completed=집계 마감).
+PROJECT_STATUS_CREATED = "created"
+PROJECT_STATUS_RUNNING = "running"
+PROJECT_STATUS_COMPLETED = "completed"
 
 # ── 이력 관리 ────────────────────────────────────────────────────────────────
 # 'running' 으로 방치된 벤치마크/judge 런을 실패로 간주하는 나이 임계(시간). 컨테이너

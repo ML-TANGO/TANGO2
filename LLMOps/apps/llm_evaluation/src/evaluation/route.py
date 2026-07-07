@@ -14,13 +14,65 @@ evaluations = APIRouter(prefix="/evaluations")
 TAG = ["EVALUATION"]
 
 
+@evaluations.post("/projects", summary="평가 프로젝트 생성(대기)", tags=TAG)
+async def create_project(body: dto.EvalProjectCreateBody,
+                         jf_user: str = Header(default=None, alias="jf-User")):
+    """모델·데이터셋·유형·이름 잠금(P3), status='created'(run 0개, P5). creator=jf-User 헤더."""
+    try:
+        res = await svc.create_project(
+            name=body.name, model_id=body.model_id, dataset_ids=body.dataset_ids,
+            eval_type=body.eval_type, creator=jf_user)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+
+@evaluations.get("/projects", summary="평가 프로젝트 목록(워크스페이스)", tags=TAG)
+async def list_projects(workspace_id: int):
+    try:
+        res = await svc.list_projects(workspace_id=workspace_id)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+
+@evaluations.get("/projects/{project_id}", summary="평가 프로젝트 상세(+run 목록)", tags=TAG)
+async def get_project(project_id: int):
+    try:
+        res = await svc.get_project(project_id=project_id)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+
+@evaluations.get("/projects/{project_id}/compare", summary="프로젝트 내 run 비교", tags=TAG)
+async def compare_project_runs(project_id: int):
+    try:
+        res = await svc.compare_project_runs(project_id=project_id)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+
+@evaluations.delete("/projects/{project_id}", summary="평가 프로젝트 삭제", tags=TAG)
+async def delete_project(project_id: int):
+    try:
+        res = await svc.delete_project(project_id=project_id)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+
 @evaluations.post("/benchmark", summary="benchmark 평가 런 생성", tags=TAG)
 async def run_benchmark(body: dto.BenchmarkRunBody):
     try:
         res = await svc.run_benchmark(
-            model_id=body.model_id, dataset_ids=body.dataset_ids,
-            metric_set=body.metric_set,
-        )
+            project_id=body.project_id, metric_set=body.metric_set)
         return response(status=1, result=res)
     except Exception as e:
         traceback.print_exc()
@@ -41,7 +93,7 @@ async def list_judges():
 async def run_judge(body: dto.JudgeRunBody):
     try:
         res = await svc.run_judge(
-            model_id=body.model_id, dataset_ids=body.dataset_ids,
+            project_id=body.project_id,
             provider=body.provider, criteria=body.criteria,
             judge_model=body.judge_model, api_key=body.api_key,
             base_url=body.base_url, custom_prompt=body.custom_prompt,
@@ -58,7 +110,7 @@ async def run_judge(body: dto.JudgeRunBody):
 async def start_expert(body: dto.ExpertStartBody):
     try:
         res = await svc.start_expert(
-            model_id=body.model_id, dataset_ids=body.dataset_ids,
+            project_id=body.project_id,
             inference_playground_id=body.inference_playground_id)
         return response(status=1, result=res)
     except Exception as e:
@@ -125,13 +177,14 @@ async def get_expert_samples(model_id: int, job_id: str):
         return response(status=0, message=str(e), result=None)
 
 
-@evaluations.post("/{model_id}/{job_id}/expert-rating", summary="전문가 채점 제출(O/X)", tags=TAG)
+@evaluations.post("/{model_id}/{job_id}/expert-rating", summary="전문가 채점 제출(1~5 별점)", tags=TAG)
 async def submit_expert_rating(model_id: int, job_id: str, body: dto.ExpertRatingBody,
                                jf_user: str = Header(default=None, alias="jf-User")):
     try:
         res = await svc.submit_expert_rating(
             model_id=model_id, job_id=job_id, sample_idx=body.sample_idx,
-            verdict=body.verdict, comment=body.comment, rater_user=jf_user)
+            score=body.score, score_json=body.score_json, comment=body.comment,
+            rater_user=jf_user)
         return response(status=1, result=res)
     except Exception as e:
         traceback.print_exc()

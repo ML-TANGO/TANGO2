@@ -1,10 +1,17 @@
 @import '@src/styles/color.scss';
 
-.evaluation-hub {
+.eval-projects {
   padding: 32px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 20px;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 .title {
@@ -15,27 +22,64 @@
 .subtitle {
   color: $mono204;
   font-size: 14px;
-  margin-bottom: 16px;
+  margin-top: 6px;
 }
 
-.mode-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
+.new-btn {
+  flex-shrink: 0;
+  padding: 10px 18px;
+  border: none;
+  border-radius: 8px;
+  background-color: $blue104;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+
+  &:hover {
+    opacity: 0.9;
+  }
 }
 
-.mode-card {
-  position: relative;
-  width: 260px;
-  min-height: 150px;
+.placeholder {
+  padding: 48px 0;
+  text-align: center;
+  color: $mono204;
+  font-size: 14px;
+}
+
+.empty {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 22px;
+  align-items: center;
+  gap: 16px;
+  padding: 64px 24px;
+  border: 1px dashed $mono203;
+  border-radius: 12px;
+  background-color: $mono202;
+
+  .empty-text {
+    color: $mono204;
+    font-size: 14px;
+  }
+}
+
+.project-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.project-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
   border: 1px solid $mono203;
   border-radius: 12px;
   background-color: #fff;
-  text-align: left;
   cursor: pointer;
   transition: border-color 0.15s, box-shadow 0.15s;
 
@@ -43,44 +87,115 @@
     border-color: $blue104;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
   }
+}
 
-  &.disabled {
-    cursor: not-allowed;
-    background-color: $mono202;
-    border-color: $mono203;
-    opacity: 0.7;
+.card-main {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
 
-    &:hover {
-      border-color: $mono203;
-      box-shadow: none;
-    }
+.card-name-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.card-name {
+  font-size: 16px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.type-badge {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  color: #fff;
+  background-color: $mono204;
+
+  &.type-benchmark {
+    background-color: #3d6df6;
   }
-
-  .mode-icon {
-    font-size: 28px;
+  &.type-judge {
+    background-color: #8b5cf6;
   }
-
-  .mode-title {
-    font-size: 16px;
-    font-weight: 700;
+  &.type-expert {
+    background-color: #0ea5a3;
   }
+}
 
-  .mode-desc {
-    font-size: 13px;
-    color: $mono204;
-    line-height: 1.4;
+.card-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: $mono204;
+  font-size: 13px;
+}
+
+.meta-sep {
+  color: $mono203;
+}
+
+.card-side {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.status-chip {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid $mono203;
+  color: $mono204;
+  background-color: $mono202;
+
+  &.status-created {
+    color: #6b7280;
+    border-color: #d1d5db;
+    background-color: #f3f4f6;
   }
+  &.status-running {
+    color: #b45309;
+    border-color: #fcd34d;
+    background-color: #fffbeb;
+  }
+  &.status-completed {
+    color: #047857;
+    border-color: #6ee7b7;
+    background-color: #ecfdf5;
+  }
+}
 
-  .mode-soon {
-    position: absolute;
-    top: 14px;
-    right: 14px;
-    font-size: 11px;
-    font-weight: 600;
-    color: $mono204;
-    border: 1px solid $mono203;
-    border-radius: 8px;
-    padding: 2px 8px;
-    background-color: #fff;
+.card-date {
+  font-size: 12px;
+  color: $mono204;
+  min-width: 108px;
+  text-align: right;
+}
+
+.del-btn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid $mono203;
+  border-radius: 6px;
+  background-color: #fff;
+  color: $mono204;
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+
+  &:hover {
+    color: #dc2626;
+    border-color: #fca5a5;
   }
 }

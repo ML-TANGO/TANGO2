@@ -5,20 +5,40 @@ from pydantic import BaseModel, Field, field_validator
 
 from evaluation.constants import (
     BENCHMARK_METRICS,
+    EVAL_TYPES,
+    EXPERT_SCORE_MAX,
+    EXPERT_SCORE_MIN,
     MAX_BENCHMARK_DATASETS,
     JUDGE_CRITERIA,
     JUDGE_PROVIDERS,
 )
 
 
-class BenchmarkRunBody(BaseModel):
+class EvalProjectCreateBody(BaseModel):
+    """평가 프로젝트 생성 — 모델·데이터셋·유형·이름 잠금(P3, 이후 불변). creator 는
+    라우트가 jf-User 헤더로 받아 주입하므로 바디에서 수취하지 않는다."""
     # model_id 가 'model_' 보호 네임스페이스 경고 안 나게(pydantic v2).
     model_config = {"protected_namespaces": ()}
 
-    model_id: int = Field(..., ge=1, description="평가 대상(학습 완료) 모델 id")
+    name: str = Field(..., min_length=1, max_length=255, description="프로젝트 이름(사용자 입력)")
+    model_id: int = Field(..., ge=1, description="평가 대상(학습 완료) 모델 id — 잠금")
     dataset_ids: List[int] = Field(
         ..., min_length=1, max_length=MAX_BENCHMARK_DATASETS,
-        description="벤치마크 데이터셋 id(다중, 최대 %d)" % MAX_BENCHMARK_DATASETS)
+        description="대상 데이터셋 id(다중, 최대 %d) — 잠금" % MAX_BENCHMARK_DATASETS)
+    eval_type: str = Field(..., description="평가 유형: benchmark|judge|expert")
+
+    @field_validator("eval_type")
+    @classmethod
+    def _validate_eval_type(cls, v: str) -> str:
+        if v not in EVAL_TYPES:
+            raise ValueError(f"unknown eval_type: {v}")
+        return v
+
+
+class BenchmarkRunBody(BaseModel):
+    """benchmark 런 — model/dataset 는 프로젝트에서 상속(project_id). 유형별 설정=metric_set."""
+
+    project_id: int = Field(..., ge=1, description="평가 프로젝트 id(model/dataset 상속·불변)")
     metric_set: Optional[List[str]] = Field(
         default=None, description="17 메트릭 중 부분집합(생략 시 전체)")
 
@@ -35,14 +55,11 @@ class BenchmarkRunBody(BaseModel):
 
 
 class JudgeRunBody(BaseModel):
-    """LLM-as-a-Judge 런 (P2). api_key/base_url = 사용자 입력·transient(영속/로그 금지).
-    검증 실패 메시지에 키 값이 절대 echo 되지 않도록 api_key/base_url 엔 값-노출 validator 미부여."""
-    model_config = {"protected_namespaces": ()}
+    """LLM-as-a-Judge 런 (P2). model/dataset 는 프로젝트에서 상속(project_id). api_key/
+    base_url = 사용자 입력·transient(영속/로그 금지). 검증 실패 메시지에 키 값이 절대
+    echo 되지 않도록 api_key/base_url 엔 값-노출 validator 미부여."""
 
-    model_id: int = Field(..., ge=1, description="평가 대상(학습 완료) 모델 id")
-    dataset_ids: List[int] = Field(
-        ..., min_length=1, max_length=MAX_BENCHMARK_DATASETS,
-        description="대상 데이터셋 id(다중, 최대 %d)" % MAX_BENCHMARK_DATASETS)
+    project_id: int = Field(..., ge=1, description="평가 프로젝트 id(model/dataset 상속·불변)")
     provider: str = Field(..., description="심판 provider: chatgpt|claude|gemini|local")
     judge_model: Optional[str] = Field(
         default=None, max_length=128,
@@ -81,13 +98,9 @@ class JudgeRunBody(BaseModel):
 
 
 class ExpertStartBody(BaseModel):
-    """P3 전문가 평가 세션 시작 — 대상 모델 + 데이터셋(다중)."""
-    model_config = {"protected_namespaces": ()}
+    """P3 전문가 평가 세션 시작 — model/dataset 는 프로젝트에서 상속(project_id·불변)."""
 
-    model_id: int = Field(..., ge=1, description="평가 대상(학습 완료) 모델 id")
-    dataset_ids: List[int] = Field(
-        ..., min_length=1, max_length=MAX_BENCHMARK_DATASETS,
-        description="대상 데이터셋 id(다중, 최대 %d)" % MAX_BENCHMARK_DATASETS)
+    project_id: int = Field(..., ge=1, description="평가 프로젝트 id(model/dataset 상속·불변)")
     inference_playground_id: Optional[int] = Field(
         default=None, ge=1,
         description="대상 모델의 배포(running) playground id — 주면 실 출력 추론, "
@@ -95,9 +108,12 @@ class ExpertStartBody(BaseModel):
 
 
 class ExpertRatingBody(BaseModel):
-    """전문가 채점 1건(O/X + 코멘트)."""
+    """전문가 채점 1건(1~5 별점 + 선택 확장 JSON + 코멘트, D2). verdict 는 BE 가 score 에서 파생."""
     sample_idx: int = Field(..., ge=0, description="채점 대상 샘플 인덱스")
-    verdict: str = Field(..., pattern="^(O|X)$", description="합격(O)/불합격(X)")
+    score: int = Field(..., ge=EXPERT_SCORE_MIN, le=EXPERT_SCORE_MAX,
+                        description="전문가 별점(%d~%d)" % (EXPERT_SCORE_MIN, EXPERT_SCORE_MAX))
+    score_json: Optional[dict] = Field(
+        default=None, description="확장 피드백(다기준/구조화·플라이휠 선호, 무스키마)")
     comment: Optional[str] = Field(default=None, max_length=2000)
 
 

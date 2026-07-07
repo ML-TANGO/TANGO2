@@ -3,7 +3,52 @@ import { callApi, downloadBlob } from '@src/network';
 // llm_evaluation 서비스 (P1b) — Kong ingress /api/(evaluations).
 // 벤치마크 평가 런 생성/폴링/이력/상태. (LLM-judge=P2, 전문가=P3.)
 
-// 벤치마크 런 생성. body: { model_id, dataset_ids: number[], metric_set?: string[] }
+// ── 평가 프로젝트 (P2) ────────────────────────────────────────────────
+// 프로젝트 = 모델 + 데이터셋(들) + 평가유형 + 이름을 묶는 관리 단위(생성 후 불변).
+// run(벤치마크/judge/expert)은 프로젝트에서 model_id·dataset_ids 를 상속받아 생성된다.
+
+// 프로젝트 생성(대기 상태, run 0개). body: { name, model_id, dataset_ids: number[],
+//   eval_type: 'benchmark'|'judge'|'expert' }. workspace_id 는 서버가 model_id 로 도출(바디 미포함).
+//   → get_project shape 반환 { project, runs }.
+export const createEvalProject = async (body) => {
+  return await callApi({ url: 'evaluations/projects', method: 'post', body });
+};
+
+// 워크스페이스 프로젝트 목록(최신순). → { workspace_id, projects: [...] }.
+export const listEvalProjects = async (workspaceId) => {
+  return await callApi({
+    url: 'evaluations/projects',
+    method: 'get',
+    params: { workspace_id: workspaceId },
+  });
+};
+
+// 프로젝트 단건(+자식 run 요약). → { project: {...}, runs: { metric_keys, best, runs } }.
+export const getEvalProject = async (projectId) => {
+  return await callApi({
+    url: `evaluations/projects/${projectId}`,
+    method: 'get',
+  });
+};
+
+// 프로젝트 삭제(FK CASCADE 로 run·채점·이력 자식행 정리). → { project_id, deleted }.
+export const deleteEvalProject = async (projectId) => {
+  return await callApi({
+    url: `evaluations/projects/${projectId}`,
+    method: 'delete',
+  });
+};
+
+// 프로젝트 내 run 비교(same model+dataset=apples-to-apples). → { project_id, metric_keys, best, runs }.
+export const compareProjectRuns = async (projectId) => {
+  return await callApi({
+    url: `evaluations/projects/${projectId}/compare`,
+    method: 'get',
+  });
+};
+
+// ── run 생성 (P2+: 프로젝트 상속) ─────────────────────────────────────
+// 벤치마크 런 생성. body: { project_id, metric_set?: string[] } — model/dataset 은 프로젝트에서 상속.
 export const runBenchmark = async (body) => {
   return await callApi({ url: 'evaluations/benchmark', method: 'post', body });
 };
@@ -18,7 +63,10 @@ export const getEvalResult = async (modelId, jobId) => {
 
 // 모델의 평가 이력(비교표).
 export const getEvalResults = async (modelId) => {
-  return await callApi({ url: `evaluations/${modelId}/results`, method: 'get' });
+  return await callApi({
+    url: `evaluations/${modelId}/results`,
+    method: 'get',
+  });
 };
 
 // 교차모델 비교(④ 경량 뷰) — 여러 모델 이력 합쳐 전역 best-per-metric. modelIds: number[].
@@ -63,7 +111,8 @@ export const getJudges = async () => {
 };
 
 // judge 런 생성(직접호출 비동기). ⚠️ api_key/base_url = transient — 화면 state 에만, 영속 X.
-// body: { model_id, dataset_ids, provider, judge_model?, api_key?, base_url?, criteria, custom_prompt? }
+// body: { project_id, provider, criteria, judge_model?, api_key?, base_url?, custom_prompt? }
+//   — model/dataset 은 프로젝트에서 상속(바디 미포함).
 export const runJudge = async (body) => {
   return await callApi({ url: 'evaluations/judge', method: 'post', body });
 };
@@ -77,7 +126,11 @@ export const getJudgeResult = async (modelId, jobId) => {
 };
 
 // ── 전문가 평가 (P3) ──────────────────────────────────────────────────
-// 세션 시작 → { job_id, samples, total }. body: { model_id, dataset_ids }
+// 세션 시작 → { job_id, total, expert_prompt, samples: [{ idx, output,
+//   image/image_url/image_served, csv_rows(2D)/csv_text }] }. body: { project_id,
+//   inference_playground_id? } — model/dataset 은 프로젝트에서 상속(바디 미포함).
+// expert_prompt(고정 지침)·per-sample csv_rows/csv_text 는 startExpert 시 인라인으로 내려온다
+// (이미지는 별도 blob 엔드포인트 expert-image/{idx} 유지). input/reference 는 계약엔 있으나 FE 미표시.
 export const startExpert = async (body) => {
   return await callApi({ url: 'evaluations/expert', method: 'post', body });
 };
@@ -90,7 +143,9 @@ export const getExpertSamples = async (modelId, jobId) => {
   });
 };
 
-// 채점 제출(O/X + 코멘트). body: { sample_idx, verdict, comment? }
+// 채점 제출(1~5 별점 + 코멘트). body: { sample_idx, score, score_json?, comment? }
+// → { rated, total, avg_score, distribution, completed, rater_user, rated_at, rate_count }.
+// score_json 은 확장 지점(다기준/구조화 피드백/선호도쌍) — 현재 UI 는 단일 score 만 전송.
 export const submitExpertRating = async (modelId, jobId, body) => {
   return await callApi({
     url: `evaluations/${modelId}/${jobId}/expert-rating`,
