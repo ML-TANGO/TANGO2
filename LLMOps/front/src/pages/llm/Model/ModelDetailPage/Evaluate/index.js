@@ -1,3 +1,3 @@
-// §14.12 ③ — 평가는 '평가(Evaluation)' 탭으로 이전. 모델탭 진입 시 이전 안내 배너.
-// 기존 self-metric 구현은 ./Evaluate (보존, 언마운트) — 추후 제거.
-export { default } from './EvaluateRelocated';
+// 모델 상세 '평가' 탭 = 해당 모델의 평가 이력(비교표) 전용 읽기 뷰 + 상단 평가 페이지 이동 버튼(QA 3).
+// 평가 실행은 '평가(Evaluation)' 허브로 이전(§14.12 ③). EvaluateRelocated 배너·EvaluateModal 은 미사용(보존).
+export { default } from './Evaluate';
