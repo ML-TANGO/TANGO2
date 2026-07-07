@@ -197,18 +197,14 @@ const InferenceMenu = lazy(() =>
 const InferenceDetail = lazy(() =>
   import('@src/pages/llm/Inference/InferenceDetail/InferenceDetail'),
 );
-// 평가(Evaluation, llm_evaluation P1c) — 허브 + 벤치마크 화면
+// 평가(Evaluation, llm_evaluation) — 프로젝트 목록/허브
 const EvaluationMenu = lazy(() =>
   import('@src/pages/llm/Evaluation/EvaluationMenu/EvaluationMenu'),
 );
-const BenchmarkEvaluation = lazy(() =>
-  import('@src/pages/llm/Evaluation/BenchmarkEvaluation/BenchmarkEvaluation'),
-);
-const JudgeEvaluation = lazy(() =>
-  import('@src/pages/llm/Evaluation/JudgeEvaluation/JudgeEvaluation'),
-);
-const ExpertEvaluation = lazy(() =>
-  import('@src/pages/llm/Evaluation/ExpertEvaluation/ExpertEvaluation'),
+// 벤치마크/judge/전문가 standalone 페이지는 프로젝트 상세(ProjectDetail)로 흡수 — 모델/데이터셋이
+// 프로젝트에서 잠기므로 셋업 뷰가 무의미. 설정·결과·전문가 채점은 재사용 컴포넌트로 편입.
+const ProjectDetail = lazy(() =>
+  import('@src/pages/llm/Evaluation/ProjectDetail/ProjectDetail'),
 );
 const EvalCrossCompare = lazy(() =>
   import('@src/pages/llm/Evaluation/EvalCrossCompare/EvalCrossCompare'),
@@ -901,37 +897,15 @@ const routeArr = [
     render: (props) => <EvaluationMenu {...props} />,
   },
   {
-    // P1c: 벤치마크 평가 화면(모델+데이터셋+17메트릭→점수표). detail=사이드nav 비노출.
-    name: 'BenchmarkEvaluation',
-    path: '/user/workspace/:id/evaluation/benchmark',
+    // 평가 프로젝트 상세(목록에서 진입, run 실행·전문가 채점·비교). detail=사이드nav 비노출.
+    name: 'ProjectDetail',
+    path: '/user/workspace/:id/evaluation/project/:projectId',
     exact: true,
     disabled: true,
     icon: IconModel,
     activeIcon: IconModelActive,
     platform: 'flightbase',
-    render: (props) => <BenchmarkEvaluation {...props} />,
-  },
-  {
-    // P2: LLM-as-a-Judge 화면(모델+심판+기준→per-criterion). detail=사이드nav 비노출.
-    name: 'JudgeEvaluation',
-    path: '/user/workspace/:id/evaluation/judge',
-    exact: true,
-    disabled: true,
-    icon: IconModel,
-    activeIcon: IconModelActive,
-    platform: 'flightbase',
-    render: (props) => <JudgeEvaluation {...props} />,
-  },
-  {
-    // P3: 전문가 평가(샘플 O/X 채점). detail=사이드nav 비노출.
-    name: 'ExpertEvaluation',
-    path: '/user/workspace/:id/evaluation/expert',
-    exact: true,
-    disabled: true,
-    icon: IconModel,
-    activeIcon: IconModelActive,
-    platform: 'flightbase',
-    render: (props) => <ExpertEvaluation {...props} />,
+    render: (props) => <ProjectDetail {...props} />,
   },
   {
     // ④ 교차모델 비교(읽기 전용 뷰). detail=사이드nav 비노출.
