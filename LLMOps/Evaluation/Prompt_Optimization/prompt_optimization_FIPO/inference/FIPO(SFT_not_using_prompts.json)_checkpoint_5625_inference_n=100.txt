@@ -3,7 +3,9 @@
 ────────────────────────────────────────────────────────────────────────────────
   benchmark      : all  →  실행 순서: gsm8k → hellaswag → mmlu
   generator      : Qwen/Qwen3-8B
+  optimizer      : ../model/sft/checkpoint-5625
   num_samples    : 100  (벤치마크당)
+  optimizer G_N  : 256 (optimizer가 생성하는 최대 token 수)
   baseline 비교   : 활성화
   device         : cuda  (NVIDIA H200,  150GB)
 ════════════════════════════════════════════════════════════════════════════════

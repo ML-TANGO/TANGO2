@@ -1,12 +1,23 @@
 #!/usr/bin/env python
 """
-Qwen SFT Optimizer 기반 FIPO 2-pass 벤치마크 평가 스크립트
+FIPO 파이프라인 벤치마크 평가 스크립트 (Llama SFT Optimizer 전용)
+
+별도 학습 없이 순수 추론(inference)만으로 평가합니다.
 
 파이프라인:
-  Raw Prompt -> Prompt Optimizer(SFT LoRA) -> Optimized Prompt -> Generator -> Answer
-
-Baseline:
-  Raw Prompt -> Generator -> Answer
+  Raw Prompt
+      |
+      v
+  [Prompt Optimizer: SFT LoRA Llama3.1-8B-Instruct]
+      |
+      v
+  Optimized Prompt
+      |
+      v
+  [Generator LLM]  (frozen, 학습 없음)
+      |
+      v
+  Answer -> Accuracy
 """
 
 import argparse
@@ -26,10 +37,11 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
 DEFAULT_ADAPTER_PATH = (
-    "/scratch/x3397a11/minkyu/workspace/ETRI/prompt_optimization/model/FIPO_sft/checkpoint-5625"
+    "/scratch/x3397a11/minkyu/workspace/ETRI/prompt_optimization/model/"
+    "FIPO_sft_llama3_1_8b_instruct"
 )
-DEFAULT_OPTIMIZER_BASE = "Qwen/Qwen3-8B"
-DEFAULT_GENERATOR = "Qwen/Qwen3-8B"
+DEFAULT_OPTIMIZER_BASE = "meta-llama/Meta-Llama-3.1-8B-Instruct"
+DEFAULT_GENERATOR = "meta-llama/Meta-Llama-3.1-8B-Instruct"
 DEFAULT_PROMPTS_JSON = (
     "/scratch/x3397a11/minkyu/workspace/ETRI/prompt_optimization/"
     "prompt_optimization_FIPO/data/prompts.json"
@@ -149,12 +161,6 @@ def resolve_model_path(model_name_or_path: str, local_files_only: bool) -> str:
     if os.path.isdir(model_name_or_path):
         return model_name_or_path
     return snapshot_download(repo_id=model_name_or_path, local_files_only=True)
-
-
-def is_qwen(tokenizer) -> bool:
-    cls_name = type(tokenizer).__name__.lower()
-    model_id = getattr(tokenizer, "name_or_path", "").lower()
-    return "qwen" in cls_name or "qwen" in model_id
 
 
 def maybe_set_pad_token(tokenizer):
@@ -299,7 +305,7 @@ def run_inference(model, tokenizer, prompt: str, device: str, max_new_tokens: in
     return tokenizer.decode(outputs[0][input_len:], skip_special_tokens=True).strip()
 
 
-def build_fipo_optimizer_text(raw_prompt: str, prompts: Dict[str, str], max_words: int = 256) -> str:
+def build_fipo_optimizer_text(raw_prompt: str, prompts: Dict[str, str], max_words: int = 512) -> str:
     text = prompts["optimizer"]
     text = text.replace("S_P", raw_prompt)
     text = text.replace("O_C", "")
@@ -319,10 +325,11 @@ def build_optimizer_input(
         max_words=optimizer_max_words,
     )
     messages = [{"role": "user", "content": optimizer_text}]
-    kwargs = dict(tokenize=False, add_generation_prompt=True)
-    if is_qwen(tokenizer):
-        kwargs["enable_thinking"] = False
-    return tokenizer.apply_chat_template(messages, **kwargs)
+    return tokenizer.apply_chat_template(
+        messages,
+        tokenize=False,
+        add_generation_prompt=True,
+    )
 
 
 def build_generator_input(tokenizer, prompt: str, benchmark: str) -> str:
@@ -343,10 +350,11 @@ def build_generator_input(tokenizer, prompt: str, benchmark: str) -> str:
         {"role": "system", "content": system},
         {"role": "user", "content": prompt},
     ]
-    kwargs = dict(tokenize=False, add_generation_prompt=True)
-    if is_qwen(tokenizer):
-        kwargs["enable_thinking"] = False
-    return tokenizer.apply_chat_template(messages, **kwargs)
+    return tokenizer.apply_chat_template(
+        messages,
+        tokenize=False,
+        add_generation_prompt=True,
+    )
 
 
 def extract_answer(response: str, benchmark: str) -> str:
@@ -576,7 +584,7 @@ BENCHMARKS_ALL = ["gsm8k", "hellaswag", "mmlu"]
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Qwen SFT Optimizer 기반 FIPO 2-pass 벤치마크 평가"
+        description="Llama SFT Optimizer 기반 FIPO 파이프라인 벤치마크 평가"
     )
     parser.add_argument(
         "--benchmark",
@@ -589,7 +597,7 @@ def main():
         "--adapter_path",
         type=str,
         default=DEFAULT_ADAPTER_PATH,
-        help="SFT LoRA 어댑터 경로 (Qwen Prompt Optimizer)",
+        help="SFT LoRA 어댑터 경로 (Llama Prompt Optimizer)",
     )
     parser.add_argument(
         "--optimizer_base_model",
@@ -613,7 +621,7 @@ def main():
         "--optimizer_max_words",
         type=int,
         default=256,
-        help="prompts.json의 G_N에 주입할 최대 단어 수 (기본값: 256)",
+        help="prompts.json의 G_N에 주입할 최대 단어 수 (기본값: 512)",
     )
     parser.add_argument("--num_samples", type=int, default=100, help="벤치마크당 샘플 수")
     parser.add_argument("--mmlu_subject", type=str, default="all", help="MMLU 과목")
@@ -667,7 +675,7 @@ def main():
     sys.stdout = tee
 
     print(SEP_DOUBLE)
-    print(f"  Qwen SFT Optimizer 벤치마크 평가  |  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"  Llama SFT Optimizer 벤치마크 평가  |  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(SEP_SINGLE)
     print(f"  benchmark        : {args.benchmark}  ->  {' -> '.join(benchmarks)}")
     print(f"  adapter_path     : {args.adapter_path}")

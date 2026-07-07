@@ -1,16 +1,29 @@
 #!/usr/bin/env python
-import torch
+import json
+import os
 from dataclasses import dataclass, field
-from typing import Dict, Sequence, Optional, List
+from typing import Dict, Optional, Sequence
+
+import torch
 from datasets import load_dataset
 from peft import LoraConfig, get_peft_model
-from transformers import AutoModelForCausalLM, AutoTokenizer, HfArgumentParser, Trainer, TrainingArguments, set_seed
+from transformers import (
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    HfArgumentParser,
+    Trainer,
+    TrainingArguments,
+    set_seed,
+)
 
 IGNORE_INDEX = -100
 
+
 @dataclass
 class MyTrainingArguments(TrainingArguments):
-    output_dir: str = field(default="/scratch/x3397a11/minkyu/workspace/ETRI/promptopti/model")
+    output_dir: str = field(
+        default="/scratch/x3397a11/minkyu/workspace/ETRI/prompt_optimization/model/SFT/FIPO_sft/g_n=512"
+    )
     num_train_epochs: float = field(default=3)
     per_device_train_batch_size: int = field(default=1)
     gradient_accumulation_steps: int = field(default=16)
@@ -26,6 +39,7 @@ class MyTrainingArguments(TrainingArguments):
     gradient_checkpointing: bool = field(default=True)
     report_to: str = field(default="none")
 
+
 @dataclass
 class ModelArguments:
     model_name_or_path: str = field(default="Qwen/Qwen3-8B")
@@ -35,49 +49,87 @@ class ModelArguments:
     lora_dropout: float = field(default=0.05)
     if_lora: int = field(default=1)
 
+
 @dataclass
 class DataArguments:
     dataset_name: str = field(default="Junrulu/Prompt_Preference_Dataset")
     dataset_split: str = field(default="train")
     raw_prompt_column: str = field(default="raw_prompt")
     target_column: str = field(default="gpt4_optimized_prompt")
+    silver_response_column: Optional[str] = field(default=None)
+    golden_response_column: Optional[str] = field(default=None)
     model_max_length: int = field(default=2048)
     max_train_samples: Optional[int] = field(default=None)
     preprocessing_num_workers: int = field(default=4)
     use_chat_template: bool = field(default=True)
+    prompt_template_path: str = field(default="../data/prompts.json")
+    fallback_max_words: int = field(default=256)
 
 
-def build_messages(raw_prompt: str):
-    system = (
-        "You are a prompt optimizer. Rewrite the user's raw prompt into a clearer, "
-        "more detailed, and more effective instruction prompt. Return only the rewritten optimized prompt."
-    )
-    user = f"Raw prompt:\n{raw_prompt}"
-    return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+def read_prompts_json(path: str) -> dict:
+    with open(path, "r", encoding="utf-8") as f:
+        obj = json.load(f)
+    required = ["optimizer", "s_r", "g_r"]
+    missing = [k for k in required if k not in obj]
+    if missing:
+        raise ValueError(f"Missing keys in prompts.json: {missing}")
+    return obj
 
 
-def build_source_text(tokenizer, raw_prompt: str, use_chat_template: bool = True) -> str:
-    messages = build_messages(raw_prompt)
+def get_optional_value(example: dict, key: Optional[str]) -> Optional[str]:
+    if not key:
+        return None
+    value = example.get(key)
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text if text else None
+
+
+def build_fipo_optimizer_text(
+    raw_prompt: str,
+    prompts: dict,
+    silver_response: Optional[str] = None,
+    golden_response: Optional[str] = None,
+    max_words: int = 256,
+) -> str:
+    optional_context = ""
+    if silver_response:
+        optional_context += prompts["s_r"].replace("S_R", silver_response)
+    if golden_response:
+        optional_context += prompts["g_r"].replace("G_R", golden_response)
+
+    text = prompts["optimizer"]
+    text = text.replace("S_P", raw_prompt)
+    text = text.replace("O_C", optional_context)
+    text = text.replace("G_N", str(max_words))
+    return text
+
+
+def build_source_text(tokenizer, optimizer_text: str, use_chat_template: bool = True) -> str:
     if use_chat_template and hasattr(tokenizer, "apply_chat_template"):
         return tokenizer.apply_chat_template(
-            messages,
+            [{"role": "user", "content": optimizer_text}],
             tokenize=False,
             add_generation_prompt=True,
             enable_thinking=False,
         )
-    return (
-        "You are a prompt optimizer.\n"
-        "Rewrite the user's raw prompt into a clearer, more detailed, and more effective instruction prompt.\n"
-        "Return only the rewritten optimized prompt.\n\n"
-        f"Raw prompt:\n{raw_prompt}\n\nOptimized prompt:\n"
-    )
+    return optimizer_text + "\n"
 
 
-def find_lora_target_modules(model) -> List[str]:
+def find_lora_target_modules(model):
     candidate_keywords = [
-        "q_proj", "k_proj", "v_proj", "o_proj",
-        "up_proj", "down_proj", "gate_proj",
-        "wq", "wk", "wv", "wo"
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+        "up_proj",
+        "down_proj",
+        "gate_proj",
+        "wq",
+        "wk",
+        "wv",
+        "wo",
     ]
     found = set()
     for name, module in model.named_modules():
@@ -90,22 +142,19 @@ def find_lora_target_modules(model) -> List[str]:
     return sorted(found)
 
 
-
 class SupervisedDataset(torch.utils.data.Dataset):
     def __init__(
         self,
-        raw_texts: Sequence[str],
+        source_texts: Sequence[str],
         targets: Sequence[str],
         tokenizer,
         model_max_length: int,
-        use_chat_template: bool
     ):
         self.input_ids = []
         self.labels = []
         eos = tokenizer.eos_token or ""
 
-        for src, tgt in zip(raw_texts, targets):
-            source = build_source_text(tokenizer, src, use_chat_template=use_chat_template)
+        for source, tgt in zip(source_texts, targets):
             full_text = source + tgt + eos
 
             tokenized_full = tokenizer(
@@ -135,6 +184,7 @@ class SupervisedDataset(torch.utils.data.Dataset):
     def __getitem__(self, i) -> Dict[str, torch.Tensor]:
         return {"input_ids": self.input_ids[i], "labels": self.labels[i]}
 
+
 class DataCollatorForSupervisedDataset:
     def __init__(self, tokenizer):
         self.tokenizer = tokenizer
@@ -160,6 +210,7 @@ class DataCollatorForSupervisedDataset:
             "labels": labels,
             "attention_mask": attention_mask,
         }
+
 
 def main():
     parser = HfArgumentParser((ModelArguments, DataArguments, MyTrainingArguments))
@@ -200,19 +251,42 @@ def main():
         model = get_peft_model(model, peft_config)
         model.print_trainable_parameters()
 
+    template_path = data_args.prompt_template_path
+    if not os.path.isabs(template_path):
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        template_path = os.path.normpath(os.path.join(base_dir, template_path))
+    prompts = read_prompts_json(template_path)
+
     ds = load_dataset(data_args.dataset_name, split=data_args.dataset_split)
     if data_args.max_train_samples is not None:
         ds = ds.select(range(min(len(ds), data_args.max_train_samples)))
 
-    raw_prompts = ds[data_args.raw_prompt_column]
-    targets = ds[data_args.target_column]
+    source_texts = []
+    targets = []
+
+    for ex in ds:
+        target = str(ex[data_args.target_column]).strip()
+        max_words = max(1, len(target.split())) if target else data_args.fallback_max_words
+        optimizer_text = build_fipo_optimizer_text(
+            raw_prompt=str(ex[data_args.raw_prompt_column]),
+            prompts=prompts,
+            silver_response=get_optional_value(ex, data_args.silver_response_column),
+            golden_response=get_optional_value(ex, data_args.golden_response_column),
+            max_words=max_words,
+        )
+        source_text = build_source_text(
+            tokenizer,
+            optimizer_text=optimizer_text,
+            use_chat_template=data_args.use_chat_template,
+        )
+        source_texts.append(source_text)
+        targets.append(target)
 
     train_dataset = SupervisedDataset(
-        raw_prompts,
-        targets,
-        tokenizer,
-        data_args.model_max_length,
-        data_args.use_chat_template,
+        source_texts=source_texts,
+        targets=targets,
+        tokenizer=tokenizer,
+        model_max_length=data_args.model_max_length,
     )
     data_collator = DataCollatorForSupervisedDataset(tokenizer)
 
@@ -228,6 +302,7 @@ def main():
     trainer.save_state()
     trainer.save_model(training_args.output_dir)
     tokenizer.save_pretrained(training_args.output_dir)
+
 
 if __name__ == "__main__":
     main()

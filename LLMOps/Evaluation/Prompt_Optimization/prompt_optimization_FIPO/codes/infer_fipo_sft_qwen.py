@@ -20,7 +20,7 @@ FIPO 파이프라인 벤치마크 평가 스크립트
   Answer → Accuracy
 
 지원 벤치마크:
-  gsm8k      수학 추론           (Exact Match on final number)
+  gsm8k      수학 추론         (Exact Match on final number)
   hellaswag  상식 추론 4지선다   (Accuracy) ← cosmos_qa 대체 (datasets 4.x 호환)
   mmlu       다분야 지식 4지선다 (Accuracy)
   all        위 3개 순차 실행    (모델을 각 1회만 로드)
@@ -30,7 +30,7 @@ FIPO 파이프라인 벤치마크 평가 스크립트
   FIPO     : raw prompt → Optimizer → Generator
 
 사용 예시:
-  # 3개 벤치마크 모두 순차 실행 (권장)
+  # 3개 벤치마크 모두 순차 실행 
   python infer_sft_qwen3_8b_with_llm.py --benchmark all --num_samples 100
 
   # GSM8K 단독
@@ -39,10 +39,10 @@ FIPO 파이프라인 벤치마크 평가 스크립트
   # HellaSwag (commonsense) 단독
   python infer_sft_qwen3_8b_with_llm.py --benchmark hellaswag --num_samples 200
 
-  # MMLU 특정 과목
-  python infer_sft_qwen3_8b_with_llm.py --benchmark mmlu --mmlu_subject high_school_math --num_samples 50
+  # MMLU 특정 과목 (코드 상에는 'all'로 설정되어 있음)
+  python infer_sft_qwen3_8b_with_llm.py --benchmark mmlu --mmlu_subject high_school_math --num_samples 100
 
-  # baseline 없이 FIPO만 (속도 2배)
+  # baseline 없이 FIPO만 
   python infer_sft_qwen3_8b_with_llm.py --benchmark all --num_samples 100 --no_baseline
 """
 
@@ -53,8 +53,11 @@ import re
 import sys
 import textwrap
 from datetime import datetime
+from typing import Dict
 
 import torch
+from datasets import DownloadConfig, DownloadMode
+from huggingface_hub import snapshot_download
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -62,22 +65,20 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 # 기본 경로
 # ──────────────────────────────────────────────────────────────
 DEFAULT_ADAPTER_PATH = (
-    "/scratch/x3397a11/minkyu/workspace/ETRI/promptopti/model/sft/checkpoint-5625"
+    "/scratch/x3397a11/minkyu/workspace/ETRI/prompt_optimization/model/SFT/FIPO_follow_sft/checkpoint-5625"
 )
-DEFAULT_GENERATOR    = "Q"
+DEFAULT_GENERATOR    = "Qwen/Qwen3-8B"
+DEFAULT_PROMPTS_JSON = (
+    "/scratch/x3397a11/minkyu/workspace/ETRI/prompt_optimization/"
+    "prompt_optimization_FIPO/data/prompts.json"
+)
 DEFAULT_LOG_DIR      = (
-    "/scratch/x3397a11/minkyu/workspace/ETRI/promptopti/FIPO_Project/inference"
+    "/scratch/x3397a11/minkyu/workspace/ETRI/prompt_optimization/"
+    "prompt_optimization_FIPO/inference"
 )
 
 SEP_DOUBLE = "═" * 80
 SEP_SINGLE = "─" * 80
-
-OPTIMIZER_SYSTEM = (
-    "You are a prompt optimizer. Rewrite the user's raw prompt into a clearer, "
-    "more detailed, and more effective instruction prompt. "
-    "Return only the rewritten optimized prompt."
-)
-
 
 # ──────────────────────────────────────────────────────────────
 # Tee: stdout + 파일 동시 출력
@@ -104,18 +105,37 @@ class Tee:
 # 1. 데이터셋 로드 & 프롬프트 포맷
 # ══════════════════════════════════════════════════════════════
 
-def load_benchmark(benchmark: str, num_samples: int, mmlu_subject: str = "all"):
+def read_prompts_json(path: str) -> Dict[str, str]:
+    with open(path, "r", encoding="utf-8") as f:
+        obj = json.load(f)
+    required = ["optimizer", "s_r", "g_r"]
+    missing = [k for k in required if k not in obj]
+    if missing:
+        raise ValueError(f"Missing keys in prompts.json: {missing}")
+    return obj
+
+
+def load_benchmark(
+    benchmark: str,
+    num_samples: int,
+    mmlu_subject: str = "all",
+    local_files_only: bool = False,
+):
     from datasets import load_dataset
     print(f"[데이터셋] {benchmark} 로드 중 ({num_samples}개)...")
+    load_kwargs = {}
+    if local_files_only:
+        load_kwargs["download_config"] = DownloadConfig(local_files_only=True)
+        load_kwargs["download_mode"] = DownloadMode.REUSE_DATASET_IF_EXISTS
 
     if benchmark == "gsm8k":
-        ds = load_dataset("openai/gsm8k", "main", split="test")
+        ds = load_dataset("openai/gsm8k", "main", split="test", **load_kwargs)
     elif benchmark == "hellaswag":
         # cosmos_qa는 datasets 4.x에서 Python 스크립트 방식이라 지원 종료
         # hellaswag는 동일한 commonsense 4지선다 벤치마크
-        ds = load_dataset("hellaswag", split="validation")
+        ds = load_dataset("hellaswag", split="validation", **load_kwargs)
     elif benchmark == "mmlu":
-        ds = load_dataset("cais/mmlu", mmlu_subject, split="test")
+        ds = load_dataset("cais/mmlu", mmlu_subject, split="test", **load_kwargs)
     else:
         raise ValueError(f"지원하지 않는 benchmark: {benchmark}")
 
@@ -176,32 +196,87 @@ def parse_sample(benchmark: str, row: dict) -> dict:
 # 2. 모델 로드 / 해제
 # ══════════════════════════════════════════════════════════════
 
-def load_optimizer(adapter_path: str, device: str):
+def resolve_model_path(model_name_or_path: str, local_files_only: bool) -> str:
+    if not local_files_only:
+        return model_name_or_path
+    if os.path.isdir(model_name_or_path):
+        return model_name_or_path
+    return snapshot_download(repo_id=model_name_or_path, local_files_only=True)
+
+
+def load_optimizer(adapter_path: str, device: str, local_files_only: bool = False):
     print(f"\n[Optimizer 로드] {adapter_path}")
     tok = AutoTokenizer.from_pretrained(adapter_path, use_fast=True)
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
     tok.padding_side = "left"
 
-    base = AutoModelForCausalLM.from_pretrained(
-        "Qwen/Qwen3-8B", torch_dtype=torch.bfloat16, device_map=device
-    )
+    base_path = resolve_model_path("Qwen/Qwen3-8B", local_files_only=local_files_only)
+    try:
+        base = AutoModelForCausalLM.from_pretrained(
+            base_path,
+            torch_dtype=torch.bfloat16,
+            device_map=device,
+            local_files_only=local_files_only,
+        )
+    except Exception as e:
+        if local_files_only:
+            raise
+        print(f"[경고] optimizer base 온라인 로드 실패 → 캐시 fallback: {e}")
+        base_path = resolve_model_path("Qwen/Qwen3-8B", local_files_only=True)
+        base = AutoModelForCausalLM.from_pretrained(
+            base_path,
+            torch_dtype=torch.bfloat16,
+            device_map=device,
+            local_files_only=True,
+        )
     base.config.use_cache = True
     model = PeftModel.from_pretrained(base, adapter_path)
     model.eval()
     return tok, model
 
-def load_generator(model_name: str, device: str):
+def load_generator(model_name: str, device: str, local_files_only: bool = False):
     print(f"\n[Generator 로드] {model_name}")
-    tok = AutoTokenizer.from_pretrained(model_name, use_fast=True)
+    model_path = resolve_model_path(model_name, local_files_only=local_files_only)
+    try:
+        tok = AutoTokenizer.from_pretrained(
+            model_path,
+            use_fast=True,
+            local_files_only=local_files_only,
+        )
+    except Exception as e:
+        if local_files_only:
+            raise
+        print(f"[경고] generator tokenizer 온라인 로드 실패 → 캐시 fallback: {e}")
+        model_path = resolve_model_path(model_name, local_files_only=True)
+        tok = AutoTokenizer.from_pretrained(
+            model_path,
+            use_fast=True,
+            local_files_only=True,
+        )
     if tok.pad_token is None:
         # Llama2는 pad_token이 없으므로 eos_token으로 대체
         tok.pad_token = tok.eos_token
     tok.padding_side = "left"
 
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name, torch_dtype=torch.bfloat16, device_map=device
-    )
+    try:
+        model = AutoModelForCausalLM.from_pretrained(
+            model_path,
+            torch_dtype=torch.bfloat16,
+            device_map=device,
+            local_files_only=local_files_only,
+        )
+    except Exception as e:
+        if local_files_only:
+            raise
+        print(f"[경고] generator model 온라인 로드 실패 → 캐시 fallback: {e}")
+        model_path = resolve_model_path(model_name, local_files_only=True)
+        model = AutoModelForCausalLM.from_pretrained(
+            model_path,
+            torch_dtype=torch.bfloat16,
+            device_map=device,
+            local_files_only=True,
+        )
     model.config.use_cache = True
     model.eval()
     print(f"  tokenizer type : {type(tok).__name__}")
@@ -240,23 +315,41 @@ def run_inference(model, tokenizer, prompt: str, device: str,
     ).strip()
 
 
-def build_optimizer_input(tokenizer, raw_prompt: str) -> str:
-    messages = [
-        {"role": "system", "content": OPTIMIZER_SYSTEM},
-        {"role": "user",   "content": f"Raw prompt:\n{raw_prompt}"},
-    ]
-    return tokenizer.apply_chat_template(
-        messages, tokenize=False,
-        add_generation_prompt=True, enable_thinking=False,
-    )
-
-
 def is_qwen(tokenizer) -> bool:
     """Qwen 계열 tokenizer 여부 판별"""
     cls_name = type(tokenizer).__name__.lower()
     model_id  = getattr(tokenizer, "name_or_path", "").lower()
     return "qwen" in cls_name or "qwen" in model_id
 
+
+def build_fipo_optimizer_text(
+    raw_prompt: str,
+    prompts: Dict[str, str],
+    max_words: int = 256,
+) -> str:
+    text = prompts["optimizer"]
+    text = text.replace("S_P", raw_prompt)
+    text = text.replace("O_C", "")
+    text = text.replace("G_N", str(max_words))
+    return text
+
+
+def build_optimizer_input(
+    tokenizer,
+    raw_prompt: str,
+    prompts: Dict[str, str],
+    optimizer_max_words: int,
+) -> str:
+    optimizer_text = build_fipo_optimizer_text(
+        raw_prompt=raw_prompt,
+        prompts=prompts,
+        max_words=optimizer_max_words,
+    )
+    messages = [{"role": "user", "content": optimizer_text}]
+    kwargs = dict(tokenize=False, add_generation_prompt=True)
+    if is_qwen(tokenizer):
+        kwargs["enable_thinking"] = False
+    return tokenizer.apply_chat_template(messages, **kwargs)
 
 def build_generator_input(tokenizer, prompt: str, benchmark: str) -> str:
     """Generator에게 넘길 최종 입력 구성 (모델 계열에 따라 chat template 분기)"""
@@ -386,7 +479,9 @@ def print_summary(results: list, benchmark: str, no_baseline: bool):
 
 def run_optimizer_pass(opt_tok, opt_model, samples: list,
                        device: str, max_new_tokens: int,
-                       benchmark_name: str) -> list:
+                       benchmark_name: str,
+                       prompts: Dict[str, str],
+                       optimizer_max_words: int) -> list:
     """Pass 1: 샘플 리스트 전체에 대해 최적화 프롬프트 생성"""
     optimized = []
     n = len(samples)
@@ -394,7 +489,12 @@ def run_optimizer_pass(opt_tok, opt_model, samples: list,
     for i, s in enumerate(samples):
         if (i + 1) % 10 == 0 or i == 0:
             print(f"    최적화 중... {i+1}/{n}")
-        inp = build_optimizer_input(opt_tok, s["raw_prompt"])
+        inp = build_optimizer_input(
+            opt_tok,
+            s["raw_prompt"],
+            prompts=prompts,
+            optimizer_max_words=optimizer_max_words,
+        )
         optimized.append(run_inference(opt_model, opt_tok, inp, device,
                                        max_new_tokens=max_new_tokens))
     print(f"    완료: {n}개")
@@ -500,9 +600,17 @@ def main():
         "--generator_model", type=str, default=DEFAULT_GENERATOR,
         help=(
             f"Generator LLM 모델명 (기본값: {DEFAULT_GENERATOR}). "
-            "반드시 chat/instruct 버전 사용 (예: meta-llama/Llama-2-7b-chat-hf). "
+            "반드시 chat/instruct 버전 사용 (예: meta-llama/Llama-2-7b-chat-hf / Qwen/Qwen3-8B). "
             "base 모델은 chat template이 없어 오류 발생."
         ),
+    )
+    parser.add_argument(
+        "--prompts_json", type=str, default=DEFAULT_PROMPTS_JSON,
+        help=f"FIPO prompts.json 경로 (기본값: {DEFAULT_PROMPTS_JSON})",
+    )
+    parser.add_argument(
+        "--optimizer_max_words", type=int, default=512,
+        help="prompts.json 의 G_N에 주입할 최대 단어 수 (기본값: 256)",
     )
     parser.add_argument(
         "--num_samples", type=int, default=100,
@@ -521,7 +629,7 @@ def main():
         help="Optimizer 최대 생성 토큰 (기본값: 512)",
     )
     parser.add_argument(
-        "--max_new_tokens_gen", type=int, default=256,
+        "--max_new_tokens_gen", type=int, default=512,
         help="Generator 최대 생성 토큰 (기본값: 256)",
     )
     parser.add_argument(
@@ -544,6 +652,10 @@ def main():
             "설정 시 huggingface_hub.login()을 통해 인증됩니다."
         ),
     )
+    parser.add_argument(
+        "--offline", type=int, default=0, choices=[0, 1],
+        help="1이면 로컬 캐시만 사용, 0이면 온라인 우선 후 캐시 fallback",
+    )
     args = parser.parse_args()
 
     # ── HuggingFace 토큰 인증 ─────────────────────────────────
@@ -555,6 +667,8 @@ def main():
 
     # ── 실행할 벤치마크 목록 결정 ─────────────────────────────
     benchmarks = BENCHMARKS_ALL if args.benchmark == "all" else [args.benchmark]
+    prompts = read_prompts_json(args.prompts_json)
+    local_files_only = bool(args.offline)
 
     # ── 로그 파일 경로 ────────────────────────────────────────
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -579,6 +693,9 @@ def main():
     print(f"  benchmark      : {args.benchmark}  →  실행 순서: {' → '.join(benchmarks)}")
     print(f"  optimizer      : {args.adapter_path}")
     print(f"  generator      : {args.generator_model}")
+    print(f"  prompts_json   : {args.prompts_json}")
+    print(f"  optimizer G_N  : {args.optimizer_max_words}")
+    print(f"  offline mode   : {args.offline}")
     print(f"  num_samples    : {args.num_samples}  (벤치마크당)")
     print(f"  baseline 비교  : {'비활성화' if args.no_baseline else '활성화'}")
     print(f"  device         : {args.device}", end="")
@@ -594,7 +711,12 @@ def main():
     all_samples: dict = {}
     for bname in benchmarks:
         subj = args.mmlu_subject if bname == "mmlu" else "all"
-        all_samples[bname] = load_benchmark(bname, args.num_samples, subj)
+        all_samples[bname] = load_benchmark(
+            bname,
+            args.num_samples,
+            subj,
+            local_files_only=local_files_only,
+        )
         print(f"  {bname:<12} → {len(all_samples[bname])}개 샘플 준비")
     print()
 
@@ -605,12 +727,18 @@ def main():
     print("  [Pass 1]  Prompt Optimizer 로드 → 전체 벤치마크 최적화")
     print(SEP_SINGLE)
 
-    opt_tok, opt_model = load_optimizer(args.adapter_path, args.device)
+    opt_tok, opt_model = load_optimizer(
+        args.adapter_path,
+        args.device,
+        local_files_only=local_files_only,
+    )
     all_optimized: dict = {}
     for bname in benchmarks:
         all_optimized[bname] = run_optimizer_pass(
             opt_tok, opt_model, all_samples[bname],
             args.device, args.max_new_tokens_opt, bname,
+            prompts=prompts,
+            optimizer_max_words=args.optimizer_max_words,
         )
 
     unload(opt_model)
@@ -625,7 +753,11 @@ def main():
     print("  [Pass 2]  Generator 로드 → 전체 벤치마크 추론 & 채점")
     print(SEP_SINGLE)
 
-    gen_tok, gen_model = load_generator(args.generator_model, args.device)
+    gen_tok, gen_model = load_generator(
+        args.generator_model,
+        args.device,
+        local_files_only=local_files_only,
+    )
     all_results: dict  = {}
     for bname in benchmarks:
         all_results[bname] = run_generator_pass(

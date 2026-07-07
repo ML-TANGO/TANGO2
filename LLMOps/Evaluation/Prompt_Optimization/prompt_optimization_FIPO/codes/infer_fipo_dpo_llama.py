@@ -1,12 +1,19 @@
 #!/usr/bin/env python
 """
-Qwen SFT Optimizer 기반 FIPO 2-pass 벤치마크 평가 스크립트
+Llama DPO Optimizer 기반 FIPO 2-pass 벤치마크 평가 스크립트
 
-파이프라인:
-  Raw Prompt -> Prompt Optimizer(SFT LoRA) -> Optimized Prompt -> Generator -> Answer
+고정 파이프라인:
+  - Optimizer: Llama 3.1 8B + DPO LoRA adapter (--adapter_path)
+  - Generator: pretrained Qwen/Qwen3-8B (adapter 없음, 고정)
 
-Baseline:
-  Raw Prompt -> Generator -> Answer
+FIPO 논문/공식 repo 정렬 옵션 (--fipo_paper_eval):
+  - MCQ(HellaSwag/MMLU): optimized prompt + 1-token logit 채점
+  - GSM8K: optimized prompt + max_new_tokens=4096 generation
+  - Optimizer G_N: raw prompt 길이 기반 동적 설정 (--gn_policy dynamic)
+
+사용 예:
+  python infer_dpo_llama.py --fipo_paper_eval \\
+      --adapter_path .../dpo_llama3_1_8b_use_silver/checkpoint-11250
 """
 
 import argparse
@@ -16,7 +23,7 @@ import re
 import sys
 import textwrap
 from datetime import datetime
-from typing import Dict
+from typing import Dict, Optional
 
 import torch
 from datasets import DownloadConfig, DownloadMode
@@ -26,10 +33,11 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
 DEFAULT_ADAPTER_PATH = (
-    "/scratch/x3397a11/minkyu/workspace/ETRI/prompt_optimization/model/FIPO_sft/checkpoint-5625"
+    "/scratch/x3397a11/minkyu/workspace/ETRI/prompt_optimization/model/"
+    "FIPO_dpo_llama3_1_8b_instruct"
 )
-DEFAULT_OPTIMIZER_BASE = "Qwen/Qwen3-8B"
-DEFAULT_GENERATOR = "Qwen/Qwen3-8B"
+DEFAULT_OPTIMIZER_BASE = "meta-llama/Meta-Llama-3.1-8B-Instruct"
+DEFAULT_GENERATOR = "Qwen/Qwen3-8B"  # pretrained base, adapter 없음 (고정)
 DEFAULT_PROMPTS_JSON = (
     "/scratch/x3397a11/minkyu/workspace/ETRI/prompt_optimization/"
     "prompt_optimization_FIPO/data/prompts.json"
@@ -71,6 +79,17 @@ def read_prompts_json(path: str) -> Dict[str, str]:
     return obj
 
 
+def resolve_num_samples(num_samples: int) -> Optional[int]:
+    """num_samples <= 0 이면 전체 split 사용."""
+    if num_samples <= 0:
+        return None
+    return num_samples
+
+
+def format_num_samples_label(num_samples: int) -> str:
+    return "전체" if num_samples <= 0 else str(num_samples)
+
+
 def load_benchmark(
     benchmark: str,
     num_samples: int,
@@ -79,7 +98,8 @@ def load_benchmark(
 ):
     from datasets import load_dataset
 
-    print(f"[데이터셋] {benchmark} 로드 중 ({num_samples}개)...")
+    cap = resolve_num_samples(num_samples)
+    print(f"[데이터셋] {benchmark} 로드 중 ({format_num_samples_label(num_samples)})...")
     load_kwargs = {}
     if local_files_only:
         load_kwargs["download_config"] = DownloadConfig(local_files_only=True)
@@ -94,8 +114,8 @@ def load_benchmark(
     else:
         raise ValueError(f"지원하지 않는 benchmark: {benchmark}")
 
-    if num_samples and num_samples < len(ds):
-        ds = ds.select(range(num_samples))
+    if cap is not None and cap < len(ds):
+        ds = ds.select(range(cap))
 
     samples = []
     for row in ds:
@@ -149,12 +169,6 @@ def resolve_model_path(model_name_or_path: str, local_files_only: bool) -> str:
     if os.path.isdir(model_name_or_path):
         return model_name_or_path
     return snapshot_download(repo_id=model_name_or_path, local_files_only=True)
-
-
-def is_qwen(tokenizer) -> bool:
-    cls_name = type(tokenizer).__name__.lower()
-    model_id = getattr(tokenizer, "name_or_path", "").lower()
-    return "qwen" in cls_name or "qwen" in model_id
 
 
 def maybe_set_pad_token(tokenizer):
@@ -228,15 +242,32 @@ def load_optimizer(
     return tok, model
 
 
+def is_qwen(tokenizer) -> bool:
+    cls_name = type(tokenizer).__name__.lower()
+    model_id = getattr(tokenizer, "name_or_path", "").lower()
+    return "qwen" in cls_name or "qwen" in model_id
+
+
+def apply_chat_template(tokenizer, messages, **extra_kwargs) -> str:
+    kwargs = dict(tokenize=False, add_generation_prompt=True)
+    kwargs.update(extra_kwargs)
+    if is_qwen(tokenizer):
+        kwargs["enable_thinking"] = False
+    return tokenizer.apply_chat_template(messages, **kwargs)
+
+
 def load_generator(model_name: str, device: str, local_files_only: bool = False):
     print(f"\n[Generator 로드] {model_name}")
+    print("  mode           : pretrained base only (LoRA/adapter 미사용)")
     model_path = resolve_model_path(model_name, local_files_only=local_files_only)
+    tok_kwargs = dict(use_fast=True, local_files_only=local_files_only)
+    model_kwargs = dict(
+        torch_dtype=torch.bfloat16,
+        device_map=device,
+        local_files_only=local_files_only,
+    )
     try:
-        tok = AutoTokenizer.from_pretrained(
-            model_path,
-            use_fast=True,
-            local_files_only=local_files_only,
-        )
+        tok = AutoTokenizer.from_pretrained(model_path, **tok_kwargs)
     except Exception as e:
         if local_files_only:
             raise
@@ -248,14 +279,11 @@ def load_generator(model_name: str, device: str, local_files_only: bool = False)
             local_files_only=True,
         )
     maybe_set_pad_token(tok)
+    if is_qwen(tok):
+        print("  backend        : Qwen (enable_thinking=False for chat template)")
 
     try:
-        model = AutoModelForCausalLM.from_pretrained(
-            model_path,
-            torch_dtype=torch.bfloat16,
-            device_map=device,
-            local_files_only=local_files_only,
-        )
+        model = AutoModelForCausalLM.from_pretrained(model_path, **model_kwargs)
     except Exception as e:
         if local_files_only:
             raise
@@ -299,12 +327,90 @@ def run_inference(model, tokenizer, prompt: str, device: str, max_new_tokens: in
     return tokenizer.decode(outputs[0][input_len:], skip_special_tokens=True).strip()
 
 
+def is_mcq_benchmark(benchmark: str) -> bool:
+    return benchmark in ("hellaswag", "mmlu")
+
+
+def get_mcq_choice_token_ids(tokenizer) -> Dict[str, int]:
+    choice_ids = {}
+    for letter in "ABCD":
+        token_id = tokenizer.convert_tokens_to_ids(letter)
+        if token_id is None or token_id == getattr(tokenizer, "unk_token_id", None):
+            encoded = tokenizer.encode(letter, add_special_tokens=False)
+            if not encoded:
+                raise ValueError(f"Tokenizer cannot encode MCQ choice token: {letter}")
+            token_id = encoded[0]
+        choice_ids[letter] = token_id
+    return choice_ids
+
+
+@torch.inference_mode()
+def predict_mcq_logit(model, tokenizer, chat_prompt: str, device: str) -> str:
+    """FIPO 공식 get_model_infer_batch_logits.py 방식: 첫 토큰 A/B/C/D logit 비교."""
+    inputs = tokenizer(
+        chat_prompt,
+        return_tensors="pt",
+        add_special_tokens=False,
+    ).to(device)
+    logits = model(**inputs).logits[0, -1]
+    scores = {
+        letter: float(logits[token_id])
+        for letter, token_id in get_mcq_choice_token_ids(tokenizer).items()
+    }
+    return max(scores, key=scores.get)
+
+
 def build_fipo_optimizer_text(raw_prompt: str, prompts: Dict[str, str], max_words: int = 256) -> str:
     text = prompts["optimizer"]
     text = text.replace("S_P", raw_prompt)
     text = text.replace("O_C", "")
     text = text.replace("G_N", str(max_words))
     return text
+
+
+def truncate_to_max_words(text: str, max_words: int) -> str:
+    words = text.strip().split()
+    if len(words) <= max_words:
+        return text.strip()
+    return " ".join(words[:max_words]).strip()
+
+
+def is_multiple_choice_prompt(raw_prompt: str, benchmark: str) -> bool:
+    if benchmark in ("hellaswag", "mmlu"):
+        return True
+    # 안전 보완: 포맷 자체로도 판별
+    return all(x in raw_prompt for x in ["A.", "B.", "C.", "D."])
+
+
+def resolve_optimizer_max_words(
+    raw_prompt: str,
+    benchmark_name: str,
+    optimizer_max_words: int,
+    optimizer_max_words_mcq: int,
+    gn_policy: str,
+) -> int:
+    cap = (
+        optimizer_max_words_mcq
+        if is_multiple_choice_prompt(raw_prompt, benchmark_name)
+        else optimizer_max_words
+    )
+    if gn_policy == "fixed":
+        return cap
+    # FIPO training: G_N=len(chosen.split()). Inference proxy: raw prompt word count.
+    return max(1, min(len(raw_prompt.split()), cap))
+
+
+def postprocess_optimized_prompt(
+    raw_prompt: str,
+    optimized_prompt: str,
+    benchmark: str,
+    max_words: int,
+    keep_raw_for_mcq: bool,
+) -> str:
+    # 객관식은 재서술을 막고 원문 유지(요청사항 반영)
+    if keep_raw_for_mcq and is_multiple_choice_prompt(raw_prompt, benchmark):
+        return raw_prompt.strip()
+    return truncate_to_max_words(optimized_prompt, max_words=max_words)
 
 
 def build_optimizer_input(
@@ -319,10 +425,7 @@ def build_optimizer_input(
         max_words=optimizer_max_words,
     )
     messages = [{"role": "user", "content": optimizer_text}]
-    kwargs = dict(tokenize=False, add_generation_prompt=True)
-    if is_qwen(tokenizer):
-        kwargs["enable_thinking"] = False
-    return tokenizer.apply_chat_template(messages, **kwargs)
+    return apply_chat_template(tokenizer, messages)
 
 
 def build_generator_input(tokenizer, prompt: str, benchmark: str) -> str:
@@ -343,10 +446,7 @@ def build_generator_input(tokenizer, prompt: str, benchmark: str) -> str:
         {"role": "system", "content": system},
         {"role": "user", "content": prompt},
     ]
-    kwargs = dict(tokenize=False, add_generation_prompt=True)
-    if is_qwen(tokenizer):
-        kwargs["enable_thinking"] = False
-    return tokenizer.apply_chat_template(messages, **kwargs)
+    return apply_chat_template(tokenizer, messages)
 
 
 def extract_answer(response: str, benchmark: str) -> str:
@@ -358,9 +458,25 @@ def extract_answer(response: str, benchmark: str) -> str:
         return nums[-1].replace(",", "") if nums else ""
 
     clean = response.strip()
+
+    # 1) 명시적 정답 패턴 우선
+    explicit = re.search(
+        r"(?:final\s*answer|answer|정답)\s*[:\-]?\s*\(?([ABCD])\)?",
+        clean,
+        flags=re.IGNORECASE,
+    )
+    if explicit:
+        return explicit.group(1).upper()
+
+    # 2) 전체 텍스트에서 A/B/C/D 단일 토큰을 찾아 마지막 값을 사용
+    all_choices = re.findall(r"\b([ABCD])\b", clean.upper())
+    if all_choices:
+        return all_choices[-1]
+
+    # 3) 기존 초반부 탐색 fallback
     m = re.search(r"\b([ABCD])\b", clean[:30])
     if m:
-        return m.group(1)
+        return m.group(1).upper()
     if clean and clean[0] in "ABCD":
         return clean[0]
     return ""
@@ -375,6 +491,28 @@ def is_correct(pred: str, gold: str, benchmark: str) -> bool:
         except ValueError:
             return False
     return pred.upper() == gold.upper()
+
+
+def run_generator_answer(
+    gen_model,
+    gen_tok,
+    chat_prompt: str,
+    device: str,
+    benchmark: str,
+    max_new_tokens: int,
+    mcq_eval_mode: str,
+):
+    if is_mcq_benchmark(benchmark) and mcq_eval_mode == "logit":
+        pred = predict_mcq_logit(gen_model, gen_tok, chat_prompt, device)
+        return f"[logit] {pred}", pred
+    response = run_inference(
+        gen_model,
+        gen_tok,
+        chat_prompt,
+        device,
+        max_new_tokens=max_new_tokens,
+    )
+    return response, extract_answer(response, benchmark)
 
 
 def print_sample_result(
@@ -470,26 +608,46 @@ def run_optimizer_pass(
     benchmark_name: str,
     prompts: Dict[str, str],
     optimizer_max_words: int,
+    optimizer_max_words_mcq: int,
+    keep_raw_for_mcq: bool,
+    gn_policy: str,
 ) -> list:
     optimized = []
     n = len(samples)
-    print(f"\n  [Pass 1 - {benchmark_name}]  Optimizer 추론 중 ({n}개)...")
+    print(
+        f"\n  [Pass 1 - {benchmark_name}]  Optimizer 추론 중 "
+        f"({n}개, max_new_tokens={max_new_tokens}, G_N={gn_policy})..."
+    )
     for i, s in enumerate(samples):
         if (i + 1) % 10 == 0 or i == 0:
             print(f"    최적화 중... {i + 1}/{n}")
+        effective_max_words = resolve_optimizer_max_words(
+            raw_prompt=s["raw_prompt"],
+            benchmark_name=benchmark_name,
+            optimizer_max_words=optimizer_max_words,
+            optimizer_max_words_mcq=optimizer_max_words_mcq,
+            gn_policy=gn_policy,
+        )
         inp = build_optimizer_input(
             opt_tok,
             s["raw_prompt"],
             prompts=prompts,
-            optimizer_max_words=optimizer_max_words,
+            optimizer_max_words=effective_max_words,
+        )
+        generated = run_inference(
+            opt_model,
+            opt_tok,
+            inp,
+            device,
+            max_new_tokens=max_new_tokens,
         )
         optimized.append(
-            run_inference(
-                opt_model,
-                opt_tok,
-                inp,
-                device,
-                max_new_tokens=max_new_tokens,
+            postprocess_optimized_prompt(
+                raw_prompt=s["raw_prompt"],
+                optimized_prompt=generated,
+                benchmark=benchmark_name,
+                max_words=effective_max_words,
+                keep_raw_for_mcq=keep_raw_for_mcq,
             )
         )
     print(f"    완료: {n}개")
@@ -505,23 +663,29 @@ def run_generator_pass(
     max_new_tokens: int,
     benchmark: str,
     no_baseline: bool,
+    mcq_eval_mode: str,
 ) -> list:
     results = []
     n = len(samples)
-    print(f"\n  [Pass 2 - {benchmark}]  Generator 추론 & 채점 중 ({n}개)...")
+    eval_desc = mcq_eval_mode if is_mcq_benchmark(benchmark) else "generation"
+    print(
+        f"\n  [Pass 2 - {benchmark}]  Generator 추론 & 채점 중 "
+        f"({n}개, mode={eval_desc}, max_new_tokens={max_new_tokens})..."
+    )
     for i, (s, opt_prompt) in enumerate(zip(samples, optimized_prompts)):
         if (i + 1) % 10 == 0 or i == 0:
             print(f"    생성 중... {i + 1}/{n}")
 
         fipo_inp = build_generator_input(gen_tok, opt_prompt, benchmark)
-        fipo_resp = run_inference(
+        fipo_resp, fipo_pred = run_generator_answer(
             gen_model,
             gen_tok,
             fipo_inp,
             device,
-            max_new_tokens=max_new_tokens,
+            benchmark,
+            max_new_tokens,
+            mcq_eval_mode,
         )
-        fipo_pred = extract_answer(fipo_resp, benchmark)
         fipo_ok = is_correct(fipo_pred, s["answer_text"], benchmark)
 
         base_resp = ""
@@ -529,14 +693,15 @@ def run_generator_pass(
         base_ok = False
         if not no_baseline:
             base_inp = build_generator_input(gen_tok, s["raw_prompt"], benchmark)
-            base_resp = run_inference(
+            base_resp, base_pred = run_generator_answer(
                 gen_model,
                 gen_tok,
                 base_inp,
                 device,
-                max_new_tokens=max_new_tokens,
+                benchmark,
+                max_new_tokens,
+                mcq_eval_mode,
             )
-            base_pred = extract_answer(base_resp, benchmark)
             base_ok = is_correct(base_pred, s["answer_text"], benchmark)
 
         print_sample_result(
@@ -573,10 +738,42 @@ def run_generator_pass(
 
 BENCHMARKS_ALL = ["gsm8k", "hellaswag", "mmlu"]
 
+# FIPO 공식 repo (scripts/test_inference.sh) 기본값
+FIPO_MAX_NEW_TOKENS_OPT = 4096
+FIPO_MAX_NEW_TOKENS_GEN_GSM8K = 4096
+FIPO_MAX_NEW_TOKENS_GEN_MCQ = 1  # multichoice E_TARLEN=1 + logit
+FIPO_MAX_NEW_TOKENS_GEN_MCQ_FREEFORM = 16
+
+
+def resolve_max_new_tokens_gen(
+    benchmark: str,
+    gsm8k: int,
+    mcq: int,
+    override: Optional[int] = None,
+    mcq_eval_mode: str = "logit",
+) -> int:
+    if override is not None:
+        return override
+    if benchmark == "gsm8k":
+        return gsm8k
+    if benchmark in ("hellaswag", "mmlu"):
+        if mcq_eval_mode == "logit":
+            return 1
+        return mcq
+    raise ValueError(f"지원하지 않는 benchmark: {benchmark}")
+
+
+def resolve_keep_raw_for_mcq(mcq_raw_guard: bool, no_mcq_raw_guard: bool) -> bool:
+    if no_mcq_raw_guard:
+        return False
+    return mcq_raw_guard
+
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Qwen SFT Optimizer 기반 FIPO 2-pass 벤치마크 평가"
+        description=(
+            "Llama DPO Optimizer + pretrained Qwen Generator FIPO 2-pass 벤치마크 평가"
+        )
     )
     parser.add_argument(
         "--benchmark",
@@ -589,19 +786,13 @@ def main():
         "--adapter_path",
         type=str,
         default=DEFAULT_ADAPTER_PATH,
-        help="SFT LoRA 어댑터 경로 (Qwen Prompt Optimizer)",
+        help="DPO LoRA 어댑터 경로 (Llama Prompt Optimizer)",
     )
     parser.add_argument(
         "--optimizer_base_model",
         type=str,
         default=DEFAULT_OPTIMIZER_BASE,
         help=f"Optimizer base model (기본값: {DEFAULT_OPTIMIZER_BASE})",
-    )
-    parser.add_argument(
-        "--generator_model",
-        type=str,
-        default=DEFAULT_GENERATOR,
-        help=f"Generator LLM 모델명 (기본값: {DEFAULT_GENERATOR})",
     )
     parser.add_argument(
         "--prompts_json",
@@ -613,13 +804,75 @@ def main():
         "--optimizer_max_words",
         type=int,
         default=256,
-        help="prompts.json의 G_N에 주입할 최대 단어 수 (기본값: 256)",
+        help="prompts.json의 G_N에 주입할 최대 단어 수 (기본값: 128)",
     )
-    parser.add_argument("--num_samples", type=int, default=100, help="벤치마크당 샘플 수")
+    parser.add_argument(
+        "--optimizer_max_words_mcq",
+        type=int,
+        default=512,
+        help="객관식 G_N 상한 (dynamic 정책에서 cap, fixed 정책에서 고정값)",
+    )
+    parser.add_argument(
+        "--mcq_raw_guard",
+        action="store_true",
+        help="MCQ에서 optimized prompt 대신 raw prompt 유지 (FIPO 논문 방식 아님)",
+    )
+    parser.add_argument(
+        "--no_mcq_raw_guard",
+        action="store_true",
+        help="(호환용) MCQ raw guard 비활성화. 기본값이 이미 비활성화",
+    )
+    parser.add_argument(
+        "--mcq_eval_mode",
+        type=str,
+        default="logit",
+        choices=["logit", "freeform"],
+        help="MCQ 채점 방식: logit(FIPO 공식) | freeform(자유 생성+파싱)",
+    )
+    parser.add_argument(
+        "--gn_policy",
+        type=str,
+        default="dynamic",
+        choices=["dynamic", "fixed"],
+        help="Optimizer G_N 정책: dynamic(FIPO, raw 길이 기반) | fixed",
+    )
+    parser.add_argument(
+        "--fipo_paper_eval",
+        action="store_true",
+        help="FIPO 논문/공식 repo 평가 설정 일괄 적용 (logit MCQ, dynamic G_N, raw guard off)",
+    )
+    parser.add_argument(
+        "--num_samples",
+        type=int,
+        default=100,
+        help="벤치마크당 샘플 수 (0 이하 = 해당 split 전체 사용)",
+    )
     parser.add_argument("--mmlu_subject", type=str, default="all", help="MMLU 과목")
     parser.add_argument("--no_baseline", action="store_true", help="Baseline 생략")
-    parser.add_argument("--max_new_tokens_opt", type=int, default=256, help="Optimizer 최대 생성 토큰")
-    parser.add_argument("--max_new_tokens_gen", type=int, default=256, help="Generator 최대 생성 토큰")
+    parser.add_argument(
+        "--max_new_tokens_opt",
+        type=int,
+        default=FIPO_MAX_NEW_TOKENS_OPT,
+        help="Optimizer 최대 생성 토큰 (FIPO 공식 N_LEN=4096)",
+    )
+    parser.add_argument(
+        "--max_new_tokens_gen",
+        type=int,
+        default=None,
+        help="모든 benchmark에 동일 Generator max_new_tokens 적용 (지정 시 아래 gsm8k/mcq 설정 무시)",
+    )
+    parser.add_argument(
+        "--max_new_tokens_gen_gsm8k",
+        type=int,
+        default=FIPO_MAX_NEW_TOKENS_GEN_GSM8K,
+        help="GSM8K Generator max_new_tokens (FIPO 공식 E_TARLEN=4096)",
+    )
+    parser.add_argument(
+        "--max_new_tokens_gen_mcq",
+        type=int,
+        default=FIPO_MAX_NEW_TOKENS_GEN_MCQ_FREEFORM,
+        help="MCQ freeform 모드 Generator max_new_tokens (logit 모드에서는 1 고정)",
+    )
     parser.add_argument("--log_dir", type=str, default=DEFAULT_LOG_DIR, help="로그 저장 디렉터리")
     parser.add_argument("--save_json", action="store_true", help="JSON 상세 결과 저장")
     parser.add_argument(
@@ -643,6 +896,17 @@ def main():
     )
     args = parser.parse_args()
 
+    if args.fipo_paper_eval:
+        args.mcq_eval_mode = "logit"
+        args.gn_policy = "dynamic"
+        args.mcq_raw_guard = False
+        args.no_mcq_raw_guard = True
+        args.max_new_tokens_opt = FIPO_MAX_NEW_TOKENS_OPT
+        args.max_new_tokens_gen_gsm8k = FIPO_MAX_NEW_TOKENS_GEN_GSM8K
+        args.max_new_tokens_gen_mcq = FIPO_MAX_NEW_TOKENS_GEN_MCQ
+
+    keep_raw_for_mcq = resolve_keep_raw_for_mcq(args.mcq_raw_guard, args.no_mcq_raw_guard)
+
     if args.hf_token:
         os.environ["HF_TOKEN"] = args.hf_token
         os.environ["HUGGING_FACE_HUB_TOKEN"] = args.hf_token
@@ -654,11 +918,12 @@ def main():
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     ckpt_tag = os.path.basename(args.adapter_path.rstrip("/"))
-    gen_tag = args.generator_model.replace("/", "-")
+    gen_tag = DEFAULT_GENERATOR.replace("/", "-")
     bench_tag = args.benchmark
     if args.benchmark == "mmlu":
         bench_tag += f"_{args.mmlu_subject}"
-    log_stem = f"{timestamp}_{bench_tag}_{ckpt_tag}_gen-{gen_tag}_n{args.num_samples}"
+    sample_tag = "all" if args.num_samples <= 0 else str(args.num_samples)
+    log_stem = f"{timestamp}_{bench_tag}_{ckpt_tag}_gen-{gen_tag}_n{sample_tag}"
     txt_path = os.path.join(args.log_dir, f"{log_stem}.txt")
     json_path = os.path.join(args.log_dir, f"{log_stem}.json")
 
@@ -667,16 +932,34 @@ def main():
     sys.stdout = tee
 
     print(SEP_DOUBLE)
-    print(f"  Qwen SFT Optimizer 벤치마크 평가  |  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"  Llama DPO Optimizer 벤치마크 평가  |  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(SEP_SINGLE)
     print(f"  benchmark        : {args.benchmark}  ->  {' -> '.join(benchmarks)}")
-    print(f"  adapter_path     : {args.adapter_path}")
+    print(f"  adapter_path     : {args.adapter_path}  (Llama DPO LoRA)")
     print(f"  optimizer_base   : {args.optimizer_base_model}")
-    print(f"  generator_model  : {args.generator_model}")
+    print(f"  generator_model  : {DEFAULT_GENERATOR}  (pretrained, adapter 없음)")
     print(f"  prompts_json     : {args.prompts_json}")
-    print(f"  optimizer G_N    : {args.optimizer_max_words}")
+    print(f"  optimizer G_N    : policy={args.gn_policy}, cap={args.optimizer_max_words} (mcq cap: {args.optimizer_max_words_mcq})")
+    print(f"  mcq eval mode    : {args.mcq_eval_mode}")
+    print(f"  mcq raw guard    : {'활성화' if keep_raw_for_mcq else '비활성화 (FIPO paper)'}")
+    print(f"  fipo_paper_eval  : {'ON' if args.fipo_paper_eval else 'OFF'}")
+    print(f"  max_new_tokens_opt : {args.max_new_tokens_opt}")
+    if args.max_new_tokens_gen is not None:
+        print(f"  max_new_tokens_gen : {args.max_new_tokens_gen} (all benchmarks)")
+    else:
+        mcq_tok = (
+            1 if args.mcq_eval_mode == "logit" else args.max_new_tokens_gen_mcq
+        )
+        print(
+            f"  max_new_tokens_gen : gsm8k={args.max_new_tokens_gen_gsm8k}, "
+            f"mcq={mcq_tok} ({args.mcq_eval_mode})"
+        )
+    print(
+        "  [설정] optimizer/generator 분리 "
+        f"(optimizer=Llama+adapter, generator={DEFAULT_GENERATOR})"
+    )
     print(f"  offline mode     : {args.offline}")
-    print(f"  num_samples      : {args.num_samples} (벤치마크당)")
+    print(f"  num_samples      : {format_num_samples_label(args.num_samples)} (벤치마크당)")
     print(f"  baseline 비교    : {'비활성화' if args.no_baseline else '활성화'}")
     print(f"  device           : {args.device}", end="")
     if torch.cuda.is_available():
@@ -722,6 +1005,9 @@ def main():
             bname,
             prompts=prompts,
             optimizer_max_words=args.optimizer_max_words,
+            optimizer_max_words_mcq=args.optimizer_max_words_mcq,
+            keep_raw_for_mcq=keep_raw_for_mcq,
+            gn_policy=args.gn_policy,
         )
     unload(opt_model)
     del opt_tok
@@ -732,21 +1018,29 @@ def main():
     print("  [Pass 2] Generator 로드 -> 전체 벤치마크 추론 & 채점")
     print(SEP_SINGLE)
     gen_tok, gen_model = load_generator(
-        args.generator_model,
+        DEFAULT_GENERATOR,
         args.device,
         local_files_only=local_files_only,
     )
     all_results = {}
     for bname in benchmarks:
+        gen_max_tokens = resolve_max_new_tokens_gen(
+            bname,
+            gsm8k=args.max_new_tokens_gen_gsm8k,
+            mcq=args.max_new_tokens_gen_mcq,
+            override=args.max_new_tokens_gen,
+            mcq_eval_mode=args.mcq_eval_mode,
+        )
         all_results[bname] = run_generator_pass(
             gen_tok,
             gen_model,
             all_samples[bname],
             all_optimized[bname],
             args.device,
-            args.max_new_tokens_gen,
+            gen_max_tokens,
             bname,
             args.no_baseline,
+            args.mcq_eval_mode,
         )
         print_summary(all_results[bname], bname, args.no_baseline)
     unload(gen_model)
@@ -768,3 +1062,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    

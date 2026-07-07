@@ -9450,5 +9450,3 @@
   gsm8k            100      0.2700      0.1900    -0.0800
   hellaswag        100      0.3200      0.2500    -0.0700
   mmlu             100      0.2000      0.1600    -0.0400
-
-텍스트 로그 저장: /scratch/x3397a11/minkyu/workspace/ETRI/promptopti/FIPO_Project/inference/20260421_141158_all_checkpoint-5625_gen-meta-llama-Llama-2-7b-chat-hf_n100.txt
