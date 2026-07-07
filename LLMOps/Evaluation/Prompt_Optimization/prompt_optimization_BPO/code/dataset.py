@@ -5,12 +5,12 @@ import torch.nn.functional as F
 from transformers import AutoTokenizer
 
 class BaseDataset(d.Dataset):
-    def __init__(self, data_path: str, model_id: str):
+    def __init__(self, data_path: str, model_id: str, tokenizer: AutoTokenizer):
         super().__init__()
         
         self.dataset = self._load_data(data_path)
 
-        self.tokenizer = AutoTokenizer.from_pretrained(model_id, padding_side="left")
+        self.tokenizer = tokenizer
         self.tokenizer.pad_token = self.tokenizer.eos_token
     
     def _load_data(self, data_path: str) -> list:
@@ -19,7 +19,8 @@ class BaseDataset(d.Dataset):
         with open(data_path, 'r', encoding='utf-8') as d:
             for line in d:
                 data = json.loads(line)
-                dataset.append({'id': data['id'], 'source': data['paragraph'][0]['q'], 'label': data['paragraph'][0]['a']})
+                dataset.append({'id': data['id'], 'source': data['paragraph'][0]['q'], 'label': data['paragraph'][0]['a']}) # BPO
+                #dataset.append({'id': data['id'], 'source': data['raw_prompt'], 'label': data['gpt4_optimized_prompt']}) # FIPO
 
         return dataset
 

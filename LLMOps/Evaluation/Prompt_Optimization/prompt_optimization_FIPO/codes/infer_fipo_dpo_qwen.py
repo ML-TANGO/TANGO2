@@ -1,0 +1,703 @@
+#!/usr/bin/env python
+"""
+FIPO-DPO Prompt Optimizer 벤치마크 평가 스크립트
+
+1. Optimizer pass
+    - input : raw prompt + prompts.json의 optimizer template
+    - output : optimized prompt (DPO로 훈련된 model이 생성)
+    
+2. Generator pass
+    - input : optimized prompt (baseline은 그냥 raw prompt)
+    - 별도의 build_generator_input의 평가용 system prompt 추가 (instruction의 역할을 수행)
+    - output : 최종 답변 text
+
+3. Evaluation
+    - GSM8K : 숫자 정답 추출
+    - HellaSwag/MMLU : A/B/C/D 추출
+"""
+
+import argparse
+import json
+import os
+import re
+import sys
+import textwrap
+from datetime import datetime
+from typing import Dict, List
+
+import torch
+from datasets import DownloadConfig, DownloadMode, load_dataset
+from huggingface_hub import snapshot_download
+from peft import PeftModel
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+
+DEFAULT_ADAPTER_PATH = (
+    "/scratch/x3397a11/minkyu/workspace/ETRI/prompt_optimization/model/dpo/checkpoint-10500"
+)
+DEFAULT_BASE_MODEL = "Qwen/Qwen3-8B"
+DEFAULT_GENERATOR = "Qwen/Qwen3-8B"
+DEFAULT_PROMPTS_JSON = (
+    "/scratch/x3397a11/minkyu/workspace/ETRI/prompt_optimization/"
+    "prompt_optimization_FIPO/data/prompts.json"
+)
+DEFAULT_LOG_DIR = (
+    "/scratch/x3397a11/minkyu/workspace/ETRI/prompt_optimization/"
+    "prompt_optimization_FIPO/inference"
+)
+BENCHMARKS_ALL = ["gsm8k", "hellaswag", "mmlu"]
+SEP_DOUBLE = "═" * 80
+SEP_SINGLE = "─" * 80
+
+
+class Tee:
+    def __init__(self, path: str):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        self._f = open(path, "w", encoding="utf-8")
+        self._stdout = sys.stdout
+
+    def write(self, msg: str):
+        self._stdout.write(msg)
+        self._f.write(msg)
+
+    def flush(self):
+        self._stdout.flush()
+        self._f.flush()
+
+    def close(self):
+        self._f.close()
+
+
+def read_prompts_json(path: str) -> Dict[str, str]:
+    with open(path, "r", encoding="utf-8") as f:
+        obj = json.load(f)
+    required = ["optimizer", "s_r", "g_r"]
+    missing = [k for k in required if k not in obj]
+    if missing:
+        raise ValueError(f"Missing keys in prompts.json: {missing}")
+    return obj
+
+
+def load_benchmark(
+    benchmark: str,
+    num_samples: int,
+    mmlu_subject: str = "all",
+    local_files_only: bool = False,
+) -> List[dict]:
+    print(f"[dataset] {benchmark} 로드 중 ({num_samples}개)")
+    load_kwargs = {}
+    if local_files_only:
+        # 오프라인 환경에서는 캐시 재사용만 허용
+        load_kwargs["download_config"] = DownloadConfig(local_files_only=True)
+        load_kwargs["download_mode"] = DownloadMode.REUSE_DATASET_IF_EXISTS
+    if benchmark == "gsm8k":
+        ds = load_dataset("openai/gsm8k", "main", split="test", **load_kwargs)
+    elif benchmark == "hellaswag":
+        ds = load_dataset("hellaswag", split="validation", **load_kwargs)
+    elif benchmark == "mmlu":
+        ds = load_dataset("cais/mmlu", mmlu_subject, split="test", **load_kwargs)
+    else:
+        raise ValueError(f"지원하지 않는 benchmark: {benchmark}")
+
+    if num_samples and num_samples < len(ds):
+        ds = ds.select(range(num_samples))
+    return [parse_sample(benchmark, row) for row in ds]
+
+
+def parse_sample(benchmark: str, row: dict) -> dict:
+    if benchmark == "gsm8k":
+        ans_text = row["answer"].split("####")[-1].strip().replace(",", "")
+        return {
+            "raw_prompt": row["question"],
+            "choices": None,
+            "answer_idx": None,
+            "answer_text": ans_text,
+        }
+
+    if benchmark == "hellaswag":
+        endings = row["endings"]
+        label = int(row["label"])
+        return {
+            "raw_prompt": (
+                f"Context: {row['ctx']}\n\n"
+                f"A. {endings[0]}\n"
+                f"B. {endings[1]}\n"
+                f"C. {endings[2]}\n"
+                f"D. {endings[3]}"
+            ),
+            "choices": endings,
+            "answer_idx": label,
+            "answer_text": "ABCD"[label],
+        }
+
+    if benchmark == "mmlu":
+        choices = row["choices"]
+        label = row["answer"]
+        choice_str = "\n".join(f"{chr(65+i)}. {c}" for i, c in enumerate(choices))
+        return {
+            "raw_prompt": f"Question: {row['question']}\n\n{choice_str}",
+            "choices": choices,
+            "answer_idx": label,
+            "answer_text": "ABCD"[label],
+        }
+
+    raise ValueError(f"지원하지 않는 benchmark: {benchmark}")
+
+
+def is_qwen(tokenizer) -> bool:
+    cls_name = type(tokenizer).__name__.lower()
+    model_id = getattr(tokenizer, "name_or_path", "").lower()
+    return "qwen" in cls_name or "qwen" in model_id
+
+
+def resolve_model_path(model_name_or_path: str, local_files_only: bool) -> str:
+    """오프라인 모드일 때 HF model id를 로컬 캐시 경로로 변환."""
+    if not local_files_only:
+        return model_name_or_path
+    if os.path.isdir(model_name_or_path):
+        return model_name_or_path
+    try:
+        return snapshot_download(repo_id=model_name_or_path, local_files_only=True)
+    except Exception as e:
+        raise RuntimeError(
+            f"오프라인 모드에서 모델 캐시가 없습니다: {model_name_or_path}\n"
+            "먼저 온라인 환경에서 모델을 다운로드하거나 로컬 경로를 지정하세요."
+        ) from e
+
+
+def load_optimizer(adapter_path: str, base_model: str, device: str, local_files_only: bool = False):
+    print(f"\n[Optimizer 로드] adapter={adapter_path}, base={base_model}")
+    tok = AutoTokenizer.from_pretrained(adapter_path, use_fast=True)
+    if tok.pad_token is None:
+        tok.pad_token = tok.eos_token
+    tok.padding_side = "left"
+
+    base_model_path = resolve_model_path(base_model, local_files_only=local_files_only)
+    try:
+        base = AutoModelForCausalLM.from_pretrained(
+            base_model_path,
+            torch_dtype=torch.bfloat16,
+            device_map=device,
+            local_files_only=local_files_only,
+        )
+    except Exception as e:
+        if local_files_only:
+            raise
+        print(f"[warning] base_model 온라인 로드 실패 → 캐시 fallback: {e}")
+        base_model_path = resolve_model_path(base_model, local_files_only=True)
+        base = AutoModelForCausalLM.from_pretrained(
+            base_model_path,
+            torch_dtype=torch.bfloat16,
+            device_map=device,
+            local_files_only=True,
+        )
+    base.config.use_cache = True
+    model = PeftModel.from_pretrained(base, adapter_path)
+    model.eval()
+    return tok, model
+
+
+def load_generator(model_name: str, device: str, local_files_only: bool = False):
+    print(f"\n[Generator 로드] {model_name}")
+    model_path = resolve_model_path(model_name, local_files_only=local_files_only)
+    try:
+        tok = AutoTokenizer.from_pretrained(
+            model_path,
+            use_fast=True,
+            local_files_only=local_files_only,
+        )
+    except Exception as e:
+        if local_files_only:
+            raise
+        print(f"[경고] generator tokenizer 온라인 로드 실패 → 캐시 fallback: {e}")
+        model_path = resolve_model_path(model_name, local_files_only=True)
+        tok = AutoTokenizer.from_pretrained(
+            model_path,
+            use_fast=True,
+            local_files_only=True,
+        )
+    if tok.pad_token is None:
+        tok.pad_token = tok.eos_token
+    tok.padding_side = "left"
+
+    try:
+        model = AutoModelForCausalLM.from_pretrained(
+            model_path,
+            torch_dtype=torch.bfloat16,
+            device_map=device,
+            local_files_only=local_files_only,
+        )
+    except Exception as e:
+        if local_files_only:
+            raise
+        print(f"[경고] generator model 온라인 로드 실패 → 캐시 fallback: {e}")
+        model_path = resolve_model_path(model_name, local_files_only=True)
+        model = AutoModelForCausalLM.from_pretrained(
+            model_path,
+            torch_dtype=torch.bfloat16,
+            device_map=device,
+            local_files_only=True,
+        )
+    model.config.use_cache = True
+    model.eval()
+    print(f"  tokenizer type : {type(tok).__name__}")
+    print(f"  eos_token      : {repr(tok.eos_token)} (id={tok.eos_token_id})")
+    print(f"  pad_token      : {repr(tok.pad_token)} (id={tok.pad_token_id})")
+    return tok, model
+
+
+def unload(model):
+    del model
+    torch.cuda.empty_cache()
+    print("[GPU 캐시 해제 완료]")
+
+
+@torch.inference_mode()
+def run_inference(
+    model,
+    tokenizer,
+    prompt: str,
+    device: str,
+    max_new_tokens: int = 512,
+) -> str:
+    inputs = tokenizer(
+        prompt,
+        return_tensors="pt",
+        add_special_tokens=False,
+    ).to(device)
+    input_len = inputs["input_ids"].shape[1]
+    outputs = model.generate(
+        **inputs,
+        max_new_tokens=max_new_tokens,
+        do_sample=False,
+        pad_token_id=tokenizer.pad_token_id,
+        eos_token_id=tokenizer.eos_token_id,
+    )
+    return tokenizer.decode(outputs[0][input_len:], skip_special_tokens=True).strip()
+
+
+def build_fipo_optimizer_text(
+    raw_prompt: str,
+    prompts: Dict[str, str],
+    max_words: int = 256,
+) -> str:
+    text = prompts["optimizer"]
+    text = text.replace("S_P", raw_prompt)
+    text = text.replace("O_C", "")
+    text = text.replace("G_N", str(max_words))
+    return text
+
+
+def build_optimizer_input(
+    tokenizer,
+    raw_prompt: str,
+    prompts: Dict[str, str],
+    optimizer_max_words: int,
+) -> str:
+    optimizer_text = build_fipo_optimizer_text(
+        raw_prompt=raw_prompt,
+        prompts=prompts,
+        max_words=optimizer_max_words,
+    )
+    messages = [{"role": "user", "content": optimizer_text}]
+    kwargs = dict(tokenize=False, add_generation_prompt=True)
+    if is_qwen(tokenizer):
+        kwargs["enable_thinking"] = False
+    return tokenizer.apply_chat_template(messages, **kwargs)
+
+
+# 이 prompt는 평가용으로 작성한 공통 instruction으로 모델 성능 비교에서 변수를 줄이기 위해 
+# 평가용으로 작성한 공통 instruction
+def build_generator_input(tokenizer, prompt: str, benchmark: str) -> str:
+    if benchmark == "gsm8k":
+        system = (
+            "You are a math solver. Read the problem carefully and solve it step by step. "
+            "At the end, write the final numerical answer after '####'."
+        )
+    else:
+        system = (
+            "You are a question answering assistant. Read the question and choose the single "
+            "best answer. Respond with only the letter: A, B, C, or D."
+        )
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": prompt},
+    ]
+    kwargs = dict(tokenize=False, add_generation_prompt=True)
+    if is_qwen(tokenizer):
+        kwargs["enable_thinking"] = False
+    return tokenizer.apply_chat_template(messages, **kwargs)
+
+
+def extract_answer(response: str, benchmark: str) -> str:
+    if benchmark == "gsm8k":
+        m = re.search(r"####\s*([\d,]+)", response)
+        if m:
+            return m.group(1).replace(",", "")
+        nums = re.findall(r"\b\d+(?:,\d{3})*(?:\.\d+)?\b", response)
+        return nums[-1].replace(",", "") if nums else ""
+    clean = response.strip()
+    m = re.search(r"\b([ABCD])\b", clean[:30])
+    if m:
+        return m.group(1)
+    if clean and clean[0] in "ABCD":
+        return clean[0]
+    return ""
+
+
+def is_correct(pred: str, gold: str, benchmark: str) -> bool:
+    if not pred:
+        return False
+    if benchmark == "gsm8k":
+        try:
+            return float(pred.replace(",", "")) == float(gold.replace(",", ""))
+        except ValueError:
+            return False
+    return pred.upper() == gold.upper()
+
+
+def print_sample_result(
+    i: int,
+    total: int,
+    raw_prompt: str,
+    opt_prompt: str,
+    gold: str,
+    base_resp: str,
+    base_pred: str,
+    base_ok: bool,
+    fipo_resp: str,
+    fipo_pred: str,
+    fipo_ok: bool,
+    no_baseline: bool,
+):
+    print(SEP_DOUBLE)
+    print(f"[샘플 {i+1}/{total}]  정답: {gold}")
+    print(SEP_SINGLE)
+
+    print("【Raw Prompt】")
+    print(textwrap.fill(raw_prompt, 76, initial_indent="  ", subsequent_indent="  "))
+    print()
+
+    print("【Optimized Prompt (DPO-FIPO)】")
+    print(textwrap.fill(opt_prompt, 76, initial_indent="  ", subsequent_indent="  "))
+    print()
+
+    if not no_baseline:
+        ok_str = "✓ 정답" if base_ok else "✗ 오답"
+        print(f"【Generator 응답 — Baseline】  예측: {base_pred or '(없음)'}  {ok_str}")
+        print(textwrap.fill(base_resp[:300], 76, initial_indent="  ", subsequent_indent="  "))
+        print()
+
+    ok_str = "✓ 정답" if fipo_ok else "✗ 오답"
+    print(f"【Generator 응답 — DPO-FIPO】  예측: {fipo_pred or '(없음)'}  {ok_str}")
+    print(textwrap.fill(fipo_resp[:300], 76, initial_indent="  ", subsequent_indent="  "))
+    print()
+
+
+def print_summary(results: List[dict], benchmark: str, no_baseline: bool):
+    n = len(results)
+    fipo_correct = sum(r["fipo_correct"] for r in results)
+    fipo_acc = fipo_correct / n if n else 0
+
+    print(SEP_DOUBLE)
+    print(f"  ■ 최종 평가 결과  |  {benchmark.upper()}  |  n={n}")
+    print(SEP_SINGLE)
+
+    if not no_baseline:
+        base_correct = sum(r["base_correct"] for r in results)
+        base_acc = base_correct / n if n else 0
+        delta = fipo_acc - base_acc
+        print(f"  {'모델':<30} {'정답':>6}  {'정확도':>8}")
+        print(f"  {'─'*48}")
+        print(f"  {'Baseline (raw → generator)':<30} {base_correct:>6}  {base_acc:>8.4f}")
+        print(f"  {'DPO-FIPO (optimizer → generator)':<30} {fipo_correct:>6}  {fipo_acc:>8.4f}")
+        sign = "+" if delta >= 0 else ""
+        print(f"  {'개선폭 (DPO-FIPO - Baseline)':<30} {'':>6}  {sign}{delta:>7.4f}")
+    else:
+        print(f"  {'DPO-FIPO (optimizer → generator)':<30} {fipo_correct:>6} / {n}  {fipo_acc:.4f}")
+    print()
+
+
+def print_all_summary(all_results: dict, no_baseline: bool):
+    print()
+    print(SEP_DOUBLE)
+    print("  ■ 전체 벤치마크 통합 요약")
+    print(SEP_SINGLE)
+
+    if no_baseline:
+        print(f"  {'벤치마크':<14} {'n':>5}  {'DPO-FIPO 정확도':>15}")
+        print(f"  {'─'*39}")
+        for bname, results in all_results.items():
+            n = len(results)
+            facc = sum(r["fipo_correct"] for r in results) / n if n else 0
+            print(f"  {bname:<14} {n:>5}  {facc:>15.4f}")
+    else:
+        print(f"  {'벤치마크':<14} {'n':>5}  {'Baseline':>10}  {'DPO-FIPO':>10}  {'개선폭':>10}")
+        print(f"  {'─'*60}")
+        for bname, results in all_results.items():
+            n = len(results)
+            bacc = sum(r["base_correct"] for r in results) / n if n else 0
+            facc = sum(r["fipo_correct"] for r in results) / n if n else 0
+            delta = facc - bacc
+            sign = "+" if delta >= 0 else ""
+            print(f"  {bname:<14} {n:>5}  {bacc:>10.4f}  {facc:>10.4f}  {sign}{delta:>9.4f}")
+    print()
+
+
+def run_optimizer_pass(
+    opt_tok,
+    opt_model,
+    samples: list,
+    prompts: Dict[str, str],
+    optimizer_max_words: int,
+    device: str,
+    max_new_tokens: int,
+    benchmark_name: str,
+) -> list:
+    optimized = []
+    n = len(samples)
+    print(f"\n  [Pass 1 – {benchmark_name}]  Optimizer 추론 중 ({n}개)...")
+    for i, s in enumerate(samples):
+        if (i + 1) % 10 == 0 or i == 0:
+            print(f"    최적화 중... {i+1}/{n}")
+        inp = build_optimizer_input(
+            opt_tok,
+            s["raw_prompt"],
+            prompts=prompts,
+            optimizer_max_words=optimizer_max_words,
+        )
+        optimized.append(
+            run_inference(
+                opt_model,
+                opt_tok,
+                inp,
+                device,
+                max_new_tokens=max_new_tokens,
+            )
+        )
+    print(f"    완료: {n}개")
+    return optimized
+
+
+def run_generator_pass(
+    gen_tok,
+    gen_model,
+    samples: list,
+    optimized_prompts: list,
+    device: str,
+    max_new_tokens: int,
+    benchmark: str,
+    no_baseline: bool,
+) -> list:
+    results = []
+    n = len(samples)
+    print(f"\n  [Pass 2 – {benchmark}]  Generator 추론 & 채점 중 ({n}개)...")
+    for i, (s, opt_prompt) in enumerate(zip(samples, optimized_prompts)):
+        if (i + 1) % 10 == 0 or i == 0:
+            print(f"    생성 중... {i+1}/{n}")
+
+        fipo_inp = build_generator_input(gen_tok, opt_prompt, benchmark)
+        fipo_resp = run_inference(gen_model, gen_tok, fipo_inp, device, max_new_tokens=max_new_tokens)
+        fipo_pred = extract_answer(fipo_resp, benchmark)
+        fipo_ok = is_correct(fipo_pred, s["answer_text"], benchmark)
+
+        base_resp = base_pred = ""
+        base_ok = False
+        if not no_baseline:
+            base_inp = build_generator_input(gen_tok, s["raw_prompt"], benchmark)
+            base_resp = run_inference(gen_model, gen_tok, base_inp, device, max_new_tokens=max_new_tokens)
+            base_pred = extract_answer(base_resp, benchmark)
+            base_ok = is_correct(base_pred, s["answer_text"], benchmark)
+
+        print_sample_result(
+            i,
+            n,
+            s["raw_prompt"],
+            opt_prompt,
+            s["answer_text"],
+            base_resp,
+            base_pred,
+            base_ok,
+            fipo_resp,
+            fipo_pred,
+            fipo_ok,
+            no_baseline,
+        )
+
+        results.append(
+            {
+                "idx": i,
+                "raw_prompt": s["raw_prompt"],
+                "optimized": opt_prompt,
+                "gold": s["answer_text"],
+                "fipo_response": fipo_resp,
+                "fipo_pred": fipo_pred,
+                "fipo_correct": fipo_ok,
+                "base_response": base_resp,
+                "base_pred": base_pred,
+                "base_correct": base_ok,
+            }
+        )
+    return results
+
+
+def main():
+    parser = argparse.ArgumentParser(description="DPO Optimizer 기반 FIPO 벤치마크 평가")
+    parser.add_argument(
+        "--benchmark",
+        type=str,
+        default="all",
+        choices=["gsm8k", "hellaswag", "mmlu", "all"],
+    )
+    parser.add_argument("--adapter_path", type=str, default=DEFAULT_ADAPTER_PATH)
+    parser.add_argument("--base_model", type=str, default=DEFAULT_BASE_MODEL)
+    parser.add_argument("--generator_model", type=str, default=DEFAULT_GENERATOR)
+    parser.add_argument("--num_samples", type=int, default=200)
+    parser.add_argument("--mmlu_subject", type=str, default="all")
+    parser.add_argument("--no_baseline", action="store_true")
+    parser.add_argument("--max_new_tokens_opt", type=int, default=512)
+    parser.add_argument("--max_new_tokens_gen", type=int, default=512)
+    parser.add_argument("--prompts_json", type=str, default=DEFAULT_PROMPTS_JSON)
+    parser.add_argument("--optimizer_max_words", type=int, default=512)
+    parser.add_argument("--log_dir", type=str, default=DEFAULT_LOG_DIR)
+    parser.add_argument("--save_json", action="store_true")
+    parser.add_argument(
+        "--offline",
+        type=int,
+        choices=[0, 1],
+        default=0,
+        help="0: HF에서 온라인 로드, 1: 로컬 캐시만 사용",
+    )
+    parser.add_argument(
+        "--hf_token",
+        type=str,
+        default=os.environ.get("HF_TOKEN", None),
+    )
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cuda" if torch.cuda.is_available() else "cpu",
+    )
+    args = parser.parse_args()
+
+    if args.hf_token:
+        os.environ["HF_TOKEN"] = args.hf_token
+        os.environ["HUGGING_FACE_HUB_TOKEN"] = args.hf_token
+    use_offline = (args.offline == 1)
+
+    if use_offline:
+        os.environ["HF_HUB_OFFLINE"] = "1"
+        os.environ["TRANSFORMERS_OFFLINE"] = "1"
+        os.environ["DATASETS_OFFLINE"] = "1"
+
+    prompts = read_prompts_json(args.prompts_json)
+    benchmarks = BENCHMARKS_ALL if args.benchmark == "all" else [args.benchmark]
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    ckpt_tag = os.path.basename(args.adapter_path.rstrip("/"))
+    gen_tag = args.generator_model.replace("/", "-")
+    log_stem = f"{timestamp}_{args.benchmark}_{ckpt_tag}_gen-{gen_tag}_n{args.num_samples}"
+    txt_path = os.path.join(args.log_dir, f"{log_stem}.txt")
+    json_path = os.path.join(args.log_dir, f"{log_stem}.json")
+
+    os.makedirs(args.log_dir, exist_ok=True)
+    tee = Tee(txt_path)
+    sys.stdout = tee
+
+    print(SEP_DOUBLE)
+    print(f"  DPO-FIPO 파이프라인 벤치마크 평가  |  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(SEP_SINGLE)
+    print(f"  benchmark      : {args.benchmark}  →  실행 순서: {' → '.join(benchmarks)}")
+    print(f"  optimizer      : {args.adapter_path}")
+    print(f"  optimizer base : {args.base_model}")
+    print(f"  generator      : {args.generator_model}")
+    print(f"  num_samples    : {args.num_samples}  (벤치마크당)")
+    print(f"  baseline 비교  : {'비활성화' if args.no_baseline else '활성화'}")
+    print(f"  offline mode   : {args.offline}")
+    print(f"  prompts_json   : {args.prompts_json}")
+    print(f"  device         : {args.device}", end="")
+    if torch.cuda.is_available():
+        print(
+            f"  ({torch.cuda.get_device_name(0)}, "
+            f"{torch.cuda.get_device_properties(0).total_memory/1e9:.0f}GB)",
+            end="",
+        )
+    print()
+    print(f"  log (txt)      : {txt_path}")
+    print(SEP_DOUBLE)
+
+    all_samples = {}
+    for bname in benchmarks:
+        subj = args.mmlu_subject if bname == "mmlu" else "all"
+        all_samples[bname] = load_benchmark(
+            bname,
+            args.num_samples,
+            subj,
+            local_files_only=use_offline,
+        )
+        print(f"  {bname:<12} → {len(all_samples[bname])}개 샘플 준비")
+    print()
+
+    all_optimized = {}
+    all_results = {}
+
+    print(SEP_SINGLE)
+    print("  [Pass 1]  Prompt Optimizer 로드 → 전체 벤치마크 최적화")
+    print(SEP_SINGLE)
+    opt_tok, opt_model = load_optimizer(
+        args.adapter_path,
+        args.base_model,
+        args.device,
+        local_files_only=use_offline,
+    )
+    for bname in benchmarks:
+        all_optimized[bname] = run_optimizer_pass(
+            opt_tok,
+            opt_model,
+            all_samples[bname],
+            prompts,
+            args.optimizer_max_words,
+            args.device,
+            args.max_new_tokens_opt,
+            bname,
+        )
+    unload(opt_model)
+
+    print()
+    print(SEP_SINGLE)
+    print("  [Pass 2]  Generator 로드 → 전체 벤치마크 추론 & 채점")
+    print(SEP_SINGLE)
+    gen_tok, gen_model = load_generator(
+        args.generator_model,
+        args.device,
+        local_files_only=use_offline,
+    )
+    for bname in benchmarks:
+        all_results[bname] = run_generator_pass(
+            gen_tok,
+            gen_model,
+            all_samples[bname],
+            all_optimized[bname],
+            args.device,
+            args.max_new_tokens_gen,
+            bname,
+            args.no_baseline,
+        )
+        print_summary(all_results[bname], bname, args.no_baseline)
+    unload(gen_model)
+    del gen_tok
+
+    if len(benchmarks) > 1:
+        print_all_summary(all_results, args.no_baseline)
+
+    if args.save_json:
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(all_results, f, ensure_ascii=False, indent=2)
+        print(f"\nJSON 저장: {json_path}")
+
+    print(f"\n텍스트 로그 저장: {txt_path}")
+    tee.close()
+
+
+if __name__ == "__main__":
+    main()

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-FIPO 파이프라인 벤치마크 평가 스크립트
+BPO 파이프라인 벤치마크 평가 스크립트
 
 별도 학습 없이 순수 추론(inference)만으로 평가합니다.
 
@@ -27,7 +27,7 @@ FIPO 파이프라인 벤치마크 평가 스크립트
 
 비교:
   Baseline : raw prompt → Generator (optimizer 없이)
-  FIPO     : raw prompt → Optimizer → Generator
+  BPO     : raw prompt → Optimizer → Generator
 
 사용 예시:
   # 3개 벤치마크 모두 순차 실행 (권장)
@@ -62,11 +62,15 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 # 기본 경로
 # ──────────────────────────────────────────────────────────────
 DEFAULT_ADAPTER_PATH = (
-    "/scratch/x3397a10/workspace/kir/ETRI/prompt_opt_baseline_BPO/models/BPO_04161459_seed100_SFT_Qwen3_8B_lora_epoch3"
+    "/scratch/x3397a10/workspace/kir/ETRI/prompt_opt_baseline_BPO/models/BPO_2ndStage_06281839_seed100_SFT_llama3.1_8B_lora_epoch3"
 )
-DEFAULT_GENERATOR    = "meta-llama/Llama-2-7b-chat-hf"
+#DEFAULT_GENERATOR    = "Qwen/Qwen3-8B"
+#OPTIMIZER_BASE_MODEL = "Qwen/Qwen3-8B"
+DEFAULT_GENERATOR    = "meta-llama/Llama-3.1-8B-Instruct"
+OPTIMIZER_BASE_MODEL = "meta-llama/Llama-3.1-8B-Instruct"
+
 DEFAULT_LOG_DIR      = (
-    "workspace/kir/ETRI/prompt_opt_baseline_BPO/results"
+    "/scratch/x3397a10/workspace/kir/ETRI/prompt_opt_baseline_BPO/results"
 )
 
 SEP_DOUBLE = "═" * 80
@@ -178,13 +182,13 @@ def parse_sample(benchmark: str, row: dict) -> dict:
 
 def load_optimizer(adapter_path: str, device: str):
     print(f"\n[Optimizer 로드] {adapter_path}")
-    tok = AutoTokenizer.from_pretrained(adapter_path, use_fast=True)
+    tok = AutoTokenizer.from_pretrained(OPTIMIZER_BASE_MODEL, use_fast=True)
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
     tok.padding_side = "left"
 
     base = AutoModelForCausalLM.from_pretrained(
-        "Qwen/Qwen3-8B", torch_dtype=torch.bfloat16, device_map=device
+        OPTIMIZER_BASE_MODEL, torch_dtype=torch.bfloat16, device_map=device
     )
     base.config.use_cache = True
     model = PeftModel.from_pretrained(base, adapter_path)
@@ -341,7 +345,7 @@ def print_sample_result(i: int, total: int, raw_prompt: str,
     print(textwrap.fill(raw_prompt, 76, initial_indent="  ", subsequent_indent="  "))
     print()
 
-    print("【Optimized Prompt (FIPO)】")
+    print("【Optimized Prompt (BPO)】")
     print(textwrap.fill(opt_prompt, 76, initial_indent="  ", subsequent_indent="  "))
     print()
 
@@ -352,7 +356,7 @@ def print_sample_result(i: int, total: int, raw_prompt: str,
         print()
 
     ok_str = "✓ 정답" if fipo_ok else "✗ 오답"
-    print(f"【Generator 응답 — FIPO】  예측: {fipo_pred or '(없음)'}  {ok_str}")
+    print(f"【Generator 응답 — BPO】  예측: {fipo_pred or '(없음)'}  {ok_str}")
     print(textwrap.fill(fipo_resp[:300], 76, initial_indent="  ", subsequent_indent="  "))
     print()
 
@@ -373,11 +377,11 @@ def print_summary(results: list, benchmark: str, no_baseline: bool):
         print(f"  {'모델':<30} {'정답':>6}  {'정확도':>8}")
         print(f"  {'─'*48}")
         print(f"  {'Baseline (raw → generator)':<30} {base_correct:>6}  {base_acc:>8.4f}")
-        print(f"  {'FIPO (optimizer → generator)':<30} {fipo_correct:>6}  {fipo_acc:>8.4f}")
+        print(f"  {'BPO (optimizer → generator)':<30} {fipo_correct:>6}  {fipo_acc:>8.4f}")
         sign = "+" if delta >= 0 else ""
-        print(f"  {'개선폭 (FIPO - Baseline)':<30} {'':>6}  {sign}{delta:>7.4f}")
+        print(f"  {'개선폭 (BPO - Baseline)':<30} {'':>6}  {sign}{delta:>7.4f}")
     else:
-        print(f"  {'FIPO (optimizer → generator)':<30} {fipo_correct:>6} / {n}  {fipo_acc:.4f}")
+        print(f"  {'BPO (optimizer → generator)':<30} {fipo_correct:>6} / {n}  {fipo_acc:.4f}")
     print()
 
 
@@ -458,14 +462,14 @@ def print_all_summary(all_results: dict, no_baseline: bool):
     print(SEP_SINGLE)
 
     if no_baseline:
-        print(f"  {'벤치마크':<14} {'n':>5}  {'FIPO 정확도':>12}")
+        print(f"  {'벤치마크':<14} {'n':>5}  {'BPO 정확도':>12}")
         print(f"  {'─'*36}")
         for bname, results in all_results.items():
             n    = len(results)
             facc = sum(r["fipo_correct"] for r in results) / n if n else 0
             print(f"  {bname:<14} {n:>5}  {facc:>12.4f}")
     else:
-        print(f"  {'벤치마크':<14} {'n':>5}  {'Baseline':>10}  {'FIPO':>10}  {'개선폭':>10}")
+        print(f"  {'벤치마크':<14} {'n':>5}  {'Baseline':>10}  {'BPO':>10}  {'개선폭':>10}")
         print(f"  {'─'*56}")
         for bname, results in all_results.items():
             n    = len(results)
@@ -486,7 +490,7 @@ BENCHMARKS_ALL = ["gsm8k", "hellaswag", "mmlu"]
 
 def main():
     parser = argparse.ArgumentParser(
-        description="FIPO 파이프라인 벤치마크 평가 (학습 없이 inference만)"
+        description="BPO 파이프라인 벤치마크 평가 (학습 없이 inference만)"
     )
     parser.add_argument(
         "--benchmark", type=str, default="all",
@@ -575,7 +579,7 @@ def main():
 
     # ── 실행 헤더 ─────────────────────────────────────────────
     print(SEP_DOUBLE)
-    print(f"  FIPO 파이프라인 벤치마크 평가  |  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"  BPO 파이프라인 벤치마크 평가  |  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(SEP_SINGLE)
     print(f"  benchmark      : {args.benchmark}  →  실행 순서: {' → '.join(benchmarks)}")
     print(f"  optimizer      : {args.adapter_path}")
