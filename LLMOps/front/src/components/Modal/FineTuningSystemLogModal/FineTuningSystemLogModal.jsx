@@ -6,7 +6,6 @@ import { useDispatch } from 'react-redux';
 
 // Actions
 import { closeModal } from '@src/store/modules/modal';
-import useIntervalCall from '@src/hooks/useIntervalCall';
 
 // Network
 import { callApi, network, STATUS_SUCCESS } from '@src/network';
@@ -18,6 +17,7 @@ import classNames from 'classnames/bind';
 import style from './FineTuningSystemLogModal.module.scss';
 
 const cx = classNames.bind(style);
+const SYSTEM_LOG_REQUEST_TIMEOUT_MS = 12000;
 
 const FineTuningSystemLogModal = ({ data, type }) => {
   // External-mode callers pass `{ jobId, manifestName, mode: 'external' }`;
@@ -33,8 +33,7 @@ const FineTuningSystemLogModal = ({ data, type }) => {
   const isPendingRef = useRef(false);
   const [log, setLog] = useState('');
   const [loading, setLoading] = useState(true);
-  const [footerMessage, setFooterMessage] = useState('');
-  const [isPending, setIsPending] = useState(false);
+  const footerMessage = '';
 
   const { t } = useTranslation();
 
@@ -66,30 +65,77 @@ const FineTuningSystemLogModal = ({ data, type }) => {
   const getSystemLog = useCallback(async () => {
     if (isPendingRef.current) return;
     isPendingRef.current = true;
-    setIsPending(true);
     if (isFirstFetch.current) {
       setLoading(true);
+    }
+    if (!targetId) {
+      setLog('');
+      if (isFirstFetch.current) {
+        setLoading(false);
+        isFirstFetch.current = false;
+      }
+      isPendingRef.current = false;
+      return;
     }
     const url = isExternal
       ? `external/jobs/${targetId}/system-log`
       : `models/fine-tuning/system-log?model_id=${targetId}`;
-    const response = await callApi({
-      url,
-      method: 'get',
-    });
+    const controller = new AbortController();
+    let didTimeout = false;
+    const timeoutId = setTimeout(() => {
+      didTimeout = true;
+      controller.abort();
+    }, SYSTEM_LOG_REQUEST_TIMEOUT_MS);
 
-    const { status, result, message, error } = response;
+    try {
+      const response = await callApi({
+        url,
+        method: 'get',
+        signal: controller.signal,
+      });
 
-    if (status === STATUS_SUCCESS) {
-      setLog(result);
-    } else {
-      errorToastMessage(error, message);
+      const { status, result, message, error } = response;
+
+      if (status === STATUS_SUCCESS) {
+        // 동시 폴링 부하로 간헐적으로 placeholder(train.log 미발견)가 올 수 있다.
+        // 실제 로그(BFF 헤더에 'showing last')이거나 아직 표시할 로그가 없을 때만
+        // 갱신 — placeholder/빈값으로 이미 표시 중인 실제 로그를 덮어쓰지 않는다
+        // (flicker 방지).
+        setLog((prev) => {
+          if (!result) return prev;
+          if (!isExternal) return result;
+          const prevIsTimeout =
+            typeof prev === 'string' &&
+            prev.startsWith('[platform] system-log request timed out');
+          if (
+            result.includes('showing last') ||
+            !prev ||
+            prev.length === 0 ||
+            prevIsTimeout
+          ) {
+            return result;
+          }
+          return prev;
+        });
+      } else if (didTimeout) {
+        setLog((prev) =>
+          prev && prev.length > 0
+            ? prev
+            : `[platform] system-log request timed out after ${
+                SYSTEM_LOG_REQUEST_TIMEOUT_MS / 1000
+              }s.\nThe backend is still reachable only after the log endpoint responds.`,
+        );
+      } else {
+        errorToastMessage(error, message);
+      }
+    } finally {
+      clearTimeout(timeoutId);
+      if (isFirstFetch.current) {
+        setLoading(false);
+        isFirstFetch.current = false;
+      }
+      isPendingRef.current = false;
     }
-    if (isFirstFetch.current) {
-      setLoading(false);
-      isFirstFetch.current = false;
-    }
-    isPendingRef.current = false;
   }, [targetId, isExternal]);
 
   useEffect(() => {
@@ -99,7 +145,7 @@ const FineTuningSystemLogModal = ({ data, type }) => {
       if (!isPendingRef.current) {
         getSystemLog();
       }
-    }, 1000);
+    }, 3000);
 
     return () => clearInterval(intervalId);
   }, [getSystemLog]);
@@ -127,9 +173,7 @@ const FineTuningSystemLogModal = ({ data, type }) => {
             size='l'
             colorType='skyblue'
             label={t('logDownload.label')}
-            disabled={
-              isExternal || loading || !log || log.length === 0
-            }
+            disabled={isExternal || loading || !log || log.length === 0}
             onClick={onClickDownload}
           />
         </div>

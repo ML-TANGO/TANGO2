@@ -126,7 +126,7 @@ function FineTuningGraph({
     );
   }, [finetuningStatus, data]);
 
-  const { message, color } = isCalMessage(
+  const { message } = isCalMessage(
     commitStatus,
     finetuningStatus,
     datasetList,
@@ -135,16 +135,6 @@ function FineTuningGraph({
   );
 
   const isObjectNull = isCalObjectNull(data);
-
-  const statusMessage = () => {
-    // const { status: graphStatus } = status || {};
-    // if (isErrorState) return;
-    // if (graphStatus === 'stop') {
-    //   return t('fineTuningStop.message');
-    // }
-
-    return t('fineTuningNoGraph.message');
-  };
 
   const renderStatusContent = () => {
     const { status: graphStatus } = finetuningStatus || {};
@@ -181,14 +171,17 @@ function FineTuningGraph({
       );
     }
     if (graphStatus === 'stop') {
-      return <div className={cx('no-data')}>{t('fineTuningStop.message')}</div>;
+      return (
+        <div className={cx('no-data')}>
+          {t(message || 'fineTuningStop.message')}
+        </div>
+      );
     }
     return (
-      <div className={cx('no-data')}>{t('fineTuningNoGraph.message')}</div>
+      <div className={cx('no-data')}>
+        {t(message || 'fineTuningNoGraph.message')}
+      </div>
     );
-
-    // 기본 또는 알 수 없는 상태 처리
-    // return null;
   };
 
   const isGraphDataReady = canRenderGraphData(
@@ -230,19 +223,9 @@ function FineTuningGraph({
           )}
         </div>
       )}
-      {!data && ( // 초기에 데이터 없는 경우
-        <div className={cx('loading')}>
-          <Loading />
-        </div>
-      )}
+      {!isGraphDataReady && renderStatusContent()}
 
-      {(!finetuningStatus.status || isObjectNull) && ( // 데이터는 있으나 그래프 없는 경우
-        <div className={cx('message')} style={{ color }}>
-          {t(message)}
-        </div>
-      )}
-
-      {isGraphDataReady && // 데이터도 있고 그래프도 있음
+      {isGraphDataReady &&
         Object.keys(data).length > 0 && (
           <div className={cx('graph-box')}>
             {Object.entries(data).map(([key, value]) => (

@@ -3,8 +3,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallowEqual, useDispatch, useSelector } from 'react-redux';
 
-import ExternalFineTuningView from './ExternalFineTuningView';
-import MultimodalFineTuningView from './MultimodalFineTuningView';
+import SDSFineTuningView from './SDSFineTuningView';
 
 import { ButtonV2, Checkbox, Radio, Switch } from '@jonathan/ui-react';
 
@@ -288,12 +287,12 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
 
         // 외부 학습 모델은 fine_tuning_config 가 null (partner manifest 기반).
         // 아래 internal LLM hyperparameter dispatch 는 skip 하고
-        // ExternalFineTuningView 로 render 분기.
+        // SDSFineTuningView 로 render 분기.
         if (result?.training_type === 'external') {
           return;
         }
         // 멀티모달(VLM) 모델은 internal hyperparameter dispatch 를 건너뛰고
-        // MultimodalFineTuningView 로 render 분기(설정은 그 뷰가 자체 관리).
+        // SDSFineTuningView 로 render 분기(설정은 그 뷰가 자체 관리).
         if (result?.load_type === 'multimodal') {
           return;
         }
@@ -387,8 +386,15 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
     }
   };
 
+  // SDS external 모델은 SDSFineTuningView 내부에서 external SSE 를 직접 구독한다.
+  // 부모는 internal/VLM 모델만 기존 internal SSE 를 연다.
+  const isExternalModel = fineTuningData?.training_type === 'external';
+  const isMultimodalModel = fineTuningData?.load_type === 'multimodal';
+  const shouldUseInternalSSE = !!fineTuningData && !isExternalModel;
+  const internalSSEModelId = shouldUseInternalSSE ? modelId : null;
+
   // SSE Status
-  useSSEStatus(modelId, userName, setFineStatus);
+  useSSEStatus(internalSSEModelId, userName, setFineStatus);
 
   // fineTuning status
   const fineTuningStatus = useMemo(
@@ -402,8 +408,15 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
     [fineTuningStatus],
   );
 
-  useSSEGraph(modelId, userName, fineTuningStatus, setGraphData, 'internal', setCheckpoints);
-  useSSETime(modelId, userName, setProgressData, fineTuningStatus);
+  useSSEGraph(
+    internalSSEModelId,
+    userName,
+    fineTuningStatus,
+    setGraphData,
+    'internal',
+    setCheckpoints,
+  );
+  useSSETime(internalSSEModelId, userName, setProgressData, fineTuningStatus);
 
   // * A-LLM MODELBASE 용 모델이름과 커밋버전
   const modelName = fineTuningData?.commit_model_name || '';
@@ -460,36 +473,20 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
   // 외부 학습 모델 (training_type='external') 은 FineTuning 탭 안에서
   // 같은 SimpleNav + box{left, right} 레이아웃을 유지한 채 내용만 교체한다.
   // (별도 탭으로 분리하지 않음 — internal 과 동일한 운영 UX.)
-  const isExternalModel = fineTuningData?.training_type === 'external';
-  const isMultimodalModel = fineTuningData?.load_type === 'multimodal';
-
-  if (isMultimodalModel) {
+  if (isExternalModel || isMultimodalModel) {
     return (
-      <MultimodalFineTuningView
+      <SDSFineTuningView
         navList={navList}
         fineTuningData={fineTuningData}
         workspaceId={workspaceId}
         modelId={modelId}
         refresh={() => getFineTuningData()}
         filteredRest={filteredRest}
-        // SSE 는 부모가 이미 구독(391·405·406) → MM 뷰는 props 로 소비(이중 구독/6커넥션 방지).
+        // internal VLM 은 부모 SSE 를 props 로 소비하고, external SDS 는 내부에서 external SSE 를 연다.
         fineStatus={fineStatus}
         graphData={graphData}
         progressData={progressData}
         checkpoints={checkpoints}
-      />
-    );
-  }
-
-  if (isExternalModel) {
-    return (
-      <ExternalFineTuningView
-        navList={navList}
-        fineTuningData={fineTuningData}
-        workspaceId={workspaceId}
-        modelId={modelId}
-        refresh={() => getFineTuningData()}
-        filteredRest={filteredRest}
       />
     );
   }

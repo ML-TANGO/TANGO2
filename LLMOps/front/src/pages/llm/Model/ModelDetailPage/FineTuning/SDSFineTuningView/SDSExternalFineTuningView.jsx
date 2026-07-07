@@ -21,7 +21,6 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallowEqual, useDispatch, useSelector } from 'react-redux';
-import { useHistory } from 'react-router-dom';
 
 import { ButtonV2 } from '@jonathan/ui-react';
 
@@ -40,10 +39,22 @@ import useSSEGraph from '../useSSEGraph';
 
 import classNames from 'classnames/bind';
 import style from '../FineTuning.module.scss';
-import localStyle from './ExternalFineTuningView.module.scss';
+import localStyle from './SDSExternalFineTuningView.module.scss';
 
 const cx = classNames.bind(style);
 const lx = classNames.bind(localStyle);
+
+const idleFineStatus = {
+  fine_tuning_status: {
+    status: 'stop',
+    reason: null,
+  },
+  commit_status: {
+    status: null,
+    type: null,
+    reason: null,
+  },
+};
 
 // Defense in depth: the BFF already restricts wandb_url to http/https, but the
 // value lands in an href so we re-check the scheme client-side and surface the
@@ -65,7 +76,7 @@ const parseSafeHttpUrl = (u) => {
 // 정규식 메타문자 이스케이프 — phase.id 를 anchored 커밋 매칭 패턴에 끼울 때 사용.
 const escapeRegExp = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-const ExternalFineTuningView = memo(function ExternalFineTuningView({
+const SDSExternalFineTuningView = memo(function SDSExternalFineTuningView({
   navList,
   fineTuningData,
   workspaceId,
@@ -76,18 +87,6 @@ const ExternalFineTuningView = memo(function ExternalFineTuningView({
   const { t } = useTranslation();
   const { userName } = useSelector((state) => state.auth, shallowEqual);
   const dispatch = useDispatch();
-  const history = useHistory();
-
-  // SP-7 딥링크 — SDS(레시피) FT 에서 프롬프트 최적화 3-모듈 파이프라인 빌더로 이동.
-  // 자동 노드 시딩은 레인 레이아웃·컨테이너(8/29 수령) 의존이라 미포함 — 진입만 연결.
-  // 라우터 state 로 진입 맥락(preset) 전달(파이프라인 페이지가 추후 배너/프리셋에 활용).
-  const goToSp7Pipeline = useCallback(() => {
-    if (!workspaceId) return;
-    history.push(`/user/workspace/${workspaceId}/pipeline`, {
-      from: 'sds-recipe',
-      preset: 'sp7',
-    });
-  }, [history, workspaceId]);
 
   const manifestName = fineTuningData?.external_manifest_name || '';
   const manifestVersion = fineTuningData?.external_manifest_version || '';
@@ -164,13 +163,15 @@ const ExternalFineTuningView = memo(function ExternalFineTuningView({
   useEffect(() => {
     loadModalComponent('FINETUNING_SYSTEM_LOG');
     loadModalComponent('FINETUNING_SETTING');
+    loadModalComponent('FINETUNING_COMMIT_LOAD');
   }, []);
 
   const fineTuningStatus = useMemo(
     () => fineStatus?.fine_tuning_status?.status,
     [fineStatus],
   );
-  const isRunning = fineTuningStatus === 'running' || fineTuningStatus === 'pending';
+  const isRunning =
+    fineTuningStatus === 'running' || fineTuningStatus === 'pending';
 
   // W&B run 링크 — 컨테이너가 result.wandb_url 로 보고하면 sse-status payload 의
   // fine_tuning_status.wandb_url 로 흘러온다(학습 중/후 모두). 없으면 미표시.
@@ -182,9 +183,9 @@ const ExternalFineTuningView = memo(function ExternalFineTuningView({
   // externalJobId 변경 시 이전 job 의 status/graph/progress 잔상 제거 — 새 SSE
   // 첫 메시지 도착 전 stale W&B 링크/그래프가 잠깐 보이는 것 방지.
   useEffect(() => {
-    setFineStatus(null);
+    setFineStatus(externalJobId ? null : idleFineStatus);
     setProgressData(null);
-    setGraphData(null);
+    setGraphData(externalJobId ? null : {});
   }, [externalJobId]);
 
   // 모델/manifest 가 바뀌면 active/commits 초기화 — 이전 모델 상태 bleed 방지
@@ -336,9 +337,11 @@ const ExternalFineTuningView = memo(function ExternalFineTuningView({
           output_subdir: outputSubdir || null,
         },
       });
-      if (
-        !(launch.status === STATUS_SUCCESS && launch.result && launch.result.job_id)
-      ) {
+      if (!(
+        launch.status === STATUS_SUCCESS &&
+        launch.result &&
+        launch.result.job_id
+      )) {
         errorToastMessage(
           launch.error,
           launch.message || t('externalTraining.start.failed.label'),
@@ -358,7 +361,15 @@ const ExternalFineTuningView = memo(function ExternalFineTuningView({
       if (typeof refresh === 'function') refresh();
       return true;
     },
-    [namespaceInput, manifestName, manifestVersion, workspaceId, modelId, refresh, t],
+    [
+      namespaceInput,
+      manifestName,
+      manifestVersion,
+      workspaceId,
+      modelId,
+      refresh,
+      t,
+    ],
   );
 
   // 단일 launch (recipe 없는 manifest) — 좌측 params textarea 사용.
@@ -401,7 +412,9 @@ const ExternalFineTuningView = memo(function ExternalFineTuningView({
     (phase, editedParams) =>
       async ({ instanceId, instanceCount, gpuCount }) => {
         const base =
-          editedParams && typeof editedParams === 'object' ? editedParams : phase.params;
+          editedParams && typeof editedParams === 'object'
+            ? editedParams
+            : phase.params;
         const params = { ...(base || {}) };
         // 체이닝: chain_from phase 의 최신 커밋(`{phase.id}-{ts}`)을 직전 산출물로
         // 잇는다. (1) `_base_model={name: <model>}` 로 그 모델의 commit_models 를
@@ -540,50 +553,53 @@ const ExternalFineTuningView = memo(function ExternalFineTuningView({
     workspaceId,
   ]);
 
-  const topButtonList = (
-    <div className={lx('top-buttons')}>
-      {recipe && Array.isArray(recipe.phases) && (
+  // 커밋 불러오기 — 저장된 커밋을 활성 모델로 로드(MM 뷰 동형 모달). SDS 는 체인이 base 를 자동
+  // 주입하므로 getCommitId 피드는 불필요(no-op). ⚠️ recipe 체인 흐름 적합성은 별도 확인 필요.
+  const handleCommitLoad = useCallback(() => {
+    dispatch(
+      openModal({
+        modalType: 'FINETUNING_COMMIT_LOAD',
+        modalData: { workspaceId, modelId, getCommitId: () => {}, refresh },
+      }),
+    );
+  }, [dispatch, workspaceId, modelId, refresh]);
+
+  // recipe(SDS) 모드는 상단 버튼 없음(실행=모니터 근처, 시스템로그=모니터 헤더). MM 뷰 동일.
+  // 비-recipe 단일 launch 만 상단에 시스템로그 + 실행/중지.
+  const topButtonList =
+    recipe && Array.isArray(recipe.phases) ? null : (
+      <div className={lx('top-buttons')}>
         <ButtonV2
           type='outline'
           size='l'
-          label='프롬프트 최적화 파이프라인'
-          onClick={goToSp7Pipeline}
+          label={t('systemLog.label')}
+          onClick={onClickSystemLog}
+          disabled={!externalJobId || !fineTuningStatus}
         />
-      )}
-      <ButtonV2
-        type='outline'
-        size='l'
-        label={t('systemLog.label')}
-        onClick={onClickSystemLog}
-        disabled={!externalJobId || !fineTuningStatus}
-      />
-      {isRunning ? (
-        <ButtonV2
-          type='solid'
-          size='l'
-          colorType='red'
-          label={t('externalTraining.stop.label')}
-          onClick={onClickStop}
-        />
-      ) : recipe ? (
-        // 레시피 학습은 phase 카드의 실행 버튼으로 단계별 시작 — 상단 단일 실행 숨김.
-        null
-      ) : (
-        <ButtonV2
-          type='solid'
-          size='l'
-          colorType='skyblue'
-          label={
-            externalJobId
-              ? t('externalTraining.model.restart.label')
-              : t('externalTraining.model.startTraining.label')
-          }
-          onClick={onClickRun}
-          disabled={!manifestName}
-        />
-      )}
-    </div>
-  );
+        {isRunning ? (
+          <ButtonV2
+            type='solid'
+            size='l'
+            colorType='red'
+            label={t('externalTraining.stop.label')}
+            onClick={onClickStop}
+          />
+        ) : (
+          <ButtonV2
+            type='solid'
+            size='l'
+            colorType='skyblue'
+            label={
+              externalJobId
+                ? t('externalTraining.model.restart.label')
+                : t('externalTraining.model.startTraining.label')
+            }
+            onClick={onClickRun}
+            disabled={!manifestName}
+          />
+        )}
+      </div>
+    );
 
   const recipeMode = !!(recipe && Array.isArray(recipe.phases));
 
@@ -660,27 +676,24 @@ const ExternalFineTuningView = memo(function ExternalFineTuningView({
         subTitle={`${manifestName}@${manifestVersion}`}
       />
       {recipeMode ? (
-        // SDS 레시피 = master-detail. 메타/네임스페이스 → 가로 phase 카드 →
-        // 선택 phase 상세(실행중=monitoringSlot / 완료=커밋 / 대기=params·실행).
+        // SDS 레시피 = 상단 4-phase 박스 + 2컬럼(설정 | 모니터). 네임스페이스/메타데이터 없음.
         <div className={lx('recipe-box')}>
-          {metadataPanel}
-          {namespacePanel}
-          <div className={lx('panel')}>
-            <div className={lx('panel-title')}>
-              {recipe.label || t('externalTraining.recipe.label')}
-            </div>
-            <RecipePipeline
-              key={`${manifestName}@${manifestVersion}`}
-              phases={recipe.phases}
-              activePhaseId={activePhaseId}
-              activePhaseStatus={fineTuningStatus}
-              donePhases={donePhases}
-              phaseCommitMap={phaseCommitMap}
-              onRunPhase={onRunPhase}
-              monitoringSlot={monitoringSlot}
-              t={t}
-            />
-          </div>
+          <RecipePipeline
+            key={`${manifestName}@${manifestVersion}`}
+            phases={recipe.phases}
+            activePhaseId={activePhaseId}
+            activePhaseStatus={fineTuningStatus}
+            donePhases={donePhases}
+            phaseCommitMap={phaseCommitMap}
+            onRunPhase={onRunPhase}
+            graphData={graphData}
+            progressData={progressData}
+            fineStatus={fineStatus}
+            onStop={onClickStop}
+            onSystemLog={onClickSystemLog}
+            onCommitLoad={handleCommitLoad}
+            t={t}
+          />
         </div>
       ) : (
         // recipe 없는 external = 기존 단일 launch (좌: params / 우: 그래프).
@@ -720,4 +733,4 @@ function Row({ label, value }) {
   );
 }
 
-export default ExternalFineTuningView;
+export default SDSExternalFineTuningView;

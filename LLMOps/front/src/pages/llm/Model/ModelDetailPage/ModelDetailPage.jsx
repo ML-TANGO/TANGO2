@@ -47,8 +47,8 @@ const ModelDetailPage = memo(function ModelDetailPage({
 
   const { t } = useTranslation();
 
-  // 모든 모델 (internal + external) 의 default 진입 탭은 'fine-tuning' 으로
-  // 통일. external 모델은 FineTuning.jsx 안에서 ExternalFineTuningView 로
+  // 모든 모델 (internal + SDS/external) 의 default 진입 탭은 'fine-tuning' 으로
+  // 통일. SDS/external 모델은 FineTuning.jsx 안에서 SDSFineTuningView 로
   // 자동 분기 — 사용자 운영 UX 가 internal 과 같다.
   const defaultSubPath = 'fine-tuning';
 

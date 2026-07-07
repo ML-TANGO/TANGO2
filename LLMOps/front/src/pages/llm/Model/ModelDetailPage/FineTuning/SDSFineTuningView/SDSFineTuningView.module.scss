@@ -1089,6 +1089,42 @@
   &--pending { background: #fff8d9; color: #8a6d00; }
 }
 
+// ── 상단 상태 배너(초기 모델 로드/커밋 진행) — 텍스트 FT isCalMessage 미러. 진행 중 config-col 잠금과 짝. ──
+.top-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-family: SpoqaM;
+  font-size: 14px;
+  &--load {
+    background: rgba($blue104, 0.08);
+    border: 1px solid rgba($blue104, 0.28);
+    color: $blue105;
+  }
+  &--error {
+    background: rgba($red502, 0.08);
+    border: 1px solid rgba($red502, 0.28);
+    color: $red502;
+  }
+}
+.top-banner-spinner {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba($blue104, 0.3);
+  border-top-color: $blue104;
+  border-radius: 50%;
+  animation: top-banner-spin 0.8s linear infinite;
+}
+@keyframes top-banner-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 // ── 학습 데이터셋 바인딩 ──
 .ds-header-row {
   display: flex;

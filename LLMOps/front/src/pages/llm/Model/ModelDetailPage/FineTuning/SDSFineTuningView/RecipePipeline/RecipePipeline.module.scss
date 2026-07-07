@@ -65,9 +65,36 @@
 }
 
 .phase-label {
+  flex: 1;
+  min-width: 0;
   font-size: 14px;
   font-weight: 600;
   color: #222;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// 단계 박스 번호(card-head 좌측). phase-label 이 flex:1 로 가운데, 배지는 우측.
+.step-num {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #eef2f7;
+  color: #4b5563;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+// 카드 하단 학습 대상 요약(예: "프로젝터 + 언어모델 LoRA").
+.step-target {
+  font-size: 11px;
+  color: #6b7280;
+  line-height: 1.4;
 }
 
 .badge {
@@ -166,6 +193,62 @@
   gap: 14px;
 }
 
+// ── 하단 2컬럼(MM 뷰 레이아웃): 좌 설정 / 우 모니터링(부모 주입, sticky). ──
+.sds-body {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.config-side {
+  flex: 1 1 42%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fafbfc;
+}
+
+.monitor-side {
+  flex: 1 1 58%;
+  min-width: 0;
+  position: sticky;
+  top: 16px;
+}
+
+.running-note {
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.5;
+  padding: 8px 0;
+}
+
+// 실행 컨트롤 바 — 모니터 컬럼 하단(실행 버튼 + 체인 게이트 힌트).
+.run-bar {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+// 좁은 화면: 1컬럼 스택(설정 위, 모니터 아래).
+@media (max-width: 1180px) {
+  .sds-body {
+    flex-direction: column;
+  }
+  .config-side,
+  .monitor-side {
+    flex: none;
+    width: 100%;
+  }
+  .monitor-side {
+    position: static;
+  }
+}
+
 .detail {
   display: flex;
   flex-direction: column;
@@ -224,4 +307,65 @@
 .detail-foot {
   display: flex;
   justify-content: flex-end;
+}
+
+// ── 모델 구조 · 프로젝터 selector(항목8) — MLP-2 활성, 나머지 비활성(표시용). ──
+.proj-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.proj-btn {
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1px solid #d6dae0;
+  background: #fff;
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+
+  &.active {
+    background: #3babff;
+    border-color: #3babff;
+    color: #fff;
+    font-weight: 600;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+// ── 체크포인트 설정(항목9) — 이름 입력 행. step 슬라이더는 MM params-grid 재사용. ──
+.ckpt-name-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.ckpt-name-label {
+  flex: 0 0 auto;
+  font-size: 13px;
+  color: #4b5563;
+}
+
+.ckpt-name-input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid #d6dae0;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #1f2937;
+  background: #fff;
+
+  &:focus {
+    outline: none;
+    border-color: #3babff;
+  }
 }
