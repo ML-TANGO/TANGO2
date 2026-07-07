@@ -423,15 +423,16 @@ const routeArr = [
     render: (props) => <Dashboard {...props} />,
   },
 
-  {
-    name: 'Docker Image',
-    path: '/user/workspace/:id/docker_images',
-    exact: true,
-    icon: IconLnbDockerGray,
-    activeIcon: IconLnbDockerBlue,
-    platform: 'flightbase',
-    render: (props) => <UserDockerImagePage {...props} />,
-  },
+  // 2026-07-06 QA(11): 도커 이미지 메뉴 임시 숨김 (추후 재노출 예정 — 라우트/컴포넌트 보존 위해 주석 처리)
+  // {
+  //   name: 'Docker Image',
+  //   path: '/user/workspace/:id/docker_images',
+  //   exact: true,
+  //   icon: IconLnbDockerGray,
+  //   activeIcon: IconLnbDockerBlue,
+  //   platform: 'flightbase',
+  //   render: (props) => <UserDockerImagePage {...props} />,
+  // },
   {
     name: 'Data',
     path: '/user/workspace/:id/datasets',
@@ -943,16 +944,17 @@ const routeArr = [
     platform: 'flightbase',
     render: (props) => <EvalCrossCompare {...props} />,
   },
-  {
-    name: 'AIPipeline',
-    path: '/user/workspace/:id/pipeline',
-    exact: true,
-    isGroup: true,
-    icon: IconPipeLine,
-    activeIcon: IconPipeLineActive,
-    platform: 'flightbase',
-    render: (props) => <UserPipeLineMenu {...props} />,
-  },
+  // 2026-07-06 QA(11): AI 파이프라인 메뉴 임시 숨김 (추후 재노출 예정 — 라우트/컴포넌트 보존 위해 주석 처리)
+  // {
+  //   name: 'AIPipeline',
+  //   path: '/user/workspace/:id/pipeline',
+  //   exact: true,
+  //   isGroup: true,
+  //   icon: IconPipeLine,
+  //   activeIcon: IconPipeLineActive,
+  //   platform: 'flightbase',
+  //   render: (props) => <UserPipeLineMenu {...props} />,
+  // },
   {
     name: 'project.label',
     path: '/user/workspace/:id/pipeline/:tid',
