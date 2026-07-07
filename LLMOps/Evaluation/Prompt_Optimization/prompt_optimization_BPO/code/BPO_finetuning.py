@@ -10,9 +10,10 @@ from datetime import datetime
 from pytz import timezone
 from tqdm.auto import tqdm
 import os, json, logging, random, sys, argparse
-from peft import LoraConfig, get_peft_model
+from peft import LoraConfig, get_peft_model, PeftModel
 
 from dataset import TrainDataset, EvaluateDataset
+#from MixDataset import TrainDataset, EvaluateDataset
 
 
 class Trainer():
@@ -58,38 +59,43 @@ class Trainer():
 def main():
     # (0) argument parsing
     parser = argparse.ArgumentParser(description='Baseline BPO SFT')
-    parser.add_argument('--model_id', type=str, default="Qwen/Qwen3-8B", help='model id/location of LLM')
+    parser.add_argument('--model_id', type=str, default="meta-llama/Llama-3.1-8B-Instruct", help='model id/location of LLM')
     parser.add_argument('--batch_size', type=int, default=1, help='batch size for dataloader')
     parser.add_argument('--epoch', type=int, default=3, help='number of epochs')
     parser.add_argument('--lr', type=float, default=5e-5, help='learning rate')
-    parser.add_argument('--base_data_path', type=str, default='../data/', help='base data path')
-    parser.add_argument('--model_save_path', type=str, default=f'../models/BPO_{date}_seed100_SFT_Qwen3_8B_lora_epoch3', help='model save path')
-    parser.add_argument('--result_path', type=str, default=f'../result/BPO_{date}_seed100_SFT_Qwen3_8B_lora_epoch3.result.json', help='output directory path')
+    parser.add_argument('--base_data_path', type=str, default='../data', help='base data path')
+    parser.add_argument('--model_save_path', type=str, default=f'../models/BPO_2ndStage_{date}_seed100_SFT_llama3.1_8B_lora_epoch3', help='model save path')
+    parser.add_argument('--result_path', type=str, default=f'../result/BPO_2ndStage_{date}_seed100_SFT_llama3.1_8B_lora_epoch3.result.json', help='output directory path')
+    parser.add_argument('--lora_path', type=str, default=f'../models/BPO_1stStage_06252129_seed100_SFT_llama3.1_8B_lora_epoch3', help='lora weights path for further fine-tuning')
     args = parser.parse_args()
 
-    train_path = f'{args.base_data_path}/train.jsonl'
-    eval_path = f'{args.base_data_path}/eval.jsonl'
+    train_path1 = f'{args.base_data_path}/train.jsonl'
+    #train_path2 = f'{args.base_data_path}/train_FIPO_dataset.jsonl'
+    #eval_path = f'{args.base_data_path}/eval.jsonl'
 
     model = AutoModelForCausalLM.from_pretrained(args.model_id, device_map='auto')
+    tokenizer = AutoTokenizer.from_pretrained(args.model_id, padding_side="left")
 
     # (1) Load Data
     now_time = datetime.now(KST).strftime('%Y/%m/%d %H:%M:%S')
     _LOGGER.info(f'[{now_time}] Starting Pre-Processing..')
-    train_dataset = TrainDataset(train_path, args.model_id)
+    train_dataset = TrainDataset(train_path1, args.model_id, tokenizer)
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=train_dataset.collate_fn)
-    #evaluation_dataset = EvaluateDataset(eval_path, args.model_id)
+    #evaluation_dataset = EvaluateDataset(eval_path, args.model_id, tokenizer)
     #evaluation_dataloader = DataLoader(evaluation_dataset, batch_size=args.batch_size, shuffle=False, collate_fn=evaluation_dataset.collate_fn)
     
     # (2) LoRA
-    config = LoraConfig(
-        r=16,
-        lora_alpha=16,
-        target_modules=['q_proj', 'v_proj'],
-        lora_dropout=0.1,
-        bias='none',
-    )
-
-    lora_model = get_peft_model(model, config)
+    if args.lora_path != '':
+        lora_model = PeftModel.from_pretrained(model, args.lora_path, is_trainable=True)
+    else:
+        config = LoraConfig(
+            r=16,
+            lora_alpha=16,
+            target_modules=['q_proj', 'v_proj'],
+            lora_dropout=0.1,
+            bias='none',
+        )
+        lora_model = get_peft_model(model, config)
     lora_model.to(device)
 
     # (3) Train
@@ -99,6 +105,7 @@ def main():
     trainer()
 
     lora_model.save_pretrained(args.model_save_path)
+    #tokenizer.save_pretrained(model_save_path)
 
     # (4) Evaluation
     #now_time = datetime.now(KST).strftime('%Y/%m/%d %H:%M:%S')
@@ -124,6 +131,7 @@ if __name__ == '__main__':
     _LOGGER = logging.getLogger("__name__")
     _LOGGER.setLevel(level=logging.INFO)
     _LOGGER.addHandler(stream_hander)
+    random.seed(100)
     date = datetime.now(KST).strftime('%m%d%H%M')
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     main()
