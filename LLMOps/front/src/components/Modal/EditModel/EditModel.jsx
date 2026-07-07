@@ -45,11 +45,21 @@ const menuOptions = [
   { label: 'Private', value: 'private' },
 ];
 
-// Hugging Submenu options
+// 모델 유형 옵션 — AddModel 의 accessTypeOptions 와 동일 taxonomy 로 정렬(2026-07-06 QA(2)).
+// 수정 모달에선 read-only 표시 전용: Single(1)/Multimodal('multimodal')/GenAI Platform(0)/Domain(2).
 const accessTypeOptions = [
   {
-    label: 'Hugging Face',
+    label: 'Single',
     value: 1,
+    labelStyle: {
+      fontSize: '14px',
+      fontFamily: 'SpoqaM',
+      marginTop: '2px',
+    },
+  },
+  {
+    label: 'Multimodal',
+    value: 'multimodal',
     labelStyle: {
       fontSize: '14px',
       fontFamily: 'SpoqaM',
@@ -59,6 +69,15 @@ const accessTypeOptions = [
   {
     label: 'GenAI Platform',
     value: 0,
+    labelStyle: {
+      fontSize: '14px',
+      fontFamily: 'SpoqaM',
+      marginTop: '2px',
+    },
+  },
+  {
+    label: 'Domain',
+    value: 2,
     labelStyle: {
       fontSize: '14px',
       fontFamily: 'SpoqaM',
@@ -193,9 +212,13 @@ const EditModel = ({ data, type }) => {
       const {
         huggingface_model_id: huggingModel,
         commit_model_name: commitModel,
+        training_type: trainingType,
       } = result;
 
-      if (commitModel && commitModel !== '') {
+      // 유형 판별(2026-07-06 QA(2)): external→Domain(2), comma→Multimodal, commit→GenAI(0), else→Single(1).
+      if (trainingType === 'external') {
+        setLoadType(2);
+      } else if (commitModel && commitModel !== '') {
         setLoadType(0);
         const [commit, version] = commitModel.split('/');
         setModelBaseData((prev) => ({
@@ -206,6 +229,12 @@ const EditModel = ({ data, type }) => {
         setVersionData((prev) => ({
           ...prev,
           selectedModel: { name: version },
+        }));
+      } else if (huggingModel && huggingModel.includes(',')) {
+        setLoadType('multimodal');
+        setHuggingData((prev) => ({
+          ...prev,
+          selectedModel: { name: huggingModel },
         }));
       } else {
         setLoadType(1);
@@ -586,7 +615,8 @@ const EditModel = ({ data, type }) => {
             />
           </div>
           <div className={cx('model')}>
-            {loadType === 1 ? (
+            {/* 2026-07-06 QA(2): 유형별 분기. multimodal/domain 은 read-only 표시(빈 GenAI 피커 오표시 방지) */}
+            {loadType === 1 && (
               <>
                 <SearchComponent
                   key='model'
@@ -609,7 +639,8 @@ const EditModel = ({ data, type }) => {
                   {t('finetuning.huggingface.message')}
                 </span>
               </>
-            ) : (
+            )}
+            {loadType === 0 && (
               <>
                 <SearchComponent
                   key='version'
@@ -634,6 +665,23 @@ const EditModel = ({ data, type }) => {
                   t={t}
                 />
               </>
+            )}
+            {loadType === 'multimodal' && (
+              <span className={cx('hugging-message')}>
+                {t('editModel.multimodal.encoders', {
+                  vision:
+                    (huggingData?.selectedModel?.name || '').split(',')[0] ||
+                    '-',
+                  llm:
+                    (huggingData?.selectedModel?.name || '').split(',')[1] ||
+                    '-',
+                })}
+              </span>
+            )}
+            {loadType === 2 && (
+              <span className={cx('hugging-message')}>
+                {t('editModel.domain.sds')}
+              </span>
             )}
           </div>
         </InputBoxWithLabel>

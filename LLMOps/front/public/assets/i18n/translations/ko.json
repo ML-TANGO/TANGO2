@@ -1248,6 +1248,8 @@
   "evaluate.relocated.title": "평가가 '평가' 탭으로 이전되었습니다",
   "evaluate.relocated.desc": "자체 메트릭 평가는 평가 탭의 벤치마크 평가(BLEU/ROUGE 포함 17개 메트릭)로 통합되었습니다. 이 모델의 기존 평가 이력도 평가 탭에서 확인할 수 있습니다.",
   "evaluate.relocated.cta": "평가 탭으로 이동",
+  "editModel.multimodal.encoders": "비전 인코더: {{vision}} / LLM: {{llm}}",
+  "editModel.domain.sds": "도메인 (SDS)",
   "search.label": "검색",
   "searchCount.label": "검색 횟수",
   "serviceType.label": "서비스 유형",

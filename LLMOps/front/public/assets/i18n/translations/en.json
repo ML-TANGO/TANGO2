@@ -1255,6 +1255,8 @@
   "evaluate.relocated.title": "Evaluation has moved to the Evaluation tab",
   "evaluate.relocated.desc": "Self-metric evaluation is now part of Benchmark Evaluation (17 metrics incl. BLEU/ROUGE) in the Evaluation tab. This model's evaluation history is available there too.",
   "evaluate.relocated.cta": "Go to Evaluation",
+  "editModel.multimodal.encoders": "Vision Encoder: {{vision}} / LLM: {{llm}}",
+  "editModel.domain.sds": "Domain (SDS)",
   "search.label": "Search",
   "searchCount.label": "Search Count",
   "serviceType.label": "Service Type",
