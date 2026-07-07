@@ -1,0 +1,24 @@
+════════════════════════════════════════════════════════════════════════════════
+  BPO 파이프라인 벤치마크 평가  |  2026-06-10 15:11:27
+────────────────────────────────────────────────────────────────────────────────
+  benchmark      : all  →  실행 순서: gsm8k → hellaswag → mmlu
+  optimizer      : /scratch/x3397a10/workspace/kir/ETRI/prompt_opt_baseline_BPO/models/BPO_Mix_06092220_seed100_SFT_Qwen3_8B_lora_epoch3
+  generator      : Qwen/Qwen3-8B
+  num_samples    : 100  (벤치마크당)
+  baseline 비교  : 활성화
+  device         : cuda  (NVIDIA H200,  150GB)
+  log (txt)      : /scratch/x3397a10/workspace/kir/ETRI/prompt_opt_baseline_BPO/results/20260610_151127_all_BPO_Mix_06092220_seed100_SFT_Qwen3_8B_lora_epoch3_gen-Qwen-Qwen3-8B_n100.txt
+════════════════════════════════════════════════════════════════════════════════
+
+[데이터셋] gsm8k 로드 중 (100개)...
+  gsm8k        → 100개 샘플 준비
+[데이터셋] hellaswag 로드 중 (100개)...
+  hellaswag    → 100개 샘플 준비
+[데이터셋] mmlu 로드 중 (100개)...
+  mmlu         → 100개 샘플 준비
+
+────────────────────────────────────────────────────────────────────────────────
+  [Pass 1]  Prompt Optimizer 로드 → 전체 벤치마크 최적화
+────────────────────────────────────────────────────────────────────────────────
+
+[Optimizer 로드] /scratch/x3397a10/workspace/kir/ETRI/prompt_opt_baseline_BPO/models/BPO_Mix_06092220_seed100_SFT_Qwen3_8B_lora_epoch3
