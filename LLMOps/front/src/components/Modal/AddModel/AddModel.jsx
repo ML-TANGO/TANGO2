@@ -59,9 +59,11 @@ const accessTypeOptions = [
     },
   },
   {
-    // 멀티모달(VLM) — 비전 인코더 + LLM 두 모델 선택(고려대 프레임워크/ETRI 목업). value='multimodal'
+    // 멀티모달(VLM) — 범용 VLM(Qwen-VL, Gemma-VL 등). 신규 UI/기능 별도 기획 예정이라
+    // 2026-07-06 QA(1)로 프론트 선택 비활성화. SDS(CLIP+LLM)는 Domain 유형으로 진입.
     label: 'Multimodal',
     value: 'multimodal',
+    disabled: true,
     labelStyle: {
       fontSize: '14px',
       fontFamily: 'SpoqaM',
@@ -257,7 +259,8 @@ const AddModel = ({ data, type }) => {
 
   // 모달 Radio
   const radioBtnHandler = (value) => {
-    const radioType = value === 'multimodal' ? 'multimodal' : parseInt(value, 10);
+    const radioType =
+      value === 'multimodal' ? 'multimodal' : parseInt(value, 10);
     setLoadType(radioType);
     // 모드 전환 시 HF 슬롯 선택 초기화 — 이전 모드의 selectedModel 이 새 모드 UI 에
     // 선택된 것처럼 표시되거나 submit body 로 새는 것 방지(리뷰 MED).
