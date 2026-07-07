@@ -45,6 +45,41 @@
     .no-desc {
       color: $mono204;
     }
+    .proj-selector {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 16px;
+
+      .proj-btn {
+        padding: 7px 14px;
+        border-radius: 8px;
+        border: 1px solid $blue102;
+        background: $mono200;
+        color: $mono205;
+        font-family: SpoqaM;
+        font-size: 13px;
+        line-height: 1;
+        cursor: pointer;
+        transition:
+          background 0.15s ease,
+          border-color 0.15s ease,
+          color 0.15s ease;
+
+        &:hover {
+          border-color: $blue104;
+          color: $blue104;
+          background: $blue100;
+        }
+
+        &.active {
+          background: $blue104;
+          border-color: $blue104;
+          color: $mono200;
+          font-family: SpoqaB;
+        }
+      }
+    }
     &:last-child {
       margin-bottom: 0;
     }

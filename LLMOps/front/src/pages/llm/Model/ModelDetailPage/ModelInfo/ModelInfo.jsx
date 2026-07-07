@@ -24,6 +24,18 @@ import IconSmile from '@src/static/images/icon/ic-smile.png';
 
 const cx = classNames.bind(style);
 
+// 정보 탭 '모델 구조' 다이어그램의 Projector 구조 탐색용 버튼(순수 시각 토글 — 백엔드/설정 영향 없음).
+// value 는 MultimodalArchDiagram 의 projType 분기 키, label 은 동일 컴포넌트의 projSub 표기와 정렬.
+const PROJECTOR_TYPES = [
+  { value: 'linear', label: 'Linear' },
+  { value: 'mlp2', label: 'MLP-2' },
+  { value: 'mlp3', label: 'MLP-3' },
+  { value: 'xattn', label: 'Cross-Attention' },
+  { value: 'qformer', label: 'Q-Former' },
+  { value: 'llama3_2_vision', label: 'Llama3.2-Vision' },
+  { value: 'resampler', label: 'Resampler' },
+];
+
 const ModelInfo = memo(function ModelInfo({ navList, data, ...rest }) {
   const { t } = useTranslation();
   const [modelInfo, setModelInfo] = useState(null);
@@ -32,6 +44,8 @@ const ModelInfo = memo(function ModelInfo({ navList, data, ...rest }) {
   const [infoData, setInfoData] = useState(null);
   const [isDescription, setIsDescription] = useState(false);
   const [description, setDescription] = useState(null);
+  // 모델 구조 다이어그램의 Projector 구조 선택(시각 전용). 기본 = 엔진 기본 MLP-2.
+  const [selectedProjType, setSelectedProjType] = useState('mlp2');
 
   const { modelId } = data;
 
@@ -186,7 +200,30 @@ const ModelInfo = memo(function ModelInfo({ navList, data, ...rest }) {
           <>
             <div className={cx('label')}>모델 구조</div>
             <div className={cx('value')}>
-              <MultimodalArchDiagram visionName={mmVision} llmName={mmLlm} />
+              <div
+                className={cx('proj-selector')}
+                role='group'
+                aria-label='Projector 구조 선택'
+              >
+                {PROJECTOR_TYPES.map((pt) => (
+                  <button
+                    key={pt.value}
+                    type='button'
+                    className={cx('proj-btn', {
+                      active: selectedProjType === pt.value,
+                    })}
+                    aria-pressed={selectedProjType === pt.value}
+                    onClick={() => setSelectedProjType(pt.value)}
+                  >
+                    {pt.label}
+                  </button>
+                ))}
+              </div>
+              <MultimodalArchDiagram
+                visionName={mmVision}
+                llmName={mmLlm}
+                projType={selectedProjType}
+              />
             </div>
           </>
         )}
