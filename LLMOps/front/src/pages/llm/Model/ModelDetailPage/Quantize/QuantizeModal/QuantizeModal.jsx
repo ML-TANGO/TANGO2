@@ -38,7 +38,8 @@ const QuantizeModal = ({ open, onClose, onConfirm, submitting }) => {
     let alive = true;
     (async () => {
       const res = await getQuantizeDevices();
-      if (alive && res.status === STATUS_SUCCESS) setDevices(res.result?.devices ?? []);
+      if (alive && res.status === STATUS_SUCCESS)
+        setDevices(res.result?.devices ?? []);
     })();
     return () => {
       alive = false;
@@ -90,7 +91,10 @@ const QuantizeModal = ({ open, onClose, onConfirm, submitting }) => {
             type='text'
             placeholder={t('quantize.device.placeholder')}
             value={customDevice}
-            onChange={(e) => setCustomDevice(e.target.value)}
+            onChange={(e) =>
+              // BFF 패턴 `^[A-Za-z0-9_\- ]{1,64}$` 정합 — 허용 외 문자 즉시 제거(422 방지, #8)
+              setCustomDevice(e.target.value.replace(/[^A-Za-z0-9_\- ]/g, ''))
+            }
             disabled={submitting}
             maxLength={64}
           />
@@ -123,7 +127,9 @@ const QuantizeModal = ({ open, onClose, onConfirm, submitting }) => {
                 <div className={cx('option-title')}>
                   {t(opt.titleKey)}
                   {selected?.recommended === opt.value && (
-                    <span className={cx('reco-tag')}>{t('quantize.reco.tag')}</span>
+                    <span className={cx('reco-tag')}>
+                      {t('quantize.reco.tag')}
+                    </span>
                   )}
                 </div>
                 <div className={cx('option-desc')}>{t(opt.descKey)}</div>
@@ -140,7 +146,9 @@ const QuantizeModal = ({ open, onClose, onConfirm, submitting }) => {
             disabled={submitting}
           />
           <div className={cx('prune-text')}>
-            <span className={cx('prune-title')}>{t('quantize.prune.label')}</span>
+            <span className={cx('prune-title')}>
+              {t('quantize.prune.label')}
+            </span>
             <span className={cx('prune-desc')}>{t('quantize.prune.desc')}</span>
           </div>
         </label>

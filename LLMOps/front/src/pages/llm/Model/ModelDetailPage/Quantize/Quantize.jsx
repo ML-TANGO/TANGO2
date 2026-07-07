@@ -27,8 +27,12 @@ const cx = classNames.bind(style);
 const TERMINAL = ['completed', 'failed', 'cancelled'];
 const POLL_MS = 3000;
 const MAX_POLL_FAILS = 5; // 연속 조회 실패 시 실패 처리(무한 폴링 방지)
+const MAX_TOTAL_POLLS = 1300; // ~65분(컨테이너 3600s 타임아웃보다 약간 김) — pending 무한폴링 방지(#2)
+const PKG_MAX_TRIES = 8; // completed 후 패키지 가시성(NFS 캐싱) 재시도 횟수(#1)
+const PKG_RETRY_MS = 4000; // 패키지 재조회 간격
 
 const lsKey = (modelId) => `sp4_quantize_${modelId}`;
+const LS_TTL_MS = 24 * 60 * 60 * 1000; // 복원 항목 만료 — 스테일 job 이 탭 진입 시 유령 '로딩' 표시 방지
 
 const formatBytes = (n) => {
   if (!n || n <= 0) return '0 B';
@@ -46,6 +50,7 @@ const saveBlob = (blob, filename) => {
   const link = document.createElement('a');
   link.href = url;
   link.download = filename;
+  document.body.appendChild(link); // detached anchor click 신뢰성(Firefox 등) 문제 방지(#6)
   link.click();
   link.remove();
   window.URL.revokeObjectURL(url);
@@ -84,18 +89,26 @@ const Quantize = memo(function Quantize({ navList, data, ...rest }) {
         url: `models/fine-tuning/summary?model_id=${modelId}`,
         method: 'get',
       });
-      if (alive && res.status === STATUS_SUCCESS) setTitleName(res.result?.name ?? '');
+      if (alive && res.status === STATUS_SUCCESS)
+        setTitleName(res.result?.name ?? '');
     })();
     return () => {
       alive = false;
     };
   }, [modelId]);
 
-  // 진행 중이던 job 복원 (localStorage)
+  // 진행 중이던 job 복원 (localStorage). ts 없거나(구 포맷) TTL 초과면 폐기 — 오래된/스테일
+  // job 이 탭 진입 시 유령 '로딩' 상태로 복원되는 것 방지(사용자 리포트).
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(lsKey(modelId));
-      if (raw) setJob(JSON.parse(raw));
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!parsed?.ts || Date.now() - parsed.ts > LS_TTL_MS) {
+        window.localStorage.removeItem(lsKey(modelId));
+        return;
+      }
+      setJob(parsed);
     } catch (e) {
       /* ignore malformed */
     }
@@ -112,9 +125,14 @@ const Quantize = memo(function Quantize({ navList, data, ...rest }) {
   }, [fetchLineage]);
 
   const fetchPackage = useCallback(async () => {
+    if (!job?.jobId) return false;
     const res = await getQuantizePackage(modelId, job.jobId);
-    if (res.status === STATUS_SUCCESS) setPkg(res.result);
-    fetchLineage(); // 패키지 ready 시 BE 가 lineage 마감 → 이력 갱신
+    if (res.status === STATUS_SUCCESS) {
+      setPkg(res.result);
+      fetchLineage(); // 패키지 ready 시 BE 가 lineage 마감 → 이력 갱신
+      return !!res.result?.ready;
+    }
+    return false;
   }, [modelId, job, fetchLineage]);
 
   const stopPoll = useCallback(() => {
@@ -124,17 +142,34 @@ const Quantize = memo(function Quantize({ navList, data, ...rest }) {
     }
   }, []);
 
-  // job 상태 폴링 → 완료 시 패키지 로드
+  // job 상태 폴링 → 완료 시 패키지 로드(가시성 재시도), 실패/유실/타임아웃 방어.
   useEffect(() => {
     if (!job?.jobId) return undefined;
     let cancelled = false;
     let failCount = 0; // 연속 조회 실패(404/네트워크) 카운트
+    let pollCount = 0; // 전체 폴링 횟수(pending 무한폴링 방지, #2)
+
+    // completed 후(또는 tracker 유실로 완료 추정 시) 패키지가 NFS 에 아직 안 보일 수 있음
+    // (다른 pod write + 캐싱) → ready 될 때까지 재시도하고 최종 ready 여부를 반환(#1/#3).
+    const retryPackageReady = async (tries = 0) => {
+      const ready = await fetchPackage();
+      if (cancelled) return false;
+      if (ready) return true;
+      if (tries + 1 >= PKG_MAX_TRIES) return false;
+      await new Promise((resolve) => setTimeout(resolve, PKG_RETRY_MS));
+      if (cancelled) return false;
+      return retryPackageReady(tries + 1);
+    };
 
     const onTerminal = (st) => {
       stopPoll();
       if (cancelled) return;
+      setStatus(st); // 로딩 스피너를 종결 상태로 확실히 전이(sticking 방지)
       if (st === 'completed') {
-        fetchPackage();
+        // 재시도 소진해도 ready 아니면 조용히 실패하지 않고 안내(#7). status 는 completed 유지.
+        retryPackageReady().then((ready) => {
+          if (!cancelled && !ready) toast.error(t('quantize.package.delayed'));
+        });
       } else {
         // 실패/취소 → lineage 에 반영(영구 'running' 방지) 후 이력 갱신
         markQuantizeLineage(modelId, job.jobId, st).finally(fetchLineage);
@@ -142,17 +177,37 @@ const Quantize = memo(function Quantize({ navList, data, ...rest }) {
     };
 
     const tick = async () => {
+      pollCount += 1;
       const res = await getQuantizeJob(job.jobId);
       if (cancelled) return;
       if (res.status !== STATUS_SUCCESS) {
-        // tracker 재시작/GC 등으로 job 조회 실패. 무한 'running' 방지:
-        // 연속 실패가 임계치를 넘으면 실패 처리(리셋 가능 + 영구 폴링 종료).
+        // tracker 재시작/GC 등으로 job 조회 실패. 임계치 초과 시: 실제 완료 산출물이 NFS 에
+        // 남아있을 수 있으므로 패키지 확인 후 분기(#3, 완료물 'failed' 오분류 방지).
         failCount += 1;
-        if (failCount >= MAX_POLL_FAILS) onTerminal('failed');
+        if (failCount >= MAX_POLL_FAILS) {
+          stopPoll();
+          // tracker 유실이어도 완료 산출물이 NFS 에 늦게 보일 수 있으므로 정상 완료 경로와
+          // 동일하게 재시도한 뒤에만 failed 로 종결(#3, NFS 지연 시 성공잡 오분류 방지).
+          const ready = await retryPackageReady();
+          if (cancelled) return;
+          if (ready) {
+            setStatus('completed');
+          } else {
+            setStatus('failed'); // 로딩 sticking 방지 — job 유실이면 실패로 종결 표시
+            markQuantizeLineage(modelId, job.jobId, 'failed').finally(
+              fetchLineage,
+            );
+          }
+        }
         return;
       }
       failCount = 0;
       const st = readStatus(res.result);
+      // 정상 200 이지만 pending/running 이 무한 지속(pod crashloop 등) → 상한 초과 시 실패 처리(#2).
+      if (!TERMINAL.includes(st) && pollCount >= MAX_TOTAL_POLLS) {
+        onTerminal('failed');
+        return;
+      }
       setStatus(st);
       if (TERMINAL.includes(st)) onTerminal(st);
     };
@@ -163,7 +218,7 @@ const Quantize = memo(function Quantize({ navList, data, ...rest }) {
       cancelled = true;
       stopPoll();
     };
-  }, [job, modelId, fetchPackage, fetchLineage, stopPoll]);
+  }, [job, modelId, fetchPackage, fetchLineage, stopPoll, t]);
 
   const handleLaunch = useCallback(
     async (body) => {
@@ -176,6 +231,7 @@ const Quantize = memo(function Quantize({ navList, data, ...rest }) {
           targetQuant: body.target_quant,
           targetDevice: body.target_device || '',
           prune: !!body.prune,
+          ts: Date.now(), // 복원 TTL 기준
         };
         try {
           window.localStorage.setItem(lsKey(modelId), JSON.stringify(next));
@@ -207,11 +263,35 @@ const Quantize = memo(function Quantize({ navList, data, ...rest }) {
     setPkg(null);
   }, [modelId, stopPoll]);
 
+  // 양자화(convert) job 중지 — external job cancel(BE·컨테이너 지원). 상태는 폴링이 'cancelled'
+  // 감지 → lineage 마감(낙관 반영 X). (#4)
+  const [cancelling, setCancelling] = useState(false);
+  const handleCancel = useCallback(async () => {
+    if (!job?.jobId || cancelling) return; // 재진입 가드(중복 cancel POST 방지)
+    setCancelling(true);
+    try {
+      const res = await callApi({
+        url: `external/jobs/${job.jobId}/cancel`,
+        method: 'post',
+      });
+      if (res.status === STATUS_SUCCESS) {
+        toast.success(t('quantize.cancel.requested'));
+      } else {
+        toast.error(res.message || t('quantize.cancel.fail'));
+      }
+    } finally {
+      setCancelling(false);
+    }
+  }, [job, cancelling, t]);
+
   const handleDownloadAll = useCallback(async () => {
     if (!job?.jobId) return;
     try {
       const blob = await downloadQuantizePackage(modelId, job.jobId);
-      saveBlob(blob, `${titleName || 'model'}-${job.jobId.slice(0, 8)}-package.zip`);
+      saveBlob(
+        blob,
+        `${titleName || 'model'}-${job.jobId.slice(0, 8)}-package.zip`,
+      );
     } catch (e) {
       toast.error(t('quantize.download.fail'));
     }
@@ -237,7 +317,10 @@ const Quantize = memo(function Quantize({ navList, data, ...rest }) {
       if (!jobId) return;
       try {
         const blob = await downloadQuantizePackage(modelId, jobId);
-        saveBlob(blob, `${titleName || 'model'}-${jobId.slice(0, 8)}-package.zip`);
+        saveBlob(
+          blob,
+          `${titleName || 'model'}-${jobId.slice(0, 8)}-package.zip`,
+        );
       } catch (e) {
         toast.error(t('quantize.download.fail'));
       }
@@ -247,11 +330,18 @@ const Quantize = memo(function Quantize({ navList, data, ...rest }) {
 
   const isRunning = job && !TERMINAL.includes(status);
   const isFailed = status === 'failed' || status === 'cancelled';
-  const ggufFile = (pkg?.files || []).find((f) => f.name.endsWith('.gguf'))?.name;
+  const ggufFile = (pkg?.files || []).find((f) =>
+    f.name.endsWith('.gguf'),
+  )?.name;
 
   return (
     <div id='quantize-tab' className={cx('quantize-tab')}>
-      <SimpleNav navList={navList} t={t} {...filteredRest} titleName={titleName} />
+      <SimpleNav
+        navList={navList}
+        t={t}
+        {...filteredRest}
+        titleName={titleName}
+      />
 
       <div className={cx('container')}>
         <div className={cx('intro')}>
@@ -273,20 +363,31 @@ const Quantize = memo(function Quantize({ navList, data, ...rest }) {
         {job && (
           <div className={cx('job-card')}>
             <div className={cx('job-row')}>
-              <span className={cx('job-label')}>{t('quantize.level.label')}</span>
+              <span className={cx('job-label')}>
+                {t('quantize.level.label')}
+              </span>
               <span className={cx('job-value')}>
                 {String(job.targetQuant || '').toUpperCase()}
               </span>
             </div>
             {job.targetDevice && (
               <div className={cx('job-row')}>
-                <span className={cx('job-label')}>{t('quantize.device.label')}</span>
+                <span className={cx('job-label')}>
+                  {t('quantize.device.label')}
+                </span>
                 <span className={cx('job-value')}>{job.targetDevice}</span>
               </div>
             )}
             <div className={cx('job-row')}>
-              <span className={cx('job-label')}>{t('quantize.status.label')}</span>
-              <span className={cx('status', isFailed ? 'fail' : status === 'completed' ? 'done' : 'run')}>
+              <span className={cx('job-label')}>
+                {t('quantize.status.label')}
+              </span>
+              <span
+                className={cx(
+                  'status',
+                  isFailed ? 'fail' : status === 'completed' ? 'done' : 'run',
+                )}
+              >
                 {isRunning && <span className={cx('spinner')} />}
                 {t(`quantize.status.${status || 'pending'}`)}
               </span>
@@ -295,7 +396,9 @@ const Quantize = memo(function Quantize({ navList, data, ...rest }) {
             {status === 'completed' && pkg?.ready && (
               <div className={cx('package')}>
                 <div className={cx('package-head')}>
-                  <span className={cx('package-title')}>{t('quantize.package.label')}</span>
+                  <span className={cx('package-title')}>
+                    {t('quantize.package.label')}
+                  </span>
                   <div className={cx('package-actions')}>
                     <ButtonV2
                       type='outline'
@@ -315,7 +418,9 @@ const Quantize = memo(function Quantize({ navList, data, ...rest }) {
                   {pkg.files.map((f) => (
                     <li key={f.name} className={cx('file-item')}>
                       <span className={cx('file-name')}>{f.name}</span>
-                      <span className={cx('file-size')}>{formatBytes(f.bytes)}</span>
+                      <span className={cx('file-size')}>
+                        {formatBytes(f.bytes)}
+                      </span>
                       <button
                         type='button'
                         className={cx('file-dl')}
@@ -330,10 +435,21 @@ const Quantize = memo(function Quantize({ navList, data, ...rest }) {
             )}
 
             {isFailed && (
-              <div className={cx('error-box')}>{t('quantize.status.failHint')}</div>
+              <div className={cx('error-box')}>
+                {t('quantize.status.failHint')}
+              </div>
             )}
 
             <div className={cx('job-actions')}>
+              {isRunning && (
+                <ButtonV2
+                  type='solid'
+                  colorType='red'
+                  label={t('stop.label')}
+                  onClick={handleCancel}
+                  disabled={cancelling}
+                />
+              )}
               <ButtonV2
                 type='outline'
                 label={t('quantize.restart.label')}
@@ -346,7 +462,9 @@ const Quantize = memo(function Quantize({ navList, data, ...rest }) {
 
         {lineage.length > 0 && (
           <div className={cx('lineage')}>
-            <div className={cx('lineage-title')}>{t('quantize.lineage.label')}</div>
+            <div className={cx('lineage-title')}>
+              {t('quantize.lineage.label')}
+            </div>
             <table className={cx('lineage-table')}>
               <thead>
                 <tr>
