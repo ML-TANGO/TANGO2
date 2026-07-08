@@ -250,6 +250,17 @@ async def _extract_events_summary(job_id: str, detail: Optional[dict]) -> dict:
     try:
         from tensorboard.backend.event_processing import event_accumulator
         import asyncio as _aio
+        from model import service as _model_svc
+
+        # NFS 부하 완화: graph 파서와 동일한 events 파일 서명 캐시 공유 —
+        # 파일이 안 바뀌었으면 재파싱 없이 캐시 반환(sse-time 3s 루프 × 클라이언트).
+        sig = await _aio.to_thread(_model_svc.tfevents_signature, log_dir)
+        if sig is None:
+            return {}
+        memo_key = ("evsummary", log_dir)
+        cached = _model_svc.tfevents_memo_get(memo_key, sig)
+        if cached is not None:
+            return cached
 
         def _read():
             ea = event_accumulator.EventAccumulator(log_dir)
@@ -278,7 +289,9 @@ async def _extract_events_summary(job_id: str, detail: Optional[dict]) -> dict:
                 "completed": train_runtime is not None,
             }
 
-        return await _aio.to_thread(_read)
+        summary = await _aio.to_thread(_read)
+        _model_svc.tfevents_memo_put(memo_key, sig, summary)
+        return summary
     except Exception:
         logger.exception("_extract_events_summary failed for %s", log_dir)
         return {}

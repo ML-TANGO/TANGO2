@@ -75,6 +75,63 @@ async def check_healthz():
 #     return None
     
 
+# ── SSE tfevents 읽기 캐시 (NFS 과부하 완화, SP-Ext) ──────────────────────
+# sse-graph/sse-time 은 3s(외부)·1s(내부) 루프에서 매 틱 tfevents 파일 전체를
+# EventAccumulator.Reload() 로 재파싱한다. 학습 중 events 파일은 계속 커지고,
+# 뷰를 연 클라이언트마다 독립 파싱하므로 NFS 읽기가 (파일크기 × 빈도 × 클라이언트)
+# 로 증폭된다. events 파일의 (경로, 크기, mtime) 서명이 바뀔 때만 재파싱하고 결과를
+# 프로세스 전역으로 공유해(같은 job 을 보는 N 클라이언트가 1회 파싱을 공유) 완화한다.
+_TFEVENTS_MEMO: dict = {}
+_TFEVENTS_MEMO_MAX = 128
+
+
+def tfevents_signature(log_dir):
+    """log_dir 내 모든 events.out.tfevents.* 의 집계 지문 (파일수, 총 size, 최신 mtime).
+
+    EventAccumulator.Reload() 는 디렉토리의 events 파일 전체를 병합해 읽으므로,
+    '최신 파일 하나'가 아니라 파일 집합 전체를 지문으로 삼아야 한 run 에 events
+    파일이 여러 개 공존해도(스테이지 전환/학습 재개) 갱신을 놓치지 않는다. events 는
+    append-only 라 어떤 파일이 커지거나 새 파일이 생기면 총 size 또는 최신 mtime 이
+    반드시 바뀐다. 파일이 없거나 log_dir 접근 불가면 None (호출부는 빈 결과로 처리).
+    """
+    try:
+        count = 0
+        total_size = 0
+        latest_m = -1.0
+        for name in os.listdir(log_dir):
+            if "tfevents" not in name:
+                continue
+            p = os.path.join(log_dir, name)
+            try:
+                st = os.stat(p)
+            except OSError:
+                continue
+            count += 1
+            total_size += st.st_size
+            if st.st_mtime > latest_m:
+                latest_m = st.st_mtime
+        if count == 0:
+            return None
+        return (count, total_size, latest_m)
+    except OSError:
+        return None
+
+
+def tfevents_memo_get(key, sig):
+    """서명이 일치하면 캐시값, 아니면 None."""
+    hit = _TFEVENTS_MEMO.get(key)
+    if hit is not None and hit[0] == sig:
+        return hit[1]
+    return None
+
+
+def tfevents_memo_put(key, sig, value):
+    """캐시 저장(간단 FIFO 상한 — 동시 학습 job 수 방어)."""
+    if key not in _TFEVENTS_MEMO and len(_TFEVENTS_MEMO) >= _TFEVENTS_MEMO_MAX:
+        _TFEVENTS_MEMO.pop(next(iter(_TFEVENTS_MEMO)), None)
+    _TFEVENTS_MEMO[key] = (sig, value)
+
+
 async def parse_tensorboard_scalars_async(log_dir, max_steps=20):
     """
     TensorBoard 로그 디렉토리에서 스칼라 태그들을 파싱하여 각 태그의 x, y 데이터를 딕셔너리 형태로 반환합니다 (async 버전).
@@ -84,6 +141,16 @@ async def parse_tensorboard_scalars_async(log_dir, max_steps=20):
         log_dir (str): TensorBoard 로그 디렉토리 경로.
         max_steps (int, optional): 출력할 최대 스텝의 개수. 기본값은 100입니다.
     """
+    # NFS 부하 완화: events 파일 서명이 직전 파싱과 같으면 재파싱 없이 공유 캐시 반환
+    # (학습 중 커지는 tfevents 를 3s/1s 루프 × 클라이언트마다 재읽던 것을 제거).
+    sig = await asyncio.to_thread(tfevents_signature, log_dir)
+    if sig is None:
+        return {}, 0
+    memo_key = ("scalars", log_dir, max_steps)
+    cached = tfevents_memo_get(memo_key, sig)
+    if cached is not None:
+        return cached
+
     # 이벤트 어큐뮬레이터 로드
     ea = event_accumulator.EventAccumulator(log_dir)
     await asyncio.to_thread(ea.Reload)
@@ -120,7 +187,9 @@ async def parse_tensorboard_scalars_async(log_dir, max_steps=20):
 
         parsed_data[tag] = {'steps': steps, 'values': values}
 
-    return parsed_data, latest_steps
+    result = (parsed_data, latest_steps)
+    tfevents_memo_put(memo_key, sig, result)
+    return result
 
 
 # ── SP-5 ⑩ 체크포인트 점 마킹 ────────────────────────────────────────────────

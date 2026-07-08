@@ -16,7 +16,7 @@ spec:
         node-role.kubernetes.io/manage: ""
       containers:
       - name: storage-exporter
-        image: docker.io/acrylaaai/storage-exporter:0.3.2
+        image: docker.io/acrylaaai/storage-exporter:0.3.3
         command: ["sh", "-c", "python3 /storage/storage-metric.py"]
         # args: [] # while true; do sleep 30; done; python3 /storage/storage-metric.py
         env:
