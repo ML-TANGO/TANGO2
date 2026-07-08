@@ -25,6 +25,7 @@ import asyncio
 import logging
 import uvicorn
 from fastapi import FastAPI, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from utils.connection_manager import connection_manager
@@ -66,7 +67,10 @@ class ExternalUninstallRequest(BaseModel):
 @health_app.post("/external/launch")
 async def external_launch(pod_info: ExternalPodInfo):
     """Run helm install for an external partner container."""
-    ok, msg = create_external_pod(pod_info)
+    # SP-Ext Phase 2: 동기 blocking helm 호출을 스레드풀로 offload → 느린 helm(NFS/API
+    # 압력)이 이벤트루프를 막아 /health·/ready 가 죽고 scheduler 가 재시작되며 오펀을
+    # 양산하던 것을 차단. subprocess timeout 과 함께 이중 방어.
+    ok, msg = await run_in_threadpool(create_external_pod, pod_info)
     if not ok:
         raise HTTPException(status_code=500, detail=f"helm install failed: {msg}")
     return {"ok": True, "stdout": msg}
@@ -75,7 +79,8 @@ async def external_launch(pod_info: ExternalPodInfo):
 @health_app.post("/external/uninstall")
 async def external_uninstall(payload: ExternalUninstallRequest):
     """Run helm uninstall to clean up an external partner release."""
-    ok, msg = delete_helm_external(payload.helm_release, payload.namespace)
+    # SP-Ext Phase 2: uninstall 도 스레드풀 offload(위 launch 와 동일 이유).
+    ok, msg = await run_in_threadpool(delete_helm_external, payload.helm_release, payload.namespace)
     if not ok:
         raise HTTPException(status_code=500, detail=f"helm uninstall failed: {msg}")
     return {"ok": True, "stdout": msg}

@@ -244,8 +244,31 @@ def create_external_pod(pod_info: ExternalPodInfo) -> Tuple[bool, str]:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            timeout=300,                      # SP-Ext Phase 2: helm install 상한(--wait 없어 보통 수초).
         )
         return True, result.stdout
+    except subprocess.TimeoutExpired:
+        # SP-Ext Phase 2: helm install 이 300s 초과(API 서버 지연 등). 무한 블로킹으로
+        # 이벤트루프/health 를 막지 않도록 실패 처리. SIGKILL 된 install 은 pending-install
+        # release(+partial Pod/GPU)를 남길 수 있고, launch 실패 경로엔 poll loop
+        # (_cleanup→uninstall)이 없으므로 여기서 best-effort uninstall 로 직접 회수한다
+        # (release 명은 job 별 unique → 오삭제 없음). 이어서 CalledProcessError 경로와
+        # 동일하게 GPU reservation + secret 정리. (helm_run 은 순환회피 위해 함수레벨 import)
+        try:
+            from scheduler.helm_run import delete_helm_external
+            delete_helm_external(pod_info.helm_release, pod_info.namespace)
+        except Exception:
+            logger.warning(
+                "best-effort uninstall after install timeout failed for %s",
+                pod_info.helm_release,
+            )
+        release_reservations_for_release(pod_info.helm_release)
+        _delete_external_secret(pod_info.helm_release, pod_info.namespace)
+        logger.error(
+            "helm install timed out (>300s) for %s in %s",
+            pod_info.helm_release, pod_info.namespace,
+        )
+        return False, "helm install timed out (>300s)"
     except subprocess.CalledProcessError as e:
         err_msg = (e.stderr or "").strip()
         # Idempotency: a duplicate release name means a prior launch already

@@ -402,6 +402,10 @@ class ExternalPodInfo(BaseModel):
     pod_name: str
     helm_release: str
     terminationGracePeriodSeconds: int = 60
+    # SP-Ext Phase 2: resolved lifecycle bound (초). pod.yaml 이 train/batch pod 의
+    # activeDeadlineSeconds 백스톱으로 사용(infer 제외, 0 이면 미부여). 구버전
+    # external_container 가 이 필드 없이 보내도 default 0 → deadline 미부여(안전).
+    timeout_seconds: int = 0
 
     # Manifest provenance (label-only)
     manifest: ExternalManifestMeta

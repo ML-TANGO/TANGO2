@@ -655,8 +655,14 @@ def delete_helm_external(helm_release: str, namespace: str):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            timeout=120,                      # SP-Ext Phase 2: helm uninstall 상한(--wait 없어 보통 수초).
         )
         return 1, result.stdout
+    except subprocess.TimeoutExpired:
+        # SP-Ext Phase 2: uninstall 이 120s 초과 → 이벤트루프 무한 블로킹 방지 위해 실패
+        # 반환. 미삭제 release 는 호출측 재시도/부팅 reconcile 이 회수.
+        print(f"helm uninstall timed out (>120s): {helm_release}")
+        return False, "helm uninstall timed out (>120s)"
     except subprocess.CalledProcessError as e:
         err_msg = (e.stderr or "").strip()
         # Already gone — treat as success so cleanup is idempotent.

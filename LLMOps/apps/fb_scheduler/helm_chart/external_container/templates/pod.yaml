@@ -106,6 +106,13 @@ spec:
     jfb/cpu-instance.name: {{ .Values.cpu_instance_name }}
   {{- end }}
   terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+  # SP-Ext Phase 2: K8s 백스톱. in-memory 감독자(external_container poll task)가
+  # 죽어도 kubelet 이 시한 초과 학습 pod 를 강제 종료(DeadlineExceeded) — 리부트
+  # 없이 폭주 pod 정지. infer(서빙=장수 pod)엔 미부여. timeout_seconds=0(구버전
+  # 미배선)이면 미부여. +600s 마진: 감독자의 graceful uninstall 이 1차, 이건 백스톱.
+  {{- if and (ne .Values.job_type "infer") (gt (int .Values.timeout_seconds) 0) }}
+  activeDeadlineSeconds: {{ add (int .Values.timeout_seconds) 600 }}
+  {{- end }}
   containers:
   - name: external-container
     {{- if .Values.image_digest }}

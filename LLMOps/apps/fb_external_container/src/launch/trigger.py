@@ -31,7 +31,11 @@ class SchedulerClient:
         """POST /external/launch — fb_scheduler runs helm install."""
         url = f"{self.base_url}/external/launch"
         try:
-            resp = await self.client.post(url, json=pod_info_dict, timeout=60.0)
+            # SP-Ext Phase 2: fb_scheduler 의 helm install subprocess 상한(300s)보다
+            # 크게 잡아야 한다. 더 작으면(기존 60s) install 이 60~300s 걸릴 때 여기서
+            # 먼저 포기 → JobTracker 가 FAILED+row삭제(uninstall 안 함)하는데 서버는
+            # 설치를 완주 → 감독자 없는 orphan(infer 는 activeDeadline 도 없어 무기한).
+            resp = await self.client.post(url, json=pod_info_dict, timeout=330.0)
         except httpx.HTTPError as e:
             raise SchedulerError(f"unable to reach fb_scheduler at {url}: {e}") from e
         if resp.status_code >= 400:
@@ -48,7 +52,8 @@ class SchedulerClient:
             resp = await self.client.post(
                 url,
                 json={"helm_release": helm_release, "namespace": namespace},
-                timeout=30.0,
+                # SP-Ext Phase 2: 서버 helm uninstall subprocess 상한(120s)보다 크게.
+                timeout=150.0,
             )
         except httpx.HTTPError as e:
             raise SchedulerError(f"unable to reach fb_scheduler at {url}: {e}") from e

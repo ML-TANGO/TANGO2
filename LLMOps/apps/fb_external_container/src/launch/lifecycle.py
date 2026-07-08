@@ -237,6 +237,11 @@ def _build_pod_info_dict(
             "estimated_duration_seconds": spec.capabilities.estimated_duration_seconds or 0,
             "timeout_seconds": spec.capabilities.timeout_seconds or 0,
         },
+        # SP-Ext Phase 2: resolved lifecycle bound = JobRecord.timeout_seconds 와
+        # 동일(_resolve_timeout). pod.yaml 이 train/batch pod 의 activeDeadlineSeconds
+        # 백스톱으로 사용 — in-memory 감독자(poll task)가 죽어도 kubelet 이 시한 초과
+        # pod 를 강제 종료(리부트 없이). infer(서빙)엔 chart 에서 미부여.
+        "timeout_seconds": _resolve_timeout(manifest),
         # securityContext / ingress / labels / env / secrets / jf_env defer
         # to chart defaults; SP-Ext.3 fills partner-defined env/secrets from
         # the persisted manifest. Ingress is enabled for sync (user-facing).
