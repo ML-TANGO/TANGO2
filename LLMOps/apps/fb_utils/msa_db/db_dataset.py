@@ -46,8 +46,8 @@ async def get_dataset_async(dataset_id=None, dataset_name=None, workspace_id=Non
             res = await select_query(query=sql, params=(dataset_id), fetch_type=FetchType.ONE)
         if dataset_name is not None:
             if workspace_id is not None:
-                sql += 'WHERE d.name = "%s" AND d.workspace_id = %s'
-                res = await select_query(query=sql, params=(dataset_name, workspace_id), fetch_type=FetchType.ONE) 
+                sql += 'WHERE d.name = %s AND d.workspace_id = %s'
+                res = await select_query(query=sql, params=(dataset_name, workspace_id), fetch_type=FetchType.ONE)
             else:
                 sql += 'WHERE d.name = "%s"' 
                 res = await select_query(query=sql, params=(dataset_name), fetch_type=FetchType.ONE) 

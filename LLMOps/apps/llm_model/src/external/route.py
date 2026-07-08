@@ -36,6 +36,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from utils import settings
 from utils import errors_catalog
 from utils.resource import response as _envelope
+from utils.msa_db import db_dataset
 
 from .proxy import ExternalContainerClient, ExternalContainerError
 
@@ -559,12 +560,58 @@ async def get_external_manifest_by_name(manifest_name: str) -> dict[str, Any]:
     )
 
 
+# ── Dynamic dataset binding ────────────────────────────────────────────────
+
+# 데이터셋 이름은 NFS subPath segment + DB 조회에 쓰이므로 allowlist 검증.
+# datasets.name 은 VARCHAR(100) — 첫 글자 영숫자(leading-dot 거부) + ._- 허용.
+_DATASET_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")
+
+
+async def _resolve_dataset_binding(params: dict[str, Any], workspace_id: int) -> None:
+    """params['_dataset'].access 를 워크스페이스 데이터셋 레코드에서 동적 해석.
+
+    recipe 는 `_dataset: {name}` 만 선언한다 — access(0=RO/1=RW) 는 DB 의 데이터셋
+    속성이지 manifest 가 하드코딩할 값이 아니다. 여기서 launch 워크스페이스 안에서
+    이름으로 조회해(워크스페이스 스코프 쿼리가 곧 same-workspace ACL) 실제 access
+    플래그를 주입한다 — evaluate 런처(model/service.py)와 동일 패턴. `_dataset` 이
+    없거나 name 이 없으면 no-op(데이터셋을 마운트하지 않는 단일 launch 는 무영향).
+
+    ``params['_dataset']`` 를 새 dict 로 교체. 이름이 유효하지 않거나 워크스페이스에
+    등록되지 않은 데이터셋이면 HTTPException.
+    """
+    ref = params.get("_dataset")
+    if not isinstance(ref, dict):
+        return
+    name = ref.get("name")
+    if not name:
+        return
+    name = str(name)
+    if not _DATASET_NAME_RE.match(name):
+        raise HTTPException(
+            status_code=422, detail=f"invalid dataset name for binding: {name!r}"
+        )
+    record = await db_dataset.get_dataset_async(
+        dataset_name=name, workspace_id=workspace_id
+    )
+    if not record:
+        raise HTTPException(
+            status_code=404,
+            detail=f"dataset {name!r} not found in workspace {workspace_id}",
+        )
+    # DB access 플래그(INT 0=RO / 1=RW)가 /dataset 마운트의 subPath 버킷
+    # ({access}/{name}) 로도 쓰인다. recipe 가 실었던 하드코딩 값은 override.
+    params["_dataset"] = {"name": name, "access": str(record["access"])}
+
+
 # ── Routes ───────────────────────────────────────────────────────────────
 
 
 @external.post("/jobs", status_code=status.HTTP_202_ACCEPTED)
 async def start_external_job(body: StartJobBody) -> dict[str, Any]:
     client = await _get_client()
+    # 동적 데이터셋 바인딩 — recipe 의 _dataset.name 을 워크스페이스 데이터셋
+    # 레코드로 해석해 실제 access(RW/RO) 주입. _dataset 없으면 no-op(단일 launch).
+    await _resolve_dataset_binding(body.params, body.workspace_id)
     try:
         raw = await client.start_job(
             manifest_name=body.manifest_name,
@@ -756,7 +803,7 @@ async def stream_fine_tuning_status(job_id: str, request: Request) -> StreamingR
 
             # Same terminal short-circuit as the internal SSE: keep streaming
             # for as long as the client holds the connection.
-            await asyncio.sleep(1)
+            await asyncio.sleep(3)
 
     return StreamingResponse(_iterate(), media_type="text/event-stream")
 
@@ -798,7 +845,7 @@ async def stream_fine_tuning_time(job_id: str, request: Request) -> StreamingRes
                 yield f"data: {json.dumps(payload)}\n\n".encode()
                 last_emit = now
 
-            await asyncio.sleep(1)
+            await asyncio.sleep(3)
 
     return StreamingResponse(_iterate(), media_type="text/event-stream")
 
@@ -844,7 +891,7 @@ async def stream_fine_tuning_graph(job_id: str, request: Request) -> StreamingRe
                 yield f"data: {json.dumps(payload)}\n\n".encode()
                 last_emit = now
 
-            await asyncio.sleep(1)
+            await asyncio.sleep(3)
 
     return StreamingResponse(_iterate(), media_type="text/event-stream")
 
