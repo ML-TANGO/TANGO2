@@ -35,6 +35,7 @@ const useSaveBtn = (isFetchingStatus, playgroundId) => {
   const handleSave = async () => {
     const {
       model_type,
+      serving_system,
       model_huggingface_id,
       model_allm_id,
       model_allm_commit_id,
@@ -52,6 +53,7 @@ const useSaveBtn = (isFetchingStatus, playgroundId) => {
 
     const body = {
       model_type,
+      serving_system,
       model_huggingface_id,
       model_allm_id: `${model_allm_id}`,
       model_allm_commit_id: `${model_allm_commit_id}`,

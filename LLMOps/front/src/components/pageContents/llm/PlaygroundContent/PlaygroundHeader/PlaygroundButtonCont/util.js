@@ -120,6 +120,7 @@ export const getDetailPlaygroundInfo = async (dispatch, playgroundId) => {
       model: result.model
         ? {
             model_type: result.model.model_type,
+            serving_system: result.model.serving_system ?? 'vllm',
             model_huggingface_id: result.model.model_hf_id,
             model_allm_id: result.model.model_allm_id,
             model_allm_name: result.model.model_allm_name,

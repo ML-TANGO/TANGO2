@@ -44,12 +44,19 @@ const TValue = {
   model_max_new_tokens: 512,
 };
 
+// 서빙 엔진 옵션(멀티엔진 로드맵 Phase 1). vLLM 활성, 그 외는 준비중(disabled).
+const ENGINES = [
+  { id: 'vllm', label: 'vLLM', disabled: false },
+  { id: 'llama_cpp', label: 'llama.cpp', disabled: true },
+];
+
 const PlaygroundModel = React.memo(({ workspaceId }) => {
   const { t } = useTranslation();
   const dispatch = useDispatch();
 
   const {
     model_type,
+    serving_system,
     model_huggingface_id,
     model_allm_name,
     model_allm_commit_name,
@@ -82,6 +89,17 @@ const PlaygroundModel = React.memo(({ workspaceId }) => {
           type: changeType,
           modelValue: +e.target.value,
         }),
+      );
+    },
+    [dispatch],
+  );
+
+  const handleSelectEngine = useCallback(
+    (engineId) => {
+      // Phase 1: vLLM 만 활성. 그 외(준비중)는 무시.
+      if (engineId !== 'vllm') return;
+      dispatch(
+        handleSetModelValue({ type: 'serving_system', modelValue: engineId }),
       );
     },
     [dispatch],
@@ -135,6 +153,38 @@ const PlaygroundModel = React.memo(({ workspaceId }) => {
     <PlaygroundFrame>
       <div className={cx('header')}>
         <h3 className={cx('title')}>{t('Model')}</h3>
+      </div>
+      <div className={cx('engine-select')}>
+        <span className={cx('engine-label')} id='serving-engine-label'>
+          서빙 엔진
+        </span>
+        <div
+          className={cx('engine-options')}
+          role='radiogroup'
+          aria-labelledby='serving-engine-label'
+        >
+          {ENGINES.map((eng) => {
+            const selected = (serving_system || 'vllm') === eng.id;
+            return (
+              <button
+                key={eng.id}
+                type='button'
+                role='radio'
+                aria-checked={selected}
+                className={cx(
+                  'engine-opt',
+                  selected && 'selected',
+                  eng.disabled && 'disabled',
+                )}
+                disabled={eng.disabled || isDisabled}
+                onClick={() => handleSelectEngine(eng.id)}
+              >
+                {eng.label}
+                {eng.disabled && <span className={cx('badge')}>준비중</span>}
+              </button>
+            );
+          })}
+        </div>
       </div>
       {!model_type && (
         <ButtonV2
