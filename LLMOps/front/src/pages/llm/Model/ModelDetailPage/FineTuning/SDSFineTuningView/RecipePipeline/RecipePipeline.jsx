@@ -146,7 +146,6 @@ const RecipePipeline = ({
   fineStatus,
   onStop,
   onSystemLog,
-  onCommitLoad,
   t,
 }) => {
   const done = donePhases || new Set();
@@ -446,19 +445,6 @@ const RecipePipeline = ({
             </span>
           ) : null}
           <div className={mx('head-actions')}>
-            <button
-              type='button'
-              className={mx('head-btn')}
-              onClick={onCommitLoad}
-              disabled={isMonRunning}
-              title={
-                isMonRunning
-                  ? '학습 중에는 불러올 수 없습니다.'
-                  : '저장된 커밋을 활성 모델로 불러옵니다.'
-              }
-            >
-              <span aria-hidden='true'>⤓</span> 커밋 불러오기
-            </button>
             <button
               type='button'
               className={mx('head-btn')}

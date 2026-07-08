@@ -163,7 +163,6 @@ const SDSExternalFineTuningView = memo(function SDSExternalFineTuningView({
   useEffect(() => {
     loadModalComponent('FINETUNING_SYSTEM_LOG');
     loadModalComponent('FINETUNING_SETTING');
-    loadModalComponent('FINETUNING_COMMIT_LOAD');
   }, []);
 
   const fineTuningStatus = useMemo(
@@ -553,17 +552,6 @@ const SDSExternalFineTuningView = memo(function SDSExternalFineTuningView({
     workspaceId,
   ]);
 
-  // 커밋 불러오기 — 저장된 커밋을 활성 모델로 로드(MM 뷰 동형 모달). SDS 는 체인이 base 를 자동
-  // 주입하므로 getCommitId 피드는 불필요(no-op). ⚠️ recipe 체인 흐름 적합성은 별도 확인 필요.
-  const handleCommitLoad = useCallback(() => {
-    dispatch(
-      openModal({
-        modalType: 'FINETUNING_COMMIT_LOAD',
-        modalData: { workspaceId, modelId, getCommitId: () => {}, refresh },
-      }),
-    );
-  }, [dispatch, workspaceId, modelId, refresh]);
-
   // recipe(SDS) 모드는 상단 버튼 없음(실행=모니터 근처, 시스템로그=모니터 헤더). MM 뷰 동일.
   // 비-recipe 단일 launch 만 상단에 시스템로그 + 실행/중지.
   const topButtonList =
@@ -691,7 +679,6 @@ const SDSExternalFineTuningView = memo(function SDSExternalFineTuningView({
             fineStatus={fineStatus}
             onStop={onClickStop}
             onSystemLog={onClickSystemLog}
-            onCommitLoad={handleCommitLoad}
             t={t}
           />
         </div>
