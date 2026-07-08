@@ -2920,5 +2920,6 @@
   "preprocessingResourceManagement.label": "전처리 자원 관리",
   "node.labels.title": "노드 레이블 관리",
   "node.labels.empty": "등록된 레이블이 없습니다.",
-  "node.labels.close": "닫기"
+  "node.labels.close": "닫기",
+  "edgeApi.nav": "Edge API 규격"
 }

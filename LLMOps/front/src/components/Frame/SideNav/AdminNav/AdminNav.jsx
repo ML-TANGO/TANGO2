@@ -16,7 +16,9 @@ const adminNavList = [
   // { name: 'Built-in Models', path: '/admin/builtin_models', icon: 'built-in' },
   // { name: 'Docker Images', path: '/admin/docker_images', icon: 'dockerimage' },
   { name: 'Datasets', path: '/admin/datasets', icon: 'dataset' },
-  { name: 'Nodes', path: '/admin/nodes', icon: 'node' },
+  { name: 'Nodes', path: '/admin/nodes', icon: 'node', exact: true },
+  // SP-8 §7 — Edge API 규격 뷰어(기관 제공 통신 규약). 노드 하위 라우트라 Nodes 바로 뒤.
+  { name: 'edgeApi.nav', path: '/admin/nodes/edge/api-spec', icon: 'network' },
   { name: 'Storage', path: '/admin/storages', icon: 'storage' },
   // { name: 'Network', path: '/admin/networks', icon: 'network' },
   // { name: 'Benchmarking', path: '/admin/benchmarking', icon: 'benchmarking' },
