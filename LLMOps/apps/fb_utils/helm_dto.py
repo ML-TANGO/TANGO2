@@ -100,9 +100,10 @@ class HelmLLMInputModel(BaseModel):
     model_allm_name: Optional[str] = None
     model_allm_commit_name: Optional[str] = None
     huggingface_api_token: Optional[str] = settings.HUGGINGFACE_TOKEN
+    serving_system: Optional[str] = "vllm"  # 멀티엔진 로드맵 Phase 1 (pod-side 소비는 Phase 2)
 
     class Config:
-        protected_namespaces = () 
+        protected_namespaces = ()
 
 # LLM - Rag
 class HelmRag(HelmLlm, HelmLLMInputModel):
@@ -231,7 +232,8 @@ class BaseConfig(BaseModel):
                     "huggingface_token": values.get("model_huggingface_token"),
                     "allm_name": values.get("model_allm_name"),
                     "allm_commit_name": values.get("model_allm_commit_name"),
-                    "huggingface_api_token" : values.get("huggingface_api_token")
+                    "huggingface_api_token" : values.get("huggingface_api_token"),
+                    "serving_system" : values.get("serving_system"),
                 },
                 "rag" : {
                     "id": values.get("rag_id"),
@@ -404,6 +406,7 @@ class DictModel(BaseModel):
     allm_name: Optional[str] = None
     allm_commit_name: Optional[str] = None
     huggingface_api_token: Optional[str] = settings.HUGGINGFACE_TOKEN
+    serving_system: Optional[str] = None  # 멀티엔진 Phase 1 — YamlToValues 라운드트립에서 --set 로 살아남게
 
 class DictLlm(BaseModel):
     db: Optional[DictLlmDb] = None

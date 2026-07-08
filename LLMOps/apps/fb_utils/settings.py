@@ -47,6 +47,14 @@ HOST_BASE_DOCKERFILE_PATH = '/jfbcore/jf-data/images' # in host
 JF_DEFAULT_UBUNTU_20="JBI_Ubuntu-20.04.6"
 JF_DEFAULT_UBUNTU_22="JBI_Ubuntu-22.04.4"
 DEPLOYMENT_LLM_IMAGE="acrylaaai/llm_deployment:dev"
+# [멀티엔진 서빙 로드맵 Phase 1] 서빙 엔진별 배포 이미지 맵. 현재 vLLM 단일 — Phase 2 에서 llama.cpp 추가.
+SERVING_ENGINE_IMAGE_MAP = {"vllm": DEPLOYMENT_LLM_IMAGE}
+# 지금 실제 지원하는 서빙 엔진(그 외 값은 서버측 거부). Phase 2 에서 "llama_cpp" 추가 예정.
+SUPPORTED_SERVING_SYSTEMS = ("vllm",)
+def resolve_serving_system(value):
+    # 읽기 시점 정규화(defense-in-depth): None/미지원 → vllm(fail-safe). 쓰기 경로는 reject.
+    v = value or "vllm"
+    return v if v in SUPPORTED_SERVING_SYSTEMS else "vllm"
 ANALYZER_IMAGE="jfb/analyzer:0.0.1"
 
 

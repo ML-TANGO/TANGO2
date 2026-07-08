@@ -186,6 +186,8 @@ async def update_playground_options(body: dto.UpdatePlaygroundOptionsInput):
                 # model
                 model_type=body.model_type, model_huggingface_id=body.model_huggingface_id, model_huggingface_token=body.model_huggingface_token,
                 model_allm_id=body.model_allm_id, model_allm_commit_id=body.model_allm_commit_id, model_info=body.model_info,
+                # serving engine
+                serving_system=body.serving_system,
                 # model_parameter
                 model_temperature=body.model_temperature, model_top_p=body.model_top_p, model_top_k=body.model_top_k,
                 model_repetition_penalty=body.model_repetition_penalty, model_max_new_tokens=body.model_max_new_tokens,

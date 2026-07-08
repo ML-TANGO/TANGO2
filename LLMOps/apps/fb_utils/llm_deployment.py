@@ -204,6 +204,7 @@ async def get_playground_helm_parameter(helm_deployment_parameter, playground_id
             model_huggingface_token=model.get("model_huggingface_token"),
             model_allm_name=model_allm_name,
             model_allm_commit_name=model_allm_commit_name,
+            serving_system=settings.resolve_serving_system(model.get("serving_system")),
             # model parameter
             param_temperature=model_parameter.get("temperature"),
             param_top_p=model_parameter.get("top_p"),

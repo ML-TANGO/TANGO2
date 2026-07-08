@@ -700,6 +700,7 @@ async def get_playground(playground_id):
                 model = json.loads(model)
                 result['model'] = dict()
                 result['model']["model_type"] = model.get("model_type")
+                result['model']["serving_system"] = model.get("serving_system") or "vllm"
                 result['model']["model_hf_id"] = model.get("model_huggingface_id")
                 
                 db_commit_info = await db.get_commit_model(commit_id=model.get("model_allm_commit_id"))
@@ -830,7 +831,8 @@ async def get_rag_prompt_info(rag, prompt):
 async def update_playground_options(playground_id, is_rag, is_prompt, accelerator,
                 model_type, model_huggingface_id, model_huggingface_token, model_allm_id, model_allm_commit_id, model_info,
                 model_temperature, model_top_p, model_top_k, model_repetition_penalty, model_max_new_tokens, 
-                rag_id, rag_chunk_max, prompt_id, prompt_name, prompt_commit_name, prompt_system_message, prompt_user_message
+                rag_id, rag_chunk_max, prompt_id, prompt_name, prompt_commit_name, prompt_system_message, prompt_user_message,
+                serving_system="vllm"
             ):
     try:
         # playground
@@ -838,10 +840,15 @@ async def update_playground_options(playground_id, is_rag, is_prompt, accelerato
         if playground_info is None:
             raise Exception("check playground id")
 
+        # 서빙 엔진 검증(멀티엔진 Phase 1) — 지원 목록 외 값은 거부(FE gate 넘어 방어).
+        serving_system = serving_system or "vllm"
+        if serving_system not in settings.SUPPORTED_SERVING_SYSTEMS:
+            raise Exception(f"지원하지 않는 서빙 엔진입니다: {serving_system}")
+
         # model — 기존 dual 링크(이중 세션)는 보존(옵션 저장이 세션 링크를 지우지 않게).
         model_dict = {"model_type": model_type, "model_huggingface_id" : model_huggingface_id, "model_huggingface_token" : model_huggingface_token,
                       "model_allm_id" : model_allm_id, "model_allm_commit_id" : model_allm_commit_id,
-                      "model_info": model_info}
+                      "model_info": model_info, "serving_system": serving_system}
         try:
             _existing_dual = (json.loads(playground_info.get("model") or "{}") or {}).get("dual")
             if _existing_dual:
@@ -1329,7 +1336,18 @@ async def create_deployment(playground_id, user_id, deployment_type, instance_id
         deployment_cpu_limit = instance_info.get('cpu_allocate', 0)
         deployment_ram_limit = instance_info.get('ram_allocate', 0)
         
-        image_real_name=f"{settings.DOCKER_REGISTRY_URL}{settings.DEPLOYMENT_LLM_IMAGE}" ### LLM 배포 이미지는 1. main.py에서 image db에 넣음. 2. image build: /jp/libs/fb_image/llm
+        # 서빙 엔진별 배포 이미지(멀티엔진 Phase 1). playground 역할만 엔진 선택 반영(embedding/reranker=vllm).
+        #   model JSON 파싱은 playground 에서만 → embedding/reranker 를 model 필드 유효성에 결합하지 않음(회귀 방지).
+        if deployment_type == "playground":
+            try:
+                _model_cfg = json.loads(playground_info.get("model") or "{}") or {}
+            except (ValueError, TypeError):
+                _model_cfg = {}
+            _serving_system = settings.resolve_serving_system(_model_cfg.get("serving_system"))
+        else:
+            _serving_system = "vllm"
+        _serving_image = settings.SERVING_ENGINE_IMAGE_MAP.get(_serving_system, settings.DEPLOYMENT_LLM_IMAGE)
+        image_real_name=f"{settings.DOCKER_REGISTRY_URL}{_serving_image}" ### LLM 배포 이미지는 1. main.py에서 image db에 넣음. 2. image build: /jp/libs/fb_image/llm
         image_id = db.get_image_id_by_real_name(real_name=image_real_name).get('id')
 
         if deployment_type == "playground":

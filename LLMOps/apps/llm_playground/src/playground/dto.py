@@ -37,6 +37,8 @@ class UpdatePlaygroundOptionsInput(BaseModel):
     model_allm_id: Optional[str] = Field(default=None, description="모델: allm 모델 선택시 id")
     model_allm_commit_id: Optional[str] = Field(default=None, description="모델: commit 선택시 model commit id")
     model_info: Optional[dict] = Field(default=None, description="모델 정보 - 설명, 커밋버전, 접근권한, 생성일시, 최근업데이트일시")
+    # serving engine (멀티엔진 로드맵 Phase 1). 현재 vllm 만 지원, 그 외 값은 서버측 거부.
+    serving_system: Optional[str] = Field(default="vllm", description="서빙 엔진: vllm (Phase 2: llama_cpp 등)")
     # model parameter
     model_temperature: Optional[float] = Field(default=None, description="모델 파라미터: temperature")
     model_top_p: Optional[float] = Field(default=None, description="모델 파라미터: top_p")
