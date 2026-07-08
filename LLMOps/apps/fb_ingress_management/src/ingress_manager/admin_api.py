@@ -54,7 +54,13 @@ ALLOWED_PATH = [
     "/api/(login|logout)(.*)/",
     "/api/users/register/",
     "/api/users/check/",
-    
+    # SP-8 §5.3 — 엣지 device heartbeat: 기관 디바이스가 자체 Bearer 토큰으로 호출(Kong
+    # consumer 아님) → key-auth 면제. 백엔드(fb_resource) 토큰 검증이 실 게이트이고,
+    # rate-limiting/request-size-limiting(edge-device-plugins.yaml)로 익명 표면 방어.
+    # ⚠️ 실 device 연동(2차년도) 시 활성. apply 시 라이브 Kong route path 문자열과
+    # 정확히 일치하는지 확인(GET {admin}/routes 의 paths) — 아래는 -device-api 인그레스 기준.
+    "/api/edge/devices(.*)/",
+
     # Marker용 임시 허용 경로들
     # "/api/(workspaces)(.*)/",
     # "~/api/(workspaces)(.*)$",

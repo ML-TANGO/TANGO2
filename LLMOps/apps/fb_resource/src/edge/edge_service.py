@@ -21,6 +21,12 @@ from utils.msa_db import db_edge
 REMOTE_MANAGER_TIMEOUT = 5  # sec
 TOKEN_TTL_DAYS = 90
 HEARTBEAT_OFFLINE_SEC = 300  # 미수신 5분 → offline
+HEARTBEAT_MIN_INTERVAL_SEC = 30  # SP-8 §5.1 — 30초 미만 재호출 throttle(429)
+
+
+class HeartbeatThrottled(Exception):
+    """heartbeat 가 최소 간격(30s) 미만으로 재수신 → 라우트가 429 로 변환."""
+    pass
 
 
 def _now() -> str:
@@ -89,6 +95,12 @@ def record_heartbeat(device_id: str, body) -> dict:
     w = db_edge.get_edge_worker(device_id=device_id)
     if not w:
         raise Exception(f"edge worker not found: {device_id}")
+    # SP-8 §5.1 — 30초 미만 재수신 throttle(429). 등록 직후 첫 heartbeat 오탐 회피 위해
+    # "이전 heartbeat 존재(last_heartbeat_json)" 를 게이트로 둔다(등록도 last_seen 을 세팅하므로).
+    if w.get("last_heartbeat_json"):
+        prev = _parse_dt(w.get("last_seen"))
+        if prev is not None and (datetime.now() - prev).total_seconds() < HEARTBEAT_MIN_INTERVAL_SEC:
+            raise HeartbeatThrottled(device_id)
     # 필드는 HeartbeatModel 에서 bound 되므로 정상 payload 는 8000 미만. 초과 시 blind
     # slice(잘린 무효 JSON 영속) 대신 거부해 이후 판독기 파손을 막는다.
     hb_json = json.dumps(body.model_dump())

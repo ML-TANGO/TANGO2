@@ -154,7 +154,7 @@ CREATE TABLE IF NOT EXISTS `edge_worker` (
     `name`               VARCHAR(128),
     `device_type`        VARCHAR(32),
     `sdx_domain`         VARCHAR(64),
-    `remote_manager_url` VARCHAR(512) NOT NULL,
+    `remote_manager_url` VARCHAR(512) NULL,   -- SP-8 §4/D1: heartbeat-only 디바이스는 NULL 허용
     `conn_status`        VARCHAR(16) DEFAULT 'offline',
     `last_seen`          DATETIME DEFAULT NULL,
     `deploy_model`       VARCHAR(128) DEFAULT NULL,

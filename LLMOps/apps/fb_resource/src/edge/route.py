@@ -125,6 +125,9 @@ async def device_heartbeat(body: model.HeartbeatModel,
     try:
         res = await run_in_threadpool(edge_service.record_heartbeat, device_id, body)
         return response(status=1, result=res)
+    except edge_service.HeartbeatThrottled:
+        # SP-8 §5.1 — 30초 미만 재수신. 게이트웨이 rate-limit 과 별개인 앱-레벨 백스톱.
+        raise HTTPException(status_code=429, detail="heartbeat too frequent")
     except Exception as e:
         traceback.print_exc()
         return response(status=0, message=str(e), result=None)

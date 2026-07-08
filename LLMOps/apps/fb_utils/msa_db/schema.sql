@@ -156,7 +156,7 @@ CREATE TABLE IF NOT EXISTS `edge_worker` (
     `name`               VARCHAR(128),
     `device_type`        VARCHAR(32),                    -- orin / rpi-hailo / pc-gpu ...
     `sdx_domain`         VARCHAR(64),                    -- SDx 도메인
-    `remote_manager_url` VARCHAR(512) NOT NULL,          -- remoteManager centralagent endpoint
+    `remote_manager_url` VARCHAR(512) NULL,              -- remoteManager centralagent endpoint (SP-8 §4/D1: heartbeat-only 디바이스는 NULL 허용)
     `conn_status`        VARCHAR(16) DEFAULT 'offline',  -- 연결상태 online/offline
     `last_seen`          DATETIME DEFAULT NULL,          -- heartbeat
     `deploy_model`       VARCHAR(128) DEFAULT NULL,      -- 배포상태: 모델명

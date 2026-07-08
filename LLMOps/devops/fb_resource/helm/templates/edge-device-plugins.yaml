@@ -1,0 +1,28 @@
+# SP-8 §5.3/§12 — 디바이스-facing heartbeat 라우트(-device-api) 보호 플러그인.
+# 이 라우트는 key-auth 면제(ALLOWED_PATH)라 게이트웨이에서 익명이므로, 남용/DoS 를
+# rate-limiting(빈도) + request-size-limiting(본문 크기)로 막는다. 리콘사일러는
+# key-auth/request-termination 만 제거하므로(admin_api.py kong_remove_security_plugins_from_route)
+# 이 두 플러그인은 ALLOWED_PATH 라우트에서도 유지된다.
+# ⚠️ 라이브 apply 는 실 device 연동(2차년도) 시점까지 보류.
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: edge-device-rate-limit
+  namespace: {{ .Values.global.jfb.namespace }}
+plugin: rate-limiting
+config:
+  # heartbeat 규약 = 30초 간격(≈2/min). IP 당 분당 60 = 넉넉한 헤드룸 + 남용 상한.
+  minute: 60
+  limit_by: ip
+  policy: local          # 단일 Kong 레플리카 기준. 멀티 레플리카 시 redis 로 변경.
+  fault_tolerant: true   # rate-limit 백엔드 장애 시 요청 통과(가용성 우선)
+---
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: edge-device-size-limit
+  namespace: {{ .Values.global.jfb.namespace }}
+plugin: request-size-limiting
+config:
+  # 게이트웨이 gross-abuse 상한(1MB). 정밀 한계(8000B)는 백엔드 record_heartbeat 가 강제.
+  allowed_payload_size: 1
