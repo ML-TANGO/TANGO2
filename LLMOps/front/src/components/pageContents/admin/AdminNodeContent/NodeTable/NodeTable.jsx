@@ -14,6 +14,11 @@ import { openConfirm } from '@src/store/modules/confirm';
 // Actions
 import { openModal } from '@src/store/modules/modal';
 
+// SP-8 P4b — K8s 노드 커스텀 레이블 (target_type='node', target_id=hostname).
+import { deleteEdgeLabel, upsertEdgeLabel } from '@src/apis/flightbase/edge';
+import { STATUS_SUCCESS } from '@src/network';
+import { toast } from '@src/components/Toast';
+
 import { calFindNodeList, postChangeStatus } from '../util';
 
 // Components
@@ -106,14 +111,74 @@ const calDisabledBtn = (roleList, typeList) => {
   return { isActiveBtn: false, isSettingBtn: false };
 };
 
+// BE CustomLabelModel.label_key 패턴과 동일 — 서버 422 전에 클라에서 선차단.
+const LABEL_KEY_RE = /^[A-Za-z0-9._/-]+$/;
+
 function NodeTable({
   nodeList: nodeTableList,
   statusList,
   setStatusList,
   handleRefresh,
+  labelsByHost = {},
+  onLabelsChanged,
 }) {
   const { t } = useTranslation();
   const dispatch = useDispatch();
+
+  // SP-8 P4b — 레이블 관리 모달(DataTable 바깥 렌더 → 1초 노드폴 리마운트 무관).
+  const [labelModalHost, setLabelModalHost] = useState(null);
+  const [labelKey, setLabelKey] = useState('');
+  const [labelValue, setLabelValue] = useState('');
+  const [labelKeyErr, setLabelKeyErr] = useState(false);
+  const [labelBusy, setLabelBusy] = useState(false);
+
+  const openLabelModal = useCallback((hostname) => {
+    setLabelModalHost(hostname);
+    setLabelKey('');
+    setLabelValue('');
+    setLabelKeyErr(false);
+  }, []);
+
+  const closeLabelModal = useCallback(() => {
+    setLabelModalHost(null);
+    setLabelKey('');
+    setLabelValue('');
+    setLabelKeyErr(false);
+  }, []);
+
+  const removeLabel = useCallback(
+    async (labelId) => {
+      const res = await deleteEdgeLabel(labelId);
+      if (res.status === STATUS_SUCCESS) onLabelsChanged?.();
+      else toast.error(res.message || t('edge.toast.labelFail'));
+    },
+    [onLabelsChanged, t],
+  );
+
+  const submitLabel = useCallback(async () => {
+    const key = labelKey.trim();
+    if (!key || labelBusy) return;
+    if (!LABEL_KEY_RE.test(key)) {
+      setLabelKeyErr(true);
+      return;
+    }
+    setLabelBusy(true);
+    const res = await upsertEdgeLabel({
+      target_type: 'node',
+      target_id: labelModalHost,
+      label_key: key,
+      label_value: labelValue.trim() || undefined,
+    });
+    setLabelBusy(false);
+    if (res.status === STATUS_SUCCESS) {
+      setLabelKey('');
+      setLabelValue('');
+      setLabelKeyErr(false);
+      onLabelsChanged?.();
+    } else {
+      toast.error(res.message || t('edge.toast.labelFail'));
+    }
+  }, [labelKey, labelValue, labelModalHost, labelBusy, onLabelsChanged, t]);
 
   const [searchKey, setSearchKey] = useState({
     label: t('nodeName.label'),
@@ -438,6 +503,41 @@ function NodeTable({
         textWrap: 'nowrap',
       },
     },
+    {
+      name: t('edge.col.labels'),
+      minWidth: '200px',
+      cell: ({ hostname }) => {
+        const labels = labelsByHost[hostname] || [];
+        return (
+          <div className={cx('label-cell')}>
+            {labels.length > 0 && (
+              <div className={cx('chips')}>
+                {labels.map((l) => (
+                  <span key={l.id} className={cx('chip')}>
+                    {l.key}
+                    {l.value ? `=${l.value}` : ''}
+                    <button
+                      type='button'
+                      className={cx('chip-x')}
+                      onClick={() => removeLabel(l.id)}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <button
+              type='button'
+              className={cx('add-label')}
+              onClick={() => openLabelModal(hostname)}
+            >
+              + {t('edge.label.add')}
+            </button>
+          </div>
+        );
+      },
+    },
     ...actionColumns,
   ];
 
@@ -551,6 +651,92 @@ function NodeTable({
         onSortHandler={onSortHandler}
         handleRefresh={handleRefresh}
       />
+
+      {labelModalHost && (
+        <div className={cx('label-overlay')} onClick={closeLabelModal}>
+          <div
+            className={cx('label-modal')}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={cx('label-modal-title')}>
+              {t('node.labels.title')}
+            </div>
+            <div className={cx('label-modal-host')}>{labelModalHost}</div>
+
+            <div className={cx('chips', 'modal-chips')}>
+              {(labelsByHost[labelModalHost] || []).length === 0 ? (
+                <span className={cx('label-empty')}>
+                  {t('node.labels.empty')}
+                </span>
+              ) : (
+                (labelsByHost[labelModalHost] || []).map((l) => (
+                  <span key={l.id} className={cx('chip')}>
+                    {l.key}
+                    {l.value ? `=${l.value}` : ''}
+                    <button
+                      type='button'
+                      className={cx('chip-x')}
+                      onClick={() => removeLabel(l.id)}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))
+              )}
+            </div>
+
+            <div className={cx('label-form')}>
+              <input
+                className={cx('label-input')}
+                placeholder={t('edge.label.key')}
+                value={labelKey}
+                onChange={(e) => {
+                  setLabelKey(e.target.value);
+                  if (labelKeyErr) setLabelKeyErr(false);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') submitLabel();
+                }}
+                maxLength={64}
+                aria-invalid={labelKeyErr}
+              />
+              <input
+                className={cx('label-input')}
+                placeholder={t('edge.label.value')}
+                value={labelValue}
+                onChange={(e) => setLabelValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') submitLabel();
+                }}
+                maxLength={255}
+              />
+              <button
+                type='button'
+                className={cx('label-btn')}
+                onClick={submitLabel}
+                disabled={labelBusy || !labelKey.trim()}
+              >
+                {t('add.label')}
+              </button>
+            </div>
+            {labelKeyErr && (
+              <div className={cx('label-err')}>
+                {t('edge.label.invalidKey')}
+              </div>
+            )}
+
+            <div className={cx('label-modal-actions')}>
+              <button
+                type='button'
+                className={cx('label-btn', 'cancel')}
+                onClick={closeLabelModal}
+              >
+                {t('node.labels.close')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

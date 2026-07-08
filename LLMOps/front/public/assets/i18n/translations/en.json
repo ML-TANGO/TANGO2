@@ -2912,5 +2912,8 @@
   "preprocessing.label": "Preprocessing",
   "pipeline.label": "Pipeline",
   "preprocessing": "Preprocessing",
-  "preprocessingResourceManagement.label": "Preprocessing Resource Mangement"
+  "preprocessingResourceManagement.label": "Preprocessing Resource Mangement",
+  "node.labels.title": "Manage node labels",
+  "node.labels.empty": "No labels yet.",
+  "node.labels.close": "Close"
 }

@@ -2917,5 +2917,8 @@
   "preprocessing.label": "전처리",
   "pipeline.label": "파이프라인",
   "preprocessing": "전처리",
-  "preprocessingResourceManagement.label": "전처리 자원 관리"
+  "preprocessingResourceManagement.label": "전처리 자원 관리",
+  "node.labels.title": "노드 레이블 관리",
+  "node.labels.empty": "등록된 레이블이 없습니다.",
+  "node.labels.close": "닫기"
 }

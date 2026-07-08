@@ -41,6 +41,16 @@ export const deployEdgeWorker = async (workerId, body) => {
   });
 };
 
+// SP-8 P4b — 커스텀 레이블 조회(노드 + 엣지워커 공용). target_type/target_id 없이 호출
+// 하면 전체. K8s 노드 레이블은 target_type='node', target_id=hostname 으로 저장/조회.
+export const getEdgeLabels = async (targetType, targetId) => {
+  const params = [];
+  if (targetType) params.push(`target_type=${encodeURIComponent(targetType)}`);
+  if (targetId) params.push(`target_id=${encodeURIComponent(targetId)}`);
+  const query = params.length ? `?${params.join('&')}` : '';
+  return await callApi({ url: `edge/labels${query}`, method: 'get' });
+};
+
 export const upsertEdgeLabel = async (body) => {
   // body: { target_type, target_id, label_key, label_value? }
   return await callApi({ url: 'edge/labels', method: 'post', body });

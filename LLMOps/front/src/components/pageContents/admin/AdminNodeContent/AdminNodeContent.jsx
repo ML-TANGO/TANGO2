@@ -7,7 +7,7 @@ import { ButtonV2 } from '@jonathan/ui-react';
 import PageHeader from '@src/components/molecules/PageHeader/PageHeader';
 
 import { callApi, STATUS_FAIL, STATUS_SUCCESS } from '@src/network';
-import { getEdgeWorkers } from '@src/apis/flightbase/edge';
+import { getEdgeLabels, getEdgeWorkers } from '@src/apis/flightbase/edge';
 import { loadModalComponent } from '@src/modal';
 
 import CPUAllocationStatus from './CPUServerTab/CPUAllocationStatus';
@@ -127,6 +127,10 @@ function AdminNodeContent() {
   // Edge 워커는 stat grid 집계용으로만 조회(테이블은 EdgeWorkerSection 자체 fetch). 10s 폴링.
   const [edgeWorkers, setEdgeWorkers] = useState([]);
   const [segment, setSegment] = useState('all'); // all | cluster | edge
+  // SP-8 P4b — K8s 노드 커스텀 레이블: hostname → labels[] 맵 + 총개수(stat grid).
+  // 1초 노드폴과 분리된 10초 폴(라이브 모니터링 루프 무개입).
+  const [labelsByHost, setLabelsByHost] = useState({});
+  const [nodeLabelCount, setNodeLabelCount] = useState(0);
 
   const isLoading = useRef(true);
   const history = useHistory();
@@ -185,6 +189,33 @@ function AdminNodeContent() {
     return () => clearInterval(iv);
   }, [fetchEdge]);
 
+  // K8s 노드 레이블: target_type='node' 전체를 한 번에 받아 hostname(target_id)별 그룹핑.
+  const nodeLabelsFetchingRef = useRef(false);
+  const fetchNodeLabels = useCallback(async () => {
+    if (nodeLabelsFetchingRef.current) return;
+    nodeLabelsFetchingRef.current = true;
+    try {
+      const res = await getEdgeLabels('node');
+      if (res.status === STATUS_SUCCESS) {
+        const list = res.result || [];
+        const map = list.reduce((acc, l) => {
+          (acc[l.target_id] = acc[l.target_id] || []).push(l);
+          return acc;
+        }, {});
+        setLabelsByHost(map);
+        setNodeLabelCount(list.length);
+      }
+    } finally {
+      nodeLabelsFetchingRef.current = false;
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchNodeLabels();
+    const iv = setInterval(fetchNodeLabels, 10000);
+    return () => clearInterval(iv);
+  }, [fetchNodeLabels]);
+
   const nodeList = nodeInfo.node_list || [];
   const k8sTotal = nodeList.length;
   const k8sOnline = nodeList.filter((n) => n.status === 'Ready').length;
@@ -194,11 +225,12 @@ function AdminNodeContent() {
   ).length;
   const gpuTotal = nodeInfo?.usage?.gpu?.total ?? 0;
   const gpuUsed = nodeInfo?.usage?.gpu?.used ?? 0;
-  // K8s 노드 라벨은 P4b(후속) — 현재는 edge embedded 라벨만 집계.
-  const labelCount = edgeWorkers.reduce(
+  // 커스텀 레이블 총합 = Edge 워커 embedded 라벨 + K8s 노드 라벨(target_type='node').
+  const edgeLabelCount = edgeWorkers.reduce(
     (a, w) => a + (w.labels?.length || 0),
     0,
   );
+  const labelCount = edgeLabelCount + nodeLabelCount;
 
   const showCluster = segment !== 'edge';
   const showEdge = segment !== 'cluster';
@@ -320,6 +352,8 @@ function AdminNodeContent() {
               nodeList={nodeInfo.node_list}
               statusList={statusList}
               setStatusList={setStatusList}
+              labelsByHost={labelsByHost}
+              onLabelsChanged={fetchNodeLabels}
             />
           </>
         )}

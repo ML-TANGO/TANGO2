@@ -22,3 +22,156 @@
 .flex-cont {
   display: flex;
 }
+
+/* ── SP-8 P4b: 커스텀 레이블 칩 컬럼 + 관리 모달 ── */
+.label-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px 2px 8px;
+  font-size: 12px;
+  background: #f1f3f7;
+  border-radius: 10px;
+  color: #444;
+}
+
+.chip-x {
+  border: none;
+  background: none;
+  color: #999;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0;
+
+  &:hover {
+    color: #e0483e;
+  }
+}
+
+.add-label {
+  border: none;
+  background: none;
+  color: #2f6fed;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.label-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.label-modal {
+  width: 420px;
+  max-width: 92vw;
+  background: #fff;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.label-modal-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.label-modal-host {
+  margin-top: 4px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  font-family: monospace;
+  color: #2f6fed;
+}
+
+.modal-chips {
+  min-height: 24px;
+  margin-bottom: 12px;
+}
+
+.label-empty {
+  font-size: 13px;
+  color: #aaa;
+}
+
+.label-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.label-input {
+  flex: 1 1 120px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 13px;
+  box-sizing: border-box;
+
+  &:focus {
+    outline: none;
+    border-color: #2f6fed;
+  }
+
+  &[aria-invalid='true'] {
+    border-color: #e0483e;
+  }
+}
+
+.label-btn {
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid #2f6fed;
+  background: #2f6fed;
+  color: #fff;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  &.cancel {
+    background: #fff;
+    color: #888;
+    border-color: #ddd;
+  }
+}
+
+.label-err {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #e0483e;
+}
+
+.label-modal-actions {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+}
