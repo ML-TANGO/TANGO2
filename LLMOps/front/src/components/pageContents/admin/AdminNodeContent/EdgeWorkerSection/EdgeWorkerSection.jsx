@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useHistory } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
@@ -9,7 +9,6 @@ import { STATUS_SUCCESS } from '@src/network';
 import {
   deleteEdgeLabel,
   deleteEdgeWorker,
-  getEdgeWorkers,
   refreshEdgeWorker,
   upsertEdgeLabel,
 } from '@src/apis/flightbase/edge';
@@ -18,7 +17,6 @@ import classNames from 'classnames/bind';
 import style from './EdgeWorkerSection.module.scss';
 
 const cx = classNames.bind(style);
-const POLL_MS = 10000;
 
 const formatBytes = (n) => {
   if (!n || n <= 0) return '-';
@@ -30,44 +28,28 @@ const formatBytes = (n) => {
 /**
  * 관리자 노드 페이지 Edge 워커 섹션 (SP-8 / 수용계획서 3.1).
  * remoteManager 가 관리하는 엣지 디바이스(인스턴스 없는 단일 노드) 등록/상태/레이블.
- * 자체완결(own fetch/state/modal) — AdminNodeContent 의 cluster node 흐름과 분리.
+ * 데이터는 부모(AdminNodeContent)가 소유·폴링 → workers/refetch props 주입(단일 소스,
+ * 세그먼트 무관하게 stat grid 와 동일 데이터). hideRegister=부모 헤더가 등록 버튼 제공 시.
  */
-const EdgeWorkerSection = () => {
+const EdgeWorkerSection = ({ workers = [], refetch, hideRegister = false }) => {
   const { t } = useTranslation();
   const history = useHistory();
-  const [workers, setWorkers] = useState([]);
   const [busyId, setBusyId] = useState(null);
   const [labelEditFor, setLabelEditFor] = useState(null);
   const [labelKey, setLabelKey] = useState('');
   const [labelValue, setLabelValue] = useState('');
-  const fetchingRef = useRef(false);
 
-  const fetchWorkers = useCallback(async () => {
-    if (fetchingRef.current) return; // 이전 폴링 진행 중이면 중첩 방지
-    fetchingRef.current = true;
-    try {
-      const res = await getEdgeWorkers();
-      if (res.status === STATUS_SUCCESS) setWorkers(res.result || []);
-    } finally {
-      fetchingRef.current = false;
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchWorkers();
-    const iv = setInterval(fetchWorkers, POLL_MS); // 저장된 상태 주기 갱신
-    return () => clearInterval(iv);
-  }, [fetchWorkers]);
+  const reload = useCallback(() => refetch?.(), [refetch]);
 
   const handleRefresh = useCallback(
     async (id) => {
       setBusyId(id);
       const res = await refreshEdgeWorker(id); // remoteManager 폴링
       setBusyId(null);
-      if (res.status === STATUS_SUCCESS) fetchWorkers();
+      if (res.status === STATUS_SUCCESS) reload();
       else toast.error(res.message || t('edge.toast.refreshFail'));
     },
-    [fetchWorkers, t],
+    [reload, t],
   );
 
   const handleDelete = useCallback(
@@ -78,10 +60,10 @@ const EdgeWorkerSection = () => {
       setBusyId(id);
       const res = await deleteEdgeWorker(id);
       setBusyId(null);
-      if (res.status === STATUS_SUCCESS) fetchWorkers();
+      if (res.status === STATUS_SUCCESS) reload();
       else toast.error(res.message || t('edge.toast.deleteFail'));
     },
-    [fetchWorkers, t],
+    [reload, t],
   );
 
   const submitLabel = useCallback(
@@ -97,21 +79,21 @@ const EdgeWorkerSection = () => {
         setLabelEditFor(null);
         setLabelKey('');
         setLabelValue('');
-        fetchWorkers();
+        reload();
       } else {
         toast.error(res.message || t('edge.toast.labelFail'));
       }
     },
-    [labelKey, labelValue, fetchWorkers, t],
+    [labelKey, labelValue, reload, t],
   );
 
   const removeLabel = useCallback(
     async (labelId) => {
       const res = await deleteEdgeLabel(labelId);
-      if (res.status === STATUS_SUCCESS) fetchWorkers();
+      if (res.status === STATUS_SUCCESS) reload();
       else toast.error(res.message || t('edge.toast.labelFail'));
     },
-    [fetchWorkers, t],
+    [reload, t],
   );
 
   return (
@@ -121,12 +103,14 @@ const EdgeWorkerSection = () => {
           {t('edge.section.title')}
           <span className={cx('edge-count')}>{workers.length}</span>
         </div>
-        <ButtonV2
-          colorType='skyblue'
-          size='s'
-          label={t('edge.register.title')}
-          onClick={() => history.push('/admin/nodes/edge/new')}
-        />
+        {!hideRegister && (
+          <ButtonV2
+            colorType='skyblue'
+            size='s'
+            label={t('edge.register.title')}
+            onClick={() => history.push('/admin/nodes/edge/new')}
+          />
+        )}
       </div>
       <div className={cx('edge-desc')}>{t('edge.section.desc')}</div>
 
