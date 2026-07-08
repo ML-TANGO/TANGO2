@@ -169,3 +169,12 @@ export const fetchExpertImageBlob = async (modelId, jobId, idx) => {
     url: `evaluations/${modelId}/${jobId}/expert-image/${idx}`,
   });
 };
+
+// 지연 단위 VLM 실추론 — 전문가가 여는 샘플 1개를 바인드된 배포 SDS 모델로 추론해 output 을
+// 실출력으로 교체·영속. → { real_output, sample }. 미바인드/비-VLM/이미 실출력/실패는 real_output=false.
+export const inferExpertSample = async (modelId, jobId, sampleIdx) => {
+  return await callApi({
+    url: `evaluations/${modelId}/${jobId}/expert-infer/${sampleIdx}`,
+    method: 'post',
+  });
+};

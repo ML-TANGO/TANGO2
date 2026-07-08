@@ -10,6 +10,7 @@ _base_model→/model, _dataset→/dataset/<name>. 멀티 데이터셋 이름은 
 from __future__ import annotations
 
 import asyncio
+import base64
 import csv
 import glob
 import hashlib
@@ -547,12 +548,14 @@ _REFERENCE_KEYS = ("reference", "answer", "output", "completion", "response", "l
                    "target", "caption")
 _MAX_FIELD_LEN = 2000          # 샘플 필드 길이 cap(프롬프트/출력/참조)
 _INFER_TIMEOUT = 60.0          # 추론 1건 타임아웃(초)
+_VLM_INFER_TIMEOUT = 300.0     # VLM(external SDS) sync 추론 1건 타임아웃 — GPU 직렬이라 텍스트보다 김
 _DATA_EXTS = (".jsonl", ".json", ".csv")
 _MAX_DATA_FILE_BYTES = 50 * 1024 * 1024  # .json 전체 로드 상한(메모리 보호; jsonl/csv 는 스트리밍)
 _EXPERT_INFER_BUDGET = 90      # start_expert 인라인 추론 전체 예산(초) — HTTP 핸들러 점유 cap
 
 # 멀티모달(VLM) 전문가 평가 — 데이터셋 row 의 이미지 컬럼을 surface 해 사람이 이미지를 보고
 # 채점. 강한 이미지 컬럼명은 값 그대로, 약한(범용) 컬럼명은 이미지 확장자일 때만 채택(오탐 방지).
+_MAX_IMAGE_BYTES = 10 * 1024 * 1024  # VLM 추론 image_base64 원본 상한(payload/메모리 방어)
 _IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp")
 _IMAGE_KEYS_STRONG = ("image", "image_url", "image_path", "img", "img_url", "img_path",
                       "image_file")
@@ -1250,6 +1253,82 @@ def _aggregate_expert(ratings: list):
     return avg_score, distribution, pass_rate
 
 
+def _sample_image_b64(sample: dict) -> Optional[str]:
+    """VLM 샘플의 서버보관 이미지(_image_abs)를 base64 로 인코딩. get_expert_image 의 봉쇄
+    로직 재사용(realpath + _image_dir commonpath 재봉쇄 + isfile + 이미지 확장자 + 크기 상한).
+    없거나 검증 실패 → None(→ 실추론 스킵, mock 유지)."""
+    abs_path = sample.get("_image_abs")
+    if not abs_path:
+        return None
+    try:
+        real = os.path.realpath(abs_path)
+        image_dir = sample.get("_image_dir")
+        # 서빙 시 재봉쇄(fail-closed) — start 이후 심링크 스왑 차단. _image_dir 이 없으면 봉쇄
+        # 불가로 간주해 거부(디폴트 거부 — 미래에 _image_abs 만 있는 샘플이 생겨도 임의 파일 미노출).
+        if not image_dir or os.path.commonpath([real, image_dir]) != image_dir:
+            return None
+        ext = os.path.splitext(real)[1].lower()
+        if not os.path.isfile(real) or ext not in _IMAGE_MEDIA:
+            return None
+        if os.path.getsize(real) > _MAX_IMAGE_BYTES:
+            return None
+        with open(real, "rb") as f:
+            return base64.b64encode(f.read()).decode("ascii")
+    except (OSError, ValueError):
+        return None
+
+
+def _csv_to_ais_rows(sample: dict) -> list:
+    """샘플 csv_rows(2D: 헤더+행)를 ais_rows(dict 리스트)로 변환. Playground external 분기가
+    ais_rows 에 my_ship=1 행을 요구 — SDS input_data.csv 가 AIS 표라 헤더/행 zip 이 그대로
+    계약이 된다. 헤더/행 부족 시 [](→ Playground 검증 거부 → mock 폴백). 셀 상한은 이미
+    _read_csv_grid 에서 적용됨."""
+    rows = sample.get("csv_rows")
+    if not isinstance(rows, list) or len(rows) < 2:
+        return []
+    header = [str(c) for c in rows[0]]
+    out = []
+    for r in rows[1:_MAX_CSV_ROWS + 1]:
+        if not isinstance(r, list):
+            continue
+        out.append({header[i]: r[i] for i in range(min(len(header), len(r)))})
+    return out
+
+
+async def _infer_vlm_output(playground_id: int, image_b64: str, ais_rows: list,
+                            session_id: str) -> Optional[str]:
+    """배포 SDS(external) 모델 VLM 추론 1건 — Playground /test 의 external 분기 재사용(내부
+    vLLM 텍스트 경로와 달리 external 배포는 test_url 이 없어 이 경유가 유일). s2s POST
+    {playground_id, test_type:'question', external_payload:{image_base64, ais_rows}}.
+    envelope status==1 → result[0].output. 실패/타임아웃/검증거부 → None(mock 유지).
+    ⚠️ test_type=='question' 은 Playground 에서 dual-prompt-gen 체크를 타지만 SDS 단일
+    배포는 dual 링크가 없어 None → external 분기로 통과한다."""
+    try:
+        url = f"http://{settings.LLM_PLAYGROUND_DNS}/api/playgrounds/test"
+        body = {"playground_id": int(playground_id), "test_type": "question",
+                "external_payload": {"image_base64": image_b64, "ais_rows": ais_rows}}
+        async with httpx.AsyncClient(timeout=_VLM_INFER_TIMEOUT) as http:
+            r = await http.post(url, json=body)
+        if r.status_code != 200:
+            print(f"_infer_vlm_output: playground {playground_id} HTTP {r.status_code}",
+                  flush=True)
+            return None
+        data = r.json()
+        if data.get("status") != 1:
+            # external 검증 거부(image/ais_rows) 등 — 원인 추적용(비밀 없음).
+            print(f"_infer_vlm_output: playground {playground_id} envelope status="
+                  f"{data.get('status')} msg={data.get('message')}", flush=True)
+            return None
+        result = data.get("result")
+        if isinstance(result, list) and result and isinstance(result[0], dict):
+            out = result[0].get("output")
+            if isinstance(out, str) and out.strip():
+                return out.strip()[:_MAX_FIELD_LEN]
+    except Exception:
+        traceback.print_exc()
+    return None
+
+
 async def _build_expert_samples(model_id: int, model_name: str, dataset_ids: List[int],
                                 ds_names: List[str], inference_url: Optional[str]) -> list:
     """전문가 채점 샘플(A4) — 실 데이터셋(input/reference/이미지) + 배포모델 추론 output.
@@ -1267,7 +1346,10 @@ async def _build_expert_samples(model_id: int, model_name: str, dataset_ids: Lis
     samples = []
     for i, row in enumerate(rows):
         s = {"idx": i, "dataset": row.get("dataset", base), "input": row["input"],
-             "output": f"[{model_name}] 응답 {i}", "reference": row.get("reference", "")}
+             "output": f"[{model_name}] 응답 {i}", "reference": row.get("reference", ""),
+             # 공개 플래그(비-_ 키라 _public_sample 통과) — 실추론 반영 여부. 텍스트는 아래
+             # 예산 업그레이드에서, VLM 은 infer_expert_sample(지연 단위)에서 True 로 승격.
+             "real_output": False}
         for k in ("image", "image_url", "image_served", "_image_abs", "_image_dir",
                   "csv_rows", "csv_text"):
             if k in row:
@@ -1278,11 +1360,12 @@ async def _build_expert_samples(model_id: int, model_name: str, dataset_ids: Lis
             for s in samples:
                 if not s["input"]:
                     continue    # image-only(VLM) 샘플 — 텍스트 추론은 이미지 미전달이라
-                    #             무의미. mock output 유지(실 VLM 추론은 A4 GPU 후속).
+                    #             무의미. mock 유지, 실 VLM 추론은 infer_expert_sample(지연 단위).
                 real = await _infer_output(
                     inference_url, s["input"], f"expert-{model_id}-{s['idx']}")
                 if real:
                     s["output"] = real
+                    s["real_output"] = True
         try:
             await asyncio.wait_for(_upgrade(), _EXPERT_INFER_BUDGET)
         except asyncio.TimeoutError:
@@ -1359,10 +1442,14 @@ async def start_expert(project_id: int,
         dataset_id=dataset_ids[0], dataset_name=dataset_name_csv, metric_set="expert",
         eval_project_id=project_id)
     # 샘플 + 고정 프롬프트 영속(running 유지) — get_expert_samples/submit 가 재생성 대신 이걸 읽는다.
+    # inference_playground_id(배포 SDS) 는 지연 단위 VLM 추론(infer_expert_sample)이 세션 재로드
+    # 후에도 대상 배포를 알 수 있도록 함께 영속(재개 세션 포함).
+    metrics_obj = {"_mode": "expert", "_samples": samples, "_expert_prompt": expert_prompt}
+    if inference_playground_id:
+        metrics_obj["_inference_playground_id"] = int(inference_playground_id)
     await db_model.set_eval_result_metrics(
         job_str_id=job_id, source_model_id=model_id,
-        metrics_json=json.dumps({"_mode": "expert", "_samples": samples,
-                                 "_expert_prompt": expert_prompt}))
+        metrics_json=json.dumps(metrics_obj))
     try:
         await db_model.update_eval_project_status(project_id, PROJECT_STATUS_RUNNING)
     except Exception:
@@ -1372,7 +1459,20 @@ async def start_expert(project_id: int,
             "mode": "expert", "datasets": ds_names,
             "samples": [_public_sample(s) for s in samples],
             "total": len(samples), "real_output": bool(inference_url),
+            "inference_enabled": bool(inference_playground_id),
             "expert_prompt": expert_prompt}
+
+
+def _session_inference_enabled(row: dict) -> bool:
+    """세션에 배포 SDS(_inference_playground_id)가 바인드됐는지 — FE 가 지연 VLM 추론
+    호출 여부를 판별(재개 세션 포함). 영속 metrics 에서 파생."""
+    metrics = row.get("metrics") if isinstance(row, dict) else None
+    if isinstance(metrics, str):
+        try:
+            metrics = json.loads(metrics)
+        except (TypeError, json.JSONDecodeError):
+            metrics = None
+    return bool(isinstance(metrics, dict) and metrics.get("_inference_playground_id"))
 
 
 async def get_expert_samples(model_id: int, job_id: str) -> dict:
@@ -1384,7 +1484,90 @@ async def get_expert_samples(model_id: int, job_id: str) -> dict:
     return {"job_id": job_id, "status": row.get("status"),
             "samples": [_public_sample(s) for s in samples],
             "total": len(samples), "ratings": ratings, "history": history,
+            "inference_enabled": _session_inference_enabled(row),
             "expert_prompt": _session_prompt(row, samples)}
+
+
+# 지연 단위 VLM 추론의 per-job 락 — 빠른 prev/next 네비로 동시 호출 시 _samples 재영속
+# read-modify-write 경쟁(인접 샘플 clobber) 차단. job_id 단위(프로세스 생명주기 내 누적).
+_EXPERT_INFER_LOCKS: dict = {}
+
+
+def _expert_infer_lock(job_id: str) -> asyncio.Lock:
+    lock = _EXPERT_INFER_LOCKS.get(job_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _EXPERT_INFER_LOCKS[job_id] = lock
+    return lock
+
+
+async def infer_expert_sample(model_id: int, job_id: str, sample_idx: int) -> dict:
+    """지연 단위 VLM 실추론 — 전문가가 여는 샘플 1개만 바인드된 배포 SDS 모델로 추론해
+    output 을 실출력으로 교체·영속(동결). 배포 미바인드/비-VLM 샘플/이미 실출력/이미지 없음
+    → no-op(mock 유지). per-job 락 + real_output 멱등으로 재영속 경쟁·중복추론 방지."""
+    if not job_id or not _JOB_ID_RE.match(job_id):
+        raise ValueError(f"invalid job_id: {job_id!r}")
+
+    # ── 1) 사전 점검(락 밖) — 대상/바인드/이미지 확보 후 실추론 여부 판정 ──────────────
+    row, samples = await _expert_session(model_id, job_id)
+    if sample_idx < 0 or sample_idx >= len(samples):
+        raise ValueError(f"sample_idx out of range: {sample_idx}")
+    s = samples[sample_idx]
+    if s.get("real_output"):    # 멱등 — 이미 실출력(동결)
+        return {"real_output": True, "sample": _public_sample(s)}
+    # 완료/취소 세션은 실추론 안 함 — set_eval_result_metrics 가 WHERE status='running' 이라
+    # 영속이 no-op 이 되어 real_output 이 DB 에 안 남고, 그러면 재열람마다 실 GPU 추론이
+    # 무한 재실행된다(리뷰 HIGH). running 아니면 현재 상태 그대로 반환(no-op).
+    if row.get("status") != "running":
+        return {"real_output": bool(s.get("real_output")), "sample": _public_sample(s)}
+    metrics = row.get("metrics")
+    if isinstance(metrics, str):
+        try:
+            metrics = json.loads(metrics)
+        except (TypeError, json.JSONDecodeError):
+            metrics = None
+    pid = metrics.get("_inference_playground_id") if isinstance(metrics, dict) else None
+    # 배포 미바인드 or VLM 샘플 아님(텍스트는 start 예산 경로) → no-op.
+    if not pid or not (s.get("csv_rows") or s.get("image_served")):
+        return {"real_output": False, "sample": _public_sample(s)}
+    image_b64 = _sample_image_b64(s)
+    if not image_b64:    # 서빙 이미지 없음/검증 실패 → 추론 불가
+        return {"real_output": False, "sample": _public_sample(s)}
+
+    # ── 2) VLM 호출(락 밖) — sync 최대 _VLM_INFER_TIMEOUT 라 락으로 잡으면 채점 완료나 다른
+    #        샘플 infer 가 그동안 막힌다. 오래 걸리는 호출은 락 밖에서 수행. ──────────────
+    text = await _infer_vlm_output(
+        int(pid), image_b64, _csv_to_ais_rows(s), f"expert-{model_id}-{sample_idx}")
+    if not text:    # 추론 실패/검증 거부/타임아웃 → mock 유지(graceful)
+        return {"real_output": False, "sample": _public_sample(s)}
+
+    # ── 3) 재영속(짧은 락 구간) — 쓰기 직전 최신 _samples 재로드 후 이 idx 만 갱신해 동시
+    #        infer/완료와의 lost-update 를 막는다. 락 안에서 status 재확인(그 사이 완료됐으면
+    #        WHERE status='running' 이 0행이라 영속 안 되므로 mock 로 포기). ──────────────
+    async with _expert_infer_lock(job_id):
+        fresh_row, fresh_samples = await _expert_session(model_id, job_id)
+        if fresh_row.get("status") != "running":
+            return {"real_output": False, "sample": _public_sample(s)}
+        if sample_idx >= len(fresh_samples):
+            return {"real_output": False, "sample": _public_sample(s)}
+        fs = fresh_samples[sample_idx]
+        if fs.get("real_output"):    # 그 사이 다른 호출이 채움 — 멱등
+            return {"real_output": True, "sample": _public_sample(fs)}
+        fs["output"] = text
+        fs["real_output"] = True
+        fresh_metrics = fresh_row.get("metrics")
+        if isinstance(fresh_metrics, str):
+            try:
+                fresh_metrics = json.loads(fresh_metrics)
+            except (TypeError, json.JSONDecodeError):
+                fresh_metrics = None
+        if not isinstance(fresh_metrics, dict):
+            fresh_metrics = {"_mode": "expert"}
+        fresh_metrics["_samples"] = fresh_samples    # _expert_prompt/_inference_playground_id 보존
+        await db_model.set_eval_result_metrics(
+            job_str_id=job_id, source_model_id=model_id,
+            metrics_json=json.dumps(fresh_metrics))
+        return {"real_output": True, "sample": _public_sample(fs)}
 
 
 async def submit_expert_rating(model_id: int, job_id: str, sample_idx: int,
@@ -1439,15 +1622,21 @@ async def submit_expert_rating(model_id: int, job_id: str, sample_idx: int,
 
     completed = False
     if rated >= total:  # 전부 채점 → 집계 영속 + 완료(비교표 합류)
-        # expert_avg_score(1~5) = 신규 기본 metric(_flatten 자동 노출·방향 max). _distribution 은
-        # _ 접두라 비교표 미노출(서버측). expert_pass_rate 는 backward-compat 병기.
-        # _samples/_expert_prompt 보존 — 완료 후 get_expert_samples 가 표시 출력·프롬프트 유지.
-        metrics = {"expert_avg_score": avg_score, "expert_pass_rate": pass_rate,
-                   "_distribution": distribution, "_mode": "expert",
-                   "_rated": rated, "_total": total, "_samples": samples,
-                   "_expert_prompt": _session_prompt(row, samples)}
-        await db_model.complete_eval_result(
-            job_str_id=job_id, metrics_json=json.dumps(metrics), source_model_id=model_id)
+        # 완료 집계 직전 최신 _samples 재로드(infer 와 같은 per-job 락) — 동시 infer_expert_sample
+        # 이 올린 실출력을 이 함수 상단(1565)의 stale 스냅샷으로 덮지 않도록(lost-update 방지).
+        async with _expert_infer_lock(job_id):
+            fresh_row, fresh_samples = await _expert_session(model_id, job_id)
+            # expert_avg_score(1~5) = 신규 기본 metric(_flatten 자동 노출·방향 max). _distribution 은
+            # _ 접두라 비교표 미노출. expert_pass_rate 는 backward-compat 병기. _samples/_expert_prompt
+            # 보존 — 완료 후 get_expert_samples 가 표시 출력(최신 실출력 포함)·프롬프트 유지.
+            metrics = {"expert_avg_score": avg_score, "expert_pass_rate": pass_rate,
+                       "_distribution": distribution, "_mode": "expert",
+                       "_rated": rated, "_total": total, "_samples": fresh_samples,
+                       "_expert_prompt": _session_prompt(fresh_row, fresh_samples)}
+            await db_model.complete_eval_result(
+                job_str_id=job_id, metrics_json=json.dumps(metrics), source_model_id=model_id)
+        # 완료 세션은 이후 infer 가 status 게이트로 no-op 이라 락 불요 → 회수(dict 누수 방지, 리뷰 LOW).
+        _EXPERT_INFER_LOCKS.pop(job_id, None)
         completed = True
 
     return {"job_id": job_id, "rated": rated, "total": total,

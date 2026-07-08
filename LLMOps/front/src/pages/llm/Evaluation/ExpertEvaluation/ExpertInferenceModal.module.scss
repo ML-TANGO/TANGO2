@@ -1,0 +1,181 @@
+@import '@src/styles/color.scss';
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background-color: rgba(0, 0, 0, 0.45);
+}
+
+.modal {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  border-radius: 14px;
+  background-color: #fff;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid $mono203;
+}
+
+.modal-title {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.close-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background-color: transparent;
+  color: $mono204;
+  font-size: 15px;
+  cursor: pointer;
+
+  &:hover {
+    background-color: $mono202;
+  }
+}
+
+.modal-body {
+  padding: 20px 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.desc {
+  font-size: 13px;
+  color: $mono204;
+  line-height: 1.5;
+}
+
+.empty {
+  font-size: 13px;
+  color: $mono204;
+  padding: 16px 0;
+  text-align: center;
+}
+
+.deploy-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.deploy-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid $mono203;
+  border-radius: 10px;
+  background-color: #fff;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s;
+
+  &:hover {
+    border-color: $blue104;
+  }
+
+  &.on {
+    border-color: $blue104;
+    box-shadow: 0 0 0 1px $blue104 inset;
+    background-color: #eef3ff;
+  }
+}
+
+.radio {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border: 1px solid $mono203;
+  border-radius: 999px;
+
+  &.on {
+    border-color: $blue104;
+    border-width: 5px;
+  }
+}
+
+.deploy-name {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deploy-badge {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #1a7f37;
+  background-color: #e6f4ea;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.hint {
+  font-size: 12px;
+  color: $mono204;
+  line-height: 1.4;
+  padding: 4px 2px;
+}
+
+.modal-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 24px;
+  border-top: 1px solid $mono203;
+}
+
+.cancel-btn {
+  padding: 9px 18px;
+  border: 1px solid $mono203;
+  border-radius: 8px;
+  background-color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+
+  &:hover {
+    background-color: $mono202;
+  }
+}
+
+.confirm-btn {
+  padding: 9px 18px;
+  border: none;
+  border-radius: 8px;
+  background-color: $blue104;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}

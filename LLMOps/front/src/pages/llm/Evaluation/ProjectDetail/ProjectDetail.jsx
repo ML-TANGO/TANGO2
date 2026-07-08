@@ -7,6 +7,7 @@ import BenchmarkResultView from '../BenchmarkEvaluation/BenchmarkResultView';
 import BenchmarkRunConfig from '../BenchmarkEvaluation/BenchmarkRunConfig';
 import { METRIC_LABEL } from '../BenchmarkEvaluation/benchmarkMetrics';
 import EvalComparison from '../EvalComparison/EvalComparison';
+import ExpertInferenceModal from '../ExpertEvaluation/ExpertInferenceModal';
 import ExpertRunView from '../ExpertEvaluation/ExpertRunView';
 import JudgeResultView from '../JudgeEvaluation/JudgeResultView';
 import JudgeRunConfig from '../JudgeEvaluation/JudgeRunConfig';
@@ -66,6 +67,7 @@ const ProjectDetail = () => {
   const [modelMap, setModelMap] = useState({}); // model_id → name
   const [dsMap, setDsMap] = useState({}); // dataset_id → name
   const [starting, setStarting] = useState(false);
+  const [showInferModal, setShowInferModal] = useState(false);
   const [compareData, setCompareData] = useState(null);
   // view: { mode: 'list'|'newRun'|'result'|'expert'|'compare', jobId?, status?, metricSet?, criteria? }
   const [view, setView] = useState({ mode: 'list' });
@@ -147,18 +149,28 @@ const ProjectDetail = () => {
   const handleNewRun = async () => {
     if (!project) return;
     if (project.eval_type === 'expert') {
-      if (starting) return;
-      setStarting(true);
-      const res = await startExpert({ project_id: Number(projectId) });
-      setStarting(false);
-      if (res.status !== STATUS_SUCCESS || !res.result?.job_id) {
-        errorToastMessage(res.error, res.message);
-        return;
-      }
-      setView({ mode: 'expert', jobId: res.result.job_id });
+      // 전문가 평가는 실추론(지연 단위 VLM)에 쓸 배포를 먼저 고른다 → startExpertRun 으로 시작.
+      setShowInferModal(true);
     } else {
       setView({ mode: 'newRun' });
     }
+  };
+
+  // 배포 선택 확정 후 전문가 세션 시작. inferencePlaygroundId=null 이면 mock 출력(graceful).
+  const startExpertRun = async (inferencePlaygroundId) => {
+    setShowInferModal(false);
+    if (starting) return;
+    setStarting(true);
+    const body = { project_id: Number(projectId) };
+    if (inferencePlaygroundId)
+      body.inference_playground_id = inferencePlaygroundId;
+    const res = await startExpert(body);
+    setStarting(false);
+    if (res.status !== STATUS_SUCCESS || !res.result?.job_id) {
+      errorToastMessage(res.error, res.message);
+      return;
+    }
+    setView({ mode: 'expert', jobId: res.result.job_id });
   };
 
   const handleBenchmarkRun = async (metricSet) => {
@@ -466,6 +478,14 @@ const ProjectDetail = () => {
           </h3>
           <EvalComparison comparison={compareData} />
         </section>
+      )}
+
+      {showInferModal && (
+        <ExpertInferenceModal
+          workspaceId={workspaceId}
+          onConfirm={startExpertRun}
+          onClose={() => setShowInferModal(false)}
+        />
       )}
     </div>
   );

@@ -11,6 +11,7 @@ import StarRating from './components/StarRating';
 import {
   getExpertResult,
   getExpertSamples,
+  inferExpertSample,
   submitExpertRating,
 } from '@src/apis/llm/evaluation';
 import { STATUS_SUCCESS } from '@src/network';
@@ -37,12 +38,16 @@ const ExpertRunView = ({ modelId, jobId, onExit }) => {
   const [current, setCurrent] = useState(0);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [infering, setInfering] = useState({}); // idx → bool (VLM 지연 실추론 로딩 스피너)
+  const [attempted, setAttempted] = useState({}); // idx → bool (1회 시도 표시 — 실패해도 재시도 X)
 
   // 재개 배선 — 마운트 시 세션 샘플 + 이전 채점 + 진행/집계 복원.
   useEffect(() => {
     let active = true;
     setLoading(true);
     setNotFound(false);
+    setInfering({}); // 세션 재로드 시 이전 세션의 로딩/시도 플래그 초기화(idx 재사용 오탐 방지)
+    setAttempted({});
     (async () => {
       const [sRes, rRes] = await Promise.all([
         getExpertSamples(mId, jobId),
@@ -61,6 +66,8 @@ const ExpertRunView = ({ modelId, jobId, onExit }) => {
         samples,
         expert_prompt: s.expert_prompt,
         total: s.total ?? samples.length,
+        // 배포 바인드 세션이면(=start 시 inference_playground_id 지정) VLM 샘플을 열람 시 실추론.
+        inference_enabled: !!s.inference_enabled,
       });
       // 이전 채점 복원 — ratings[] 각 행(sample_idx 별 현재값)을 FE ratings 맵으로.
       const map = {};
@@ -104,6 +111,48 @@ const ExpertRunView = ({ modelId, jobId, onExit }) => {
       active = false;
     };
   }, [mId, jobId]);
+
+  // 지연 단위 VLM 실추론 — 배포 바인드 세션에서 현재 샘플이 VLM(csv/이미지)이고 아직 mock 이면
+  // 열람 시 배포 SDS 모델로 추론해 output 을 실출력으로 교체(영속·동결). 안 본 샘플은 GPU 미소모.
+  // 실패/미바인드/비-VLM 은 no-op(mock 유지). BE 가 멱등·per-job 락이라 재열람/연타에도 안전.
+  useEffect(() => {
+    if (!session || !session.inference_enabled) return;
+    const s = session.samples[current];
+    if (!s || s.real_output) return;
+    if (!(s.csv_rows || s.image_served)) return; // VLM 샘플만
+    // 1회만 시도 — 실패(graceful mock)해도 재발화 금지. real_output 은 실패 시 false 로 남으므로
+    // 그것만으로는 "미시도"와 "시도했으나 실패"를 구분 못 해 요청 폭주가 난다(리뷰 CRITICAL).
+    if (attempted[s.idx]) return;
+    const idx = s.idx;
+    setAttempted((p) => ({ ...p, [idx]: true }));
+    setInfering((p) => ({ ...p, [idx]: true }));
+    (async () => {
+      const res = await inferExpertSample(mId, jobId, idx);
+      // 스피너 해제는 무조건(리뷰 HIGH: stuck flag 방지). 병합은 idx 기준이라 그 사이 다른
+      // 샘플로 이동했어도 안전 — 완료된 실추론을 항상 반영(재방문 시 mock 잔존 방지).
+      setInfering((p) => ({ ...p, [idx]: false }));
+      // 실제 실출력이 생긴 경우만 병합 — graceful mock(real_output=false)은 session 갱신 불요
+      // (불필요한 재렌더/effect 재발화 회피, 리뷰 CRITICAL).
+      if (
+        res.status === STATUS_SUCCESS &&
+        res.result?.real_output &&
+        res.result?.sample
+      ) {
+        const updated = res.result.sample;
+        setSession((prev) =>
+          prev
+            ? {
+                ...prev,
+                samples: prev.samples.map((x) =>
+                  x.idx === updated.idx ? { ...x, ...updated } : x,
+                ),
+              }
+            : prev,
+        );
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current, session, jobId, mId]);
 
   const setComment = (idx, comment) =>
     setRatings((prev) => ({ ...prev, [idx]: { ...prev[idx], comment } }));
@@ -203,14 +252,18 @@ const ExpertRunView = ({ modelId, jobId, onExit }) => {
             <span className={cx('output-label')}>
               {t('evaluation.expert.output')}
             </span>
-            <div className={cx('output-text')}>{sample.output}</div>
+            <div className={cx('output-text')}>
+              {infering[sample.idx]
+                ? t('evaluation.expert.inferring')
+                : sample.output}
+            </div>
           </div>
 
           <div className={cx('rate-block')}>
             <StarRating
               value={r.score}
               onChange={(score) => rate(sample.idx, score)}
-              disabled={progress?.completed}
+              disabled={progress?.completed || !!infering[sample.idx]}
               t={t}
             />
             <input

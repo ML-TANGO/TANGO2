@@ -215,6 +215,20 @@ async def get_expert_image(model_id: int, job_id: str, sample_idx: int):
         return Response(status_code=404)
 
 
+@evaluations.post("/{model_id}/{job_id}/expert-infer/{sample_idx}",
+                  summary="전문가 샘플 실추론(지연 단위 VLM)", tags=TAG)
+async def infer_expert_sample(model_id: int, job_id: str, sample_idx: int):
+    """전문가가 여는 샘플 1개를 바인드된 배포 SDS 모델로 실추론해 output 을 실출력으로
+    교체·영속. 미바인드/비-VLM/이미 실출력/이미지 없음/추론 실패 → real_output=false(mock 유지)."""
+    try:
+        res = await svc.infer_expert_sample(
+            model_id=model_id, job_id=job_id, sample_idx=sample_idx)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+
 @evaluations.post("/{model_id}/{job_id}/status", summary="평가 실패/취소 마킹", tags=TAG)
 async def update_eval_status(model_id: int, job_id: str, body: dto.EvalStatusBody):
     try:
