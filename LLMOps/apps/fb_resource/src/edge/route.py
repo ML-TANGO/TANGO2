@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Header, HTTPException, Path
 from starlette.concurrency import run_in_threadpool
 from typing import Optional
 
@@ -71,6 +71,18 @@ async def deploy_worker(worker_id: int, body: model.DeployEdgeModel):
         return response(status=0, message=str(e), result=None)
 
 
+@edge.post('/workers/{worker_id}/token')
+@admin_access_check()
+async def issue_worker_token(worker_id: int):
+    # 노드별 Bearer 토큰 발급/rotation — 평문은 응답 1회만.
+    try:
+        res = await run_in_threadpool(edge_service.issue_device_token, worker_id)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+
 # ── 통합 파이프라인 s2s (llm_deploy edge 노드) ────────────────────────────────
 # fb_pipeline 런타임이 호출 — admin 세션이 없으므로 admin_access_check 미적용.
 # 위 admin deploy/get 과 동일 서비스 함수를 재사용하되 게이트만 s2s 로 연다
@@ -91,6 +103,27 @@ async def pipeline_status_worker(worker_id: int):
     # 를 확정한다(deploy 가 202 async 면 deploy_state=deploying 으로 남으므로).
     try:
         res = await run_in_threadpool(edge_service.refresh_edge_worker, worker_id)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+
+# ── device-facing (기관 디바이스가 호출) ─────────────────────────────────────
+# 세션 없음 → admin_access_check 미적용(s2s 선례와 동형). 노드별 Bearer 토큰 자체 검증.
+# 경로는 /edge/devices/... 로 /workers·/labels 세그먼트와 분리(라우팅 충돌 회피).
+@edge.post('/devices/{device_id}/heartbeat')
+async def device_heartbeat(body: model.HeartbeatModel,
+                           device_id: str = Path(..., max_length=128, pattern=r"^[A-Za-z0-9._\-]+$"),
+                           authorization: str = Header(default=None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing bearer token")
+    token = authorization[len("Bearer "):]
+    valid = await run_in_threadpool(edge_service.verify_device_token, device_id, token)
+    if not valid:
+        raise HTTPException(status_code=401, detail="Invalid device token")
+    try:
+        res = await run_in_threadpool(edge_service.record_heartbeat, device_id, body)
         return response(status=1, result=res)
     except Exception as e:
         traceback.print_exc()

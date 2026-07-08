@@ -13,37 +13,43 @@ import TrackingHOC from '@src/hoc/TrackingHOC';
 const AdminDashboardPage = lazy(() => import('@src/pages/AdminDashboardPage'));
 const AdminWorkspacePage = lazy(() => import('@src/pages/AdminWorkspacePage'));
 const AdminTrainingPage = lazy(() => import('@src/pages/AdminTrainingPage'));
-const AdminDeploymentPage = lazy(() =>
-  import('@src/pages/AdminDeploymentPage'),
+const AdminDeploymentPage = lazy(
+  () => import('@src/pages/AdminDeploymentPage'),
 );
 
-const AdminBuiltInModelPage = lazy(() =>
-  import('@src/pages/AdminBuiltInModelPage'),
+const AdminBuiltInModelPage = lazy(
+  () => import('@src/pages/AdminBuiltInModelPage'),
 );
-const AdminDockerImagePage = lazy(() =>
-  import('@src/pages/AdminDockerImagePage'),
+const AdminDockerImagePage = lazy(
+  () => import('@src/pages/AdminDockerImagePage'),
 );
 const AdminDatasetPage = lazy(() => import('@src/pages/AdminDatasetPage'));
 const DatasetDetailPage = lazy(() => import('@src/pages/DatasetDetailPage'));
 const AdminNodePage = lazy(() => import('@src/pages/AdminNodePage'));
+const AdminEdgeWizardPage = lazy(
+  () => import('@src/pages/AdminEdgeWizardPage'),
+);
+const AdminEdgeApiSpecPage = lazy(
+  () => import('@src/pages/AdminEdgeApiSpecPage'),
+);
 const AdminStoragePage = lazy(() => import('@src/pages/AdminStoragePage'));
 const AdminNetworkPage = lazy(() => import('@src/pages/AdminNetworkPage'));
-const AdminBenchmarkingPage = lazy(() =>
-  import('@src/pages/AdminBenchmarkingPage'),
+const AdminBenchmarkingPage = lazy(
+  () => import('@src/pages/AdminBenchmarkingPage'),
 );
 const AdminRecordPage = lazy(() => import('@src/pages/AdminRecordPage'));
 const AdminUserPage = lazy(() => import('@src/pages/AdminUserPage'));
-const AdminBasicBillingPage = lazy(() =>
-  import('@src/pages/AdminBasicBillingPage'),
+const AdminBasicBillingPage = lazy(
+  () => import('@src/pages/AdminBasicBillingPage'),
 );
-const AdminInstanceBillingPage = lazy(() =>
-  import('@src/pages/AdminInstanceBillingPage'),
+const AdminInstanceBillingPage = lazy(
+  () => import('@src/pages/AdminInstanceBillingPage'),
 );
-const AdminStorageBillingPage = lazy(() =>
-  import('@src/pages/AdminStorageBillingPage'),
+const AdminStorageBillingPage = lazy(
+  () => import('@src/pages/AdminStorageBillingPage'),
 );
-const AdminBillingMonitoringPage = lazy(() =>
-  import('@src/pages/AdminBillingMonitoringPage'),
+const AdminBillingMonitoringPage = lazy(
+  () => import('@src/pages/AdminBillingMonitoringPage'),
 );
 const NotFoundPage = lazy(() => import('@src/pages/NotFoundPage'));
 
@@ -129,6 +135,19 @@ function AdminRouter({ trackingEvent }) {
             render={() => <DatasetDetailPage trackingEvent={trackingEvent} />}
           />
           <Route
+            exact
+            path={`${path}/nodes/edge/new`}
+            render={() => <AdminEdgeWizardPage trackingEvent={trackingEvent} />}
+          />
+          <Route
+            exact
+            path={`${path}/nodes/edge/api-spec`}
+            render={() => (
+              <AdminEdgeApiSpecPage trackingEvent={trackingEvent} />
+            )}
+          />
+          <Route
+            exact
             path={`${path}/nodes`}
             render={() => <AdminNodePage trackingEvent={trackingEvent} />}
           />

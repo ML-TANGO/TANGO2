@@ -4,10 +4,14 @@ remoteManager(K8s-free 브리지)가 관리하는 엣지 디바이스를 플랫�
 등록하고, remoteManager /metrics 폴링으로 연결상태/자원/배포상태를 갱신한다.
 fb_resource 의 sync 패턴(requests + db_*)을 따른다.
 """
+import hashlib
+import hmac
 import ipaddress
+import json
+import secrets
 import socket
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
 import requests
@@ -15,10 +19,84 @@ import requests
 from utils.msa_db import db_edge
 
 REMOTE_MANAGER_TIMEOUT = 5  # sec
+TOKEN_TTL_DAYS = 90
+HEARTBEAT_OFFLINE_SEC = 300  # 미수신 5분 → offline
 
 
 def _now() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _parse_dt(v):
+    if v is None:
+        return None
+    if isinstance(v, datetime):
+        return v
+    try:
+        return datetime.strptime(str(v), "%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return None
+
+
+def _derive_conn_status(w: dict) -> str:
+    """last_seen staleness 로 online/offline 파생(heartbeat push 모델 — 폴러 불필요)."""
+    ls = _parse_dt(w.get("last_seen"))
+    if ls is None:
+        return "offline"
+    return "online" if (datetime.now() - ls).total_seconds() <= HEARTBEAT_OFFLINE_SEC else "offline"
+
+
+def _hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def issue_device_token(worker_id: int) -> dict:
+    """노드별 Bearer 토큰 발급(재호출=rotation). 평문은 응답에서 1회만 노출."""
+    w = db_edge.get_edge_worker(worker_id=worker_id)
+    if not w:
+        raise Exception(f"edge worker {worker_id} not found")
+    plaintext = secrets.token_urlsafe(32)
+    prefix = plaintext[:8]
+    expires_at = (datetime.now() + timedelta(days=TOKEN_TTL_DAYS)).strftime("%Y-%m-%d %H:%M:%S")
+    ok = db_edge.update_edge_worker_token(
+        worker_id, token_hash=_hash_token(plaintext),
+        token_prefix=prefix, token_expires_at=expires_at,
+    )
+    if not ok:
+        raise Exception("failed to persist token")
+    return {"worker_id": worker_id, "device_id": w["device_id"],
+            "token": plaintext, "token_prefix": prefix, "expires_at": expires_at}
+
+
+def verify_device_token(device_id: str, token: str) -> bool:
+    """device-facing 요청의 Bearer 토큰 검증(상수시간 + 만료 확인)."""
+    if not token:
+        return False
+    w = db_edge.get_edge_worker(device_id=device_id)
+    if not w or not w.get("edge_token_hash"):
+        return False
+    # 만료 확인 — fail-closed: 만료값이 있는데 파싱 실패하면 만료로 간주(fail-open 금지).
+    raw_exp = w.get("token_expires_at")
+    if raw_exp is not None:
+        exp = _parse_dt(raw_exp)
+        if exp is None or datetime.now() > exp:
+            return False
+    return hmac.compare_digest(str(w["edge_token_hash"]), _hash_token(token))
+
+
+def record_heartbeat(device_id: str, body) -> dict:
+    """heartbeat 원본 저장 + last_seen/online 갱신."""
+    w = db_edge.get_edge_worker(device_id=device_id)
+    if not w:
+        raise Exception(f"edge worker not found: {device_id}")
+    # 필드는 HeartbeatModel 에서 bound 되므로 정상 payload 는 8000 미만. 초과 시 blind
+    # slice(잘린 무효 JSON 영속) 대신 거부해 이후 판독기 파손을 막는다.
+    hb_json = json.dumps(body.model_dump())
+    if len(hb_json) > 8000:
+        raise Exception("heartbeat payload too large")
+    if not db_edge.update_edge_worker_heartbeat(w["id"], last_heartbeat_json=hb_json, last_seen=_now()):
+        raise Exception("failed to persist heartbeat")
+    return {"device_id": device_id, "received": True}
 
 
 def _safe_rm_url(url: str, suffix: str):
@@ -97,6 +175,15 @@ def _labels_for(target_type: str, target_id: str):
 def _worker_view(w: dict) -> dict:
     if not w:
         return None
+    w = dict(w)
+    has_token = bool(w.get("edge_token_hash"))
+    # 인증 material(토큰 해시)은 응답에 노출하지 않는다(token_prefix/expires_at 만 표시).
+    w.pop("edge_token_hash", None)
+    # heartbeat 워커(토큰 발급됨)만 last_seen staleness 로 offline 파생. pull 전용
+    # (remoteManager /metrics) 워커는 저장된 conn_status 유지 — 주기 폴러 부재로 인한
+    # 오탐(→ SP-6 배포 셀렉터가 healthy 디바이스를 비활성화) 방지.
+    if has_token:
+        w["conn_status"] = _derive_conn_status(w)
     return {**w, "labels": _labels_for("edge_worker", w["device_id"])}
 
 
@@ -106,6 +193,7 @@ def register_edge_worker(body) -> dict:
     wid = db_edge.insert_edge_worker(
         device_id=body.device_id, name=body.name, device_type=body.device_type,
         sdx_domain=body.sdx_domain, remote_manager_url=body.remote_manager_url,
+        hw_model=body.hw_model, location=body.location,
     )
     if not wid:
         raise Exception("failed to register edge worker")

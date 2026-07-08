@@ -10,16 +10,19 @@ from utils.msa_db.db_base import get_db
 
 # ── edge_worker ─────────────────────────────────────────────────────────────
 
-def insert_edge_worker(device_id, name, device_type, sdx_domain, remote_manager_url):
+def insert_edge_worker(device_id, name, device_type, sdx_domain, remote_manager_url,
+                       hw_model=None, location=None):
     try:
         with get_db() as conn:
             cur = conn.cursor()
             sql = """
                 INSERT INTO edge_worker
-                    (device_id, name, device_type, sdx_domain, remote_manager_url)
-                VALUES (%s, %s, %s, %s, %s)
+                    (device_id, name, device_type, sdx_domain, remote_manager_url,
+                     hw_model, location)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
             """
-            cur.execute(sql, (device_id, name, device_type, sdx_domain, remote_manager_url))
+            cur.execute(sql, (device_id, name, device_type, sdx_domain,
+                              remote_manager_url, hw_model, location))
             conn.commit()
             return cur.lastrowid
     except Exception:
@@ -92,6 +95,40 @@ def update_edge_worker_status(worker_id, conn_status, last_seen=None,
         with get_db() as conn:
             cur = conn.cursor()
             cur.execute(f"UPDATE edge_worker SET {', '.join(sets)} WHERE id=%s", params)
+            conn.commit()
+            return True
+    except Exception:
+        traceback.print_exc()
+        return False
+
+
+def update_edge_worker_token(worker_id, token_hash, token_prefix, token_expires_at):
+    """노드별 Bearer 토큰 발급/rotation — 해시/prefix/만료 저장(평문 미저장)."""
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE edge_worker SET edge_token_hash=%s, token_prefix=%s, "
+                "token_expires_at=%s WHERE id=%s",
+                (token_hash, token_prefix, token_expires_at, worker_id),
+            )
+            conn.commit()
+            return True
+    except Exception:
+        traceback.print_exc()
+        return False
+
+
+def update_edge_worker_heartbeat(worker_id, last_heartbeat_json, last_seen):
+    """디바이스 heartbeat 수신 → 원본 저장 + last_seen 갱신 + online 표시."""
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE edge_worker SET conn_status='online', last_seen=%s, "
+                "last_heartbeat_json=%s WHERE id=%s",
+                (last_seen, last_heartbeat_json, worker_id),
+            )
             conn.commit()
             return True
     except Exception:

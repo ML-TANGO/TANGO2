@@ -7,13 +7,24 @@ export const getEdgeWorkers = async () => {
 };
 
 export const registerEdgeWorker = async (body) => {
-  // body: { device_id, name?, device_type?, sdx_domain?, remote_manager_url }
+  // body: { device_id, name?, device_type?, sdx_domain?, remote_manager_url?, hw_model?, location? }
   return await callApi({ url: 'edge/workers', method: 'post', body });
 };
 
 export const refreshEdgeWorker = async (workerId) => {
   // remoteManager /metrics 폴링 → 연결상태/자원/배포 갱신.
-  return await callApi({ url: `edge/workers/${workerId}/refresh`, method: 'post' });
+  return await callApi({
+    url: `edge/workers/${workerId}/refresh`,
+    method: 'post',
+  });
+};
+
+// SP-8 P1 — 노드별 Bearer 토큰 발급/rotation. 평문 토큰은 응답에서 1회만 노출.
+export const issueEdgeToken = async (workerId) => {
+  return await callApi({
+    url: `edge/workers/${workerId}/token`,
+    method: 'post',
+  });
 };
 
 export const deleteEdgeWorker = async (workerId) => {

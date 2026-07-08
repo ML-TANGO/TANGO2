@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useHistory } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 import { ButtonV2 } from '@jonathan/ui-react';
@@ -10,11 +11,8 @@ import {
   deleteEdgeWorker,
   getEdgeWorkers,
   refreshEdgeWorker,
-  registerEdgeWorker,
   upsertEdgeLabel,
 } from '@src/apis/flightbase/edge';
-
-import EdgeWorkerModal from './EdgeWorkerModal';
 
 import classNames from 'classnames/bind';
 import style from './EdgeWorkerSection.module.scss';
@@ -36,9 +34,8 @@ const formatBytes = (n) => {
  */
 const EdgeWorkerSection = () => {
   const { t } = useTranslation();
+  const history = useHistory();
   const [workers, setWorkers] = useState([]);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [labelEditFor, setLabelEditFor] = useState(null);
   const [labelKey, setLabelKey] = useState('');
@@ -62,22 +59,6 @@ const EdgeWorkerSection = () => {
     return () => clearInterval(iv);
   }, [fetchWorkers]);
 
-  const handleRegister = useCallback(
-    async (body) => {
-      setSubmitting(true);
-      const res = await registerEdgeWorker(body);
-      setSubmitting(false);
-      if (res.status === STATUS_SUCCESS) {
-        toast.success(t('edge.toast.registered'));
-        setModalOpen(false);
-        fetchWorkers();
-      } else {
-        toast.error(res.message || t('edge.toast.registerFail'));
-      }
-    },
-    [fetchWorkers, t],
-  );
-
   const handleRefresh = useCallback(
     async (id) => {
       setBusyId(id);
@@ -92,7 +73,8 @@ const EdgeWorkerSection = () => {
   const handleDelete = useCallback(
     async (id, deviceId) => {
       // eslint-disable-next-line no-alert
-      if (!window.confirm(t('edge.confirm.delete', { device: deviceId }))) return;
+      if (!window.confirm(t('edge.confirm.delete', { device: deviceId })))
+        return;
       setBusyId(id);
       const res = await deleteEdgeWorker(id);
       setBusyId(null);
@@ -143,7 +125,7 @@ const EdgeWorkerSection = () => {
           colorType='skyblue'
           size='s'
           label={t('edge.register.title')}
-          onClick={() => setModalOpen(true)}
+          onClick={() => history.push('/admin/nodes/edge/new')}
         />
       </div>
       <div className={cx('edge-desc')}>{t('edge.section.desc')}</div>
@@ -198,7 +180,9 @@ const EdgeWorkerSection = () => {
                   {w.cpu_cores ? `CPU ${w.cpu_cores} · ` : ''}
                   {w.mem_total ? `${formatBytes(w.mem_total)} · ` : ''}
                   {w.gpu_info || ''}
-                  {w.container_count != null ? ` · ${w.container_count} cont.` : ''}
+                  {w.container_count != null
+                    ? ` · ${w.container_count} cont.`
+                    : ''}
                   {!w.cpu_cores && !w.mem_total && !w.gpu_info ? '-' : ''}
                 </td>
                 <td className={cx('last-seen')}>{w.last_seen || '-'}</td>
@@ -290,13 +274,6 @@ const EdgeWorkerSection = () => {
           </tbody>
         </table>
       )}
-
-      <EdgeWorkerModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onSubmit={handleRegister}
-        submitting={submitting}
-      />
     </div>
   );
 };

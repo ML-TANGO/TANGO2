@@ -9,7 +9,10 @@ class RegisterEdgeWorkerModel(BaseModel):
     name: Optional[str] = Field(default=None, max_length=128)
     device_type: Optional[str] = Field(default=None, max_length=32)
     sdx_domain: Optional[str] = Field(default=None, max_length=64)
-    remote_manager_url: str = Field(..., min_length=1, max_length=512, pattern=r"^https?://.+")
+    # heartbeat push 모델에선 선택(remoteManager pull/deploy 경로에서만 사용). 값이 있으면 URL 검증.
+    remote_manager_url: Optional[str] = Field(default=None, max_length=512, pattern=r"^https?://.+")
+    hw_model: Optional[str] = Field(default=None, max_length=128)
+    location: Optional[str] = Field(default=None, max_length=255)
 
 
 class DeployEdgeModel(BaseModel):
@@ -48,3 +51,26 @@ class CustomLabelModel(BaseModel):
     target_id: str = Field(..., min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._/\-]+$")
     label_key: str = Field(..., min_length=1, max_length=64, pattern=r"^[A-Za-z0-9._/\-]+$")
     label_value: Optional[str] = Field(default=None, max_length=255)
+
+
+class HeartbeatModel(BaseModel):
+    """기관 디바이스 → 플랫폼 자원/상태 보고 (규격 v1.0). 30초 주기."""
+    timestamp: Optional[str] = Field(default=None, max_length=64)
+    cpu_pct: Optional[float] = None
+    gpu_pct: Optional[float] = None
+    gpu_mem_gb: Optional[float] = Field(default=None, ge=0, le=1048576)
+    gpu_mem_used_gb: Optional[float] = Field(default=None, ge=0, le=1048576)
+    disk_gb: Optional[float] = Field(default=None, ge=0, le=1073741824)
+    disk_used_gb: Optional[float] = Field(default=None, ge=0, le=1073741824)
+    model_loaded: Optional[str] = Field(default=None, max_length=128)
+    inference_count_total: Optional[int] = Field(default=None, ge=0, le=1000000000000)
+    inference_latency_p50_ms: Optional[float] = Field(default=None, ge=0, le=3600000)
+    inference_latency_p99_ms: Optional[float] = Field(default=None, ge=0, le=3600000)
+    last_error: Optional[str] = Field(default=None, max_length=512)
+
+    @field_validator("cpu_pct", "gpu_pct")
+    @classmethod
+    def _clamp_pct(cls, v):
+        if v is None:
+            return v
+        return max(0.0, min(100.0, float(v)))

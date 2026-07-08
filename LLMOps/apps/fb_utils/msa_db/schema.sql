@@ -166,6 +166,12 @@ CREATE TABLE IF NOT EXISTS `edge_worker` (
     `mem_total`          BIGINT DEFAULT NULL,
     `gpu_info`           VARCHAR(256) DEFAULT NULL,
     `container_count`    INT(11) DEFAULT NULL,
+    `hw_model`           VARCHAR(128) DEFAULT NULL,      -- 하드웨어 모델 (예: Jetson AGX Orin 64GB)
+    `location`           VARCHAR(255) DEFAULT NULL,      -- 물리 위치
+    `edge_token_hash`    VARCHAR(128) DEFAULT NULL,      -- 노드별 Bearer token sha256 (평문 미저장)
+    `token_prefix`       VARCHAR(16) DEFAULT NULL,       -- 토큰 식별 prefix (표시용)
+    `token_expires_at`   DATETIME DEFAULT NULL,          -- 토큰 만료 (발급+90일)
+    `last_heartbeat_json` TEXT DEFAULT NULL,             -- 최근 heartbeat 원본 (자원/지연/에러)
     `create_datetime`    DATETIME DEFAULT CURRENT_TIMESTAMP,
     `update_datetime`    DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY(`id`),
