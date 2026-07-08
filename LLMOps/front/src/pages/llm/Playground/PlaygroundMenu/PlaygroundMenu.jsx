@@ -7,7 +7,7 @@ import { toast } from 'react-toastify';
 import CardTemplate from '@src/components/molecules/CardTemplate/CardTemplate';
 
 import EdgeDeploymentSection from './EdgeDeploymentSection/EdgeDeploymentSection';
-import NewDeploymentModal from './NewDeploymentModal/NewDeploymentModal';
+import NewDeploymentWizard from '@src/components/Modal/NewDeploymentWizard/NewDeploymentWizard';
 
 import {
   deletePlayground,
@@ -88,26 +88,23 @@ const PlaygroundMenu = () => {
   const { id: workspace_id } = match.params;
 
   const [playgroundInfo, setPlaygroundInfo] = useState([]);
-  // D6 v3: "+새 배포" → 타겟 chooser. 클러스터=기존 ADD_PLAYGROUND, 엣지/standalone=양자화 선행 안내.
+  // D6 v3: "+새 배포" → 스텝 위저드(NewDeploymentWizard). 클러스터=대상→정보→확인→postPlayground(상세이동),
+  //   엣지/standalone=양자화 선행 안내. (기존 ADD_PLAYGROUND 셸 생성 모달을 위저드가 흡수.)
   const [showNewDeployment, setShowNewDeployment] = useState(false);
 
   const handleCreateCard = useCallback(() => {
     setShowNewDeployment(true);
   }, []);
 
-  // 현재 클러스터 배포 = 기존 Playground 생성 플로우.
-  const openClusterCreate = useCallback(() => {
-    dispatch(
-      openModal({
-        modalType: 'ADD_PLAYGROUND',
-        modalData: {
-          workspace_id,
-          handleRefresh: async () =>
-            await getPlaygroundInfo(workspace_id, setPlaygroundInfo),
-        },
-      }),
-    );
-  }, [dispatch, workspace_id]);
+  // 위저드 props 를 안정 identity 로 — 인라인 리터럴이면 부모 리렌더마다 위저드 Escape 리스너가 재등록됨.
+  const handleCloseNewDeployment = useCallback(
+    () => setShowNewDeployment(false),
+    [],
+  );
+  const handleRefreshDeployments = useCallback(
+    () => getPlaygroundInfo(workspace_id, setPlaygroundInfo),
+    [workspace_id],
+  );
 
   const handleOnClickCard = useCallback(
     (e, id, constructor, isAccess, userList) => {
@@ -233,7 +230,6 @@ const PlaygroundMenu = () => {
   );
 
   useEffect(() => {
-    loadModalComponent('ADD_PLAYGROUND');
     loadModalComponent('EDIT_PLAYGROUND');
 
     breadCrumbHandler(dispatch);
@@ -259,11 +255,13 @@ const PlaygroundMenu = () => {
         />
       </Suspense>
       <EdgeDeploymentSection />
-      <NewDeploymentModal
-        open={showNewDeployment}
-        onClose={() => setShowNewDeployment(false)}
-        onSelectCluster={openClusterCreate}
-      />
+      {showNewDeployment && (
+        <NewDeploymentWizard
+          wid={workspace_id}
+          onClose={handleCloseNewDeployment}
+          onRefresh={handleRefreshDeployments}
+        />
+      )}
     </div>
   );
 };
