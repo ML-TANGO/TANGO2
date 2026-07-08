@@ -44,9 +44,12 @@ class Settings(BaseSettings):
     # 5 minutes and partner /info responses can be slow during cold-start.
     partner_http_timeout_seconds: float = 300.0
 
-    # Polling cadence for async jobs (SP-Ext.8). 5s is the floor; lifecycle
-    # raises this back off as partner runtime stretches.
-    poll_interval_seconds: float = 5.0
+    # Polling cadence for async jobs (SP-Ext.8). Partner /health + /train/status
+    # poll interval. 10s (raised from 5s) to ease concurrent-poll load — the BFF
+    # SSE relays (status/time/graph) + system-log all fan out through get_job;
+    # hours-long training makes a ~10s terminal-detection latency negligible.
+    # env-overridable (POLL_INTERVAL_SECONDS) via populate_by_name.
+    poll_interval_seconds: float = 10.0
 
     # MariaDB startup connect retry (SP-Ext.3). On a node reboot this pod can
     # start before MariaDB-galera accepts connections; a one-shot connect would
