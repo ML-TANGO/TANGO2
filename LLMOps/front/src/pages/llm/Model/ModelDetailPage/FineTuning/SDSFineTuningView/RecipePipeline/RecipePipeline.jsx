@@ -18,6 +18,9 @@
 
 import { Fragment, useCallback, useEffect, useState } from 'react';
 
+import { getExternalCheckpoints } from '@src/apis/llm/model';
+import { STATUS_SUCCESS } from '@src/network';
+
 import BasicLineChart from '../../FineTuningGraph/BasicLineChart';
 
 import classNames from 'classnames/bind';
@@ -147,6 +150,7 @@ const phaseStatusOf = (phase, activePhaseId, activePhaseStatus, donePhases) => {
 
 const RecipePipeline = ({
   phases,
+  modelId,
   activePhaseId,
   activePhaseStatus,
   donePhases,
@@ -218,6 +222,32 @@ const RecipePipeline = ({
       [phaseId]: { ...(s[phaseId] || {}), [key]: value },
     }));
 
+  // 이어서 학습(가중치 warm-start) — 모델의 저장된 체크포인트 목록. 선택 시 그 가중치에서
+  // 이어서 학습(옵티마이저/step 은 리셋). 목록 소스 = list_external_checkpoints(P1).
+  const [resumeCkpts, setResumeCkpts] = useState([]);
+  const [resumeSel, setResumeSel] = useState(''); // '' = 처음부터. 값 = "<commit>/checkpoint-<step>"
+  useEffect(() => {
+    // 모델 전환 시 이전 모델의 체크포인트 선택 잔존 방지(컴포넌트가 manifest@version 로만
+    // keyed 라 같은 매니페스트의 다른 모델로 이동 시 미리마운트 → stale 선택으로 오모델
+    // 체크포인트 주입 위험, codex MED).
+    setResumeSel('');
+    setResumeCkpts([]);
+    if (!modelId) return;
+    let alive = true;
+    (async () => {
+      const res = await getExternalCheckpoints(modelId);
+      if (
+        alive &&
+        res?.status === STATUS_SUCCESS &&
+        Array.isArray(res.result?.list)
+      )
+        setResumeCkpts(res.result.list.filter((c) => c && Number.isFinite(c.step)));
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [modelId]);
+
   // 실행 — 편집한 숫자 하이퍼파라미터/step 과 체크포인트 이름만 phase.params 위에 오버레이,
   // 나머지 키(경로·phase·scenario·chain)는 pass-through(계약 보존). 체인 주입은 부모가 처리.
   const handleRun = useCallback(
@@ -230,9 +260,12 @@ const RecipePipeline = ({
       });
       const name = (f.output_checkpoint_name || '').trim();
       if (name) merged.output_checkpoint_name = name; // 빈값이 필수키를 덮지 않도록
+      // 이어서 학습: FE-내부 마커. 부모 launchPhase 가 chain_inputs 뒤에 resume_lora_path/
+      // projector_path 로 변환(사용자 선택이 자동 체인을 override) + commit_models 마운트 보장.
+      if (resumeSel) merged._resume_checkpoint = resumeSel;
       onRunPhase(phase, merged);
     },
-    [forms, onRunPhase],
+    [forms, onRunPhase, resumeSel],
   );
 
   const selectedPhase =
@@ -435,6 +468,33 @@ const RecipePipeline = ({
               </div>
               <div className={mx('params-grid')}>
                 {CKPT_NUM_SPECS.map((s) => renderSlider(s, selectedPhase.id))}
+              </div>
+            </section>
+
+            <section className={mx('section')}>
+              <div className={mx('section-label')}>이어서 학습 (선택)</div>
+              <div className={cx('resume-row')}>
+                <select
+                  className={cx('resume-select')}
+                  value={resumeSel}
+                  onChange={(e) => setResumeSel(e.target.value)}
+                >
+                  <option value=''>처음부터 (이어받지 않음)</option>
+                  {resumeCkpts.map((c) => (
+                    <option
+                      key={`${c.commit_id}:${c.step}`}
+                      value={`${c.commit_name}/checkpoint-${c.step}`}
+                    >
+                      {`${c.stage_label ? `[${c.stage_label}] ` : ''}Step ${c.step.toLocaleString()}${
+                        Number.isFinite(c.loss) ? ` · loss ${c.loss.toFixed(3)}` : ''
+                      }`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className={mx('train-hint')}>
+                선택한 체크포인트의 가중치에서 이어서 학습합니다(옵티마이저·step 은
+                새로 시작). 저장된 체크포인트가 없으면 목록이 비어 있습니다.
               </div>
             </section>
           </>

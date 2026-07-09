@@ -446,6 +446,18 @@ const SDSExternalFineTuningView = memo(function SDSExternalFineTuningView({
           const baseName = commitModelName || modelName;
           if (baseName) params._base_model = { name: baseName };
         }
+        // 이어서 학습(가중치 warm-start) — RecipePipeline 이 심은 FE-내부 마커를 여기서
+        // resume_lora_path/projector_path 로 변환. chain_inputs 뒤라 사용자 선택이 자동 체인을
+        // override. 그 체크포인트가 있는 commit_models 를 /models/checkpoints 로 마운트하도록
+        // _base_model 도 보장(chain_from 없는 phase 에서도). 마커는 파트너로 보내지 않는다.
+        if (params._resume_checkpoint) {
+          const rel = String(params._resume_checkpoint);
+          params.resume_lora_path = `/models/checkpoints/${rel}`;
+          params.projector_path = `/models/checkpoints/${rel}/projector.bin`;
+          delete params._resume_checkpoint;
+          const rbase = commitModelName || modelName;
+          if (rbase && !params._base_model) params._base_model = { name: rbase };
+        }
         const ok = await submitExternalJob({
           params,
           outputSubdir: phase.id,
@@ -669,6 +681,7 @@ const SDSExternalFineTuningView = memo(function SDSExternalFineTuningView({
           <RecipePipeline
             key={`${manifestName}@${manifestVersion}`}
             phases={recipe.phases}
+            modelId={modelId}
             activePhaseId={activePhaseId}
             activePhaseStatus={fineTuningStatus}
             donePhases={donePhases}

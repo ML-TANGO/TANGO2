@@ -369,3 +369,26 @@
     border-color: #3babff;
   }
 }
+
+// 이어서 학습(warm-start) 체크포인트 선택.
+.resume-row {
+  display: flex;
+  align-items: center;
+}
+
+.resume-select {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid #d6dae0;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #1f2937;
+  background: #fff;
+  cursor: pointer;
+
+  &:focus {
+    outline: none;
+    border-color: #3babff;
+  }
+}
