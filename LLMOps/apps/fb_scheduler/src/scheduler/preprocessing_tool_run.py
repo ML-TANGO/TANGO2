@@ -33,42 +33,42 @@ def job_run_command(run_code_type: str, run_code: str, parameter: str):
 def create_preprocessing_job_pod(preprocessing_job_info : PreprocessingJobPodInfo):
     try:
         os.chdir("/app/helm_chart/") # TODO 나중에 변수화 해야할 듯
-        job_command = f' --set spec.containers.command="{preprocessing_job_info.command}"'
+        job_command = f" --set spec.containers.command={common.helm_set_value(preprocessing_job_info.command)}"
         
         labels_command=""
         for key, val in preprocessing_job_info.labels.model_dump().items():
             if val:
-                labels_command += f" --set labels.{key}={val}"
+                labels_command += f" --set labels.{key}={common.helm_set_value(val)}"
         
         env_command=""
         for key, val in preprocessing_job_info.env.model_dump().items():
             if val:
-                env_command += f" --set spec.containers.env.{key}={val}"
+                env_command += f" --set spec.containers.env.{key}={common.helm_set_value(val)}"
             
         resource_limit_command=""
         for key, val in preprocessing_job_info.resource.model_dump().items():
-            resource_limit_command += f" --set spec.containers.resource.limits.{key}={val}"
+            resource_limit_command += f" --set spec.containers.resource.limits.{key}={common.helm_set_value(val)}"
         nodes_command = ""
         for index, node in enumerate(preprocessing_job_info.cluster):
-            nodes_command += f" --set cluster[{index}].node_name={node.node_name}"
-            nodes_command += f' --set cluster[{index}].device.type="{node.device.device_type}"'
-            nodes_command += f' --set cluster[{index}].device.model="{node.device.model}"'
-            nodes_command += f" --set cluster[{index}].device.count={node.device.count}"
-            nodes_command += f' --set cluster[{index}].device.uuids="{node.device.uuids}"'
-            nodes_command += f' --set cluster[{index}].device.ids="{node.device.ids}"'        
+            nodes_command += f" --set cluster[{index}].node_name={common.helm_set_value(node.node_name)}"
+            nodes_command += f" --set cluster[{index}].device.type={common.helm_set_value(node.device.device_type)}"
+            nodes_command += f" --set cluster[{index}].device.model={common.helm_set_value(node.device.model)}"
+            nodes_command += f" --set cluster[{index}].device.count={common.helm_set_value(node.device.count)}"
+            nodes_command += f" --set cluster[{index}].device.uuids={common.helm_set_value(node.device.uuids)}"
+            nodes_command += f" --set cluster[{index}].device.ids={common.helm_set_value(node.device.ids)}"        
         namespace = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=preprocessing_job_info.labels.workspace_id)
-        command=f"""helm install {preprocessing_job_info.labels.helm_name} prepro_job/ \
-            -n {namespace} \
+        command=f"""helm install {common.shell_arg(preprocessing_job_info.labels.helm_name)} prepro_job/ \
+            -n {common.shell_arg(namespace)} \
             --set system.namespace={settings.JF_SYSTEM_NAMESPACE} \
-            --set namespace={namespace} \
-            --set owner_name={preprocessing_job_info.owner_name} \
-            --set pod_name={preprocessing_job_info.pod_name} \
+            --set namespace={common.shell_arg(namespace)} \
+            --set owner_name={common.helm_set_value(preprocessing_job_info.owner_name)} \
+            --set pod_name={common.helm_set_value(preprocessing_job_info.pod_name)} \
             --set spec.restartPolicy={preprocessing_job_info.restartPolicy} \
-            --set spec.containers.image={preprocessing_job_info.image} \
+            --set spec.containers.image={common.helm_set_value(preprocessing_job_info.image)} \
             --set total_device_count={preprocessing_job_info.total_device_count} \
-            --set spec.hostname={preprocessing_job_info.hostname} \
-            --set dataset.access={preprocessing_job_info.dataset_access} \
-            --set dataset.name={preprocessing_job_info.dataset_name} \
+            --set spec.hostname={common.helm_set_value(preprocessing_job_info.hostname)} \
+            --set dataset.access={common.helm_set_value(preprocessing_job_info.dataset_access)} \
+            --set dataset.name={common.helm_set_value(preprocessing_job_info.dataset_name)} \
             --set privateRepo={settings.JONATHAN_PRIVATE_REPO_ENABLED} \
             --set privatePip={settings.JONATHAN_PRIVATE_PIP_ENABLED} \
             --set nexusPrefix={settings.JONATHAN_NEXUS_PREFIX} \
@@ -80,7 +80,7 @@ def create_preprocessing_job_pod(preprocessing_job_info : PreprocessingJobPodInf
             
             
         if preprocessing_job_info.cpu_instance_name:
-            command += f"  --set spec.cpu_instance_name={preprocessing_job_info.cpu_instance_name}"
+            command += f"  --set spec.cpu_instance_name={common.helm_set_value(preprocessing_job_info.cpu_instance_name)}"
             
         print(command, file=sys.stderr)
         result = subprocess.run(
@@ -110,25 +110,25 @@ def create_preprocessing_tool_pod(preprocessing_tool_pod : PreprocessingToolPodI
         labels_command=""
         for key, val in preprocessing_tool_pod.labels.model_dump().items():
             if val:
-                labels_command += f" --set labels.{key}={val}"
+                labels_command += f" --set labels.{key}={common.helm_set_value(val)}"
         
         env_command=""
         for key, val in preprocessing_tool_pod.env.model_dump().items():
             if val:
-                env_command += f" --set spec.containers.env.{key}={val}"
+                env_command += f" --set spec.containers.env.{key}={common.helm_set_value(val)}"
             
         resource_limit_command=""
         for key, val in preprocessing_tool_pod.resource.model_dump().items():
-            resource_limit_command += f" --set spec.containers.resource.limits.{key}={val}"
+            resource_limit_command += f" --set spec.containers.resource.limits.{key}={common.helm_set_value(val)}"
         
         nodes_command = ""
         for index, node in enumerate(preprocessing_tool_pod.cluster):
-            nodes_command += f" --set cluster[{index}].node_name={node.node_name}"
-            nodes_command += f' --set cluster[{index}].device.type="{node.device.device_type}"'
-            nodes_command += f' --set cluster[{index}].device.model="{node.device.model}"'
-            nodes_command += f" --set cluster[{index}].device.count={node.device.count}"
-            nodes_command += f' --set cluster[{index}].device.uuids="{node.device.uuids}"'
-            nodes_command += f' --set cluster[{index}].device.ids="{node.device.ids}"'
+            nodes_command += f" --set cluster[{index}].node_name={common.helm_set_value(node.node_name)}"
+            nodes_command += f" --set cluster[{index}].device.type={common.helm_set_value(node.device.device_type)}"
+            nodes_command += f" --set cluster[{index}].device.model={common.helm_set_value(node.device.model)}"
+            nodes_command += f" --set cluster[{index}].device.count={common.helm_set_value(node.device.count)}"
+            nodes_command += f" --set cluster[{index}].device.uuids={common.helm_set_value(node.device.uuids)}"
+            nodes_command += f" --set cluster[{index}].device.ids={common.helm_set_value(node.device.ids)}"
         namespace = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=preprocessing_tool_pod.labels.workspace_id)
         
         if settings.EXTERNAL_HOST_REDIRECT:
@@ -137,22 +137,22 @@ def create_preprocessing_tool_pod(preprocessing_tool_pod : PreprocessingToolPodI
             domain = f"{settings.EXTERNAL_HOST}:{settings.EXTERNAL_HOST_PORT}"
         
         
-        command=f"""helm install {preprocessing_tool_pod.labels.helm_name} tools/ \
-            -n {namespace} \
-            --set namespace={namespace} \
+        command=f"""helm install {common.shell_arg(preprocessing_tool_pod.labels.helm_name)} tools/ \
+            -n {common.shell_arg(namespace)} \
+            --set namespace={common.shell_arg(namespace)} \
             --set ingress_class_name={settings.INGRESS_CLASS_NAME} \
-            --set owner_name={preprocessing_tool_pod.owner_name} \
-            --set pod_name={preprocessing_tool_pod.pod_name} \
-            --set service.svc_name={preprocessing_tool_pod.svc_name} \
+            --set owner_name={common.helm_set_value(preprocessing_tool_pod.owner_name)} \
+            --set pod_name={common.helm_set_value(preprocessing_tool_pod.pod_name)} \
+            --set service.svc_name={common.helm_set_value(preprocessing_tool_pod.svc_name)} \
             --set service.port={preprocessing_tool_pod.port} \
-            --set spec.containers.image="{preprocessing_tool_pod.image}" \
+            --set spec.containers.image={common.helm_set_value(preprocessing_tool_pod.image)} \
             --set domain="{domain}" \
-            --set tool_password="{preprocessing_tool_pod.tool_password}" \
+            --set tool_password={common.helm_set_value(preprocessing_tool_pod.tool_password)} \
             --set spec.restartPolicy={preprocessing_tool_pod.restartPolicy}\
             --set total_device_count={preprocessing_tool_pod.total_device_count} \
-            --set spec.hostname={preprocessing_tool_pod.hostname} \
-            --set dataset.access={preprocessing_tool_pod.dataset_access} \
-            --set dataset.name={preprocessing_tool_pod.dataset_name} \
+            --set spec.hostname={common.helm_set_value(preprocessing_tool_pod.hostname)} \
+            --set dataset.access={common.helm_set_value(preprocessing_tool_pod.dataset_access)} \
+            --set dataset.name={common.helm_set_value(preprocessing_tool_pod.dataset_name)} \
             --set privateRepo={settings.JONATHAN_PRIVATE_REPO_ENABLED} \
             --set privatePip={settings.JONATHAN_PRIVATE_PIP_ENABLED} \
             --set nexusPrefix={settings.JONATHAN_NEXUS_PREFIX} \
@@ -165,7 +165,7 @@ def create_preprocessing_tool_pod(preprocessing_tool_pod : PreprocessingToolPodI
             
         
         if preprocessing_tool_pod.cpu_instance_name:
-            command += f"  --set spec.cpu_instance_name={preprocessing_tool_pod.cpu_instance_name}"
+            command += f"  --set spec.cpu_instance_name={common.helm_set_value(preprocessing_tool_pod.cpu_instance_name)}"
         
         print(command, file=sys.stderr)
         
@@ -228,7 +228,7 @@ def create_preprocessing_job(pod_info: dict):
                 device=Accelerator(
                     device_type=resource_type,
                     model=model,
-                    uuids = common.escape_special_chars(",".join(gpu_uuids)),
+                    uuids = ",".join(gpu_uuids),
                     ids = ".".join(map(str, gpu_ids)),
                     count = len(gpu_uuids)
                 )
@@ -383,7 +383,7 @@ def create_preprocessing_tool(pod_info : dict):
                 device=Accelerator(
                     device_type=resource_type,
                     model=model,
-                    uuids = common.escape_special_chars(",".join(gpu_uuids)),
+                    uuids = ",".join(gpu_uuids),
                     ids = ".".join(map(str, gpu_ids)),
                     count = len(gpu_uuids)
                 )
@@ -442,7 +442,7 @@ def create_preprocessing_tool(pod_info : dict):
         env=env,
         port=TYPE.TOOL_PORT[pod_info["tool_type"]],
         svc_name=svc_name,
-        tool_password=common.escape_special_chars(tool_password),
+        tool_password=tool_password,
         resource=resource,
         image=pod_info["image_name"],
         pod_name=unique_pod_name,

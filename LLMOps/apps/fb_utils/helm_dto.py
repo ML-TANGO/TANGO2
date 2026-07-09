@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field, validator, StrictStr, model_validator, field_validator
 from typing import Optional, List, Union, Any
 import json
+import shlex
 import utils.HELP as HELP
 from utils import PATH
 from utils.TYPE import TRAINING_ITEM_A, TRAINING_ITEM_B, TRAINING_ITEM_C, PROJECT_TYPE, DEPLOYMENT_TYPE, PROJECT_POD_HOSTNAME
@@ -278,8 +279,12 @@ class BaseConfig(BaseModel):
                 if value is None or value == "None":
                     continue
                 try:
-                    value = str(value).replace(",", "\\,").replace("{", '\\{').replace("}", '\\}')
-                    lines.append(f'{full_key}="{value}"')
+                    # helm parser 이스케이프(,{}) 후 shlex.quote 로 셸-안전화 — shell=True 로 실행되는
+                    # `helm install --set` 인젝션 차단(멀티엔진 landmine #8, model_huggingface_id/
+                    # model_allm_name/serving_system 등 사용자 제어 값이 이 경로로 흐름). 단일따옴표
+                    # 래핑이라 helm 이스케이프 백슬래시(\,)는 그대로 helm 에 전달되어 파싱 동일.
+                    helm_escaped = str(value).replace(",", "\\,").replace("{", "\\{").replace("}", "\\}")
+                    lines.append(f"{full_key}={shlex.quote(helm_escaped)}")
                 except:
                     pass
                     # print("values", value)

@@ -108,7 +108,7 @@ def create_training_pod(pod_info: dict):
                 device=Accelerator(
                     device_type=resource_type,
                     model=model,
-                    uuids = common.escape_special_chars(",".join(gpu_uuids)),
+                    uuids = ",".join(gpu_uuids),
                     ids = ".".join(map(str, gpu_ids)),
                     count = len(gpu_uuids)
                 )
@@ -212,7 +212,7 @@ def create_training_pod(pod_info: dict):
         owner_name=owner_name,
         total_device_count=pod_info["gpu_count"],
         distributed_framework=pod_info["distributed_framework"],
-        distributed_config_path=common.escape_special_chars(pod_info["distributed_config_path"]),
+        distributed_config_path=pod_info["distributed_config_path"],
         dataset_id=pod_info["dataset_id"],
         dataset_access=dataset_info["access"],
         dataset_name=dataset_info["name"]
@@ -310,7 +310,7 @@ def create_hps_pod(pod_info: dict):
                 device=Accelerator(
                     device_type=resource_type,
                     model=model,
-                    uuids = common.escape_special_chars(",".join(gpu_uuids)),
+                    uuids = ",".join(gpu_uuids),
                     ids = ".".join(map(str, gpu_ids)),
                     count = len(gpu_uuids)
                 )
@@ -553,7 +553,7 @@ def create_project_tool(pod_info : dict):
                 device=Accelerator(
                     device_type=resource_type,
                     model=model,
-                    uuids = common.escape_special_chars(",".join(gpu_uuids)),
+                    uuids = ",".join(gpu_uuids),
                     ids = ".".join(map(str, gpu_ids)),
                     count = len(gpu_uuids)
                 )
@@ -612,7 +612,7 @@ def create_project_tool(pod_info : dict):
         env=env,
         port=TYPE.TOOL_PORT[pod_info["tool_type"]],
         svc_name=svc_name,
-        tool_password=common.escape_special_chars(tool_password),
+        tool_password=tool_password,
         resource=resource,
         image=pod_info["image_name"],
         pod_name=unique_pod_name,

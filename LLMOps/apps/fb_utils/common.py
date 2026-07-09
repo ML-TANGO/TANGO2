@@ -23,6 +23,7 @@ random.seed( ((temp_time_for_random_seed&0xff000000) >> 24)
         + ((temp_time_for_random_seed&0x000000ff) << 24))
 import string
 import json
+import shlex
 import argparse
 import functools
 import pathlib
@@ -1574,6 +1575,26 @@ async def get_files(base_path, file_extension, ignore_folders, is_full_path=Fals
     
     return run_code_list, file_list
 
+
+
+def helm_escape(value) -> str:
+    """helm `--set` 파서용 이스케이프(`,` `{` `}`). 값 안의 helm 메타문자를 escape."""
+    return str(value).replace(",", "\\,").replace("{", "\\{").replace("}", "\\}")
+
+
+def helm_set_value(value) -> str:
+    """helm `--set key=<이 결과>` 에 넣을 셸-안전 값 토큰.
+
+    helm 이스케이프(`helm_escape`) 후 `shlex.quote` → `shell=True` 로 실행되는 helm install
+    커맨드의 셸 인젝션(`;`, `$()`, 백틱, `&&`, 따옴표 탈출)을 차단하면서 helm 의 `\\,`/`\\{`/`\\}`
+    는 단일따옴표 안에서 그대로 보존되어 helm `--set` 파서에 정확히 전달된다.
+    """
+    return shlex.quote(helm_escape(value))
+
+
+def shell_arg(value) -> str:
+    """helm_name/namespace 등 일반 셸 인자를 셸-안전 quote(`shell=True` 인젝션 차단)."""
+    return shlex.quote(str(value))
 
 
 def escape_special_chars(command):
