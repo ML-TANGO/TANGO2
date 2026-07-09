@@ -100,8 +100,20 @@ const CKPT_NUM_SPECS = [
   { key: 'save_steps', label: 'Save Steps', min: 0, max: 5000, step: 50 },
   { key: 'eval_steps', label: 'Eval Steps', min: 0, max: 5000, step: 50 },
   { key: 'logging_steps', label: 'Logging Steps', min: 0, max: 1000, step: 10 },
+  {
+    key: 'save_total_limit',
+    label: '최대 보관 개수',
+    min: 1,
+    max: 10,
+    step: 1,
+  },
 ];
-const CKPT_DEFAULTS = { save_steps: 500, eval_steps: 500, logging_steps: 10 };
+const CKPT_DEFAULTS = {
+  save_steps: 500,
+  eval_steps: 500,
+  logging_steps: 10,
+  save_total_limit: 3,
+};
 
 const toNum = (v) =>
   v === '' || v === null || v === undefined || Number.isNaN(Number(v))
