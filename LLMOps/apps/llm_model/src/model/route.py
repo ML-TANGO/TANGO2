@@ -211,6 +211,53 @@ async def promote_commit_model_checkpoint(model_id: int, commit_id: int, step: i
         return response(status=0, message=_um, result=False)
 
 
+# ── SDS(external) 체크포인트 관리 (P1) — commit-scoped 내부 체크포인트와 별개로,
+# external 모델의 per-step 체크포인트를 모델레벨 flat 목록으로. 서비스가 NFS 직독. ──
+@model.get("/{model_id}/external-checkpoints", summary='list SDS/external checkpoints (flat)', tags=TAG_COMMIT_MODEL)
+async def list_external_model_checkpoints(model_id: int):
+    """SDS(external) 모델의 per-step 체크포인트 flat 목록(P1) — 커밋들의 commit_models/<c>/checkpoint-<step>/
+    를 loss/grad/크기/시각/phase 태그/best 로 나열. 컨테이너 아닌 플랫폼 NFS 직독."""
+    try:
+        if not await svc.user_can_access_model(get_user_id(), model_id):
+            return response(status=0, message="forbidden", result={"list": []})
+        res = await svc.list_external_checkpoints(model_id=model_id)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message="server error", result={"list": []})
+
+
+@model.delete("/{model_id}/external-checkpoints/{commit_id}/{step}", summary='delete a SDS/external checkpoint', tags=TAG_COMMIT_MODEL)
+async def delete_external_model_checkpoint(model_id: int, commit_id: int, step: int):
+    """SDS 체크포인트 삭제 — step:int(allowlist), 경로봉쇄·best 보호는 서비스에서."""
+    try:
+        if not await svc.user_can_access_model(get_user_id(), model_id):
+            return response(status=0, message="forbidden", result=False)
+        res = await svc.delete_external_checkpoint(model_id=model_id, commit_id=commit_id, step=step)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        _m = str(e)
+        _um = _m[len("Error:"):].strip() if _m.startswith("Error:") else "server error"
+        return response(status=0, message=_um, result=False)
+
+
+@model.post("/{model_id}/external-checkpoints/{commit_id}/{step}/best", summary='set a SDS/external checkpoint as best', tags=TAG_COMMIT_MODEL)
+async def set_external_model_best_checkpoint(model_id: int, commit_id: int, step: int):
+    """SDS 체크포인트 best 지정(P1: 모델레벨 마커). 실제 서빙 전환은 P2. step:int allowlist,
+    경로봉쇄·commit↔model 소속 검증은 서비스에서."""
+    try:
+        if not await svc.user_can_access_model(get_user_id(), model_id):
+            return response(status=0, message="forbidden", result=False)
+        res = await svc.set_external_best_checkpoint(model_id=model_id, commit_id=commit_id, step=step)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        _m = str(e)
+        _um = _m[len("Error:"):].strip() if _m.startswith("Error:") else "server error"
+        return response(status=0, message=_um, result=False)
+
+
 @model.get("/fine-tuning/system-log", summary='log - fine tuning', tags=TAG_FINE_TUNING)
 async def get_fine_tuning_system_log(model_id: int):
     try:

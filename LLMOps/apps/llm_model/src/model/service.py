@@ -2117,6 +2117,242 @@ async def commit_external_artifacts(model_id : int, job_id : str,
     }
 
 
+# ── SDS(external) 체크포인트 관리 (P1: 목록/메타데이터/삭제/best 마커) ──────────
+# 내부 엔진은 커밋 스냅샷을 commit_checkpoints/<c>/adapters/checkpoint-<step>/ 로 보존하지만,
+# external(SDS)은 commit_external_artifacts 가 파트너 output 트리를 통째로 옮겨
+# commit_models/<commit>/checkpoint-<step>/ (HF Trainer 표준 레이아웃) 에 남긴다. 컨테이너엔
+# 체크포인트 목록/삭제 API 가 없어(/models·/deploy 만) 플랫폼이 NFS 를 직독한다.
+# best = 모델레벨 마커파일. 실제 서빙 전환(best→deploy)은 P2.
+
+_EXTERNAL_BEST_MARKER = ".best_checkpoint.json"
+
+# recipe phase → 프론트 stage 태그 텍스트(phase별). 미매핑/미상은 'LLM'(서빙 가능 계열).
+_SDS_PHASE_TAG = {
+    "projector":   "프로젝터",
+    "lora":        "LoRA",
+    "lora_marine": "해양 LoRA",
+    "lora_sds":    "SDS",
+}
+
+
+def _external_model_root(storage_name: str, workspace_name: str, model_name: str) -> str:
+    return PATH.JF_MAIN_MODEL_PATH.format(
+        STORAGE_NAME=storage_name, WORKSPACE_NAME=workspace_name, MODEL_NAME=model_name)
+
+
+def _external_best_marker_file(model_root: str) -> str:
+    return os.path.join(model_root, _EXTERNAL_BEST_MARKER)
+
+
+def _dir_size_bytes(path: str) -> int:
+    """디렉토리 전체 크기(메타데이터만, 파일 내용 미read). SDS 체크포인트는 full 모델이라 폴더 du."""
+    total = 0
+    for root, _dirs, files in os.walk(path):
+        for f in files:
+            try:
+                total += os.path.getsize(os.path.join(root, f))
+            except OSError:
+                pass
+    return total
+
+
+# du 캐시 — SDS 체크포인트는 커밋 후 frozen(mtime 불변)이라 dir mtime 이 같으면 재사용.
+# 매 GET 마다 멀티-GB 트리를 재귀 walk 하던 NFS 과부하(이 코드베이스의 기존 이력)를 완화한다.
+# 프로세스-로컬(재시작/멀티-pod 는 1회 재계산) — 정합성 위해 mtime 서명으로 무효화.
+_dir_size_cache = {}    # path -> (mtime, size_bytes)
+
+
+def _cached_dir_size(path: str) -> int:
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        return 0
+    hit = _dir_size_cache.get(path)
+    if hit and hit[0] == mtime:
+        return hit[1]
+    size = _dir_size_bytes(path)
+    _dir_size_cache[path] = (mtime, size)
+    return size
+
+
+# 모델별 직렬화 락 — best 마커 read-check 와 삭제/재지정 사이 TOCTOU(동시 요청 시 방금 best 로
+# 지정된 체크포인트가 삭제돼 마커가 stale) 방지. 프로세스-로컬(단일 운영자 전제, cross-pod 는 P2).
+_external_model_locks = {}    # model_id -> asyncio.Lock
+
+
+def _external_model_lock(model_id: int):
+    lock = _external_model_locks.get(model_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _external_model_locks[model_id] = lock
+    return lock
+
+
+def _sds_phase_of(fine_tuning_config):
+    """커밋 fine_tuning_config(JSON str = partner_metadata) 에서 recipe phase 추출. 없으면 None."""
+    try:
+        cfg = json.loads(fine_tuning_config) if isinstance(fine_tuning_config, str) else (fine_tuning_config or {})
+    except Exception:
+        return None
+    if not isinstance(cfg, dict):
+        return None
+    phase = cfg.get("phase")
+    if not phase and isinstance(cfg.get("params"), dict):
+        phase = cfg["params"].get("phase")
+    return phase if isinstance(phase, str) else None
+
+
+def _read_external_best(model_root: str):
+    """모델레벨 best 마커 읽기 → {commit_name, step} 또는 None."""
+    try:
+        with open(_external_best_marker_file(model_root), "r") as f:
+            data = json.loads(f.read())
+        if isinstance(data, dict) and data.get("commit_name") and data.get("step") is not None:
+            return {"commit_name": data["commit_name"], "step": int(data["step"])}
+    except Exception:
+        pass
+    return None
+
+
+def _write_external_best(model_root: str, commit_name: str, step: int) -> None:
+    os.makedirs(model_root, exist_ok=True)
+    with open(_external_best_marker_file(model_root), "w") as f:
+        f.write(json.dumps({"commit_name": commit_name, "step": int(step)}, ensure_ascii=False))
+
+
+async def list_external_checkpoints(model_id: int) -> dict:
+    """SDS(external) 모델의 커밋들에 저장된 per-step 체크포인트를 flat 하게 나열(P1).
+    각 커밋 commit_models/<commit>/checkpoint-<step>/ 를 스캔 → trainer_state.json(loss/grad/epoch)
+    + du(크기) + mtime(시각) + phase 태그 + best(마커) 로 반환. 컨테이너 아닌 플랫폼 NFS 직독.
+    정렬은 목업과 동일(proj 먼저 → llm, 각 그룹 step 오름차순)."""
+    model_info = await db_model.get_model(model_id=model_id)
+    if not model_info:
+        raise Exception("Error: not exist model")
+    if (model_info.get("training_type") or "internal") != "external":
+        # external 전용 — 내부/멀티모달은 기존 commit 체크포인트 UI 사용.
+        return {"list": [], "best": None, "storage": {"used_bytes": 0}}
+    workspace_info = await db_model.get_workspace_model(workspace_id=model_info["workspace_id"])
+    model_root = _external_model_root(workspace_info["main_storage_name"], workspace_info["name"], model_info["name"])
+    commits_base = os.path.realpath(os.path.join(model_root, "commit_models"))
+    best = await asyncio.to_thread(_read_external_best, model_root)
+
+    commits = await db_model.get_commit_models(model_id=model_id)
+    out, total_bytes = [], 0
+    for c in (commits or []):
+        commit_name = c.get("name")
+        if not commit_name or "/" in commit_name or commit_name in (".", ".."):
+            continue
+        commit_dir = os.path.join(model_root, "commit_models", commit_name)
+        if not _is_under(commit_dir, commits_base):    # 경로 봉쇄(방어)
+            continue
+        try:
+            entries = await asyncio.to_thread(os.listdir, commit_dir)
+        except (FileNotFoundError, NotADirectoryError):
+            continue
+        ckpt_names = sorted(
+            [e for e in entries if e.startswith("checkpoint-") and e[len("checkpoint-"):].isdigit()],
+            key=lambda e: int(e[len("checkpoint-"):]))
+        # 각 checkpoint-<step> 도 심볼릭 escape 방어(list 도 set/delete 와 동일 봉쇄) — realpath 로
+        # 트리 밖을 가리키는 링크 차단. 반신뢰 external 컨테이너가 심은 심링크로 read/du 가 밖으로 새는 것 방지.
+        ckpt_names = [n for n in ckpt_names if _is_under(os.path.join(commit_dir, n), commits_base)]
+        if not ckpt_names:
+            continue
+        # phase 태그 — 커밋 full row 의 fine_tuning_config(partner_metadata) 파싱.
+        full = await db_model.get_commit_model(commit_id=c["id"])
+        phase = _sds_phase_of((full or {}).get("fine_tuning_config"))
+        stage_key = "proj" if phase == "projector" else "llm"
+        stage_label = _SDS_PHASE_TAG.get(phase or "", "LLM")
+        # 메트릭: 최고 step 의 trainer_state.json(가장 완전한 log_history).
+        log_history = []
+        ts_path = os.path.join(commit_dir, ckpt_names[-1], "trainer_state.json")
+        try:
+            ts = json.loads(await asyncio.to_thread(_read_text_capped, ts_path))
+            log_history = ts.get("log_history") or []
+        except Exception:
+            pass
+        for name in ckpt_names:
+            step = int(name[len("checkpoint-"):])
+            cdir = os.path.join(commit_dir, name)
+            try:
+                saved_at = int(await asyncio.to_thread(os.path.getmtime, cdir))
+            except OSError:
+                saved_at = None
+            size_bytes = await asyncio.to_thread(_cached_dir_size, cdir)
+            total_bytes += size_bytes
+            out.append({
+                "commit_id": c["id"],
+                "commit_name": commit_name,
+                "step": step,
+                "epoch": _ckpt_metric(log_history, step, "epoch"),
+                "loss": _ckpt_metric(log_history, step, "loss"),
+                "grad_norm": _ckpt_metric(log_history, step, "grad_norm"),
+                "size_bytes": size_bytes,
+                "saved_at": saved_at,            # epoch seconds
+                "stage": stage_key,              # 'proj' | 'llm'
+                "stage_label": stage_label,      # 프론트 태그 텍스트(phase별)
+                "is_best": bool(best and best.get("commit_name") == commit_name
+                                and int(best.get("step", -1)) == step),
+            })
+    out.sort(key=lambda r: (0 if r["stage"] == "proj" else 1, r["step"]))
+    return {"list": out, "best": best, "storage": {"used_bytes": total_bytes}}
+
+
+async def set_external_best_checkpoint(model_id: int, commit_id: int, step: int) -> dict:
+    """SDS 체크포인트 best 지정 — 모델레벨 마커파일에 (commit_name, step) 기록(P1).
+    실제 서빙 전환(best→/external/deploy)은 P2. 대상 체크포인트 실재 + commit↔model 소속 검증."""
+    model_info = await db_model.get_model(model_id=model_id)
+    if not model_info or (model_info.get("training_type") or "internal") != "external":
+        raise Exception("Error: not an external model")
+    commit = await db_model.get_commit_model(commit_id=commit_id)
+    if not commit or commit.get("model_id") != model_id:
+        raise Exception("Error: commit not found for model")
+    commit_name = commit["name"]
+    if not commit_name or "/" in commit_name or commit_name in (".", ".."):
+        raise Exception("Error: invalid commit name")
+    workspace_info = await db_model.get_workspace_model(workspace_id=model_info["workspace_id"])
+    model_root = _external_model_root(workspace_info["main_storage_name"], workspace_info["name"], model_info["name"])
+    commits_base = os.path.realpath(os.path.join(model_root, "commit_models"))
+    target = os.path.join(model_root, "commit_models", commit_name, "checkpoint-{}".format(int(step)))
+    if not _is_under(target, commits_base):
+        raise Exception("Error: invalid checkpoint path")
+    # 삭제와 동일 락으로 직렬화 — 마커 write 와 delete 의 best-check 사이 TOCTOU 방지.
+    async with _external_model_lock(model_id):
+        if not await asyncio.to_thread(os.path.isdir, target):
+            raise Exception("Error: checkpoint not found")
+        await asyncio.to_thread(_write_external_best, model_root, commit_name, int(step))
+    return {"commit_name": commit_name, "step": int(step)}
+
+
+async def delete_external_checkpoint(model_id: int, commit_id: int, step: int) -> bool:
+    """SDS 체크포인트 삭제 — commit_models/<commit>/checkpoint-<step>/ 통째 rm(commonpath 봉쇄 +
+    step int 강제). 현재 best(서빙 후보)는 삭제 거부 — 다른 것을 best 로 지정한 뒤 삭제."""
+    model_info = await db_model.get_model(model_id=model_id)
+    if not model_info or (model_info.get("training_type") or "internal") != "external":
+        raise Exception("Error: not an external model")
+    commit = await db_model.get_commit_model(commit_id=commit_id)
+    if not commit or commit.get("model_id") != model_id:
+        raise Exception("Error: commit not found for model")
+    commit_name = commit["name"]
+    if not commit_name or "/" in commit_name or commit_name in (".", ".."):
+        raise Exception("Error: invalid commit name")
+    workspace_info = await db_model.get_workspace_model(workspace_id=model_info["workspace_id"])
+    model_root = _external_model_root(workspace_info["main_storage_name"], workspace_info["name"], model_info["name"])
+    commits_base = os.path.realpath(os.path.join(model_root, "commit_models"))
+    target = os.path.join(model_root, "commit_models", commit_name, "checkpoint-{}".format(int(step)))
+    if not _is_under(target, commits_base):
+        raise Exception("Error: invalid checkpoint path")
+    # best-check ~ rm 을 모델 락으로 원자화 — 동시 set-best 가 이 체크포인트를 best 로 만든 뒤
+    # 삭제되어 마커가 stale 되는 TOCTOU 방지(마커는 P2 서빙 대상 포인터).
+    async with _external_model_lock(model_id):
+        best = await asyncio.to_thread(_read_external_best, model_root)
+        if best and best.get("commit_name") == commit_name and int(best.get("step", -1)) == int(step):
+            raise Exception("Error: best(서빙) 체크포인트는 삭제할 수 없습니다. 다른 체크포인트를 best 로 지정한 뒤 삭제하세요")
+        if not await asyncio.to_thread(os.path.isdir, target):
+            raise Exception("Error: checkpoint not found")
+        await asyncio.to_thread(common.rm_rf, target)
+    return True
+
+
 # ── 3.6 Custom 모델: by-reference 체크포인트 ingestion (런타임-바운드) ──────────
 # 기관(예: 에이브노틱스)이 Nexus/HF 에 올린 커스텀 체크포인트를 레퍼런스로 당겨와
 # 검증 후 commit_models 에 머티리얼라이즈한다. **사용자 파일 업로드 X(운영자 매개)** —

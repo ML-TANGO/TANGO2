@@ -52,6 +52,31 @@ export const promoteCommitCheckpoint = async (modelId, commitId, step) => {
   });
 };
 
+// SDS/external 모델 체크포인트 (P1) — 여러 커밋의 per-step 체크포인트를 flat 하게
+// 나열(proj → llm, step 오름차순 정렬은 BE 가 수행). commit-checkpoints 계열과
+// 동일한 base(`models/...`) + 응답 envelope 을 그대로 미러링한다.
+export const getExternalCheckpoints = async (modelId) => {
+  return await callApi({
+    url: `models/${modelId}/external-checkpoints`,
+    method: 'get',
+  });
+};
+
+export const deleteExternalCheckpoint = async (modelId, commitId, step) => {
+  return await callApi({
+    url: `models/${modelId}/external-checkpoints/${commitId}/${step}`,
+    method: 'delete',
+  });
+};
+
+// Best 지정 — 모델레벨 마커에 (commit_name, step) 기록(P1). 서빙 전환은 P2.
+export const setBestExternalCheckpoint = async (modelId, commitId, step) => {
+  return await callApi({
+    url: `models/${modelId}/external-checkpoints/${commitId}/${step}/best`,
+    method: 'post',
+  });
+};
+
 // 양자화·포팅 (SP-4 / v0.4 3.9) — 학습 완료 모델 → GGUF convert job → 포팅 패키지.
 export const startQuantize = async (modelId, body) => {
   // body: { target_quant: 'q4'|'q5'|'q6', target_device?: string }
