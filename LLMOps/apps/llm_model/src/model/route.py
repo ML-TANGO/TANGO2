@@ -258,6 +258,23 @@ async def set_external_model_best_checkpoint(model_id: int, commit_id: int, step
         return response(status=0, message=_um, result=False)
 
 
+@model.post("/{model_id}/external-checkpoints/serve-best", summary='serve the best SDS/external checkpoint (P2)', tags=TAG_COMMIT_MODEL)
+async def serve_external_model_best_checkpoint(model_id: int):
+    """P2: best 로 지정된 SDS 체크포인트를 실행 중 infer pod 에 in-pod 로드해 서빙 전환.
+    phase 게이트(projector 거부)·경로봉쇄·full envelope 구성·재로드 타임아웃(600s)은 서비스에서.
+    동기 호출(재로드 1~5분) — FE 는 스피너로 응답 대기."""
+    try:
+        if not await svc.user_can_access_model(get_user_id(), model_id):
+            return response(status=0, message="forbidden", result=False)
+        res = await svc.serve_external_best_checkpoint(model_id=model_id)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        _m = str(e)
+        _um = _m[len("Error:"):].strip() if _m.startswith("Error:") else "server error"
+        return response(status=0, message=_um, result=False)
+
+
 @model.get("/fine-tuning/system-log", summary='log - fine tuning', tags=TAG_FINE_TUNING)
 async def get_fine_tuning_system_log(model_id: int):
     try:

@@ -2188,6 +2188,20 @@ def _external_model_lock(model_id: int):
     return lock
 
 
+# serve(배포 전환) 전용 락 — set-best/delete 락과 분리. 이유: serve 는 파트너 /deploy(가중치
+# 재로드)로 락을 최대 600s 보유하므로, 공유 락이면 그 동안 set-best/delete 가 600s 블록된다.
+# 전용 락 + fail-fast 로 serve-vs-serve(재로드 중첩·자원 증폭)만 차단한다.
+_external_serve_locks = {}    # model_id -> asyncio.Lock
+
+
+def _external_serve_lock(model_id: int):
+    lock = _external_serve_locks.get(model_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _external_serve_locks[model_id] = lock
+    return lock
+
+
 def _sds_phase_of(fine_tuning_config):
     """커밋 fine_tuning_config(JSON str = partner_metadata) 에서 recipe phase 추출. 없으면 None."""
     try:
@@ -2220,6 +2234,39 @@ def _write_external_best(model_root: str, commit_name: str, step: int) -> None:
         f.write(json.dumps({"commit_name": commit_name, "step": int(step)}, ensure_ascii=False))
 
 
+# P2: best(의도) 와 별개로 "실제 서빙 중"(state)을 기록 — /deploy 성공 후에만 기록해
+# FE 가 '★BEST'(마커) vs '서빙 중'(실 반영)을 구분. best 재지정만으론 서빙 안 바뀜.
+_EXTERNAL_SERVED_MARKER = ".served_checkpoint.json"
+
+
+def _external_served_marker_file(model_root: str) -> str:
+    return os.path.join(model_root, _EXTERNAL_SERVED_MARKER)
+
+
+def _read_external_served(model_root: str):
+    try:
+        with open(_external_served_marker_file(model_root), "r") as f:
+            data = json.loads(f.read())
+        if isinstance(data, dict) and data.get("commit_name") and data.get("step") is not None:
+            return {"commit_name": data["commit_name"], "step": int(data["step"])}
+    except Exception:
+        pass
+    return None
+
+
+def _write_external_served(model_root: str, commit_name: str, step: int) -> None:
+    os.makedirs(model_root, exist_ok=True)
+    with open(_external_served_marker_file(model_root), "w") as f:
+        f.write(json.dumps({"commit_name": commit_name, "step": int(step)}, ensure_ascii=False))
+
+
+def _clear_external_served(model_root: str) -> None:
+    try:
+        os.remove(_external_served_marker_file(model_root))
+    except OSError:
+        pass
+
+
 async def list_external_checkpoints(model_id: int) -> dict:
     """SDS(external) 모델의 커밋들에 저장된 per-step 체크포인트를 flat 하게 나열(P1).
     각 커밋 commit_models/<commit>/checkpoint-<step>/ 를 스캔 → trainer_state.json(loss/grad/epoch)
@@ -2235,6 +2282,7 @@ async def list_external_checkpoints(model_id: int) -> dict:
     model_root = _external_model_root(workspace_info["main_storage_name"], workspace_info["name"], model_info["name"])
     commits_base = os.path.realpath(os.path.join(model_root, "commit_models"))
     best = await asyncio.to_thread(_read_external_best, model_root)
+    served = await asyncio.to_thread(_read_external_served, model_root)
 
     commits = await db_model.get_commit_models(model_id=model_id)
     out, total_bytes = [], 0
@@ -2292,9 +2340,11 @@ async def list_external_checkpoints(model_id: int) -> dict:
                 "stage_label": stage_label,      # 프론트 태그 텍스트(phase별)
                 "is_best": bool(best and best.get("commit_name") == commit_name
                                 and int(best.get("step", -1)) == step),
+                "is_served": bool(served and served.get("commit_name") == commit_name
+                                  and int(served.get("step", -1)) == step),
             })
     out.sort(key=lambda r: (0 if r["stage"] == "proj" else 1, r["step"]))
-    return {"list": out, "best": best, "storage": {"used_bytes": total_bytes}}
+    return {"list": out, "best": best, "served": served, "storage": {"used_bytes": total_bytes}}
 
 
 async def set_external_best_checkpoint(model_id: int, commit_id: int, step: int) -> dict:
@@ -2323,6 +2373,101 @@ async def set_external_best_checkpoint(model_id: int, commit_id: int, step: int)
     return {"commit_name": commit_name, "step": int(step)}
 
 
+async def serve_external_best_checkpoint(model_id: int) -> dict:
+    """P2: 현재 best 로 지정된 SDS 체크포인트를 실행 중 infer pod 에 in-pod 로드해 서빙 전환.
+    컨테이너 /deploy 는 checkpoint_name 을 EVA_CHECKPOINTS_ROOT(=commit_models RO 마운트) 기준
+    상대경로로 os.path.join 하므로 `<commit>/checkpoint-<step>` 하위경로 서빙이 가능하다(컨테이너 무변경).
+    비자명:
+    - phase 게이트: projector 단계는 언어모델 LoRA 가 없어 서빙 시 base+projector 만 조용히 로드됨
+      → 컨테이너에 게이트가 없으므로 여기서 거부.
+    - ETRIAdapter.deploy 는 payload 를 envelope 로 감싸지 않음(start_job 과 비대칭) → 호출측이
+      full envelope `{workspace_id, project_id, params:{checkpoint_name}}` 를 직접 구성.
+    - 재로드 동기 1~5분 → deploy timeout 상향(600s).
+    - deploy 성공 후에만 served 마커 기록(best=의도 vs served=실 반영 구분).
+    """
+    model_info = await db_model.get_model(model_id=model_id)
+    if not model_info or (model_info.get("training_type") or "internal") != "external":
+        raise Exception("Error: not an external model")
+    workspace_info = await db_model.get_workspace_model(workspace_id=model_info["workspace_id"])
+    model_root = _external_model_root(workspace_info["main_storage_name"], workspace_info["name"], model_info["name"])
+    commits_base = os.path.realpath(os.path.join(model_root, "commit_models"))
+
+    # serve-vs-serve 직렬화(전용 락 + fail-fast) — 공유 infer pod 가중치 재로드는 1~5분·GPU 점유·
+    # 커넥션 600s 라 중첩 호출 시 재로드 레이스/자원 증폭/served 마커 desync. FE busy 는 탭-로컬
+    # 이라 curl/멀티탭에 무력 → 서버측 게이트. 이미 진행 중이면 대기 없이 거부(pile-up 방지).
+    from external.proxy import ExternalContainerClient, ExternalContainerError
+    import httpx
+
+    # serve-vs-serve 직렬화(전용 락 + fail-fast) — 재로드 1~5분·GPU·600s 커넥션이라 중첩 시
+    # 재로드 레이스/자원 증폭. 이미 진행 중이면 대기 없이 거부(pile-up 방지). FE busy 는 탭-로컬.
+    serve_lock = _external_serve_lock(model_id)
+    if serve_lock.locked():
+        raise Exception("Error: 이미 서빙 전환이 진행 중입니다. 완료 후 다시 시도하세요")
+    async with serve_lock:
+        # 마커 상태 조작(best 읽기 + 서빙 대상 '예약')은 delete/set-best 와 동일한 model lock 하에서
+        # 원자적으로 처리한다. 그래야 락 밖에서 도는 600s deploy 중에 delete 가 in-flight 타깃을
+        # 지우거나(served 는 이 시점에 이미 기록됨 → delete 의 served 가드가 보호) served 마커가
+        # delete 의 read/rm 과 경합하지 않는다. 실패 시 이전 served 로 롤백.
+        async with _external_model_lock(model_id):
+            best = await asyncio.to_thread(_read_external_best, model_root)
+            if not best:
+                raise Exception("Error: 먼저 서빙할 체크포인트를 best 로 지정하세요")
+            commit_name, step = best["commit_name"], int(best["step"])
+            if not commit_name or "/" in commit_name or commit_name in (".", ".."):
+                raise Exception("Error: invalid commit name")
+
+            # 경로 봉쇄 + 실재 확인(checkpoint_name 이 파트너 HTTP 로 흐르므로 방어).
+            target = os.path.join(model_root, "commit_models", commit_name, "checkpoint-{}".format(step))
+            if not _is_under(target, commits_base):
+                raise Exception("Error: invalid checkpoint path")
+            if not await asyncio.to_thread(os.path.isdir, target):
+                raise Exception("Error: 서빙할 체크포인트가 존재하지 않습니다")
+
+            # 서빙 게이트(fail-closed·아티팩트 기반) — phase 필드는 구커밋/미기록 시 None 이라 신뢰 불가.
+            # 컨테이너 _load_checkpoint 의 has_lora 판정과 동일하게 adapter_config.json 존재를 요구:
+            # 없으면 언어모델 LoRA 미포함(프로젝터 단계 등) → 서빙 시 base+projector 만 조용히 로드됨.
+            if not await asyncio.to_thread(os.path.exists, os.path.join(target, "adapter_config.json")):
+                raise Exception("Error: 이 체크포인트에는 언어모델 LoRA(adapter_config.json)가 없어 "
+                                "서빙할 수 없습니다(프로젝터 단계 등). 언어모델 단계 체크포인트를 best 로 지정하세요")
+
+            # deploy '전에' served 를 대상으로 선기록(예약) — delete 의 served 가드가 in-flight
+            # 타깃을 보호하도록. 실패 롤백용으로 이전값 보관. (여기까지 model lock 하 = delete/set-best 와 원자.)
+            prev_served = await asyncio.to_thread(_read_external_served, model_root)
+            await asyncio.to_thread(_write_external_served, model_root, commit_name, step)
+
+        # full envelope 구성(etri_vlm.deploy 는 payload 를 그대로 파트너로 전달). deploy 는 model
+        # lock 밖 — 600s 동안 delete/set-best 를 블록하지 않되, 위 served 예약이 타깃을 보호한다.
+        checkpoint_name = "{}/checkpoint-{}".format(commit_name, step)
+        envelope = {
+            "workspace_id": str(model_info["workspace_id"]),
+            "project_id": str(model_id),
+            "params": {"checkpoint_name": checkpoint_name},
+        }
+        try:
+            async with httpx.AsyncClient(timeout=600.0) as hc:
+                client = ExternalContainerClient(base_url=settings.FB_EXTERNAL_CONTAINER_URL, client=hc)
+                raw = await client.deploy(
+                    manifest_name=settings.SDS_MANIFEST_NAME,
+                    manifest_version=settings.SDS_MANIFEST_VERSION,
+                    workspace_id=model_info["workspace_id"],
+                    payload=envelope,
+                    timeout=600.0,
+                )
+        except ExternalContainerError as exc:
+            # deploy 실패 → served 예약 롤백(성공 안 했는데 served 로 남지 않게), model lock 하.
+            async with _external_model_lock(model_id):
+                if prev_served:
+                    await asyncio.to_thread(_write_external_served, model_root,
+                                            prev_served["commit_name"], int(prev_served["step"]))
+                else:
+                    await asyncio.to_thread(_clear_external_served, model_root)
+            _msg = str(exc)
+            if "404" in _msg:
+                raise Exception("Error: 실행 중인 추론(infer) pod 를 찾을 수 없습니다. 먼저 이 모델을 배포하세요")
+            raise Exception("Error: 서빙 전환 실패: {}".format(_msg[:200]))
+    return {"commit_name": commit_name, "step": step, "checkpoint_name": checkpoint_name, "result": raw}
+
+
 async def delete_external_checkpoint(model_id: int, commit_id: int, step: int) -> bool:
     """SDS 체크포인트 삭제 — commit_models/<commit>/checkpoint-<step>/ 통째 rm(commonpath 봉쇄 +
     step int 강제). 현재 best(서빙 후보)는 삭제 거부 — 다른 것을 best 로 지정한 뒤 삭제."""
@@ -2346,7 +2491,12 @@ async def delete_external_checkpoint(model_id: int, commit_id: int, step: int) -
     async with _external_model_lock(model_id):
         best = await asyncio.to_thread(_read_external_best, model_root)
         if best and best.get("commit_name") == commit_name and int(best.get("step", -1)) == int(step):
-            raise Exception("Error: best(서빙) 체크포인트는 삭제할 수 없습니다. 다른 체크포인트를 best 로 지정한 뒤 삭제하세요")
+            raise Exception("Error: best 체크포인트는 삭제할 수 없습니다. 다른 체크포인트를 best 로 지정한 뒤 삭제하세요")
+        # 현재 서빙 중(served)인 체크포인트도 삭제 거부 — served≠best 일 수 있어 best 가드만으론 부족.
+        # 삭제 시 infer pod 메모리엔 남아도 마커가 stale·재시작 시 로드 실패.
+        served = await asyncio.to_thread(_read_external_served, model_root)
+        if served and served.get("commit_name") == commit_name and int(served.get("step", -1)) == int(step):
+            raise Exception("Error: 현재 서빙 중인 체크포인트는 삭제할 수 없습니다. 다른 체크포인트로 서빙 전환한 뒤 삭제하세요")
         if not await asyncio.to_thread(os.path.isdir, target):
             raise Exception("Error: checkpoint not found")
         await asyncio.to_thread(common.rm_rf, target)

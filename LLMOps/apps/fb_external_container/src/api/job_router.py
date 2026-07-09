@@ -330,31 +330,45 @@ async def deploy_external(
         infer_record = tracker.get(req.infer_job_id)
         if infer_record is None:
             raise NotFoundError(f"infer job {req.infer_job_id} not found")
+        # 명시 지정도 workspace + infer 타입 검증(교차 테넌트/오배포 차단).
+        if (
+            getattr(infer_record, "workspace_id", None) != req.workspace_id
+            or infer_record.manifest.spec.job_type != "infer"
+        ):
+            raise NotFoundError(
+                f"infer job {req.infer_job_id} is not a matching infer pod "
+                f"for workspace {req.workspace_id}"
+            )
     else:
-        # paired: 같은 service_family + manifest_name 의 가장 최근 running job.
+        # paired: 같은 workspace 의 running INFER job 만 매칭(train 레코드/타 워크스페이스 제외).
+        # exact manifest(호출자가 infer manifest 직접) 우선, 없으면 service_family 페어링(호출자가
+        # train manifest 를 준 hybrid-pair). 어느 경로든 job_type=='infer' 강제 — train pod 에
+        # deploy 호출(그 manifest 엔 /deploy 없음)로 실패하던 문제 + 타 워크스페이스 pod 로 오배포 차단.
         family = manifest.spec.service_family
         for rec in tracker.all():
-            if (
+            if getattr(rec, "workspace_id", None) != req.workspace_id:
+                continue
+            if rec.manifest.spec.job_type != "infer":
+                continue
+            exact = (
                 rec.manifest.metadata.name == req.manifest_name
                 and rec.manifest.metadata.version == req.manifest_version
-            ):
-                infer_record = rec
-                break
-            if (
-                family
-                and rec.manifest.spec.service_family == family
-                and rec.manifest.spec.job_type == "infer"
-            ):
+            )
+            paired = bool(family) and rec.manifest.spec.service_family == family
+            if exact or paired:
                 infer_record = rec
                 break
         if infer_record is None:
             raise NotFoundError(
                 f"no active infer pod found for {req.manifest_name}@"
-                f"{req.manifest_version} (service_family={family})"
+                f"{req.manifest_version} in workspace {req.workspace_id} "
+                f"(service_family={family})"
             )
 
-    AdapterCls = get_adapter_class(manifest.metadata.name)
-    adapter = AdapterCls(manifest, infer_record.service_url, tracker.http_client)
+    # 어댑터는 infer pod 의 manifest 로 생성 — /deploy 엔드포인트는 infer manifest 에만 존재.
+    # (train manifest 로 넘어오는 hybrid-pair 케이스에서 endpoints["deploy"] KeyError 방지.)
+    AdapterCls = get_adapter_class(infer_record.manifest.metadata.name)
+    adapter = AdapterCls(infer_record.manifest, infer_record.service_url, tracker.http_client)
     try:
         body = await adapter.deploy(req.payload)
     except NotImplementedError as e:

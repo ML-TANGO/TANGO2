@@ -77,6 +77,15 @@ export const setBestExternalCheckpoint = async (modelId, commitId, step) => {
   });
 };
 
+// 서빙 시작(P2) — 현재 best 체크포인트를 실행 중 infer pod 에 in-pod 로드(재로드 1~5분 동기).
+// callApi 는 timeout 미설정(무제한)이라 FE 는 스피너로 응답 대기.
+export const serveExternalBestCheckpoint = async (modelId) => {
+  return await callApi({
+    url: `models/${modelId}/external-checkpoints/serve-best`,
+    method: 'post',
+  });
+};
+
 // 양자화·포팅 (SP-4 / v0.4 3.9) — 학습 완료 모델 → GGUF convert job → 포팅 패키지.
 export const startQuantize = async (modelId, body) => {
   // body: { target_quant: 'q4'|'q5'|'q6', target_device?: string }

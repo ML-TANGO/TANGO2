@@ -6,6 +6,7 @@ import {
   getExternalCheckpoints,
   deleteExternalCheckpoint,
   setBestExternalCheckpoint,
+  serveExternalBestCheckpoint,
 } from '@src/apis/llm/model';
 import { callApi, STATUS_SUCCESS } from '@src/network';
 import { errorToastMessage } from '@src/utils';
@@ -183,6 +184,25 @@ function ExternalCheckpointList({ navList, data, ...rest }) {
     }
   };
 
+  // 서빙 시작(P2) — 현재 best 체크포인트를 실행 중 infer pod 에 in-pod 로드. 재로드 1~5분
+  // 동기라 busy 락 유지 + 스피너. 성공 시 재조회로 '서빙 중' 배지 반영.
+  const handleServe = async () => {
+    if (busy !== null || !modelId) return;
+    setBusy('serve');
+    try {
+      const res = await serveExternalBestCheckpoint(modelId);
+      if (res.status === STATUS_SUCCESS) {
+        toast.success('서빙 체크포인트로 전환했습니다');
+        await fetchCheckpoints();
+      } else {
+        // projector 단계 거부·infer pod 미실행 등 가드 실패 — 서버 메시지 그대로 노출.
+        errorToastMessage(res.error, res.message);
+      }
+    } finally {
+      if (mountedRef.current) setBusy(null);
+    }
+  };
+
   const usedBytes = Number.isFinite(storage?.used_bytes)
     ? storage.used_bytes
     : 0;
@@ -217,6 +237,7 @@ function ExternalCheckpointList({ navList, data, ...rest }) {
                 const k = rowKey(c);
                 const deleting = busy === `del:${c.commit_id}:${c.step}`;
                 const besting = busy === `best:${c.commit_id}:${c.step}`;
+                const serving = busy === 'serve';
                 return (
                   <div
                     key={k}
@@ -246,6 +267,15 @@ function ExternalCheckpointList({ navList, data, ...rest }) {
                             <span aria-hidden='true'>★</span> BEST
                           </span>
                         )}
+                        {c.is_served && (
+                          <span
+                            className={cx('served-badge')}
+                            aria-label='서빙 중인 체크포인트'
+                            title='추론 pod 에 실제 로드되어 서빙 중'
+                          >
+                            <span aria-hidden='true'>●</span> 서빙 중
+                          </span>
+                        )}
                       </div>
                       <div className={cx('ckpt-actions')}>
                         {!c.is_best && (
@@ -258,6 +288,18 @@ function ExternalCheckpointList({ navList, data, ...rest }) {
                             title='이 체크포인트를 BEST 로 지정'
                           >
                             {besting ? '지정 중…' : 'Best 지정'}
+                          </button>
+                        )}
+                        {c.is_best && !c.is_served && (
+                          <button
+                            type='button'
+                            className={cx('serve-btn')}
+                            onClick={handleServe}
+                            disabled={busy !== null}
+                            aria-label='이 BEST 체크포인트를 서빙으로 전환'
+                            title='추론 pod 에 이 체크포인트를 로드해 서빙 전환 (1~5분)'
+                          >
+                            {serving ? '서빙 전환 중…' : '서빙 시작'}
                           </button>
                         )}
                         <button

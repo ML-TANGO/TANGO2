@@ -152,8 +152,13 @@ class ExternalContainerClient:
         namespace: str = "jonathan-system",
         infer_job_id: str | None = None,
         payload: dict[str, Any] | None = None,
+        timeout: float = 60.0,
     ) -> dict[str, Any]:
-        """Trigger hybrid pair deploy — partner /deploy reload."""
+        """Trigger hybrid pair deploy — partner /deploy reload.
+
+        timeout: partner /deploy 는 in-pod 가중치 재로드(1~5분 동기)라 기본 60s 로는
+        부족 → 호출측이 상향(예: 체크포인트 서빙 전환 600s)해서 넘긴다.
+        """
         body: dict[str, Any] = {
             "manifest_name": manifest_name,
             "manifest_version": manifest_version,
@@ -167,6 +172,7 @@ class ExternalContainerClient:
             "/api/v1/jobs/deploy",
             json=body,
             expected_status=200,
+            timeout=timeout,
         )
 
     async def run_inference(
@@ -189,10 +195,11 @@ class ExternalContainerClient:
         *,
         json: Any,
         expected_status: int,
+        timeout: float = 60.0,
     ) -> Any:
         url = f"{self.base_url}{path}"
         try:
-            resp = await self.client.post(url, json=json, timeout=60.0)
+            resp = await self.client.post(url, json=json, timeout=timeout)
         except httpx.HTTPError as e:
             raise ExternalContainerError(0, f"unable to reach {url}: {e}") from e
         if resp.status_code != expected_status:
