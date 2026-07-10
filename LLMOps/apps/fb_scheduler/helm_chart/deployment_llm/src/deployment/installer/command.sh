@@ -423,7 +423,21 @@ cd $JF_DEPLOYMENT_PWD;
 cd /llm;
 if [ "$LLM_TYPE" = "playground" ]; then
     echo 1
-    if [ "$LLM_GPU_TOTAL_COUNT" = "0" ]; then
+    # [멀티엔진 Phase 2] llama.cpp = 단일 프로세스(ray 미사용, -ngl 로 GPU 오프로드).
+    # embedding/reranker 는 엔진 무관(HF 유지) 이라 여기서 분기하지 않음.
+    if [ "$LLM_SERVING_SYSTEM" = "llama_cpp" ]; then
+
+        # llama.cpp = 단일 노드 엔진(크로스팟 병렬 없음). BE 가 instance_count=1 로 클램프하지만,
+        # 방어적으로 index 0 만 서빙, 그 외 팟은 idle(공유 PVC GGUF 동시쓰기 레이스/중복 차단).
+        if [ "$LLM_POD_INDEX" = "0" ]; then
+            echo "playground engine: llama.cpp"
+            python3 /llm/playground_llamacpp.py;
+        else
+            echo "llama.cpp single-node — idle non-head pod (index $LLM_POD_INDEX)"
+            sleep infinity;
+        fi
+
+    elif [ "$LLM_GPU_TOTAL_COUNT" = "0" ]; then
 
         python3 /llm/playground.py;
 

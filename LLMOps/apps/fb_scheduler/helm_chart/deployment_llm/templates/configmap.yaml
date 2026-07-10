@@ -29,6 +29,8 @@ data:
   {{ .Files.Get "src/llm/settings.py" | nindent 4 }}
   playground.py: |-
   {{ .Files.Get "src/llm/playground.py" | nindent 4 }}
+  playground_llamacpp.py: |-
+  {{ .Files.Get "src/llm/playground_llamacpp.py" | nindent 4 }}
   embedding.py: |-
   {{ .Files.Get "src/llm/embedding.py" | nindent 4 }}
   reranker.py: |-

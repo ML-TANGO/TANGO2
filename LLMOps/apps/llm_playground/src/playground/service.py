@@ -1350,6 +1350,13 @@ async def create_deployment(playground_id, user_id, deployment_type, instance_id
         image_real_name=f"{settings.DOCKER_REGISTRY_URL}{_serving_image}" ### LLM 배포 이미지는 1. main.py에서 image db에 넣음. 2. image build: /jp/libs/fb_image/llm
         image_id = db.get_image_id_by_real_name(real_name=image_real_name).get('id')
 
+        # [멀티엔진 Phase 2] llama.cpp = 단일 노드 엔진(크로스팟 병렬 없음) → 멀티팟 배포 금지.
+        #   instance_count>1 이면 1 로 클램프(공유 PVC GGUF 동시쓰기 레이스·N중복 다운로드·비결정 라우팅 차단).
+        #   vLLM 은 무영향. command.sh 의 index 0 가드와 이중 방어.
+        if deployment_type == "playground" and _serving_system == "llama_cpp" and instance_count and instance_count > 1:
+            print(f"[llama.cpp] instance_count {instance_count} -> 1 클램프(단일 노드 엔진)")
+            instance_count = 1
+
         if deployment_type == "playground":
             deployment_name = f"playground-{playground_id}"
             llm_type=TYPE.LLM_DEPLOYMENT_TYPE_TO_INT.get(TYPE.PLAYGROUND_MODEL)

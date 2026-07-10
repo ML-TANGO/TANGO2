@@ -131,6 +131,8 @@
   value: {{ .Values.llm.model.allm_commit_name | quote | default "" }}
 - name: LLM_HUGGINGFACE_API_TOKEN
   value: {{ .Values.llm.model.huggingface_api_token | quote | default "" }}
+- name: LLM_SERVING_SYSTEM
+  value: {{ .Values.llm.model.serving_system | quote | default "" }}
 {{- end }}
 
 

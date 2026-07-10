@@ -44,10 +44,10 @@ const TValue = {
   model_max_new_tokens: 512,
 };
 
-// 서빙 엔진 옵션(멀티엔진 로드맵 Phase 1). vLLM 활성, 그 외는 준비중(disabled).
+// 서빙 엔진 옵션(멀티엔진 로드맵 Phase 2). vLLM + llama.cpp(GGUF 직접/HF 온더플라이 변환) 활성.
 const ENGINES = [
   { id: 'vllm', label: 'vLLM', disabled: false },
-  { id: 'llama_cpp', label: 'llama.cpp', disabled: true },
+  { id: 'llama_cpp', label: 'llama.cpp', disabled: false },
 ];
 
 const PlaygroundModel = React.memo(({ workspaceId }) => {
@@ -96,8 +96,9 @@ const PlaygroundModel = React.memo(({ workspaceId }) => {
 
   const handleSelectEngine = useCallback(
     (engineId) => {
-      // Phase 1: vLLM 만 활성. 그 외(준비중)는 무시.
-      if (engineId !== 'vllm') return;
+      // 활성(비-disabled) 엔진만 반영. disabled 는 버튼단에서도 막지만 방어.
+      const eng = ENGINES.find((e) => e.id === engineId);
+      if (!eng || eng.disabled) return;
       dispatch(
         handleSetModelValue({ type: 'serving_system', modelValue: engineId }),
       );

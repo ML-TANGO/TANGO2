@@ -32,13 +32,18 @@ def initialize_app():
 def set_llm_deployment_image():
     with get_db() as conn:
         try:
-            real_name=f"{settings.DOCKER_REGISTRY_URL}{settings.DEPLOYMENT_LLM_IMAGE}"
             user_id = db_user.get_user(user_name='admin').get("id")
-            image = db_image.get_image_id_by_real_name(real_name=real_name)
-            if image is None or len(image) == 0:
-                sql = """INSERT INTO image (user_id, name, real_name, status, access) VALUES (%s, %s, %s, %s, %s)"""
-                conn.cursor().execute(sql, (user_id, "JBI_LLM_Deployment_image", real_name, 2, 1))
-                conn.commit()
+            # [멀티엔진 Phase 2] 지원 서빙 엔진 이미지 전부 등록(vLLM + llama.cpp).
+            #   create_deployment 의 get_image_id_by_real_name 조회가 성공하려면 각 엔진 이미지가
+            #   image 테이블에 있어야 함 — 미등록 시 배포 시점 crash.
+            for _engine, _img in settings.SERVING_ENGINE_IMAGE_MAP.items():
+                real_name = f"{settings.DOCKER_REGISTRY_URL}{_img}"
+                image = db_image.get_image_id_by_real_name(real_name=real_name)
+                if image is None or len(image) == 0:
+                    name = "JBI_LLM_Deployment_image" if _engine == "vllm" else f"JBI_LLM_Deployment_image_{_engine}"
+                    sql = """INSERT INTO image (user_id, name, real_name, status, access) VALUES (%s, %s, %s, %s, %s)"""
+                    conn.cursor().execute(sql, (user_id, name, real_name, 2, 1))
+                    conn.commit()
         except:
             traceback.print_exc()
 

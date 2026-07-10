@@ -28,6 +28,9 @@ LLM_MODEL_HUGGINGFACE_TOKEN = os.environ.get("LLM_MODEL_HUGGINGFACE_TOKEN")
 LLM_MODEL_ALLM_NAME = os.environ.get("LLM_MODEL_ALLM_NAME")
 LLM_MODEL_ALLM_COMMIT_NAME = os.environ.get("LLM_MODEL_ALLM_COMMIT_NAME")
 LLM_HUGGINGFACE_API_TOKEN = os.environ.get("LLM_HUGGINGFACE_API_TOKEN")
+# [멀티엔진 Phase 2] 서빙 엔진 — 엔트리 스크립트는 _command.tpl 이 이 값으로 선택하지만,
+# pod-side 방어(defense-in-depth)로도 노출. None/빈값 → vllm.
+LLM_SERVING_SYSTEM = os.environ.get("LLM_SERVING_SYSTEM") or "vllm"
 
 # env.llm.rag
 LLM_RAG_ID = os.environ.get("LLM_RAG_ID")

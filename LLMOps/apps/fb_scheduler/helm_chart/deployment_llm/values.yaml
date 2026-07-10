@@ -71,8 +71,10 @@ llm:
     huggingface_token:
     # ALLM 일때 사용
     allm_name:
-    allm_commit_name: 
+    allm_commit_name:
     huggingface_api_token:
+    # [멀티엔진 Phase 2] 서빙 엔진(vllm|llama_cpp). 비면 vllm. LLM(model) 역할만 소비.
+    serving_system:
 
   rag:
     id:
