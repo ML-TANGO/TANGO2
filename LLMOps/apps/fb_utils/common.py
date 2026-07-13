@@ -686,7 +686,9 @@ def parameter_dict_to_list(parameter: dict):
 def parameter_dict_to_str(parameter, flag=" "):
     parameter_str = ""
     for k,v in parameter.items():
-        parameter_str += " --{k}{flag}{v} ".format(k=k, flag=flag, v=v) #  프론트에서 파라미터가 붙어서 들어와서 수정함 (2024-05-16)
+        # 값(및 키)을 shlex.quote 로 셸-안전 토큰화 — built_in_param 은 사용자 제어(임의 dict)이고
+        # 이 문자열이 job pod 의 bash -c 로 들어가므로 이스케이프 없으면 커맨드 인젝션(예: result_file_name="x; cmd").
+        parameter_str += " --{k}{flag}{v} ".format(k=shlex.quote(str(k)), flag=flag, v=shlex.quote(str(v)))
     return parameter_str
 
 def get_line_print(line_message, prefix="=============="):
