@@ -901,6 +901,8 @@ def insert_mongodb_user_dashboard_timeline():
                         result["gpu"]=resource_usage["gpu"]
                         result["ram"]=resource_usage["ram"]
                         ram_usage_percent = (result["ram"]["used"] / result["ram"]["hard"]) * 100 if result["ram"]["hard"] > 0 else 0
+                        main_storage_percent = 0
+                        data_storage_percent = 0
                         if result.get("storage_main", None):
                             main_storage_percent = (result["storage_main"]["used"] / result["storage_main"]["total"]) * 100 if result["storage_main"]["total"] > 0 else 0
                         if result.get("storage_data", None):
@@ -946,7 +948,7 @@ def insert_mongodb_user_dashboard_timeline():
                                 KafkaProducer(conf).produce(topic=topic_key.ALERT_SYSTEM_TOPIC, value=notification.model_dump_json())
                                 # kafka_produce(producer, topic_key.ALERT_SYSTEM_TOPIC, notification.model_dump_json())
                                 # res, message = insert_notification_history(notification)
-                        if main_storage_percent < 80:
+                        if result.get("storage_main") and main_storage_percent < 80:
                             if workspace["main_storage_lock"] != 0:
                                 ws_db.update_workspace_quota(workspace_id=workspace["id"], main_storage_lock=0)
                         elif main_storage_percent > 80 and main_storage_percent < 90:
@@ -986,7 +988,7 @@ def insert_mongodb_user_dashboard_timeline():
                             ws_db.update_workspace_quota(workspace_id=workspace["id"], main_storage_lock=3)
                             storage_lock(workspace)
 
-                        if data_storage_percent < 80:
+                        if result.get("storage_data") and data_storage_percent < 80:
                             if workspace["data_storage_lock"] != 0:
                                 ws_db.update_workspace_quota(workspace_id=workspace["id"], data_storage_lock=0)
                         elif data_storage_percent > 80 and data_storage_percent < 90:

@@ -79,8 +79,8 @@ const useDashboardSSe = (workspaceId) => {
         total_count: setTotalCount,
         usage: setUsage,
         storage: (storageData) => {
-          setMainStorage(storageData.main_storage);
-          setDataStorage(storageData.data_storage);
+          setMainStorage(storageData?.main_storage ?? DEFAULT_MAIN_STORAGE);
+          setDataStorage(storageData?.data_storage ?? DEFAULT_DATA_STORAGE);
         },
         manager: setIsManager,
         instances_used: setInstanceUsed,
