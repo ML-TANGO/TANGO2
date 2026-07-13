@@ -822,7 +822,7 @@ async def preprocessing_option(workspace_id : int = None, preprocessing_id : int
     return result
 
 def get_preprocessing_built_in_data_tfs(data_type : str):
-    return TYPE_BUILT_IN.PREPROCESSING_BUILT_IN_DATA_TYPE_TFS[data_type]
+    return TYPE_BUILT_IN.PREPROCESSING_BUILT_IN_DATA_TYPE_TFS.get(data_type, [])
 
 
 async def get_preprocessing_used_gpu_count(preprocessing_id : int)-> dict:

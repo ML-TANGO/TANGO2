@@ -40,6 +40,7 @@
 # PREPROCESSING_BUILT_IN_TEXT_TYPE = "Text"
 PREPROCESSING_BUILT_IN_IMAGE_TYPE = "Image"
 PREPROCESSING_BUILT_IN_TABULAR_TYPE = "Tabular"
+PREPROCESSING_BUILT_IN_DOMAIN_TYPE = "Domain"
 # PREPROCESSING_BUILT_IN_VIDEO_TYPE = "Video"
 # PREPROCESSING_BUILT_IN_AUDIO_TYPE = "Audio"
 
@@ -49,12 +50,19 @@ PREPROCESSING_BUILT_IN_DATA_TYPES = [
     PREPROCESSING_BUILT_IN_TABULAR_TYPE,
     # PREPROCESSING_BUILT_IN_VIDEO_TYPE,
     # PREPROCESSING_BUILT_IN_AUDIO_TYPE
-] 
+]
+
+# 도메인 특화 전처리 카테고리 — generic built-in 과 구분해 전처리 모달에서 별도(peer) 노출.
+# 백엔드 preprocessing_type 은 'built-in' 을 그대로 사용(스케줄러/helm 호환).
+PREPROCESSING_DOMAIN_DATA_TYPES = [
+    PREPROCESSING_BUILT_IN_DOMAIN_TYPE,
+]
 
 # TFS
 IMAGE_AUGMENT = "데이터셋 내 이미지 증강 (Image Augmentation in given dataset)"
 MARKER_ANALYSIS = "Marker 라벨링 json 데이터 csv 변환(Marker result json to csv)"
 FORMAT_CONVERT = "데이터 포맷 변환 (Format Conversion: CSV/TXT/Parquet → JSON/JSONL)"
+SDS_LLAVA_CONVERT = "SDS VLM 학습 데이터 변환 (SDS scenarios → LLaVA JSON)"
 TEXT_AUGMENT = "텍스트 증강 (Text Augmentation)"
 TEXT_CLEANING = "텍스트 정제 (Text Cleaning)"
 TOKENIZATION_EMBEDDING = "토큰화 및 임베딩 생성 (Tokenization & Embedding Generation)"
@@ -92,6 +100,9 @@ PREPROCESSING_TFS_PARAM = {
     # 데이터 포맷 변환 — target_format(text/instruction/chat), output_format(json/jsonl),
     # result_file_name. 입력 데이터(--input_data)는 스케줄러가 주입. 컬럼→필드는 규약 자동매핑.
     FORMAT_CONVERT : ["target_format", "output_format", "result_file_name"],
+    # SDS → LLaVA JSON. sds_variant(en/ko/ko_compact/all), result_file_name(기본 sds_train).
+    # 입력(--input_data)은 스케줄러가 sds 데이터셋 디렉토리로 주입. 컬럼 매핑 없음(도메인 고정 포맷).
+    SDS_LLAVA_CONVERT : ["sds_variant", "result_file_name"],
     TEXT_AUGMENT: ["text_data", "augmentation_rules"],
     TEXT_CLEANING: ["text_data", "cleaning_rules"],
     TOKENIZATION_EMBEDDING: ["text_data", "tokenization_method"],
@@ -127,6 +138,7 @@ PREPROCESSING_TFS_SCRIPT = {
     IMAGE_AUGMENT : "preprocessing_augment.py",
     MARKER_ANALYSIS : "preprocess_marker_json.py",
     FORMAT_CONVERT : "format_convert.py",
+    SDS_LLAVA_CONVERT : "sds_llava_convert.py",
     TEXT_AUGMENT: "text_augmentation.py",
     TEXT_CLEANING: "text_cleaning.py",
     TOKENIZATION_EMBEDDING: "tokenization_embedding.py",
@@ -182,6 +194,9 @@ PREPROCESSING_BUILT_IN_DATA_TYPE_TFS = {
         # CATEGORICAL_ENCODING,
         # STATISTICAL_RESAMPLING,
         # FEATURE_ENGINEERING
+    ],
+    PREPROCESSING_BUILT_IN_DOMAIN_TYPE : [
+        SDS_LLAVA_CONVERT,
     ],
     # PREPROCESSING_BUILT_IN_VIDEO_TYPE : [
     #     SPECTRAL_AUGMENTATION,

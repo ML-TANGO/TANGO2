@@ -188,6 +188,7 @@ const DatasetBuiltinJobCreate = ({ data, type }) => {
             setSelectedData={setSelectedData}
             selectDataset={selectDataset}
             setSelectedDataset={setSelectedDataset}
+            defaultToRoot
           />
           <div className={cx('message')}>
             [안내] {handleDataMessage(builtInDataType)}

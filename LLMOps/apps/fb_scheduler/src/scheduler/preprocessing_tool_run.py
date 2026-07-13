@@ -306,8 +306,9 @@ def create_preprocessing_job(pod_info: dict):
             run_code = PATH.JF_PREPROCESSING_BUILT_IN_CODE_PATH.format(RUN_CODE=TYPE_BUILT_IN.PREPROCESSING_TFS_SCRIPT[pod_info["built_in_data_tf"]])
             _, run_code_type = os.path.splitext(run_code)
             run_command = job_run_command(run_code_type=run_code_type[1:], run_code=run_code, parameter=parameter)
-        elif pod_info["built_in_data_tf"] == TYPE_BUILT_IN.FORMAT_CONVERT:
-            # 데이터 포맷 변환 — 입력 데이터셋 경로 주입(marker 동형). 출력은 원본 옆 파일(sidecar).
+        elif pod_info["built_in_data_tf"] in (TYPE_BUILT_IN.FORMAT_CONVERT, getattr(TYPE_BUILT_IN, "SDS_LLAVA_CONVERT", None)):
+            # 포맷 변환(FORMAT_CONVERT) + SDS→LLaVA(SDS_LLAVA_CONVERT, Domain) — 둘 다
+            # 입력 데이터셋 경로를 --input_data 로 주입(marker 동형). 출력은 원본 옆 파일(sidecar).
             dataset_data_path = PATH.JF_PREPROCESSING_DATA_PATH.format(DATA_PATH=pod_info["dataset_data_path"])
             parameter += f" --input_data={dataset_data_path}"
             run_code = PATH.JF_PREPROCESSING_BUILT_IN_CODE_PATH.format(RUN_CODE=TYPE_BUILT_IN.PREPROCESSING_TFS_SCRIPT[pod_info["built_in_data_tf"]])

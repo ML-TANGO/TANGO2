@@ -30,7 +30,9 @@ DOCKER_REGISTRY_URL = os.getenv('DOCKER_REGISTRY_URL', None) # '192.168.1.13:500
 SYSTEM_DOCKER_REGISTRY_URL = os.getenv('SYSTEM_DOCKER_REGISTRY_URL', None) # '192.168.1.13:5000/' # Should be an empty string or finished with slash(`/')
 if SYSTEM_DOCKER_REGISTRY_URL:
     JF_DEFAULT_UBUNTU_20_IMAGE = SYSTEM_DOCKER_REGISTRY_URL + "jfb/" +  'jbi_ubuntu-20.04.6:latest'
-    JF_DEFAULT_UBUNTU_22_IMAGE = SYSTEM_DOCKER_REGISTRY_URL + "jfb/" +  'jbi_ubuntu-22.04.6:latest'
+    # built-in 전처리/pipeline 기본 실행 이미지. 기존 jfb/jbi_ubuntu(사내 레지스트리·pull불가)
+    # 대신 docker.io/acrylaaai 게시 lean 베이스(python3+pandas/pyarrow/pillow). 소스=libs/fb_image/built_in_image/Builtin_Preprocess.
+    JF_DEFAULT_UBUNTU_22_IMAGE = SYSTEM_DOCKER_REGISTRY_URL + "acrylaaai/genai-platform-builtin-preprocess:tango_v2.0.1"
 DOCKER_REGISTRY_PROTOCOL = os.getenv('DOCKER_REGISTRY_PROTOCOL', "http://") # "http://" | "https://"
 SYSTEM_DOCKER_REGISTRY_PROTOCOL = os.getenv('SYSTEM_DOCKER_REGISTRY_PROTOCOL', "http://")
 IMAGE_NAMESPACE = f"{JF_SYSTEM_NAMESPACE}-image" if JF_SYSTEM_NAMESPACE else "default-image"

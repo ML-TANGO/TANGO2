@@ -1078,21 +1078,28 @@ async def get_jobs(preprocessing_id : int, search_key=None, size=None, page=None
             # 추후 수정
             if preprocessing_info["built_in_data_tf"] in (
                 TYPE_BUILT_IN.MARKER_ANALYSIS, TYPE_BUILT_IN.IMAGE_AUGMENT,
-                TYPE_BUILT_IN.FORMAT_CONVERT):
+                TYPE_BUILT_IN.FORMAT_CONVERT, TYPE_BUILT_IN.SDS_LLAVA_CONVERT):
                 dataset_data_path = PATH.JF_DATA_DATASET_DATA_PATH.format(STORAGE_NAME=workspace_info["data_storage_name"], WORKSPACE_NAME=workspace_info["name"], \
                     ACCESS=dataset_info["access"], DATASET_NAME=dataset_info["name"], DATA_PATH=job["dataset_data_path"])
                 dataset_data_path = os.path.dirname(dataset_data_path)
-            # result_file_name 미저장 시 스크립트 기본값("converted")과 맞추고 basename 으로
-            # 경로조작 차단(스크립트와 동일 정책).
-            file_name = os.path.basename(parameter.get("result_file_name") or "converted")
             try:
-                # marker/augment 출력은 .csv, 포맷변환은 사용자 선택 output_format(json/jsonl).
-                ext = (parameter.get("output_format", "jsonl")
-                       if preprocessing_info["built_in_data_tf"] == TYPE_BUILT_IN.FORMAT_CONVERT
-                       else "csv")
-                result_file_path = f"{dataset_data_path}/{file_name}.{ext}"
-                # print(result_file_path)
-                job["log_file"] = os.path.exists(result_file_path)
+                if preprocessing_info["built_in_data_tf"] == TYPE_BUILT_IN.SDS_LLAVA_CONVERT:
+                    # SDS 출력 = 입력 디렉토리 안 {result_file_name}_{variant}.json (variant별 최대 3개).
+                    base = os.path.basename(parameter.get("result_file_name") or "sds_train")
+                    variant = parameter.get("sds_variant", "all")
+                    variants = ["en", "ko", "ko_compact"] if variant == "all" else [variant]
+                    job["log_file"] = any(
+                        os.path.exists(f"{dataset_data_path}/{base}_{v}.json") for v in variants
+                    )
+                else:
+                    # result_file_name 미저장 시 스크립트 기본값("converted")과 맞추고 basename 으로 경로조작 차단.
+                    file_name = os.path.basename(parameter.get("result_file_name") or "converted")
+                    # marker/augment 출력은 .csv, 포맷변환은 사용자 선택 output_format(json/jsonl).
+                    ext = (parameter.get("output_format", "jsonl")
+                           if preprocessing_info["built_in_data_tf"] == TYPE_BUILT_IN.FORMAT_CONVERT
+                           else "csv")
+                    result_file_path = f"{dataset_data_path}/{file_name}.{ext}"
+                    job["log_file"] = os.path.exists(result_file_path)
             except Exception as e:
                 traceback.print_exc()
                 job["log_file"] = False
@@ -1159,6 +1166,19 @@ async def get_built_in_result_download(job_id : int):
         media_type=media_type,
         filename=f"{file_name}.{out_fmt}"
         )
+    elif preprocessing_info["built_in_data_tf"] == TYPE_BUILT_IN.SDS_LLAVA_CONVERT:
+        # SDS 출력 = 입력 디렉토리 안 {result_file_name}_{variant}.json (variant별 최대 3개).
+        # 다운로드는 존재하는 variant 중 하나(ko>en>ko_compact 우선) 반환.
+        dataset_data_path = PATH.JF_DATA_DATASET_DATA_PATH.format(STORAGE_NAME=workspace_info["data_storage_name"], WORKSPACE_NAME=workspace_info["name"], \
+            ACCESS=dataset_info["access"], DATASET_NAME=dataset_info["name"], DATA_PATH=preprocessing_job_info["dataset_data_path"])
+        directory = os.path.dirname(dataset_data_path)
+        base = os.path.basename(parameter.get("result_file_name") or "sds_train")
+        variant = parameter.get("sds_variant", "all")
+        order = ["ko", "en", "ko_compact"] if variant == "all" else [variant]
+        for v in order:
+            p = os.path.join(directory, f"{base}_{v}.json")
+            if os.path.exists(p):
+                return FileResponse(path=p, media_type="application/json", filename=f"{base}_{v}.json")
 
     pass
 
@@ -1295,7 +1315,10 @@ async def preprocessing_option(workspace_id : int = None, preprocessing_id : int
         "user_list": db_user.get_user_list_in_workspace(workspace_id=workspace_id),
         "instances": workspace_allocate_instance,
         # "docker_image_list": await db_prepro.get_workspace_image_list(workspace_id),
-        "built_in_data_types": TYPE_BUILT_IN.PREPROCESSING_BUILT_IN_DATA_TYPES
+        "built_in_data_types": TYPE_BUILT_IN.PREPROCESSING_BUILT_IN_DATA_TYPES,
+        # DOMAIN 상수는 공유lib(fb_utils) 업데이트가 pod 에 반영돼야 존재. 미반영(baked utils)
+        # 이미지에서도 크래시 안 나도록 getattr 폴백(빈 리스트) — 공유lib 마운트 배선 정합 후 실제 값 노출.
+        "domain_data_types": getattr(TYPE_BUILT_IN, "PREPROCESSING_DOMAIN_DATA_TYPES", [])
     }
     if preprocessing_id: # 수정용
         preprocessing_info = await db_prepro.get_preprocessing(preprocessing_id=preprocessing_id)
@@ -1802,7 +1825,14 @@ async def run_job(preprocessing_id : int, parameter: str, create_user_id : int, 
             # param check
             
             parameter = common.parameter_dict_to_str(built_in_param)
-            
+            # built-in 잡은 FE 가 run_code 를 안 보냄 → TFS 스크립트명으로 파생(스케줄러가
+            # /built_in/<script> 로 재계산·실행). preprocessing_job.run_code NOT NULL 대응
+            # (SDS 뿐 아니라 모든 built-in 공통 — null insert IntegrityError fix).
+            if run_code is None:
+                run_code = TYPE_BUILT_IN.PREPROCESSING_TFS_SCRIPT.get(
+                    preprocessing_info["built_in_data_tf"], ""
+                )
+
         
         job_info = {
             "create_user_id" : create_user_id,
