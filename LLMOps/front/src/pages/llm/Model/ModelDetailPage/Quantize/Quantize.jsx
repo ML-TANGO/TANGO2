@@ -12,6 +12,7 @@ import {
   getQuantizeLineage,
   getQuantizePackage,
   markQuantizeLineage,
+  registerServable,
   startQuantize,
 } from '@src/apis/llm/model';
 
@@ -328,6 +329,52 @@ const Quantize = memo(function Quantize({ navList, data, ...rest }) {
     [modelId, titleName, t],
   );
 
+  // [멀티엔진 Phase 2 C-B] 완료된 양자화 GGUF 를 llama.cpp 직접 서빙용 commit 모델로 등록.
+  // (i18n 키는 후속 — Phase 1 minor-defer 선례 따라 하드코딩)
+  const [registeringJobId, setRegisteringJobId] = useState(null);
+  const handleRegisterServable = useCallback(
+    async (jobId, quant) => {
+      if (!jobId || registeringJobId) return; // in-flight 재진입 가드(중복 POST 방지)
+      const suggested = `${titleName || 'model'}-${quant || 'gguf'}`
+        .replace(/[^A-Za-z0-9._-]/g, '-')
+        .slice(0, 50);
+      const input = window.prompt(
+        'servable 모델 이름 (영문/숫자/._- 1~50자)',
+        suggested,
+      );
+      if (input === null) return;
+      const modelName = input.trim();
+      // 제안값이 아닌 실제 입력값 검증(BE allowlist 와 동일) — 서버 왕복 전 차단.
+      if (
+        !/^[A-Za-z0-9._-]{1,50}$/.test(modelName) ||
+        modelName === '.' ||
+        modelName === '..'
+      ) {
+        toast.error('이름은 영문/숫자/._- 1~50자여야 합니다.');
+        return;
+      }
+      setRegisteringJobId(jobId);
+      try {
+        const res = await registerServable(modelId, jobId, {
+          model_name: modelName,
+        });
+        if (res.status === STATUS_SUCCESS) {
+          toast.success(
+            'servable 등록 완료 — 배포에서 llama.cpp 로 서빙하세요.',
+          );
+          fetchLineage(); // 성공 반영(형제 handleLaunch 패턴)
+        } else {
+          toast.error(res.message || 'servable 등록 실패');
+        }
+      } catch (e) {
+        toast.error('servable 등록 실패');
+      } finally {
+        setRegisteringJobId(null);
+      }
+    },
+    [modelId, titleName, registeringJobId, fetchLineage],
+  );
+
   const isRunning = job && !TERMINAL.includes(status);
   const isFailed = status === 'failed' || status === 'cancelled';
   const ggufFile = (pkg?.files || []).find((f) =>
@@ -488,13 +535,28 @@ const Quantize = memo(function Quantize({ navList, data, ...rest }) {
                     <td>{l.create_datetime || '-'}</td>
                     <td>
                       {l.status === 'completed' ? (
-                        <button
-                          type='button'
-                          className={cx('file-dl')}
-                          onClick={() => handleDownloadLineage(l.job_id)}
-                        >
-                          {t('download.label')}
-                        </button>
+                        <>
+                          <button
+                            type='button'
+                            className={cx('file-dl')}
+                            onClick={() => handleDownloadLineage(l.job_id)}
+                          >
+                            {t('download.label')}
+                          </button>
+                          <button
+                            type='button'
+                            className={cx('file-dl')}
+                            onClick={() =>
+                              handleRegisterServable(
+                                l.job_id,
+                                l.quantization_type,
+                              )
+                            }
+                            disabled={registeringJobId === l.job_id}
+                          >
+                            servable 등록
+                          </button>
+                        </>
                       ) : (
                         '-'
                       )}

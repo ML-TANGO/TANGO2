@@ -2117,6 +2117,145 @@ async def commit_external_artifacts(model_id : int, job_id : str,
     }
 
 
+async def register_quantized_servable(model_id: int, job_id: str,
+                                      model_name: str,
+                                      commit_name: str = None,
+                                      commit_message: str = None) -> dict:
+    """[멀티엔진 Phase 2 C-B] 양자화 GGUF 를 llama.cpp 직접 서빙용 commit 모델로 등록.
+
+    Why
+    ---
+    convert(양자화) job 은 GGUF 를 `jobs/<job_id>/output/` 에 남기지만, 배포는
+    `models/<allm>/commit_models/<commit>/` 를 `/model` 로 마운트한다(위치 상이 =
+    GGUF servable 갭). 이 함수가 GGUF 를 배포 마운트 위치로 복사하고 model +
+    commit_model row 를 만들어, Playground 에서 serving_system=llama_cpp,
+    model_type=commit 으로 배포하면 playground_llamacpp.py 가 /model/*.gguf 를
+    변환 없이 직접 서빙한다.
+
+    commit_external_artifacts 패턴을 미러링하되 (a) 원본(vLLM-precision) 과 분리된
+    신규 servable model 을 만들고, (b) 다운로드 패키지를 보존하려 move 가 아닌
+    copy2 를 쓴다.
+    """
+    import shutil
+    # 1. GGUF 소스 해석 — job_id 화이트리스트 + commonpath 는 _quantize_output_dir 재사용.
+    output_dir = await _quantize_output_dir(model_id, job_id)
+    if not os.path.isdir(output_dir):
+        raise Exception(f"quantize package not ready: {output_dir}")
+    out_real = os.path.realpath(output_dir)
+    gguf_name = None
+    for fn in sorted(os.listdir(output_dir)):
+        fp = os.path.join(output_dir, fn)
+        # 심링크가 output_dir 밖을 가리키면 제외(list_quantize_package 와 동일 가드).
+        if os.path.commonpath([os.path.realpath(fp), out_real]) != out_real:
+            continue
+        if os.path.isfile(fp) and fn.endswith(".gguf"):
+            gguf_name = fn
+            break
+    if not gguf_name:
+        raise Exception(f"no .gguf found in {output_dir}")
+
+    src_model = await db_model.get_model(model_id=model_id)
+    if not src_model:
+        raise Exception(f"model {model_id} not found")
+    workspace_id = src_model["workspace_id"]
+    create_user_id = src_model["create_user_id"]
+    ws = await db_model.get_workspace_model(workspace_id=int(workspace_id))
+    if not ws:
+        raise Exception(f"workspace for model {model_id} not found")
+    storage_name = ws["main_storage_name"]
+    workspace_name = ws["name"]
+
+    # 2. dest name 검증 — create_model 과 동일 allowlist + 정확일치 '.'/'..' 거부.
+    #    부분문자열 '..' 체크만으론 model_name='.' 이 통과해 models/./commit_models 로 한 단계
+    #    얕게 쓰이는 우회가 있었음(보안 리뷰) → 형제 commit_name 규약처럼 정확일치도 거부.
+    if (not re.fullmatch(r'[A-Za-z0-9._-]{1,50}', model_name or '')
+            or model_name in ('.', '..') or '..' in model_name):
+        raise Exception("invalid model_name (영문/숫자/._- 1~50자, '.'/'..' 불가)")
+    if await db_model.check_model_by_model_name(model_name=model_name, workspace_id=workspace_id):
+        raise Exception(f"model name duplicated: {model_name}")
+    if not commit_name:
+        ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        commit_name = f"gguf-{ts}"
+    # commit_name 도 model_name 과 동일 charset allowlist. helm --set 은 helm_dto 의 shlex.quote 로
+    #   셸-무해화되지만(codex CRITICAL 은 그 하드닝 미고려 오탐), 방어심화 + helm 파싱 안전 + 컨벤션 정합.
+    if (not re.fullmatch(r'[A-Za-z0-9._-]{1,64}', commit_name or '')
+            or commit_name in ('.', '..')):
+        raise Exception(f"invalid commit_name: {commit_name!r}")
+
+    # 3. dest 경로 + commonpath 이탈 차단(commit_external_artifacts 와 동일 클래스).
+    model_root = PATH.JF_MAIN_MODEL_PATH.format(
+        STORAGE_NAME=storage_name, WORKSPACE_NAME=workspace_name, MODEL_NAME=model_name,
+    )
+    commit_dir = os.path.join(model_root, "commit_models", commit_name)
+    _commits_base = os.path.realpath(os.path.join(model_root, "commit_models"))
+    if os.path.commonpath([os.path.realpath(commit_dir), _commits_base]) != _commits_base:
+        raise Exception("commit path escapes commit_models base")
+    if os.path.exists(commit_dir):
+        raise Exception(f"commit dir already exists: {commit_dir}")
+
+    # 4-6. servable model row → GGUF 복사 → commit_model row. 부분실패 시 orphan(재시도 dedup
+    #      차단) 방지 롤백 — svc.create_model 실패 정리 패턴(service.py:1561-1567) 미러.
+    new_model_id = None
+    made_dir = False
+    try:
+        # 4. 신규 servable model row (원본과 분리 → 독립 배포 엔트리).
+        new_model_id = await db_model.create_model(
+            workspace_id=workspace_id,
+            name=model_name,
+            create_user_id=create_user_id,
+            description=f"quantized GGUF from model {model_id} (job {job_id[:8]})",
+            huggingface_git='',  # NOT NULL column on legacy schema
+            access=src_model.get("access", 1),
+        )
+        if not new_model_id:
+            raise Exception("failed to create servable model row")
+
+        # 5. GGUF 복사 — move 아님(다운로드 패키지 원본 보존). 멀티-GB NFS copy 는 이벤트루프를
+        #    블록하므로 to_thread(대용량 gguf zip 을 to_thread 로 돌리는 _build_zip 선례와 동일).
+        os.makedirs(commit_dir, exist_ok=True)
+        made_dir = True
+        await asyncio.to_thread(
+            shutil.copy2, os.path.join(output_dir, gguf_name), os.path.join(commit_dir, gguf_name))
+
+        # 6. commit_model row + latest_commit_id (배포가 allm_name/commit_name 을 여기서 deref).
+        ft_config_json = json.dumps(
+            {"source_model_id": model_id, "job_id": job_id, "gguf": gguf_name}, ensure_ascii=False)
+        commit_id = await db_model.create_commit_model(
+            name=commit_name,
+            model_id=new_model_id,
+            workspace_id=workspace_id,
+            create_user_id=create_user_id,
+            fine_tuning_config=ft_config_json,
+            commit_message=(commit_message or f"quantized gguf {job_id[:8]}"),
+            model_description=(src_model.get("description") or ""),
+        )
+        await db_model.update_model_commit_id(latest_commit_id=commit_id, model_id=new_model_id)
+    except Exception:
+        traceback.print_exc()
+        # 부분 생성물 정리 — model row + 방금 만든 models/<name>/ 트리 제거(재시도 dedup 차단 해소).
+        if new_model_id:
+            try:
+                await db_model.delete_model(model_id=new_model_id)
+            except Exception:
+                traceback.print_exc()
+        if made_dir:
+            try:
+                await delete_model_folder(storage_name=storage_name,
+                                          workspace_name=workspace_name, model_name=model_name)
+            except Exception:
+                traceback.print_exc()
+        raise
+
+    return {
+        "model_id": new_model_id,
+        "model_name": model_name,
+        "commit_id": commit_id,
+        "commit_name": commit_name,
+        "commit_dir": commit_dir,
+        "gguf": gguf_name,
+    }
+
+
 # ── SDS(external) 체크포인트 관리 (P1: 목록/메타데이터/삭제/best 마커) ──────────
 # 내부 엔진은 커밋 스냅샷을 commit_checkpoints/<c>/adapters/checkpoint-<step>/ 로 보존하지만,
 # external(SDS)은 commit_external_artifacts 가 파트너 output 트리를 통째로 옮겨

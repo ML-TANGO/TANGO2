@@ -805,6 +805,31 @@ async def download_quantize_package(model_id: int, job_id: str, file: Optional[s
     return FileResponse(path, media_type=media, filename=filename, background=background)
 
 
+class _RegisterServableBody(BaseModel):
+    """Body for POST /models/{model_id}/quantize/{job_id}/register-servable — [멀티엔진
+    Phase 2 C-B] 양자화 GGUF 를 llama.cpp 직접 서빙용 commit 모델로 등록. model_name
+    은 helm --set/NFS 세그먼트에 들어가므로 route 단에서도 allowlist(service 재검증과 이중)."""
+    model_config = {"protected_namespaces": ()}
+    model_name: str = Field(..., pattern=r"^[A-Za-z0-9._-]{1,50}$")
+    commit_name: Optional[str] = None
+    commit_message: Optional[str] = None
+
+
+@model.post("/{model_id}/quantize/{job_id}/register-servable", summary='register quantized GGUF as llama.cpp-servable commit model', tags=TAG_MODEL)
+async def register_quantized_servable(model_id: int, job_id: str, body: _RegisterServableBody):
+    try:
+        res = await svc.register_quantized_servable(
+            model_id=model_id, job_id=job_id,
+            model_name=body.model_name,
+            commit_name=body.commit_name,
+            commit_message=body.commit_message,
+        )
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+
 # ── SP-5 자동평가 (v0.4 3.8) ──────────────────────────────────────────────
 
 _EVAL_ALLOWED_METRICS = {"bleu", "rouge", "perplexity"}
