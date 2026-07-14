@@ -18,6 +18,10 @@ from utils import common
 from utils.common import is_good_name
 from utils.llm_db import db_items as db
 from utils.msa_db import db_dataset
+from utils.msa_db import db_edge
+from utils import deployment_envelope
+from utils.access_check import check_admin_access_level, ADMIN_ALLOW_MAX_LEVEL
+from fastapi.concurrency import run_in_threadpool
 from utils.crypt import front_cipher
 from utils import llm_deployment
 from utils.redis import get_redis_client_async
@@ -87,6 +91,29 @@ async def get_playground_list(workspace_id, user_id):
     except Exception as e:
         traceback.print_exc()
     return result
+
+async def get_deployment_targets(workspace_id, user_id):
+    """배포 타겟 통합 read-model — cluster(Playground)+edge 를 정규화 envelope 로 반환.
+    배포 타겟 디스패치 설계. 순수 매핑은 deployment_envelope 재사용.
+    edge 목록은 기존 `/edge/workers`(fb_resource, `@admin_access_check`)와 동일하게 **admin 전용** —
+    edge_worker 는 workspace/owner 바인딩이 없어(전역) 비-admin 에게 노출 금지. 게이트 판정만 재사용."""
+    targets = []
+    try:
+        # cluster (활성 = Playground, llm>0). 기존 목록 서비스 재사용 → status 재파생 안 함.
+        # workspace_id 는 목록 행에 없어 파라미터로 주입(target_details 정합).
+        cluster_list = await get_playground_list(workspace_id=workspace_id, user_id=user_id)
+        targets.extend(
+            deployment_envelope.cluster_envelope(dep, workspace_id=workspace_id) for dep in cluster_list)
+        # edge (remoteManager 디바이스, 공유 msa_db 층, 전역). 기존 admin 게이트 미러 —
+        # admin(=root) 에게만 포함. 비-admin 은 cluster-only (전역 디바이스 IDOR 방지).
+        # sync(pymysql) admin 체크·edge 조회는 이벤트루프 블록 방지로 threadpool offload(형제 edge 라우트 선례).
+        admin_level = await run_in_threadpool(check_admin_access_level, user_id)
+        if admin_level <= ADMIN_ALLOW_MAX_LEVEL:
+            edge_list = await run_in_threadpool(db_edge.get_edge_worker_list) or []
+            targets.extend(deployment_envelope.edge_envelope(w) for w in edge_list)
+    except Exception as e:
+        traceback.print_exc()
+    return targets
 
 async def get_playground_info(playground_id):
     """

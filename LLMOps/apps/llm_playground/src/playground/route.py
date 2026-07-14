@@ -95,6 +95,17 @@ async def get_playground_list(workspace_id: int=None):
         traceback.print_exc()
         return response(status=0, message=str(e), result=None)
 
+@playgrounds.get("/targets", summary='배포 타겟 통합 목록(cluster+edge) 정규화 read-model', tags=TAG_LIST)
+async def get_deployment_targets(workspace_id: int=None):
+    """배포 타겟 디스패치 read-model — cluster(Playground)+edge 를 정규화 envelope 로 통합 반환."""
+    try:
+        user_id = get_user_id()
+        res = await svc.get_deployment_targets(workspace_id=workspace_id, user_id=user_id)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
 @playgrounds.post("",summary='목록페이지 - 목록 페이지에서 생성', tags=TAG_LIST)
 async def create_playground(body: dto.CreatePlaygroundInput):
     """
