@@ -3099,20 +3099,23 @@ def _public_api_endpoint(api_path):
     return "{}{}".format(_ingress_base_url(), _external_route_path(api_path))
 
 
-def _get_owned_deployment(deployment_id, headers_user):
-    """배포 조회 + 소유권 검증(C-1/N3: 게시=외부 노출 고위험 → 능동 차단)."""
+def _get_deployment_or_404(deployment_id):
+    """배포 조회 + 존재 확인.
+
+    게시 authZ = **플랫폼의 열린 posture 정합**(2026-07-15 사용자 결정 B): 이전엔 소유자
+    전용(owner != 요청자 → Forbidden)이었으나, 이 플랫폼은 workspace/deployment access
+    check 가 전반적으로 비활성(공개 playground·워크스페이스 공유)이라 게시만 owner-gate 인 게
+    불일치였다(비소유자·admin의 타 워크스페이스 미접근으로 게시 불가). 이제 라우트의 get_auth
+    (미인증 400) 인증만 요구하고 소유권은 보지 않는다. 존재하지 않는 배포는 404.
+    """
     dep = db_deployment.get_deployment(deployment_id=deployment_id)
     if not dep:
         raise ItemNotExistError("Deployment not found")
-    user_info = db_user.get_user_id(headers_user) if headers_user else None
-    user_id = user_info.get("id") if user_info else None
-    if user_id is None or dep.get("user_id") != user_id:
-        raise Exception("Forbidden: not the deployment owner")
     return dep
 
 
 def publish_deployment_api(deployment_id, headers_user=None):
-    dep = _get_owned_deployment(deployment_id, headers_user)
+    dep = _get_deployment_or_404(deployment_id)  # authZ=인증만(route get_auth), 소유권 무관
     api_path = dep.get("api_path")
     if not api_path:
         raise Exception("Deployment has no api_path (not running or not exposed)")
@@ -3180,7 +3183,7 @@ def publish_deployment_api(deployment_id, headers_user=None):
 
 
 def get_deployment_api_info(deployment_id, headers_user=None):
-    dep = _get_owned_deployment(deployment_id, headers_user)  # N3: GET 도 소유권 체크(키 반환)
+    dep = _get_deployment_or_404(deployment_id)  # 존재 확인. 키 반환은 인증 사용자면 허용(공유 게시)
     row = db_deployment.get_deployment_api(deployment_id)
     if not row or not row.get("enabled"):
         return None
@@ -3196,7 +3199,7 @@ def get_deployment_api_info(deployment_id, headers_user=None):
 
 
 def rotate_deployment_api_key(deployment_id, headers_user=None):
-    _get_owned_deployment(deployment_id, headers_user)
+    _get_deployment_or_404(deployment_id)  # 존재 확인(authZ=인증만)
     row = db_deployment.get_deployment_api(deployment_id)
     if not row or not row.get("enabled"):  # M-1: 미게시/해제 상태 회전 금지
         raise ItemNotExistError("Deployment API not published")
@@ -3206,9 +3209,8 @@ def rotate_deployment_api_key(deployment_id, headers_user=None):
 
 
 def unpublish_deployment_api(deployment_id, headers_user=None):
-    # headers_user 가 있으면(외부 호출) 소유권 검증, 없으면(라이프사이클 내부 정리) 통과.
-    # 실제 Kong 리소스 + deployment_api row 정리는 공용 teardown core 에 위임 —
-    # llm_playground stop/delete lifecycle 도 같은 core 를 호출한다(분기 방지, 3b-2).
-    if headers_user is not None:
-        _get_owned_deployment(deployment_id, headers_user)
+    # authZ = 인증만(route get_auth) — 소유자 전용 차단 제거(플랫폼 posture 정합, 결정 B).
+    # headers_user 는 route 호환용(외부 호출 시 전달)이나 소유권엔 미사용. 실제 Kong 리소스 +
+    # deployment_api row 정리는 공용 teardown core 에 위임 — llm_playground stop/delete lifecycle
+    # (headers_user=None)도 같은 core 를 호출한다(분기 방지, 3b-2). teardown 은 멱등이라 존재 확인 불요.
     teardown_deployment_api(deployment_id)
