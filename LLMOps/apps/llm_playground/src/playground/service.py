@@ -622,12 +622,17 @@ async def get_playground(playground_id):
         else:
             users=[item.get("user_name") for item in await db.get_user_playground_list(playground_id=item.get("id"))]
         result['info']['users'] = users
+        # 게시(D6) 대상 배포 PK. FE(PlaygroundDetail 외부 API 섹션)가 이 값으로
+        # /deployments/{id}/api-publish 를 호출한다. deployment 파싱 블록에서 실제값을
+        # 채우고, 배포 없으면 None 유지.
+        result['info']['deployment_id'] = None
 
         # INFO - instance
         try:
             if deployment:
                 deployment_playground = json.loads(deployment)
                 deployment_playground_id = deployment_playground.get("deployment_playground_id")
+                result['info']['deployment_id'] = deployment_playground_id
                 deployment_embedding_id = deployment_playground.get("deployment_embedding_id")
                 deployment_reranker_id = deployment_playground.get("deployment_reranker_id")
 
