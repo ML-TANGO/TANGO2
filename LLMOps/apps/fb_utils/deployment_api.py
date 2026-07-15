@@ -61,19 +61,28 @@ def teardown_deployment_api(deployment_id) -> None:
     row = db_deployment.get_deployment_api(deployment_id)
     consumer = (row or {}).get("api_consumer") or api_consumer_name(deployment_id)
     route_id = (row or {}).get("api_route_id")
+    errors = []
     if not route_id:
         try:
             dep = db_deployment.get_deployment(deployment_id=deployment_id)
         except Exception:
             dep = None  # 2차 조회 실패해도 크리덴셜 삭제는 진행(키 무효화 우선)
         api_path = (dep or {}).get("api_path")
+        # route 조회(Kong 조회)가 실패해도 크리덴셜 삭제(키 무효화)는 반드시 진행 — 유효 키를 살려둔 채
+        # 함수가 이탈하면 '키 우선 무효화' 불변식이 깨진다. path·name 조회를 독립 try 로 분리해, path 조회
+        # 일시 실패가 name 폴백까지 막지 않도록 한다. 실패는 errors 로 기록(unpublish 가 실패 노출·멱등
+        # 재시도)하되 route_id 는 None 으로 남겨 route 삭제만 건너뛴다(남은 route 는 다음 orphan sweep 이 회수).
         if api_path:
-            route_id = kong_helper.find_route_id_by_path(external_route_path(api_path))
+            try:
+                route_id = kong_helper.find_route_id_by_path(external_route_path(api_path))
+            except Exception as e:
+                errors.append("find_route_by_path: {!r}".format(e))
         if not route_id:
-            # api_path 소실(배포 삭제)돼도 route name 으로 정리 — orphan sweep/lifecycle delete 견고성.
-            route_id = kong_helper.find_route_id_by_name(external_route_name(deployment_id))
-
-    errors = []
+            try:
+                # api_path 소실(배포 삭제)돼도 route name 으로 정리 — orphan sweep/lifecycle delete 견고성.
+                route_id = kong_helper.find_route_id_by_name(external_route_name(deployment_id))
+            except Exception as e:
+                errors.append("find_route_by_name: {!r}".format(e))
     # 1) 크리덴셜 먼저(키 무효화 최우선). 각 단계 독립 — 실패해도 나머지 시도.
     try:
         kong_helper.delete_key_auths(consumer)   # 유효 키 제거(→ route 남아도 401)

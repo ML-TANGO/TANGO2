@@ -264,3 +264,48 @@ def test_teardown_continues_when_secondary_lookup_raises(kong, db):
     kong.delete_key_auths.assert_called_once_with("dep-9")
     kong.delete_consumer.assert_called_once_with("dep-9")
     db.delete_deployment_api.assert_called_once_with(9)
+
+
+@patch("utils.deployment_api.db_deployment")
+@patch("utils.deployment_api.kong_helper")
+def test_teardown_path_lookup_raises_falls_through_to_name(kong, db):
+    """path 조회가 예외여도 name 폴백은 계속 시도(독립 try) — path 실패가 route 정리를 막지 않는다.
+
+    또한 조회 예외가 크리덴셜 삭제 전에 함수를 이탈시키면 유효 키가 살아남는다 — 그 회귀도 막는다."""
+    db.get_deployment_api.return_value = None
+    db.get_deployment.return_value = {"api_path": "abc"}
+    kong.find_route_id_by_path.side_effect = Exception("kong 500")
+    kong.find_route_id_by_name.return_value = "R3"      # name 폴백은 성공
+    db.delete_deployment_api.return_value = {"result": True}
+
+    with pytest.raises(Exception) as exc:
+        deployment_api.teardown_deployment_api(9)
+
+    kong.find_route_id_by_name.assert_called_once_with("ext-dep-9")
+    kong.delete_route.assert_called_once_with("R3")     # name 으로 찾은 route 삭제됨
+    kong.delete_key_auths.assert_called_once_with("dep-9")
+    kong.delete_consumer.assert_called_once_with("dep-9")
+    db.delete_deployment_api.assert_called_once_with(9)
+    assert "find_route_by_path" in str(exc.value)
+
+
+@patch("utils.deployment_api.db_deployment")
+@patch("utils.deployment_api.kong_helper")
+def test_teardown_both_route_lookups_raise_still_deletes_credentials(kong, db):
+    """path·name 조회가 모두 예외여도 크리덴셜/row 삭제는 진행하고 두 오류를 모아 raise."""
+    db.get_deployment_api.return_value = None
+    db.get_deployment.return_value = {"api_path": "abc"}
+    kong.find_route_id_by_path.side_effect = Exception("kong 500")
+    kong.find_route_id_by_name.side_effect = Exception("kong 500")
+    db.delete_deployment_api.return_value = {"result": True}
+
+    with pytest.raises(Exception) as exc:
+        deployment_api.teardown_deployment_api(9)
+
+    kong.delete_key_auths.assert_called_once_with("dep-9")
+    kong.delete_consumer.assert_called_once_with("dep-9")
+    kong.delete_route.assert_not_called()               # route_id 미해결 → route 삭제 skip
+    db.delete_deployment_api.assert_called_once_with(9)
+    msg = str(exc.value)
+    assert "find_route_by_path" in msg
+    assert "find_route_by_name" in msg
