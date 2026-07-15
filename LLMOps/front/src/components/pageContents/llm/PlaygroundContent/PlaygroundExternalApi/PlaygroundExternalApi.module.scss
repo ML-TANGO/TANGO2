@@ -1,0 +1,123 @@
+@import '@src/styles/color.scss';
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 12px;
+  white-space: nowrap;
+
+  &.on {
+    color: $lime604;
+    background: rgba($lime604, 0.14);
+  }
+
+  &.off {
+    color: $mono205;
+    background: $mono202;
+  }
+}
+
+.desc {
+  font-size: 14px;
+  color: $mono205;
+  line-height: 1.6;
+}
+
+.published,
+.unpublished {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 600;
+  color: $mono205;
+}
+
+.value-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.value {
+  font-size: 14px;
+  color: $mono207;
+  word-break: break-all;
+
+  &.mono {
+    font-family: 'Menlo', 'Monaco', monospace;
+    background: $mono202;
+    padding: 8px 12px;
+    border-radius: 8px;
+    flex: 1;
+  }
+}
+
+.copy-btn,
+.link-btn {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.copy-btn {
+  border: 1px solid $mono203;
+  background: #fff;
+  color: $mono205;
+
+  &:hover {
+    border-color: $blue104;
+    color: $blue104;
+  }
+}
+
+.link-btn {
+  border: none;
+  background: transparent;
+  color: $blue104;
+  padding: 8px 6px;
+}
+
+.hint {
+  font-size: 13px;
+  color: $mono204;
+  line-height: 1.6;
+
+  code {
+    font-family: 'Menlo', 'Monaco', monospace;
+    background: $mono202;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}

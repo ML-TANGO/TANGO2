@@ -70,6 +70,7 @@ const PlaygroundInfo = React.memo(() => {
     update_datetime,
     access,
     users,
+    deployment_id,
   } = useSelector((state) => state.llmPlayground.info, shallowEqual);
   const { accellator, isAccellator } = useSelector(
     (state) => state.llmPlayground,
@@ -174,6 +175,7 @@ const PlaygroundInfo = React.memo(() => {
                   update_datetime,
                   users,
                   access,
+                  deployment_id, // 통째교체 reducer 에서 게시 섹션 id 유실 방지
                 })
               }
               customStyle={{

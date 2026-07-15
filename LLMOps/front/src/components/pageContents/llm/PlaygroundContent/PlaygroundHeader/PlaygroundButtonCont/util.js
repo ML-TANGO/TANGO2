@@ -95,6 +95,7 @@ export const getDetailPlaygroundInfo = async (dispatch, playgroundId) => {
             update_datetime: result.info.update_datetime,
             access: result.info.access,
             users: result.info.users ?? [],
+            deployment_id: result.info.deployment_id ?? null,
           }
         : initialLLMPlaygroundState.info,
       accellator: data.result === 'running' ? true : false,

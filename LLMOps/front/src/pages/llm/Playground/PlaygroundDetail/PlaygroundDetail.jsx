@@ -4,6 +4,7 @@ import { useRouteMatch } from 'react-router-dom';
 
 import PlaygroundHeader from '@src/components/pageContents/llm/PlaygroundContent/PlaygroundHeader';
 import PlaygroundInfo from '@src/components/pageContents/llm/PlaygroundContent/PlaygroundInfo';
+import PlaygroundExternalApi from '@src/components/pageContents/llm/PlaygroundContent/PlaygroundExternalApi';
 import PlaygroundInstanceSettingInfo from '@src/components/pageContents/llm/PlaygroundContent/PlaygroundInstanceSettingInfo';
 import PlaygroundModel from '@src/components/pageContents/llm/PlaygroundContent/PlaygroundModel';
 import PlaygroundModelParameterSetting from '@src/components/pageContents/llm/PlaygroundContent/PlaygroundModelParameterSetting';
@@ -50,6 +51,7 @@ const getDetailPlaygroundInfo = async (dispatch, playgroundId) => {
             update_datetime: result.info.update_datetime,
             access: result.info.access,
             users: result.info.users ?? [],
+            deployment_id: result.info.deployment_id ?? null,
           }
         : initialLLMPlaygroundState.info,
       accellator: data.result === 'running' ? true : false,
@@ -169,6 +171,7 @@ const PlaygroundDetail = () => {
         <PlaygroundModel workspaceId={workspaceId} />
         <PlaygroundModelParameterSetting />
         <PlaygroundInstanceSettingInfo />
+        <PlaygroundExternalApi />
         {/* <PlaygroundRag workspaceId={workspaceId} playgroundId={playgroundId} /> */}
         {/* <PlaygroundPrompt workspaceId={workspaceId} /> */}
       </div>

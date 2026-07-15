@@ -25,6 +25,7 @@ export const initialLLMPlaygroundState = {
     update_datetime: '0000-00-00 00:00:00',
     access: 1,
     users: [],
+    deployment_id: null, // 게시(D6) 대상 배포 PK. get_playground 응답 info.deployment_id.
   },
   accellator: false,
   isAccellator: false,
