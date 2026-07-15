@@ -168,6 +168,10 @@ def kong_sync_user_to_consumer():
             print(f"Failed to create consumer {new_user}: {e}", file=sys.stderr)
 
     old_users = list(set(consumers) - set(users))
+    # 게시(D6) 전용 consumer(dep-<id>)는 DB user 가 아니지만 publish_deployment_api 가 관리한다.
+    # 제외하지 않으면 이 동기화가 ~5s 루프마다 삭제 → key-auth 크리덴셜 cascade 소멸 → 게시 키 401.
+    # unpublish_deployment_api 에서만 삭제된다.
+    old_users = [u for u in old_users if not (u.startswith("dep-") and u[4:].isdigit())]
     if len(old_users) or len(new_users):
         print(f"[SYNC User] Create: {new_users} |  Remove: {old_users}", file=sys.stderr)
 
@@ -739,7 +743,13 @@ def kong_sync_consumer_acl_groups():
             
             if not username or username == "anonymous-user":
                 continue
-                
+
+            # 게시(D6) consumer(dep-<id>)는 publish_deployment_api 가 ACL 그룹(=자기 group)을 관리한다.
+            # 이 동기화가 DB user 아님을 이유로 그룹을 벗기면 게시 route 의 acl(allow=[dep-<id>])이
+            # 소유 consumer 를 거부(403) → 제외한다.
+            if username.startswith("dep-") and username[4:].isdigit():
+                continue
+
             processed_users += 1
             
             # username으로 user 정보 조회
