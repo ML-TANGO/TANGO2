@@ -1025,6 +1025,64 @@ def get_instance_node_name(instance_id):
     return res
 
 
+# ── SP-Deployment(D6) §12: 클러스터 배포 API 게시 상태 (deployment_api, 1:1) ──
+def upsert_deployment_api(deployment_id, api_consumer, api_route_id=None, enabled=1):
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            sql = """
+                INSERT INTO deployment_api (deployment_id, api_consumer, api_route_id, enabled)
+                VALUES (%s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    api_consumer=VALUES(api_consumer),
+                    api_route_id=VALUES(api_route_id),
+                    enabled=VALUES(enabled),
+                    published_at=current_timestamp()
+            """
+            cur.execute(sql, (deployment_id, api_consumer, api_route_id, enabled))
+            conn.commit()
+        return {'result': True}
+    except Exception as e:
+        traceback.print_exc()
+        return {'result': False, 'message': str(e)}
+
+
+def get_deployment_api(deployment_id):
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM deployment_api WHERE deployment_id=%s", (deployment_id,))
+            return cur.fetchone()
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
+def set_deployment_api_enabled(deployment_id, enabled):
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("UPDATE deployment_api SET enabled=%s WHERE deployment_id=%s",
+                        (enabled, deployment_id))
+            conn.commit()
+        return {'result': True}
+    except Exception as e:
+        traceback.print_exc()
+        return {'result': False, 'message': str(e)}
+
+
+def delete_deployment_api(deployment_id):
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM deployment_api WHERE deployment_id=%s", (deployment_id,))
+            conn.commit()
+        return {'result': True}
+    except Exception as e:
+        traceback.print_exc()
+        return {'result': False, 'message': str(e)}
+
+
 # playground ==============================================================
 def insert_deployment_llm(**kwargs):
     try:

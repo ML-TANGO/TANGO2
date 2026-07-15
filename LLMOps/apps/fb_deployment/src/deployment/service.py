@@ -28,6 +28,7 @@ from utils.msa_db import db_user, db_deployment, db_workspace, db_instance, db_p
 
 from deployment import dto
 from utils import topic_key
+from utils import kong_helper  # SP-Deployment(D6) §12 클러스터 API 게시
 
 from confluent_kafka import Producer
 from confluent_kafka.admin import AdminClient, NewTopic
@@ -683,7 +684,13 @@ def delete_deployment(deployment_ids, headers_user):
             except Exception as e:
                 traceback.print_exc()
                 pass
-            
+
+            # SP-D6 §12: 외부 API 게시 상태(Kong consumer/key/plugin) 정리 — 실패해도 삭제 진행
+            try:
+                unpublish_deployment_api(deployment_id)
+            except Exception:
+                traceback.print_exc()
+
             # 내부 메모리 call_count_chart 삭제
             try:
                 del DEPLOYMENT_CALL_CHART[deployment_id]
@@ -1277,6 +1284,14 @@ def stop_deployment(deployment_id):
             res, message = uninstall_all_deployment(workspace_id=deployment_info["workspace_id"], deployment_id=deployment_id)
         except:
             print(message)
+
+        # SP-D6 §12: 중지 시 외부 API 게시 비활성(enabled=0). consumer/key 유지 → 재시작 후 재게시 시 키 안정.
+        # (중지된 route 는 helm uninstall 로 제거되며 key-auth plugin 도 함께 사라짐)
+        try:
+            if db_deployment.get_deployment_api(deployment_id):
+                db_deployment.set_deployment_api_enabled(deployment_id, 0)
+        except Exception:
+            traceback.print_exc()
 
         for item in db_deployment.get_deployment_worker_list(deployment_id=deployment_id, running=True):
             # ==========DB 업데이트===========================
@@ -3050,3 +3065,158 @@ def uninstall_all_deployment(workspace_id, deployment_id):
 #         if per_hour_info_list:
 #             worker_num_of_log_per_hour_info_list += per_hour_info_list
 #     return worker_num_of_log_per_hour_info_list
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# SP-Deployment(D6) §12 — 클러스터 배포 API 게시
+#   배포 서빙은 이미 Kong route(/deployment/{api_path})로 노출됨.
+#   게시 = 그 route 에 key-auth plugin 부착 + consumer/key 발급(외부 소비자=키 필수).
+#   내부 추론(Inference)은 ClusterIP 직접 호출이라 키 불필요(§12.6).
+# ════════════════════════════════════════════════════════════════════════════
+# 게시 전용 외부 경로 prefix — 내부 서빙 `/deployment/`(익명 공유)와 분리.
+# 비-`/api` 라 fb_ingress_management 리콘사일러가 스킵(generic key-auth 미부착).
+EXTERNAL_API_PREFIX = "/ext"
+
+
+def _external_route_path(api_path):
+    """게시 전용 Kong route path — 라우트 생성(publish)과 공개 URL 이 같은 경로를 쓰도록 단일 정의."""
+    return "{}/{}".format(EXTERNAL_API_PREFIX, api_path)
+
+
+def _ingress_base_url():
+    """게시 URL 의 {protocol}://{host}[:port]. get_deployment_full_api_address 와 동일한
+    settings(EXTERNAL_HOST/PORT/REDIRECT)를 사용 — 단 그 함수는 현재 상대경로만 반환하므로
+    이 절대 URL 조립 로직의 첫 실사용처다."""
+    if EXTERNAL_HOST_REDIRECT:
+        return "{}://{}".format(INGRESS_PROTOCOL, EXTERNAL_HOST)
+    return "{}://{}:{}".format(INGRESS_PROTOCOL, EXTERNAL_HOST, EXTERNAL_HOST_PORT)
+
+
+def _public_api_endpoint(api_path):
+    if not api_path:
+        return None
+    return "{}{}".format(_ingress_base_url(), _external_route_path(api_path))
+
+
+def _api_consumer_name(deployment_id):
+    return "dep-{}".format(deployment_id)
+
+
+def _get_owned_deployment(deployment_id, headers_user):
+    """배포 조회 + 소유권 검증(C-1/N3: 게시=외부 노출 고위험 → 능동 차단)."""
+    dep = db_deployment.get_deployment(deployment_id=deployment_id)
+    if not dep:
+        raise ItemNotExistError("Deployment not found")
+    user_info = db_user.get_user_id(headers_user) if headers_user else None
+    user_id = user_info.get("id") if user_info else None
+    if user_id is None or dep.get("user_id") != user_id:
+        raise Exception("Forbidden: not the deployment owner")
+    return dep
+
+
+def publish_deployment_api(deployment_id, headers_user=None):
+    dep = _get_owned_deployment(deployment_id, headers_user)
+    api_path = dep.get("api_path")
+    if not api_path:
+        raise Exception("Deployment has no api_path (not running or not exposed)")
+    # 내부 서빙 route(/deployment/{api_path}) 는 채팅이 익명으로 쓰므로 건드리지 않는다.
+    # 그 route 의 Kong service 만 취해, 같은 service 를 가리키는 전용 게시 route(/ext/{api_path})를
+    # 새로 만들고 거기에만 key-auth 를 붙인다(라우트 분리 → Playground(llm>0) 배포도 게시 가능).
+    internal_route_id = kong_helper.find_route_id_by_path("/deployment/{}".format(api_path))
+    if not internal_route_id:
+        raise Exception("Kong route not found for /deployment/{} (deployment running?)".format(api_path))
+    service_id = kong_helper.get_route_service_id(internal_route_id)
+    if not service_id:
+        raise Exception("Kong service not found for internal route {}".format(internal_route_id))
+    ext_path = _external_route_path(api_path)
+    consumer = _api_consumer_name(deployment_id)
+    # 이 호출이 새로 만든 것만 롤백하기 위한 사전 상태(N2 동시성 안전)
+    pre_key = kong_helper.get_key_auth(consumer)
+    ext_created = False
+    try:
+        # consumer + ACL group(배포별 1:1) 먼저 — key-auth 는 '유효 키'만 검증하므로
+        # acl(allow=[consumer]) 로 소유 consumer 로 제한해야 교차테넌트 우회를 막는다.
+        kong_helper.get_or_create_consumer(consumer)
+        kong_helper.add_consumer_to_acl_group(consumer, consumer)
+        api_key = kong_helper.get_or_create_key_auth(consumer)
+        # 전용 게시 route(같은 service) 생성 + 인증(key-auth) + 인가(acl=소유 consumer 만).
+        ext_route_id, ext_created = kong_helper.create_route_on_service(
+            service_id, ext_path, name="ext-dep-{}".format(deployment_id))
+        kong_helper.attach_key_auth_plugin(ext_route_id)       # 인증: 유효 키 필수(anonymous 없음)
+        kong_helper.attach_acl_plugin(ext_route_id, consumer)  # 인가: 이 consumer 만(교차테넌트 차단)
+        db_res = db_deployment.upsert_deployment_api(deployment_id, consumer, ext_route_id, enabled=1)
+        if not db_res.get("result"):  # N1: Kong 성공 + DB 실패 partial-commit 방지
+            raise Exception("deployment_api persist failed: {}".format(db_res.get("message")))
+    except Exception:
+        # 이 호출이 만든 것만 정리(동시 publish 시 타 요청 자원 보존)
+        try:
+            if ext_created:  # route 삭제 시 부착 plugin(key-auth/acl) 도 함께 제거
+                cur = kong_helper.find_route_id_by_path(ext_path)
+                if cur:
+                    kong_helper.delete_route(cur)
+        except Exception:
+            pass
+        try:
+            if not pre_key:
+                kong_helper.delete_key_auths(consumer)
+                kong_helper.delete_consumer(consumer)
+        except Exception:
+            pass
+        raise
+    return {
+        "deployment_id": deployment_id,
+        "endpoint": _public_api_endpoint(api_path),
+        "consumer": consumer,
+        "api_key": api_key,
+        "key_name": kong_helper.KEY_NAMES[0],
+        "enabled": True,
+    }
+
+
+def get_deployment_api_info(deployment_id, headers_user=None):
+    dep = _get_owned_deployment(deployment_id, headers_user)  # N3: GET 도 소유권 체크(키 반환)
+    row = db_deployment.get_deployment_api(deployment_id)
+    if not row or not row.get("enabled"):
+        return None
+    return {
+        "deployment_id": deployment_id,
+        "endpoint": _public_api_endpoint(dep.get("api_path")),
+        "consumer": row.get("api_consumer"),
+        "api_key": kong_helper.get_key_auth(row.get("api_consumer")),  # Kong fetch(미저장)
+        "key_name": kong_helper.KEY_NAMES[0],
+        "enabled": True,
+        "published_at": row.get("published_at"),
+    }
+
+
+def rotate_deployment_api_key(deployment_id, headers_user=None):
+    _get_owned_deployment(deployment_id, headers_user)
+    row = db_deployment.get_deployment_api(deployment_id)
+    if not row or not row.get("enabled"):  # M-1: 미게시/해제 상태 회전 금지
+        raise ItemNotExistError("Deployment API not published")
+    api_key = kong_helper.rotate_key_auth(row.get("api_consumer"))
+    db_deployment.set_deployment_api_enabled(deployment_id, 1)  # update_datetime 갱신(회전 이력)
+    return {"deployment_id": deployment_id, "api_key": api_key}
+
+
+def unpublish_deployment_api(deployment_id, headers_user=None):
+    # headers_user 가 있으면(외부 호출) 소유권 검증, 없으면(라이프사이클 내부 정리) 통과
+    dep = None
+    if headers_user is not None:
+        dep = _get_owned_deployment(deployment_id, headers_user)
+    row = db_deployment.get_deployment_api(deployment_id)
+    # row 가 없거나(미게시) DB blip 이어도 결정적 식별자로 Kong 정리 시도 —
+    # DB 오류를 '이미 미게시'로 오인해 route/키를 살려두는 불완전 취소(revocation) 방지.
+    consumer = (row or {}).get("api_consumer") or _api_consumer_name(deployment_id)
+    route_id = (row or {}).get("api_route_id")
+    if not route_id:
+        if dep is None:
+            dep = db_deployment.get_deployment(deployment_id=deployment_id)
+        api_path = (dep or {}).get("api_path")
+        if api_path:
+            route_id = kong_helper.find_route_id_by_path(_external_route_path(api_path))
+    if route_id:
+        kong_helper.delete_route(route_id)  # 전용 게시 route 삭제(부착 plugin 동반 제거)
+    kong_helper.delete_key_auths(consumer)
+    kong_helper.delete_consumer(consumer)
+    db_deployment.delete_deployment_api(deployment_id)
