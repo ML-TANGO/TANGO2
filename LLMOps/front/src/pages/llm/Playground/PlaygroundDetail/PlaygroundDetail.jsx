@@ -33,9 +33,8 @@ const cx = classNames.bind(style);
 
 // ** [GET] 플레이그라운드 데이터 **
 const getDetailPlaygroundInfo = async (dispatch, playgroundId) => {
-  const { result, message, status, error } = await getDetailPlayground(
-    playgroundId,
-  );
+  const { result, message, status, error } =
+    await getDetailPlayground(playgroundId);
   const { data } = await getPlaygroundCheckAccel();
 
   if (status === STATUS_SUCCESS) {
@@ -45,12 +44,12 @@ const getDetailPlaygroundInfo = async (dispatch, playgroundId) => {
         ? {
             id: result.info.id,
             create_datetime: result.info.create_datetime,
-            description: result.info.description,
+            description: result.info.description ?? '-',
             name: result.info.name,
             owner: result.info.owner,
             update_datetime: result.info.update_datetime,
             access: result.info.access,
-            users: result.info.users,
+            users: result.info.users ?? [],
           }
         : initialLLMPlaygroundState.info,
       accellator: data.result === 'running' ? true : false,
@@ -75,6 +74,7 @@ const getDetailPlaygroundInfo = async (dispatch, playgroundId) => {
       model: result.model
         ? {
             model_type: result.model.model_type,
+            serving_system: result.model.serving_system ?? 'vllm',
             model_huggingface_id: result.model.model_hf_id,
             model_allm_id: result.model.model_allm_id,
             model_allm_name: result.model.model_allm_name,

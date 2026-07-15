@@ -78,9 +78,8 @@ export const calEqualValue = (info, model, rag, prompt, originValue) => {
 
 // ** [GET] 플레이그라운드 데이터 **
 export const getDetailPlaygroundInfo = async (dispatch, playgroundId) => {
-  const { result, message, status, error } = await getDetailPlayground(
-    playgroundId,
-  );
+  const { result, message, status, error } =
+    await getDetailPlayground(playgroundId);
   const { data } = await getPlaygroundCheckAccel();
 
   if (status === STATUS_SUCCESS) {
@@ -90,12 +89,12 @@ export const getDetailPlaygroundInfo = async (dispatch, playgroundId) => {
         ? {
             id: result.info.id,
             create_datetime: result.info.create_datetime,
-            description: result.info.description,
+            description: result.info.description ?? '-',
             name: result.info.name,
             owner: result.info.owner,
             update_datetime: result.info.update_datetime,
             access: result.info.access,
-            users: result.info.users,
+            users: result.info.users ?? [],
           }
         : initialLLMPlaygroundState.info,
       accellator: data.result === 'running' ? true : false,
