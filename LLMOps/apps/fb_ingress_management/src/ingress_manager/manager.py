@@ -83,12 +83,20 @@ def kong_sweep_orphan_publish():
             continue
         created = r.get("created_at") or now  # 누락 시 now → grace 로 보호(즉시 삭제 방지)
         candidates[did] = max(candidates.get(did, 0), created)
-    swept, grace, raced = [], [], []
+    swept, grace, raced, unconfirmed = [], [], [], []
     for did, created in candidates.items():
         if now - created < ORPHAN_GRACE_SEC:
             grace.append(did)  # 갓 게시(publish 진행중) 보호
             continue
-        if db_deployment.get_deployment_api(did):  # TOCTOU: 삭제 직전 재확인
+        # 삭제 직전(후보별) 최신 집합 재조회 — check-then-act 간극 최소화. 루프 진입 전 배치 스냅샷은
+        # 뒤 후보일수록 stale 해져, 앞 후보 teardown(느린 Kong 호출) 동안 재게시된 정상 배포를 오삭제할
+        # 수 있다. 단건 get_deployment_api 는 '부재'와 'DB 오류'가 둘 다 None 이라 못 씀 → list 재조회로
+        # 구분(None=조회 실패 → 이 후보 보류하고 다음 주기 재시도 / set 이면 그 안에 있으면 보존).
+        fresh = db_deployment.list_deployment_api_ids()
+        if fresh is None:
+            unconfirmed.append(did)  # DB blip: 부재로 오인 말고 이번 주기엔 건드리지 않음
+            continue
+        if did in set(fresh):  # 스윕 도중 재게시됐거나 여전히 존재 → 보존(raced)
             raced.append(did)
             continue
         try:
@@ -96,9 +104,9 @@ def kong_sweep_orphan_publish():
             swept.append(did)
         except Exception:
             traceback.print_exc()  # 부분 실패는 다음 주기 재시도
-    if swept or grace or raced:
-        print("[orphan-sweep] swept=%s grace-skipped=%s raced-skipped=%s" % (swept, grace, raced),
-              file=sys.stderr)
+    if swept or grace or raced or unconfirmed:
+        print("[orphan-sweep] swept=%s grace-skipped=%s raced-skipped=%s unconfirmed=%s" % (
+            swept, grace, raced, unconfirmed), file=sys.stderr)
 
 
 def manager_routine():
