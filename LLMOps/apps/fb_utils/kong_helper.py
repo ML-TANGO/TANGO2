@@ -104,6 +104,33 @@ def find_route_id_by_path(path_prefix: str) -> Optional[str]:
         params = {"size": 100, "offset": offset}
 
 
+def find_route_id_by_name(name: str) -> Optional[str]:
+    """name 이 일치하는 Kong route 의 id. offset 페이지네이션.
+    게시 route(ext-dep-{id})를 배포/api_path 소실 후에도 찾기 위함(teardown fallback·orphan sweep)."""
+    params = {"size": 100}
+    while True:
+        body = _request("get", "/routes", params=params).json()
+        for route in body.get("data", []):
+            if route.get("name") == name:
+                return route["id"]
+        offset = body.get("offset")
+        if not offset:
+            return None
+        params = {"size": 100, "offset": offset}
+
+
+def list_routes() -> list:
+    """모든 Kong route(full dict, name·created_at 포함). offset 페이지네이션. orphan sweep 용."""
+    out, params = [], {"size": 100}
+    while True:
+        body = _request("get", "/routes", params=params).json()
+        out.extend(body.get("data", []))
+        offset = body.get("offset")
+        if not offset:
+            return out
+        params = {"size": 100, "offset": offset}
+
+
 # ── key-auth plugin (route 에 부착 = 외부 호출 시 키 필수) ──
 def get_key_auth_plugin_id(route_id: str) -> Optional[str]:
     """route 의 key-auth plugin id. offset 페이지네이션(plugin 다수 대비, H1)."""

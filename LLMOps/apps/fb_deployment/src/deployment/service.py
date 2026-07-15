@@ -3141,7 +3141,7 @@ def publish_deployment_api(deployment_id, headers_user=None):
         api_key = kong_helper.get_or_create_key_auth(consumer)
         # 전용 게시 route(같은 service) 생성 + 인증(key-auth) + 인가(acl=소유 consumer 만).
         ext_route_id, ext_created = kong_helper.create_route_on_service(
-            service_id, ext_path, name="ext-dep-{}".format(deployment_id))
+            service_id, ext_path, name=deployment_api.external_route_name(deployment_id))
         kong_helper.attach_key_auth_plugin(ext_route_id)       # 인증: 유효 키 필수(anonymous 없음)
         kong_helper.attach_acl_plugin(ext_route_id, consumer)  # 인가: 이 consumer 만(교차테넌트 차단)
         # 남용가드(3b-2): 게시 route 는 외부 노출 → rate/size limiting(config=deployment_api 상수).

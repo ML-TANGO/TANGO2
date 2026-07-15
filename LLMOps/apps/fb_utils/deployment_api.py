@@ -34,6 +34,12 @@ def api_consumer_name(deployment_id) -> str:
     return "dep-{}".format(deployment_id)
 
 
+def external_route_name(deployment_id) -> str:
+    """게시 전용 route 의 Kong name(publish 생성 시 부여). 배포/api_path 소실 후에도 이 name 으로
+    route 를 찾아 정리하기 위한 단일 정의(orphan sweep·teardown fallback·publish 공유)."""
+    return "ext-dep-{}".format(deployment_id)
+
+
 def teardown_deployment_api(deployment_id) -> None:
     """게시(D6) Kong 리소스 + deployment_api row 를 완전 취소(revoke). 멱등.
 
@@ -63,6 +69,9 @@ def teardown_deployment_api(deployment_id) -> None:
         api_path = (dep or {}).get("api_path")
         if api_path:
             route_id = kong_helper.find_route_id_by_path(external_route_path(api_path))
+        if not route_id:
+            # api_path 소실(배포 삭제)돼도 route name 으로 정리 — orphan sweep/lifecycle delete 견고성.
+            route_id = kong_helper.find_route_id_by_name(external_route_name(deployment_id))
 
     errors = []
     # 1) 크리덴셜 먼저(키 무효화 최우선). 각 단계 독립 — 실패해도 나머지 시도.

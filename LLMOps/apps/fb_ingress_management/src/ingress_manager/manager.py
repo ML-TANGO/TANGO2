@@ -1,4 +1,6 @@
 from utils import settings
+from utils import kong_helper, deployment_api  # 게시(D6) orphan sweep
+from utils.msa_db import db_deployment          # 게시(D6) orphan sweep
 import traceback, time, sys, threading
 import logging
 from ingress_manager.admin_api import *
@@ -33,8 +35,74 @@ def debug_log(message):
     if DEBUG_MODE:
         print(f"[DEBUG] {message}", file=sys.stderr)
 
+# ── 게시(D6) orphan sweep ─────────────────────────────────────────────
+# deployment_api row 가 전혀 없는 Kong 게시 route(ext-dep-<id>) + 그 dep-<id> consumer/key 를 정리.
+# teardown 부분실패·Kong 완전 outage·out-of-band 배포삭제로 남은 dangling 크리덴셜 안전망(3b-2 후속).
+# 5s 메인 루프 안에서 ORPHAN_SWEEP_INTERVAL 마다만 실행(throttle).
+#
+# 안전 설계(3-way 리뷰 BLOCK 반영):
+#  - **route(ext-dep-*) 기준 앵커**: route 는 D6 publish 만 생성하므로, 우연히 'dep-123' 이름의
+#    실제 유저 consumer 를 orphan 으로 오삭제할 위험이 없다(consumer 열거 안 함). exploit 가능한
+#    잔여(=키+route 공존)는 route 앵커로 모두 커버; route 없는 consumer-only 잔여는 비악용성.
+#  - **정상 기준 = row 존재(enabled 무관)**: 중지-보존(enabled=0, consumer/key 유지) 를 보존.
+#  - **삭제 직전 row 재확인**(TOCTOU): 스윕 도중 publish 가 row 를 썼으면 보존.
+#  - **grace**: route created_at 이 grace 이내면 갓 게시(진행중)로 보고 skip. created_at 누락 시 now.
+ORPHAN_SWEEP_INTERVAL = 120  # sec
+ORPHAN_GRACE_SEC = 60        # sec
+_last_orphan_sweep = 0.0
+
+
+def _orphan_dep_id(name, prefix):
+    """name 이 '<prefix><digits>' 면 int deployment_id, 아니면 None. ascii 숫자만(‘²’ 등 isdigit
+    True 지만 int() 크래시하는 유니코드 숫자 배제 — 한 개가 전체 스윕을 죽이지 않도록)."""
+    if name and name.startswith(prefix):
+        tail = name[len(prefix):]
+        if tail.isascii() and tail.isdigit():
+            return int(tail)
+    return None
+
+
+def kong_sweep_orphan_publish():
+    """게시(D6) orphan sweep. deployment_api row 없는 ext-dep-<id> route → 공용 teardown(멱등)."""
+    all_ids = db_deployment.list_deployment_api_ids()
+    if all_ids is None:
+        # DB 조회 실패 → 반드시 스킵(빈 집합 오인 시 유효 게시를 전부 삭제하므로).
+        print("[orphan-sweep] skip: deployment_api 조회 실패", file=sys.stderr)
+        return
+    known = set(all_ids)  # row 존재(enabled 무관) = 정상
+    now = time.time()
+    try:
+        routes = kong_helper.list_routes()
+    except Exception:
+        traceback.print_exc()
+        return  # Kong 열거 실패 → 스킵(부분 목록으로 유효 게시 오판 방지)
+    candidates = {}  # dep_id -> 관측된 최신 created_at(여럿이면 max = 보호적)
+    for r in routes:
+        did = _orphan_dep_id(r.get("name"), "ext-dep-")
+        if did is None or did in known:
+            continue
+        created = r.get("created_at") or now  # 누락 시 now → grace 로 보호(즉시 삭제 방지)
+        candidates[did] = max(candidates.get(did, 0), created)
+    swept, grace, raced = [], [], []
+    for did, created in candidates.items():
+        if now - created < ORPHAN_GRACE_SEC:
+            grace.append(did)  # 갓 게시(publish 진행중) 보호
+            continue
+        if db_deployment.get_deployment_api(did):  # TOCTOU: 삭제 직전 재확인
+            raced.append(did)
+            continue
+        try:
+            deployment_api.teardown_deployment_api(did)  # 멱등: route + dep-{id} consumer/key + row
+            swept.append(did)
+        except Exception:
+            traceback.print_exc()  # 부분 실패는 다음 주기 재시도
+    if swept or grace or raced:
+        print("[orphan-sweep] swept=%s grace-skipped=%s raced-skipped=%s" % (swept, grace, raced),
+              file=sys.stderr)
+
+
 def manager_routine():
-    global _manager_routine_running
+    global _manager_routine_running, _last_orphan_sweep
     
     # 중복 실행 방지 체크
     with _manager_routine_lock:
@@ -91,6 +159,12 @@ def manager_routine():
                     debug_log("Step 5: Auto-applying ACL to routes...")
                     kong_auto_apply_acl_to_routes()
                     
+                    # 6b. 게시(D6) orphan sweep (throttle: ORPHAN_SWEEP_INTERVAL 마다만)
+                    if time.monotonic() - _last_orphan_sweep >= ORPHAN_SWEEP_INTERVAL:
+                        debug_log("Step 6: Orphan publish sweep...")
+                        kong_sweep_orphan_publish()
+                        _last_orphan_sweep = time.monotonic()
+
                     # 7. 현황 요약 출력 (항상 표시)
                     print(f"[MANAGER] ═══════════════════════════════════════════════════════════", file=sys.stderr)
                     display_ingress_status_summary()

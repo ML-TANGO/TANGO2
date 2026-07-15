@@ -1083,6 +1083,23 @@ def delete_deployment_api(deployment_id):
         return {'result': False, 'message': str(e)}
 
 
+def list_deployment_api_ids():
+    """deployment_api 에 존재하는 모든 deployment_id(enabled 무관). 게시 orphan sweep 의
+    '정상(비-orphan)' 집합 — row 가 존재하면 orphan 아님. **enabled 로 거르지 않는다**:
+    stop_deployment 은 중지 시 enabled=0 으로 두되 consumer/key 를 의도적으로 보존(재시작 후
+    재게시 키 안정)하므로, enabled=1 만 정상으로 보면 중지-보존 크리덴셜을 orphan 으로 오삭제한다.
+    ⚠️ 조회 실패 시 None 반환 — 호출부(sweep)는 None 이면 이번 주기를 반드시 스킵(빈 집합 오인 시
+    유효 게시를 전부 삭제)."""
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT deployment_id FROM deployment_api")
+            return [row["deployment_id"] for row in (cur.fetchall() or [])]
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
 # playground ==============================================================
 def insert_deployment_llm(**kwargs):
     try:
