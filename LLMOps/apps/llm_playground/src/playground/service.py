@@ -20,6 +20,7 @@ from utils.llm_db import db_items as db
 from utils.msa_db import db_dataset
 from utils.msa_db import db_edge
 from utils import deployment_envelope
+from utils import deployment_api  # 게시(D6) 공용 teardown — stop/delete 시 Kong 정리(3b-2)
 from utils.access_check import check_admin_access_level, ADMIN_ALLOW_MAX_LEVEL
 from fastapi.concurrency import run_in_threadpool
 from utils.crypt import front_cipher
@@ -374,6 +375,15 @@ async def delete_playground(id_list):
                         traceback.print_exc()
 
             deployment_ids = [x for x in [playground_deployment_id, playground_embedding_id, playground_reranker_id] if x]
+            # 게시(D6) 자동 취소 — deployment_api row 는 FK cascade 되나 Kong route/consumer/key 는
+            # DB-비관리라 orphan → 삭제 대상 배포마다 공용 teardown(3b-2). embedding/reranker 도 직접
+            # 게시 가능(엔드포인트가 타입 제한 안 함)하므로 전부 정리. delete_deployments 前 실행
+            # (row/api_path 가 아직 있어 결정적 정리 가능). best-effort — Kong blip 이 삭제를 막지 않게.
+            for _dep_id in deployment_ids:
+                try:
+                    await run_in_threadpool(deployment_api.teardown_deployment_api, _dep_id)
+                except Exception:
+                    traceback.print_exc()
             db.delete_deployments(deployment_ids=deployment_ids)
 
         # playground 삭제
@@ -1531,7 +1541,18 @@ async def stop_playground(playground_id, _dual_cascaded=False):
                 await llm_deployment.uninstall_worker(deployment_id=deployment_embedding_id, llm_type=TYPE.PLAYGROUND_RAG_EMBEDDING, llm_id=rag_id)
             if deployment_reranker_id is not None:
                 print(deployment_reranker_id, rag_id)
-                await llm_deployment.uninstall_worker(deployment_id=deployment_reranker_id, llm_type=TYPE.PLAYGROUND_RAG_RERANKER, llm_id=rag_id) 
+                await llm_deployment.uninstall_worker(deployment_id=deployment_reranker_id, llm_type=TYPE.PLAYGROUND_RAG_RERANKER, llm_id=rag_id)
+
+            # 게시(D6) 자동 취소 — 중지 시 helm uninstall 로 Kong service 가 prune 되어 /ext 가
+            # dangling 되고 키가 유효 잔존 → 게시 가능한 모든 배포(primary+embedding+reranker) 정리(3b-2).
+            # deployment row 는 stop 에서 유지되나 게시물은 재게시 전까지 무의미. best-effort.
+            for _dep_id in (deployment_playground_id, deployment_embedding_id, deployment_reranker_id):
+                if _dep_id is None:
+                    continue
+                try:
+                    await run_in_threadpool(deployment_api.teardown_deployment_api, _dep_id)
+                except Exception:
+                    traceback.print_exc()
 
             # DB: playground test 기록 삭제
             await db.delete_playground_test(playground_id)

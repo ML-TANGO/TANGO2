@@ -29,6 +29,12 @@ from utils.msa_db import db_user, db_deployment, db_workspace, db_instance, db_p
 from deployment import dto
 from utils import topic_key
 from utils import kong_helper  # SP-Deployment(D6) §12 클러스터 API 게시
+from utils import deployment_api  # 게시(D6) 공용 teardown core (llm_playground lifecycle 과 공유)
+from utils.deployment_api import (
+    external_route_path as _external_route_path,
+    api_consumer_name as _api_consumer_name,
+    teardown_deployment_api,
+)
 
 from confluent_kafka import Producer
 from confluent_kafka.admin import AdminClient, NewTopic
@@ -3073,14 +3079,9 @@ def uninstall_all_deployment(workspace_id, deployment_id):
 #   게시 = 그 route 에 key-auth plugin 부착 + consumer/key 발급(외부 소비자=키 필수).
 #   내부 추론(Inference)은 ClusterIP 직접 호출이라 키 불필요(§12.6).
 # ════════════════════════════════════════════════════════════════════════════
-# 게시 전용 외부 경로 prefix — 내부 서빙 `/deployment/`(익명 공유)와 분리.
-# 비-`/api` 라 fb_ingress_management 리콘사일러가 스킵(generic key-auth 미부착).
-EXTERNAL_API_PREFIX = "/ext"
-
-
-def _external_route_path(api_path):
-    """게시 전용 Kong route path — 라우트 생성(publish)과 공개 URL 이 같은 경로를 쓰도록 단일 정의."""
-    return "{}/{}".format(EXTERNAL_API_PREFIX, api_path)
+# 게시(D6) prefix/route-path/consumer 식별자 + teardown 은 utils.deployment_api 로 이동
+# (llm_playground stop/delete lifecycle 과 공유·분기 방지). _external_route_path /
+# _api_consumer_name 은 상단 import 의 alias, EXTERNAL_API_PREFIX 는 그 모듈 상수.
 
 
 def _ingress_base_url():
@@ -3096,10 +3097,6 @@ def _public_api_endpoint(api_path):
     if not api_path:
         return None
     return "{}{}".format(_ingress_base_url(), _external_route_path(api_path))
-
-
-def _api_consumer_name(deployment_id):
-    return "dep-{}".format(deployment_id)
 
 
 def _get_owned_deployment(deployment_id, headers_user):
@@ -3144,6 +3141,15 @@ def publish_deployment_api(deployment_id, headers_user=None):
             service_id, ext_path, name="ext-dep-{}".format(deployment_id))
         kong_helper.attach_key_auth_plugin(ext_route_id)       # 인증: 유효 키 필수(anonymous 없음)
         kong_helper.attach_acl_plugin(ext_route_id, consumer)  # 인가: 이 consumer 만(교차테넌트 차단)
+        # 남용가드(3b-2): 게시 route 는 외부 노출 → rate/size limiting(config=deployment_api 상수).
+        # best-effort — 인증(key-auth)/인가(acl)는 위에서 이미 부착됐으므로, 가드 부착이 Kong blip 으로
+        # 실패해도 게시(및 롤백)를 깨지 않는다(가드는 보조·멱등 → 다음 publish/rotate 에 자가치유).
+        # route 삭제 시 cascade 제거되므로 별도 teardown 불요.
+        try:
+            kong_helper.attach_plugin(ext_route_id, "rate-limiting", deployment_api.EXTERNAL_RATE_LIMIT_CONFIG)
+            kong_helper.attach_plugin(ext_route_id, "request-size-limiting", deployment_api.EXTERNAL_REQUEST_SIZE_CONFIG)
+        except Exception:
+            traceback.print_exc()  # 가드 부착 실패는 게시를 깨지 않음(auth 는 이미 hard-required)
         db_res = db_deployment.upsert_deployment_api(deployment_id, consumer, ext_route_id, enabled=1)
         if not db_res.get("result"):  # N1: Kong 성공 + DB 실패 partial-commit 방지
             raise Exception("deployment_api persist failed: {}".format(db_res.get("message")))
@@ -3200,23 +3206,9 @@ def rotate_deployment_api_key(deployment_id, headers_user=None):
 
 
 def unpublish_deployment_api(deployment_id, headers_user=None):
-    # headers_user 가 있으면(외부 호출) 소유권 검증, 없으면(라이프사이클 내부 정리) 통과
-    dep = None
+    # headers_user 가 있으면(외부 호출) 소유권 검증, 없으면(라이프사이클 내부 정리) 통과.
+    # 실제 Kong 리소스 + deployment_api row 정리는 공용 teardown core 에 위임 —
+    # llm_playground stop/delete lifecycle 도 같은 core 를 호출한다(분기 방지, 3b-2).
     if headers_user is not None:
-        dep = _get_owned_deployment(deployment_id, headers_user)
-    row = db_deployment.get_deployment_api(deployment_id)
-    # row 가 없거나(미게시) DB blip 이어도 결정적 식별자로 Kong 정리 시도 —
-    # DB 오류를 '이미 미게시'로 오인해 route/키를 살려두는 불완전 취소(revocation) 방지.
-    consumer = (row or {}).get("api_consumer") or _api_consumer_name(deployment_id)
-    route_id = (row or {}).get("api_route_id")
-    if not route_id:
-        if dep is None:
-            dep = db_deployment.get_deployment(deployment_id=deployment_id)
-        api_path = (dep or {}).get("api_path")
-        if api_path:
-            route_id = kong_helper.find_route_id_by_path(_external_route_path(api_path))
-    if route_id:
-        kong_helper.delete_route(route_id)  # 전용 게시 route 삭제(부착 plugin 동반 제거)
-    kong_helper.delete_key_auths(consumer)
-    kong_helper.delete_consumer(consumer)
-    db_deployment.delete_deployment_api(deployment_id)
+        _get_owned_deployment(deployment_id, headers_user)
+    teardown_deployment_api(deployment_id)

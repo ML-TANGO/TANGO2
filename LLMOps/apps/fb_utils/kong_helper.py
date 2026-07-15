@@ -224,3 +224,16 @@ def attach_acl_plugin(route_id: str, group: str) -> str:
         return existing
     return _request("post", f"/routes/{route_id}/plugins",
                     json={"name": "acl", "config": {"allow": [group]}}).json()["id"]
+
+
+def attach_plugin(route_id: str, name: str, config: dict) -> str:
+    """route 에 임의 plugin 부착(멱등: 이미 있으면 기존 id 반환).
+
+    게시(D6) route 남용가드(rate-limiting / request-size-limiting) 등 config 가
+    plugin 마다 다른 경우를 위한 generic 부착기. route 삭제 시 함께 제거(cascade).
+    """
+    existing = get_plugin_id(route_id, name)
+    if existing:
+        return existing
+    return _request("post", f"/routes/{route_id}/plugins",
+                    json={"name": name, "config": config}).json()["id"]
