@@ -1311,8 +1311,8 @@ async def start_playground(user_name, playground_id,
         run_embedding, run_reranker =  False, False
         # 플레이그라운드 배포
         if deployment_playground_id:
-            # 재배포
-            await update_deployment(deployment_id=deployment_playground_id, instance_id=playground_instance_id, instance_count=playground_instance_count, gpu_count=playground_gpu_count)
+            # 재배포 — playground_id 전달로 serving_system 변경 시 image_id 재계산(엔진 전환 반영).
+            await update_deployment(deployment_id=deployment_playground_id, instance_id=playground_instance_id, instance_count=playground_instance_count, gpu_count=playground_gpu_count, playground_id=playground_id)
         else:
             # 초기배포
             deployment_playground_id = await create_deployment(playground_id=playground_id, user_id=user_id, deployment_type="playground",
@@ -1395,8 +1395,8 @@ async def create_deployment(playground_id, user_id, deployment_type, instance_id
         # [멀티엔진 Phase 2] llama.cpp = 단일 노드 엔진(크로스팟 병렬 없음) → 멀티팟 배포 금지.
         #   instance_count>1 이면 1 로 클램프(공유 PVC GGUF 동시쓰기 레이스·N중복 다운로드·비결정 라우팅 차단).
         #   vLLM 은 무영향. command.sh 의 index 0 가드와 이중 방어.
-        if deployment_type == "playground" and _serving_system == "llama_cpp" and instance_count and instance_count > 1:
-            print(f"[llama.cpp] instance_count {instance_count} -> 1 클램프(단일 노드 엔진)")
+        if deployment_type == "playground" and _serving_system in ("llama_cpp", "tgi") and instance_count and instance_count > 1:
+            print(f"[{_serving_system}] instance_count {instance_count} -> 1 클램프(단일 노드 엔진)")
             instance_count = 1
 
         if deployment_type == "playground":
@@ -1435,11 +1435,32 @@ async def create_deployment(playground_id, user_id, deployment_type, instance_id
         raise Exception(e)
 
 # 배포 업데이트
-async def update_deployment(deployment_id, instance_id, instance_count, gpu_count):
+async def update_deployment(deployment_id, instance_id, instance_count, gpu_count, playground_id=None):
     try:
         instance_info = db.get_instance(instance_id=instance_id)
         instance_type = instance_info.get("instance_type")
-        db.update_deployment(deployment_id=deployment_id, instance_id=instance_id, instance_type=instance_type, instance_allocate=instance_count, gpu_per_worker=gpu_count)
+        # [멀티엔진] 재배포 시 serving_system 이 바뀌었을 수 있어 image_id 를 재계산(엔진 전환 반영).
+        #   create_deployment(1388-1393) 과 동일 로직. playground 재배포에만 적용
+        #   (embedding/reranker 는 항상 vllm 이라 image_id 불변 → playground_id 미전달 시 재계산 skip).
+        image_id = None
+        if playground_id is not None:
+            playground_info = await db.get_playground(playground_id=playground_id)
+            try:
+                _model_cfg = json.loads(playground_info.get("model") or "{}") or {}
+            except (ValueError, TypeError):
+                _model_cfg = {}
+            _serving_system = settings.resolve_serving_system(_model_cfg.get("serving_system"))
+            _serving_image = settings.SERVING_ENGINE_IMAGE_MAP.get(_serving_system, settings.DEPLOYMENT_LLM_IMAGE)
+            _img = db.get_image_id_by_real_name(real_name=f"{settings.DOCKER_REGISTRY_URL}{_serving_image}")
+            # 이미지행 미등록 시 조용히 옛 image_id 를 유지하면 엔진 전환이 이전 엔진 이미지로 뜬다(무음 오배포) → 명시 실패.
+            if not _img:
+                raise Exception(f"서빙 이미지 미등록: serving_system={_serving_system} "
+                                f"({settings.DOCKER_REGISTRY_URL}{_serving_image}) — image 테이블 시드 필요")
+            image_id = _img.get("id")
+        if image_id is not None:
+            db.update_deployment(deployment_id=deployment_id, instance_id=instance_id, instance_type=instance_type, instance_allocate=instance_count, gpu_per_worker=gpu_count, image_id=image_id)
+        else:
+            db.update_deployment(deployment_id=deployment_id, instance_id=instance_id, instance_type=instance_type, instance_allocate=instance_count, gpu_per_worker=gpu_count)
     except Exception as e:
         traceback.print_exc()
         raise(str(e))

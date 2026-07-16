@@ -51,10 +51,12 @@ JF_DEFAULT_UBUNTU_22="JBI_Ubuntu-22.04.4"
 DEPLOYMENT_LLM_IMAGE="acrylaaai/llm_deployment:dev"
 # [멀티엔진 서빙 로드맵 Phase 2] llama.cpp 서빙 이미지(별도 서빙-레이어, FROM ghcr.io/ggml-org/llama.cpp:full).
 DEPLOYMENT_LLM_LLAMACPP_IMAGE="acrylaaai/llm_deployment_llamacpp:dev"
-# 서빙 엔진별 배포 이미지 맵. vLLM(GPU/CPU 폴백) + llama.cpp(GGUF 직접 / HF 온더플라이 변환).
-SERVING_ENGINE_IMAGE_MAP = {"vllm": DEPLOYMENT_LLM_IMAGE, "llama_cpp": DEPLOYMENT_LLM_LLAMACPP_IMAGE}
+# [멀티엔진 서빙 로드맵 Phase 3 / Tier B] TGI 서빙 이미지(별도 HTTP 서버, FROM ghcr.io/huggingface/text-generation-inference).
+DEPLOYMENT_LLM_TGI_IMAGE="acrylaaai/llm_deployment_tgi:dev"
+# 서빙 엔진별 배포 이미지 맵. vLLM(GPU/CPU 폴백) + llama.cpp(GGUF 직접 / HF 온더플라이 변환) + TGI(HF/safetensors).
+SERVING_ENGINE_IMAGE_MAP = {"vllm": DEPLOYMENT_LLM_IMAGE, "llama_cpp": DEPLOYMENT_LLM_LLAMACPP_IMAGE, "tgi": DEPLOYMENT_LLM_TGI_IMAGE}
 # 지금 실제 지원하는 서빙 엔진(그 외 값은 서버측 거부).
-SUPPORTED_SERVING_SYSTEMS = ("vllm", "llama_cpp")
+SUPPORTED_SERVING_SYSTEMS = ("vllm", "llama_cpp", "tgi")
 def resolve_serving_system(value):
     # 읽기 시점 정규화(defense-in-depth): None/미지원 → vllm(fail-safe). 쓰기 경로는 reject.
     v = value or "vllm"

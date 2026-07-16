@@ -1,0 +1,406 @@
+"""[멀티엔진 서빙 Phase 3 / Tier B] 외부 HTTP 추론서버 공용 어댑터 (LLM/model 역할 전용).
+
+playground_llamacpp.py(llama.cpp) 와 **동일한 플랫폼 서빙 계약**을 그대로 유지하고,
+엔진만 "외부 HTTP 서버를 subprocess 로 띄우는" 방식으로 일반화한다:
+  - FastAPI 앱, port 8555, `POST /`(`{test_question,session_id,test_type}` → `[{input,output,time}]`),
+    `GET /` 헬스, `api_monitor` 데코, `db.insert/update_playground_test`, RAG DNS 호출.
+    → command.sh/nginx/proxy/모니터링/stop 스캐폴딩 무변경(playground_llamacpp.py L1-13 계약과 동일).
+
+Tier B 엔진 추상화(ServingRuntime 레지스트리):
+  - 앱/envelope/lifespan 오케스트레이션은 엔진 무관.
+  - 엔진별 차이(런처 argv·health path·내부 포트·generate 호출)만 ServingRuntime 이 캡슐화.
+  - 첫 엔트리 = TGI(HuggingFace text-generation-inference). Ollama/Triton 은 SERVING_RUNTIMES 에
+    엔트리만 추가하면 됨(lifespan/POST/GET 재작성 불요).
+  - 어떤 런타임을 쓸지는 pod-side `settings.LLM_SERVING_SYSTEM` 이 선택(defense-in-depth).
+
+TGI 는 HF/safetensors 를 직접 서빙(GGUF 변환 없음) → `_resolve_model_dir()` 이 해석한 디렉토리가
+곧 `--model-id`. 임베딩/리랭커 역할은 이 파일을 쓰지 않는다(엔진 무관, HF 유지 — 설계 §10).
+"""
+import sys, os, time, subprocess, asyncio, traceback, hashlib
+from dataclasses import dataclass
+from typing import Callable
+import uvicorn, aiofiles, httpx
+from fastapi import FastAPI, Request, HTTPException
+from contextlib import asynccontextmanager
+sys.path.append('/addlib')
+from deployment_api_deco import api_monitor
+
+import settings, db
+
+file_name = os.path.splitext(os.path.basename(__file__))[0]
+
+# ===== Tier B 공용 서빙 상수 =====
+ENGINE_HOST = "127.0.0.1"                 # 엔진은 localhost 만 바인딩(외부 노출은 8555 FastAPI/nginx).
+MODEL_CACHE_DIR = "/jf-deployment-home/serving"  # jf-ws(NFS) 백업 → LoRA merge 결과 캐시(재기동 재사용).
+
+LIFESPAN_STATUS = False
+ENGINE_PROC = None
+RUNTIME = None       # 선택된 ServingRuntime
+MODEL_DIR = None     # 엔진에 넘긴 model-id(로깅/모델 태그용)
+
+
+# =======================================================================
+# 모델 해석 (playground_llamacpp.py L53-111 미러 — GGUF 변환 단계만 제거)
+# =======================================================================
+def _model_identity():
+    """모델 식별 slug(merge 캐시 keying용, H2). 모델 바뀌면 캐시 디렉토리명도 바뀜."""
+    mt = settings.LLM_MODEL_TYPE
+    if mt == "commit":
+        raw = f"commit:{settings.LLM_MODEL_ALLM_NAME}:{settings.LLM_MODEL_ALLM_COMMIT_NAME}"
+    else:
+        raw = f"hf:{settings.LLM_MODEL_HUGGINGFACE_ID}"
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def _subprocess_env():
+    """엔진 런처에 넘길 env. TGI 등 Tier B 런처는 자체 venv(/usr/src/.venv)·CUDA·PATH 로
+    자식 shard 프로세스를 spawn 하므로 **정상 환경을 상속**해야 한다(allow-list 로 좁히면
+    launcher/shard 가 실행파일·라이브러리를 못 찾음 — FileNotFoundError). 대신 **시크릿만 제거**(S-B):
+    DB 비번·*PASSWORD*·*SECRET*·*TOKEN*. 모델은 부모가 이미 로컬에 받아둠 → 토큰 불요.
+    폐쇄망 전제라 HF offline 을 강제(setdefault) — 로컬 서빙이므로 hub 접근 시도 원천 차단."""
+    env = dict(os.environ)
+    for k in list(env.keys()):
+        ku = k.upper()
+        # 이 파드의 DB 크레덴셜은 JF_LLM_DB_*(비번=JF_LLM_DB_PW) 네이밍 —
+        #   JF_DB 접두/'PASSWORD' 로는 안 잡히므로 JF_LLM_DB 접두 + _PW/_PWD 접미도 제거(S-B).
+        if (k.startswith("JF_DB") or k.startswith("JF_LLM_DB")
+                or "PASSWORD" in ku or "SECRET" in ku or "TOKEN" in ku
+                or ku.endswith("_PW") or ku.endswith("_PWD")):
+            env.pop(k, None)
+    env.setdefault("HF_HUB_OFFLINE", "1")
+    env.setdefault("TRANSFORMERS_OFFLINE", "1")
+    return env
+
+
+def _merge_lora_commit():
+    """LoRA 커밋(/model=adapter, /model/source_model=base) → merge 후 서빙 대상 디렉토리 반환(H1).
+    playground_llamacpp.py L74-96 / playground.py 의 PeftModel.merge_and_unload() 경로와 파리티.
+    TGI 는 safetensors 를 직접 서빙하므로 merged 디렉토리가 그대로 --model-id 가 된다(GGUF 변환 없음)."""
+    merged = os.path.join(MODEL_CACHE_DIR, f"merged.{_model_identity()}")
+    if os.path.isdir(merged) and any(f.endswith(".safetensors") for f in os.listdir(merged)):
+        print(f"[serving_adapter] LoRA merge 캐시 재사용: {merged}")
+        return merged
+    import torch
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from peft import PeftModel
+    print("[serving_adapter] LoRA 커밋 감지 → base(/model/source_model)+adapter(/model) merge")
+    base = AutoModelForCausalLM.from_pretrained(
+        "/model/source_model", torch_dtype=torch.float16, trust_remote_code=True)
+    model = PeftModel.from_pretrained(base, "/model")
+    model = model.merge_and_unload()
+    os.makedirs(merged, exist_ok=True)
+    model.save_pretrained(merged, safe_serialization=True)  # safetensors → TGI 직접 서빙 호환
+    try:
+        tok = AutoTokenizer.from_pretrained("/tokenizer")
+    except Exception:
+        tok = AutoTokenizer.from_pretrained("/model/source_model")
+    tok.save_pretrained(merged)  # chat_template 포함 → TGI /v1/chat/completions 필수
+    return merged
+
+
+def _resolve_model_dir():
+    """모델 위치 해석. commit → /model(LoRA 면 merge), huggingface → 스냅샷 다운로드.
+    반환 디렉토리가 곧 엔진의 model-id (playground_llamacpp.py L99-111 미러, _ensure_gguf 만 제거)."""
+    model_type = settings.LLM_MODEL_TYPE
+    if model_type == "commit":
+        # LoRA 파인튜닝 커밋: /model=adapter, /model/source_model=base (playground.py 선례).
+        if os.path.exists("/model/source_model"):
+            return _merge_lora_commit()
+        return "/model"
+    # huggingface: 로컬 캐시/nexus 우선(HF offline 가능). 토큰 optional. (parent 프로세스 env 사용)
+    repo_id = settings.LLM_MODEL_HUGGINGFACE_ID
+    token = settings.LLM_HUGGINGFACE_API_TOKEN or None
+    from huggingface_hub import snapshot_download
+    return snapshot_download(repo_id=repo_id, token=token)
+
+
+# =======================================================================
+# ServingRuntime 레지스트리 (Tier B 엔진 추상화)
+# =======================================================================
+def _openai_chat_payload(messages, params):
+    """OpenAI 호환 chat body — llama.cpp `/v1/chat/completions` 사용부(L265-272)와 동형."""
+    payload = {
+        "messages": messages,
+        "temperature": params["temperature"],
+        "top_p": params["top_p"],
+        "max_tokens": params["max_tokens"],
+    }
+    # repetition_penalty 는 OpenAI 라우트에 없어 frequency_penalty 로 근사(의미 상이 — VERIFY 참고).
+    if params.get("frequency_penalty"):
+        payload["frequency_penalty"] = params["frequency_penalty"]
+    return payload
+
+
+def _openai_chat_parse(data):
+    """llama.cpp 와 동일한 응답 매핑: choices[0].message.content (L278)."""
+    return data["choices"][0]["message"]["content"].strip()
+
+
+def _tgi_build_args(model_dir, port, bin_path):
+    """TGI 런처 argv. --model-id 는 로컬 디렉토리 경로 허용. 단일노드(A100) — shard 플래그 미지정.
+    --trust-remote-code 는 기본 off(보안). offline 은 _subprocess_env 가 강제."""
+    return [
+        bin_path,
+        "--model-id", model_dir,
+        "--port", str(port),
+        "--hostname", ENGINE_HOST,
+    ]
+
+
+@dataclass
+class ServingRuntime:
+    """엔진별 차이만 캡슐화. 앱/lifespan 은 이 인터페이스에만 의존(엔진 무관)."""
+    name: str                                   # 로깅/모델 태그 라벨
+    port: int                                   # 엔진 내부 포트(8555/18555 과 충돌 없음)
+    bin_env: str                                # 런처 바이너리 경로 env 키
+    default_bin: str                            # env 미설정 시 PATH 상 기본 바이너리
+    build_args: Callable[[str, int, str], list]  # (model_dir, port, bin_path) → argv 리스트
+    health_path: str = "/health"                # 200 → ready
+    generate_path: str = "/v1/chat/completions"
+    build_payload: Callable[[list, dict], dict] = _openai_chat_payload
+    parse_response: Callable[[dict], str] = _openai_chat_parse
+
+    def bin_path(self):
+        # bare name 을 절대경로로 해석 — Popen 이 제한 env 로 실행파일 탐색에 실패하는 것 방지.
+        # 벤더 이미지 런처는 PATH(/usr/local/bin 등) 상에 있음 → shutil.which 로 절대경로화.
+        import shutil
+        name = os.environ.get(self.bin_env) or self.default_bin
+        return shutil.which(name) or name
+
+    @property
+    def base_url(self):
+        return f"http://{ENGINE_HOST}:{self.port}"
+
+    @property
+    def health_url(self):
+        return f"{self.base_url}{self.health_path}"
+
+    @property
+    def generate_url(self):
+        return f"{self.base_url}{self.generate_path}"
+
+
+SERVING_RUNTIMES = {
+    # TGI: HF/safetensors 직접 서빙, OpenAI 호환 /v1/chat/completions, /health 200 → ready.
+    "tgi": ServingRuntime(
+        name="tgi",
+        port=8080,
+        bin_env="TGI_LAUNCHER_BIN",
+        default_bin="text-generation-launcher",
+        build_args=_tgi_build_args,
+    ),
+    # 향후 엔진은 여기에 엔트리만 추가(lifespan/POST/GET 무변경):
+    #   "ollama":  build_args=_ollama_build_args, generate_path="/api/chat", parse=...,
+    #   "triton":  build_args=_triton_build_args, generate_path="/v2/models/.../generate", parse=...,
+}
+
+
+def _select_runtime():
+    key = (settings.LLM_SERVING_SYSTEM or "").lower()
+    rt = SERVING_RUNTIMES.get(key)
+    if rt is None:
+        raise RuntimeError(
+            f"serving_adapter: 미지원 serving_system={key!r} (지원: {list(SERVING_RUNTIMES)})")
+    return rt
+
+
+# =======================================================================
+# lifespan — 엔진 subprocess 기동 + health 폴링 (playground_llamacpp.py L141-186 미러)
+# =======================================================================
+async def _wait_ready(health_url, timeout_s=1800):
+    deadline = time.time() + timeout_s
+    async with httpx.AsyncClient() as client:
+        while time.time() < deadline:
+            try:
+                r = await client.get(health_url, timeout=5)
+                if r.status_code == 200:
+                    return True
+            except Exception:
+                pass
+            await asyncio.sleep(2)
+    return False
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global LIFESPAN_STATUS, ENGINE_PROC, RUNTIME, MODEL_DIR
+    try:
+        RUNTIME = _select_runtime()
+        MODEL_DIR = _resolve_model_dir()  # commit→/model(LoRA merge), hf→snapshot. TGI 는 그대로 model-id.
+        args = RUNTIME.build_args(MODEL_DIR, RUNTIME.port, RUNTIME.bin_path())
+        print(f"[{RUNTIME.name}] start: {' '.join(args)}")
+        # 시크릿 미상속 env(S-B) — native 런처에 DB비번/HF토큰 노출 차단. argv 리스트, shell 미사용.
+        ENGINE_PROC = subprocess.Popen(args, env=_subprocess_env())  # nosec
+
+        if not await _wait_ready(RUNTIME.health_url):
+            raise RuntimeError(f"{RUNTIME.name} 준비 실패(health timeout)")
+        LIFESPAN_STATUS = True
+        yield
+    except Exception:
+        traceback.print_exc()
+        LIFESPAN_STATUS = "error"  # POST/GET 이 402(Model Error) 반환
+        yield
+    finally:
+        if ENGINE_PROC is not None:
+            try:
+                ENGINE_PROC.terminate()
+            except Exception:
+                pass
+
+
+# =======================================================================
+# dataset (playground_llamacpp.py L192-209 와 동일)
+# =======================================================================
+async def get_dataset_input(dataset_id, filename):
+    result = []
+    try:
+        dataset_info = await db.get_dataset(dataset_id=dataset_id)
+        dataset_name = dataset_info.get("name")
+        dataset_access = "datasets_rw" if dataset_info.get("access") == 1 else "datasets_ro"
+        dataset_path = f"/jf-data/dataset/{dataset_access}/{dataset_name}/{filename}"
+        try:
+            async with aiofiles.open(dataset_path, mode='r', encoding='utf-8') as f:
+                lines = await f.readlines()
+                for line in lines:
+                    result.append(line.strip())
+        except Exception:
+            traceback.print_exc()
+            print("파일 내용 읽기 실패")
+    except Exception:
+        traceback.print_exc()
+    return result
+
+
+async def _fetch_rag_context(test_input):
+    """RAG(embedding/reranker 파드) 결과 → context 문자열. embedding/reranker 는 엔진 무관(HF).
+    playground_llamacpp.py L212-241 과 동일."""
+    if not settings.LLM_RUN_RAG:
+        return ""
+    if settings.LLM_RUN_RAG_RERANKER:
+        rag_dns = f"http://deployment-llm-playground-rag-reranker-{settings.LLM_RAG_ID}--service:18555"
+    else:
+        rag_dns = f"http://deployment-llm-playground-rag-embedding-{settings.LLM_RAG_ID}--service:18555"
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{rag_dns}/playground",
+                json={"chunk_size": settings.LLM_PLAYGROUND_RAG_CHUNK_MAX, "prompt": test_input},
+                timeout=1800,
+            )
+        if response.status_code != 200:
+            return ""
+        payload = response.json().get("data")
+        # langchain 직렬화 파싱은 지연 import(이미지에 langchain 하드의존 회피 — 설계 §10).
+        try:
+            from langchain_core.load import loads
+            docs = loads(payload)
+            return "".join(getattr(d, "page_content", "") for d in docs)
+        except Exception:
+            print("[serving_adapter] RAG 결과 파싱 스킵(langchain 미탑재) — context 없이 진행")
+            return ""
+    except Exception:
+        print("[serving_adapter] RAG 대기/실패 — context 없이 진행")
+        return ""
+
+
+# =======================================================================
+# playground (playground_llamacpp.py L247-288 미러 — RUNTIME.generate 로 위임)
+# =======================================================================
+async def run_playground(test_input, session_id, db_id):
+    result = None
+    try:
+        rag = await _fetch_rag_context(test_input)
+
+        # 프롬프트 구성 (playground.py/llama.cpp 의 chat 메시지 형태 유지)
+        if settings.LLM_RUN_PROMPT:
+            system_message = settings.LLM_PROMPT_SYSTEM_MESSAGE or ""
+            user_message = settings.LLM_PROMPT_USER_MESSAGE or test_input
+            messages = [
+                {"role": "system", "content": rag + system_message},
+                {"role": "user", "content": user_message},
+            ]
+        else:
+            content = (rag + "\n" + test_input) if rag else test_input
+            messages = [{"role": "user", "content": content}]
+
+        max_tokens = settings.LLM_PARAM_MAX_NEW_TOKENS if settings.LLM_PARAM_MAX_NEW_TOKENS > 0 else 4096
+        # repetition_penalty(곱셈, ~1.0-1.3)를 OpenAI frequency_penalty(가산, 범위 [-2,2])로 그대로
+        #   넘기면 의미 상이·값 거부 위험 → TGI 엔 미전달(엔진 기본값). 엔진별 정확 매핑은 후속.
+        params = {
+            "temperature": settings.LLM_PARAM_TEMPERATURE,
+            "top_p": settings.LLM_PARAM_TOP_P,
+            "max_tokens": max_tokens,
+        }
+        payload = RUNTIME.build_payload(messages, params)
+
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(RUNTIME.generate_url, json=payload, timeout=1800)
+            resp.raise_for_status()
+            data = resp.json()
+        result = RUNTIME.parse_response(data)
+
+        try:
+            await db.update_playground_test(
+                db_id=db_id, **{"model": f"{RUNTIME.name}:{os.path.basename(MODEL_DIR or '')}"})
+        except Exception:
+            pass
+        return result
+    except Exception as e:
+        traceback.print_exc()
+        result = str(e)
+    return result
+
+
+app = FastAPI(lifespan=lifespan)
+print("FASTAPI APP START (serving_adapter)")
+
+
+@app.post("/", description="종합테스트")
+@api_monitor()
+async def post_llm(request: Request):
+    global LIFESPAN_STATUS
+    if LIFESPAN_STATUS is False:
+        raise HTTPException(status_code=401, detail="Installing")
+    elif LIFESPAN_STATUS == "error":
+        raise HTTPException(status_code=402, detail="Model Error")
+
+    print("playground(serving_adapter) test start")
+    data = await request.json()
+    test_type = data.get("test_type") if data.get("test_type") is not None else "question"
+    test_dataset_id = data.get("test_dataset_id")
+    test_dataset_filename = data.get("test_dataset_filename")
+    test_question = data.get("test_question")
+    session_id = data.get("session_id")
+    result = []
+    try:
+        if test_type == "dataset":
+            test_input = await get_dataset_input(dataset_id=test_dataset_id, filename=test_dataset_filename)
+        else:
+            test_input = [test_question]
+        for _input in test_input:
+            _, db_id = await db.insert_playground_test(playground_id=settings.LLM_PLAYGROUND_ID, type=test_type)
+            start_time = time.time()
+            output = await run_playground(test_input=_input, session_id=session_id, db_id=db_id)
+            end_time = time.time()
+            item = {"input": _input, "output": output, "time": end_time - start_time}
+            result.append(item)
+            await db.update_playground_test(db_id=db_id, **{"input": _input, "output": output})
+        return result
+    except Exception:
+        traceback.print_exc()
+    return result
+
+
+@app.get("/")
+@api_monitor()
+async def health():
+    global LIFESPAN_STATUS
+    if LIFESPAN_STATUS is False:
+        raise HTTPException(status_code=401, detail="Installing")
+    elif LIFESPAN_STATUS == "error":
+        raise HTTPException(status_code=402, detail="Model Error")
+    return "JF DEPLOYMENT RUNNING - playground (serving_adapter)"
+
+
+if __name__ == "__main__":
+    uvicorn.run(f"{file_name}:app", port=8555, host='0.0.0.0')

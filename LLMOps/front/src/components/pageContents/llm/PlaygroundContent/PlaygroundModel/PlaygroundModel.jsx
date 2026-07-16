@@ -44,10 +44,12 @@ const TValue = {
   model_max_new_tokens: 512,
 };
 
-// 서빙 엔진 옵션(멀티엔진 로드맵 Phase 2). vLLM + llama.cpp(GGUF 직접/HF 온더플라이 변환) 활성.
+// 서빙 엔진 옵션(멀티엔진 로드맵). vLLM + llama.cpp(GGUF 직접/HF 온더플라이 변환)
+//   + TGI(Phase 3 Tier B, HF/safetensors 직접 서빙) 활성.
 const ENGINES = [
   { id: 'vllm', label: 'vLLM', disabled: false },
   { id: 'llama_cpp', label: 'llama.cpp', disabled: false },
+  { id: 'tgi', label: 'TGI', disabled: false },
 ];
 
 const PlaygroundModel = React.memo(({ workspaceId }) => {
