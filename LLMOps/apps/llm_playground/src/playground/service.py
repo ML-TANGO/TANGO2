@@ -1395,7 +1395,7 @@ async def create_deployment(playground_id, user_id, deployment_type, instance_id
         # [멀티엔진 Phase 2] llama.cpp = 단일 노드 엔진(크로스팟 병렬 없음) → 멀티팟 배포 금지.
         #   instance_count>1 이면 1 로 클램프(공유 PVC GGUF 동시쓰기 레이스·N중복 다운로드·비결정 라우팅 차단).
         #   vLLM 은 무영향. command.sh 의 index 0 가드와 이중 방어.
-        if deployment_type == "playground" and _serving_system in ("llama_cpp", "tgi") and instance_count and instance_count > 1:
+        if deployment_type == "playground" and _serving_system in ("llama_cpp", "tgi", "ollama") and instance_count and instance_count > 1:
             print(f"[{_serving_system}] instance_count {instance_count} -> 1 클램프(단일 노드 엔진)")
             instance_count = 1
 
@@ -1450,6 +1450,11 @@ async def update_deployment(deployment_id, instance_id, instance_count, gpu_coun
             except (ValueError, TypeError):
                 _model_cfg = {}
             _serving_system = settings.resolve_serving_system(_model_cfg.get("serving_system"))
+            # [멀티엔진] 단일 노드 엔진(llama.cpp/tgi/ollama)은 재배포에서도 instance_count>1 금지
+            #   (create_deployment 클램프와 동형 — 유휴 비-head 파드가 8555 를 안 여는 문제 차단).
+            if _serving_system in ("llama_cpp", "tgi", "ollama") and instance_count and instance_count > 1:
+                print(f"[{_serving_system}] 재배포 instance_count {instance_count} -> 1 클램프(단일 노드 엔진)")
+                instance_count = 1
             _serving_image = settings.SERVING_ENGINE_IMAGE_MAP.get(_serving_system, settings.DEPLOYMENT_LLM_IMAGE)
             _img = db.get_image_id_by_real_name(real_name=f"{settings.DOCKER_REGISTRY_URL}{_serving_image}")
             # 이미지행 미등록 시 조용히 옛 image_id 를 유지하면 엔진 전환이 이전 엔진 이미지로 뜬다(무음 오배포) → 명시 실패.

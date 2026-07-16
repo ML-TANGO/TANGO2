@@ -18,7 +18,7 @@ TGI 는 HF/safetensors 를 직접 서빙(GGUF 변환 없음) → `_resolve_model
 """
 import sys, os, time, subprocess, asyncio, traceback, hashlib
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Optional
 import uvicorn, aiofiles, httpx
 from fastapi import FastAPI, Request, HTTPException
 from contextlib import asynccontextmanager
@@ -37,6 +37,7 @@ LIFESPAN_STATUS = False
 ENGINE_PROC = None
 RUNTIME = None       # 선택된 ServingRuntime
 MODEL_DIR = None     # 엔진에 넘긴 model-id(로깅/모델 태그용)
+MODEL_TAG = None     # payload(/api/chat 등)에 넣을 모델 태그. Ollama 는 prepare 가 등록 후 반환, 그 외는 MODEL_DIR.
 
 
 # =======================================================================
@@ -117,8 +118,9 @@ def _resolve_model_dir():
 # =======================================================================
 # ServingRuntime 레지스트리 (Tier B 엔진 추상화)
 # =======================================================================
-def _openai_chat_payload(messages, params):
-    """OpenAI 호환 chat body — llama.cpp `/v1/chat/completions` 사용부(L265-272)와 동형."""
+def _openai_chat_payload(messages, params, model_tag):
+    """OpenAI 호환 chat body — llama.cpp `/v1/chat/completions` 사용부(L265-272)와 동형.
+    TGI 는 단일 모델 서빙이라 model_tag 는 불필요 → 시그니처만 통일(엔진 무관 호출부)."""
     payload = {
         "messages": messages,
         "temperature": params["temperature"],
@@ -147,6 +149,108 @@ def _tgi_build_args(model_dir, port, bin_path):
     ]
 
 
+# ----- Ollama 엔진 델타 (TGI 와 달리 런처가 모델을 로드하지 않음 → prepare 훅으로 등록) -----
+def _ollama_build_args(model_dir, port, bin_path):
+    """Ollama 런처 argv. `ollama serve` 는 HTTP 서버만 띄우고 모델은 로드하지 않는다
+    (모델은 ready 후 _ollama_prepare 가 `ollama create` 로 스토어에 등록). 포트/바인딩은
+    extra_env 의 OLLAMA_HOST(127.0.0.1:11434)로 지정 → argv 엔 모델/포트 인자 없음."""
+    return [bin_path, "serve"]
+
+
+def _ollama_build_payload(messages, params, model_tag):
+    """Ollama `/api/chat` body. OpenAI 와 달리 (1) model 이름 필수, (2) 샘플링은 options 중첩,
+    (3) max_tokens 는 num_predict. Ollama 는 top_k/repeat_penalty 를 네이티브 지원 → 플랫폼 설정 반영
+    (llama.cpp 파리티; TGI OpenAI 라우트는 미지원이라 거기선 생략). stream=False 로 단발 응답."""
+    options = {
+        "temperature": params["temperature"],
+        "top_p": params["top_p"],
+        "num_predict": params["max_tokens"],
+    }
+    if settings.LLM_PARAM_TOP_K and settings.LLM_PARAM_TOP_K > 0:
+        options["top_k"] = settings.LLM_PARAM_TOP_K
+    if settings.LLM_PARAM_REPETITION_PENALTY and settings.LLM_PARAM_REPETITION_PENALTY > 0:
+        options["repeat_penalty"] = settings.LLM_PARAM_REPETITION_PENALTY
+    return {
+        "model": model_tag,
+        "messages": messages,
+        "stream": False,
+        "options": options,
+    }
+
+
+def _ollama_chat_parse(data):
+    """Ollama /api/chat 응답 매핑: message.content (OpenAI choices[0].message 와 상이)."""
+    return data["message"]["content"].strip()
+
+
+def _ollama_cache_key(model_dir):
+    """ollama materialize/Modelfile/tag 캐시 키. resolved model_dir(hf 는 스냅샷 경로에 revision 해시
+    포함, commit 은 /model 또는 merged.<id>)를 해싱 → 동일 HF ID 라도 revision 이 바뀌면 키가 바뀌어
+    stale 재사용 방지(_model_identity 는 hf revision 을 담지 않음 — codex HIGH)."""
+    return hashlib.sha1((model_dir or "").encode("utf-8")).hexdigest()[:16]
+
+
+def _ollama_materialize(model_dir, key):
+    """Ollama `create` 는 HF 캐시 스냅샷의 상대 심링크(../../blobs/..)를 'insecure path' 로 거부한다.
+    최상위 '일반 파일'만 basename 으로 평면 복사(심링크는 최종 대상의 실제 내용) → 상대 traversal 제거.
+    디렉토리/디렉토리 심링크는 복사하지 않는다(무한/예상외 트리·중첩 경로 배제, 보안 하드닝).
+    marker 로 캐시(재기동 재사용). 표준 causal-LM 스냅샷(safetensors/config/tokenizer)은 평면 구조."""
+    import shutil
+    flat = os.path.join(MODEL_CACHE_DIR, f"ollama-src.{key}")
+    marker = os.path.join(flat, ".materialized")
+    if os.path.exists(marker):
+        return flat
+    if os.path.isdir(flat):
+        shutil.rmtree(flat, ignore_errors=True)
+    os.makedirs(flat, exist_ok=True)
+    for entry in os.scandir(model_dir):
+        # 심링크 따라간 최종 대상이 '일반 파일' 인 것만 basename 으로 복사(디렉토리/특수파일 제외).
+        if entry.is_file(follow_symlinks=True):
+            shutil.copyfile(entry.path, os.path.join(flat, entry.name))  # follow_symlinks 기본 True → 실제 내용
+    open(marker, "w").close()
+    return flat
+
+
+def _ollama_prepare(model_dir, base_url):
+    """[Ollama 특수성] 런처가 모델을 로드하지 않으므로, 서버 ready 후 모델을 스토어에 등록하고
+    /api/chat 에서 쓸 tag 를 반환한다. HF safetensors 디렉토리를
+    `ollama create <tag> -f Modelfile(FROM <model_dir>)` 로 임포트(지원 아키텍처면 내부 포맷 변환).
+
+    - serve/create 가 **동일 OLLAMA_MODELS/OLLAMA_HOST** 를 써야 함(불일치 시 서버가 모델을 못 찾음)
+      → runtime.extra_env 를 serve(lifespan)·create(여기) 양쪽에 동일 적용.
+    - OLLAMA_MODELS 는 NFS 캐시(extra_env)라 재기동 시 이미 등록된 tag 면 create 생략(변환비용 절감).
+    """
+    rt = RUNTIME or SERVING_RUNTIMES["ollama"]   # lifespan 에서 선택된 런타임 재사용(레지스트리 키 하드코딩 회피)
+    bin_path = rt.bin_path()
+    env = _subprocess_env()
+    if rt.extra_env:
+        env.update(rt.extra_env)
+    key = _ollama_cache_key(model_dir)           # resolved model_dir 기반(hf revision 반영 — stale 방지)
+    tag = f"jf-{key}"
+    # 이미 등록된 태그면 재사용(NFS 스토어 캐시).
+    try:
+        listed = subprocess.run([bin_path, "list"], env=env,
+                                capture_output=True, text=True, timeout=60)
+        if tag in (listed.stdout or ""):
+            print(f"[ollama] 모델 태그 캐시 재사용: {tag}")
+            return tag
+    except Exception:
+        pass
+    # HF 캐시 스냅샷은 ../../blobs 상대 심링크 → Ollama create 가 'insecure path' 로 거부.
+    #   심링크 없는 실제 파일 dir 로 1회 materialize(캐시) 후 그 경로를 FROM 으로.
+    src_dir = _ollama_materialize(model_dir, key)
+    os.makedirs(MODEL_CACHE_DIR, exist_ok=True)
+    modelfile = os.path.join(MODEL_CACHE_DIR, f"Modelfile.{key}")
+    with open(modelfile, "w", encoding="utf-8") as f:
+        f.write(f"FROM {src_dir}\n")
+    print(f"[ollama] create {tag} <- {src_dir}")
+    proc = subprocess.run([bin_path, "create", tag, "-f", modelfile], env=env,
+                          capture_output=True, text=True, timeout=3600)
+    if proc.returncode != 0:
+        raise RuntimeError(f"ollama create 실패(rc={proc.returncode}): {(proc.stderr or '')[-500:]}")
+    return tag
+
+
 @dataclass
 class ServingRuntime:
     """엔진별 차이만 캡슐화. 앱/lifespan 은 이 인터페이스에만 의존(엔진 무관)."""
@@ -157,8 +261,10 @@ class ServingRuntime:
     build_args: Callable[[str, int, str], list]  # (model_dir, port, bin_path) → argv 리스트
     health_path: str = "/health"                # 200 → ready
     generate_path: str = "/v1/chat/completions"
-    build_payload: Callable[[list, dict], dict] = _openai_chat_payload
+    build_payload: Callable[[list, dict, str], dict] = _openai_chat_payload
     parse_response: Callable[[dict], str] = _openai_chat_parse
+    prepare: Optional[Callable[[str, str], str]] = None   # ready 후 모델 등록 훅(Ollama). None → MODEL_TAG=MODEL_DIR
+    extra_env: Optional[dict] = None                       # 엔진 subprocess 추가 env(Ollama 스토어/바인딩)
 
     def bin_path(self):
         # bare name 을 절대경로로 해석 — Popen 이 제한 env 로 실행파일 탐색에 실패하는 것 방지.
@@ -189,8 +295,25 @@ SERVING_RUNTIMES = {
         default_bin="text-generation-launcher",
         build_args=_tgi_build_args,
     ),
+    # Ollama: `ollama serve`(모델 미로드) → ready 후 prepare 가 `ollama create` 로 등록. /api/chat.
+    #   serve/create 가 공유할 스토어(OLLAMA_MODELS=NFS)·바인딩(OLLAMA_HOST)은 extra_env 로 주입.
+    "ollama": ServingRuntime(
+        name="ollama",
+        port=11434,
+        bin_env="OLLAMA_BIN",
+        default_bin="ollama",
+        build_args=_ollama_build_args,
+        health_path="/",                 # GET / → 200 "Ollama is running"
+        generate_path="/api/chat",
+        build_payload=_ollama_build_payload,
+        parse_response=_ollama_chat_parse,
+        prepare=_ollama_prepare,
+        extra_env={
+            "OLLAMA_HOST": f"{ENGINE_HOST}:11434",
+            "OLLAMA_MODELS": os.path.join(MODEL_CACHE_DIR, "ollama"),
+        },
+    ),
     # 향후 엔진은 여기에 엔트리만 추가(lifespan/POST/GET 무변경):
-    #   "ollama":  build_args=_ollama_build_args, generate_path="/api/chat", parse=...,
     #   "triton":  build_args=_triton_build_args, generate_path="/v2/models/.../generate", parse=...,
 }
 
@@ -223,17 +346,27 @@ async def _wait_ready(health_url, timeout_s=1800):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global LIFESPAN_STATUS, ENGINE_PROC, RUNTIME, MODEL_DIR
+    global LIFESPAN_STATUS, ENGINE_PROC, RUNTIME, MODEL_DIR, MODEL_TAG
     try:
         RUNTIME = _select_runtime()
         MODEL_DIR = _resolve_model_dir()  # commit→/model(LoRA merge), hf→snapshot. TGI 는 그대로 model-id.
         args = RUNTIME.build_args(MODEL_DIR, RUNTIME.port, RUNTIME.bin_path())
         print(f"[{RUNTIME.name}] start: {' '.join(args)}")
         # 시크릿 미상속 env(S-B) — native 런처에 DB비번/HF토큰 노출 차단. argv 리스트, shell 미사용.
-        ENGINE_PROC = subprocess.Popen(args, env=_subprocess_env())  # nosec
+        # extra_env(엔진별, 예: Ollama 스토어/바인딩)는 serve 와 이후 prepare 가 동일하게 써야 함.
+        engine_env = _subprocess_env()
+        if RUNTIME.extra_env:
+            engine_env.update(RUNTIME.extra_env)
+        ENGINE_PROC = subprocess.Popen(args, env=engine_env)  # nosec
 
         if not await _wait_ready(RUNTIME.health_url):
             raise RuntimeError(f"{RUNTIME.name} 준비 실패(health timeout)")
+        # 서버 ready 후 모델 준비. TGI 는 prepare=None → MODEL_TAG=MODEL_DIR. Ollama 는 create 후 tag 반환.
+        #   prepare 는 blocking subprocess(ollama create, 최대 1h) → to_thread 로 오프로드(이벤트루프 비점유).
+        if RUNTIME.prepare:
+            MODEL_TAG = await asyncio.to_thread(RUNTIME.prepare, MODEL_DIR, RUNTIME.base_url)
+        else:
+            MODEL_TAG = MODEL_DIR
         LIFESPAN_STATUS = True
         yield
     except Exception:
@@ -331,7 +464,7 @@ async def run_playground(test_input, session_id, db_id):
             "top_p": settings.LLM_PARAM_TOP_P,
             "max_tokens": max_tokens,
         }
-        payload = RUNTIME.build_payload(messages, params)
+        payload = RUNTIME.build_payload(messages, params, MODEL_TAG)
 
         async with httpx.AsyncClient() as client:
             resp = await client.post(RUNTIME.generate_url, json=payload, timeout=1800)

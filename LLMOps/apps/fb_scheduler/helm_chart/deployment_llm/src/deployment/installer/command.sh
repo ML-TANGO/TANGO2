@@ -449,6 +449,19 @@ if [ "$LLM_TYPE" = "playground" ]; then
             sleep infinity;
         fi
 
+    elif [ "$LLM_SERVING_SYSTEM" = "ollama" ]; then
+
+        # [Tier B] Ollama = 외부 HTTP 서버를 subprocess 로 기동하는 공용 어댑터(TGI 와 동일 serving_adapter).
+        # `ollama serve` 는 모델을 로드하지 않으므로 adapter 가 ready 후 `ollama create` 로 등록(엔진 델타).
+        # 단일 노드(ray 미사용). index 0 만 서빙, 그 외 팟은 idle.
+        if [ "$LLM_POD_INDEX" = "0" ]; then
+            echo "playground engine: ollama (serving_adapter)"
+            python3 /llm/serving_adapter.py;
+        else
+            echo "ollama single-node — idle non-head pod (index $LLM_POD_INDEX)"
+            sleep infinity;
+        fi
+
     elif [ "$LLM_GPU_TOTAL_COUNT" = "0" ]; then
 
         python3 /llm/playground.py;

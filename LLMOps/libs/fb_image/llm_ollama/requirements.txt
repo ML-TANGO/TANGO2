@@ -1,0 +1,13 @@
+# 플랫폼 서빙 레이어(FastAPI shim) 의존성. 버전 range-pin(공급망/브레이킹 릴리스 회귀 방지).
+# ⚠️ Ollama 베이스(ollama/ollama)는 Go 바이너리라 python 추론 스택을 제공하지 않는다
+#    (TGI 베이스가 torch/transformers/hf_hub 를 주던 것과 다름) → 필요한 것을 여기서 명시.
+# 서빙 계약 복제: FastAPI 스택 + httpx(엔진 native API/RAG DNS) + aiofiles(dataset) + aiomysql(db.py).
+# + huggingface_hub: _resolve_model_dir 의 hf 스냅샷 다운로드(hf 모델 서빙 경로).
+# 보류(후속): torch/transformers/peft — _merge_lora_commit(LoRA 커밋 merge) 경로용.
+#    이미지 비대(torch ~GB) 회피 위해 미포함. LoRA-commit Ollama 배포가 필요하면 추가.
+fastapi>=0.110,<1.0
+uvicorn[standard]>=0.29,<1.0
+httpx>=0.27,<1.0
+aiofiles>=23.0,<25.0
+aiomysql>=0.2.0,<1.0
+huggingface_hub>=0.23,<1.0
