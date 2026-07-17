@@ -87,8 +87,8 @@ diagnosticMode:
 ##
 image:
   registry: docker.io
-  repository: bitnamilegacy/kafka
-  tag: 3.7.0-debian-12-r6
+  repository: soldevelo/kafka
+  tag: 3.7.1-debian-12-r0
   digest: ""
   ## Specify a imagePullPolicy
   ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
