@@ -13,7 +13,7 @@ import style from './EvalProjectCreateModal.module.scss';
 
 const cx = classNames.bind(style);
 
-const MAX_DATASETS = 10; // llm_evaluation dataset_ids max_length=10 (초과 시 BE 422)
+const MAX_DATASETS = 10; // 다중 비활성(보존): 현재 BE dataset_ids max_length=1(단일 강제). 다중 복원 시 참조.
 
 // 평가 유형 3종 — 라벨/설명은 기존 evaluation.mode.* 재사용(중복 키 회피).
 const TYPES = [
@@ -73,20 +73,11 @@ const EvalProjectCreateModal = ({ workspaceId, onClose, onCreated }) => {
     })();
   }, [workspaceId]);
 
-  // 데이터셋은 BE cap(10) 클라이언트단 강제 — 초과 추가 시 토스트, 422 round-trip 회피.
+  // 단일 강제(2026-07-19): 데이터셋 1개만 선택(다중 비활성). 같은 항목 재클릭=해제,
+  // 다른 항목 클릭=교체. BE 도 dataset_ids max_length=1 로 강제. 다중 복원 대비
+  // MAX_DATASETS 상수/다중 cap 코드는 보존(selDatasets 배열 계약도 유지).
   const toggleDataset = (id) => {
-    if (selDatasets.includes(id)) {
-      setSelDatasets(selDatasets.filter((x) => x !== id));
-      return;
-    }
-    if (selDatasets.length >= MAX_DATASETS) {
-      errorToastMessage(
-        null,
-        t('evaluation.datasetCap', { max: MAX_DATASETS }),
-      );
-      return;
-    }
-    setSelDatasets([...selDatasets, id]);
+    setSelDatasets(selDatasets.includes(id) ? [] : [id]);
   };
 
   const filteredDatasets = useMemo(() => {
@@ -177,9 +168,7 @@ const EvalProjectCreateModal = ({ workspaceId, onClose, onCreated }) => {
               <span className={cx('ds-count-badge')}>{datasets.length}</span>
               <div className={cx('ds-spacer')} />
               {selDatasets.length > 0 && (
-                <span className={cx('ds-selected-label')}>
-                  <strong>{selDatasets.length}</strong> / {MAX_DATASETS}
-                </span>
+                <span className={cx('ds-selected-label')}>✓</span>
               )}
             </div>
             {datasets.length > 0 && (

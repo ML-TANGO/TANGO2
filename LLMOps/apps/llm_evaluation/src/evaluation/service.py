@@ -929,7 +929,10 @@ async def _build_judge_samples(model_id: int, model_name: str, dataset_ids: List
                                ds_names: List[str], inference_url: Optional[str]) -> list:
     """채점 대상 샘플(A4) — 실 데이터셋(input/reference) + 배포모델 추론 output.
     데이터셋을 못 읽으면 합성 input 으로, 추론 URL 없으면 mock output 으로 폴백."""
-    n = min(MAX_JUDGE_SAMPLES, max(1, len(ds_names) * 5))
+    # 단일 데이터셋 강제(2026-07-19)에 맞춰 샘플 수를 데이터셋 수와 분리 — 단일에서
+    # 최대 MAX_JUDGE_SAMPLES 추출. 구 `len(ds_names)*5` 스케일링은 다중 전제였고
+    # 단일에선 5 로 고정됐음. 다중 복원 시 dataset-수 스케일링 재도입.
+    n = MAX_JUDGE_SAMPLES
     rows = await _read_dataset_samples(dataset_ids, n)
     base = ds_names[0] if ds_names else "dataset"
     if not rows:    # 실 데이터셋 못 읽음 → 합성 input 폴백(기존 스캐폴딩 동등)

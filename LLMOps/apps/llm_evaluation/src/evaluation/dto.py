@@ -22,9 +22,13 @@ class EvalProjectCreateBody(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=255, description="프로젝트 이름(사용자 입력)")
     model_id: int = Field(..., ge=1, description="평가 대상(학습 완료) 모델 id — 잠금")
+    # 단일 강제(2026-07-19): 전 평가유형 데이터셋 1개만 허용. 다중은 비활성(코드/상수 보존).
+    # 근거: 정식 evaluate-selfmetric 컨테이너가 단일 데이터셋(JF_DATASET_NAME)만 채점 →
+    # 프로젝트 다중 선택은 실 채점과 불일치. benchmark 정식 plugin 이 다중 계약을 확정하면
+    # max_length=MAX_BENCHMARK_DATASETS 로 복원(다운스트림 다중 처리는 그대로 보존됨).
     dataset_ids: List[int] = Field(
-        ..., min_length=1, max_length=MAX_BENCHMARK_DATASETS,
-        description="대상 데이터셋 id(다중, 최대 %d) — 잠금" % MAX_BENCHMARK_DATASETS)
+        ..., min_length=1, max_length=1,
+        description="대상 데이터셋 id — 단일 잠금(다중 상한 %d 은 비활성)" % MAX_BENCHMARK_DATASETS)
     eval_type: str = Field(..., description="평가 유형: benchmark|judge|expert")
 
     @field_validator("eval_type")
