@@ -38,6 +38,13 @@ spec:
         envFrom:
         - configMapRef:
             name: jfb-settings
+        env:
+        # 양자화(convert) 컨테이너 manifest 바인딩 — 레지스트리 등록명(convert-llamacpp).
+        # jfb-settings 에 키가 없어 코드 기본값 mock-convert 로 떨어지므로 여기서 명시 오버라이드.
+        - name: CONVERT_MANIFEST_NAME
+          value: "convert-llamacpp"
+        - name: CONVERT_MANIFEST_VERSION
+          value: "1.0.0"
         volumeMounts:
         {{- include "lib.volume.volumeMounts" (dict "name" "jf-kube" )  | nindent 8 }}
         {{- include "lib.volume.volumeMounts"  (dict "name" "jf-src" "enabled" .Values.global.jfb.volume.src.enabled )  | nindent 8 }}
