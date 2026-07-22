@@ -14,8 +14,8 @@ import { openConfirm } from '@src/store/modules/confirm';
 // Actions
 import { openModal } from '@src/store/modules/modal';
 
-// SP-8 P4b — K8s 노드 커스텀 레이블 (target_type='node', target_id=hostname).
-import { deleteEdgeLabel, upsertEdgeLabel } from '@src/apis/flightbase/edge';
+// 엣지 워커 행 액션(통합 노드표에 병합된 EDGE 행의 새로고침/삭제).
+import { deleteEdgeWorker, refreshEdgeWorker } from '@src/apis/flightbase/edge';
 import { STATUS_SUCCESS } from '@src/network';
 import { toast } from '@src/components/Toast';
 
@@ -23,6 +23,7 @@ import { calFindNodeList, postChangeStatus } from '../util';
 
 // Components
 import AdminNodeDetail from '../AdminNodeDetail';
+import EdgeWorkerDetail from '../EdgeWorkerDetail';
 
 import classNames from 'classnames/bind';
 // CSS module
@@ -73,10 +74,20 @@ const nodeTypeColorObj = {
   CPU: 'yellow',
   GPU: 'green',
   MANAGE: 'pink',
+  DB: 'blue', // K8s node-role.kubernetes.io/db 라벨 파생
+  EDGE: 'orange', // 통합표에 병합된 엣지 워커 행 표식
 };
 
 const calBadgeColor = (nodeType) => {
   return nodeTypeColorObj[nodeType];
+};
+
+// 엣지 워커 자원(heartbeat 코어 수는 정수 bytes 아님 → mem_total 만 포맷).
+const formatBytes = (n) => {
+  if (!n || n <= 0) return '';
+  const u = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.min(Math.floor(Math.log(n) / Math.log(1024)), u.length - 1);
+  return `${(n / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${u[i]}`;
 };
 
 const calIsCpuGpu = (typeList) => {
@@ -111,74 +122,42 @@ const calDisabledBtn = (roleList, typeList) => {
   return { isActiveBtn: false, isSettingBtn: false };
 };
 
-// BE CustomLabelModel.label_key 패턴과 동일 — 서버 422 전에 클라에서 선차단.
-const LABEL_KEY_RE = /^[A-Za-z0-9._/-]+$/;
-
 function NodeTable({
   nodeList: nodeTableList,
   statusList,
   setStatusList,
   handleRefresh,
-  labelsByHost = {},
-  onLabelsChanged,
+  refetchEdge,
 }) {
   const { t } = useTranslation();
   const dispatch = useDispatch();
 
-  // SP-8 P4b — 레이블 관리 모달(DataTable 바깥 렌더 → 1초 노드폴 리마운트 무관).
-  const [labelModalHost, setLabelModalHost] = useState(null);
-  const [labelKey, setLabelKey] = useState('');
-  const [labelValue, setLabelValue] = useState('');
-  const [labelKeyErr, setLabelKeyErr] = useState(false);
-  const [labelBusy, setLabelBusy] = useState(false);
+  // 통합표에 병합된 엣지 워커 행 액션(remoteManager 새로고침 / 삭제). 진행 중 busy 가드.
+  const [edgeBusyId, setEdgeBusyId] = useState(null);
 
-  const openLabelModal = useCallback((hostname) => {
-    setLabelModalHost(hostname);
-    setLabelKey('');
-    setLabelValue('');
-    setLabelKeyErr(false);
-  }, []);
-
-  const closeLabelModal = useCallback(() => {
-    setLabelModalHost(null);
-    setLabelKey('');
-    setLabelValue('');
-    setLabelKeyErr(false);
-  }, []);
-
-  const removeLabel = useCallback(
-    async (labelId) => {
-      const res = await deleteEdgeLabel(labelId);
-      if (res.status === STATUS_SUCCESS) onLabelsChanged?.();
-      else toast.error(res.message || t('edge.toast.labelFail'));
+  const handleEdgeRefresh = useCallback(
+    async (edgeId) => {
+      setEdgeBusyId(edgeId);
+      const res = await refreshEdgeWorker(edgeId);
+      setEdgeBusyId(null);
+      if (res.status === STATUS_SUCCESS) refetchEdge?.();
+      else toast.error(res.message || t('edge.toast.refreshFail'));
     },
-    [onLabelsChanged, t],
+    [refetchEdge, t],
   );
 
-  const submitLabel = useCallback(async () => {
-    const key = labelKey.trim();
-    if (!key || labelBusy) return;
-    if (!LABEL_KEY_RE.test(key)) {
-      setLabelKeyErr(true);
-      return;
-    }
-    setLabelBusy(true);
-    const res = await upsertEdgeLabel({
-      target_type: 'node',
-      target_id: labelModalHost,
-      label_key: key,
-      label_value: labelValue.trim() || undefined,
-    });
-    setLabelBusy(false);
-    if (res.status === STATUS_SUCCESS) {
-      setLabelKey('');
-      setLabelValue('');
-      setLabelKeyErr(false);
-      onLabelsChanged?.();
-    } else {
-      toast.error(res.message || t('edge.toast.labelFail'));
-    }
-  }, [labelKey, labelValue, labelModalHost, labelBusy, onLabelsChanged, t]);
+  const handleEdgeDelete = useCallback(
+    async (edgeId, deviceId) => {
+      // eslint-disable-next-line no-alert
+      if (!window.confirm(t('edge.confirm.delete', { device: deviceId }))) return;
+      setEdgeBusyId(edgeId);
+      const res = await deleteEdgeWorker(edgeId);
+      setEdgeBusyId(null);
+      if (res.status === STATUS_SUCCESS) refetchEdge?.();
+      else toast.error(res.message || t('edge.toast.deleteFail'));
+    },
+    [refetchEdge, t],
+  );
 
   const [searchKey, setSearchKey] = useState({
     label: t('nodeName.label'),
@@ -294,7 +273,18 @@ function NodeTable({
     {
       name: t('status.label'),
       selector: 'condition',
-      cell: ({ status, id }) => {
+      cell: (row) => {
+        if (row._rowType === 'edge') {
+          const on = row.conn_status === 'online';
+          return (
+            <Badge
+              size='lg'
+              label={t(on ? 'attached' : 'detached')}
+              type={on ? 'primary-2' : 'gray'}
+            />
+          );
+        }
+        const { status, id } = row;
         const findList = calFindNodeList(statusList, id);
         const newStatus = calStatusFlag(findList, status);
         return (
@@ -322,19 +312,21 @@ function NodeTable({
       minWidth: '380px',
       maxWidth: '380px',
       sortable: true,
-      cell: ({
-        role,
-        hostname: name,
-        active_status: activeStatus = 1,
-        type,
-      }) => {
-        const isMaster = role.find((role) => role === 'control-plane');
+      cell: (row) => {
+        const {
+          role,
+          hostname: name,
+          active_status: activeStatus = 1,
+          type,
+        } = row;
+        const isEdge = row._rowType === 'edge';
+        const isMaster = role.find((r) => r === 'control-plane');
         return (
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
-              cursor: 'not-allowed',
+              cursor: isEdge ? 'default' : 'not-allowed',
             }}
           >
             <div
@@ -343,6 +335,12 @@ function NodeTable({
               style={{ textOverflow: 'hidden', textWrap: 'nowrap' }}
             >
               {name}
+              {isEdge && row.deploy_model && (
+                <span style={{ opacity: 0.6, marginLeft: 6 }}>
+                  · {row.deploy_model}
+                  {row.deploy_state ? ` (${row.deploy_state})` : ''}
+                </span>
+              )}
             </div>
             <div className={cx('flex-cont')}>
               {type.length !== 0 &&
@@ -409,9 +407,32 @@ function NodeTable({
     {
       name: t('setting.label'),
       selector: 'id',
-      minWidth: '64px',
-      maxWidth: '64px',
+      minWidth: '150px',
+      maxWidth: '180px',
       cell: (row) => {
+        if (row._rowType === 'edge') {
+          const eid = row._edge.id;
+          return (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type='button'
+                className={cx('edge-act')}
+                disabled={edgeBusyId === eid}
+                onClick={() => handleEdgeRefresh(eid)}
+              >
+                {t('edge.action.refresh')}
+              </button>
+              <button
+                type='button'
+                className={cx('edge-act', 'danger')}
+                disabled={edgeBusyId === eid}
+                onClick={() => handleEdgeDelete(eid, row.device_id)}
+              >
+                {t('delete.label')}
+              </button>
+            </div>
+          );
+        }
         const { role, type } = row;
         const { isSettingBtn } = calDisabledBtn(role, type);
 
@@ -437,8 +458,10 @@ function NodeTable({
     {
       name: t('cpuConfig.label'),
       minWidth: '356px',
-      cell: ({ cpu_info }) => {
-        const { cpu_model } = cpu_info;
+      cell: (row) => {
+        if (row._rowType === 'edge')
+          return row.cpu_cores ? `${row.cpu_cores} cores` : '-';
+        const { cpu_model } = row.cpu_info;
         return cpu_model;
       },
       style: {
@@ -448,7 +471,9 @@ function NodeTable({
     {
       name: t('gpuConfig.label'),
       minWidth: '280px',
-      cell: ({ gpu_info }) => {
+      cell: (row) => {
+        if (row._rowType === 'edge') return row.gpu_info || '-';
+        const { gpu_info } = row;
         if (!gpu_info) return '-';
 
         const gpuConfigurationObj = Object.values(gpu_info).reduce(
@@ -483,7 +508,9 @@ function NodeTable({
     {
       name: t('node.ramInfo.label'),
       minWidth: '210px',
-      cell: ({ mem_info }) => {
+      cell: (row) => {
+        if (row._rowType === 'edge') return formatBytes(row.mem_total) || '-';
+        const { mem_info } = row;
         if (!mem_info) return '-';
 
         const { device } = mem_info;
@@ -501,41 +528,6 @@ function NodeTable({
       },
       style: {
         textWrap: 'nowrap',
-      },
-    },
-    {
-      name: t('edge.col.labels'),
-      minWidth: '200px',
-      cell: ({ hostname }) => {
-        const labels = labelsByHost[hostname] || [];
-        return (
-          <div className={cx('label-cell')}>
-            {labels.length > 0 && (
-              <div className={cx('chips')}>
-                {labels.map((l) => (
-                  <span key={l.id} className={cx('chip')}>
-                    {l.key}
-                    {l.value ? `=${l.value}` : ''}
-                    <button
-                      type='button'
-                      className={cx('chip-x')}
-                      onClick={() => removeLabel(l.id)}
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-            <button
-              type='button'
-              className={cx('add-label')}
-              onClick={() => openLabelModal(hostname)}
-            >
-              + {t('edge.label.add')}
-            </button>
-          </div>
-        );
       },
     },
     ...actionColumns,
@@ -563,7 +555,12 @@ function NodeTable({
   }, [nodeStatus, statusOptions, selectInputHandler]);
 
   const expandedComponent = useCallback((row) => {
-    return <AdminNodeDetail data={row.data} />;
+    // AdminNodeDetail 은 K8s 노드 shape 전용(cpu_info/sw_version/mem_info 구조분해).
+    // 엣지 행은 전용 상세(EdgeWorkerDetail)로 분기 — 원본 워커 객체(_edge) 전달.
+    const d = row.data;
+    if (!d) return null;
+    if (d._rowType === 'edge') return <EdgeWorkerDetail worker={d._edge} />;
+    return <AdminNodeDetail data={d} />;
   }, []);
 
   const onSortHandler = useCallback(
@@ -651,92 +648,6 @@ function NodeTable({
         onSortHandler={onSortHandler}
         handleRefresh={handleRefresh}
       />
-
-      {labelModalHost && (
-        <div className={cx('label-overlay')} onClick={closeLabelModal}>
-          <div
-            className={cx('label-modal')}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className={cx('label-modal-title')}>
-              {t('node.labels.title')}
-            </div>
-            <div className={cx('label-modal-host')}>{labelModalHost}</div>
-
-            <div className={cx('chips', 'modal-chips')}>
-              {(labelsByHost[labelModalHost] || []).length === 0 ? (
-                <span className={cx('label-empty')}>
-                  {t('node.labels.empty')}
-                </span>
-              ) : (
-                (labelsByHost[labelModalHost] || []).map((l) => (
-                  <span key={l.id} className={cx('chip')}>
-                    {l.key}
-                    {l.value ? `=${l.value}` : ''}
-                    <button
-                      type='button'
-                      className={cx('chip-x')}
-                      onClick={() => removeLabel(l.id)}
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))
-              )}
-            </div>
-
-            <div className={cx('label-form')}>
-              <input
-                className={cx('label-input')}
-                placeholder={t('edge.label.key')}
-                value={labelKey}
-                onChange={(e) => {
-                  setLabelKey(e.target.value);
-                  if (labelKeyErr) setLabelKeyErr(false);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') submitLabel();
-                }}
-                maxLength={64}
-                aria-invalid={labelKeyErr}
-              />
-              <input
-                className={cx('label-input')}
-                placeholder={t('edge.label.value')}
-                value={labelValue}
-                onChange={(e) => setLabelValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') submitLabel();
-                }}
-                maxLength={255}
-              />
-              <button
-                type='button'
-                className={cx('label-btn')}
-                onClick={submitLabel}
-                disabled={labelBusy || !labelKey.trim()}
-              >
-                {t('add.label')}
-              </button>
-            </div>
-            {labelKeyErr && (
-              <div className={cx('label-err')}>
-                {t('edge.label.invalidKey')}
-              </div>
-            )}
-
-            <div className={cx('label-modal-actions')}>
-              <button
-                type='button'
-                className={cx('label-btn', 'cancel')}
-                onClick={closeLabelModal}
-              >
-                {t('node.labels.close')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

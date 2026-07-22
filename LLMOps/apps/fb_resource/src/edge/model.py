@@ -4,15 +4,12 @@ from typing import Optional
 
 
 class RegisterEdgeWorkerModel(BaseModel):
-    # device_id 는 식별자(파일/레이블 아님)지만 안전 문자만.
-    device_id: str = Field(..., min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._\-]+$")
-    name: Optional[str] = Field(default=None, max_length=128)
+    # device_id 는 서버가 자동 생성(edge-<hex>) — 클라이언트 입력 없음(물리장비 heartbeat id는
+    # 등록 후 Step2 에서 확인). 사람이 식별하는 유일 키는 name(필수·중복 불가, 서비스에서 체크).
+    name: str = Field(..., min_length=1, max_length=128)
     device_type: Optional[str] = Field(default=None, max_length=32)
-    sdx_domain: Optional[str] = Field(default=None, max_length=64)
     # heartbeat push 모델에선 선택(remoteManager pull/deploy 경로에서만 사용). 값이 있으면 URL 검증.
     remote_manager_url: Optional[str] = Field(default=None, max_length=512, pattern=r"^https?://.+")
-    hw_model: Optional[str] = Field(default=None, max_length=128)
-    location: Optional[str] = Field(default=None, max_length=255)
 
 
 class DeployEdgeModel(BaseModel):

@@ -15,12 +15,18 @@ from utils.msa_db import db_edge
 
 # ── model 검증 ────────────────────────────────────────────────────────────────
 
-def test_register_accepts_hw_model_and_location():
+def test_register_requires_name():
+    # device_id 는 서버 자동생성(입력 X), name 은 필수. location/sdx_domain/hw_model 제거됨.
     m = model.RegisterEdgeWorkerModel(
-        device_id="orin-01", remote_manager_url="http://192.168.0.9:8080",
-        hw_model="Jetson AGX Orin 64GB", location="부산항")
-    assert m.hw_model == "Jetson AGX Orin 64GB"
-    assert m.location == "부산항"
+        name="부산항-오린-01", device_type="orin",
+        remote_manager_url="http://192.168.0.9:8080")
+    assert m.name == "부산항-오린-01"
+    assert m.device_type == "orin"
+
+
+def test_register_rejects_missing_name():
+    with pytest.raises(Exception):
+        model.RegisterEdgeWorkerModel(remote_manager_url="http://192.168.0.9:8080")
 
 
 def test_heartbeat_clamps_pct():
@@ -141,6 +147,5 @@ def test_insert_edge_worker_param_arity(monkeypatch):
             return False
 
     monkeypatch.setattr(db_edge, "get_db", lambda: _Conn())
-    db_edge.insert_edge_worker("orin-01", "n", "orin", "sds", "http://192.168.0.9:8080",
-                               hw_model="AGX", location="busan")
-    assert len(re.findall(r"%s", captured["sql"])) == len(captured["params"]) == 7
+    db_edge.insert_edge_worker("edge-a1b2c3d4", "n", "orin", "http://192.168.0.9:8080")
+    assert len(re.findall(r"%s", captured["sql"])) == len(captured["params"]) == 4

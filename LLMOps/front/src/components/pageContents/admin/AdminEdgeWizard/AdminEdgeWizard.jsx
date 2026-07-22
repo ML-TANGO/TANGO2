@@ -8,11 +8,7 @@ import PageHeader from '@src/components/molecules/PageHeader/PageHeader';
 import { toast } from '@src/components/Toast';
 import { STATUS_SUCCESS } from '@src/network';
 import { copyToClipboardWithToast } from '@src/utils';
-import {
-  issueEdgeToken,
-  registerEdgeWorker,
-  upsertEdgeLabel,
-} from '@src/apis/flightbase/edge';
+import { issueEdgeToken, registerEdgeWorker } from '@src/apis/flightbase/edge';
 
 import classNames from 'classnames/bind';
 import style from './AdminEdgeWizard.module.scss';
@@ -28,21 +24,10 @@ const TRACKS = [
   { value: 'pc-gpu', labelKey: 'edge.track.pcGpu' },
 ];
 
-// 소속 기관 (sdx_domain). 기타 = 빈 값.
-const ORGS = [
-  { value: 'SDS', labelKey: 'edge.org.sds' },
-  { value: 'SDF', labelKey: 'edge.org.sdf' },
-  { value: 'SDM', labelKey: 'edge.org.sdm' },
-  { value: '', labelKey: 'edge.org.etc' },
-];
-
-// BE 검증과 동일 패턴(model.py). 잘못된 값이 서버로 가기 전에 클라이언트에서 차단.
-const DEVICE_ID_RE = /^[A-Za-z0-9._-]+$/;
-const LABEL_KEY_RE = /^[A-Za-z0-9._/-]+$/;
-
 /**
  * Edge 등록 위저드 (풀페이지 2-step, admin). SP-8 확장.
- * Step1 정보 입력 → registerEdgeWorker(+레이블 upsert) → Step2 API 안내 + 토큰 발급.
+ * Step1 정보 입력 → registerEdgeWorker → Step2 API 안내 + 토큰 발급.
+ * device_id 는 서버가 자동 생성(edge-<hex>) → Step2 에서 확인. 이름은 필수·중복 불가(BE 체크).
  */
 const AdminEdgeWizard = () => {
   const { t } = useTranslation();
@@ -50,17 +35,10 @@ const AdminEdgeWizard = () => {
 
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
-    device_id: '',
     name: '',
     device_type: 'orin',
-    hw_model: '',
-    sdx_domain: 'SDS',
-    location: '',
     remote_manager_url: '',
   });
-  const [labels, setLabels] = useState([]); // [{key, value}]
-  const [labelKey, setLabelKey] = useState('');
-  const [labelValue, setLabelValue] = useState('');
 
   const [submitting, setSubmitting] = useState(false);
   const [created, setCreated] = useState(null); // {id, device_id}
@@ -71,30 +49,12 @@ const AdminEdgeWizard = () => {
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
-  const deviceIdValid = useMemo(
-    () => DEVICE_ID_RE.test(form.device_id.trim()),
-    [form.device_id],
-  );
+  const nameValid = useMemo(() => form.name.trim().length > 0, [form.name]);
   const urlValid = useMemo(() => {
     const u = form.remote_manager_url.trim();
     return u === '' || /^https?:\/\/.+/.test(u);
   }, [form.remote_manager_url]);
-  const canSubmit = deviceIdValid && urlValid && !submitting;
-
-  const addLabel = () => {
-    const key = labelKey.trim();
-    if (!key) return;
-    if (!LABEL_KEY_RE.test(key)) {
-      toast.error(t('edge.label.invalidKey'));
-      return;
-    }
-    if (labels.some((l) => l.key === key)) return;
-    setLabels((ls) => [...ls, { key, value: labelValue.trim() }]);
-    setLabelKey('');
-    setLabelValue('');
-  };
-  const removeLabel = (key) =>
-    setLabels((ls) => ls.filter((l) => l.key !== key));
+  const canSubmit = nameValid && urlValid && !submitting;
 
   const goToNodes = () => {
     if (submitting) return; // 등록 진행 중엔 이탈 금지(백그라운드 토스트/상태 누수 방지).
@@ -106,12 +66,8 @@ const AdminEdgeWizard = () => {
     submittingRef.current = true;
     setSubmitting(true);
     const body = {
-      device_id: form.device_id.trim(),
-      name: form.name.trim() || undefined,
+      name: form.name.trim(),
       device_type: form.device_type || undefined,
-      hw_model: form.hw_model.trim() || undefined,
-      sdx_domain: form.sdx_domain || undefined,
-      location: form.location.trim() || undefined,
       remote_manager_url: form.remote_manager_url.trim() || undefined,
     };
     const res = await registerEdgeWorker(body);
@@ -122,23 +78,11 @@ const AdminEdgeWizard = () => {
       return;
     }
     const worker = res.result || {};
-    // 레이블은 등록 성공 후 device_id 기준으로 개별 upsert. 실패는 수집해 경고(등록 자체는 유지).
-    let labelFailed = false;
-    for (const l of labels) {
-      // eslint-disable-next-line no-await-in-loop
-      const lr = await upsertEdgeLabel({
-        target_type: 'edge_worker',
-        target_id: body.device_id,
-        label_key: l.key,
-        label_value: l.value || undefined,
-      });
-      if (lr.status !== STATUS_SUCCESS) labelFailed = true;
-    }
     submittingRef.current = false;
     setSubmitting(false);
-    setCreated({ id: worker.id, device_id: body.device_id });
-    if (labelFailed) toast.error(t('edge.toast.labelPartial'));
-    else toast.success(t('edge.toast.registered'));
+    // device_id 는 서버가 생성해 응답으로 내려줌 → Step2 에서 표시.
+    setCreated({ id: worker.id, device_id: worker.device_id });
+    toast.success(t('edge.toast.registered'));
     setStep(2);
   };
 
@@ -157,7 +101,6 @@ const AdminEdgeWizard = () => {
   };
 
   // 표시 전용 안내 문자열. 실제 라우트는 fb_resource edge/route.py 의 /edge/devices/{id}/heartbeat.
-  // (P3 API 규격 뷰어에서 공용 상수/자산으로 일원화 예정.)
   const heartbeatPath = created
     ? `POST /api/edge/devices/${created.device_id}/heartbeat`
     : '';
@@ -203,35 +146,15 @@ const AdminEdgeWizard = () => {
             </div>
             <div className={cx('card-desc')}>{t('edge.wizard.step1.desc')}</div>
 
-            <label className={cx('field-label')} htmlFor='edge-device-id'>
-              {t('edge.field.deviceId')} *
-            </label>
-            <input
-              id='edge-device-id'
-              className={cx('field-input', {
-                invalid: form.device_id && !deviceIdValid,
-              })}
-              value={form.device_id}
-              onChange={set('device_id')}
-              placeholder='orin-sds-port-01'
-              maxLength={128}
-              aria-invalid={!!form.device_id && !deviceIdValid}
-              aria-describedby='edge-device-id-hint'
-            />
-            {form.device_id && !deviceIdValid && (
-              <div id='edge-device-id-hint' className={cx('field-error')}>
-                {t('edge.field.deviceId.invalid')}
-              </div>
-            )}
-
             <label className={cx('field-label')} htmlFor='edge-name'>
-              {t('edge.field.name')}
+              {t('edge.field.name')} *
             </label>
             <input
               id='edge-name'
               className={cx('field-input')}
               value={form.name}
               onChange={set('name')}
+              placeholder='orin-sds-port-01'
               maxLength={128}
             />
 
@@ -251,45 +174,6 @@ const AdminEdgeWizard = () => {
               ))}
             </select>
 
-            <label className={cx('field-label')} htmlFor='edge-hw-model'>
-              {t('edge.field.hwModel')}
-            </label>
-            <input
-              id='edge-hw-model'
-              className={cx('field-input')}
-              value={form.hw_model}
-              onChange={set('hw_model')}
-              placeholder='Jetson AGX Orin 64GB · Jetpack 6.0'
-              maxLength={128}
-            />
-
-            <label className={cx('field-label')} htmlFor='edge-org'>
-              {t('edge.field.sdxDomain')}
-            </label>
-            <select
-              id='edge-org'
-              className={cx('field-input')}
-              value={form.sdx_domain}
-              onChange={set('sdx_domain')}
-            >
-              {ORGS.map((o) => (
-                <option key={o.labelKey} value={o.value}>
-                  {t(o.labelKey)}
-                </option>
-              ))}
-            </select>
-
-            <label className={cx('field-label')} htmlFor='edge-location'>
-              {t('edge.field.location')}
-            </label>
-            <input
-              id='edge-location'
-              className={cx('field-input')}
-              value={form.location}
-              onChange={set('location')}
-              maxLength={255}
-            />
-
             <label className={cx('field-label')} htmlFor='edge-rm-url'>
               {t('edge.field.remoteManager')}
             </label>
@@ -307,50 +191,6 @@ const AdminEdgeWizard = () => {
               {urlValid
                 ? t('edge.wizard.urlHint')
                 : t('edge.field.remoteManager.invalid')}
-            </div>
-
-            <label className={cx('field-label')}>
-              {t('edge.field.labels')}
-            </label>
-            <div className={cx('chips')}>
-              {labels.map((l) => (
-                <span key={l.key} className={cx('chip')}>
-                  {l.key}
-                  {l.value ? `=${l.value}` : ''}
-                  <button
-                    type='button'
-                    className={cx('chip-x')}
-                    onClick={() => removeLabel(l.key)}
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-            </div>
-            <div className={cx('label-add')}>
-              <input
-                className={cx('label-input')}
-                placeholder={t('edge.label.key')}
-                value={labelKey}
-                onChange={(e) => setLabelKey(e.target.value)}
-                maxLength={64}
-                aria-label={t('edge.label.key')}
-              />
-              <input
-                className={cx('label-input')}
-                placeholder={t('edge.label.value')}
-                value={labelValue}
-                onChange={(e) => setLabelValue(e.target.value)}
-                maxLength={255}
-                aria-label={t('edge.label.value')}
-              />
-              <button
-                type='button'
-                className={cx('label-btn')}
-                onClick={addLabel}
-              >
-                + {t('add.label')}
-              </button>
             </div>
 
             <div className={cx('actions')}>
@@ -376,6 +216,25 @@ const AdminEdgeWizard = () => {
               {t('edge.wizard.step2.title')}
             </div>
             <div className={cx('card-desc')}>{t('edge.wizard.step2.desc')}</div>
+
+            {/* 서버가 자동 생성한 device_id — 물리 장비 설정/heartbeat 에 이 값을 사용. */}
+            {created && (
+              <div className={cx('api-box')}>
+                <div className={cx('api-hint')}>{t('edge.field.deviceId')}</div>
+                <div className={cx('token-row')}>
+                  <code className={cx('token-value')}>
+                    {created.device_id}
+                  </code>
+                  <button
+                    type='button'
+                    className={cx('label-btn')}
+                    onClick={() => copyToClipboardWithToast(created.device_id)}
+                  >
+                    {t('edge.token.copy')}
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className={cx('api-box')}>
               <div className={cx('api-line')}>{heartbeatPath}</div>

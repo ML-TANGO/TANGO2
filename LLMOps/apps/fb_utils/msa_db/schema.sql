@@ -155,7 +155,6 @@ CREATE TABLE IF NOT EXISTS `edge_worker` (
     `device_id`          VARCHAR(128) NOT NULL,          -- 식별
     `name`               VARCHAR(128),
     `device_type`        VARCHAR(32),                    -- orin / rpi-hailo / pc-gpu ...
-    `sdx_domain`         VARCHAR(64),                    -- SDx 도메인
     `remote_manager_url` VARCHAR(512) NULL,              -- remoteManager centralagent endpoint (SP-8 §4/D1: heartbeat-only 디바이스는 NULL 허용)
     `conn_status`        VARCHAR(16) DEFAULT 'offline',  -- 연결상태 online/offline
     `last_seen`          DATETIME DEFAULT NULL,          -- heartbeat
@@ -166,8 +165,6 @@ CREATE TABLE IF NOT EXISTS `edge_worker` (
     `mem_total`          BIGINT DEFAULT NULL,
     `gpu_info`           VARCHAR(256) DEFAULT NULL,
     `container_count`    INT(11) DEFAULT NULL,
-    `hw_model`           VARCHAR(128) DEFAULT NULL,      -- 하드웨어 모델 (예: Jetson AGX Orin 64GB)
-    `location`           VARCHAR(255) DEFAULT NULL,      -- 물리 위치
     `edge_token_hash`    VARCHAR(128) DEFAULT NULL,      -- 노드별 Bearer token sha256 (평문 미저장)
     `token_prefix`       VARCHAR(16) DEFAULT NULL,       -- 토큰 식별 prefix (표시용)
     `token_expires_at`   DATETIME DEFAULT NULL,          -- 토큰 만료 (발급+90일)

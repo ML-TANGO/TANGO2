@@ -10,19 +10,16 @@ from utils.msa_db.db_base import get_db
 
 # ── edge_worker ─────────────────────────────────────────────────────────────
 
-def insert_edge_worker(device_id, name, device_type, sdx_domain, remote_manager_url,
-                       hw_model=None, location=None):
+def insert_edge_worker(device_id, name, device_type, remote_manager_url):
     try:
         with get_db() as conn:
             cur = conn.cursor()
             sql = """
                 INSERT INTO edge_worker
-                    (device_id, name, device_type, sdx_domain, remote_manager_url,
-                     hw_model, location)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    (device_id, name, device_type, remote_manager_url)
+                VALUES (%s, %s, %s, %s)
             """
-            cur.execute(sql, (device_id, name, device_type, sdx_domain,
-                              remote_manager_url, hw_model, location))
+            cur.execute(sql, (device_id, name, device_type, remote_manager_url))
             conn.commit()
             return cur.lastrowid
     except Exception:
@@ -30,7 +27,7 @@ def insert_edge_worker(device_id, name, device_type, sdx_domain, remote_manager_
         return None
 
 
-def get_edge_worker(worker_id=None, device_id=None):
+def get_edge_worker(worker_id=None, device_id=None, name=None):
     try:
         with get_db() as conn:
             cur = conn.cursor()
@@ -39,6 +36,8 @@ def get_edge_worker(worker_id=None, device_id=None):
                 cur.execute("SELECT * FROM edge_worker WHERE id=%s", (worker_id,))
             elif device_id is not None:
                 cur.execute("SELECT * FROM edge_worker WHERE device_id=%s", (device_id,))
+            elif name is not None:
+                cur.execute("SELECT * FROM edge_worker WHERE name=%s", (name,))
             else:
                 return None
             return cur.fetchone()

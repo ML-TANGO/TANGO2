@@ -219,6 +219,26 @@ def get_node_info(node_name):
         return None
 
 
+def list_node_roles():
+    """모든 노드의 node-role.kubernetes.io/* 라벨을 {node_name: set(role)} 로 반환.
+
+    노드 배지 파생용(예: 관리자가 `kubectl label node X node-role.kubernetes.io/db=`
+    하면 'db' 배지). best-effort — 실패 시 {} (배지 없이도 노드표는 정상 동작).
+    """
+    v1 = client.CoreV1Api()
+    prefix = "node-role.kubernetes.io/"
+    try:
+        out = {}
+        for n in v1.list_node().items:
+            labels = n.metadata.labels or {}
+            out[n.metadata.name] = {
+                k[len(prefix):] for k in labels if k.startswith(prefix) and len(k) > len(prefix)
+            }
+        return out
+    except Exception:
+        return {}
+
+
 def get_pvc_info(namespace, pvc_name):
     v1 = client.CoreV1Api()
     try:

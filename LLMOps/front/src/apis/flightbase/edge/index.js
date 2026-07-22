@@ -7,7 +7,8 @@ export const getEdgeWorkers = async () => {
 };
 
 export const registerEdgeWorker = async (body) => {
-  // body: { device_id, name?, device_type?, sdx_domain?, remote_manager_url?, hw_model?, location? }
+  // body: { name, device_type?, remote_manager_url? }
+  // device_id 는 서버가 자동 생성(응답 result.device_id). name 은 필수·중복 불가.
   return await callApi({ url: 'edge/workers', method: 'post', body });
 };
 

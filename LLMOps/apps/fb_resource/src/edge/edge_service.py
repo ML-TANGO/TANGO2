@@ -199,13 +199,27 @@ def _worker_view(w: dict) -> dict:
     return {**w, "labels": _labels_for("edge_worker", w["device_id"])}
 
 
+def _generate_device_id() -> str:
+    """서버측 불변 식별자 생성 — 이름(가변)과 분리. 물리장비 heartbeat id 로 쓰인다."""
+    return "edge-" + secrets.token_hex(4)  # edge-xxxxxxxx (8 hex)
+
+
 def register_edge_worker(body) -> dict:
-    if db_edge.get_edge_worker(device_id=body.device_id):
-        raise Exception(f"edge worker already registered: {body.device_id}")
+    # 이름은 사람이 식별하는 유일 키 — 중복 등록 방지(정확 일치).
+    if db_edge.get_edge_worker(name=body.name):
+        raise Exception(f"edge worker name already exists: {body.name}")
+    # device_id 는 서버가 자동 생성(랜덤 불투명값). 극히 드문 충돌은 재시도로 회피.
+    device_id = None
+    for _ in range(5):
+        candidate = _generate_device_id()
+        if not db_edge.get_edge_worker(device_id=candidate):
+            device_id = candidate
+            break
+    if device_id is None:
+        raise Exception("failed to allocate unique device_id")
     wid = db_edge.insert_edge_worker(
-        device_id=body.device_id, name=body.name, device_type=body.device_type,
-        sdx_domain=body.sdx_domain, remote_manager_url=body.remote_manager_url,
-        hw_model=body.hw_model, location=body.location,
+        device_id=device_id, name=body.name, device_type=body.device_type,
+        remote_manager_url=body.remote_manager_url,
     )
     if not wid:
         raise Exception("failed to register edge worker")
