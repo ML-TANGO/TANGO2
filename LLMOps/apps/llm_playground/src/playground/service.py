@@ -18,10 +18,8 @@ from utils import common
 from utils.common import is_good_name
 from utils.llm_db import db_items as db
 from utils.msa_db import db_dataset
-from utils.msa_db import db_edge
 from utils import deployment_envelope
 from utils import deployment_api  # 게시(D6) 공용 teardown — stop/delete 시 Kong 정리(3b-2)
-from utils.access_check import check_admin_access_level, ADMIN_ALLOW_MAX_LEVEL
 from fastapi.concurrency import run_in_threadpool
 from utils.crypt import front_cipher
 from utils import llm_deployment
@@ -66,6 +64,7 @@ async def get_playground_list(workspace_id, user_id):
                 "create_datetime" : item.get("create_datetime"),
                 "update_datetime" : item.get("create_datetime"),
                 "access" : item.get("access"),
+                "deploy_type" : item.get("deploy_type") or "cluster",
                 "owner" : db.get_user(user_id=item.get("create_user_id")).get("name"),
                 "status" : status.get("status") if status else TYPE.KUBE_POD_STATUS_STOP,
                 "bookmark" : 1 if item.get("id") in user_playground_bookmark_list else 0,
@@ -94,24 +93,25 @@ async def get_playground_list(workspace_id, user_id):
     return result
 
 async def get_deployment_targets(workspace_id, user_id):
-    """배포 타겟 통합 read-model — cluster(Playground)+edge 를 정규화 envelope 로 반환.
-    배포 타겟 디스패치 설계. 순수 매핑은 deployment_envelope 재사용.
-    edge 목록은 기존 `/edge/workers`(fb_resource, `@admin_access_check`)와 동일하게 **admin 전용** —
-    edge_worker 는 workspace/owner 바인딩이 없어(전역) 비-admin 에게 노출 금지. 게이트 판정만 재사용."""
+    """배포 타겟 통합 read-model — cluster/edge/standalone 3종을 정규화 envelope 로 반환.
+    3종 모두 playground row(deploy_type 판별자)이며 workspace 스코프 — deploy_type 로 envelope 디스패치.
+    edge 도 별도 playground 배포(deploy_type='edge')이며, 실제 배포 디바이스(edge_worker)는
+    상세 '배포' 탭에서 선택하는 타겟이지 목록 항목이 아니다. 별도 admin 게이트 없음(workspace 스코프 목록)."""
     targets = []
     try:
         # cluster (활성 = Playground, llm>0). 기존 목록 서비스 재사용 → status 재파생 안 함.
         # workspace_id 는 목록 행에 없어 파라미터로 주입(target_details 정합).
         cluster_list = await get_playground_list(workspace_id=workspace_id, user_id=user_id)
-        targets.extend(
-            deployment_envelope.cluster_envelope(dep, workspace_id=workspace_id) for dep in cluster_list)
-        # edge (remoteManager 디바이스, 공유 msa_db 층, 전역). 기존 admin 게이트 미러 —
-        # admin(=root) 에게만 포함. 비-admin 은 cluster-only (전역 디바이스 IDOR 방지).
-        # sync(pymysql) admin 체크·edge 조회는 이벤트루프 블록 방지로 threadpool offload(형제 edge 라우트 선례).
-        admin_level = await run_in_threadpool(check_admin_access_level, user_id)
-        if admin_level <= ADMIN_ALLOW_MAX_LEVEL:
-            edge_list = await run_in_threadpool(db_edge.get_edge_worker_list) or []
-            targets.extend(deployment_envelope.edge_envelope(w) for w in edge_list)
+        # deploy_type 로 cluster/edge/standalone envelope 디스패치 — 3종 모두 playground row(workspace 스코프).
+        #   edge 도 별도 playground 로 관리(배포 디바이스=edge_worker 는 상세 '배포' 탭에서 선택하는 타겟, 목록 항목 아님).
+        for dep in cluster_list:
+            dt = dep.get("deploy_type") or "cluster"
+            if dt == deployment_envelope.TARGET_STANDALONE:
+                targets.append(deployment_envelope.standalone_envelope(dep, workspace_id=workspace_id))
+            elif dt == deployment_envelope.TARGET_EDGE:
+                targets.append(deployment_envelope.edge_deploy_envelope(dep, workspace_id=workspace_id))
+            else:
+                targets.append(deployment_envelope.cluster_envelope(dep, workspace_id=workspace_id))
     except Exception as e:
         traceback.print_exc()
     return targets
@@ -143,11 +143,11 @@ async def get_playground_info(playground_id):
     return result
 
 
-async def create_playground(workspace_id, name, description, access, user_name=None, owner_id=None, users_id=[]):
+async def create_playground(workspace_id, name, description, access, user_name=None, owner_id=None, users_id=[], deploy_type='cluster'):
     try:
         owner_id = owner_id if owner_id else db.get_user(user_name=user_name).get("id")
         # playground
-        res, playground_id = await db.insert_playground(workspace_id=workspace_id, name=name, description=description, create_user_id=owner_id, access=access)
+        res, playground_id = await db.insert_playground(workspace_id=workspace_id, name=name, description=description, create_user_id=owner_id, access=access, deploy_type=deploy_type)
         if not res:
             return False 
 

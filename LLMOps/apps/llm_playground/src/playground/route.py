@@ -112,7 +112,7 @@ async def create_playground(body: dto.CreatePlaygroundInput):
     목록페이지 - 목록 페이지에서 생성
     """
     try:
-        res = await svc.create_playground(workspace_id=body.workspace_id, name=body.name, description=body.description, owner_id=body.owner_id, access=body.access, users_id=body.users_id)
+        res = await svc.create_playground(workspace_id=body.workspace_id, name=body.name, description=body.description, owner_id=body.owner_id, access=body.access, users_id=body.users_id, deploy_type=body.deploy_type)
         return response(status=1, result=res)
     except Exception as e:
         traceback.print_exc()

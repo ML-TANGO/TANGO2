@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 import datetime
 from utils.TYPE import DEPLOYMENT_TYPE
 
@@ -12,6 +12,7 @@ class CreatePlaygroundInput(BaseModel):
     access: int = Field(default=1, description='Access Type : 0 = private, 1 = public')
     owner_id: int = Field(default=None, description='Users Id' )
     users_id: Optional[list] = Field(default=list(), description='Users Id' )
+    deploy_type: Literal['cluster', 'edge', 'standalone'] = Field(default='cluster', description='배포 유형(cluster|edge|standalone) — 미지원 값/null 거부')
 
 class UpdatePlaygroundInput(BaseModel):
     playground_id: int

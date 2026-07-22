@@ -8,8 +8,10 @@ FE/BFF 가 하나의 형태로 소비하도록 **정규화**하는 순수 함수
 - 상세는 target_details 로 원본 병기(손실적 정규화 방지). phase 는 coarse 5-state.
 
 envelope = {
-    "target":          "cluster" | "edge",
-    "native_id":       원본 식별자(playground/deployment id, edge worker id),
+    "target":          "cluster" | "edge" | "standalone",
+    "native_id":       원본 식별자(현 목록: 3종 모두 playground id — edge 도 playground 배포),
+    # 주: edge 는 두 생산자 — edge_deploy_envelope(playground row, deploy_type='edge', 현 목록 소스) /
+    #     edge_envelope(edge_worker 디바이스 기반, 디바이스 뷰용 — 현재 목록 미사용).
     "phase":           PHASE_* (deploying/running/stopped/failed/unknown),
     "capabilities":    [CAP_*],           # 타겟이 지원하는 동작(publish 등은 cluster 전용)
     "links":           {name: url|path},  # 호출/관리 링크(있을 때만)
@@ -35,6 +37,7 @@ CAP_PACKAGE_DOWNLOAD = "package_download"
 
 TARGET_CLUSTER = "cluster"
 TARGET_EDGE = "edge"
+TARGET_STANDALONE = "standalone"  # 오프라인 번들(playground row, deploy_type='standalone')
 
 # cluster 서빙 상태 문자열 → coarse phase (fb_deployment/llm_playground deployment_status.status).
 _CLUSTER_PHASE = {
@@ -125,5 +128,42 @@ def edge_envelope(worker: dict) -> dict:
             "deploy_model": worker.get("deploy_model"),
             "deploy_version": worker.get("deploy_version"),
             "deploy_state": worker.get("deploy_state"),
+        },
+    }
+
+
+def edge_deploy_envelope(dep: dict, workspace_id=None) -> dict:
+    """온디바이스(엣지) 배포 행 dict → envelope. playground row(deploy_type='edge').
+    edge 도 별도 playground 로 관리 — 배포 디바이스(edge_worker)는 상세 '배포' 탭에서 선택하는 타겟이지
+    목록 항목이 아니다. 여기선 배포(프로젝트) 자체의 상태만."""
+    status = _cluster_status_str(dep)
+    return {
+        "target": TARGET_EDGE,
+        "native_id": dep.get("id") or dep.get("playground_id"),
+        "name": dep.get("name"),
+        "phase": normalize_cluster_phase(status),
+        "capabilities": [CAP_REMOTE_REFRESH, CAP_PACKAGE_DOWNLOAD],
+        "links": {},
+        "last_observed_at": None,
+        "target_details": {
+            "workspace_id": dep.get("workspace_id") if dep.get("workspace_id") is not None else workspace_id,
+        },
+    }
+
+
+def standalone_envelope(dep: dict, workspace_id=None) -> dict:
+    """standalone(오프라인 번들) 행 dict → envelope. playground row(deploy_type='standalone').
+    러닝 배포가 아니라 번들 산출물 — package_download capability 만, live/publish 없음."""
+    status = _cluster_status_str(dep)
+    return {
+        "target": TARGET_STANDALONE,
+        "native_id": dep.get("id") or dep.get("playground_id"),
+        "name": dep.get("name"),
+        "phase": normalize_cluster_phase(status),
+        "capabilities": [CAP_PACKAGE_DOWNLOAD],
+        "links": {},
+        "last_observed_at": None,
+        "target_details": {
+            "workspace_id": dep.get("workspace_id") if dep.get("workspace_id") is not None else workspace_id,
         },
     }

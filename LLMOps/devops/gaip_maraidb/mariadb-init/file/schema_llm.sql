@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS `playground` (
     `create_user_id`        INT(11),
     `access`                INT(11),
     `description`           VARCHAR(5000),
+    `deploy_type`           VARCHAR(16) DEFAULT 'cluster',
     `create_datetime`       DATETIME DEFAULT CURRENT_TIMESTAMP(),
     `update_datetime`       DATETIME DEFAULT CURRENT_TIMESTAMP() ON UPDATE CURRENT_TIMESTAMP(),
     `deployment`            JSON,

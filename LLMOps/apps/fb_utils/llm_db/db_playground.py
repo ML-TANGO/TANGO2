@@ -4,7 +4,7 @@ from utils import TYPE
 
 async def get_playground_list(workspace_id=None):
     sql = """
-    SELECT p.id, p.name, p.workspace_id, p.create_user_id, p.description, p.access, p.deployment, p.model, p.rag, p.prompt,
+    SELECT p.id, p.name, p.workspace_id, p.create_user_id, p.description, p.access, p.deploy_type, p.deployment, p.model, p.rag, p.prompt,
     DATE_FORMAT(p.create_datetime, %s) create_datetime, DATE_FORMAT(p.update_datetime, %s) update_datetime
     FROM playground p
     """
@@ -32,11 +32,11 @@ async def get_playground(playground_id):
     res = await select_query(sql, params=(TYPE.TIME_DATE_FORMAT_SQL, TYPE.TIME_DATE_FORMAT_SQL, playground_id), fetch_type=FetchType.ONE)
     return res
 
-async def insert_playground(workspace_id, create_user_id, name, description, access):
+async def insert_playground(workspace_id, create_user_id, name, description, access, deploy_type='cluster'):
     try:
-        sql = """INSERT into playground (workspace_id, create_user_id, name, description, access)
-                    VALUES (%s,%s,%s,%s,%s)"""
-        playground_id = await commit_query(query=sql, params=(workspace_id, create_user_id, name, description, access))
+        sql = """INSERT into playground (workspace_id, create_user_id, name, description, access, deploy_type)
+                    VALUES (%s,%s,%s,%s,%s,%s)"""
+        playground_id = await commit_query(query=sql, params=(workspace_id, create_user_id, name, description, access, deploy_type))
         return True, playground_id
     except:
         traceback.print_exc()
