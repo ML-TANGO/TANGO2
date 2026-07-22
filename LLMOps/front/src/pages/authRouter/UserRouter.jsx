@@ -83,100 +83,98 @@ import style from './UserRouter.module.scss';
 
 const Model = lazy(() => import('../llm/Model'));
 const ModelDetailPage = lazy(() => import('../llm/Model/ModelDetailPage'));
+const EdgeDeploymentDetail = lazy(() => import('../llm/Edge/EdgeDeploymentDetail'));
 const RagDetailPage = lazy(() => import('../llm/Rag/RagDetailPage'));
 
 const Rag = lazy(() => import('../llm/Rag'));
 
 const SelectedPage = lazy(() => import('../SelectedPage'));
 
-const UserDatasetCollectDetailPage = lazy(() =>
-  import('../UserDatasetCollectDetailPage'),
+const UserDatasetCollectDetailPage = lazy(
+  () => import('../UserDatasetCollectDetailPage'),
 );
 
 const Dashboard = lazy(() => import('@src/pages/llm/DashboardPage'));
 
 const cx = classNames.bind(style);
 
-const UserPipeLineInfo = lazy(() =>
-  import(
-    '@src/components/pageContents/user/UserPipeLineContent/UserPipeLineInfo'
-  ),
+const UserPipeLineInfo = lazy(
+  () =>
+    import('@src/components/pageContents/user/UserPipeLineContent/UserPipeLineInfo'),
 );
 
-const UserPipeLineSetting = lazy(() =>
-  import(
-    '@src/components/pageContents/user/UserPipeLineContent/UserPipeLineSetting'
-  ),
+const UserPipeLineSetting = lazy(
+  () =>
+    import('@src/components/pageContents/user/UserPipeLineContent/UserPipeLineSetting'),
 );
 
-const UserPipeLineContent = lazy(() =>
-  import('@src/components/pageContents/user/UserPipeLineContent'),
+const UserPipeLineContent = lazy(
+  () => import('@src/components/pageContents/user/UserPipeLineContent'),
 );
 
-const UserDatasetRedirectPage = lazy(() =>
-  import('@src/pages/UserDatasetRedirectPage'),
+const UserDatasetRedirectPage = lazy(
+  () => import('@src/pages/UserDatasetRedirectPage'),
 );
 
-const UserDataCollectMenuPage = lazy(() =>
-  import('@src/pages/UserDataCollectMenuPage'),
+const UserDataCollectMenuPage = lazy(
+  () => import('@src/pages/UserDataCollectMenuPage'),
 );
 
-const UserDatasetLabelingPage = lazy(() =>
-  import('@src/pages/UserDatasetLabelingPage'),
+const UserDatasetLabelingPage = lazy(
+  () => import('@src/pages/UserDatasetLabelingPage'),
 );
 
-const ModelCommitListItem = lazy(() =>
-  import('@src/pages/llm/Model/ModelDetailPage/CommitList/ModelCommitListItem'),
+const ModelCommitListItem = lazy(
+  () =>
+    import('@src/pages/llm/Model/ModelDetailPage/CommitList/ModelCommitListItem'),
 );
 
-const PromptCommitPage = lazy(() =>
-  import('@src/pages/llm/Prompt/PromptCommitPage'),
+const PromptCommitPage = lazy(
+  () => import('@src/pages/llm/Prompt/PromptCommitPage'),
 );
 
-const PromptDetail = lazy(() =>
-  import('@src/pages/llm/Prompt/PromptDetailPage'),
+const PromptDetail = lazy(
+  () => import('@src/pages/llm/Prompt/PromptDetailPage'),
 );
 
-const UserPipeLineMenu = lazy(() =>
-  import(
-    '@src/components/pageContents/user/UserPipeLineContent/UserPipeLineMenu'
-  ),
+const UserPipeLineMenu = lazy(
+  () =>
+    import('@src/components/pageContents/user/UserPipeLineContent/UserPipeLineMenu'),
 );
-const UserPipelineHistoryDetail = lazy(() =>
-  import(
-    '@src/components/pageContents/user/UserPipeLineContent/UserPipelineHistoryDetail'
-  ),
+const UserPipelineHistoryDetail = lazy(
+  () =>
+    import('@src/components/pageContents/user/UserPipeLineContent/UserPipelineHistoryDetail'),
 );
 
-const PromptMenuPage = lazy(() =>
-  import('@src/pages/llm/Prompt/PromptMenuPage/PromptMenuPage'),
+const PromptMenuPage = lazy(
+  () => import('@src/pages/llm/Prompt/PromptMenuPage/PromptMenuPage'),
 );
 
 const PlaygroundMenu = lazy(() => import('../llm/Playground/PlaygroundMenu'));
-const PlaygroundDetail = lazy(() =>
-  import('../llm/Playground/PlaygroundDetail'),
+const PlaygroundDetail = lazy(
+  () => import('../llm/Playground/PlaygroundDetail'),
 );
 
 const LLMDatasetPage = lazy(() => import('@src/pages/llm/LLMDatasetPage'));
 
 // Pages
 const UserDashboardPage = lazy(() => import('@src/pages/UserDashboardPage'));
-const UserDockerImagePage = lazy(() =>
-  import('@src/pages/UserDockerImagePage'),
+const UserDockerImagePage = lazy(
+  () => import('@src/pages/UserDockerImagePage'),
 );
 const UserJobPage = lazy(() => import('@src/pages/UserJobPage'));
-const UserDeploymentInfoPage = lazy(() =>
-  import('@src/pages/UserDeploymentInfoPage'),
+const UserDeploymentInfoPage = lazy(
+  () => import('@src/pages/UserDeploymentInfoPage'),
 );
-const UserTrainingInfoPage = lazy(() =>
-  import('@src/pages/UserTrainingInfoPage'),
+const UserTrainingInfoPage = lazy(
+  () => import('@src/pages/UserTrainingInfoPage'),
 );
 const DeployWorkerPage = lazy(() => import('@src/pages/DeployWorkerPage'));
-const DeployWorkerDashboardPage = lazy(() =>
-  import('@src/pages/DeployWorkerDashboardPage'),
+const DeployWorkerDashboardPage = lazy(
+  () => import('@src/pages/DeployWorkerDashboardPage'),
 );
-const DeployDashboardPage = lazy(() =>
-  import('@src/pages/DeployDashboardPage'),
+const DeployDashboardPage = lazy(
+  () => import('@src/pages/DeployDashboardPage'),
 );
 const UserHomePage = lazy(() => import('@src/pages/UserHomePage'));
 const UserDatasetPage = lazy(() => import('@src/pages/UserDatasetPage'));
@@ -185,61 +183,61 @@ const UserTrainingPage = lazy(() => import('@src/pages/UserTrainingPage'));
 const UserHpsPage = lazy(() => import('@src/pages/UserHpsPage'));
 const UserCheckpointPage = lazy(() => import('@src/pages/UserCheckpointPage'));
 const UserWorkbenchPage = lazy(() => import('@src/pages/UserWorkbenchPage'));
-const UserFederatedLearningPage = lazy(() =>
-  import('@src/pages/UserFederatedLearningPage'),
+const UserFederatedLearningPage = lazy(
+  () => import('@src/pages/UserFederatedLearningPage'),
 );
 const UserDeploymentPage = lazy(() => import('@src/pages/UserDeploymentPage'));
 // SP-Deployment(D6) v3 §7.5 — 추론(Inference) 탭 (Playground test 소비 레이어)
-const InferenceMenu = lazy(() =>
-  import('@src/pages/llm/Inference/InferenceMenu/InferenceMenu'),
+const InferenceMenu = lazy(
+  () => import('@src/pages/llm/Inference/InferenceMenu/InferenceMenu'),
 );
 // D6 v3 Tier-1 — 추론 상세 (배포 config 없는 lean 채팅/데이터셋, TestComponent 재사용)
-const InferenceDetail = lazy(() =>
-  import('@src/pages/llm/Inference/InferenceDetail/InferenceDetail'),
+const InferenceDetail = lazy(
+  () => import('@src/pages/llm/Inference/InferenceDetail/InferenceDetail'),
 );
 // 평가(Evaluation, llm_evaluation) — 프로젝트 목록/허브
-const EvaluationMenu = lazy(() =>
-  import('@src/pages/llm/Evaluation/EvaluationMenu/EvaluationMenu'),
+const EvaluationMenu = lazy(
+  () => import('@src/pages/llm/Evaluation/EvaluationMenu/EvaluationMenu'),
 );
 // 벤치마크/judge/전문가 standalone 페이지는 프로젝트 상세(ProjectDetail)로 흡수 — 모델/데이터셋이
 // 프로젝트에서 잠기므로 셋업 뷰가 무의미. 설정·결과·전문가 채점은 재사용 컴포넌트로 편입.
-const ProjectDetail = lazy(() =>
-  import('@src/pages/llm/Evaluation/ProjectDetail/ProjectDetail'),
+const ProjectDetail = lazy(
+  () => import('@src/pages/llm/Evaluation/ProjectDetail/ProjectDetail'),
 );
-const EvalCrossCompare = lazy(() =>
-  import('@src/pages/llm/Evaluation/EvalCrossCompare/EvalCrossCompare'),
+const EvalCrossCompare = lazy(
+  () => import('@src/pages/llm/Evaluation/EvalCrossCompare/EvalCrossCompare'),
 );
 const UserServicePage = lazy(() => import('@src/pages/UserServicePage'));
 const UserTestPage = lazy(() => import('@src/pages/UserTestPage'));
 const NotFoundPage = lazy(() => import('@src/pages/NotFoundPage'));
-const UserDatasetPreprocessPage = lazy(() =>
-  import('@src/pages/UserDatasetPreprocessPage'),
+const UserDatasetPreprocessPage = lazy(
+  () => import('@src/pages/UserDatasetPreprocessPage'),
 );
-const UserDatasetPreprocessDetailPage = lazy(() =>
-  import('@src/pages/UserDatasetPreprocessDetailPage'),
+const UserDatasetPreprocessDetailPage = lazy(
+  () => import('@src/pages/UserDatasetPreprocessDetailPage'),
 );
 
-const UserDatasetAnalysisPage = lazy(() =>
-  import('@src/pages/UserDatasetAnalysisPage'),
+const UserDatasetAnalysisPage = lazy(
+  () => import('@src/pages/UserDatasetAnalysisPage'),
 );
 const UserSynthesisPage = lazy(() => import('@src/pages/UserSynthesisPage'));
-const UserSynthesisDetailPage = lazy(() =>
-  import('@src/pages/UserSynthesisDetailPage'),
+const UserSynthesisDetailPage = lazy(
+  () => import('@src/pages/UserSynthesisDetailPage'),
 );
-const UserSynthesisPromptOptimizePage = lazy(() =>
-  import('@src/pages/UserSynthesisPromptOptimizePage'),
+const UserSynthesisPromptOptimizePage = lazy(
+  () => import('@src/pages/UserSynthesisPromptOptimizePage'),
 );
-const UserSynthesisPromptListPage = lazy(() =>
-  import('@src/pages/UserSynthesisPromptListPage'),
+const UserSynthesisPromptListPage = lazy(
+  () => import('@src/pages/UserSynthesisPromptListPage'),
 );
-const UserSynthesisCanvasPage = lazy(() =>
-  import('@src/pages/UserSynthesisCanvasPage'),
+const UserSynthesisCanvasPage = lazy(
+  () => import('@src/pages/UserSynthesisCanvasPage'),
 );
-const UserSynthesisWizardPage = lazy(() =>
-  import('@src/pages/UserSynthesisWizardPage'),
+const UserSynthesisWizardPage = lazy(
+  () => import('@src/pages/UserSynthesisWizardPage'),
 );
-const UserDatasetAnalysisDetailPage = lazy(() =>
-  import('@src/pages/UserDatasetAnalysisDetailPage'),
+const UserDatasetAnalysisDetailPage = lazy(
+  () => import('@src/pages/UserDatasetAnalysisDetailPage'),
 );
 
 const IS_HIDE_TRAINING =
@@ -392,6 +390,16 @@ const llmRouteArr = [
     activeIcon: IconNavPlaygroundActive,
     platform: 'llm',
     render: (props) => <DeployDashboardPage {...props} />,
+  },
+  {
+    name: 'EdgeDeploymentDetail',
+    path: '/user/workspace/:id/edge-deploy/:workerId',
+    exact: false,
+    disabled: true,
+    icon: IconNavPlaygroundActive,
+    activeIcon: IconNavPlaygroundActive,
+    platform: 'llm',
+    render: (props) => <EdgeDeploymentDetail {...props} />,
   },
 ];
 
@@ -969,6 +977,16 @@ const routeArr = [
     platform: 'flightbase',
     render: (props) => <DeployDashboardPage {...props} />,
   },
+  {
+    name: 'EdgeDeploymentDetail',
+    path: '/user/workspace/:id/edge-deploy/:workerId',
+    exact: false,
+    disabled: true,
+    icon: IconNavPlaygroundActive,
+    activeIcon: IconNavPlaygroundActive,
+    platform: 'flightbase',
+    render: (props) => <EdgeDeploymentDetail {...props} />,
+  },
 ];
 
 const calSideNavList = (selectedPlatform) => {
@@ -1046,14 +1064,14 @@ const TopCardNav = ({ workspaceId }) => {
         activeStyle={TOP_CARD_ACTIVE}
       >
         <svg
-          viewBox="58 19 16 16"
-          width="22"
-          height="22"
-          fill="currentColor"
+          viewBox='58 19 16 16'
+          width='22'
+          height='22'
+          fill='currentColor'
           style={{ marginBottom: '6px' }}
-          xmlns="http://www.w3.org/2000/svg"
+          xmlns='http://www.w3.org/2000/svg'
         >
-          <path d="M64.6658 31.6632V28.3299H67.3324V31.6632C67.3324 32.0299 67.6324 32.3299 67.9991 32.3299H69.9991C70.3658 32.3299 70.6658 32.0299 70.6658 31.6632V26.9966H71.7991C72.1058 26.9966 72.2524 26.6166 72.0191 26.4166L66.4458 21.3966C66.1924 21.1699 65.8058 21.1699 65.5524 21.3966L59.9791 26.4166C59.7524 26.6166 59.8924 26.9966 60.1991 26.9966H61.3324V31.6632C61.3324 32.0299 61.6324 32.3299 61.9991 32.3299H63.9991C64.3658 32.3299 64.6658 32.0299 64.6658 31.6632Z" />
+          <path d='M64.6658 31.6632V28.3299H67.3324V31.6632C67.3324 32.0299 67.6324 32.3299 67.9991 32.3299H69.9991C70.3658 32.3299 70.6658 32.0299 70.6658 31.6632V26.9966H71.7991C72.1058 26.9966 72.2524 26.6166 72.0191 26.4166L66.4458 21.3966C66.1924 21.1699 65.8058 21.1699 65.5524 21.3966L59.9791 26.4166C59.7524 26.6166 59.8924 26.9966 60.1991 26.9966H61.3324V31.6632C61.3324 32.0299 61.6324 32.3299 61.9991 32.3299H63.9991C64.3658 32.3299 64.6658 32.0299 64.6658 31.6632Z' />
         </svg>
         대시보드
       </NavLink>
@@ -1063,14 +1081,14 @@ const TopCardNav = ({ workspaceId }) => {
         activeStyle={TOP_CARD_ACTIVE}
       >
         <svg
-          viewBox="186 19 16 16"
-          width="22"
-          height="22"
-          fill="currentColor"
+          viewBox='186 19 16 16'
+          width='22'
+          height='22'
+          fill='currentColor'
           style={{ marginBottom: '6px' }}
-          xmlns="http://www.w3.org/2000/svg"
+          xmlns='http://www.w3.org/2000/svg'
         >
-          <path d="M199.336 22.9974L194.003 22.9974L192.669 21.6641H188.669C187.936 21.6641 187.343 22.2641 187.343 22.9974L187.336 30.9974C187.336 31.7307 187.936 32.3307 188.669 32.3307H199.336C200.069 32.3307 200.669 31.7307 200.669 30.9974V24.3307C200.669 23.5974 200.069 22.9974 199.336 22.9974ZM199.336 30.9974L188.669 30.9974V29.2831L199.336 29.2831V30.9974Z" />
+          <path d='M199.336 22.9974L194.003 22.9974L192.669 21.6641H188.669C187.936 21.6641 187.343 22.2641 187.343 22.9974L187.336 30.9974C187.336 31.7307 187.936 32.3307 188.669 32.3307H199.336C200.069 32.3307 200.669 31.7307 200.669 30.9974V24.3307C200.669 23.5974 200.069 22.9974 199.336 22.9974ZM199.336 30.9974L188.669 30.9974V29.2831L199.336 29.2831V30.9974Z' />
         </svg>
         드라이브
       </NavLink>

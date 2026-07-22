@@ -1,0 +1,121 @@
+@import '@src/styles/color.scss';
+
+.edge-cont {
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+
+  .back {
+    border: none;
+    background: initial;
+    color: $mono205;
+    font-family: SpoqaM;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .title {
+    margin: 0;
+    color: $mono207;
+    font-family: SpoqaB;
+    font-size: 20px;
+  }
+  .badge {
+    padding: 2px 10px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-family: SpoqaM;
+    &.on {
+      background: rgba($blue104, 0.12);
+      color: $blue104;
+    }
+    &.off {
+      background: $mono202;
+      color: $mono205;
+    }
+  }
+}
+
+.tab-bar {
+  margin-bottom: 24px;
+}
+
+.grid {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+}
+
+@media (max-width: 1024px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  border: 1px solid $mono203;
+  border-radius: 12px;
+  background: #fff;
+  min-width: 0;
+
+  .card-title {
+    margin: 0 0 4px;
+    color: $mono207;
+    font-family: SpoqaB;
+    font-size: 16px;
+  }
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  .k {
+    color: $mono205;
+    font-family: SpoqaM;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  .v {
+    color: $mono207;
+    font-family: SpoqaM;
+    font-size: 13px;
+    text-align: right;
+    word-break: break-word;
+  }
+}
+
+.label {
+  color: $mono205;
+  font-family: SpoqaM;
+  font-size: 13px;
+}
+
+.select,
+.input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid $mono203;
+  border-radius: 8px;
+  font-size: 13px;
+  color: $mono207;
+  background: $mono200;
+}
+
+.hint {
+  margin: 4px 0 0;
+  color: $mono205;
+  font-family: SpoqaM;
+  font-size: 12px;
+}

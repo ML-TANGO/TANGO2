@@ -26,7 +26,7 @@ async def register_worker(body: model.RegisterEdgeWorkerModel):
 
 
 @edge.get('/workers')
-@admin_access_check()
+# [authZ] 목록 조회 = 일반 사용자 개방 (등록/관리만 admin). 엣지 워커는 전역 디바이스.
 async def list_workers():
     try:
         res = await run_in_threadpool(edge_service.list_edge_workers)
@@ -37,7 +37,7 @@ async def list_workers():
 
 
 @edge.get('/workers/{worker_id}')
-@admin_access_check()
+# [authZ] 단건 조회 = 일반 사용자 개방.
 async def get_worker(worker_id: int):
     try:
         res = await run_in_threadpool(edge_service.get_edge_worker, worker_id)
@@ -48,7 +48,7 @@ async def get_worker(worker_id: int):
 
 
 @edge.post('/workers/{worker_id}/refresh')
-@admin_access_check()
+# [authZ] 상태/자원 갱신(모니터링) = 일반 사용자 개방.
 async def refresh_worker(worker_id: int):
     # remoteManager /metrics 폴링 → 연결상태/자원/배포 갱신 (blocking → threadpool).
     try:
@@ -60,7 +60,7 @@ async def refresh_worker(worker_id: int):
 
 
 @edge.post('/workers/{worker_id}/deploy')
-@admin_access_check()
+# [authZ] 배포 실행 = 일반 사용자 개방 (등록/관리만 admin).
 async def deploy_worker(worker_id: int, body: model.DeployEdgeModel):
     # SP-6 / 3.10 — 양자화 패키지를 Edge 워커에 remoteManager /ops 로 배포 (blocking → threadpool).
     try:
