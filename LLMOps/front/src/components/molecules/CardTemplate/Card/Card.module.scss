@@ -120,6 +120,29 @@
           color: $red502;
         }
       }
+      .type-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 8px;
+        border-radius: 6px;
+        font-family: SpoqaM;
+        font-size: 11px;
+        line-height: 11px;
+        border: 1px solid $mono203;
+        background: $mono201;
+        color: $mono205;
+
+        &.cluster {
+          border-color: rgba($blue104, 0.4);
+          background: rgba($blue104, 0.08);
+          color: $blue104;
+        }
+        &.edge {
+          border-color: rgba($lime604, 0.4);
+          background: rgba($lime604, 0.1);
+          color: $lime604;
+        }
+      }
     }
     .btn-cont {
       display: flex;

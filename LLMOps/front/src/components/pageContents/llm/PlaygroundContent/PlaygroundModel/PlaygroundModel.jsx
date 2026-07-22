@@ -52,6 +52,8 @@ const ENGINES = [
   { id: 'tgi', label: 'TGI', disabled: false },
   { id: 'ollama', label: 'Ollama', disabled: false },
   { id: 'triton', label: 'Triton', disabled: false },
+  // TensorRT: 목업 UI-only(백엔드 미배선). 활성처럼 표시(disabled:false) — 실제 배포는 아직 미지원.
+  { id: 'tensorrt', label: 'TensorRT', disabled: false },
 ];
 
 const PlaygroundModel = React.memo(({ workspaceId }) => {

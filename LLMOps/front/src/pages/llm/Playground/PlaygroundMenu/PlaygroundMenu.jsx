@@ -6,7 +6,6 @@ import { toast } from 'react-toastify';
 
 import CardTemplate from '@src/components/molecules/CardTemplate/CardTemplate';
 
-import EdgeDeploymentSection from './EdgeDeploymentSection/EdgeDeploymentSection';
 import NewDeploymentWizard from '@src/components/Modal/NewDeploymentWizard/NewDeploymentWizard';
 
 import {
@@ -28,6 +27,17 @@ import style from './PlaygroundMenu.module.scss';
 
 const cx = classNames.bind(style);
 
+// 배포 유형(playground.deploy_type) → 유형 라벨 칩(상태 배지 옆). 3종 모두 playground row.
+const TYPE_LABEL = { cluster: '클러스터', edge: '온디바이스', standalone: 'Standalone' };
+
+// 배포 유형별 상세 라우팅 경로.
+const detailPath = (wid, kind, id) => {
+  if (kind === 'edge') return `/user/workspace/${wid}/edge-deploy/${id}`;
+  if (kind === 'standalone')
+    return `/user/workspace/${wid}/standalone-deploy/${id}`;
+  return `/user/workspace/${wid}/llmplayground/${id}/llmplayground`;
+};
+
 const breadCrumbHandler = (dispatch) => {
   dispatch(
     startPath([
@@ -41,41 +51,34 @@ const breadCrumbHandler = (dispatch) => {
   );
 };
 
-const getPlaygroundInfo = async (workspace_id, setPlaygroundInfo) => {
+// 배포 목록 — getPlayground(cluster/edge/standalone 모두 playground row) 기반.
+//   각 행에 deploy_type + access/owner/bookmark/users 가 있어 유형 배지·접근가드·북마크를 모두 지원.
+const getPlaygroundInfo = async (workspace_id, setDeployItems) => {
   const { result, message, status, error } = await getPlayground(workspace_id);
   if (status === STATUS_SUCCESS) {
-    const transformList = result.map((el) => {
-      const {
-        id,
-        name,
-        description,
-        owner,
-        update_datetime,
-        create_datetime,
-        bookmark,
-        access,
-        status,
-        users,
-      } = el;
+    const list = (result || []).map((r) => {
+      const kind = r.deploy_type || 'cluster';
       return {
-        id,
-        title: name,
-        subTitle: description,
-        constructor: owner,
-        updateTime: update_datetime,
-        createTime: create_datetime,
-        isBookMark: bookmark,
-        isAccess: access,
-        userList: users,
-        status,
+        id: r.id,
+        kind,
+        title: r.name,
+        typeBadge: TYPE_LABEL[kind] || kind,
+        subTitle: r.description,
+        constructor: r.owner,
+        updateTime: r.update_datetime,
+        createTime: r.create_datetime,
+        isBookMark: r.bookmark,
+        isAccess: r.access,
+        userList: r.users,
+        status: r.status,
       };
     });
-    const sortArr = transformList.sort((a, b) => b.isBookMark - a.isBookMark);
-    setPlaygroundInfo(sortArr);
-    return transformList;
-  } else {
-    errorToastMessage(error, message);
+    const sortArr = list.sort((a, b) => b.isBookMark - a.isBookMark);
+    setDeployItems(sortArr);
+    return sortArr;
   }
+  errorToastMessage(error, message);
+  return [];
 };
 
 const PlaygroundMenu = () => {
@@ -87,63 +90,56 @@ const PlaygroundMenu = () => {
 
   const { id: workspace_id } = match.params;
 
-  const [playgroundInfo, setPlaygroundInfo] = useState([]);
-  // D6 v3: "+새 배포" → 스텝 위저드(NewDeploymentWizard). 클러스터=대상→정보→확인→postPlayground(상세이동),
-  //   엣지/standalone=양자화 선행 안내. (기존 ADD_PLAYGROUND 셸 생성 모달을 위저드가 흡수.)
+  const [deployItems, setDeployItems] = useState([]);
+  // D6 v3: "+새 배포" → 스텝 위저드(NewDeploymentWizard). cluster/edge/standalone 모두 생성 진행.
   const [showNewDeployment, setShowNewDeployment] = useState(false);
 
   const handleCreateCard = useCallback(() => {
     setShowNewDeployment(true);
   }, []);
 
-  // 위저드 props 를 안정 identity 로 — 인라인 리터럴이면 부모 리렌더마다 위저드 Escape 리스너가 재등록됨.
   const handleCloseNewDeployment = useCallback(
     () => setShowNewDeployment(false),
     [],
   );
   const handleRefreshDeployments = useCallback(
-    () => getPlaygroundInfo(workspace_id, setPlaygroundInfo),
+    () => getPlaygroundInfo(workspace_id, setDeployItems),
     [workspace_id],
   );
 
+  // private(access===0) 배포는 소유자/지정 사용자만 조작 — UI 접근가드(BE authZ 비활성 하 유일 방어선).
+  const hasAccess = useCallback(
+    (isAccess, constructor, userList) => {
+      if (isAccess !== 0) return true;
+      if (userName === constructor) return true;
+      return !!(userList || []).find(
+        ({ user_name }) => user_name === userName,
+      );
+    },
+    [userName],
+  );
+
+  // 카드 클릭 → 접근가드 후 배포 유형별 상세 라우팅.
   const handleOnClickCard = useCallback(
     (e, id, constructor, isAccess, userList) => {
       e.stopPropagation();
-
-      if (isAccess === 0) {
-        if (userName !== constructor) {
-          const isEditAccess = userList.find(
-            ({ user_name }) => user_name === userName,
-          );
-          if (!isEditAccess) {
-            toast.error('접근 권한이 없습니다.');
-            return;
-          }
-        }
+      if (!hasAccess(isAccess, constructor, userList)) {
+        toast.error('접근 권한이 없습니다.');
+        return;
       }
-      history.push(
-        `/user/workspace/${workspace_id}/llmplayground/${id}/llmplayground`,
-      );
+      const item = deployItems.find((i) => String(i.id) === String(id));
+      history.push(detailPath(workspace_id, item?.kind, id));
     },
-    [userName, history, workspace_id],
+    [history, workspace_id, deployItems, hasAccess],
   );
 
   const handleDelete = useCallback(
     async (e, id, title, isAccess, userList, constructor) => {
       e.stopPropagation();
-
-      if (isAccess === 0) {
-        if (userName !== constructor) {
-          const isEditAccess = userList.find(
-            ({ user_name }) => user_name === userName,
-          );
-          if (!isEditAccess) {
-            toast.error('접근 권한이 없습니다.');
-            return;
-          }
-        }
+      if (!hasAccess(isAccess, constructor, userList)) {
+        toast.error('접근 권한이 없습니다.');
+        return;
       }
-
       dispatch(
         openConfirm({
           title: 'playground.delete.label',
@@ -156,7 +152,7 @@ const PlaygroundMenu = () => {
               if (status !== STATUS_SUCCESS) {
                 toast.error(message);
               } else {
-                await getPlaygroundInfo(workspace_id, setPlaygroundInfo);
+                await getPlaygroundInfo(workspace_id, setDeployItems);
               }
             },
           },
@@ -167,19 +163,18 @@ const PlaygroundMenu = () => {
         }),
       );
     },
-    [dispatch, workspace_id],
+    [dispatch, workspace_id, hasAccess],
   );
 
   const handleBookMark = useCallback(
     async (e, id, isBookMark) => {
       e.stopPropagation();
-
       if (!isBookMark) {
         await postBookmark(id);
       } else {
         await deletePlaygroundBookmark(id);
       }
-      await getPlaygroundInfo(workspace_id, setPlaygroundInfo);
+      await getPlaygroundInfo(workspace_id, setDeployItems);
     },
     [workspace_id],
   );
@@ -187,31 +182,19 @@ const PlaygroundMenu = () => {
   const handleEdit = useCallback(
     async (e, id, isAccess, userList, constructor) => {
       e.stopPropagation();
-
-      if (isAccess === 0) {
-        if (userName !== constructor) {
-          const isEditAccess = userList.find(
-            ({ user_name }) => user_name === userName,
-          );
-          if (!isEditAccess) {
-            toast.error('접근 권한이 없습니다.');
-            return;
-          }
-        }
+      if (!hasAccess(isAccess, constructor, userList)) {
+        toast.error('접근 권한이 없습니다.');
+        return;
       }
-
-      const playground_data = await getPlaygroundInfo(
-        workspace_id,
-        setPlaygroundInfo,
-      ).then((res) => res.find((item) => item.id === id));
-
-      const transformUserList = userList.map((info) => {
-        return {
+      const playground_data = (
+        await getPlaygroundInfo(workspace_id, setDeployItems)
+      ).find((item) => String(item.id) === String(id));
+      const transformUserList = (playground_data?.userList || []).map(
+        (info) => ({
           label: info.user_name,
           value: info.user_id,
-        };
-      });
-
+        }),
+      );
       dispatch(
         openModal({
           modalType: 'EDIT_PLAYGROUND',
@@ -219,26 +202,26 @@ const PlaygroundMenu = () => {
             workspace_id,
             userList: transformUserList,
             playground_data,
-            isAccess,
+            isAccess: playground_data?.isAccess,
             handleRefresh: async () =>
-              await getPlaygroundInfo(workspace_id, setPlaygroundInfo),
+              await getPlaygroundInfo(workspace_id, setDeployItems),
           },
         }),
       );
     },
-    [dispatch, userName, workspace_id],
+    [dispatch, workspace_id, hasAccess],
   );
 
   useEffect(() => {
     loadModalComponent('EDIT_PLAYGROUND');
 
     breadCrumbHandler(dispatch);
-    getPlaygroundInfo(workspace_id, setPlaygroundInfo);
+    getPlaygroundInfo(workspace_id, setDeployItems);
   }, [dispatch, workspace_id]);
 
   return (
     <div className={cx('playground-cont')}>
-      {/* D6 v3: Playground → "배포" 탭. CardTemplate=현재클러스터 / EdgeDeploymentSection=온디바이스 */}
+      {/* D6 v3: 배포 목록 = cluster(클러스터) + edge(온디바이스) + standalone (모두 playground row, deploy_type 구분) */}
       <h1 className={cx('title')}>{t('Deployment')}</h1>
       <Suspense fallback={<>loading...</>}>
         <CardTemplate
@@ -250,11 +233,10 @@ const PlaygroundMenu = () => {
           }
           handleEdit={handleEdit}
           handleOnClickCard={handleOnClickCard}
-          cardItems={playgroundInfo}
+          cardItems={deployItems}
           statusBadge
         />
       </Suspense>
-      <EdgeDeploymentSection />
       {showNewDeployment && (
         <NewDeploymentWizard
           wid={workspace_id}

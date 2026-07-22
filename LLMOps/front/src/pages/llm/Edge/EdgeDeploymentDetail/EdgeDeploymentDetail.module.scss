@@ -1,44 +1,35 @@
 @import '@src/styles/color.scss';
 
-.edge-cont {
+/* PlaygroundDetail 과 동형 — 미스타일 래퍼(페이지 프레임이 여백 제공, 이중 padding 제거) */
+.playground-cont {
   display: flex;
   flex-direction: column;
-  padding: 24px;
 }
 
-.header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
+/* 헤더 우측 슬롯(DeployDetailHeader right): 타입 칩 + 연결 상태 */
+.type-chip {
+  padding: 3px 10px;
+  border-radius: 8px;
+  font-family: SpoqaM;
+  font-size: 12px;
+  line-height: 12px;
+  border: 1px solid rgba($lime604, 0.4);
+  background: rgba($lime604, 0.1);
+  color: $lime604;
+}
 
-  .back {
-    border: none;
-    background: initial;
+.conn {
+  padding: 2px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-family: SpoqaM;
+  &.on {
+    background: rgba($blue104, 0.12);
+    color: $blue104;
+  }
+  &.off {
+    background: $mono202;
     color: $mono205;
-    font-family: SpoqaM;
-    font-size: 13px;
-    cursor: pointer;
-  }
-  .title {
-    margin: 0;
-    color: $mono207;
-    font-family: SpoqaB;
-    font-size: 20px;
-  }
-  .badge {
-    padding: 2px 10px;
-    border-radius: 10px;
-    font-size: 12px;
-    font-family: SpoqaM;
-    &.on {
-      background: rgba($blue104, 0.12);
-      color: $blue104;
-    }
-    &.off {
-      background: $mono202;
-      color: $mono205;
-    }
   }
 }
 
@@ -59,13 +50,21 @@
   }
 }
 
+/* 정보 탭 — PlaygroundDetail content-cont 동형 */
+.content-cont {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: repeat(auto-fit, minmax(344px, 1fr));
+  align-items: start;
+}
+
 .card {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 20px;
-  border: 1px solid $mono203;
-  border-radius: 12px;
+  gap: 16px;
+  padding: 24px;
+  border: 1px solid #c8dbfd;
+  border-radius: 16px;
   background: #fff;
   min-width: 0;
 
@@ -73,7 +72,8 @@
     margin: 0 0 4px;
     color: $mono207;
     font-family: SpoqaB;
-    font-size: 16px;
+    font-size: 18px;
+    line-height: 18px;
   }
 }
 
@@ -84,13 +84,15 @@
   .k {
     color: $mono205;
     font-family: SpoqaM;
-    font-size: 13px;
+    font-size: 14px;
+    line-height: 14px;
     white-space: nowrap;
   }
   .v {
     color: $mono207;
     font-family: SpoqaM;
-    font-size: 13px;
+    font-size: 14px;
+    line-height: 14px;
     text-align: right;
     word-break: break-word;
   }
@@ -99,12 +101,13 @@
 .label {
   color: $mono205;
   font-family: SpoqaM;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .select,
 .input {
   width: 100%;
+  box-sizing: border-box; /* padding·border 포함 100% — 카드 영역 넘침 방지 */
   padding: 8px 12px;
   border: 1px solid $mono203;
   border-radius: 8px;
@@ -118,4 +121,133 @@
   color: $mono205;
   font-family: SpoqaM;
   font-size: 12px;
+}
+
+/* 배포 유형 배지(온디바이스/standalone 구분) */
+.kind-badge {
+  padding: 2px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-family: SpoqaM;
+  background: rgba($blue104, 0.1);
+  color: $blue104;
+}
+
+/* 배포 탭: 4열(모델·런타임 | 파라미터 | 고급옵션 | 디바이스+현재배포) */
+.deploy-cont {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: start;
+}
+
+@media (max-width: 1024px) {
+  .deploy-cont {
+    grid-template-columns: 1fr;
+  }
+}
+
+.stacked-col {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+
+  > * {
+    flex: 0 0 auto;
+  }
+}
+
+/* 런타임 엔진 2행×3열 + 커스텀(전폭) */
+.engine-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 6px 0 12px;
+}
+
+.engine-opt {
+  padding: 8px 6px;
+  border: 1px solid $mono203;
+  border-radius: 8px;
+  background: $mono200;
+  color: $mono205;
+  font-family: SpoqaM;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: center;
+
+  &.selected {
+    border-color: $blue104;
+    background: rgba($blue104, 0.08);
+    color: $blue104;
+    font-family: SpoqaB;
+  }
+
+  &.custom {
+    grid-column: span 3;
+  }
+}
+
+.divider {
+  height: 1px;
+  background: $mono203;
+  margin: 8px 0;
+}
+
+.sub-title {
+  color: $mono207;
+  font-family: SpoqaB;
+  font-size: 13px;
+}
+
+/* 파라미터 슬라이더 */
+.param {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  .param-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .param-val {
+    color: $blue104;
+    font-family: SpoqaB;
+    font-size: 13px;
+  }
+
+  .slider {
+    width: 100%;
+    accent-color: $blue104;
+  }
+}
+
+/* 모니터링 탭 높이 정렬(정보/모니터링 카드 시각 정렬) */
+.monitor-grid .card {
+  min-height: 260px;
+}
+
+/* 정보 탭: 배포 프로젝트 설정 패널(단일 컬럼, 설정 폭) */
+.info-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 560px);
+  gap: 24px;
+}
+
+.info-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.info-value {
+  margin: 0;
+  color: $mono207;
+  font-family: SpoqaM;
+  font-size: 14px;
+  line-height: 22px;
+  word-break: break-word;
 }

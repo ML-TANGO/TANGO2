@@ -32,6 +32,8 @@ const CardTemplate = ({
           createTime,
           isAccess,
           status,
+          typeBadge,
+          kind,
         } = cardInfo;
         return (
           <Card
@@ -53,6 +55,8 @@ const CardTemplate = ({
             width={width}
             height={height}
             statusBadge={statusBadge}
+            typeBadge={typeBadge}
+            typeBadgeKind={kind}
           />
         );
       })}

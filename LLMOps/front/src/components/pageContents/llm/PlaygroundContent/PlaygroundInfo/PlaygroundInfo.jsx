@@ -181,6 +181,10 @@ const PlaygroundInfo = React.memo(() => {
             )}
           </div>
           <div className={cx('flex-16')}>
+            <span className={cx('label')}>배포 유형</span>
+            <span className={cx('value')}>클러스터</span>
+          </div>
+          <div className={cx('flex-16')}>
             <span className={cx('label')}>{t('accessType.label')}</span>
             <div className={cx('flex-row-16')}>
               <span className={cx('label')}>

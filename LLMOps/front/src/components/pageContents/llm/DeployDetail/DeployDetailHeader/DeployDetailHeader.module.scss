@@ -1,0 +1,48 @@
+@import '@src/styles/color.scss';
+
+.header-cont {
+  .navigate-header-cont {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 30px;
+
+    .back-btn {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      border: none;
+      background: initial;
+      cursor: pointer;
+
+      span {
+        color: $mono208;
+        font-family: SpoqaB;
+        font-size: 16px;
+        line-height: 16px;
+      }
+    }
+  }
+
+  .header-content-cont {
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 38px;
+
+    .header-title {
+      display: inline-block;
+      margin: initial;
+      color: $mono207;
+      font-family: SpoqaB;
+      font-size: 24px;
+      line-height: 100%;
+    }
+
+    .header-content-right {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+    }
+  }
+}

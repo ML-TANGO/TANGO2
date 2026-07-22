@@ -10,7 +10,11 @@ import {
   calFooterMessage,
   calNameError,
 } from '@src/components/Modal/AddPlayground/AddPlayground';
-import { getPlaygroundOwner, postPlayground } from '@src/apis/llm/playground';
+import {
+  getPlayground,
+  getPlaygroundOwner,
+  postPlayground,
+} from '@src/apis/llm/playground';
 import useOwnerList from '@src/hooks/useOwnerList';
 import { STATUS_SUCCESS } from '@src/network';
 import { errorToastMessage } from '@src/utils';
@@ -112,15 +116,11 @@ const NewDeploymentWizard = ({ wid, onClose, onRefresh }) => {
   const footerMessage = calFooterMessage(name, isNameError);
   const isNameValid = !footerMessage;
 
-  const canStep1 = target === 'cluster';
+  // 3종(cluster/edge/standalone) 모두 배포 셸(playground row) 생성 후 유형별 상세에서 구성.
+  const canStep1 =
+    target === 'cluster' || target === 'standalone' || target === 'edge';
   // owner 는 useOwnerList 가 비동기로 채움 → 프리로드 전 빠른 생성 시 owner_id undefined 방지.
   const canCreate = canStep1 && isNameValid && !!owner?.value;
-  const needsQuantize = target === 'edge' || target === 'standalone';
-
-  const goToModel = () => {
-    onClose?.();
-    history.push(`/user/workspace/${wid}/model`);
-  };
 
   const handleCreate = async () => {
     if (!canCreate || creatingRef.current) return;
@@ -134,26 +134,40 @@ const NewDeploymentWizard = ({ wid, onClose, onRefresh }) => {
         access: isAccess,
         owner_id: owner?.value,
         user_id: userList.current,
+        deploy_type: target, // cluster | edge | standalone (배포 유형 영속)
       });
       if (res.status !== STATUS_SUCCESS) {
         errorToastMessage(res.error, res.message);
         return;
       }
-      // postPlayground 는 생성 id 를 직접 주지 않음 → 목록 재조회 후 name+desc 매칭.
-      //   동명+동일설명 중복 시 첫 매칭이 기존 배포일 수 있어, 매칭들 중 최대 id(=방금 생성된 auto-increment PK)를 택한다.
-      const list = (await onRefresh?.()) ?? [];
-      const matches = list.filter(
-        (el) => el.title === name && el.subTitle === description,
-      );
-      const created = matches.length
-        ? matches.reduce((a, b) => (Number(b.id) > Number(a.id) ? b : a))
-        : null;
+      // 목록(deployItems) 갱신 + 생성 id 확정. 통합 목록(envelope)은 name 이 라벨 prefix 로 가공되므로,
+      //   생성 id 는 getPlayground(full, 원본 name 보유)에서 name 매칭 + 최대 id(auto-increment PK)로 특정.
+      await onRefresh?.();
+      let created = null;
+      try {
+        const full = await getPlayground(wid);
+        const matches = (full.result || []).filter((el) => el.name === name);
+        created = matches.length
+          ? matches.reduce((a, b) => (Number(b.id) > Number(a.id) ? b : a))
+          : null;
+      } catch (_) {
+        created = null;
+      }
       if (created) {
-        history.push(
-          `/user/workspace/${wid}/llmplayground/${created.id}/llmplayground`,
-        );
+        // 유형별 상세로 이동 — standalone=스크립트/번들, edge=온디바이스 배포, cluster=기존 배포 상세.
+        if (target === 'standalone') {
+          history.push(
+            `/user/workspace/${wid}/standalone-deploy/${created.id}`,
+          );
+        } else if (target === 'edge') {
+          history.push(`/user/workspace/${wid}/edge-deploy/${created.id}`);
+        } else {
+          history.push(
+            `/user/workspace/${wid}/llmplayground/${created.id}/llmplayground`,
+          );
+        }
       } else {
-        // 생성은 성공(위 status 통과)했으나 재조회/매칭 실패 → 목록에서 확인하도록 안내(무신호 close 방지).
+        // 생성 성공했으나 id 특정 실패 → 목록에서 확인하도록 안내(무신호 close 방지).
         toast.success('배포가 생성되었습니다. 목록에서 확인해 주세요.');
       }
       onClose?.();
@@ -231,18 +245,6 @@ const NewDeploymentWizard = ({ wid, onClose, onRefresh }) => {
                   </button>
                 ))}
               </div>
-              {needsQuantize && (
-                <div className={cx('notice')}>
-                  <p>{t('deployment.requiresQuantize')}</p>
-                  <button
-                    type='button'
-                    className={cx('notice-btn')}
-                    onClick={goToModel}
-                  >
-                    {t('goToModel.label')}
-                  </button>
-                </div>
-              )}
             </div>
           )}
 

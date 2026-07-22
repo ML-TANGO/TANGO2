@@ -17,6 +17,18 @@ export const getPlayground = async (workspace_id) => {
   return res;
 };
 
+// 배포 타겟 통합 read-model(cluster/edge/standalone) — deployment_envelope 정규화 목록.
+export const getDeploymentTargets = async (workspace_id) => {
+  const res = await callApi({
+    url: 'playgrounds/targets',
+    method: 'get',
+    params: {
+      workspace_id,
+    },
+  });
+  return res;
+};
+
 export const postPlayground = async ({
   workspace_id,
   name,
@@ -24,6 +36,7 @@ export const postPlayground = async ({
   access,
   owner_id,
   user_id,
+  deploy_type = 'cluster',
 }) => {
   const res = await callApi({
     url: 'playgrounds',
@@ -35,6 +48,7 @@ export const postPlayground = async ({
       access,
       owner_id,
       users_id: user_id,
+      deploy_type,
     },
   });
   return res;

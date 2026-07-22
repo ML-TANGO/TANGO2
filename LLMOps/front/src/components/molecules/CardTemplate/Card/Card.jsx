@@ -40,6 +40,8 @@ const Card = ({
   width,
   height,
   statusBadge = false,
+  typeBadge,
+  typeBadgeKind,
 }) => {
   const { t } = useTranslation();
   return (
@@ -63,6 +65,9 @@ const Card = ({
             >
               {t(status)}
             </span>
+          )}
+          {typeBadge && (
+            <span className={cx('type-badge', typeBadgeKind)}>{typeBadge}</span>
           )}
         </div>
         <div className={cx('btn-cont')}>

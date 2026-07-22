@@ -84,6 +84,9 @@ import style from './UserRouter.module.scss';
 const Model = lazy(() => import('../llm/Model'));
 const ModelDetailPage = lazy(() => import('../llm/Model/ModelDetailPage'));
 const EdgeDeploymentDetail = lazy(() => import('../llm/Edge/EdgeDeploymentDetail'));
+const StandaloneDeploymentDetail = lazy(() =>
+  import('../llm/Standalone/StandaloneDeploymentDetail'),
+);
 const RagDetailPage = lazy(() => import('../llm/Rag/RagDetailPage'));
 
 const Rag = lazy(() => import('../llm/Rag'));
@@ -393,7 +396,7 @@ const llmRouteArr = [
   },
   {
     name: 'EdgeDeploymentDetail',
-    path: '/user/workspace/:id/edge-deploy/:workerId',
+    path: '/user/workspace/:id/edge-deploy/:deployId',
     exact: false,
     disabled: true,
     icon: IconNavPlaygroundActive,
@@ -979,13 +982,23 @@ const routeArr = [
   },
   {
     name: 'EdgeDeploymentDetail',
-    path: '/user/workspace/:id/edge-deploy/:workerId',
+    path: '/user/workspace/:id/edge-deploy/:deployId',
     exact: false,
     disabled: true,
     icon: IconNavPlaygroundActive,
     activeIcon: IconNavPlaygroundActive,
     platform: 'flightbase',
     render: (props) => <EdgeDeploymentDetail {...props} />,
+  },
+  {
+    name: 'StandaloneDeploymentDetail',
+    path: '/user/workspace/:id/standalone-deploy/:deployId',
+    exact: false,
+    disabled: true,
+    icon: IconNavPlaygroundActive,
+    activeIcon: IconNavPlaygroundActive,
+    platform: 'flightbase',
+    render: (props) => <StandaloneDeploymentDetail {...props} />,
   },
 ];
 
