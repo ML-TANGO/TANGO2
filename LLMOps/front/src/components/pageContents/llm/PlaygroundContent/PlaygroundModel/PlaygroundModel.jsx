@@ -51,6 +51,7 @@ const ENGINES = [
   { id: 'llama_cpp', label: 'llama.cpp', disabled: false },
   { id: 'tgi', label: 'TGI', disabled: false },
   { id: 'ollama', label: 'Ollama', disabled: false },
+  { id: 'triton', label: 'Triton', disabled: false },
 ];
 
 const PlaygroundModel = React.memo(({ workspaceId }) => {

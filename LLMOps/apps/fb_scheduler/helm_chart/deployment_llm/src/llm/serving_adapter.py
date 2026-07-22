@@ -183,10 +183,10 @@ def _ollama_chat_parse(data):
     return data["message"]["content"].strip()
 
 
-def _ollama_cache_key(model_dir):
-    """ollama materialize/Modelfile/tag 캐시 키. resolved model_dir(hf 는 스냅샷 경로에 revision 해시
-    포함, commit 은 /model 또는 merged.<id>)를 해싱 → 동일 HF ID 라도 revision 이 바뀌면 키가 바뀌어
-    stale 재사용 방지(_model_identity 는 hf revision 을 담지 않음 — codex HIGH)."""
+def _resolved_cache_key(model_dir):
+    """resolved model_dir 기반 캐시 키(ollama materialize/tag · triton 모델명 공용). hf 는 스냅샷 경로에
+    revision 해시 포함, commit 은 /model 또는 merged.<id> → 동일 HF ID 라도 revision 이 바뀌면 키가
+    바뀌어 stale 재사용 방지(_model_identity 는 hf revision 을 담지 않음 — codex HIGH)."""
     return hashlib.sha1((model_dir or "").encode("utf-8")).hexdigest()[:16]
 
 
@@ -225,7 +225,7 @@ def _ollama_prepare(model_dir, base_url):
     env = _subprocess_env()
     if rt.extra_env:
         env.update(rt.extra_env)
-    key = _ollama_cache_key(model_dir)           # resolved model_dir 기반(hf revision 반영 — stale 방지)
+    key = _resolved_cache_key(model_dir)         # resolved model_dir 기반(hf revision 반영 — stale 방지)
     tag = f"jf-{key}"
     # 이미 등록된 태그면 재사용(NFS 스토어 캐시).
     try:
@@ -248,6 +248,88 @@ def _ollama_prepare(model_dir, base_url):
                           capture_output=True, text=True, timeout=3600)
     if proc.returncode != 0:
         raise RuntimeError(f"ollama create 실패(rc={proc.returncode}): {(proc.stderr or '')[-500:]}")
+    return tag
+
+
+# ----- Triton 엔진 델타 (NVIDIA Triton + vLLM backend; model repository + KServe generate) -----
+TRITON_REPO_DIR = os.path.join(MODEL_CACHE_DIR, "triton-repo")  # explicit model-control repo(기동 전 존재 필요)
+_TRITON_TOKENIZER = None   # chat_template 평탄화용(prepare 에서 로드·캐시)
+
+
+def _triton_build_args(model_dir, port, bin_path):
+    """Triton 런처 argv. explicit model-control 로 기동(모델 없이 ready) → prepare 가 repo 작성 후 load.
+    repo 디렉토리는 기동 전 존재해야 하므로 여기서 빈 디렉토리를 만든다(부수효과)."""
+    os.makedirs(TRITON_REPO_DIR, exist_ok=True)
+    return [
+        bin_path,
+        f"--model-repository={TRITON_REPO_DIR}",
+        "--model-control-mode=explicit",
+        f"--http-port={port}",
+        f"--http-address={ENGINE_HOST}",
+        "--allow-grpc=false",
+        "--allow-metrics=false",
+    ]
+
+
+def _triton_build_payload(messages, params, model_tag):
+    """Triton vLLM backend KServe generate body. generate 는 text_input(단일 프롬프트)만 받으므로
+    메시지를 tokenizer.chat_template 로 평탄화. 샘플링은 sampling_parameters(JSON 문자열)."""
+    import json
+    if _TRITON_TOKENIZER is not None:
+        prompt = _TRITON_TOKENIZER.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True)
+    else:  # 토크나이저 미로드 폴백(chat_template 없이 원문 이어붙임)
+        prompt = "\n".join(m.get("content", "") for m in messages)
+    sampling = {
+        "temperature": params["temperature"],
+        "top_p": params["top_p"],
+        "max_tokens": params["max_tokens"],
+    }
+    if settings.LLM_PARAM_TOP_K and settings.LLM_PARAM_TOP_K > 0:
+        sampling["top_k"] = settings.LLM_PARAM_TOP_K
+    if settings.LLM_PARAM_REPETITION_PENALTY and settings.LLM_PARAM_REPETITION_PENALTY > 0:
+        sampling["repetition_penalty"] = settings.LLM_PARAM_REPETITION_PENALTY
+    return {
+        "text_input": prompt,
+        "sampling_parameters": json.dumps(sampling),
+        "exclude_input_in_output": True,
+    }
+
+
+def _triton_parse(data):
+    """Triton vLLM backend generate 응답: text_output (누락 시 KeyError → 상위서 오류 표면화, TGI/ollama 파서와 동형)."""
+    return data["text_output"].strip()
+
+
+def _triton_prepare(model_dir, base_url):
+    """[Triton 특수성] explicit model-control → server ready 후 vLLM backend 모델 repo 를 작성하고
+    load API 로 올린다. repo/<tag>/{config.pbtxt, 1/model.json}. tag=모델명(resolved model_dir 기반).
+    chat_template 평탄화용 tokenizer 도 여기서 로드·캐시."""
+    global _TRITON_TOKENIZER
+    import json
+    tag = f"jf-{_resolved_cache_key(model_dir)}"
+    model_dir_abs = os.path.abspath(model_dir)
+    ver_dir = os.path.join(TRITON_REPO_DIR, tag, "1")
+    os.makedirs(ver_dir, exist_ok=True)
+    with open(os.path.join(TRITON_REPO_DIR, tag, "config.pbtxt"), "w", encoding="utf-8") as f:
+        f.write('backend: "vllm"\ninstance_group [ { count: 1, kind: KIND_MODEL } ]\n')
+    # vLLM 엔진 args. tensor_parallel_size=파드당 GPU 수(playground.py:141 관례) → 멀티GPU 단일노드 활용
+    #   (누락 시 vLLM 기본 1 GPU만 써 OOM/유휴 — codex HIGH). gpu_mem_util 은 vLLM 기본과 동일.
+    _model_json = {"model": model_dir_abs, "disable_log_requests": True, "gpu_memory_utilization": 0.9}
+    if settings.LLM_GPU_COUNT and settings.LLM_GPU_COUNT > 1:
+        _model_json["tensor_parallel_size"] = settings.LLM_GPU_COUNT
+    with open(os.path.join(ver_dir, "model.json"), "w", encoding="utf-8") as f:
+        json.dump(_model_json, f)
+    # chat_template 평탄화용 tokenizer 로드. 실패/무-template 시 loud-fail(무음 degrade 방지 — 기능∩codex).
+    #   trust_remote_code=False 명시(보안: 상위 transformers 기본값 의존 배제).
+    from transformers import AutoTokenizer
+    _TRITON_TOKENIZER = AutoTokenizer.from_pretrained(model_dir_abs, trust_remote_code=False)
+    if getattr(_TRITON_TOKENIZER, "chat_template", None) is None:
+        raise RuntimeError(f"triton: tokenizer 에 chat_template 없음({model_dir_abs}) — /generate 프롬프트 평탄화 불가")
+    r = httpx.post(f"{base_url}/v2/repository/models/{tag}/load", timeout=1800)
+    if r.status_code != 200:
+        raise RuntimeError(f"triton load 실패(status={r.status_code}): {r.text[:500]}")
+    print(f"[triton] loaded {tag} <- {model_dir_abs}")
     return tag
 
 
@@ -281,9 +363,10 @@ class ServingRuntime:
     def health_url(self):
         return f"{self.base_url}{self.health_path}"
 
-    @property
-    def generate_url(self):
-        return f"{self.base_url}{self.generate_path}"
+    def generate_url_for(self, model_tag):
+        # Triton 처럼 URL 에 모델명이 들어가는 엔진 지원 — generate_path 의 {tag} 치환.
+        #   TGI/ollama generate_path 엔 {} 가 없어 no-op.
+        return f"{self.base_url}{self.generate_path.format(tag=model_tag)}"
 
 
 SERVING_RUNTIMES = {
@@ -313,8 +396,20 @@ SERVING_RUNTIMES = {
             "OLLAMA_MODELS": os.path.join(MODEL_CACHE_DIR, "ollama"),
         },
     ),
-    # 향후 엔진은 여기에 엔트리만 추가(lifespan/POST/GET 무변경):
-    #   "triton":  build_args=_triton_build_args, generate_path="/v2/models/.../generate", parse=...,
+    # Triton(NVIDIA) + vLLM backend: explicit model-control → ready 후 prepare 가 repo 작성 + load.
+    #   KServe generate 는 URL 에 모델명 포함(generate_path 의 {tag}) → generate_url_for 가 치환.
+    "triton": ServingRuntime(
+        name="triton",
+        port=8000,
+        bin_env="TRITON_BIN",
+        default_bin="tritonserver",
+        build_args=_triton_build_args,
+        health_path="/v2/health/ready",
+        generate_path="/v2/models/{tag}/generate",
+        build_payload=_triton_build_payload,
+        parse_response=_triton_parse,
+        prepare=_triton_prepare,
+    ),
 }
 
 
@@ -467,7 +562,7 @@ async def run_playground(test_input, session_id, db_id):
         payload = RUNTIME.build_payload(messages, params, MODEL_TAG)
 
         async with httpx.AsyncClient() as client:
-            resp = await client.post(RUNTIME.generate_url, json=payload, timeout=1800)
+            resp = await client.post(RUNTIME.generate_url_for(MODEL_TAG), json=payload, timeout=1800)
             resp.raise_for_status()
             data = resp.json()
         result = RUNTIME.parse_response(data)
