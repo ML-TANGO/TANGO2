@@ -1390,7 +1390,15 @@ async def create_deployment(playground_id, user_id, deployment_type, instance_id
             _serving_system = "vllm"
         _serving_image = settings.SERVING_ENGINE_IMAGE_MAP.get(_serving_system, settings.DEPLOYMENT_LLM_IMAGE)
         image_real_name=f"{settings.DOCKER_REGISTRY_URL}{_serving_image}" ### LLM 배포 이미지는 1. main.py에서 image db에 넣음. 2. image build: /jp/libs/fb_image/llm
-        image_id = db.get_image_id_by_real_name(real_name=image_real_name).get('id')
+        # 이미지행 미등록(레지스트리 드리프트 등) 시 None.get() 크래시 방지 → 명시 실패(update_deployment 와 동형).
+        _image_row = db.get_image_id_by_real_name(real_name=image_real_name)
+        if isinstance(_image_row, tuple):  # 헬퍼가 DB 예외 시 (False, e) 반환 → '미등록'과 구분해 오류 전파(truthy 튜플이 가드 우회 방지)
+            raise Exception(f"서빙 이미지 조회 실패: serving_system={_serving_system} "
+                            f"({image_real_name}) — {_image_row[1]}")
+        if not _image_row:
+            raise Exception(f"서빙 이미지 미등록: serving_system={_serving_system} "
+                            f"({image_real_name}) — image 테이블 시드 필요")
+        image_id = _image_row.get('id')
 
         # [멀티엔진 Phase 2] llama.cpp = 단일 노드 엔진(크로스팟 병렬 없음) → 멀티팟 배포 금지.
         #   instance_count>1 이면 1 로 클램프(공유 PVC GGUF 동시쓰기 레이스·N중복 다운로드·비결정 라우팅 차단).
