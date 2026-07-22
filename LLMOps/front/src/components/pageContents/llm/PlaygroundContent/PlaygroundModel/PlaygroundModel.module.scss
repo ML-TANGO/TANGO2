@@ -14,13 +14,15 @@
   }
 
   .engine-options {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
     gap: 10px;
   }
 
   .engine-opt {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 6px;
     padding: 8px 16px;
     border: 1px solid $mono203;

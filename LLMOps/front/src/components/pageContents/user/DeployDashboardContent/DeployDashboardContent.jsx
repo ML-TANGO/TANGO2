@@ -141,14 +141,17 @@ function DeployDashboardContent({
   onChangeResolution,
   onChangeSearchType,
   onSelectGraph,
+  embedded = false,
 }) {
   const match = useRouteMatch();
   const isPlayground = calIsPlaygroundPath(match.path);
 
   return (
     <div className={cx('dashboard')}>
-      {isPlayground && <PlaygroundHeader title={title} />}
-      {!isPlayground && title && <div className={cx('title')}>{title}</div>}
+      {!embedded && isPlayground && <PlaygroundHeader title={title} />}
+      {!embedded && !isPlayground && title && (
+        <div className={cx('title')}>{title}</div>
+      )}
       <DeployStatusCard
         type='deployDashboard'
         totalInfoData={totalInfoData}

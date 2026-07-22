@@ -1,0 +1,64 @@
+@import '@src/styles/color.scss';
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.title {
+  margin: 0;
+  color: $mono207;
+  font-family: SpoqaB;
+  font-size: 18px;
+  line-height: 18px;
+}
+
+.badge {
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: $mono202;
+  color: $mono205;
+  font-family: SpoqaM;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+/* 비활성 자리표시 — 흐리게 + 상호작용 차단(선택 기능 오프) */
+.groups {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.group-label {
+  color: $mono205;
+  font-family: SpoqaM;
+  font-size: 14px;
+}
+
+.options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.option {
+  padding: 8px 14px;
+  border: 1px solid $mono203;
+  border-radius: 8px;
+  background: $mono202;
+  color: $mono204;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: not-allowed;
+}

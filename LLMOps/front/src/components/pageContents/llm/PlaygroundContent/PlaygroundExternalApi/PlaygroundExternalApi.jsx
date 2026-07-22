@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { shallowEqual, useDispatch, useSelector } from 'react-redux';
 import { toast } from 'react-toastify';
 
-import { ButtonV2 } from '@jonathan/ui-react';
+import { ButtonV2, Textarea } from '@jonathan/ui-react';
 
 import {
   getDeploymentApi,
@@ -30,10 +30,9 @@ const maskKey = (key) => {
   return `${key.slice(0, 4)}${'•'.repeat(6)}${key.slice(-4)}`;
 };
 
-// 배포(D6) 외부 API 게시 섹션 — Playground 상세.
-//   deployment_id(=fb_deployment PK) 가 있는 배포만 대상(클러스터 서빙). 미배포 플레이그라운드는 숨김.
-//   BE: apps/fb_deployment service.publish/get/rotate/unpublish_deployment_api (Kong key-auth + ACL).
-//   키 원본은 Kong 보관(미저장) → GET 시 라이브 fetch. 소유자만 호출 가능(BE 능동 소유권 체크).
+// [API 호출] 통합 카드 — Playground 상세.
+//   요청 JSON 포맷(항상) + 엔드포인트: 게시 시 외부(엔드포인트+키+curl) / 미게시 시 게시 버튼(내부 호출 URL 은 비노출).
+//   외부 게시(D6)는 deployment_id(=fb_deployment PK) 있는 배포만 대상(Kong key-auth + ACL, 키 원본은 Kong 보관→라이브 fetch).
 export default function PlaygroundExternalApi() {
   const dispatch = useDispatch();
 
@@ -46,6 +45,14 @@ export default function PlaygroundExternalApi() {
     shallowEqual,
   );
   const isCompleteRunning = calIsCompleteRunning(status);
+  const statusType = status?.status;
+
+  // 요청 body 스키마(JSON 포맷)만 사용 — 내부 호출 URL 은 화면 비노출(사용자向 외부 게시 엔드포인트만 표출).
+  const { format } = useSelector(
+    (state) => state.llmPlayground.info_request,
+    shallowEqual,
+  );
+  const formatJson = JSON.stringify(format, null, 2);
 
   const [loading, setLoading] = useState(true);
   const [info, setInfo] = useState(null); // 게시정보 or null(미게시)
@@ -54,9 +61,12 @@ export default function PlaygroundExternalApi() {
 
   // 게시 상태 조회 — deployment_id 확정 시 1회 (SSE 로 deployment_id 가 채워지면 재조회).
   useEffect(() => {
-    // 배포 없음 → 섹션 숨김(아래 return null). loading 은 true 유지 → SSE 로
-    // deployment_id 가 채워질 때 "미게시" 한 프레임 깜빡임 방지.
-    if (!deploymentId) return undefined;
+    // 배포 없음 → 외부 게시 조회 skip. 내부 URL/JSON 만 표시.
+    if (!deploymentId) {
+      setInfo(null);
+      setLoading(false);
+      return undefined;
+    }
     let alive = true;
     (async () => {
       setLoading(true);
@@ -66,8 +76,7 @@ export default function PlaygroundExternalApi() {
         if (res.status === STATUS_SUCCESS) {
           setInfo(res.result);
         } else {
-          // status=0(미게시)은 정상 상태 → 조용히 처리. 전송/서버 오류만 토스트로
-          // 노출(미게시로 오인해 재게시하는 것 방지).
+          // status=0(미게시)은 정상 상태 → 조용히 처리. 전송/서버 오류만 토스트로 노출.
           setInfo(null);
           if (res.status === STATUS_INTERNAL_SERVER_ERROR) {
             toast.error(res.message || '게시 상태를 불러오지 못했습니다.');
@@ -158,18 +167,30 @@ export default function PlaygroundExternalApi() {
     );
   };
 
-  // 배포가 없는 플레이그라운드(클러스터 서빙 미배포)면 섹션 자체 숨김.
-  if (!deploymentId) return null;
-
   const published = !!(info && info.enabled);
 
   return (
     <PlaygroundFrame style={{ backgroundColor: '#fff' }}>
       <div className={cx('header')}>
-        <h3 className={cx('title')}>외부 API 게시</h3>
-        <span className={cx('badge', published ? 'on' : 'off')}>
-          {published ? '게시됨' : '미게시'}
-        </span>
+        <h3 className={cx('title')}>API 호출</h3>
+        {deploymentId && (
+          <span className={cx('badge', published ? 'on' : 'off')}>
+            {published ? '게시됨' : '미게시'}
+          </span>
+        )}
+      </div>
+
+      {/* 요청 JSON 포맷 — 어느 경로든 요청 body 스키마이므로 항상 표시 */}
+      <div className={cx('field')}>
+        <span className={cx('label')}>요청 JSON 포맷</span>
+        {statusType === 'stop' ? (
+          <p className={cx('desc')}>배포가 활성화되면 JSON 포맷이 생성됩니다.</p>
+        ) : (
+          <Textarea
+            value={formatJson}
+            customStyle={{ color: '#747474', width: '100%', minHeight: '140px' }}
+          />
+        )}
       </div>
 
       {loading ? (
@@ -243,25 +264,31 @@ export default function PlaygroundExternalApi() {
         </div>
       ) : (
         <div className={cx('unpublished')}>
-          <p className={cx('desc')}>
-            이 배포를 외부에서 호출할 수 있는 공개 엔드포인트와 API 키를
-            발급합니다. 키 인증(Kong)이 적용되어 발급된 키로만 접근할 수
-            있습니다.
-          </p>
-          {!isCompleteRunning && (
-            <p className={cx('hint')}>
-              배포가 실행 중일 때 게시할 수 있습니다.
+          {deploymentId ? (
+            <>
+              <p className={cx('desc')}>
+                이 배포를 외부에서 호출할 수 있는 공개 엔드포인트와 API 키를
+                발급합니다. 키 인증(Kong)이 적용되어 발급된 키로만 접근할 수
+                있습니다.
+              </p>
+              {!isCompleteRunning && (
+                <p className={cx('hint')}>배포가 실행 중일 때 게시할 수 있습니다.</p>
+              )}
+              <div className={cx('actions')}>
+                <ButtonV2
+                  colorType='blue'
+                  label='외부 API 게시'
+                  onClick={handlePublish}
+                  disabled={!isCompleteRunning || busy}
+                  isLoading={busy}
+                />
+              </div>
+            </>
+          ) : (
+            <p className={cx('desc')}>
+              배포를 실행한 뒤 외부 API를 게시하면 호출 엔드포인트가 표시됩니다.
             </p>
           )}
-          <div className={cx('actions')}>
-            <ButtonV2
-              colorType='blue'
-              label='외부 API 게시'
-              onClick={handlePublish}
-              disabled={!isCompleteRunning || busy}
-              isLoading={busy}
-            />
-          </div>
         </div>
       )}
     </PlaygroundFrame>

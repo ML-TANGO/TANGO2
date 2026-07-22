@@ -1,13 +1,16 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { shallowEqual, useDispatch, useSelector } from 'react-redux';
 import { useRouteMatch } from 'react-router-dom';
 
 import PlaygroundHeader from '@src/components/pageContents/llm/PlaygroundContent/PlaygroundHeader';
 import PlaygroundInfo from '@src/components/pageContents/llm/PlaygroundContent/PlaygroundInfo';
+import PlaygroundAdvancedOptions from '@src/components/pageContents/llm/PlaygroundContent/PlaygroundAdvancedOptions';
 import PlaygroundExternalApi from '@src/components/pageContents/llm/PlaygroundContent/PlaygroundExternalApi';
 import PlaygroundInstanceSettingInfo from '@src/components/pageContents/llm/PlaygroundContent/PlaygroundInstanceSettingInfo';
 import PlaygroundModel from '@src/components/pageContents/llm/PlaygroundContent/PlaygroundModel';
 import PlaygroundModelParameterSetting from '@src/components/pageContents/llm/PlaygroundContent/PlaygroundModelParameterSetting';
+import PlaygroundMonitoring from '@src/components/pageContents/llm/PlaygroundContent/PlaygroundMonitoring';
+import Tab from '@src/components/molecules/Tab';
 
 import {
   getDetailPlayground,
@@ -143,6 +146,23 @@ const PlaygroundDetail = () => {
     (state) => state.llmPlayground.info,
     shallowEqual,
   );
+  const { init_deployment } = useSelector(
+    (state) => state.llmPlayground.status,
+    shallowEqual,
+  );
+
+  const [tab, setTab] = useState('INFO');
+
+  const tabOptions = [
+    { label: 'information.label', value: 'INFO' },
+    { label: 'Model', value: 'MODEL' },
+    { label: 'Monitoring', value: 'MONITOR', disable: !init_deployment },
+  ];
+
+  // 배포가 중지되어 모니터링 대상이 사라지면 정보 탭으로 되돌린다.
+  useEffect(() => {
+    if (tab === 'MONITOR' && !init_deployment) setTab('INFO');
+  }, [tab, init_deployment]);
 
   // ! [사이드 이펙트] 초기 데이터 렌더 **
   const eventSourceRef = useRef(null);
@@ -166,15 +186,34 @@ const PlaygroundDetail = () => {
         getDetailPlaygroundInfo={getDetailPlaygroundInfo}
         eventSourceRef={eventSourceRef}
       />
-      <div className={cx('content-cont')}>
-        <PlaygroundInfo />
-        <PlaygroundModel workspaceId={workspaceId} />
-        <PlaygroundModelParameterSetting />
-        <PlaygroundInstanceSettingInfo />
-        <PlaygroundExternalApi />
-        {/* <PlaygroundRag workspaceId={workspaceId} playgroundId={playgroundId} /> */}
-        {/* <PlaygroundPrompt workspaceId={workspaceId} /> */}
+      <div className={cx('tab-bar')}>
+        <Tab
+          type='c'
+          sidePaddingNone
+          option={tabOptions}
+          select={{ value: tab }}
+          tabHandler={({ value }) => setTab(value)}
+        />
       </div>
+      {tab === 'INFO' && (
+        <div className={cx('content-cont')}>
+          <PlaygroundInfo />
+        </div>
+      )}
+      {tab === 'MODEL' && (
+        <div className={cx('model-cont')}>
+          <PlaygroundModel workspaceId={workspaceId} />
+          <PlaygroundModelParameterSetting />
+          <PlaygroundAdvancedOptions />
+          <div className={cx('stacked-col')}>
+            <PlaygroundInstanceSettingInfo />
+            <PlaygroundExternalApi />
+          </div>
+          {/* <PlaygroundRag workspaceId={workspaceId} playgroundId={playgroundId} /> */}
+          {/* <PlaygroundPrompt workspaceId={workspaceId} /> */}
+        </div>
+      )}
+      {tab === 'MONITOR' && <PlaygroundMonitoring />}
     </div>
   );
 };

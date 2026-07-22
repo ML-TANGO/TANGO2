@@ -137,7 +137,7 @@ const PlaygroundHeader = ({
   return (
     <div className={cx('header-cont')}>
       <OutsideWarn />
-      <PlaygroundNavigation isFetchingStatus={isFetchingStatus} />
+      <PlaygroundNavigation />
       <div className={cx('header-content-cont')}>
         <h2 className={cx('header-title')}>{title}</h2>
         <div className={cx('header-content-right')}>
