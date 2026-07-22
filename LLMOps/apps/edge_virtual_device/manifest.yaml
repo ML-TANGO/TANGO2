@@ -1,0 +1,66 @@
+# Edge 가상 디바이스 하네스 배포 (테스트 전용, ClusterIP 내부 한정 — 외부 비노출).
+# 배포:
+#   kubectl -n jonathan-system create configmap edge-vdev-code \
+#     --from-file=edge_virtual_device.py=apps/edge_virtual_device/edge_virtual_device.py \
+#     --dry-run=client -o yaml | kubectl apply -f -
+#   kubectl apply -f apps/edge_virtual_device/manifest.yaml
+# 등록 URL(경로 없이): http://jfb-edge-virtual-device.jonathan-system.svc.cluster.local:8500
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jfb-edge-virtual-device
+  namespace: jonathan-system
+  labels:
+    app: jfb-edge-virtual-device
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jfb-edge-virtual-device
+  template:
+    metadata:
+      labels:
+        app: jfb-edge-virtual-device
+    spec:
+      containers:
+        - name: vdev
+          # 신규 빌드/푸시 회피 — 이미 pull 가능한 playground 앱 이미지(fastapi/uvicorn 포함) 재사용.
+          image: docker.io/acrylaaai/genai-platform-playground_app:tango_v2.0.1
+          imagePullPolicy: IfNotPresent
+          workingDir: /app/vdev
+          env:
+            - name: PYTHONPATH
+              value: /app/vdev
+          command:
+            - python3
+            - -m
+            - uvicorn
+            - edge_virtual_device:app
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8500"
+          ports:
+            - containerPort: 8500
+          volumeMounts:
+            - name: code
+              mountPath: /app/vdev
+      volumes:
+        - name: code
+          configMap:
+            name: edge-vdev-code
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jfb-edge-virtual-device
+  namespace: jonathan-system
+  labels:
+    app: jfb-edge-virtual-device
+spec:
+  selector:
+    app: jfb-edge-virtual-device
+  ports:
+    - name: http
+      port: 8500
+      targetPort: 8500
