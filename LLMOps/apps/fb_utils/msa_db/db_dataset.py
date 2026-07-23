@@ -255,8 +255,9 @@ def insert_dataset(name, workspace_id , create_user_id, access, description):
             sql = "INSERT into datasets(name, workspace_id, create_user_id, access, description) values (%s,%s,%s,%s,%s)"
             cur.execute(sql, (name, workspace_id, create_user_id, access, description))
 
+            new_dataset_id = cur.lastrowid
             conn.commit()
-        return True
+        return new_dataset_id
     except Exception as e:
         traceback.print_exc()
         return False

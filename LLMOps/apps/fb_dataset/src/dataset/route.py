@@ -69,7 +69,7 @@ def create_dataset(workspace_id : Annotated[int, Form()],
         user_name, _ = get_auth()
         res = dataset_svc.create_dataset(body=args, headers_user=user_name)
         if res:
-            return response(status = 1, message = 'Dataset Create Complete')
+            return response(status = 1, result = res, message = 'Dataset Create Complete')
         else:
             raise Exception("Dataset DB Insert Error")
     except Exception as e:
