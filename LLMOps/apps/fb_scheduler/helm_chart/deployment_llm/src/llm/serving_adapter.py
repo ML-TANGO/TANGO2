@@ -9,7 +9,7 @@ playground_llamacpp.py(llama.cpp) 와 **동일한 플랫폼 서빙 계약**을 �
 Tier B 엔진 추상화(ServingRuntime 레지스트리):
   - 앱/envelope/lifespan 오케스트레이션은 엔진 무관.
   - 엔진별 차이(런처 argv·health path·내부 포트·generate 호출)만 ServingRuntime 이 캡슐화.
-  - 첫 엔트리 = TGI(HuggingFace text-generation-inference). Ollama/Triton 은 SERVING_RUNTIMES 에
+  - 첫 엔트리 = TGI(HuggingFace text-generation-inference). Ollama/Triton/TensorRT 는 SERVING_RUNTIMES 에
     엔트리만 추가하면 됨(lifespan/POST/GET 재작성 불요).
   - 어떤 런타임을 쓸지는 pod-side `settings.LLM_SERVING_SYSTEM` 이 선택(defense-in-depth).
 
@@ -333,6 +333,35 @@ def _triton_prepare(model_dir, base_url):
     return tag
 
 
+# ----- TensorRT-LLM 엔진 델타 (trtllm-serve OpenAI 호환 서버; PyTorch 백엔드 = HF 직접, AOT 컴파일 불요) -----
+def _tensorrt_build_args(model_dir, port, bin_path):
+    """TensorRT-LLM 런처 argv. `trtllm-serve serve <model_dir> --backend pytorch` 는 OpenAI 호환
+    /v1/chat/completions + /health 를 노출하고, PyTorch 백엔드로 HF 체크포인트를 직접 로드한다
+    (별도 AOT `trtllm-build` 엔진 컴파일 불요 — vLLM/TGI 와 동형). model 인자는 로컬 디렉토리 허용.
+    멀티GPU 단일노드는 --tp_size(파드당 GPU 수 = triton 관례, LLM_GPU_COUNT). --trust_remote_code 는
+    기본 off(보안, TGI 와 동일). offline 은 _subprocess_env 가 강제. payload/parse 는 OpenAI 기본값 재사용."""
+    args = [
+        bin_path, "serve", model_dir,
+        "--host", ENGINE_HOST,
+        "--port", str(port),
+        "--backend", "pytorch",
+    ]
+    if settings.LLM_GPU_COUNT and settings.LLM_GPU_COUNT > 1:
+        args += ["--tp_size", str(settings.LLM_GPU_COUNT)]
+    return args
+
+
+def _tensorrt_build_payload(messages, params, model_tag):
+    """trtllm-serve OpenAI 서버(TRT-LLM 0.20 `openai_protocol.py`)는 ChatCompletionRequest.model 이
+    **필수** — 누락 시 매 요청 422(기능∩codex HIGH). TGI 는 model optional 이라 _openai_chat_payload
+    (model 미포함)로 충분했지만 trtllm-serve 는 필수라 여기서 명시한다. 서버는 `trtllm-serve serve <dir>`
+    의 <dir>(=MODEL_TAG, prepare 없음 → MODEL_DIR)로 모델을 등록하므로 요청 model 도 그 경로로 일치.
+    나머지 필드는 OpenAI 기본과 동일 → _openai_chat_payload 재사용(DRY)."""
+    payload = _openai_chat_payload(messages, params, model_tag)
+    payload["model"] = model_tag
+    return payload
+
+
 @dataclass
 class ServingRuntime:
     """엔진별 차이만 캡슐화. 앱/lifespan 은 이 인터페이스에만 의존(엔진 무관)."""
@@ -409,6 +438,18 @@ SERVING_RUNTIMES = {
         build_payload=_triton_build_payload,
         parse_response=_triton_parse,
         prepare=_triton_prepare,
+    ),
+    # TensorRT-LLM: `trtllm-serve serve <model> --backend pytorch` → OpenAI 호환 /v1/chat/completions,
+    #   /health 200 → ready. PyTorch 백엔드로 HF 직접 로드(AOT 컴파일 불요). parse 는 OpenAI 기본값
+    #   재사용(TGI 동형)이나 payload 는 model 필수(TRT-LLM 0.20 스키마) → _tensorrt_build_payload.
+    "tensorrt": ServingRuntime(
+        name="tensorrt",
+        port=8000,                       # trtllm-serve 기본 포트(triton 과 동일값이나 파드당 1엔진이라 무충돌)
+        bin_env="TRTLLM_SERVE_BIN",
+        default_bin="trtllm-serve",
+        build_args=_tensorrt_build_args,
+        health_path="/health",
+        build_payload=_tensorrt_build_payload,
     ),
 }
 
