@@ -142,6 +142,17 @@
           background: rgba($lime604, 0.1);
           color: $lime604;
         }
+        // 모델 타입 칩 — 멀티모달(액센트) / 단일(중립).
+        &.multimodal {
+          border-color: rgba($blue104, 0.4);
+          background: rgba($blue104, 0.08);
+          color: $blue104;
+        }
+        &.single {
+          border-color: $mono203;
+          background: $mono201;
+          color: $mono205;
+        }
       }
     }
     .btn-cont {

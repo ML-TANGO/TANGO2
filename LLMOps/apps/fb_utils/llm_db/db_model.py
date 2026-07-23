@@ -186,6 +186,7 @@ async def get_models(workspace_id : int) -> List[dict]:
         SELECT m.id, m.description, m.name, m.create_user_id, m.workspace_id,
         m.latest_fine_tuning_status, m.access,
         m.commit_status,
+        m.training_type, m.load_type, m.domain,
         DATE_FORMAT(m.create_datetime, %s) AS create_datetime,
         DATE_FORMAT(m.update_datetime, %s) AS update_datetime,
         w.name as workspace_name, u.name as create_user_name

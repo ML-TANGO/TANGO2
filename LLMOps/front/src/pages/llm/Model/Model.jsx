@@ -70,6 +70,12 @@ function Model() {
     if (status === STATUS_SUCCESS) {
       if (result) {
         const newModels = result.map((v) => {
+          // 카드 타입 칩: 멀티모달(내부 VLM=load_type / 도메인 SDS=domain) vs 단일(single).
+          // training_type='external' 자체로 판별하지 않음 — 추후 SDM/SDF 도 external 이라 오분류 방지.
+          const kind =
+            v.load_type === 'multimodal' || v.domain === 'SDS'
+              ? 'multimodal'
+              : 'single';
           return {
             ...v,
             createTime: v.create_datetime,
@@ -81,6 +87,8 @@ function Model() {
             isAccess: v.is_access ? 1 : 0,
             status: v.status?.fine_tuning === 'running' ? 'active' : null,
             userList: v?.users,
+            kind,
+            typeBadge: kind,
           };
         });
         setModels((prevModels) => {

@@ -998,7 +998,11 @@ async def get_models(workspace_id : int, header_user_id : int) -> List[dict]:
             "create_user_name" : model["create_user_name"],
             "update_datetime" : model["update_datetime"],
             "create_datetime" : model["create_datetime"],
-            "description" : model["description"]
+            "description" : model["description"],
+            # 목록 카드 타입 칩용 — 멀티모달 판별(load_type='multimodal' 내부 VLM / domain='SDS' 외부).
+            "training_type" : model.get("training_type"),
+            "load_type" : model.get("load_type"),
+            "domain" : model.get("domain"),
         }
         if model_pod_status.get(TYPE.FINE_TUNING_TYPE, {}):
             if model_pod_status[TYPE.FINE_TUNING_TYPE].get(str(model["id"]),{}):
