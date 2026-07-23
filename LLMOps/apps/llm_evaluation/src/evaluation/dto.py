@@ -4,11 +4,13 @@ from typing import List, Optional
 from pydantic import BaseModel, Field, field_validator
 
 from evaluation.constants import (
-    BENCHMARK_METRICS,
+    BENCHMARK_IDS,
     EVAL_TYPES,
     EXPERT_SCORE_MAX,
     EXPERT_SCORE_MIN,
     MAX_BENCHMARK_DATASETS,
+    MAX_BENCHMARK_ITEMS,
+    METRIC_IDS,
     JUDGE_CRITERIA,
     JUDGE_PROVIDERS,
 )
@@ -39,22 +41,48 @@ class EvalProjectCreateBody(BaseModel):
         return v
 
 
+class BenchmarkMetricPair(BaseModel):
+    """벤치마크 1개 + 그 벤치마크에 쓸 메트릭 1개. 벤치마크(ARC·MMLU…)와 메트릭(Accuracy·F1…)을
+    분리 — 기존의 섞인 flat metric_set 을 폐기하고 '벤치마크→메트릭' 매핑으로 대체."""
+
+    benchmark: str = Field(..., description="벤치마크 id(BENCHMARK_IDS)")
+    metric: str = Field(..., description="점수 메트릭 id(METRIC_IDS)")
+
+    @field_validator("benchmark")
+    @classmethod
+    def _validate_benchmark(cls, v: str) -> str:
+        if v not in BENCHMARK_IDS:
+            raise ValueError(f"unknown benchmark: {v}")
+        return v
+
+    @field_validator("metric")
+    @classmethod
+    def _validate_metric(cls, v: str) -> str:
+        if v not in METRIC_IDS:
+            raise ValueError(f"unknown metric: {v}")
+        return v
+
+
 class BenchmarkRunBody(BaseModel):
-    """benchmark 런 — model/dataset 는 프로젝트에서 상속(project_id). 유형별 설정=metric_set."""
+    """benchmark 런 — model/dataset 는 프로젝트에서 상속(project_id). 유형별 설정 =
+    benchmarks(벤치마크→메트릭 매핑). 생략 시 BE 가 전체 벤치마크를 권장 메트릭으로 채점."""
 
     project_id: int = Field(..., ge=1, description="평가 프로젝트 id(model/dataset 상속·불변)")
-    metric_set: Optional[List[str]] = Field(
-        default=None, description="17 메트릭 중 부분집합(생략 시 전체)")
+    benchmarks: Optional[List[BenchmarkMetricPair]] = Field(
+        default=None, max_length=MAX_BENCHMARK_ITEMS,
+        description="벤치마크→메트릭 매핑(생략 시 전체 벤치마크·권장 메트릭)")
 
-    @field_validator("metric_set")
+    @field_validator("benchmarks")
     @classmethod
-    def _validate_metrics(cls, v: Optional[List[str]]) -> Optional[List[str]]:
-        # unknown 메트릭이 조용히 전체 17개로 확장되지 않도록 입력단에서 거부(422).
+    def _dedup_benchmarks(cls, v):
+        # 같은 벤치마크 중복 지정 거부(런당 벤치마크 1행 — 결과 averages 키/메트릭 매핑 충돌 방지).
         if v is None:
             return v
-        unknown = [m for m in v if m not in BENCHMARK_METRICS]
-        if unknown:
-            raise ValueError(f"unknown metric(s): {unknown}")
+        seen = set()
+        for pair in v:
+            if pair.benchmark in seen:
+                raise ValueError(f"duplicate benchmark: {pair.benchmark}")
+            seen.add(pair.benchmark)
         return v
 
 

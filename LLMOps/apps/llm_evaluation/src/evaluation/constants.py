@@ -1,11 +1,26 @@
 """llm_evaluation 공용 상수."""
 
-# ETRI BenchmarkEvaluationPage 정본 17 메트릭(evaluate-benchmark-mock 컨테이너와 id 일치).
-BENCHMARK_METRICS = (
-    "accuracy", "f1", "acc_norm", "arc", "kobest", "mmlu", "hellaswag",
-    "winogrande", "gsm8k", "truthfulqa", "boolq", "humaneval", "meteor",
-    "cider", "spice", "bleu", "rouge",
+# 벤치마크 정본(9) — id = FE benchmarks.js + evaluate-benchmark-mock 컨테이너와 일치. 벤치마크
+# = 표준 평가 태스크(ARC·MMLU…). "벤치마크 선택 → 벤치마크별 메트릭" 2단계의 1단계 후보다.
+BENCHMARK_IDS = (
+    "arc", "kobest", "mmlu", "hellaswag", "winogrande",
+    "gsm8k", "truthfulqa", "boolq", "humaneval",
 )
+
+# 메트릭 정본(8) — 벤치마크와 분리된 채점 방식. id = FE benchmarkMetrics.js + mock 일치.
+METRIC_IDS = (
+    "accuracy", "f1", "acc_norm", "bleu", "rouge", "meteor", "cider", "spice",
+)
+
+# 벤치마크별 권장 메트릭(생략 시 채택) — FE 기본 선택·mock 기본 채점과 공유(단일 소스).
+BENCHMARK_RECOMMENDED_METRIC = {
+    "arc": "accuracy", "kobest": "f1", "mmlu": "accuracy", "hellaswag": "acc_norm",
+    "winogrande": "accuracy", "gsm8k": "accuracy", "truthfulqa": "accuracy",
+    "boolq": "accuracy", "humaneval": "accuracy",
+}
+
+# 한 벤치마크 런이 다룰 벤치마크 상한 — metric_set 요약 컬럼(VARCHAR 255) 초과·과도 태스크 방지.
+MAX_BENCHMARK_ITEMS = 20
 
 # 한 벤치마크 런이 다룰 데이터셋 상한 — dataset_name CSV 가 eval_result.dataset_name
 # VARCHAR(255) 를 넘지 않도록(+ 과도한 멀티마운트 방지).

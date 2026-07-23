@@ -32,9 +32,12 @@ from utils.llm_db import db_model
 
 from external.proxy import ExternalContainerClient, ExternalContainerError
 from evaluation.constants import (
-    BENCHMARK_METRICS,
+    BENCHMARK_IDS,
+    BENCHMARK_RECOMMENDED_METRIC,
     EVAL_TYPES,
     MAX_BENCHMARK_DATASETS,
+    MAX_BENCHMARK_ITEMS,
+    METRIC_IDS,
     PROJECT_STATUS_COMPLETED,
     PROJECT_STATUS_CREATED,
     PROJECT_STATUS_RUNNING,
@@ -65,10 +68,11 @@ _JOB_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 
 
 async def run_benchmark(project_id: int,
-                        metric_set: Optional[List[str]] = None) -> dict:
+                        benchmarks: Optional[List[dict]] = None) -> dict:
     """벤치마크 평가 런 — 프로젝트에서 model/dataset(잠금) 상속 → evaluate 컨테이너 런치.
     model_id·dataset_ids 는 프로젝트에서 주입(요청 바디 미수취 → 불변 강제, P3). 유형별
-    설정(metric_set)만 body 에서 받는다. run 생성 시 프로젝트를 'running' 으로 전이."""
+    설정 = benchmarks(벤치마크→메트릭 매핑). 생략 시 전체 벤치마크를 권장 메트릭으로 채점.
+    run 생성 시 프로젝트를 'running' 으로 전이."""
     project, dataset_ids = await _load_project_for_run(project_id, "benchmark")
     model_id = int(project["model_id"])
     model_info = await db_model.get_model(model_id=model_id)
@@ -93,9 +97,26 @@ async def run_benchmark(project_id: int,
             raise Exception("dataset access path is unsafe")
         datasets.append(d)
 
-    metrics = [m for m in (metric_set or list(BENCHMARK_METRICS))
-               if m in BENCHMARK_METRICS] or list(BENCHMARK_METRICS)
-    metric_csv = ",".join(metrics)
+    # 벤치마크→메트릭 매핑 정규화. 생략/빈값 → 전체 벤치마크·권장 메트릭. unknown id 는
+    # 무시(dto 에서 이미 422 검증하지만 방어), 벤치마크 중복은 첫 지정 유지.
+    pairs = []
+    seen = set()
+    for item in (benchmarks or []):
+        b = str((item or {}).get("benchmark", "")).strip()
+        m = str((item or {}).get("metric", "")).strip()
+        if b not in BENCHMARK_IDS or m not in METRIC_IDS or b in seen:
+            continue
+        seen.add(b)
+        pairs.append({"benchmark": b, "metric": m})
+    if not pairs:
+        pairs = [{"benchmark": b, "metric": BENCHMARK_RECOMMENDED_METRIC[b]}
+                 for b in BENCHMARK_IDS]
+    pairs = pairs[:MAX_BENCHMARK_ITEMS]
+    benchmark_set = [p["benchmark"] for p in pairs]
+    metric_map = {p["benchmark"]: p["metric"] for p in pairs}
+    # eval_result.metric_set(VARCHAR 255) = "benchmark:metric" CSV — 런 설정 요약 + 재개 소스
+    # (기존 flat metric CSV 대체). 전체 결과(점수)는 metrics JSON 에 별도 영속.
+    metric_csv = ",".join(f"{p['benchmark']}:{p['metric']}" for p in pairs)[:255]
     ds_names = [str(d["name"]) for d in datasets]
     # eval_result.dataset_name 은 VARCHAR(255). 멀티 데이터셋 CSV 가 넘으면 요약형으로
     # 저장(런 자체는 진행 — 전체 목록은 반환 dict 의 datasets 로 보존). dataset_ids 상한
@@ -110,7 +131,9 @@ async def run_benchmark(project_id: int,
         "_base_model": {"name": model_name},
         "_dataset": {"name": primary["name"], "access": primary["access"]},
         "datasets": ds_names,
-        "metric_set": metrics,
+        "benchmarks": pairs,
+        "benchmark_set": benchmark_set,
+        "metric_map": metric_map,
     }
 
     try:
@@ -146,7 +169,8 @@ async def run_benchmark(project_id: int,
     return {
         "project_id": project_id,
         "model_id": model_id, "model_name": model_name, "workspace_id": workspace_id,
-        "dataset_ids": dataset_ids, "datasets": ds_names, "metric_set": metrics,
+        "dataset_ids": dataset_ids, "datasets": ds_names,
+        "benchmarks": pairs, "benchmark_set": benchmark_set, "metric_map": metric_map,
         "manifest_name": settings.BENCHMARK_MANIFEST_NAME,
         "manifest_version": settings.BENCHMARK_MANIFEST_VERSION,
         "job_id": job_id, "mode": "benchmark",

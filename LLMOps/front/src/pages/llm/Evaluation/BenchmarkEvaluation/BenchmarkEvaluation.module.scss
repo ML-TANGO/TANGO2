@@ -439,3 +439,665 @@
 .avg {
   background: $blue101;
 }
+
+/* 결과 랭킹 카드의 메트릭 부제(벤치마크 아래 사용 메트릭). */
+.score-sub {
+  font-size: 11px;
+  color: $mono205;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   벤치마크 평가 설정 위저드 (BenchmarkRunConfig) — image.png 3단계 구성
+   ════════════════════════════════════════════════════════════════════════ */
+.wz {
+  padding: 28px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1280px;
+}
+
+.wz-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.wz-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: $mono207;
+}
+
+.wz-subtitle {
+  margin-top: 4px;
+  font-size: 13px;
+  color: $mono205;
+}
+
+/* 스텝 인디케이터 1─2─3 */
+.wz-steps {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.wz-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 4px 10px 4px 4px;
+
+  &:not(:last-child)::after {
+    content: '';
+    width: 44px;
+    height: 1px;
+    background: $mono203;
+    margin-left: 4px;
+  }
+}
+
+.wz-step-num {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1.5px solid $mono203;
+  color: $mono204;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.wz-step-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: $mono204;
+  white-space: nowrap;
+}
+
+.wz-step.on {
+  .wz-step-num {
+    background: $blue104;
+    border-color: $blue104;
+    color: #fff;
+  }
+  .wz-step-label {
+    color: $blue104;
+  }
+}
+
+.wz-step.done {
+  .wz-step-num {
+    border-color: $blue104;
+    color: $blue104;
+  }
+  .wz-step-label {
+    color: $mono206;
+  }
+}
+
+/* 본문 2열: 좌 단계 본문 / 우 요약 사이드바 */
+.wz-body {
+  display: grid;
+  grid-template-columns: 1fr 330px;
+  gap: 20px;
+  align-items: start;
+}
+
+.wz-main {
+  min-width: 0;
+}
+
+.wz-panel {
+  background: #fff;
+  border: 1px solid $mono203;
+  border-radius: 14px;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.wz-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.wz-panel-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: $mono207;
+}
+
+.wz-panel-desc {
+  margin-top: 4px;
+  font-size: 13px;
+  color: $mono205;
+}
+
+.wz-search {
+  min-width: 220px;
+  padding: 9px 14px;
+  border: 1px solid $mono203;
+  border-radius: 8px;
+  font-size: 13px;
+  color: $mono207;
+  outline: none;
+
+  &:focus {
+    border-color: $blue104;
+  }
+  &::placeholder {
+    color: $mono204;
+  }
+}
+
+/* 카테고리 사이드바 + 카드 그리드 */
+.wz-select-body {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 20px;
+}
+
+.wz-cats {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.wz-cats-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: $mono204;
+  padding: 4px 10px 8px;
+}
+
+.wz-cat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: $mono206;
+  cursor: pointer;
+
+  &:hover {
+    background: $mono202;
+  }
+  &.on {
+    background: $blue101;
+    color: $blue104;
+    font-weight: 700;
+  }
+}
+
+.wz-cat-count {
+  font-size: 12px;
+  color: $mono204;
+}
+
+.wz-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 12px;
+  align-content: start;
+}
+
+.wz-card {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid $mono203;
+  border-radius: 12px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+
+  &:hover {
+    border-color: $blue104;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+  }
+  &.on {
+    border-color: $blue104;
+    background: $blue101;
+  }
+}
+
+.wz-check {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  border: 1.5px solid $mono203;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: #fff;
+
+  &.on {
+    background: $blue104;
+    border-color: $blue104;
+  }
+}
+
+.wz-card-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.wz-card-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: $mono207;
+}
+
+.wz-card-desc {
+  font-size: 12px;
+  color: $mono205;
+  line-height: 1.4;
+}
+
+.wz-tag {
+  align-self: flex-start;
+  margin-top: 2px;
+  font-size: 11px;
+  color: $blue104;
+  background: $blue101;
+  border-radius: 6px;
+  padding: 2px 8px;
+}
+
+.wz-cards-empty {
+  grid-column: 1 / -1;
+  padding: 32px 0;
+  text-align: center;
+  font-size: 13px;
+  color: $mono204;
+}
+
+.wz-hint {
+  font-size: 12px;
+  color: $mono205;
+}
+
+/* 2단계: 메트릭 매핑 테이블 + 설명 패널 */
+.wz-metric-body {
+  display: grid;
+  grid-template-columns: 1fr 260px;
+  gap: 18px;
+  align-items: start;
+}
+
+.wz-metric-table {
+  display: flex;
+  flex-direction: column;
+}
+
+.wz-mt-head,
+.wz-mt-row {
+  display: grid;
+  grid-template-columns: 2.2fr 1fr 1.5fr 32px;
+  align-items: center;
+  gap: 12px;
+}
+
+.wz-mt-head {
+  padding: 0 4px 10px;
+  border-bottom: 1px solid $mono203;
+  font-size: 12px;
+  font-weight: 700;
+  color: $mono204;
+}
+
+.wz-mt-row {
+  padding: 12px 4px;
+  border-bottom: 1px solid $mono202;
+}
+
+.wz-mt-bench {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.wz-mt-rec {
+  font-size: 13px;
+  color: $mono205;
+}
+
+.wz-metric-select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid $mono203;
+  border-radius: 8px;
+  font-size: 13px;
+  color: $blue104;
+  font-weight: 600;
+  background: #fff;
+  cursor: pointer;
+  outline: none;
+
+  &:focus {
+    border-color: $blue104;
+  }
+}
+
+.wz-mt-remove {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  color: $mono204;
+  cursor: pointer;
+  border-radius: 6px;
+  font-size: 13px;
+
+  &:hover {
+    background: $mono202;
+    color: $mono207;
+  }
+}
+
+.wz-add-custom {
+  align-self: flex-start;
+  margin-top: 14px;
+  padding: 9px 16px;
+  border: 1px dashed $mono203;
+  border-radius: 8px;
+  background: none;
+  color: $blue104;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    border-color: $blue104;
+    background: $blue101;
+  }
+}
+
+.wz-metric-desc {
+  background: $mono201;
+  border: 1px solid $mono203;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wz-md-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: $mono206;
+}
+
+.wz-md-metric {
+  font-size: 16px;
+  font-weight: 700;
+  color: $mono207;
+}
+
+.wz-md-sub {
+  font-size: 13px;
+  color: $mono206;
+}
+
+.wz-md-formula {
+  font-size: 12px;
+  color: $mono206;
+  background: #fff;
+  border: 1px solid $mono203;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-variant-numeric: tabular-nums;
+  word-break: keep-all;
+}
+
+.wz-md-label {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: $mono204;
+}
+
+.wz-md-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.wz-md-tag {
+  font-size: 11px;
+  color: $blue104;
+  background: $blue101;
+  border-radius: 6px;
+  padding: 2px 8px;
+}
+
+/* 3단계: 확인 목록 */
+.wz-confirm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wz-confirm-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid $mono203;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.wz-confirm-metric {
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 700;
+  color: $blue104;
+}
+
+/* 우측 요약 사이드바 */
+.wz-summary {
+  position: sticky;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.wz-sum-block {
+  background: #fff;
+  border: 1px solid $mono203;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wz-sum-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.wz-sum-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: $mono207;
+}
+
+.wz-sum-clear {
+  border: none;
+  background: none;
+  color: $mono204;
+  font-size: 12px;
+  cursor: pointer;
+
+  &:hover {
+    color: $blue104;
+  }
+}
+
+.wz-sum-empty {
+  font-size: 13px;
+  color: $mono204;
+  padding: 8px 0;
+}
+
+.wz-sum-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.wz-sum-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wz-sum-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: $mono207;
+}
+
+.wz-sum-tag {
+  margin-left: auto;
+  font-size: 11px;
+  color: $mono205;
+  background: $mono202;
+  border-radius: 6px;
+  padding: 2px 8px;
+}
+
+.wz-map-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.wz-map-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.wz-map-bench {
+  font-size: 13px;
+  color: $mono206;
+}
+
+.wz-map-metric {
+  font-size: 13px;
+  font-weight: 700;
+  color: $blue104;
+}
+
+.wz-sum-info {
+  background: $blue101;
+  border-radius: 12px;
+  padding: 14px;
+  font-size: 12px;
+  color: $mono206;
+  line-height: 1.5;
+
+  ul {
+    margin: 8px 0 0;
+    padding-left: 4px;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  li::before {
+    content: '• ';
+    color: $blue104;
+  }
+}
+
+.wz-sum-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.wz-btn {
+  flex: 1;
+  padding: 11px 16px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &.primary {
+    background: $blue104;
+    color: #fff;
+  }
+  &.ghost {
+    flex: 0 0 auto;
+    background: #fff;
+    border-color: $mono203;
+    color: $mono206;
+
+    &:hover {
+      border-color: $blue104;
+      color: $blue104;
+    }
+  }
+  &.disabled {
+    background: $mono203;
+    color: $mono204;
+    cursor: not-allowed;
+    border-color: transparent;
+  }
+}
+
+@media (max-width: 1080px) {
+  .wz-body {
+    grid-template-columns: 1fr;
+  }
+  .wz-summary {
+    position: static;
+  }
+  .wz-select-body,
+  .wz-metric-body {
+    grid-template-columns: 1fr;
+  }
+}

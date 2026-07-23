@@ -71,8 +71,11 @@ async def delete_project(project_id: int):
 @evaluations.post("/benchmark", summary="benchmark 평가 런 생성", tags=TAG)
 async def run_benchmark(body: dto.BenchmarkRunBody):
     try:
+        # 검증된 pair 모델 → 서비스는 순수 dict 로 받는다(dto 의존 분리, 기존 패턴).
+        pairs = ([{"benchmark": p.benchmark, "metric": p.metric}
+                  for p in body.benchmarks] if body.benchmarks else None)
         res = await svc.run_benchmark(
-            project_id=body.project_id, metric_set=body.metric_set)
+            project_id=body.project_id, benchmarks=pairs)
         return response(status=1, result=res)
     except Exception as e:
         traceback.print_exc()

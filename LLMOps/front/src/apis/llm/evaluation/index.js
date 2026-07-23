@@ -48,7 +48,8 @@ export const compareProjectRuns = async (projectId) => {
 };
 
 // ── run 생성 (P2+: 프로젝트 상속) ─────────────────────────────────────
-// 벤치마크 런 생성. body: { project_id, metric_set?: string[] } — model/dataset 은 프로젝트에서 상속.
+// 벤치마크 런 생성. body: { project_id, benchmarks?: [{ benchmark, metric }] } — 벤치마크→메트릭
+//   매핑(생략 시 전체 벤치마크·권장 메트릭). model/dataset 은 프로젝트에서 상속.
 export const runBenchmark = async (body) => {
   return await callApi({ url: 'evaluations/benchmark', method: 'post', body });
 };

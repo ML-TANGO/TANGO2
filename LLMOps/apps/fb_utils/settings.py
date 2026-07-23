@@ -31,8 +31,9 @@ SYSTEM_DOCKER_REGISTRY_URL = os.getenv('SYSTEM_DOCKER_REGISTRY_URL', None) # '19
 if SYSTEM_DOCKER_REGISTRY_URL:
     JF_DEFAULT_UBUNTU_20_IMAGE = SYSTEM_DOCKER_REGISTRY_URL + "jfb/" +  'jbi_ubuntu-20.04.6:latest'
     # built-in 전처리/pipeline 기본 실행 이미지. 기존 jfb/jbi_ubuntu(사내 레지스트리·pull불가)
-    # 대신 docker.io/acrylaaai 게시 lean 베이스(python3+pandas/pyarrow/pillow). 소스=libs/fb_image/built_in_image/Builtin_Preprocess.
-    JF_DEFAULT_UBUNTU_22_IMAGE = SYSTEM_DOCKER_REGISTRY_URL + "acrylaaai/genai-platform-builtin-preprocess:tango_v2.0.1"
+    # 대신 docker.io/acrylaaai 게시 lean 베이스(python3+pandas/pyarrow/pillow/numpy). 소스=libs/fb_image/preprocessing.
+    # FORMAT_CONVERT(데이터 포맷 변환) 포함 활성 빌트인 4종이 이 베이스에서 실행(스크립트는 NFS /built_in 마운트).
+    JF_DEFAULT_UBUNTU_22_IMAGE = SYSTEM_DOCKER_REGISTRY_URL + "acrylaaai/genai-platform-builtin-preprocess:tango_v2.1.0"
 DOCKER_REGISTRY_PROTOCOL = os.getenv('DOCKER_REGISTRY_PROTOCOL', "http://") # "http://" | "https://"
 SYSTEM_DOCKER_REGISTRY_PROTOCOL = os.getenv('SYSTEM_DOCKER_REGISTRY_PROTOCOL', "http://")
 IMAGE_NAMESPACE = f"{JF_SYSTEM_NAMESPACE}-image" if JF_SYSTEM_NAMESPACE else "default-image"
@@ -67,7 +68,9 @@ def resolve_serving_system(value):
     # 읽기 시점 정규화(defense-in-depth): None/미지원 → vllm(fail-safe). 쓰기 경로는 reject.
     v = value or "vllm"
     return v if v in SUPPORTED_SERVING_SYSTEMS else "vllm"
-ANALYZER_IMAGE="jfb/analyzer:0.0.1"
+# 데이터셋 분석 워커 pod 이미지. 기존 jfb/analyzer(사내 레지스트리·pull불가 → ImagePullBackOff)
+# 대신 docker.io/acrylaaai 게시 이미지. 소스=libs/fb_image/analyzer.
+ANALYZER_IMAGE="acrylaaai/genai-platform-analyzer:tango_v2.0.1"
 
 
 
@@ -208,7 +211,7 @@ EVALUATE_MANIFEST_VERSION = os.getenv('EVALUATE_MANIFEST_VERSION', '1.0.0')
 # 컨테이너(고려대 plugin / 실측) 도착 시 동일 계약(job_type=evaluate)이라 env 만 교체하면
 # 플랫폼 코드 변경 없이 전환된다. (기본 메트릭은 evaluate-selfmetric 으로 라우팅 가능.)
 BENCHMARK_MANIFEST_NAME = os.getenv('BENCHMARK_MANIFEST_NAME', 'evaluate-benchmark-mock')
-BENCHMARK_MANIFEST_VERSION = os.getenv('BENCHMARK_MANIFEST_VERSION', '0.1.0')
+BENCHMARK_MANIFEST_VERSION = os.getenv('BENCHMARK_MANIFEST_VERSION', '0.2.0')
 
 # SDS 도메인(3.5) 모델 생성 시 자동 바인딩되는 외부 컨테이너 manifest 의 고정 버전.
 # 사용자는 모델 생성에서 domain=SDS 만 고르고 버전은 안 고른다 → create_model 이

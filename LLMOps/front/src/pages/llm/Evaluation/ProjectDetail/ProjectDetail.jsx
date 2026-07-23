@@ -5,6 +5,7 @@ import { useHistory, useRouteMatch } from 'react-router-dom';
 
 import BenchmarkResultView from '../BenchmarkEvaluation/BenchmarkResultView';
 import BenchmarkRunConfig from '../BenchmarkEvaluation/BenchmarkRunConfig';
+import { BENCHMARK_LABEL } from '../BenchmarkEvaluation/benchmarks';
 import { METRIC_LABEL } from '../BenchmarkEvaluation/benchmarkMetrics';
 import EvalComparison from '../EvalComparison/EvalComparison';
 import ExpertInferenceModal from '../ExpertEvaluation/ExpertInferenceModal';
@@ -14,13 +15,16 @@ import JudgeRunConfig from '../JudgeEvaluation/JudgeRunConfig';
 
 import {
   compareProjectRuns,
+  deleteEvalRun,
   getEvalDatasets,
   getEvalProject,
+  markEvalStatus,
   runBenchmark,
   runJudge,
   startExpert,
 } from '@src/apis/llm/evaluation';
 import { startPath } from '@src/store/modules/breadCrumb';
+import { openConfirm } from '@src/store/modules/confirm';
 import { callApi, STATUS_SUCCESS } from '@src/network';
 
 import { errorToastMessage } from '@src/utils';
@@ -173,12 +177,13 @@ const ProjectDetail = () => {
     setView({ mode: 'expert', jobId: res.result.job_id });
   };
 
-  const handleBenchmarkRun = async (metricSet) => {
+  // benchmarks = [{ benchmark, metric }] — 벤치마크→메트릭 매핑(BenchmarkRunConfig 위저드).
+  const handleBenchmarkRun = async (benchmarks) => {
     if (starting) return;
     setStarting(true);
     const res = await runBenchmark({
       project_id: Number(projectId),
-      metric_set: metricSet,
+      benchmarks,
     });
     setStarting(false);
     if (res.status !== STATUS_SUCCESS || !res.result?.job_id) {
@@ -189,7 +194,6 @@ const ProjectDetail = () => {
       mode: 'result',
       jobId: res.result.job_id,
       status: 'running',
-      metricSet,
     });
   };
 
@@ -219,13 +223,43 @@ const ProjectDetail = () => {
         mode: 'result',
         jobId: run.job_id,
         status: run.status,
-        // metric_set 은 DB 문자열("bleu,rouge") — BenchmarkResultView 는 배열 기대.
-        metricSet: run.metric_set ? String(run.metric_set).split(',') : [],
         // judge 의 metric_set 은 "judge:<provider>"(기준 아님) — JudgeResultView 가
-        // judge_* 키에서 실제 기준을 파생하므로 빈 배열로 넘긴다.
+        // judge_* 키에서 실제 기준을 파생하므로 빈 배열로 넘긴다. benchmark 결과 뷰는
+        // metrics JSON 을 직접 폴링하므로 별도 metricSet prop 불필요(제거).
         criteria: [],
       });
     }
+  };
+
+  // 런 1건 삭제(진행중/완료 모두). 프로젝트 삭제와 동일하게 네이티브 확인 모달(openConfirm) 재사용.
+  //   행 클릭(openRun) 과 겹치지 않게 stopPropagation. 삭제 후 목록 갱신.
+  const handleDeleteRun = (run, e) => {
+    e.stopPropagation();
+    if (!run?.job_id) return;
+    dispatch(
+      openConfirm({
+        title: 'evaluation.run.delete.title',
+        content: 'evaluation.run.delete.message',
+        testid: 'eval-run-delete-modal',
+        submit: {
+          text: 'delete.label',
+          func: async () => {
+            // 진행 중인 컨테이너 백엔드 런(benchmark/judge)은 삭제 전에 취소해 자원 회수
+            //   (expert=컨테이너 없음). 취소는 best-effort — 실패해도 삭제는 진행.
+            if (run.status === 'running' && project.eval_type !== 'expert') {
+              await markEvalStatus(project.model_id, run.job_id, 'cancelled');
+            }
+            const res = await deleteEvalRun(project.model_id, run.job_id);
+            if (res.status !== STATUS_SUCCESS) {
+              errorToastMessage(res.error, res.message);
+              return;
+            }
+            await fetchProject();
+          },
+        },
+        cancel: { text: 'cancel.label' },
+      }),
+    );
   };
 
   const openCompare = async () => {
@@ -243,12 +277,19 @@ const ProjectDetail = () => {
     const raw = run.metric_set;
     if (raw == null || raw === '') return null;
     if (project.eval_type === 'benchmark') {
-      const ids = String(raw)
+      // metric_set = "benchmark:metric" CSV(신 스키마) → "벤치마크 · 메트릭" 함께 요약.
+      //   구 런은 metric-id CSV("bleu,rouge", 콜론 없음)라 metric 라벨로 폴백
+      //   (BenchmarkResultView 와 동일 3-way 체인: BENCHMARK_LABEL → METRIC_LABEL → id).
+      const parts = String(raw)
         .split(',')
         .map((s) => s.trim())
-        .filter(Boolean);
-      if (ids.length === 0) return null;
-      return ids.map((id) => METRIC_LABEL[id] || id).join(', ');
+        .filter(Boolean)
+        .map((tok) => {
+          const [b, m] = tok.split(':');
+          const benchLabel = BENCHMARK_LABEL[b] || METRIC_LABEL[b] || b;
+          return m ? `${benchLabel} · ${METRIC_LABEL[m] || m}` : benchLabel;
+        });
+      return parts.length ? parts.join(', ') : null;
     }
     if (project.eval_type === 'judge') {
       const provider = String(raw)
@@ -425,6 +466,13 @@ const ProjectDetail = () => {
                           ? t('evaluation.project.detail.resume')
                           : t('evaluation.project.detail.open')}
                       </span>
+                      <button
+                        type='button'
+                        className={cx('run-delete')}
+                        onClick={(e) => handleDeleteRun(run, e)}
+                      >
+                        {t('delete.label')}
+                      </button>
                     </div>
                   </div>
                 );
@@ -448,7 +496,6 @@ const ProjectDetail = () => {
           modelId={project.model_id}
           jobId={view.jobId}
           status={view.status}
-          metricSet={view.metricSet}
           onComplete={fetchProject}
         />
       )}
