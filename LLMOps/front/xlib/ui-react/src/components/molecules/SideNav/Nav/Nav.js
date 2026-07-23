@@ -9,8 +9,8 @@ var cx = classNames.bind(style);
 function Nav(_a) {
     var _b = _a.navList, navList = _b === void 0 ? [] : _b, theme = _a.theme, onNavigate = _a.onNavigate, t = _a.t;
     return (jsx("div", __assign({ className: cx('nav-list', theme) }, { children: navList.map(function (_a, key) {
-            var name = _a.name, path = _a.path, Icon = _a.icon, ActiveIcon = _a.activeIcon, group = _a.group, subGroup = _a.subGroup, isGroup = _a.isGroup, isFirstGroup = _a.isFirstGroup, isLastGroup = _a.isLastGroup, disabled = _a.disabled;
-            return !disabled ? (jsx("div", __assign({ className: cx('nav-wrap', group && 'main-group', subGroup && 'sub-group', isFirstGroup && 'first-group', isLastGroup && 'last-group') }, { children: jsx(NavItem, { name: t ? t(name) : name, path: path, icon: Icon, activeIcon: ActiveIcon, isGroup: isGroup, group: group, subGroup: subGroup, theme: theme, onNavigate: onNavigate }, key) }), key)) : null;
+            var name = _a.name, path = _a.path, Icon = _a.icon, ActiveIcon = _a.activeIcon, group = _a.group, subGroup = _a.subGroup, isGroup = _a.isGroup, isFirstGroup = _a.isFirstGroup, isLastGroup = _a.isLastGroup, disabled = _a.disabled, excludeChildren = _a.excludeChildren;
+            return !disabled ? (jsx("div", __assign({ className: cx('nav-wrap', group && 'main-group', subGroup && 'sub-group', isFirstGroup && 'first-group', isLastGroup && 'last-group') }, { children: jsx(NavItem, { name: t ? t(name) : name, path: path, icon: Icon, activeIcon: ActiveIcon, isGroup: isGroup, group: group, subGroup: subGroup, theme: theme, onNavigate: onNavigate, excludeChildren: excludeChildren }, key) }), key)) : null;
         }) })));
 }
 Nav.defaultProps = {

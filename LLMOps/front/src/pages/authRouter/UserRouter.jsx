@@ -445,6 +445,8 @@ const routeArr = [
     path: '/user/workspace/:id/datasets',
     exact: true,
     isGroup: true,
+    // 그룹 헤드는 하위 페이지에서 점등 유지하되, 별개 목적지인 드라이브(/datasets/management)에선 제외.
+    excludeChildren: ['management'],
     icon: IconLnbDatasetsGray,
     activeIcon: IconLnbDatasetsBlue,
     platform: 'flightbase',
