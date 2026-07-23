@@ -1,0 +1,16 @@
+// VLM 모델 구조 도식 컨테이너 — SVG 는 컨테이너 폭에 맞춰 스케일(반응형).
+.mg-wrapper {
+  border: 1px solid #dbdbdb;
+  border-radius: 12px;
+  overflow: hidden;
+  max-width: 1100px;
+  margin: 0 auto;
+  width: 100%;
+  background: #fff;
+}
+
+.mg-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}

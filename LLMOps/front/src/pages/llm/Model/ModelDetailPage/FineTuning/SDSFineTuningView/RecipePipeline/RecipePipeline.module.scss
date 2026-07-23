@@ -340,6 +340,108 @@
   }
 }
 
+// ── 프로젝터 타입별 파라미터 행(시각화 전용) — 라벨 + 값 칩. ──
+.proj-param-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.proj-param-label {
+  min-width: 84px;
+  font-size: 12px;
+  color: #6b7280;
+  font-family: SpoqaM;
+}
+
+// ── 모델 구조 도식 헤더(크게 보기 버튼 — 우측 정렬) ──
+.diagram-head {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.diagram-open-btn {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid #3babff;
+  background: #fff;
+  color: #3babff;
+  font-size: 12px;
+  font-family: SpoqaM;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+
+  &:hover {
+    background: #3babff;
+    color: #fff;
+  }
+}
+
+// ── '크게 보기' 모달(경량 로컬 오버레이) ──
+.diagram-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.diagram-modal {
+  background: #fff;
+  border-radius: 14px;
+  width: min(92vw, 1200px);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+
+.diagram-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #eceff3;
+}
+
+.diagram-modal-title {
+  font-family: SpoqaB;
+  font-size: 16px;
+  color: #1f2937;
+}
+
+.diagram-modal-close {
+  border: none;
+  background: transparent;
+  font-size: 18px;
+  line-height: 1;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+
+  &:hover {
+    background: #f1f3f5;
+    color: #1f2937;
+  }
+}
+
+.diagram-modal-body {
+  padding: 20px;
+  overflow: auto;
+}
+
 // ── 체크포인트 설정(항목9) — 이름 입력 행. step 슬라이더는 MM params-grid 재사용. ──
 .ckpt-name-row {
   display: flex;

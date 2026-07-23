@@ -22,6 +22,7 @@ import { getExternalCheckpoints } from '@src/apis/llm/model';
 import { STATUS_SUCCESS } from '@src/network';
 
 import BasicLineChart from '../../FineTuningGraph/BasicLineChart';
+import MultimodalArchDiagram from './MultimodalArchDiagram';
 
 import classNames from 'classnames/bind';
 import style from './RecipePipeline.module.scss';
@@ -183,6 +184,28 @@ const RecipePipeline = ({
     return (pending || phases[0] || {}).id;
   });
 
+  // 모델 구조 · 프로젝터(항목8) — 시각화 전용 선택 상태(백엔드 미전송). 선택에 따라 도식만 갱신.
+  const [projType, setProjType] = useState(FIXED_PROJ);
+  const [mlpHidden, setMlpHidden] = useState(2048);
+  const [xAttnHeads, setXAttnHeads] = useState(8);
+  const [qTokens, setQTokens] = useState(32);
+  const [diagramOpen, setDiagramOpen] = useState(false); // '크게 보기' 모달
+
+  // 모달 열림 동안 Esc 닫기 + body 스크롤락(플랫폼 ModalFrame 관례 정합).
+  useEffect(() => {
+    if (!diagramOpen) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setDiagramOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [diagramOpen]);
+
   // 실행 phase 가 바뀌면 그 phase 를 자동 선택(모니터링 따라가기).
   useEffect(() => {
     if (activePhaseId) setSelectedPhaseId(activePhaseId);
@@ -273,6 +296,12 @@ const RecipePipeline = ({
   const selectedStatus = selectedPhase
     ? phaseStatusOf(selectedPhase, activePhaseId, activePhaseStatus, done)
     : 'idle';
+
+  // 편집(idle) 상태를 벗어나면 '크게 보기' 모달을 닫는다 — SSE 상태전이(running→done 등) 후
+  // 도식 섹션이 사라졌다가 idle 로 돌아올 때 모달이 저절로 재출현하는 것을 방지.
+  useEffect(() => {
+    if (selectedStatus !== 'idle') setDiagramOpen(false);
+  }, [selectedStatus]);
   const selForm = selectedPhase ? forms[selectedPhase.id] || {} : {};
   const target = selectedPhase
     ? TRAIN_TARGET[selectedPhase.params?.phase]
@@ -421,22 +450,125 @@ const RecipePipeline = ({
                   <button
                     key={p.value}
                     type='button'
-                    className={cx(
-                      'proj-btn',
-                      p.value === FIXED_PROJ && 'active',
-                    )}
-                    disabled={p.value !== FIXED_PROJ}
-                    aria-pressed={p.value === FIXED_PROJ}
+                    className={cx('proj-btn', p.value === projType && 'active')}
+                    onClick={() => setProjType(p.value)}
+                    aria-pressed={p.value === projType}
                   >
                     {p.label}
                   </button>
                 ))}
               </div>
-              <div className={mx('train-hint')}>
-                현재 MLP-2 프로젝터로 고정입니다. 다른 구조는 SDS 컨테이너
-                고도화 시 지원됩니다.
+
+              {/* 프로젝터 타입별 파라미터(시각화 전용) — 도식 라벨에 반영 */}
+              {(projType === 'mlp2' || projType === 'mlp3') && (
+                <div className={cx('proj-param-row')}>
+                  <span className={cx('proj-param-label')}>Hidden Dim</span>
+                  <div className={cx('proj-selector')}>
+                    {[1024, 2048, 4096].map((h) => (
+                      <button
+                        key={h}
+                        type='button'
+                        className={cx('proj-btn', mlpHidden === h && 'active')}
+                        onClick={() => setMlpHidden(h)}
+                        aria-pressed={mlpHidden === h}
+                      >
+                        {h}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {projType === 'xattn' && (
+                <div className={cx('proj-param-row')}>
+                  <span className={cx('proj-param-label')}>Attn Heads</span>
+                  <div className={cx('proj-selector')}>
+                    {[4, 8, 16].map((h) => (
+                      <button
+                        key={h}
+                        type='button'
+                        className={cx('proj-btn', xAttnHeads === h && 'active')}
+                        onClick={() => setXAttnHeads(h)}
+                        aria-pressed={xAttnHeads === h}
+                      >
+                        {`${h} heads`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {projType === 'qformer' && (
+                <div className={cx('proj-param-row')}>
+                  <span className={cx('proj-param-label')}>Query Tokens</span>
+                  <div className={cx('proj-selector')}>
+                    {[16, 32, 64].map((q) => (
+                      <button
+                        key={q}
+                        type='button'
+                        className={cx('proj-btn', qTokens === q && 'active')}
+                        onClick={() => setQTokens(q)}
+                        aria-pressed={qTokens === q}
+                      >
+                        {`${q} tokens`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className={cx('diagram-head')}>
+                <button
+                  type='button'
+                  className={cx('diagram-open-btn')}
+                  onClick={() => setDiagramOpen(true)}
+                >
+                  🔍 크게 보기
+                </button>
               </div>
+
+              <MultimodalArchDiagram
+                projType={projType}
+                mlpHidden={mlpHidden}
+                xAttnHeads={xAttnHeads}
+                qTokens={qTokens}
+              />
             </section>
+
+            {diagramOpen && (
+              <div
+                className={cx('diagram-modal-backdrop')}
+                onClick={() => setDiagramOpen(false)}
+              >
+                <div
+                  className={cx('diagram-modal')}
+                  role='dialog'
+                  aria-modal='true'
+                  aria-label='모델 구조 · 프로젝터'
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className={cx('diagram-modal-head')}>
+                    <span className={cx('diagram-modal-title')}>
+                      모델 구조 · 프로젝터
+                    </span>
+                    <button
+                      type='button'
+                      className={cx('diagram-modal-close')}
+                      onClick={() => setDiagramOpen(false)}
+                      aria-label='닫기'
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div className={cx('diagram-modal-body')}>
+                    <MultimodalArchDiagram
+                      projType={projType}
+                      mlpHidden={mlpHidden}
+                      xAttnHeads={xAttnHeads}
+                      qTokens={qTokens}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
 
             {presentHp.length ? (
               <section className={mx('section')}>
