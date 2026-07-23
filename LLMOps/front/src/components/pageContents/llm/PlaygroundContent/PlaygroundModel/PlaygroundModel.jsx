@@ -45,14 +45,14 @@ const TValue = {
 };
 
 // 서빙 엔진 옵션(멀티엔진 로드맵). vLLM + llama.cpp(GGUF 직접/HF 온더플라이 변환)
-//   + TGI(Phase 3 Tier B, HF/safetensors 직접 서빙) + Ollama(Phase 3 Tier B, 모델스토어 등록 후 /api/chat) 활성.
+//   + Phase 3 Tier B(외부 HTTP 서버 어댑터 serving_adapter): TGI/Ollama/Triton/TensorRT 활성.
 const ENGINES = [
   { id: 'vllm', label: 'vLLM', disabled: false },
   { id: 'llama_cpp', label: 'llama.cpp', disabled: false },
   { id: 'tgi', label: 'TGI', disabled: false },
   { id: 'ollama', label: 'Ollama', disabled: false },
   { id: 'triton', label: 'Triton', disabled: false },
-  // TensorRT: 목업 UI-only(백엔드 미배선). 활성처럼 표시(disabled:false) — 실제 배포는 아직 미지원.
+  // TensorRT: Phase 3 Tier B, trtllm-serve(OpenAI 호환, PyTorch 백엔드로 HF 직접) 어댑터로 배선.
   { id: 'tensorrt', label: 'TensorRT', disabled: false },
 ];
 
