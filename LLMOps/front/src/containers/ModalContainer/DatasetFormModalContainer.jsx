@@ -518,9 +518,8 @@ class ModalContainer extends PureComponent {
           this.progressRef.current.innerText = `Files are uploading... ${progress}%`;
         for (let i = 0; i < this.progressRefs.length; i += 1) {
           if (this.progressRefs[i])
-            this.progressRefs[
-              i
-            ].innerText = `Files are uploading... ${progress}%`;
+            this.progressRefs[i].innerText =
+              `Files are uploading... ${progress}%`;
         }
       },
     });
@@ -528,9 +527,8 @@ class ModalContainer extends PureComponent {
 
     if (status === STATUS_SUCCESS) {
       this.props.closeModal(type);
-      console.log('create success dataset');
-
-      if (callback) callback();
+      // CREATE: 새 dataset_id 를 콜백으로 넘겨 부모가 상세 뷰로 자동 진입(업로드는 상세에서).
+      if (callback) callback(response.result);
       return true;
     } else {
       errorToastMessage(error, message);
@@ -580,9 +578,8 @@ class ModalContainer extends PureComponent {
               this.progressRef.current.innerText = `Files are uploading... ${progress}%`;
             for (let i = 0; i < this.progressRefs.length; i += 1) {
               if (this.progressRefs[i])
-                this.progressRefs[
-                  i
-                ].innerText = `Files are uploading... ${progress}%`;
+                this.progressRefs[i].innerText =
+                  `Files are uploading... ${progress}%`;
             }
           },
         });

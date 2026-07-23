@@ -10,26 +10,11 @@
 
 .page-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
-}
-
-.title-box {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.title {
-  font-size: 22px;
-  font-weight: 700;
-  color: $mono207;
-}
-
-.title-sub {
-  font-size: 13px;
-  color: $mono205;
+  padding-bottom: 16px;
+  border-bottom: 1px solid $mono203;
 }
 
 .header-actions {
@@ -39,134 +24,10 @@
   flex-shrink: 0;
 }
 
-.primary-btn {
-  padding: 9px 20px;
-  border-radius: 8px;
-  border: none;
-  background: $blue104;
-  color: $mono200;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  white-space: nowrap;
-
-  &:hover {
-    background: $blue105;
-  }
-  &:disabled {
-    background: $mono203;
-    color: $mono205;
-    cursor: not-allowed;
-  }
-}
-
-.outline-btn {
-  padding: 8px 16px;
-  border-radius: 8px;
-  border: 1px solid $mono203;
-  background: $mono200;
-  color: $mono205;
-  font-size: 13px;
-  cursor: pointer;
-  white-space: nowrap;
-
-  &:hover:not(:disabled) {
-    border-color: $blue104;
-    color: $blue104;
-  }
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-}
-
-.upload-zone {
-  border: 2px dashed $mono203;
-  border-radius: 14px;
-  background: $mono200;
-  padding: 36px 24px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
-
-  &:hover {
-    border-color: $blue104;
-    background: rgba($blue104, 0.03);
-    box-shadow: $card-hover-color;
-  }
-  &.dragging {
-    border-color: $blue104;
-    background: rgba($blue104, 0.06);
-    box-shadow: $card-hover-color;
-  }
-}
-
-.upload-icon {
-  font-size: 36px;
-  line-height: 1;
-}
-
-.upload-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: $mono207;
-}
-
-.upload-desc {
-  font-size: 13px;
-  color: $mono205;
-}
-
-.fmt-row {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: center;
-  margin-top: 4px;
-}
-
-.fmt-chip {
-  font-size: 11px;
-  border-radius: 4px;
-  padding: 3px 10px;
-  background: $blue100;
-  color: $blue104;
-  border: 1px solid $blue101;
-}
-
 .section {
   display: flex;
   flex-direction: column;
   gap: 14px;
-}
-
-.section-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.section-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: $mono207;
-  border-left: 3px solid $blue104;
-  padding-left: 9px;
-}
-
-.count-badge {
-  font-size: 12px;
-  background: $blue101;
-  color: $blue104;
-  border-radius: 12px;
-  padding: 2px 10px;
-}
-
-.spacer {
-  flex: 1;
 }
 
 .delete-btn {
@@ -178,58 +39,33 @@
   font-size: 13px;
   cursor: pointer;
 
-  &:hover {
+  &:hover:not(:disabled) {
     border-color: $red502;
     color: $red502;
   }
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.list-footer {
+  display: flex;
+  justify-content: flex-start;
+  padding-top: 4px;
 }
 
 .list-toolbar {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 10px;
 }
 
 .search-wrap {
-  flex: 1;
   position: relative;
   display: flex;
   align-items: center;
-}
-
-.search-input {
-  width: 100%;
-  padding: 8px 32px 8px 12px;
-  border: 1px solid $mono203;
-  border-radius: 8px;
-  background: $mono200;
-  font-size: 13px;
-  color: $mono207;
-  outline: none;
-
-  &:focus {
-    border-color: $blue104;
-  }
-  &::placeholder {
-    color: $mono205;
-  }
-}
-
-.search-clear {
-  position: absolute;
-  right: 8px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 12px;
-  color: $mono205;
-  padding: 2px 4px;
-  border-radius: 4px;
-
-  &:hover {
-    color: $mono207;
-    background: $mono202;
-  }
 }
 
 .btn-filter {
@@ -269,12 +105,12 @@
   transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
 
   &:hover {
-    border-color: $blue104;
+    border-color: $mono204;
     box-shadow: $card-hover-color;
   }
   &.ds-card--on {
     border-color: $blue104;
-    background: rgba($blue104, 0.04);
+    background: $blue100;
   }
 }
 
@@ -333,8 +169,9 @@
     border: 1px solid $mono203;
   }
   &.ds-access--rw {
-    background: $lime601;
-    color: $lime604;
+    background: $blue100;
+    color: $blue105;
+    border: 1px solid $blue102;
   }
 }
 
@@ -359,25 +196,41 @@
   flex-shrink: 0;
 }
 
-.icon-action-btn {
-  padding: 6px 12px;
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
   border-radius: 6px;
   border: 1px solid $mono203;
   background: $mono200;
-  color: $mono206;
-  font-size: 12px;
   cursor: pointer;
-  white-space: nowrap;
-  transition: border-color 0.15s, color 0.15s;
+  transition: border-color 0.15s, background 0.15s;
 
-  &:hover:not(.icon-action-btn--disabled):not(:disabled) {
-    border-color: $blue104;
-    color: $blue104;
+  img {
+    width: 16px;
+    height: 16px;
   }
-  &.icon-action-btn--disabled,
+
+  &:hover:not(.icon-btn--disabled):not(:disabled) {
+    border-color: $blue104;
+    background: $blue100;
+  }
+  &.icon-btn--disabled,
   &:disabled {
     opacity: 0.4;
     cursor: not-allowed;
+  }
+
+  .spin {
+    animation: ds-spin 0.8s linear infinite;
+  }
+}
+
+@keyframes ds-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 
@@ -389,4 +242,45 @@
   background: $mono200;
   border: 1px dashed $mono203;
   border-radius: 10px;
+}
+
+// 카드별 파일 미리보기(상위 4개) — 상세 진입 전 목록에서 내부 파일 노출
+.ds-preview {
+  list-style: none;
+  margin: 10px 0 0 0;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: $mono200;
+  border: 1px solid $mono203;
+  border-radius: 8px;
+}
+
+.ds-preview-item {
+  font-family: SpoqaM;
+  font-size: 12px;
+  color: $mono207;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ds-preview-more {
+  margin-top: 2px;
+  font-family: SpoqaM;
+  font-size: 11px;
+  color: $mono205;
+}
+
+.ds-preview--empty {
+  margin: 10px 0 0 0;
+  padding: 10px;
+  text-align: center;
+  font-family: SpoqaM;
+  font-size: 12px;
+  color: $mono205;
+  background: $mono200;
+  border: 1px dashed $mono203;
+  border-radius: 8px;
 }

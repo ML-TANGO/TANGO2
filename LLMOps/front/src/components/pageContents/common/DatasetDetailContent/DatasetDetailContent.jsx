@@ -97,6 +97,7 @@ function DatasetDetailContent({
   historyForward,
   paginationResetDefaultPage,
   onFileUpload, // 파일 업로드 이벤트
+  onDropUpload, // 드래그앤드롭 업로드 (현재 데이터셋으로 직접 업로드)
   onCreateFolder, // 폴더 생성 이벤트
   onGitHubClone, // 깃허브 클론 이벤트
   onGoogleDriveUpload, // 구글드라이브 업로드 이벤트
@@ -133,6 +134,25 @@ function DatasetDetailContent({
 
   const { t } = useTranslation();
   const dispatch = useDispatch();
+
+  // 드래그앤드롭 업로드 — 드롭 시 현재 데이터셋으로 직접 업로드, 클릭 시 업로드 모달
+  const [isDragging, setIsDragging] = useState(false);
+  const handleUploadDragOver = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+  const handleUploadDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+  const handleUploadDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const dropped = e.dataTransfer?.files;
+    if (dropped && dropped.length > 0) {
+      onDropUpload?.([...dropped]);
+    }
+  };
 
   // ! const memoizedFileList = useMemo(() => fileList, [fileList]);
 
@@ -874,10 +894,10 @@ function DatasetDetailContent({
                 switchStatus === 'pending'
                   ? { backgroundColor: '#ffab31' }
                   : switchStatus === 'failed' || switchStatus === 'error'
-                  ? { backgroundColor: '#eb3e2a' }
-                  : switchStatus === null
-                  ? { backgroundColor: '#c1c1c1' }
-                  : {}
+                    ? { backgroundColor: '#eb3e2a' }
+                    : switchStatus === null
+                      ? { backgroundColor: '#c1c1c1' }
+                      : {}
               }
               onChange={() => {
                 if (
@@ -901,6 +921,30 @@ function DatasetDetailContent({
           )}
         </div>
       </div>
+      {!isTempPath && !isDisabledBtn && (
+        <div
+          className={cx('upload-dropzone', isDragging && 'dragging')}
+          role='button'
+          tabIndex={0}
+          onClick={onFileUpload}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onFileUpload();
+            }
+          }}
+          onDragOver={handleUploadDragOver}
+          onDragLeave={handleUploadDragLeave}
+          onDrop={handleUploadDrop}
+        >
+          <span className={cx('upload-dropzone-text')}>
+            {t(
+              'dragAndDropUpload.message',
+              '파일을 여기로 끌어다 놓거나 클릭해 업로드하세요',
+            )}
+          </span>
+        </div>
+      )}
       <Table
         loading={tableLoading || rowClickFetching || fromUploadFetching}
         finder={DatasetFinderWrapper}

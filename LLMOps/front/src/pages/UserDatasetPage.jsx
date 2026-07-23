@@ -321,8 +321,18 @@ function UserDatasetPage({ trackingEvent }) {
           footerRender: DatasetFormModalFooter,
           submit: {
             text: 'create.label',
-            func: () => {
-              getDatasetsData();
+            // 생성 후 새 데이터셋 상세로 자동 진입 → 업로드/폴더 관리는 상세에서(Req 2 흐름).
+            func: (newDatasetId) => {
+              if (newDatasetId) {
+                history.push({
+                  pathname: `/user/workspace/${workspaceId}/datasets/management/${newDatasetId}/files`,
+                  // 상세 페이지는 location.state 에서 id 를 읽음(없으면 pathname 폴백이 'management' 를
+                  // 잘못 집음) — 카드 클릭과 동일하게 state 로 새 id 를 전달.
+                  state: { id: newDatasetId, workspaceId },
+                });
+              } else {
+                getDatasetsData();
+              }
             },
           },
           cancel: {

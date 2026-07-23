@@ -2248,6 +2248,18 @@ function DatasetDetailPage({ trackingEvent }) {
       paginationResetDefaultPage={paginationResetDefaultPage}
       historyForward={historyForward}
       onFileUpload={onFileUpload}
+      onDropUpload={(fileList) =>
+        onSubmitUpload({
+          files: [...fileList],
+          uploadType: 0,
+          // 드롭 업로드는 모달 중복검사 UI 를 안 거치므로, 동명 파일을 덮어쓰지 않고
+          // 복사(백엔드 duplicate 리네임)로 처리 — 데이터 손실/손상 방지(리뷰 HIGH).
+          checkedFileList: [...fileList].map((f) => ({
+            fileName: f.name,
+            overwrite: false,
+          })),
+        })
+      }
       onCreateFolder={onCreateFolder}
       onFileDownload={onFileDownload}
       onGoogleDriveUpload={onGoogleDriveUpload}
