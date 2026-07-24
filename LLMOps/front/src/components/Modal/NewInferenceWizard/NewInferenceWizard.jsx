@@ -17,7 +17,6 @@ const cx = classNames.bind(style);
 // ETRI 목업(NewInferenceWizard) UI 를 우리 실 BE(인스턴스·커밋)로 재배선.
 const STEPS = ['모델 구성', '자원 할당', '확인 및 생성'];
 const GPU_OPTIONS = [1, 2, 4];
-const REPLICA_OPTIONS = [1, 2];
 
 const NewInferenceWizard = ({ wid, onClose, onCreate }) => {
   const [step, setStep] = useState(1);
@@ -33,8 +32,9 @@ const NewInferenceWizard = ({ wid, onClose, onCreate }) => {
   // Step2 — 자원 할당(실 인스턴스)
   const [instances, setInstances] = useState([]);
   const [instanceId, setInstanceId] = useState(null);
-  const [gpuCount, setGpuCount] = useState(1);
-  const [replicas, setReplicas] = useState(1);
+  // 모델별 GPU 수(회의결정: LLM1/LLM2 각각 독립). 레플리카는 미노출 → 인스턴스 1개 내부 고정.
+  const [promptGpuCount, setPromptGpuCount] = useState(1);
+  const [inferenceGpuCount, setInferenceGpuCount] = useState(1);
 
   // Step3 — 세션명 + 생성
   const [sessionName, setSessionName] = useState('');
@@ -89,8 +89,8 @@ const NewInferenceWizard = ({ wid, onClose, onCreate }) => {
         model_instance_id: instanceId,
         prompt_gen_commit_id: promptCommit,
         inference_commit_id: inferenceCommit,
-        model_instance_count: replicas,
-        model_gpu_count: gpuCount,
+        prompt_gen_gpu_count: promptGpuCount,
+        inference_gpu_count: inferenceGpuCount,
       });
       if (res.status === STATUS_SUCCESS) {
         onCreate?.(res.result);
@@ -113,17 +113,17 @@ const NewInferenceWizard = ({ wid, onClose, onCreate }) => {
     <div className={cx('overlay')} onClick={handleClose}>
       <div
         className={cx('wizard')}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="dual-wizard-title"
+        role='dialog'
+        aria-modal='true'
+        aria-labelledby='dual-wizard-title'
         onClick={(e) => e.stopPropagation()}
       >
         <div className={cx('header')}>
-          <span className={cx('title')} id="dual-wizard-title">
+          <span className={cx('title')} id='dual-wizard-title'>
             새 이중모델 추론 세션
           </span>
           <button
-            type="button"
+            type='button'
             className={cx('close-btn')}
             onClick={handleClose}
           >
@@ -157,19 +157,7 @@ const NewInferenceWizard = ({ wid, onClose, onCreate }) => {
           {/* Step 1 — 모델 구성 */}
           {step === 1 && (
             <>
-              <div className={cx('section')}>
-                <h3 className={cx('section-title')}>추론 모델 (LLM2)</h3>
-                <ModelSelector
-                  wid={wid}
-                  selected={inferenceModel}
-                  onSelect={(id, data) => {
-                    setInferenceModel(id);
-                    setInferenceModelData(data);
-                    setInferenceCommit(null);
-                  }}
-                  onCheckpointSelect={(id) => setInferenceCommit(id)}
-                />
-              </div>
+              {/* 실행 순서(LLM1→LLM2)와 일치: 프롬프트 생성 모델을 먼저 배치 */}
               <div className={cx('section')}>
                 <h3 className={cx('section-title')}>
                   프롬프트 생성 모델 (LLM1)
@@ -183,6 +171,19 @@ const NewInferenceWizard = ({ wid, onClose, onCreate }) => {
                     setPromptCommit(null);
                   }}
                   onCheckpointSelect={(id) => setPromptCommit(id)}
+                />
+              </div>
+              <div className={cx('section')}>
+                <h3 className={cx('section-title')}>추론 모델 (LLM2)</h3>
+                <ModelSelector
+                  wid={wid}
+                  selected={inferenceModel}
+                  onSelect={(id, data) => {
+                    setInferenceModel(id);
+                    setInferenceModelData(data);
+                    setInferenceCommit(null);
+                  }}
+                  onCheckpointSelect={(id) => setInferenceCommit(id)}
                 />
               </div>
               {sameModel && (
@@ -228,13 +229,15 @@ const NewInferenceWizard = ({ wid, onClose, onCreate }) => {
                 )}
               </div>
               <div className={cx('section')}>
-                <h3 className={cx('section-title')}>모델당 GPU 수</h3>
+                <h3 className={cx('section-title')}>
+                  프롬프트 생성 모델 (LLM1) GPU 수
+                </h3>
                 <div className={cx('chip-row')}>
                   {GPU_OPTIONS.map((g) => (
                     <div
                       key={g}
-                      className={cx('chip', gpuCount === g && 'selected')}
-                      onClick={() => setGpuCount(g)}
+                      className={cx('chip', promptGpuCount === g && 'selected')}
+                      onClick={() => setPromptGpuCount(g)}
                     >
                       {g}
                     </div>
@@ -242,22 +245,26 @@ const NewInferenceWizard = ({ wid, onClose, onCreate }) => {
                 </div>
               </div>
               <div className={cx('section')}>
-                <h3 className={cx('section-title')}>레플리카 수</h3>
+                <h3 className={cx('section-title')}>추론 모델 (LLM2) GPU 수</h3>
                 <div className={cx('chip-row')}>
-                  {REPLICA_OPTIONS.map((r) => (
+                  {GPU_OPTIONS.map((g) => (
                     <div
-                      key={r}
-                      className={cx('chip', replicas === r && 'selected')}
-                      onClick={() => setReplicas(r)}
+                      key={g}
+                      className={cx(
+                        'chip',
+                        inferenceGpuCount === g && 'selected',
+                      )}
+                      onClick={() => setInferenceGpuCount(g)}
                     >
-                      {r}
+                      {g}
                     </div>
                   ))}
                 </div>
               </div>
               <p className={cx('note')}>
-                * 세션은 두 모델을 각각 배포하므로 GPU {gpuCount * 2}장을
-                점유합니다 (모델당 {gpuCount}장).
+                * 세션은 두 모델을 각각 배포하므로 GPU{' '}
+                {promptGpuCount + inferenceGpuCount}장을 점유합니다 (프롬프트
+                생성 {promptGpuCount}장 + 추론 {inferenceGpuCount}장).
               </p>
             </>
           )}
@@ -269,10 +276,10 @@ const NewInferenceWizard = ({ wid, onClose, onCreate }) => {
                 <h3 className={cx('section-title')}>세션 이름</h3>
                 <input
                   className={cx('name-input')}
-                  type="text"
+                  type='text'
                   maxLength={64}
-                  aria-label="세션 이름"
-                  placeholder="추론 세션 이름을 입력하세요"
+                  aria-label='세션 이름'
+                  placeholder='추론 세션 이름을 입력하세요'
                   value={sessionName}
                   onChange={(e) => setSessionName(e.target.value)}
                 />
@@ -297,9 +304,11 @@ const NewInferenceWizard = ({ wid, onClose, onCreate }) => {
                   </span>
                 </div>
                 <div className={cx('s-row')}>
-                  <span className={cx('s-key')}>모델당 GPU / 레플리카</span>
+                  <span className={cx('s-key')}>
+                    GPU (프롬프트 생성 / 추론)
+                  </span>
                   <span className={cx('s-val')}>
-                    {gpuCount} / {replicas}
+                    {promptGpuCount} / {inferenceGpuCount}
                   </span>
                 </div>
               </div>
@@ -310,7 +319,7 @@ const NewInferenceWizard = ({ wid, onClose, onCreate }) => {
         <div className={cx('footer')}>
           {step > 1 && (
             <button
-              type="button"
+              type='button'
               className={cx('back-btn')}
               onClick={() => setStep((s) => s - 1)}
             >
@@ -318,7 +327,7 @@ const NewInferenceWizard = ({ wid, onClose, onCreate }) => {
             </button>
           )}
           <button
-            type="button"
+            type='button'
             className={cx('cancel-btn')}
             onClick={handleClose}
           >
@@ -326,7 +335,7 @@ const NewInferenceWizard = ({ wid, onClose, onCreate }) => {
           </button>
           {step < 3 ? (
             <button
-              type="button"
+              type='button'
               className={cx(
                 'next-btn',
                 ((step === 1 && !canStep1) || (step === 2 && !canStep2)) &&
@@ -339,8 +348,11 @@ const NewInferenceWizard = ({ wid, onClose, onCreate }) => {
             </button>
           ) : (
             <button
-              type="button"
-              className={cx('create-btn', (!canCreate || creating) && 'disabled')}
+              type='button'
+              className={cx(
+                'create-btn',
+                (!canCreate || creating) && 'disabled',
+              )}
               disabled={!canCreate || creating}
               onClick={handleCreate}
             >

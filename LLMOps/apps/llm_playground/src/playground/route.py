@@ -438,7 +438,8 @@ async def create_dual_session(body: dto.CreateDualSessionInput):
             prompt_gen_model_id=body.prompt_gen_model_id, inference_model_id=body.inference_model_id,
             model_instance_id=body.model_instance_id,
             prompt_gen_commit_id=body.prompt_gen_commit_id, inference_commit_id=body.inference_commit_id,
-            model_instance_count=body.model_instance_count, model_gpu_count=body.model_gpu_count)
+            model_instance_count=body.model_instance_count, model_gpu_count=body.model_gpu_count,
+            prompt_gen_gpu_count=body.prompt_gen_gpu_count, inference_gpu_count=body.inference_gpu_count)
         return response(status=1, result=res)
     except Exception as e:
         traceback.print_exc()

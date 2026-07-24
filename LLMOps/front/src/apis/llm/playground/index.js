@@ -205,8 +205,8 @@ export const postDualSession = async ({
   model_instance_id,
   prompt_gen_commit_id,
   inference_commit_id,
-  model_instance_count,
-  model_gpu_count,
+  prompt_gen_gpu_count,
+  inference_gpu_count,
 }) => {
   const res = await callApi({
     url: 'playgrounds/dual-session',
@@ -219,8 +219,8 @@ export const postDualSession = async ({
       model_instance_id: +model_instance_id,
       prompt_gen_commit_id: prompt_gen_commit_id ? +prompt_gen_commit_id : null,
       inference_commit_id: inference_commit_id ? +inference_commit_id : null,
-      model_instance_count: +(model_instance_count ?? 1),
-      model_gpu_count: +(model_gpu_count ?? 1),
+      prompt_gen_gpu_count: +(prompt_gen_gpu_count ?? 1),
+      inference_gpu_count: +(inference_gpu_count ?? 1),
     },
   });
   return res;
@@ -349,7 +349,9 @@ export const postDualBatch = async ({
       session_id,
       system_prompt: system_prompt || null,
       dual_examples:
-        Array.isArray(dual_examples) && dual_examples.length ? dual_examples : null,
+        Array.isArray(dual_examples) && dual_examples.length
+          ? dual_examples
+          : null,
     },
   });
   return res;

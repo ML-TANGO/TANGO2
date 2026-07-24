@@ -137,7 +137,8 @@ class CreateDualSessionInput(BaseModel):
     """이중모델 추론 세션 생성(WBS 추론 4.2) — 프롬프트생성 모델(LLM1) + 추론 모델(LLM2)을
     한 세션으로 동시 배포(co-provision). 각 모델은 기존 배포 경로(pipeline_deploy)로 올라가고,
     추론 playground(부모)-프롬프트생성 playground(자식)를 JSON 링크한다.
-    자원 블록은 두 모델에 각각 적용(a안)."""
+    자원 블록은 두 모델에 각각 적용하되, GPU 는 모델별 개별 지정 가능(a안 +
+    prompt_gen_gpu_count/inference_gpu_count 오버라이드)."""
     workspace_id: int
     name: str = Field(min_length=1, max_length=64, description="세션 이름")
     prompt_gen_model_id: int = Field(description="프롬프트 생성 모델(LLM1, allm) id")
@@ -147,7 +148,10 @@ class CreateDualSessionInput(BaseModel):
     inference_commit_id: Optional[int] = Field(default=None, description="LLM2 배포 commit id(생략 시 latest)")
     # instance/gpu 상한 = 폭주 입력 backstop(실제 상한은 워크스페이스 쿼터가 다운스트림 강제). gpu 0=CPU 허용.
     model_instance_count: Optional[int] = Field(default=1, ge=1, le=16, description="인스턴스 할당 개수(모델당)")
-    model_gpu_count: Optional[int] = Field(default=1, ge=0, le=16, description="GPU 할당 개수(모델당)")
+    model_gpu_count: Optional[int] = Field(default=1, ge=0, le=16, description="GPU 할당 개수(모델당, 모델별 미지정 시 폴백)")
+    # 모델별 GPU 개별 지정(회의결정: LLM1/LLM2 각각 독립 GPU 수). 생략 시 공통 model_gpu_count 폴백(하위호환).
+    prompt_gen_gpu_count: Optional[int] = Field(default=None, ge=0, le=16, description="LLM1(프롬프트 생성) GPU 할당 개수(생략 시 model_gpu_count)")
+    inference_gpu_count: Optional[int] = Field(default=None, ge=0, le=16, description="LLM2(추론) GPU 할당 개수(생략 시 model_gpu_count)")
 
     class Config:
         protected_namespaces = ()

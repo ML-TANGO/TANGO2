@@ -248,11 +248,13 @@ async def _link_dual_session(parent_playground_id, child_playground_id, prompt_g
 async def create_dual_session(workspace_id, name, user_name,
                               prompt_gen_model_id, inference_model_id, model_instance_id,
                               prompt_gen_commit_id=None, inference_commit_id=None,
-                              model_instance_count=1, model_gpu_count=1):
+                              model_instance_count=1, model_gpu_count=1,
+                              prompt_gen_gpu_count=None, inference_gpu_count=None):
     """이중모델 추론 세션 co-provision(WBS 추론 4.2). 프롬프트생성 모델(LLM1)+추론 모델(LLM2)을
     각각 기존 배포 경로(pipeline_deploy: create→bind→start, external/internal 분기 포함)로 올리고
     부모(추론)-자식(프롬프트생성) playground 를 링크한다. 부분실패 시 이미 만든 것 롤백.
-    자원 블록은 두 모델에 각각 적용(a안). 반환: {session_playground_id, prompt_gen_playground_id}."""
+    자원 블록은 두 모델에 각각 적용하되 GPU 는 모델별 개별 지정(prompt_gen/inference_gpu_count,
+    생략 시 model_gpu_count 폴백). 반환: {session_playground_id, prompt_gen_playground_id}."""
     if not name or not isinstance(name, str) or not name.strip():
         raise Exception("Error: session name is required")
     if prompt_gen_model_id == inference_model_id:
@@ -263,6 +265,12 @@ async def create_dual_session(workspace_id, name, user_name,
         raise Exception("Error: model_instance_count must be >= 1")
     if model_gpu_count is not None and model_gpu_count < 0:
         raise Exception("Error: model_gpu_count must be >= 0")
+    # 모델별 GPU 오버라이드(회의결정: LLM1/LLM2 각각 독립 GPU 수). 생략 시 공통 model_gpu_count 폴백(하위호환).
+    gpu1 = prompt_gen_gpu_count if prompt_gen_gpu_count is not None else model_gpu_count
+    gpu2 = inference_gpu_count if inference_gpu_count is not None else model_gpu_count
+    for _g in (gpu1, gpu2):
+        if _g is not None and _g < 0:
+            raise Exception("Error: per-model gpu count must be >= 0")
     # 모델 존재 + 워크스페이스 일치 검증(교차테넌트 모델 배포 차단; genai_unified_pipeline 선례).
     # 메시지 통합(존재/타워크스페이스 구분 시 model id 열거 오라클) — generic 에러.
     for _mid in (prompt_gen_model_id, inference_model_id):
@@ -281,7 +289,7 @@ async def create_dual_session(workspace_id, name, user_name,
         workspace_id=workspace_id, model_id=prompt_gen_model_id, user_name=user_name,
         model_instance_id=model_instance_id, model_commit_id=prompt_gen_commit_id,
         name=f"{_base}-promptgen", model_instance_count=model_instance_count,
-        model_gpu_count=model_gpu_count)).get("playground_id")
+        model_gpu_count=gpu1)).get("playground_id")
 
     # 2) 추론 모델(LLM2) 배포 — 실패 시 LLM1 롤백
     try:
@@ -289,7 +297,7 @@ async def create_dual_session(workspace_id, name, user_name,
             workspace_id=workspace_id, model_id=inference_model_id, user_name=user_name,
             model_instance_id=model_instance_id, model_commit_id=inference_commit_id,
             name=f"{_base}-infer", model_instance_count=model_instance_count,
-            model_gpu_count=model_gpu_count)).get("playground_id")
+            model_gpu_count=gpu2)).get("playground_id")
     except Exception:
         traceback.print_exc()
         try:
