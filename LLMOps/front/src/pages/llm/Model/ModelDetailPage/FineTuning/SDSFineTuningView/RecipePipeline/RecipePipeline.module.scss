@@ -17,7 +17,8 @@
 }
 
 .card {
-  flex: 0 0 180px;
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -196,27 +197,23 @@
 // ── 하단 2컬럼(MM 뷰 레이아웃): 좌 설정 / 우 모니터링(부모 주입, sticky). ──
 .sds-body {
   display: flex;
-  gap: 20px;
+  gap: 24px;
   align-items: flex-start;
 }
 
 .config-side {
-  flex: 1 1 42%;
+  flex: 1 1 30%;
+  max-width: 402px;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 16px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  background: #fafbfc;
+  // 카드 idiom: 내부 .section 들이 카드가 되므로 컬럼 자체 테두리/배경은 제거(이중 카드 방지).
 }
 
 .monitor-side {
-  flex: 1 1 58%;
+  flex: 1 1 70%;
   min-width: 0;
-  position: sticky;
-  top: 16px;
 }
 
 .running-note {

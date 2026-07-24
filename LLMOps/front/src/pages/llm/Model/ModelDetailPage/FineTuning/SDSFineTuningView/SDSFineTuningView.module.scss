@@ -114,12 +114,12 @@
   display: flex;
   flex-direction: row;
   align-items: flex-start;
-  gap: 32px;
+  gap: 24px;
 }
 
 .config-col {
-  flex: 0 0 32%;
-  max-width: 32%;
+  flex: 0 0 30%;
+  max-width: 402px;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -138,8 +138,6 @@
   display: flex;
   flex-direction: column;
   gap: 32px;
-  position: sticky;      // 긴 설정을 스크롤해도 모니터링은 상단 근처에 머무름
-  top: 16px;
 }
 
 // 좁은 화면: 1-컬럼 스택(설정 위, 모니터링 아래)
@@ -159,6 +157,19 @@
   display: flex;
   flex-direction: column;
   gap: 18px;
+  // 플랫폼 카드 idiom(내부 Single LLM .left-top 동형) — 섹션을 흰 카드로.
+  padding: 24px;
+  border: 1px solid $blue102;
+  border-radius: 16px;
+  background: $mono200;
+}
+
+// 학습 추이 섹션은 이미 자체 chart-card 를 가지므로 카드 중첩 방지(모니터 마지막 섹션).
+.monitor-col > .section:last-child {
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
 }
 
 .section-label {
@@ -782,8 +793,8 @@
 // ── Charts ────────────────────────────────────────────────────────────────────────
 .charts-grid {
   display: grid;
-  // 2열 고정 — 손실(train/eval) 윗줄, 진단(grad/lr) 아랫줄 = 2×2. 차트가 넓게 읽힘.
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  // 1열 스택 — 설정 컬럼이 길어 우측 학습 추이가 아래까지 채우도록 세로 적층(차트도 전폭으로 커짐).
+  grid-template-columns: minmax(0, 1fr);
   gap: 20px;
 }
 

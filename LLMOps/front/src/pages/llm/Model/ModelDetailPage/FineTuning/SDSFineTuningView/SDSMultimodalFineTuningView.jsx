@@ -18,12 +18,26 @@ import { openModal } from '@src/store/modules/modal';
 import { callApi, STATUS_SUCCESS } from '@src/network';
 import { errorToastMessage } from '@src/utils';
 
+import { Badge, ButtonV2 } from '@jonathan/ui-react';
+
 import SimpleNav from '../../SimpleNav';
 import BasicLineChart from '../FineTuningGraph/BasicLineChart';
+import ModelRangeBar from '../ModelRangeBar/ModelRangeBar';
 
 import classNames from 'classnames/bind';
 import style from '../FineTuning.module.scss';
 import localStyle from './SDSFineTuningView.module.scss';
+
+// 상태 → 조나단 Badge type 매핑(플랫폼 디자인시스템 재사용).
+const BADGE_TYPE = {
+  running: 'blue',
+  pending: 'yellow',
+  installing: 'yellow',
+  done: 'green',
+  error: 'red',
+  stop: 'gray',
+  idle: 'gray',
+};
 
 const cx = classNames.bind(style);
 const lx = classNames.bind(localStyle);
@@ -468,40 +482,32 @@ const SDSMultimodalFineTuningView = memo(function SDSMultimodalFineTuningView({
   // freeze 배너 — 비전=항상 동결, projector=trainProj, LLM=LoRA/full(stage2 항상 수행).
   const freezeLayers = [
     {
-      icon: '🔒',
       name: shortName(visionName),
       note: 'Vision Encoder (동결)',
       cls: 'frozen',
     },
     trainProj
-      ? { icon: '⚙', name: 'Projector', note: 'MLP (학습)', cls: 'trainable' }
-      : { icon: '🔒', name: 'Projector', note: '동결', cls: 'frozen' },
+      ? { name: 'Projector', note: 'MLP (학습)', cls: 'trainable' }
+      : { name: 'Projector', note: '동결', cls: 'frozen' },
     trainLLM
-      ? { icon: '⚡', name: shortName(llmName), note: 'LoRA 학습', cls: 'lora' }
+      ? { name: shortName(llmName), note: 'LoRA 학습', cls: 'lora' }
       : {
-          icon: '⚡',
           name: shortName(llmName),
           note: '전체 학습 (full)',
           cls: 'trainable',
         },
   ];
 
-  const paramItem = ({ label, val, min, max, step, set, curr }) => (
-    <div key={label} className={lx('param-item')}>
-      <div className={lx('param-header')}>
-        <span className={lx('param-name')}>{label}</span>
-        <span className={lx('param-val')}>{val}</span>
-      </div>
-      <input
-        type='range'
-        className={lx('slider')}
-        min={min}
-        max={max}
-        step={step}
-        value={curr}
-        onChange={(e) => set(Number(e.target.value))}
-      />
-    </div>
+  const paramItem = ({ label, min, max, step, set, curr }) => (
+    <ModelRangeBar
+      key={label}
+      label={label}
+      value={curr}
+      min={min}
+      max={max}
+      step={step}
+      onChange={(e) => set(Number(e.target.value))}
+    />
   );
 
   return (
@@ -667,15 +673,12 @@ const SDSMultimodalFineTuningView = memo(function SDSMultimodalFineTuningView({
           </section>
 
           <div className={lx('freeze-banner')}>
-            {freezeLayers.map(({ icon, name, note, cls }) => (
+            {freezeLayers.map(({ name, note, cls }) => (
               <div
                 key={`${name}-${note}`}
                 className={lx('freeze-item', `freeze-item--${cls}`)}
                 aria-label={`${name}: ${note}`}
               >
-                <span className={lx('freeze-icon')} aria-hidden='true'>
-                  {icon}
-                </span>
                 <div>
                   <div className={lx('freeze-name')}>{name}</div>
                   <div className={lx('freeze-note')}>{note}</div>
@@ -691,7 +694,6 @@ const SDSMultimodalFineTuningView = memo(function SDSMultimodalFineTuningView({
                 {[
                   {
                     label: 'Learning Rate',
-                    val: lr1.toExponential(1),
                     min: 0.0001,
                     max: 0.01,
                     step: 0.0001,
@@ -700,7 +702,6 @@ const SDSMultimodalFineTuningView = memo(function SDSMultimodalFineTuningView({
                   },
                   {
                     label: '에포크 수',
-                    val: ep1,
                     min: 1,
                     max: 5,
                     step: 1,
@@ -720,7 +721,6 @@ const SDSMultimodalFineTuningView = memo(function SDSMultimodalFineTuningView({
                   {[
                     {
                       label: 'LoRA Rank (r)',
-                      val: loraR,
                       min: 4,
                       max: 128,
                       step: 4,
@@ -729,7 +729,6 @@ const SDSMultimodalFineTuningView = memo(function SDSMultimodalFineTuningView({
                     },
                     {
                       label: 'LoRA Alpha',
-                      val: loraA,
                       min: 8,
                       max: 256,
                       step: 8,
@@ -738,7 +737,6 @@ const SDSMultimodalFineTuningView = memo(function SDSMultimodalFineTuningView({
                     },
                     {
                       label: 'LoRA Dropout',
-                      val: loraD.toFixed(2),
                       min: 0,
                       max: 0.3,
                       step: 0.01,
@@ -772,7 +770,6 @@ const SDSMultimodalFineTuningView = memo(function SDSMultimodalFineTuningView({
               {[
                 {
                   label: 'Learning Rate',
-                  val: lr2.toExponential(1),
                   min: 0.00001,
                   max: 0.001,
                   step: 0.00001,
@@ -781,7 +778,6 @@ const SDSMultimodalFineTuningView = memo(function SDSMultimodalFineTuningView({
                 },
                 {
                   label: '에포크 수',
-                  val: ep2,
                   min: 1,
                   max: 10,
                   step: 1,
@@ -790,7 +786,6 @@ const SDSMultimodalFineTuningView = memo(function SDSMultimodalFineTuningView({
                 },
                 {
                   label: '배치 크기',
-                  val: bs2,
                   min: 1,
                   max: 32,
                   step: 1,
@@ -799,7 +794,6 @@ const SDSMultimodalFineTuningView = memo(function SDSMultimodalFineTuningView({
                 },
                 {
                   label: 'Weight Decay',
-                  val: wd2.toFixed(3),
                   min: 0,
                   max: 0.1,
                   step: 0.001,
@@ -842,40 +836,56 @@ const SDSMultimodalFineTuningView = memo(function SDSMultimodalFineTuningView({
             <div className={lx('control-head')}>
               <SectionLabel>학습 제어</SectionLabel>
               {sMeta && (
-                <span
-                  className={lx('status-badge', `status-badge--${sMeta.cls}`)}
-                >
-                  {sMeta.label}
-                </span>
+                <Badge
+                  label={sMeta.label}
+                  type={BADGE_TYPE[sMeta.cls] || 'gray'}
+                  size='sm'
+                />
               )}
               {/* 유틸 액션(텍스트 FT TopButtonList 미러): 커밋 불러오기 + 시스템 로그. 우측 정렬. */}
               <div className={lx('head-actions')}>
-                <button
-                  type='button'
-                  className={lx('head-btn')}
+                <ButtonV2
+                  type='solid'
+                  colorType='skyblue'
+                  size='l'
+                  label='커밋 불러오기'
                   onClick={handleCommitLoad}
                   disabled={loadBlocked}
-                  title={
-                    loadBlocked
-                      ? '학습/저장 중에는 불러올 수 없습니다.'
-                      : '저장된 커밋을 활성 모델로 불러옵니다.'
-                  }
-                >
-                  <span aria-hidden='true'>⤓</span> 커밋 불러오기
-                </button>
-                <button
-                  type='button'
-                  className={lx('head-btn')}
+                />
+                <ButtonV2
+                  type='solid'
+                  colorType='skyblue'
+                  size='l'
+                  label='시스템 로그'
                   onClick={handleSystemLog}
                   disabled={logBlocked}
-                  title={
-                    logBlocked
-                      ? '학습 기록이 아직 없습니다.'
-                      : '학습 파드 시스템 로그를 확인합니다.'
-                  }
-                >
-                  <span aria-hidden='true'>📄</span> 시스템 로그
-                </button>
+                />
+                {isRunning ? (
+                  <ButtonV2
+                    type='solid'
+                    colorType='red'
+                    size='l'
+                    label='학습 중지'
+                    onClick={stopVlm}
+                    disabled={stopping}
+                  />
+                ) : isPreparing ? (
+                  <ButtonV2
+                    type='solid'
+                    size='l'
+                    label='준비 중…'
+                    disabled
+                    isLoading
+                  />
+                ) : (
+                  <ButtonV2
+                    type='solid'
+                    size='l'
+                    label={isDone ? '다시 학습' : '학습 시작'}
+                    onClick={handleTrain}
+                    disabled={!hasDataset || isCommitting || starting}
+                  />
+                )}
               </div>
             </div>
             {fineTuningStatus === 'error' &&
@@ -915,58 +925,19 @@ const SDSMultimodalFineTuningView = memo(function SDSMultimodalFineTuningView({
                 />
               </div>
               <div className={lx('train-btn-row')}>
-                {isRunning ? (
-                  <button
-                    type='button'
-                    className={lx('train-btn', 'train-btn--stop')}
-                    onClick={stopVlm}
-                    disabled={stopping}
-                  >
-                    ■ 학습 중지
-                  </button>
-                ) : isPreparing ? (
-                  <button
-                    type='button'
-                    className={lx('train-btn', 'train-btn--start')}
-                    disabled
-                  >
-                    ● 준비 중…
-                  </button>
-                ) : (
-                  <button
-                    type='button'
-                    className={lx('train-btn', 'train-btn--start')}
-                    onClick={handleTrain}
-                    disabled={!hasDataset || isCommitting || starting}
-                    title={
-                      !hasDataset
-                        ? '학습 데이터셋을 먼저 바인딩하세요.'
-                        : isCommitting
-                          ? '저장(커밋) 중에는 학습을 시작할 수 없습니다.'
-                          : undefined
-                    }
-                  >
-                    {isDone ? '↻  다시 학습' : '▶  학습 시작'}
-                  </button>
-                )}
                 {/* 학습 완료 시에만 저장(커밋) — merged LLaVA 는 stage2 정상 완료 후에만 latest_checkpoint 에
                   존재(중지/실패 시점엔 머지 산출물 없음) → done 게이트(텍스트 FT 의 done/stop/error 와 의도적
                   차이). 재학습 시작 직후(starting)엔 숨김 + 커밋 잡 in-flight/상태 미확정(commitBlocked)이면 비활성. */}
                 {isDone && !starting && (
-                  <button
-                    type='button'
-                    className={lx('train-btn', 'train-btn--commit')}
+                  <ButtonV2
+                    type='solid'
+                    colorType='blue'
+                    size='m'
+                    label={isCommitting ? '저장 중…' : '학습 결과 저장'}
                     onClick={handleCommit}
                     disabled={commitBlocked}
-                    title={
-                      isCommitting
-                        ? '저장(커밋) 작업이 진행 중입니다.'
-                        : '학습 결과를 버전으로 저장합니다.'
-                    }
-                  >
-                    <span aria-hidden='true'>{isCommitting ? '⏳' : '💾'}</span>
-                    {isCommitting ? '  저장 중…' : '  학습 결과 저장'}
-                  </button>
+                    isLoading={isCommitting}
+                  />
                 )}
               </div>
               {!hasDataset && !isActive && (

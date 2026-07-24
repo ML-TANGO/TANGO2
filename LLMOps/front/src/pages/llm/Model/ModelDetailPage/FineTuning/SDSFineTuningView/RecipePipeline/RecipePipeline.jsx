@@ -16,12 +16,15 @@
 // 폼은 숫자 하이퍼파라미터/체크포인트 키만 오버레이하고 나머지(경로·phase·scenario·chain)는
 // pass-through → onRunPhase(phase, merged) 시그니처·부모 체이닝 무변경.
 
-import { Fragment, useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+
+import { Badge, ButtonV2, InputText, Selectbox } from '@jonathan/ui-react';
 
 import { getExternalCheckpoints } from '@src/apis/llm/model';
 import { STATUS_SUCCESS } from '@src/network';
 
 import BasicLineChart from '../../FineTuningGraph/BasicLineChart';
+import ModelRangeBar from '../../ModelRangeBar/ModelRangeBar';
 import MultimodalArchDiagram from './MultimodalArchDiagram';
 
 import classNames from 'classnames/bind';
@@ -32,14 +35,15 @@ import mmStyle from '../SDSFineTuningView.module.scss';
 const cx = classNames.bind(style);
 const mx = classNames.bind(mmStyle);
 
-// SSE fine_tuning_status.status (running|pending|done|stop|error) + idle.
-const STATUS_KEYS = {
-  running: 'externalTraining.recipe.status.running',
-  pending: 'externalTraining.recipe.status.pending',
-  done: 'externalTraining.recipe.status.done',
-  error: 'externalTraining.recipe.status.error',
-  stop: 'externalTraining.recipe.status.stop',
-  idle: 'externalTraining.recipe.status.idle',
+// 상태 → 조나단 Badge type 매핑(플랫폼 디자인시스템 재사용).
+const BADGE_TYPE = {
+  running: 'blue',
+  pending: 'yellow',
+  installing: 'yellow',
+  done: 'green',
+  error: 'red',
+  stop: 'gray',
+  idle: 'gray',
 };
 
 // 모니터 상태 배지(MM STATUS_META 동형).
@@ -249,6 +253,19 @@ const RecipePipeline = ({
   // 이어서 학습(옵티마이저/step 은 리셋). 목록 소스 = list_external_checkpoints(P1).
   const [resumeCkpts, setResumeCkpts] = useState([]);
   const [resumeSel, setResumeSel] = useState(''); // '' = 처음부터. 값 = "<commit>/checkpoint-<step>"
+  // 이어서 학습 체크포인트 → 조나단 Selectbox list(label/value) 형태로 변환.
+  const resumeOptions = useMemo(
+    () => [
+      { label: '처음부터 (이어받지 않음)', value: '' },
+      ...resumeCkpts.map((c) => ({
+        label: `${c.stage_label ? `[${c.stage_label}] ` : ''}Step ${c.step.toLocaleString()}${
+          Number.isFinite(c.loss) ? ` · loss ${c.loss.toFixed(3)}` : ''
+        }`,
+        value: `${c.commit_name}/checkpoint-${c.step}`,
+      })),
+    ],
+    [resumeCkpts],
+  );
   useEffect(() => {
     // 모델 전환 시 이전 모델의 체크포인트 선택 잔존 방지(컴포넌트가 manifest@version 로만
     // keyed 라 같은 매니페스트의 다른 모델로 이동 시 미리마운트 → stale 선택으로 오모델
@@ -264,7 +281,9 @@ const RecipePipeline = ({
         res?.status === STATUS_SUCCESS &&
         Array.isArray(res.result?.list)
       )
-        setResumeCkpts(res.result.list.filter((c) => c && Number.isFinite(c.step)));
+        setResumeCkpts(
+          res.result.list.filter((c) => c && Number.isFinite(c.step)),
+        );
     })();
     return () => {
       alive = false;
@@ -338,33 +357,25 @@ const RecipePipeline = ({
   // 학습 대상 freeze 배너(읽기전용) — 비전=항상 동결, projector/LLM 은 phase 가 결정.
   const freezeLayers = target
     ? [
-        { icon: '🔒', name: 'Vision Encoder', note: '동결', cls: 'frozen' },
+        { name: 'Vision Encoder', note: '동결', cls: 'frozen' },
         target.proj === 'train'
-          ? { icon: '⚙', name: 'Projector', note: '학습', cls: 'trainable' }
-          : { icon: '🔒', name: 'Projector', note: '동결', cls: 'frozen' },
+          ? { name: 'Projector', note: '학습', cls: 'trainable' }
+          : { name: 'Projector', note: '동결', cls: 'frozen' },
         target.llm === 'lora'
-          ? {
-              icon: '⚡',
-              name: 'Language Model',
-              note: 'LoRA 학습',
-              cls: 'lora',
-            }
-          : { icon: '🔒', name: 'Language Model', note: '동결', cls: 'frozen' },
+          ? { name: 'Language Model', note: 'LoRA 학습', cls: 'lora' }
+          : { name: 'Language Model', note: '동결', cls: 'frozen' },
       ]
     : [];
 
   const FreezeBanner = () =>
     freezeLayers.length ? (
       <div className={mx('freeze-banner')}>
-        {freezeLayers.map(({ icon, name, note, cls }) => (
+        {freezeLayers.map(({ name, note, cls }) => (
           <div
             key={`${name}-${note}`}
             className={mx('freeze-item', `freeze-item--${cls}`)}
             aria-label={`${name}: ${note}`}
           >
-            <span className={mx('freeze-icon')} aria-hidden='true'>
-              {icon}
-            </span>
             <div>
               <div className={mx('freeze-name')}>{name}</div>
               <div className={mx('freeze-note')}>{note}</div>
@@ -374,27 +385,17 @@ const RecipePipeline = ({
       </div>
     ) : null;
 
-  const renderSlider = (spec, phaseId) => {
-    const val = selForm[spec.key];
-    const disp = spec.exp ? Number(val).toExponential(1) : val;
-    return (
-      <div key={spec.key} className={mx('param-item')}>
-        <div className={mx('param-header')}>
-          <span className={mx('param-name')}>{spec.label}</span>
-          <span className={mx('param-val')}>{disp}</span>
-        </div>
-        <input
-          type='range'
-          className={mx('slider')}
-          min={spec.min}
-          max={spec.max}
-          step={spec.step}
-          value={val}
-          onChange={(e) => setField(phaseId, spec.key, Number(e.target.value))}
-        />
-      </div>
-    );
-  };
+  const renderSlider = (spec, phaseId) => (
+    <ModelRangeBar
+      key={spec.key}
+      label={spec.label}
+      value={selForm[spec.key]}
+      min={spec.min}
+      max={spec.max}
+      step={spec.step}
+      onChange={(e) => setField(phaseId, spec.key, Number(e.target.value))}
+    />
+  );
 
   // 좌측 설정 컬럼 — 선택 phase 의 상태별 UI(실행 버튼은 우측 모니터로 이동).
   const renderConfig = () => {
@@ -404,16 +405,6 @@ const RecipePipeline = ({
 
     return (
       <div className={cx('config-side')}>
-        <div className={cx('detail-head')}>
-          <span className={cx('detail-title')}>{selectedPhase.label}</span>
-          <span className={cx('badge', `badge-${selectedStatus}`)}>
-            {t(STATUS_KEYS[selectedStatus] || STATUS_KEYS.idle)}
-          </span>
-        </div>
-        {selectedPhase.description ? (
-          <div className={cx('phase-desc')}>{selectedPhase.description}</div>
-        ) : null}
-
         {/* 학습 대상(읽기전용) — 모든 상태 공통 */}
         {freezeLayers.length ? (
           <section className={mx('section')}>
@@ -516,13 +507,13 @@ const RecipePipeline = ({
               )}
 
               <div className={cx('diagram-head')}>
-                <button
-                  type='button'
-                  className={cx('diagram-open-btn')}
+                <ButtonV2
+                  type='outline'
+                  colorType='blue'
+                  size='s'
+                  label='크게 보기'
                   onClick={() => setDiagramOpen(true)}
-                >
-                  🔍 크게 보기
-                </button>
+                />
               </div>
 
               <MultimodalArchDiagram
@@ -583,20 +574,22 @@ const RecipePipeline = ({
               <div className={mx('section-label')}>체크포인트 설정</div>
               <div className={cx('ckpt-name-row')}>
                 <span className={cx('ckpt-name-label')}>체크포인트 이름</span>
-                <input
-                  type='text'
-                  className={cx('ckpt-name-input')}
-                  value={selForm.output_checkpoint_name || ''}
-                  onChange={(e) =>
-                    setField(
-                      selectedPhase.id,
-                      'output_checkpoint_name',
-                      e.target.value,
-                    )
-                  }
-                  placeholder='output_checkpoint_name'
-                  spellCheck={false}
-                />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <InputText
+                    size='medium'
+                    value={selForm.output_checkpoint_name || ''}
+                    onChange={(e) =>
+                      setField(
+                        selectedPhase.id,
+                        'output_checkpoint_name',
+                        e.target.value,
+                      )
+                    }
+                    placeholder='output_checkpoint_name'
+                    disableClearBtn
+                    customStyle={{ width: '100%' }}
+                  />
+                </div>
               </div>
               <div className={mx('params-grid')}>
                 {CKPT_NUM_SPECS.map((s) => renderSlider(s, selectedPhase.id))}
@@ -606,27 +599,22 @@ const RecipePipeline = ({
             <section className={mx('section')}>
               <div className={mx('section-label')}>이어서 학습 (선택)</div>
               <div className={cx('resume-row')}>
-                <select
-                  className={cx('resume-select')}
-                  value={resumeSel}
-                  onChange={(e) => setResumeSel(e.target.value)}
-                >
-                  <option value=''>처음부터 (이어받지 않음)</option>
-                  {resumeCkpts.map((c) => (
-                    <option
-                      key={`${c.commit_id}:${c.step}`}
-                      value={`${c.commit_name}/checkpoint-${c.step}`}
-                    >
-                      {`${c.stage_label ? `[${c.stage_label}] ` : ''}Step ${c.step.toLocaleString()}${
-                        Number.isFinite(c.loss) ? ` · loss ${c.loss.toFixed(3)}` : ''
-                      }`}
-                    </option>
-                  ))}
-                </select>
+                <Selectbox
+                  list={resumeOptions}
+                  selectedItem={
+                    resumeOptions.find((o) => o.value === resumeSel) ||
+                    resumeOptions[0]
+                  }
+                  onChange={(item) => setResumeSel(item.value)}
+                  customStyle={{
+                    selectboxForm: { width: '100%' },
+                    listForm: { width: '100%' },
+                  }}
+                />
               </div>
               <div className={mx('train-hint')}>
-                선택한 체크포인트의 가중치에서 이어서 학습합니다(옵티마이저·step 은
-                새로 시작). 저장된 체크포인트가 없으면 목록이 비어 있습니다.
+                선택한 체크포인트의 가중치에서 이어서 학습합니다(옵티마이저·step
+                은 새로 시작). 저장된 체크포인트가 없으면 목록이 비어 있습니다.
               </div>
             </section>
           </>
@@ -642,26 +630,38 @@ const RecipePipeline = ({
         <div className={mx('control-head')}>
           <div className={mx('section-label')}>학습 제어</div>
           {monMeta ? (
-            <span
-              className={mx('status-badge', `status-badge--${monMeta.cls}`)}
-            >
-              {monMeta.label}
-            </span>
+            <Badge
+              label={monMeta.label}
+              type={BADGE_TYPE[monMeta.cls] || 'gray'}
+              size='sm'
+            />
           ) : null}
           <div className={mx('head-actions')}>
-            <button
-              type='button'
-              className={mx('head-btn')}
+            <ButtonV2
+              type='solid'
+              colorType='skyblue'
+              size='l'
+              label='시스템 로그'
               onClick={onSystemLog}
               disabled={!fineStatus}
-              title={
-                !fineStatus
-                  ? '학습 기록이 아직 없습니다.'
-                  : '학습 파드 로그를 확인합니다.'
-              }
-            >
-              <span aria-hidden='true'>📄</span> 시스템 로그
-            </button>
+            />
+            {isMonRunning ? (
+              <ButtonV2
+                type='solid'
+                colorType='red'
+                size='l'
+                label='학습 중지'
+                onClick={onStop}
+              />
+            ) : (
+              <ButtonV2
+                type='solid'
+                size='l'
+                label={t('externalTraining.recipe.run.label')}
+                onClick={() => selectedPhase && handleRun(selectedPhase)}
+                disabled={!canRun(selectedPhase)}
+              />
+            )}
           </div>
         </div>
         {monStatus === 'error' && fineStatus?.fine_tuning_status?.reason ? (
@@ -694,31 +694,6 @@ const RecipePipeline = ({
           </div>
           <div className={mx('prog-track')}>
             <div className={mx('prog-fill')} style={{ width: `${monPct}%` }} />
-          </div>
-          <div className={mx('train-btn-row')}>
-            {isMonRunning ? (
-              <button
-                type='button'
-                className={mx('train-btn', 'train-btn--stop')}
-                onClick={onStop}
-              >
-                ■ 학습 중지
-              </button>
-            ) : (
-              <button
-                type='button'
-                className={mx('train-btn', 'train-btn--start')}
-                onClick={() => selectedPhase && handleRun(selectedPhase)}
-                disabled={!canRun(selectedPhase)}
-                title={
-                  selBlockedByChain
-                    ? t('externalTraining.recipe.chainGate.label')
-                    : undefined
-                }
-              >
-                ▶ {t('externalTraining.recipe.run.label')}
-              </button>
-            )}
           </div>
           {selBlockedByChain && !isMonRunning ? (
             <div className={mx('train-hint')}>
@@ -767,7 +742,6 @@ const RecipePipeline = ({
             done,
           );
           const selected = phase.id === selectedPhaseId;
-          const ptarget = TRAIN_TARGET[phase.params?.phase];
           return (
             <Fragment key={phase.id}>
               {idx > 0 ? <div className={cx('connector')}>→</div> : null}
@@ -779,12 +753,9 @@ const RecipePipeline = ({
                 <div className={cx('card-head')}>
                   <span className={cx('step-num')}>{idx + 1}</span>
                   <span className={cx('phase-label')}>{phase.label}</span>
-                  <span className={cx('badge', `badge-${st}`)}>
-                    {t(STATUS_KEYS[st] || STATUS_KEYS.idle)}
-                  </span>
                 </div>
-                {ptarget ? (
-                  <div className={cx('step-target')}>{ptarget.label}</div>
+                {phase.description ? (
+                  <div className={cx('step-target')}>{phase.description}</div>
                 ) : null}
               </button>
             </Fragment>
