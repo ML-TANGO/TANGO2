@@ -119,6 +119,29 @@
   margin-bottom: 12px;
 }
 
+.input-block {
+  margin: 4px 0 16px;
+}
+
+.input-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: #888;
+  margin-bottom: 6px;
+}
+
+.input-text {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #333;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 10px 12px;
+  background: #f6f7f9;
+  border-radius: 6px;
+}
+
 .output-block {
   margin: 4px 0 16px;
 }

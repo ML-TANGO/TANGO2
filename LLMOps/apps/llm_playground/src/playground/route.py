@@ -419,7 +419,8 @@ async def pipeline_deploy(body: dto.PipelineDeployInput):
             user_name=body.user_name, model_instance_id=body.model_instance_id,
             model_commit_id=body.model_commit_id, name=body.name,
             model_instance_count=body.model_instance_count,
-            model_gpu_count=body.model_gpu_count)
+            model_gpu_count=body.model_gpu_count,
+            prompt_system_message=body.prompt_system_message)
         return response(status=1, result=res)
     except Exception as e:
         traceback.print_exc()

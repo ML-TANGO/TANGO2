@@ -71,6 +71,11 @@ class BenchmarkRunBody(BaseModel):
     benchmarks: Optional[List[BenchmarkMetricPair]] = Field(
         default=None, max_length=MAX_BENCHMARK_ITEMS,
         description="벤치마크→메트릭 매핑(생략 시 전체 벤치마크·권장 메트릭)")
+    # 생성·채점 분리(D2-b) — 러너 inference 런 job_id 를 주면 그 런이 생성한 output 을
+    # 스코어러에 넘겨 채점(재추론 회피). 생략 시 현행(컨테이너 자체 생성). job_str_id 문자셋.
+    inference_job_id: Optional[str] = Field(
+        default=None, max_length=128, pattern=r"^[A-Za-z0-9_-]+$",
+        description="러너 generate 런 job_id(주면 생성 output 을 채점, 없으면 컨테이너 자체 생성)")
 
     @field_validator("benchmarks")
     @classmethod
@@ -112,6 +117,11 @@ class JudgeRunBody(BaseModel):
         default=None, ge=1,
         description="대상 모델의 배포(running) playground id — 주면 실 출력 추론, "
                     "없으면 mock output(A4)")
+    # P2-b2 — 러너 inference 런 job_id. 주면 그 런이 생성한 _samples.output 을 채점(재추론
+    # 회피). 우선순위: inference_job_id(러너) > inference_playground_id(빌린 배포) > mock.
+    inference_job_id: Optional[str] = Field(
+        default=None, max_length=128, pattern=r"^[A-Za-z0-9_-]+$",
+        description="러너 generate 런 job_id(주면 생성 output 을 채점, 없으면 배포 추론/mock)")
 
     @field_validator("provider")
     @classmethod
@@ -137,6 +147,11 @@ class ExpertStartBody(BaseModel):
         default=None, ge=1,
         description="대상 모델의 배포(running) playground id — 주면 실 출력 추론, "
                     "없으면 mock output(A4)")
+    # P2-b2 — 러너 inference 런 job_id. 주면 그 런이 생성한 _samples 를 채점 대상으로 사용
+    # (재추론 회피, 이미지/CSV 필드 포함). 우선순위: inference_job_id > inference_playground_id > mock.
+    inference_job_id: Optional[str] = Field(
+        default=None, max_length=128, pattern=r"^[A-Za-z0-9_-]+$",
+        description="러너 generate 런 job_id(주면 생성 샘플을 채점, 없으면 배포 추론/mock)")
 
 
 class ExpertRatingBody(BaseModel):
@@ -147,6 +162,26 @@ class ExpertRatingBody(BaseModel):
     score_json: Optional[dict] = Field(
         default=None, description="확장 피드백(다기준/구조화·플라이휠 선호, 무스키마)")
     comment: Optional[str] = Field(default=None, max_length=2000)
+
+
+class EvalInferenceRunBody(BaseModel):
+    """평가 추론 러너(generate phase) 런 — model/dataset 는 프로젝트 상속(project_id). 하이브리드
+    인스턴스: inference_playground_id(running 배포 재사용) 또는 instance_id(전용 할당·완료 후 회수).
+    system_prompt = 이 런이 소유하는 생성 시스템 프롬프트(헤더 고정 표시·채점 컨텍스트).
+    ⚠️ P1 WIP — instance_id ge=1 등 review 지적은 P2 선결."""
+    model_config = {"protected_namespaces": ()}
+
+    project_id: int = Field(..., ge=1, description="평가 프로젝트 id(model/dataset 상속·불변)")
+    system_prompt: Optional[str] = Field(
+        default=None, max_length=4000, description="생성 시스템 프롬프트(런 소유·표시)")
+    inference_playground_id: Optional[int] = Field(
+        default=None, ge=1, description="재사용할 running 배포 id(주면 재사용, 없으면 전용 할당)")
+    instance_id: Optional[int] = Field(
+        default=None, ge=1, description="전용 할당 시 인스턴스 id(할당 경로 필수)")
+    instance_count: int = Field(default=1, ge=1, le=8, description="전용 할당 인스턴스 수")
+    gpu_count: int = Field(default=1, ge=0, le=8, description="전용 할당 GPU 수")
+    commit_id: Optional[int] = Field(
+        default=None, ge=1, description="대상 커밋 체크포인트 id(선택)")
 
 
 class EvalStatusBody(BaseModel):

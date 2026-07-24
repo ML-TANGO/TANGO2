@@ -75,7 +75,26 @@ async def run_benchmark(body: dto.BenchmarkRunBody):
         pairs = ([{"benchmark": p.benchmark, "metric": p.metric}
                   for p in body.benchmarks] if body.benchmarks else None)
         res = await svc.run_benchmark(
-            project_id=body.project_id, benchmarks=pairs)
+            project_id=body.project_id, benchmarks=pairs,
+            inference_job_id=body.inference_job_id)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+
+@evaluations.post("/inference", summary="평가 추론 러너(generate) 런 생성", tags=TAG)
+async def run_eval_inference(body: dto.EvalInferenceRunBody,
+                             jf_user: str = Header(default=None, alias="jf-User")):
+    """평가가 대상 모델 인스턴스를 확보(running 배포 재사용 or 전용 할당)해 데이터셋 전량 batch
+    추론 → _samples + _gen_system_prompt 영속(채점은 후속). 즉시 job_id 반환. 전용 할당 시
+    jf-User(트리거 유저)를 배포 소유자로 사용(없으면 project.creator). ⚠️ P1 WIP(P2 선결 지적 有)."""
+    try:
+        res = await svc.run_eval_inference(
+            project_id=body.project_id, system_prompt=body.system_prompt,
+            inference_playground_id=body.inference_playground_id,
+            instance_id=body.instance_id, instance_count=body.instance_count,
+            gpu_count=body.gpu_count, commit_id=body.commit_id, user_name=jf_user)
         return response(status=1, result=res)
     except Exception as e:
         traceback.print_exc()
@@ -101,6 +120,7 @@ async def run_judge(body: dto.JudgeRunBody):
             judge_model=body.judge_model, api_key=body.api_key,
             base_url=body.base_url, custom_prompt=body.custom_prompt,
             inference_playground_id=body.inference_playground_id,
+            inference_job_id=body.inference_job_id,
         )
         return response(status=1, result=res)
     except Exception as e:
@@ -114,7 +134,8 @@ async def start_expert(body: dto.ExpertStartBody):
     try:
         res = await svc.start_expert(
             project_id=body.project_id,
-            inference_playground_id=body.inference_playground_id)
+            inference_playground_id=body.inference_playground_id,
+            inference_job_id=body.inference_job_id)
         return response(status=1, result=res)
     except Exception as e:
         traceback.print_exc()

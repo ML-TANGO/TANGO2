@@ -1,6 +1,34 @@
 /* 전문가 평가 리뷰 뷰 서브컴포넌트 공용 스타일
    (PromptBox · ProgressHeader · StarRating · CsvTable · CompletionBanner · SampleImage) */
 
+/* ── 생성 시스템 프롬프트 고정 박스(P3) ── 채점 대상 출력을 생성할 때 쓰인 시스템 프롬프트.
+   평가 지침(.prompt-box, 파란 accent)과 구분되도록 슬레이트 accent 로 표시. */
+.gen-prompt-box {
+  padding: 12px 16px;
+  margin-bottom: 10px;
+  background: #f6f7fb;
+  border: 1px solid #dcdfe8;
+  border-left: 3px solid #5b6b8c;
+  border-radius: 8px;
+}
+
+.gen-prompt-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #5b6b8c;
+  margin-bottom: 4px;
+}
+
+.gen-prompt-text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #333;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* ── 고정 프롬프트 박스(D3) ── */
 .prompt-box {
   padding: 12px 16px;

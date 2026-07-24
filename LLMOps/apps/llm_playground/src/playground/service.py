@@ -162,7 +162,8 @@ async def create_playground(workspace_id, name, description, access, user_name=N
 
 async def pipeline_deploy(workspace_id, model_id, user_name, model_instance_id,
                           model_commit_id=None, name=None,
-                          model_instance_count=1, model_gpu_count=1):
+                          model_instance_count=1, model_gpu_count=1,
+                          prompt_system_message=None):
     """파이프라인(통합 파이프라인 llm_deploy 노드)의 s2s 클러스터 배포(spec #4).
     create → 옵션(모델 바인딩 + deployment_run) → start 를 원자적으로 수행한다.
     배포 로직 자체는 기존 서비스 함수(update_playground_options / start_playground)를
@@ -194,7 +195,9 @@ async def pipeline_deploy(workspace_id, model_id, user_name, model_instance_id,
         await db.insert_user_playground_list(playgrounds_id=[playground_id], users_id=[owner_id])
         # 모델 바인딩 + deployment_run 세팅(start 전제) — 기존 옵션 저장 경로 재사용.
         await update_playground_options(
-            playground_id=playground_id, is_rag=False, is_prompt=False, accelerator=False,
+            playground_id=playground_id, is_rag=False,
+            # 시스템 프롬프트가 주어지면 run_prompt=True 로 서빙이 chat template 에 반영(없으면 현행 False).
+            is_prompt=bool(prompt_system_message), accelerator=False,
             model_type="commit", model_huggingface_id=None, model_huggingface_token=None,
             model_allm_id=str(model_id), model_allm_commit_id=str(model_commit_id),
             # 샘플링 파라미터 기본값 — None 이면 배포 파드가 0 으로 vLLM SamplingParams 에 넘겨
@@ -202,7 +205,8 @@ async def pipeline_deploy(workspace_id, model_id, user_name, model_instance_id,
             model_info=None, model_temperature=0.7, model_top_p=1.0, model_top_k=-1,
             model_repetition_penalty=1.0, model_max_new_tokens=512,
             rag_id=None, rag_chunk_max=0, prompt_id=None, prompt_name=None,
-            prompt_commit_name=None, prompt_system_message=None, prompt_user_message=None)
+            prompt_commit_name=None, prompt_system_message=prompt_system_message,
+            prompt_user_message=None)
         # 서빙 시작(자원 할당) — 기존 start 경로 재사용.
         await start_playground(
             user_name=user_name, playground_id=playground_id,

@@ -72,6 +72,31 @@
   text-align: center;
 }
 
+/* 러너 generate 모달(EvalGenerateModal)의 시스템 프롬프트 입력 — 이 모달 chrome 을 재사용. */
+.sys-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: $mono204;
+  margin-bottom: 6px;
+}
+
+.sys-prompt {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid $mono203;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  font-family: inherit;
+  resize: vertical;
+
+  &:focus {
+    outline: none;
+    border-color: $blue104;
+  }
+}
+
 .deploy-list {
   display: flex;
   flex-direction: column;

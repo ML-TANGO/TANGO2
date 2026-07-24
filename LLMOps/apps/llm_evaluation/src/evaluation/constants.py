@@ -82,6 +82,16 @@ EXPERT_PROMPT_DEFAULT = (
     "(1 = 매우 미흡, 5 = 매우 우수)"
 )
 
+# 생성 시스템 프롬프트(헤더 고정 박스) 표시원 — SDS external eva-vlm 폴백. eva-vlm(external)은
+# 내부 vLLM 처럼 조회 가능한 prompt.system_message 가 없고 /info 는 output_type 이름만 노출한다.
+# 그래서 SDS 전문가 세션은 eva-vlm 이 custom_prompt 미전달 시 실제 쓰는 프롬프트(PROMPT_MAP
+# '한글 항해조력메시지', 실측 yvvyee/eva-vlm-backend:1.1.0 model_manager.py:34)를 미러한다 →
+# 표시=실사용 일치. (custom_prompt 를 넘기면 그게 우선하고 이 상수는 미사용.)
+SDS_GEN_SYSTEM_PROMPT = (
+    "제공된 카메라 이미지와 AIS 데이터를 기반으로 COLREG 규칙에 따른 "
+    "자선의 항해 조력 메시지를 제공하시오."
+)
+
 # SDS 데이터셋 레이아웃 규약(실측) — 샘플당 서브디렉토리 tango_sds-*/ 에
 # input_data.csv(표) + input_image.png(멀티모달) + output_*.txt(참조 출력)를 담는다.
 # 디렉토리-워크 빌더가 이 규약으로 디렉토리 1개=샘플 1개를 만든다.
@@ -91,6 +101,19 @@ EXPERT_IMAGE_FILENAME = "input_image.png"
 EXPERT_OUTPUT_GLOB = "output_*.txt"
 # reference 로 우선 채택할 output 파일(없으면 정렬상 첫 output_*.txt).
 EXPERT_REFERENCE_FILENAME = "output_advice_kor.txt"
+
+# ── 평가 추론 러너 (generate phase) ──────────────────────────────────────────
+# 한 평가 추론 런이 생성할 최대 샘플 수(전량 batch 상한 — 장시간/타임아웃·metrics JSON 비대 방지).
+# judge/expert 의 20/1000 캡과 달리 러너는 데이터셋 전량 지향이라 크게 잡되 상한은 둔다. 초과분 truncate.
+MAX_EVAL_SAMPLES = 200
+
+# 전용 배포 할당 시 status-sync running 대기 폴링 상한(2s 간격 → ~10분, pipeline 동형).
+EVAL_DEPLOY_MAX_POLLS = 300
+
+# 러너 generate 전체 wall-clock 상한(초) — hung/느린 배포가 GPU(전용 할당)를 무한 점유하지
+# 않도록. judge(MAX_JUDGE_RUN_SECONDS 300)·expert(_EXPERT_INFER_BUDGET 90)와 동일 취지이나
+# 전량 batch(≤MAX_EVAL_SAMPLES) 라 크게 잡는다. 초과 시 런=failed + (할당형) teardown.
+EVAL_INFER_RUN_SECONDS = 3600
 
 # ── 교차모델 비교 (④ 경량 뷰) ──────────────────────────────────────────────────
 # 한 비교 뷰가 합칠 모델 상한(표 가독성 + 모델별 get_model/list_eval_results N쿼리 가드).

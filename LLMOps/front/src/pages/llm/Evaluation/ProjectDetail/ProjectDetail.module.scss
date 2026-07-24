@@ -200,6 +200,40 @@
   }
 }
 
+/* 러너 generate(추론) 실행 — 점수 런과 구분되는 "생성" 스텝. 슬레이트 accent(생성 프롬프트 박스와 일치). */
+.gen-btn {
+  border: 1px solid #5b6b8c;
+  background: #fff;
+  color: #5b6b8c;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: #f6f7fb;
+  }
+
+  &:disabled {
+    border-color: $mono203;
+    color: $mono204;
+    cursor: not-allowed;
+  }
+}
+
+.gen-banner {
+  margin-top: 12px;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #5b6b8c;
+  background: #f6f7fb;
+  border: 1px solid #dcdfe8;
+  border-left: 3px solid #5b6b8c;
+  border-radius: 8px;
+}
+
 .runs-empty {
   padding: 40px 24px;
   text-align: center;

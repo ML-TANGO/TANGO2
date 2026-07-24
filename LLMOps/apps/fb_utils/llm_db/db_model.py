@@ -780,10 +780,13 @@ async def count_run_statuses_by_projects(project_ids : list) -> list:
     if not project_ids:
         return []
     placeholders = ",".join(["%s"] * len(project_ids))
+    # 러너 inference '생성' 런(metric_set='inference')은 채점이 아니므로 프로젝트 상태 파생 집계에서
+    #   제외 — 생성만 한 프로젝트가 목록에서 completed 로 오분류되는 것 방지(리뷰 HIGH).
     sql = f"""
         SELECT eval_project_id, status, COUNT(*) AS cnt
         FROM eval_result
         WHERE eval_project_id IN ({placeholders})
+          AND (metric_set IS NULL OR metric_set <> 'inference')
         GROUP BY eval_project_id, status
     """
     res = await select_query(sql, params=tuple(project_ids), fetch_type=FetchType.ALL)

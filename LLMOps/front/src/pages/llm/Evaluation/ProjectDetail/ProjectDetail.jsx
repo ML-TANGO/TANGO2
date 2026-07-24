@@ -13,6 +13,8 @@ import ExpertRunView from '../ExpertEvaluation/ExpertRunView';
 import JudgeResultView from '../JudgeEvaluation/JudgeResultView';
 import JudgeRunConfig from '../JudgeEvaluation/JudgeRunConfig';
 
+import EvalGenerateModal from './EvalGenerateModal';
+
 import {
   compareProjectRuns,
   deleteEvalRun,
@@ -20,6 +22,7 @@ import {
   getEvalProject,
   markEvalStatus,
   runBenchmark,
+  runEvalInference,
   runJudge,
   startExpert,
 } from '@src/apis/llm/evaluation';
@@ -72,6 +75,8 @@ const ProjectDetail = () => {
   const [dsMap, setDsMap] = useState({}); // dataset_id → name
   const [starting, setStarting] = useState(false);
   const [showInferModal, setShowInferModal] = useState(false);
+  const [showGenModal, setShowGenModal] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [compareData, setCompareData] = useState(null);
   // view: { mode: 'list'|'newRun'|'result'|'expert'|'compare', jobId?, status?, metricSet?, criteria? }
   const [view, setView] = useState({ mode: 'list' });
@@ -129,7 +134,29 @@ const ProjectDetail = () => {
     };
   }, [workspaceId]);
 
-  const runs = runsData?.runs ?? [];
+  // 러너 generate 런이 running 인 동안 프로젝트를 폴링 → 완료되면(runsData 갱신) genRunning 이
+  // false 가 되어 폴링이 멈추고, 배너가 '생성 완료'로 전환 + 채점이 그 output 을 소비 가능.
+  useEffect(() => {
+    const running = (runsData?.runs ?? []).some(
+      (r) => r.metric_set === 'inference' && r.status === 'running',
+    );
+    if (!running) return undefined;
+    const timer = setInterval(() => {
+      fetchProject();
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [runsData, fetchProject]);
+
+  // 러너 inference 런(metric_set='inference')은 점수 런이 아니라 "생성" 서브스텝 — 점수 목록에서
+  // 분리(클릭 시 dead-end 방지)하고, 최신 완료본은 배너/benchmark seam(inference_job_id)에 쓴다.
+  const allRuns = runsData?.runs ?? [];
+  const runs = allRuns.filter((r) => r.metric_set !== 'inference');
+  const latestInference = allRuns.find(
+    (r) => r.metric_set === 'inference' && r.status === 'completed',
+  );
+  const genRunning = allRuns.some(
+    (r) => r.metric_set === 'inference' && r.status === 'running',
+  );
   const metricKeys = runsData?.metric_keys ?? [];
 
   // run 행의 dataset_name 폴백(헤더 데이터셋명 보강용).
@@ -168,6 +195,8 @@ const ProjectDetail = () => {
     const body = { project_id: Number(projectId) };
     if (inferencePlaygroundId)
       body.inference_playground_id = inferencePlaygroundId;
+    // 생성 런이 있으면 그 샘플을 채점 대상으로(명시 opt-in). 없으면 배포/mock.
+    if (latestInference?.job_id) body.inference_job_id = latestInference.job_id;
     const res = await startExpert(body);
     setStarting(false);
     if (res.status !== STATUS_SUCCESS || !res.result?.job_id) {
@@ -177,6 +206,31 @@ const ProjectDetail = () => {
     setView({ mode: 'expert', jobId: res.result.job_id });
   };
 
+  // 평가 추론 러너(generate) 실행 — 선택한 running 배포로 데이터셋 전량 batch 추론 → _samples +
+  // _gen_system_prompt 영속. 백그라운드 런이라 즉시 목록 갱신 후 genRunning 폴링이 완료까지 추적.
+  const handleGenerate = async ({ inference_playground_id, system_prompt }) => {
+    setShowGenModal(false);
+    if (generating) return;
+    setGenerating(true);
+    try {
+      const res = await runEvalInference({
+        project_id: Number(projectId),
+        inference_playground_id,
+        system_prompt,
+      });
+      if (res.status !== STATUS_SUCCESS || !res.result?.job_id) {
+        errorToastMessage(res.error, res.message);
+        return;
+      }
+      // 러너 런(running)이 목록/배너에 반영되도록 갱신 → genRunning 폴링이 완료까지 추적.
+      await fetchProject();
+    } finally {
+      // busy 해제는 fetchProject 반영 후에야 — 그 전엔 genRunning 이 아직 false 라 버튼이
+      //   재활성되어 이중 제출될 수 있음(리뷰 HIGH). finally 로 refetch 후 해제.
+      setGenerating(false);
+    }
+  };
+
   // benchmarks = [{ benchmark, metric }] — 벤치마크→메트릭 매핑(BenchmarkRunConfig 위저드).
   const handleBenchmarkRun = async (benchmarks) => {
     if (starting) return;
@@ -184,6 +238,10 @@ const ProjectDetail = () => {
     const res = await runBenchmark({
       project_id: Number(projectId),
       benchmarks,
+      // 생성 런이 있으면 그 output 을 스코어러에 넘겨 채점(생성·채점 분리). 없으면 컨테이너 자체 생성.
+      ...(latestInference?.job_id
+        ? { inference_job_id: latestInference.job_id }
+        : {}),
     });
     setStarting(false);
     if (res.status !== STATUS_SUCCESS || !res.result?.job_id) {
@@ -200,7 +258,14 @@ const ProjectDetail = () => {
   const handleJudgeRun = async (body) => {
     if (starting) return;
     setStarting(true);
-    const res = await runJudge({ project_id: Number(projectId), ...body });
+    const res = await runJudge({
+      project_id: Number(projectId),
+      ...body,
+      // 생성 런이 있으면 그 output 을 채점(명시 opt-in, benchmark 와 통일). 없으면 배포/mock.
+      ...(latestInference?.job_id
+        ? { inference_job_id: latestInference.job_id }
+        : {}),
+    });
     setStarting(false);
     if (res.status !== STATUS_SUCCESS || !res.result?.job_id) {
       errorToastMessage(res.error, res.message);
@@ -399,6 +464,16 @@ const ProjectDetail = () => {
             </h3>
             <span className={cx('runs-count')}>{runs.length}</span>
             <div className={cx('runs-spacer')} />
+            <button
+              type='button'
+              className={cx('gen-btn')}
+              disabled={generating || genRunning}
+              onClick={() => setShowGenModal(true)}
+            >
+              {genRunning
+                ? t('evaluation.generate.running')
+                : t('evaluation.generate.action')}
+            </button>
             {runs.length >= 2 && (
               <button
                 type='button'
@@ -419,6 +494,14 @@ const ProjectDetail = () => {
                 : `+ ${t('evaluation.project.detail.newRun')}`}
             </button>
           </div>
+
+          {(latestInference || genRunning) && (
+            <div className={cx('gen-banner')}>
+              {genRunning
+                ? t('evaluation.generate.running')
+                : t('evaluation.generate.ready')}
+            </div>
+          )}
 
           {runs.length === 0 ? (
             <div className={cx('runs-empty')}>
@@ -532,6 +615,14 @@ const ProjectDetail = () => {
           workspaceId={workspaceId}
           onConfirm={startExpertRun}
           onClose={() => setShowInferModal(false)}
+        />
+      )}
+      {showGenModal && (
+        <EvalGenerateModal
+          workspaceId={workspaceId}
+          running={generating}
+          onConfirm={handleGenerate}
+          onClose={() => setShowGenModal(false)}
         />
       )}
     </div>

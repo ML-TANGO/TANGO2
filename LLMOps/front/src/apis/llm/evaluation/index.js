@@ -54,6 +54,13 @@ export const runBenchmark = async (body) => {
   return await callApi({ url: 'evaluations/benchmark', method: 'post', body });
 };
 
+// 평가 추론 러너(generate) 런 생성. body: { project_id, system_prompt?, inference_playground_id?,
+//   instance_id?, instance_count?, gpu_count?, commit_id? }. running 배포 재사용 or 전용 할당(후 회수).
+//   → 즉시 { job_id, allocated, system_prompt, ... }. per-sample output 은 백그라운드로 생성·영속. (P1 WIP)
+export const runEvalInference = async (body) => {
+  return await callApi({ url: 'evaluations/inference', method: 'post', body });
+};
+
 // 단건 평가 결과 폴링 (ready=true 시 metrics + eval_result lazy 마감).
 export const getEvalResult = async (modelId, jobId) => {
   return await callApi({

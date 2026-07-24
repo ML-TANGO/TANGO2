@@ -6,6 +6,7 @@ import ExpertCompletionBanner from './components/ExpertCompletionBanner';
 import ExpertProgressHeader from './components/ExpertProgressHeader';
 import ExpertPromptBox from './components/ExpertPromptBox';
 import ExpertSampleImage from './components/ExpertSampleImage';
+import GenPromptBox from './components/GenPromptBox';
 import StarRating from './components/StarRating';
 
 import {
@@ -68,6 +69,8 @@ const ExpertRunView = ({ modelId, jobId, onExit }) => {
         total: s.total ?? samples.length,
         // 배포 바인드 세션이면(=start 시 inference_playground_id 지정) VLM 샘플을 열람 시 실추론.
         inference_enabled: !!s.inference_enabled,
+        // 생성 시스템 프롬프트(헤더 고정 박스, P3) — 러너 런/바인드 배포에서 옴(없으면 박스 숨김).
+        gen_system_prompt: s.gen_system_prompt,
       });
       // 이전 채점 복원 — ratings[] 각 행(sample_idx 별 현재값)을 FE ratings 맵으로.
       const map = {};
@@ -209,6 +212,7 @@ const ExpertRunView = ({ modelId, jobId, onExit }) => {
   return (
     <div className={cx('expert')}>
       <div className={cx('review-head')}>
+        <GenPromptBox prompt={session.gen_system_prompt} t={t} />
         <ExpertPromptBox prompt={session.expert_prompt} t={t} />
         <ExpertProgressHeader
           rated={progress?.rated}
@@ -247,6 +251,15 @@ const ExpertRunView = ({ modelId, jobId, onExit }) => {
           />
 
           <CsvTable rows={sample.csv_rows} text={sample.csv_text} />
+
+          {sample.input ? (
+            <div className={cx('input-block')}>
+              <span className={cx('input-label')}>
+                {t('evaluation.expert.input')}
+              </span>
+              <div className={cx('input-text')}>{sample.input}</div>
+            </div>
+          ) : null}
 
           <div className={cx('output-block')}>
             <span className={cx('output-label')}>

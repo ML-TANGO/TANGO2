@@ -125,6 +125,10 @@ class PipelineDeployInput(BaseModel):
     name: Optional[str] = Field(default=None, description="배포명(생략 시 자동)")
     model_instance_count: Optional[int] = Field(default=1, description="인스턴스 할당 개수")
     model_gpu_count: Optional[int] = Field(default=1, description="GPU 할당 개수")
+    prompt_system_message: Optional[str] = Field(
+        default=None,
+        description="배포 시 baking 할 시스템 프롬프트(생략 시 None=현행 동작). 평가 추론 러너가 "
+                    "전용 배포에 런의 시스템 프롬프트를 실제로 주입해 표시=실사용 일치시키는 용도.")
 
     class Config:
         protected_namespaces = ()

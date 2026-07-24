@@ -34,9 +34,12 @@ from external.proxy import ExternalContainerClient, ExternalContainerError
 from evaluation.constants import (
     BENCHMARK_IDS,
     BENCHMARK_RECOMMENDED_METRIC,
+    EVAL_DEPLOY_MAX_POLLS,
+    EVAL_INFER_RUN_SECONDS,
     EVAL_TYPES,
     MAX_BENCHMARK_DATASETS,
     MAX_BENCHMARK_ITEMS,
+    MAX_EVAL_SAMPLES,
     METRIC_IDS,
     PROJECT_STATUS_COMPLETED,
     PROJECT_STATUS_CREATED,
@@ -58,6 +61,7 @@ from evaluation.constants import (
     MAX_EXPERT_SAMPLES,
     MAX_JUDGE_RUN_SECONDS,
     MAX_JUDGE_SAMPLES,
+    SDS_GEN_SYSTEM_PROMPT,
     SDS_SAMPLE_DIR_GLOB,
     STALE_RUNNING_MAX_HOURS,
 )
@@ -68,11 +72,13 @@ _JOB_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 
 
 async def run_benchmark(project_id: int,
-                        benchmarks: Optional[List[dict]] = None) -> dict:
+                        benchmarks: Optional[List[dict]] = None,
+                        inference_job_id: Optional[str] = None) -> dict:
     """벤치마크 평가 런 — 프로젝트에서 model/dataset(잠금) 상속 → evaluate 컨테이너 런치.
     model_id·dataset_ids 는 프로젝트에서 주입(요청 바디 미수취 → 불변 강제, P3). 유형별
     설정 = benchmarks(벤치마크→메트릭 매핑). 생략 시 전체 벤치마크를 권장 메트릭으로 채점.
-    run 생성 시 프로젝트를 'running' 으로 전이."""
+    inference_job_id(러너 생성) 주면 그 생성 output 을 스코어러에 넘겨 채점(생성·채점 분리,
+    D2-b). run 생성 시 프로젝트를 'running' 으로 전이."""
     project, dataset_ids = await _load_project_for_run(project_id, "benchmark")
     model_id = int(project["model_id"])
     model_info = await db_model.get_model(model_id=model_id)
@@ -136,6 +142,22 @@ async def run_benchmark(project_id: int,
         "metric_map": metric_map,
     }
 
+    # 생성·채점 분리(D2-b, P2-b3) — 러너 inference 런이 있으면 그 생성 output 을 스코어러에
+    # 넘긴다(generate→score seam): 스코어러가 pre-generated 샘플을 채점(자체 재추론 회피).
+    # ⚠️ 현행 mock 0.2.0 은 이 필드를 무시하고 hash 점수를 낸다 — 실 per-benchmark 채점(제공
+    # 샘플 기반)은 고려대 plugin 계약(후속). FE 미노출 서버전용(_) 키는 제외해 넘긴다(NFS 경로
+    # 등 누출 방지). 벤치마크 실채점은 태스크별 정답키 구조가 필요하므로 free-text seam 은 잠정.
+    used_runner = False
+    if inference_job_id:
+        run_samples, _gen = await _load_run_samples(model_id, project_id, inference_job_id)
+        if run_samples:
+            params["samples"] = [
+                {"input": s.get("input", ""), "output": s.get("output", ""),
+                 "reference": s.get("reference", ""), "dataset": s.get("dataset", "")}
+                for s in run_samples]
+            params["generate_mode"] = "provided"
+            used_runner = True
+
     try:
         async with httpx.AsyncClient(timeout=60.0) as http:
             client = ExternalContainerClient(
@@ -173,7 +195,7 @@ async def run_benchmark(project_id: int,
         "benchmarks": pairs, "benchmark_set": benchmark_set, "metric_map": metric_map,
         "manifest_name": settings.BENCHMARK_MANIFEST_NAME,
         "manifest_version": settings.BENCHMARK_MANIFEST_VERSION,
-        "job_id": job_id, "mode": "benchmark",
+        "job_id": job_id, "mode": "benchmark", "used_runner": used_runner,
     }
 
 
@@ -381,13 +403,14 @@ def _derive_project_status(statuses) -> str:
     return PROJECT_STATUS_COMPLETED
 
 
-async def _load_project_for_run(project_id: int, eval_type: str):
-    """run-start 공통 — 프로젝트 로드 + 잠긴 dataset_ids 반환. 프로젝트 유형과 다른 run
-    생성은 거부(benchmark 프로젝트에 judge run 등 교차유형 차단)."""
+async def _load_project_for_run(project_id: int, eval_type: Optional[str] = None):
+    """run-start 공통 — 프로젝트 로드 + 잠긴 dataset_ids 반환. eval_type 지정 시 프로젝트
+    유형과 다른 run 생성 거부(benchmark 프로젝트에 judge run 등 교차유형 차단). eval_type=None
+    이면 게이트 생략(추론 러너 generate 는 type-agnostic — 유형 무관 output 생성)."""
     project = await db_model.get_eval_project(project_id=project_id)
     if not project:
         raise Exception(f"eval project {project_id} not found")
-    if project.get("eval_type") != eval_type:
+    if eval_type is not None and project.get("eval_type") != eval_type:
         raise Exception(
             f"project eval_type is {project.get('eval_type')!r}, not {eval_type!r}")
     dataset_ids = _parse_dataset_ids(project.get("dataset_ids"))
@@ -467,8 +490,11 @@ async def get_project(project_id: int) -> dict:
     if not project:
         raise Exception(f"eval project {project_id} not found")
     rows = await db_model.list_eval_results_by_project(eval_project_id=project_id)
-    # 표시 상태는 자식 run 상태에서 파생(§5) — DB 의 raw status 를 오버라이드.
-    derived_status = _derive_project_status([r.get("status") for r in rows])
+    # 표시 상태는 자식 run 상태에서 파생(§5) — 단 러너 inference '생성' 런(metric_set='inference')은
+    #   채점이 아니므로 상태 파생에서 제외(생성만 한 프로젝트가 completed 로 오분류 방지, 리뷰 HIGH).
+    #   runs 목록엔 포함(FE 가 생성 배너·최신 inference job 추적에 사용, 표시 필터는 FE 담당).
+    score_rows = [r for r in rows if r.get("metric_set") != "inference"]
+    derived_status = _derive_project_status([r.get("status") for r in score_rows])
     return {"project": {**project, "dataset_ids": _parse_dataset_ids(project.get("dataset_ids")),
                         "status": derived_status},
             "runs": db_model.build_eval_comparison(rows)}
@@ -926,6 +952,29 @@ async def _resolve_inference_url(playground_id: Optional[int]) -> Optional[str]:
     return None
 
 
+async def _resolve_deploy_system_prompt(playground_id: Optional[int]) -> Optional[str]:
+    """바인드된 배포(playground)의 생성 시스템 프롬프트(prompt.system_message)를 s2s 로 해석.
+    러너를 안 쓴 현행 배포-바인드 경로(전문가 SDS 등)에서 헤더 고정 박스에 '실제 생성에 쓰인
+    시스템 프롬프트'를 표시하기 위함(표시=실사용 일치, P3). GET /playgrounds/{id} →
+    result.prompt.system_message. 미지정/실패/빈값 → None(박스 숨김)."""
+    if not playground_id:
+        return None
+    try:
+        url = (f"http://{settings.LLM_PLAYGROUND_DNS}"
+               f"/api/playgrounds/{int(playground_id)}")
+        async with httpx.AsyncClient(timeout=10.0) as http:
+            r = await http.get(url)
+        if r.status_code != 200 or r.json().get("status") != 1:
+            return None
+        prompt = (r.json().get("result") or {}).get("prompt") or {}
+        msg = prompt.get("system_message")
+        if isinstance(msg, str) and msg.strip():
+            return msg.strip()[:_MAX_FIELD_LEN]
+    except Exception:
+        traceback.print_exc()
+    return None
+
+
 async def _infer_output(test_url: str, prompt: str, session_id: str) -> Optional[str]:
     """배포 모델 추론 1건 — test_url 로 {input_type:question, input, session_id} POST.
     응답에서 출력 텍스트 추출(여러 키 수용). 실패/타임아웃 → None(mock 폴백)."""
@@ -949,16 +998,63 @@ async def _infer_output(test_url: str, prompt: str, session_id: str) -> Optional
     return None
 
 
+async def _load_run_samples(model_id: int, project_id: int,
+                            inference_job_id: Optional[str] = None) -> tuple:
+    """생성·채점 분리(P2-b) — 지정된 러너 inference 런(inference_job_id)의 _samples +
+    gen_system_prompt 를 로드해 score phase 가 재사용(재추론 회피). **명시 opt-in 전용**:
+    inference_job_id 없으면 (None, None) — judge/expert 가 조용히 라이브추론(inference_playground_id)
+    을 오버라이드하지 않도록 benchmark 와 통일(리뷰 HIGH). 프로젝트 바인딩(list_eval_results_by_project
+    필터)으로 타 프로젝트 런 유입 차단(같은 model 이라도 — 리뷰 MEDIUM). 완료된
+    metric_set=='inference' 만. 서버전용 _image_abs 등 보존(expert VLM 표시용).
+    반환 (samples|None, gen_system_prompt|None). gen_system_prompt=P3 헤더 고정 박스 표시원."""
+    if not inference_job_id:
+        return None, None
+    try:
+        rows = await db_model.list_eval_results_by_project(
+            eval_project_id=project_id) or []
+    except Exception:
+        traceback.print_exc()
+        return None, None
+    for r in rows:
+        if (not r or r.get("job_str_id") != inference_job_id
+                or r.get("metric_set") != "inference" or r.get("status") != "completed"):
+            continue
+        m = r.get("metrics")
+        if isinstance(m, str):
+            try:
+                m = json.loads(m)
+            except (TypeError, json.JSONDecodeError):
+                m = None
+        if not isinstance(m, dict):
+            return None, None
+        samples = m.get("_samples")
+        if isinstance(samples, list) and samples:
+            return samples, m.get("_gen_system_prompt")
+        return None, None
+    return None, None
+
+
 async def _build_judge_samples(model_id: int, model_name: str, dataset_ids: List[int],
-                               ds_names: List[str], inference_url: Optional[str]) -> list:
+                               ds_names: List[str], inference_url: Optional[str],
+                               run_samples: Optional[list] = None) -> list:
     """채점 대상 샘플(A4) — 실 데이터셋(input/reference) + 배포모델 추론 output.
-    데이터셋을 못 읽으면 합성 input 으로, 추론 URL 없으면 mock output 으로 폴백."""
+    run_samples(러너 생성 output, P2-b2) 주면 그것을 그대로 채점(재추론 회피). 없으면
+    데이터셋 읽기 + 배포 추론, 못 읽으면 합성 input, 추론 URL 없으면 mock output 폴백."""
     # 단일 데이터셋 강제(2026-07-19)에 맞춰 샘플 수를 데이터셋 수와 분리 — 단일에서
     # 최대 MAX_JUDGE_SAMPLES 추출. 구 `len(ds_names)*5` 스케일링은 다중 전제였고
     # 단일에선 5 로 고정됐음. 다중 복원 시 dataset-수 스케일링 재도입.
+    base = ds_names[0] if ds_names else "dataset"
+    # P2-b2 — 러너 생성 샘플 우선(재추론 회피). output 공백(image-only/실패)이면 placeholder.
+    if run_samples:
+        out = []
+        for i, s in enumerate(run_samples[:MAX_JUDGE_SAMPLES]):
+            out.append({"id": f"{model_name}-{s.get('dataset', base)}-{i}",
+                        "input": s.get("input", ""),
+                        "output": (s.get("output") or "").strip() or f"[{model_name}] response {i}",
+                        "reference": s.get("reference", "")})
+        return out
     n = MAX_JUDGE_SAMPLES
     rows = await _read_dataset_samples(dataset_ids, n)
-    base = ds_names[0] if ds_names else "dataset"
     if not rows:    # 실 데이터셋 못 읽음 → 합성 input 폴백(기존 스캐폴딩 동등)
         rows = [{"input": f"[{base}] sample {i} prompt", "reference": "",
                  "dataset": base} for i in range(n)]
@@ -1092,15 +1188,16 @@ async def _judge_score(provider, judge_model, api_key, base_url,
 
 async def _run_judge_task(model_id, job_id, model_name, dataset_ids, ds_names, provider,
                           judge_model, api_key, base_url, criteria, custom_prompt,
-                          inference_url=None) -> None:
+                          inference_url=None, run_samples=None) -> None:
     """백그라운드 judge 루프 — 샘플별 심판 호출 → 기준별 평균(0~100) → eval_result 마감.
     ⚠️ api_key 는 이 함수 인자로만 존재(in-memory). 절대 로그/DB 기록 금지.
     전역 wall-clock 상한(MAX_JUDGE_RUN_SECONDS) 초과(hung provider 등) 시 failed 처리.
-    inference_url 있으면 대상 모델 실 추론으로 output 생성, 없으면 mock(A4)."""
+    run_samples(러너 생성, P2-b2) 있으면 그것을, 없고 inference_url 있으면 대상 모델 실 추론,
+    둘 다 없으면 mock(A4)."""
     try:
         async def _score_all():
             samples = await _build_judge_samples(
-                model_id, model_name, dataset_ids, ds_names, inference_url)
+                model_id, model_name, dataset_ids, ds_names, inference_url, run_samples)
             agg = {c: [] for c in criteria}
             for s in samples:
                 scores = await _judge_score(provider, judge_model, api_key, base_url,
@@ -1138,7 +1235,8 @@ async def run_judge(project_id: int, provider: str,
                     criteria: List[str], judge_model: Optional[str] = None,
                     api_key: Optional[str] = None, base_url: Optional[str] = None,
                     custom_prompt: Optional[str] = None,
-                    inference_playground_id: Optional[int] = None) -> dict:
+                    inference_playground_id: Optional[int] = None,
+                    inference_job_id: Optional[str] = None) -> dict:
     """LLM-as-a-Judge 런 생성(직접호출 비동기). model/dataset 는 프로젝트에서 상속(불변, P3),
     유형별 설정(provider/criteria/judge_model/api_key/base_url/custom_prompt)만 body.
     키/URL = transient. 즉시 job_id 반환 후 백그라운드 채점 → eval_result.metrics(judge_*)
@@ -1175,8 +1273,11 @@ async def run_judge(project_id: int, provider: str,
     if len(dataset_name_csv) > 255:
         dataset_name_csv = f"{ds_names[0]} +{len(ds_names) - 1} more"[:255]
 
-    # 배포 모델 추론 URL 해석(실패/미지정 → None → mock output 폴백).
-    inference_url = await _resolve_inference_url(inference_playground_id)
+    # P2-b2 — 러너 생성 샘플 우선(재추론 회피). 있으면 배포 URL 해석 스킵. 없으면 배포
+    # 모델 추론 URL 해석(실패/미지정 → None → mock output 폴백).
+    run_samples, _gen = await _load_run_samples(model_id, project_id, inference_job_id)
+    inference_url = (None if run_samples
+                     else await _resolve_inference_url(inference_playground_id))
 
     job_id = f"judge-{model_id}-{uuid.uuid4().hex[:16]}"
     await db_model.insert_eval_result(
@@ -1190,14 +1291,252 @@ async def run_judge(project_id: int, provider: str,
 
     task = asyncio.create_task(_run_judge_task(
         model_id, job_id, model_name, dataset_ids, ds_names, provider, judge_model,
-        api_key, base_url, crit, custom_prompt, inference_url))
+        api_key, base_url, crit, custom_prompt, inference_url, run_samples))
     _judge_tasks.add(task)
     task.add_done_callback(_judge_tasks.discard)
 
     return {"project_id": project_id, "model_id": model_id, "job_id": job_id,
             "provider": provider, "mode": "judge", "criteria": crit,
             "datasets": ds_names, "mock": _judge_mock_enabled(),
-            "real_output": bool(inference_url)}
+            "real_output": bool(inference_url) or bool(run_samples),
+            "used_runner": bool(run_samples)}
+
+
+# ── 평가 추론 러너 (generate phase, P1) ──────────────────────────────────────
+# 평가가 대상 모델을 골라 인스턴스를 확보(하이브리드: running 배포 재사용 or 전용 할당)하고
+# 데이터셋 전량(≤MAX_EVAL_SAMPLES)에 batch 추론 → per-sample output + 런 시스템프롬프트를
+# eval_result.metrics 에 영속. 채점(score phase, P2)이 _samples.output 을 소비한다.
+# 배포/상태/teardown 은 llm_playground 프리미티브를 s2s 재사용(신규 서빙 로직 없음).
+_eval_infer_tasks: set = set()
+# 프로젝트 단위 in-process 락 — run_eval_inference 의 idempotency check + 예약 insert 를 원자화
+#   (동시 POST 2건이 둘 다 통과해 GPU 중복 할당하는 TOCTOU 차단, 리뷰 HIGH). 단일 레플리카 전제.
+_eval_infer_project_locks: dict = {}
+
+
+def _project_infer_lock(project_id: int) -> asyncio.Lock:
+    lock = _eval_infer_project_locks.get(project_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _eval_infer_project_locks[project_id] = lock
+    return lock
+
+
+async def _deploy_transient_playground(model_id, workspace_id, user_name, instance_id,
+                                       instance_count, gpu_count, commit_id,
+                                       system_prompt=None) -> int:
+    """전용 배포 할당 — llm_playground pipeline-deploy s2s(create+bind+start 원자). pipeline.py
+    execute_llm_deploy(cluster) 와 동형 바디. user_name 은 실 플랫폼 유저(pipeline_deploy 가
+    db.get_user 검증)라 eval 런 트리거 유저(jf-User)/project.creator 를 넘긴다. playground_id 반환."""
+    body = {
+        "workspace_id": int(workspace_id),
+        "model_id": int(model_id),
+        "user_name": user_name,
+        "model_instance_id": instance_id,
+        "model_instance_count": int(instance_count or 1),
+        # gpu_count=0(CPU) 를 1 로 뒤집지 않는다(`or 1` 금지) — DTO 가 ge=0 허용.
+        "model_gpu_count": int(gpu_count if gpu_count is not None else 1),
+    }
+    if commit_id is not None:
+        body["model_commit_id"] = commit_id
+    if system_prompt:    # 런의 시스템 프롬프트를 배포에 baking(표시=실사용 일치, P2-b)
+        body["prompt_system_message"] = system_prompt
+    url = f"http://{settings.LLM_PLAYGROUND_DNS}/api/playgrounds/pipeline-deploy"
+    async with httpx.AsyncClient(timeout=60.0) as http:
+        r = await http.post(url, json=body)
+    data = r.json() if r.status_code == 200 else {}
+    pid = (data.get("result") or {}).get("playground_id")
+    if not pid:
+        # response() 는 앱-레벨 실패도 HTTP 200(envelope status=0)로 반환 — 실패 사유(message)를
+        #   삼키지 않고 노출(GPU 쿼터·commit 부재·user 미존재 등 진단 가능하게, 리뷰 MEDIUM).
+        msg = data.get("message") or f"HTTP {r.status_code}"
+        raise Exception(f"pipeline-deploy failed: {msg}")
+    return int(pid)
+
+
+async def _wait_playground_ready(playground_id: int) -> bool:
+    """status-sync 폴링 — running 까지(pipeline._wait_for_playground_deploy 동형, ~10분 상한).
+    running=True, error/failed 또는 상한 초과/연속 unreachable=False."""
+    url = (f"http://{settings.LLM_PLAYGROUND_DNS}"
+           f"/api/playgrounds/status-sync/{int(playground_id)}")
+    fails = 0
+    for _ in range(EVAL_DEPLOY_MAX_POLLS):
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as http:
+                r = await http.get(url)
+            status = (r.json().get("result") or {}).get("status")
+            fails = 0
+            if status == "running":
+                return True
+            if status in ("error", "failed"):
+                return False
+        except Exception:
+            fails += 1
+            if fails >= 60:
+                return False
+        await asyncio.sleep(2)
+    return False
+
+
+async def _teardown_playground(playground_id: int) -> None:
+    """전용 배포 회수 — DELETE /api/playgrounds/{id}(helm uninstall+GPU 오펀 가드 재사용).
+    best-effort(실패해도 예외 전파 X — finally 경로 호출, GPU 오펀만은 로그로 남긴다)."""
+    try:
+        url = (f"http://{settings.LLM_PLAYGROUND_DNS}"
+               f"/api/playgrounds/{int(playground_id)}")
+        async with httpx.AsyncClient(timeout=30.0) as http:
+            r = await http.delete(url)
+        # 무음 실패 방지 — helm uninstall 실패/앱-레벨 오류가 성공처럼 보이지 않게 가시화(GPU 오펀 추적).
+        ok = r.status_code < 400 and (r.json().get("status") == 1
+                                      if r.headers.get("content-type", "").startswith("application/json")
+                                      else True)
+        if not ok:
+            print(f"_teardown_playground: {playground_id} 회수 실패(HTTP {r.status_code}) — GPU 오펀 가능",
+                  flush=True)
+    except Exception:
+        traceback.print_exc()
+
+
+async def run_eval_inference(project_id: int, system_prompt: Optional[str] = None,
+                             inference_playground_id: Optional[int] = None,
+                             instance_id=None, instance_count: int = 1,
+                             gpu_count: int = 1, commit_id=None,
+                             user_name: Optional[str] = None) -> dict:
+    """평가 추론 러너(generate phase) — 프로젝트 상속 모델/데이터셋으로 인스턴스를 확보해
+    데이터셋 전량(≤MAX_EVAL_SAMPLES) batch 추론 → _samples + _gen_system_prompt 를
+    eval_result.metrics 에 영속. 하이브리드 인스턴스: inference_playground_id 주면 running
+    배포 재사용, 아니면 instance_id 로 전용 할당(완료/실패 시 delete_playground 회수).
+    즉시 job_id 반환 후 백그라운드 생성(judge 런과 동형 비동기).
+    ⚠️ P1 WIP — review 지적(wall-clock cap/배포 소유권 검증/teardown 견고화/idempotency/
+    system_prompt 실사용/실패→completed/gpu_count=0/eval_type gate/instance_id ge=1)은 P2 선결."""
+    # run-start 공통 로더 재사용(중복 방지). generate 는 type-agnostic 이라 eval_type gate 생략.
+    project, dataset_ids = await _load_project_for_run(project_id, None)
+    model_id = int(project["model_id"])
+    model_info = await db_model.get_model(model_id=model_id)
+    if not model_info:
+        raise Exception(f"model {model_id} not found")
+    model_name = model_info["name"]
+    workspace_id = int(model_info["workspace_id"])
+
+    ds_names = []
+    for did in dataset_ids:
+        d = await db_model.get_dataset_model(dataset_id=did)
+        if not d:
+            raise Exception(f"dataset {did} not found")
+        if int(d["workspace_id"]) != workspace_id:
+            raise Exception("dataset and model belong to different workspaces")
+        ds_names.append(str(d["name"]))
+    dataset_name_csv = ",".join(ds_names)
+    if len(dataset_name_csv) > 255:
+        dataset_name_csv = f"{ds_names[0]} +{len(ds_names) - 1} more"[:255]
+
+    # 하이브리드: 배포 미지정이면 전용 할당 → instance_id + 실 유저 필수(FE 인스턴스 선택 전달).
+    allocate = not inference_playground_id
+    deploy_user = user_name or project.get("creator")
+    if allocate and not instance_id:
+        raise Exception("inference_playground_id or instance_id required")
+    if allocate and not deploy_user:
+        raise Exception("deploy user_name required for transient allocation")
+
+    sysprompt = (system_prompt or "").strip()[:_MAX_FIELD_LEN] or None
+    job_id = f"infer-{model_id}-{uuid.uuid4().hex[:16]}"
+    # TOCTOU 가드 — idempotency check(프로젝트당 running inference 1개)와 예약 insert 를 프로젝트
+    #   단위 in-process 락으로 원자화(동시 POST 2건이 둘 다 통과해 GPU 중복 할당 차단, 리뷰 HIGH).
+    #   조회 실패는 가드를 막지 않음(진행). 멀티레플리카면 DB 유니크 제약 필요(P4-deploy).
+    async with _project_infer_lock(project_id):
+        try:
+            _existing = await db_model.list_eval_results_by_project(
+                eval_project_id=project_id) or []
+        except Exception:
+            _existing = []
+            traceback.print_exc()
+        if any(r.get("metric_set") == "inference" and r.get("status") == "running"
+               for r in _existing):
+            raise Exception("an inference run is already in progress for this project")
+        await db_model.insert_eval_result(
+            source_model_id=model_id, workspace_id=workspace_id, job_str_id=job_id,
+            dataset_id=dataset_ids[0], dataset_name=dataset_name_csv,
+            metric_set="inference", eval_project_id=project_id)
+    try:
+        await db_model.update_eval_project_status(project_id, PROJECT_STATUS_RUNNING)
+    except Exception:
+        traceback.print_exc()
+
+    task = asyncio.create_task(_run_eval_inference_task(
+        model_id, workspace_id, job_id, model_name, dataset_ids, sysprompt,
+        inference_playground_id, allocate, instance_id, instance_count, gpu_count, commit_id,
+        deploy_user))
+    _eval_infer_tasks.add(task)
+    task.add_done_callback(_eval_infer_tasks.discard)
+
+    return {"project_id": project_id, "model_id": model_id, "job_id": job_id,
+            "mode": "inference", "datasets": ds_names, "allocated": allocate,
+            "system_prompt": sysprompt}
+
+
+async def _run_eval_inference_task(model_id, workspace_id, job_id, model_name, dataset_ids,
+                                   system_prompt, inference_playground_id, allocate,
+                                   instance_id, instance_count, gpu_count, commit_id,
+                                   deploy_user=None) -> None:
+    """백그라운드 generate — 인스턴스 확보 → 전량 batch 추론 → _samples 영속 → (할당형) 회수.
+    wall-clock 상한(EVAL_INFER_RUN_SECONDS)으로 hung/느린 배포의 GPU 무한점유 방지, finally 에서
+    teardown 강제. 전량 추론 실패 또는 timeout → eval_result=failed('completed' 위장 안 함).
+    state['pid'] 에 배포 id 를 담아 timeout 후에도 teardown 되게 한다(단, deploy POST 자체
+    timeout 후 서버측 생성된 경우는 pid 미포착 — pipeline.execute_llm_deploy 와 동일 잔여 gap)."""
+    state = {"pid": None}
+
+    async def _generate():
+        playground_id = inference_playground_id
+        if allocate:
+            state["pid"] = await _deploy_transient_playground(
+                model_id, workspace_id, deploy_user, instance_id, instance_count,
+                gpu_count, commit_id, system_prompt)
+            if not await _wait_playground_ready(state["pid"]):
+                raise Exception(f"transient playground {state['pid']} not ready")
+            playground_id = state["pid"]
+        inference_url = await _resolve_inference_url(playground_id)
+        if not inference_url:
+            raise Exception("no inference url (deployment not running?)")
+        rows = await _read_dataset_samples(dataset_ids, MAX_EVAL_SAMPLES)
+        samples = []
+        for i, row in enumerate(rows):
+            out = None
+            if row.get("input"):    # 텍스트 input 만 — image-only(VLM) 전량 batch 는 P4
+                out = await _infer_output(
+                    inference_url, row["input"], f"infer-{model_id}-{i}")
+            sample = {
+                "idx": i, "input": row.get("input", ""), "output": out or "",
+                "reference": row.get("reference", ""), "dataset": row.get("dataset", "")}
+            # 이미지/CSV 필드 보존 — score phase(expert VLM)가 _samples 소비 시 렌더/추론
+            # 컨텍스트가 유지되도록(_image_abs 등 서버전용 키 포함; get_judge_result 가 _samples
+            # 를 통째 strip 하고 expert 경로는 _public_sample 로 걸러 누출 없음).
+            for k in ("image", "image_url", "image_served", "_image_abs", "_image_dir",
+                      "csv_rows", "csv_text"):
+                if k in row:
+                    sample[k] = row[k]
+            samples.append(sample)
+        # 데이터셋을 못 읽었거나(0 샘플) 전량 추론 실패(모든 output 공백)면 completed 로 위장하지
+        #   않고 실패 처리 — rows=[] 인 dataset-read 실패도 failed(리뷰 CRITICAL: 성공 위장 방지).
+        if not samples:
+            raise Exception("no samples read from dataset (unreadable/empty/unsupported)")
+        if not any(s["output"] for s in samples):
+            raise Exception("all inference outputs empty (deployment unreachable?)")
+        metrics = {"_mode": "inference", "_gen_system_prompt": system_prompt,
+                   "_samples": samples, "_total": len(samples)}
+        await db_model.complete_eval_result(
+            job_str_id=job_id, metrics_json=json.dumps(metrics), source_model_id=model_id)
+
+    try:
+        await asyncio.wait_for(_generate(), timeout=EVAL_INFER_RUN_SECONDS)
+    except Exception:
+        traceback.print_exc()
+        try:
+            await db_model.update_eval_result_status(
+                job_str_id=job_id, status="failed", source_model_id=model_id)
+        except Exception:
+            traceback.print_exc()
+    finally:
+        if state["pid"]:
+            await _teardown_playground(state["pid"])
 
 
 async def get_judge_result(model_id: int, job_id: str) -> dict:
@@ -1323,7 +1662,7 @@ def _csv_to_ais_rows(sample: dict) -> list:
 
 
 async def _infer_vlm_output(playground_id: int, image_b64: str, ais_rows: list,
-                            session_id: str) -> Optional[str]:
+                            session_id: str, prompt: Optional[str] = None) -> Optional[str]:
     """배포 SDS(external) 모델 VLM 추론 1건 — Playground /test 의 external 분기 재사용(내부
     vLLM 텍스트 경로와 달리 external 배포는 test_url 이 없어 이 경유가 유일). s2s POST
     {playground_id, test_type:'question', external_payload:{image_base64, ais_rows}}.
@@ -1332,8 +1671,21 @@ async def _infer_vlm_output(playground_id: int, image_b64: str, ais_rows: list,
     배포는 dual 링크가 없어 None → external 분기로 통과한다."""
     try:
         url = f"http://{settings.LLM_PLAYGROUND_DNS}/api/playgrounds/test"
+        # 생성 시스템 프롬프트를 external_payload 에 실으면 playground_test 가 그대로 params 로
+        # eva-vlm /run 에 포워딩. eva-vlm 은 params.custom_prompt 로 받아 question 을 오버라이드
+        # (실측: yvvyee/eva-vlm-backend:1.1.0 schemas.py:94 RunParams.custom_prompt /
+        # model_manager.py:333 `question = custom_prompt or PROMPT_MAP[output_type]`). 미전달 시
+        # PROMPT_MAP[output_type] 기본 프롬프트 사용. (표시=실사용 일치, P4.)
+        # SDS 전문가 평가는 '항해조력메시지'를 채점(묘사 아님) → output_type 을 조력메시지로 지정
+        # (eva-vlm 기본값이 '영문 해상상황묘사'라 미지정 시 묘사를 생성해 채점대상과 어긋남).
+        # sds-lora-ko 체크포인트 + reference=output_advice_kor.txt(한글 조력)라 '한글 항해조력메시지'.
+        # custom_prompt 전달 시 그게 question 을 오버라이드(output_type 은 AIS 텍스트 lang=ko 에 계속 작용).
+        ext = {"image_base64": image_b64, "ais_rows": ais_rows,
+               "output_type": "한글 항해조력메시지"}
+        if prompt:
+            ext["custom_prompt"] = prompt
         body = {"playground_id": int(playground_id), "test_type": "question",
-                "external_payload": {"image_base64": image_b64, "ais_rows": ais_rows}}
+                "external_payload": ext}
         async with httpx.AsyncClient(timeout=_VLM_INFER_TIMEOUT) as http:
             r = await http.post(url, json=body)
         if r.status_code != 200:
@@ -1357,13 +1709,30 @@ async def _infer_vlm_output(playground_id: int, image_b64: str, ais_rows: list,
 
 
 async def _build_expert_samples(model_id: int, model_name: str, dataset_ids: List[int],
-                                ds_names: List[str], inference_url: Optional[str]) -> list:
+                                ds_names: List[str], inference_url: Optional[str],
+                                run_samples: Optional[list] = None) -> list:
     """전문가 채점 샘플(A4) — 실 데이터셋(input/reference/이미지) + 배포모델 추론 output.
-    데이터셋 못 읽으면 합성(레거시 동등·결정적), 추론 URL 없으면 mock output 폴백."""
+    run_samples(러너 생성, P2-b2) 주면 그것을 그대로(이미지/CSV 필드 보존) 채점 대상으로.
+    없으면 데이터셋 로드 + 배포 추론, 못 읽으면 합성(레거시 동등), 추론 URL 없으면 mock 폴백."""
+    base = ds_names[0] if ds_names else "dataset"
+    # P2-b2 — 러너 생성 샘플 우선(재생성/재추론 회피). output 있으면 real_output=True.
+    if run_samples:
+        out = []
+        for i, s in enumerate(run_samples[:MAX_EXPERT_SAMPLES]):
+            item = {"idx": i, "dataset": s.get("dataset", base),
+                    "input": s.get("input", ""),
+                    "output": (s.get("output") or "").strip() or f"[{model_name}] 응답 {i}",
+                    "reference": s.get("reference", ""),
+                    "real_output": bool((s.get("output") or "").strip())}
+            for k in ("image", "image_url", "image_served", "_image_abs", "_image_dir",
+                      "csv_rows", "csv_text"):
+                if k in s:
+                    item[k] = s[k]
+            out.append(item)
+        return out
     # 데이터셋 전량 로드(ceiling 까지). 구 `len(ds_names)*5` 휴리스틱 제거 — 전문가는 전 샘플 리뷰.
     n = MAX_EXPERT_SAMPLES
     rows = await _read_dataset_samples(dataset_ids, n)
-    base = ds_names[0] if ds_names else "dataset"
     if not rows:    # 실 데이터셋 못 읽음 → 합성 폴백(구 스캐폴딩과 동일 문자열 = 레거시 안정)
         rows = [{"input": f"[{base}] sample {i} 입력 프롬프트", "reference": f"참조 답변 {i}",
                  "dataset": ds_names[i % len(ds_names)] if ds_names else base}
@@ -1429,10 +1798,12 @@ async def _expert_session(model_id: int, job_id: str):
 
 
 async def start_expert(project_id: int,
-                       inference_playground_id: Optional[int] = None) -> dict:
+                       inference_playground_id: Optional[int] = None,
+                       inference_job_id: Optional[str] = None) -> dict:
     """전문가 평가 세션 시작 — model/dataset 는 프로젝트에서 상속(불변, P3). 채점 샘플 생성
-    + 세션 행. inference_playground_id(배포 모델) 주면 실 출력으로, 없으면 mock(A4). 생성
-    샘플은 metrics._samples 로 영속 → 재로드 안정(실 추론 비결정성/배포 종료에도 표시 고정)."""
+    + 세션 행. inference_job_id(러너 생성) 주면 그 샘플을, 없고 inference_playground_id 주면
+    실 출력 추론, 둘 다 없으면 mock(A4). 생성 샘플은 metrics._samples 로 영속 → 재로드
+    안정(실 추론 비결정성/배포 종료에도 표시 고정)."""
     project, dataset_ids = await _load_project_for_run(project_id, "expert")
     model_id = int(project["model_id"])
     model_info = await db_model.get_model(model_id=model_id)
@@ -1454,9 +1825,21 @@ async def start_expert(project_id: int,
             raise Exception("dataset name has unsafe characters")
         ds_names.append(ds_name)
 
-    inference_url = await _resolve_inference_url(inference_playground_id)
+    # P2-b2 — 러너 생성 샘플 우선(재추론 회피). 있으면 배포 URL 해석 스킵.
+    run_samples, gen_prompt = await _load_run_samples(
+        model_id, project_id, inference_job_id)
+    inference_url = (None if run_samples
+                     else await _resolve_inference_url(inference_playground_id))
+    # 생성 시스템 프롬프트(P3 헤더 고정 박스) — 러너 런 우선, 없으면 바인드 배포의 system_message.
+    if not gen_prompt and inference_playground_id:
+        gen_prompt = await _resolve_deploy_system_prompt(inference_playground_id)
     samples = await _build_expert_samples(
-        model_id, model_name, dataset_ids, ds_names, inference_url)
+        model_id, model_name, dataset_ids, ds_names, inference_url, run_samples)
+    # external eva-vlm(SDS)은 내부 system_message 가 없어 위 gen_prompt 가 None → 실사용 프롬프트
+    #   미러로 폴백(샘플에 csv_rows=선박 계측표 있으면 SDS 시나리오, _expert_prompt 와 동일 판별).
+    if not gen_prompt and any(
+            isinstance(s, dict) and s.get("csv_rows") for s in samples):
+        gen_prompt = SDS_GEN_SYSTEM_PROMPT
     dataset_name_csv = ",".join(ds_names)
     if len(dataset_name_csv) > 255:
         dataset_name_csv = f"{ds_names[0]} +{len(ds_names) - 1} more"[:255]
@@ -1472,6 +1855,8 @@ async def start_expert(project_id: int,
     # inference_playground_id(배포 SDS) 는 지연 단위 VLM 추론(infer_expert_sample)이 세션 재로드
     # 후에도 대상 배포를 알 수 있도록 함께 영속(재개 세션 포함).
     metrics_obj = {"_mode": "expert", "_samples": samples, "_expert_prompt": expert_prompt}
+    if gen_prompt:    # 생성 시스템 프롬프트 동결(세션 재로드 시 헤더 박스 유지)
+        metrics_obj["_gen_system_prompt"] = gen_prompt
     if inference_playground_id:
         metrics_obj["_inference_playground_id"] = int(inference_playground_id)
     await db_model.set_eval_result_metrics(
@@ -1485,9 +1870,11 @@ async def start_expert(project_id: int,
     return {"project_id": project_id, "model_id": model_id, "job_id": job_id,
             "mode": "expert", "datasets": ds_names,
             "samples": [_public_sample(s) for s in samples],
-            "total": len(samples), "real_output": bool(inference_url),
+            "total": len(samples),
+            "real_output": bool(inference_url) or bool(run_samples),
+            "used_runner": bool(run_samples),
             "inference_enabled": bool(inference_playground_id),
-            "expert_prompt": expert_prompt}
+            "expert_prompt": expert_prompt, "gen_system_prompt": gen_prompt}
 
 
 def _session_inference_enabled(row: dict) -> bool:
@@ -1502,6 +1889,19 @@ def _session_inference_enabled(row: dict) -> bool:
     return bool(isinstance(metrics, dict) and metrics.get("_inference_playground_id"))
 
 
+def _session_gen_prompt(row: dict) -> Optional[str]:
+    """세션에 동결된 생성 시스템 프롬프트(_gen_system_prompt) — 헤더 고정 박스 표시원(P3).
+    영속 metrics 에서 파생(재개 세션 포함). 없으면 None(박스 숨김)."""
+    metrics = row.get("metrics") if isinstance(row, dict) else None
+    if isinstance(metrics, str):
+        try:
+            metrics = json.loads(metrics)
+        except (TypeError, json.JSONDecodeError):
+            metrics = None
+    val = metrics.get("_gen_system_prompt") if isinstance(metrics, dict) else None
+    return val if isinstance(val, str) and val else None
+
+
 async def get_expert_samples(model_id: int, job_id: str) -> dict:
     """세션 샘플 + 기존 채점 + 채점 이력(재개·감사추적용)."""
     row, samples = await _expert_session(model_id, job_id)
@@ -1512,7 +1912,8 @@ async def get_expert_samples(model_id: int, job_id: str) -> dict:
             "samples": [_public_sample(s) for s in samples],
             "total": len(samples), "ratings": ratings, "history": history,
             "inference_enabled": _session_inference_enabled(row),
-            "expert_prompt": _session_prompt(row, samples)}
+            "expert_prompt": _session_prompt(row, samples),
+            "gen_system_prompt": _session_gen_prompt(row)}
 
 
 # 지연 단위 VLM 추론의 per-job 락 — 빠른 prev/next 네비로 동시 호출 시 _samples 재영속
@@ -1564,7 +1965,8 @@ async def infer_expert_sample(model_id: int, job_id: str, sample_idx: int) -> di
     # ── 2) VLM 호출(락 밖) — sync 최대 _VLM_INFER_TIMEOUT 라 락으로 잡으면 채점 완료나 다른
     #        샘플 infer 가 그동안 막힌다. 오래 걸리는 호출은 락 밖에서 수행. ──────────────
     text = await _infer_vlm_output(
-        int(pid), image_b64, _csv_to_ais_rows(s), f"expert-{model_id}-{sample_idx}")
+        int(pid), image_b64, _csv_to_ais_rows(s), f"expert-{model_id}-{sample_idx}",
+        _session_gen_prompt(row))
     if not text:    # 추론 실패/검증 거부/타임아웃 → mock 유지(graceful)
         return {"real_output": False, "sample": _public_sample(s)}
 
