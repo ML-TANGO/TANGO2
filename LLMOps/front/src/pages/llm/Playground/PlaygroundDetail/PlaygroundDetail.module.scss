@@ -8,11 +8,11 @@
   grid-template-columns: repeat(auto-fit, minmax(344px, 1fr));
 }
 
-/* 모델 탭: 4열 그리드 (모델 | 파라미터 | 고급 옵션 | 인스턴스+API 호출 세로 스택) */
+/* 모델 탭: 3열 그리드 (모델 | 파라미터 | 인스턴스+API 호출 세로 스택) */
 .model-cont {
   display: grid;
   gap: 24px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   /* 각 열 내용 높이 그대로 위 정렬 — 늘어난 빈 공간(아래 blank) 방지 */
   align-items: start;
 }

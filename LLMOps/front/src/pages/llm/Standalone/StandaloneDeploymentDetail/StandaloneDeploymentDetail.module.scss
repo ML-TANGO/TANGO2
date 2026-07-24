@@ -37,11 +37,11 @@
   align-items: start;
 }
 
-/* 배포 탭: 3열(모델·런타임 | 파라미터 | 고급옵션) — 인스턴스/API/디바이스 열 없음 */
+/* 배포 탭: 2열(모델·런타임 | 파라미터) — 인스턴스/API/디바이스 열 없음 */
 .deploy-cont {
   display: grid;
   gap: 24px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: start;
 }
 

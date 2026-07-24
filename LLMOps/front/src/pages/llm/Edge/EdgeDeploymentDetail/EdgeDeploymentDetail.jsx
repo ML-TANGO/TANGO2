@@ -6,7 +6,6 @@ import { ButtonV2 } from '@jonathan/ui-react';
 
 import Tab from '@src/components/molecules/Tab';
 import DeployDetailHeader from '@src/components/pageContents/llm/DeployDetail/DeployDetailHeader';
-import PlaygroundAdvancedOptions from '@src/components/pageContents/llm/PlaygroundContent/PlaygroundAdvancedOptions';
 import {
   deployEdgeWorker,
   getEdgeWorkers,
@@ -24,18 +23,47 @@ const cx = classNames.bind(style);
 // 런타임 엔진 기본 6종(+ 커스텀 도커 이미지 pull). 엔진별 기본 서빙 이미지(목업).
 //   커스텀 선택 시 사용자가 이미지 경로를 직접 입력해 pull.
 const ENGINES = [
-  { id: 'vllm', label: 'vLLM', image: 'docker.io/acrylaaai/llm_deployment:dev' },
-  { id: 'llama_cpp', label: 'llama.cpp', image: 'docker.io/acrylaaai/llm_deployment_llamacpp:dev' },
-  { id: 'tgi', label: 'TGI', image: 'docker.io/acrylaaai/llm_deployment_tgi:dev' },
-  { id: 'ollama', label: 'Ollama', image: 'docker.io/acrylaaai/llm_deployment_ollama:dev' },
-  { id: 'triton', label: 'Triton', image: 'docker.io/acrylaaai/llm_deployment_triton:dev' },
-  { id: 'tensorrt', label: 'TensorRT', image: 'docker.io/acrylaaai/llm_deployment_tensorrt:dev' },
+  {
+    id: 'vllm',
+    label: 'vLLM',
+    image: 'docker.io/acrylaaai/llm_deployment:dev',
+  },
+  {
+    id: 'llama_cpp',
+    label: 'llama.cpp',
+    image: 'docker.io/acrylaaai/llm_deployment_llamacpp:dev',
+  },
+  {
+    id: 'tgi',
+    label: 'TGI',
+    image: 'docker.io/acrylaaai/llm_deployment_tgi:dev',
+  },
+  {
+    id: 'ollama',
+    label: 'Ollama',
+    image: 'docker.io/acrylaaai/llm_deployment_ollama:dev',
+  },
+  {
+    id: 'triton',
+    label: 'Triton',
+    image: 'docker.io/acrylaaai/llm_deployment_triton:dev',
+  },
+  {
+    id: 'tensorrt',
+    label: 'TensorRT',
+    image: 'docker.io/acrylaaai/llm_deployment_tensorrt:dev',
+  },
 ];
 const CUSTOM_ENGINE = 'custom';
 const DEFAULT_EDGE_IMAGE = ENGINES[1].image; // llama.cpp (엣지 기본)
 
 // 파라미터 기본값(목업 — 배포 요청 body 확장 시 사용).
-const DEFAULT_PARAMS = { temperature: 1, top_p: 0.9, top_k: 50, max_new_tokens: 512 };
+const DEFAULT_PARAMS = {
+  temperature: 1,
+  top_p: 0.9,
+  top_k: 50,
+  max_new_tokens: 512,
+};
 const PARAM_META = [
   { key: 'temperature', label: 'Temperature', min: 0, max: 2, step: 0.1 },
   { key: 'top_p', label: 'Top P', min: 0, max: 1, step: 0.05 },
@@ -54,7 +82,7 @@ function Row({ k, v }) {
 
 // 사용자용 온디바이스(엣지) 배포 상세 — 3탭(정보/배포/모니터링), Playground 셸 미러.
 //   정보: 디바이스 정보 + 현재 배포 요약.
-//   배포: [모델(런타임엔진 6+커스텀 → 모델선택 → 양자화 GGUF → 모델정보)] | 파라미터 | 고급옵션
+//   배포: [모델(런타임엔진 6+커스텀 → 모델선택 → 양자화 GGUF → 모델정보)] | 파라미터
 //         | [디바이스 정보(디바이스 선택) + 현재 배포 상태(배포 실행)].
 //   모니터링: /metrics 폴링 + heartbeat 자원/상태.
 export default function EdgeDeploymentDetail() {
@@ -84,7 +112,9 @@ export default function EdgeDeploymentDetail() {
   // 전체 디바이스 목록 — 마운트 시 1회(+배포 후 명시 갱신). targetId 변경마다 재fetch 하지 않음(레이스/과다호출 방지).
   const loadWorkers = useCallback(async () => {
     const { status, result } = await getEdgeWorkers();
-    setWorkers(status === STATUS_SUCCESS && Array.isArray(result) ? result : []);
+    setWorkers(
+      status === STATUS_SUCCESS && Array.isArray(result) ? result : [],
+    );
   }, []);
 
   useEffect(() => {
@@ -132,7 +162,9 @@ export default function EdgeDeploymentDetail() {
     (async () => {
       const { status, result } = await getQuantizeLineage(modelId);
       if (alive && status === STATUS_SUCCESS) {
-        setLineage((result?.lineage || []).filter((l) => l.status === 'completed'));
+        setLineage(
+          (result?.lineage || []).filter((l) => l.status === 'completed'),
+        );
       }
     })();
     return () => {
@@ -157,7 +189,9 @@ export default function EdgeDeploymentDetail() {
   }, [tab, targetId]);
 
   const selectedModel = models.find((m) => String(m.id) === String(modelId));
-  const selectedLineage = lineage.find((l) => String(l.id) === String(lineageId));
+  const selectedLineage = lineage.find(
+    (l) => String(l.id) === String(lineageId),
+  );
 
   const handleSelectEngine = (id) => {
     setEngine(id);
@@ -165,7 +199,8 @@ export default function EdgeDeploymentDetail() {
     if (eng) setImage(eng.image); // 기본 엔진 → 기본 이미지. 커스텀은 입력 유지.
   };
 
-  const handleParam = (key, value) => setParams((p) => ({ ...p, [key]: +value }));
+  const handleParam = (key, value) =>
+    setParams((p) => ({ ...p, [key]: +value }));
 
   const handleDeploy = async () => {
     if (!worker) return toast.error('디바이스를 선택하세요.');
@@ -189,7 +224,9 @@ export default function EdgeDeploymentDetail() {
 
   const heartbeat = useMemo(() => {
     try {
-      return worker?.last_heartbeat_json ? JSON.parse(worker.last_heartbeat_json) : null;
+      return worker?.last_heartbeat_json
+        ? JSON.parse(worker.last_heartbeat_json)
+        : null;
     } catch {
       return null;
     }
@@ -206,7 +243,9 @@ export default function EdgeDeploymentDetail() {
     <div className={cx('playground-cont')}>
       <DeployDetailHeader
         title={project?.name || '온디바이스 배포'}
-        onBack={() => history.push(`/user/workspace/${workspaceId}/llmplayground`)}
+        onBack={() =>
+          history.push(`/user/workspace/${workspaceId}/llmplayground`)
+        }
         right={
           <>
             <span className={cx('type-chip', 'edge')}>온디바이스</span>
@@ -254,11 +293,15 @@ export default function EdgeDeploymentDetail() {
             </div>
             <div className={cx('info-field')}>
               <span className={cx('label')}>생성 일시</span>
-              <span className={cx('info-value')}>{project?.create_datetime || '-'}</span>
+              <span className={cx('info-value')}>
+                {project?.create_datetime || '-'}
+              </span>
             </div>
             <div className={cx('info-field')}>
               <span className={cx('label')}>최근 업데이트</span>
-              <span className={cx('info-value')}>{project?.update_datetime || '-'}</span>
+              <span className={cx('info-value')}>
+                {project?.update_datetime || '-'}
+              </span>
             </div>
           </section>
         </div>
@@ -271,8 +314,14 @@ export default function EdgeDeploymentDetail() {
           <section className={cx('card')}>
             <h3 className={cx('card-title')}>모델 · 런타임</h3>
 
-            <span className={cx('label')} id='edge-engine-label'>런타임 엔진</span>
-            <div className={cx('engine-grid')} role='radiogroup' aria-labelledby='edge-engine-label'>
+            <span className={cx('label')} id='edge-engine-label'>
+              런타임 엔진
+            </span>
+            <div
+              className={cx('engine-grid')}
+              role='radiogroup'
+              aria-labelledby='edge-engine-label'
+            >
               {ENGINES.map((eng) => (
                 <button
                   key={eng.id}
@@ -289,7 +338,11 @@ export default function EdgeDeploymentDetail() {
                 type='button'
                 role='radio'
                 aria-checked={isCustomEngine}
-                className={cx('engine-opt', 'custom', isCustomEngine && 'selected')}
+                className={cx(
+                  'engine-opt',
+                  'custom',
+                  isCustomEngine && 'selected',
+                )}
                 onClick={() => handleSelectEngine(CUSTOM_ENGINE)}
               >
                 커스텀 이미지
@@ -310,7 +363,9 @@ export default function EdgeDeploymentDetail() {
 
             <div className={cx('divider')} />
 
-            <label className={cx('label')} htmlFor='edge-model'>모델</label>
+            <label className={cx('label')} htmlFor='edge-model'>
+              모델
+            </label>
             <select
               id='edge-model'
               className={cx('select')}
@@ -319,11 +374,15 @@ export default function EdgeDeploymentDetail() {
             >
               <option value=''>모델 선택</option>
               {models.map((m) => (
-                <option key={m.id} value={m.id}>{m.name}</option>
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
               ))}
             </select>
 
-            <label className={cx('label')} htmlFor='edge-gguf'>양자화 모델(GGUF)</label>
+            <label className={cx('label')} htmlFor='edge-gguf'>
+              양자화 모델(GGUF)
+            </label>
             <select
               id='edge-gguf'
               className={cx('select')}
@@ -331,7 +390,9 @@ export default function EdgeDeploymentDetail() {
               onChange={(e) => setLineageId(e.target.value)}
               disabled={!modelId}
             >
-              <option value=''>{modelId ? '양자화 산출물 선택' : '모델 먼저 선택'}</option>
+              <option value=''>
+                {modelId ? '양자화 산출물 선택' : '모델 먼저 선택'}
+              </option>
               {lineage.map((l) => (
                 <option key={l.id} value={l.id}>
                   {l.quantization_type} · {l.gguf_path?.split('/').pop()}
@@ -345,7 +406,10 @@ export default function EdgeDeploymentDetail() {
                 <span className={cx('sub-title')}>모델 정보</span>
                 <Row k='이름' v={selectedModel.name || '-'} />
                 <Row k='양자화' v={selectedLineage?.quantization_type || '-'} />
-                <Row k='GGUF' v={selectedLineage?.gguf_path?.split('/').pop() || '-'} />
+                <Row
+                  k='GGUF'
+                  v={selectedLineage?.gguf_path?.split('/').pop() || '-'}
+                />
               </>
             )}
           </section>
@@ -372,36 +436,44 @@ export default function EdgeDeploymentDetail() {
             ))}
           </section>
 
-          {/* 3열: 고급 옵션(공용 placeholder 재사용) */}
-          <PlaygroundAdvancedOptions />
-
-          {/* 4열: 디바이스 정보(선택) + 현재 배포 상태 */}
+          {/* 3열: 디바이스 정보(선택) + 현재 배포 상태 */}
           <div className={cx('stacked-col')}>
             <section className={cx('card')}>
               <h3 className={cx('card-title')}>디바이스 정보</h3>
-              <label className={cx('label')} htmlFor='edge-device'>엣지 디바이스</label>
+              <label className={cx('label')} htmlFor='edge-device'>
+                엣지 디바이스
+              </label>
               <select
                 id='edge-device'
                 className={cx('select')}
                 value={targetId}
                 onChange={(e) => setTargetId(e.target.value)}
               >
-                {workers.length === 0 && <option value={targetId}>디바이스 없음</option>}
+                {workers.length === 0 && (
+                  <option value={targetId}>디바이스 없음</option>
+                )}
                 {workers.map((w) => (
                   <option key={w.id} value={String(w.id)}>
-                    {w.name || w.device_id} {w.conn_status ? `(${w.conn_status})` : ''}
+                    {w.name || w.device_id}{' '}
+                    {w.conn_status ? `(${w.conn_status})` : ''}
                   </option>
                 ))}
               </select>
               <Row k='유형' v={worker?.device_type || '-'} />
               <Row k='연결' v={worker?.conn_status || '-'} />
-              <Row k='자원' v={`CPU ${worker?.cpu_cores ?? '-'} / ${worker?.gpu_info || 'GPU -'}`} />
+              <Row
+                k='자원'
+                v={`CPU ${worker?.cpu_cores ?? '-'} / ${worker?.gpu_info || 'GPU -'}`}
+              />
             </section>
 
             <section className={cx('card')}>
               <h3 className={cx('card-title')}>현재 배포 상태</h3>
               <Row k='상태' v={worker?.deploy_state || '미배포'} />
-              <Row k='로드 모델' v={worker?.deploy_model || heartbeat?.model_loaded || '-'} />
+              <Row
+                k='로드 모델'
+                v={worker?.deploy_model || heartbeat?.model_loaded || '-'}
+              />
               <Row k='최근 확인' v={worker?.last_seen || '-'} />
               <ButtonV2
                 label={deploying ? '배포 중…' : '배포 실행'}
@@ -411,7 +483,9 @@ export default function EdgeDeploymentDetail() {
                 style={{ width: '100%', marginTop: '8px' }}
               />
               {!isOnline && (
-                <p className={cx('hint')}>디바이스가 online일 때 배포할 수 있습니다.</p>
+                <p className={cx('hint')}>
+                  디바이스가 online일 때 배포할 수 있습니다.
+                </p>
               )}
             </section>
           </div>

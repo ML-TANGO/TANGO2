@@ -4,7 +4,6 @@ import { useRouteMatch } from 'react-router-dom';
 
 import PlaygroundHeader from '@src/components/pageContents/llm/PlaygroundContent/PlaygroundHeader';
 import PlaygroundInfo from '@src/components/pageContents/llm/PlaygroundContent/PlaygroundInfo';
-import PlaygroundAdvancedOptions from '@src/components/pageContents/llm/PlaygroundContent/PlaygroundAdvancedOptions';
 import PlaygroundExternalApi from '@src/components/pageContents/llm/PlaygroundContent/PlaygroundExternalApi';
 import PlaygroundInstanceSettingInfo from '@src/components/pageContents/llm/PlaygroundContent/PlaygroundInstanceSettingInfo';
 import PlaygroundModel from '@src/components/pageContents/llm/PlaygroundContent/PlaygroundModel';
@@ -204,7 +203,6 @@ const PlaygroundDetail = () => {
         <div className={cx('model-cont')}>
           <PlaygroundModel workspaceId={workspaceId} />
           <PlaygroundModelParameterSetting />
-          <PlaygroundAdvancedOptions />
           <div className={cx('stacked-col')}>
             <PlaygroundInstanceSettingInfo />
             <PlaygroundExternalApi />

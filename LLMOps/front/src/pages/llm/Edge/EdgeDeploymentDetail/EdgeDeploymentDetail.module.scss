@@ -133,11 +133,11 @@
   color: $blue104;
 }
 
-/* 배포 탭: 4열(모델·런타임 | 파라미터 | 고급옵션 | 디바이스+현재배포) */
+/* 배포 탭: 3열(모델·런타임 | 파라미터 | 디바이스+현재배포) */
 .deploy-cont {
   display: grid;
   gap: 24px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: start;
 }
 

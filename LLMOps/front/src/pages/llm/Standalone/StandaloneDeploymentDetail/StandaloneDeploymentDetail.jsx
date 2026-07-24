@@ -5,7 +5,6 @@ import { ButtonV2 } from '@jonathan/ui-react';
 
 import Tab from '@src/components/molecules/Tab';
 import DeployDetailHeader from '@src/components/pageContents/llm/DeployDetail/DeployDetailHeader';
-import PlaygroundAdvancedOptions from '@src/components/pageContents/llm/PlaygroundContent/PlaygroundAdvancedOptions';
 import { getModel, getQuantizeLineage } from '@src/apis/llm/model';
 import { STATUS_SUCCESS } from '@src/network';
 import { copyToClipboardWithToast } from '@src/utils';
@@ -18,16 +17,45 @@ const cx = classNames.bind(style);
 
 // 런타임 엔진 기본 6종(+ 커스텀 도커 이미지 pull). standalone 은 오프라인 번들이라 이미지가 실행 스크립트에 박힘.
 const ENGINES = [
-  { id: 'vllm', label: 'vLLM', image: 'docker.io/acrylaaai/llm_deployment:dev' },
-  { id: 'llama_cpp', label: 'llama.cpp', image: 'docker.io/acrylaaai/llm_deployment_llamacpp:dev' },
-  { id: 'tgi', label: 'TGI', image: 'docker.io/acrylaaai/llm_deployment_tgi:dev' },
-  { id: 'ollama', label: 'Ollama', image: 'docker.io/acrylaaai/llm_deployment_ollama:dev' },
-  { id: 'triton', label: 'Triton', image: 'docker.io/acrylaaai/llm_deployment_triton:dev' },
-  { id: 'tensorrt', label: 'TensorRT', image: 'docker.io/acrylaaai/llm_deployment_tensorrt:dev' },
+  {
+    id: 'vllm',
+    label: 'vLLM',
+    image: 'docker.io/acrylaaai/llm_deployment:dev',
+  },
+  {
+    id: 'llama_cpp',
+    label: 'llama.cpp',
+    image: 'docker.io/acrylaaai/llm_deployment_llamacpp:dev',
+  },
+  {
+    id: 'tgi',
+    label: 'TGI',
+    image: 'docker.io/acrylaaai/llm_deployment_tgi:dev',
+  },
+  {
+    id: 'ollama',
+    label: 'Ollama',
+    image: 'docker.io/acrylaaai/llm_deployment_ollama:dev',
+  },
+  {
+    id: 'triton',
+    label: 'Triton',
+    image: 'docker.io/acrylaaai/llm_deployment_triton:dev',
+  },
+  {
+    id: 'tensorrt',
+    label: 'TensorRT',
+    image: 'docker.io/acrylaaai/llm_deployment_tensorrt:dev',
+  },
 ];
 const CUSTOM_ENGINE = 'custom';
 
-const DEFAULT_PARAMS = { temperature: 1, top_p: 0.9, top_k: 50, max_new_tokens: 512 };
+const DEFAULT_PARAMS = {
+  temperature: 1,
+  top_p: 0.9,
+  top_k: 50,
+  max_new_tokens: 512,
+};
 const PARAM_META = [
   { key: 'temperature', label: 'Temperature', min: 0, max: 2, step: 0.1 },
   { key: 'top_p', label: 'Top P', min: 0, max: 1, step: 0.05 },
@@ -46,7 +74,7 @@ function Row({ k, v }) {
 
 // standalone(오프라인 번들) 배포 상세 — 3탭(정보/배포/스크립트), Playground 셸 미러.
 //   정보: 배포 정보 요약.
-//   배포: 3열 [모델·런타임(6+커스텀)] | 파라미터 | 고급옵션 (인스턴스/API/디바이스 열 없음).
+//   배포: 2열 [모델·런타임(6+커스텀)] | 파라미터 (인스턴스/API/디바이스 열 없음).
 //   스크립트: 배포 실행 스크립트 + 이미지/코드 생성(오프라인 번들). 모니터링 탭 대체.
 export default function StandaloneDeploymentDetail() {
   const history = useHistory();
@@ -88,7 +116,9 @@ export default function StandaloneDeploymentDetail() {
     (async () => {
       const { status, result } = await getQuantizeLineage(modelId);
       if (alive && status === STATUS_SUCCESS) {
-        setLineage((result?.lineage || []).filter((l) => l.status === 'completed'));
+        setLineage(
+          (result?.lineage || []).filter((l) => l.status === 'completed'),
+        );
       }
     })();
     return () => {
@@ -111,7 +141,9 @@ export default function StandaloneDeploymentDetail() {
   }, [deployId]);
 
   const selectedModel = models.find((m) => String(m.id) === String(modelId));
-  const selectedLineage = lineage.find((l) => String(l.id) === String(lineageId));
+  const selectedLineage = lineage.find(
+    (l) => String(l.id) === String(lineageId),
+  );
 
   const handleSelectEngine = (id) => {
     setEngine(id);
@@ -119,7 +151,8 @@ export default function StandaloneDeploymentDetail() {
     if (eng) setImage(eng.image);
   };
 
-  const handleParam = (key, value) => setParams((p) => ({ ...p, [key]: +value }));
+  const handleParam = (key, value) =>
+    setParams((p) => ({ ...p, [key]: +value }));
 
   // 배포 실행 스크립트(목업) — 선택 구성으로 docker run 스크립트 생성.
   const runScript = useMemo(() => {
@@ -155,7 +188,9 @@ export default function StandaloneDeploymentDetail() {
     <div className={cx('playground-cont')}>
       <DeployDetailHeader
         title={project?.name || 'Standalone 배포'}
-        onBack={() => history.push(`/user/workspace/${workspaceId}/llmplayground`)}
+        onBack={() =>
+          history.push(`/user/workspace/${workspaceId}/llmplayground`)
+        }
         right={<span className={cx('type-chip')}>Standalone</span>}
       />
 
@@ -180,7 +215,9 @@ export default function StandaloneDeploymentDetail() {
             </div>
             <div className={cx('info-field')}>
               <span className={cx('label')}>배포 유형</span>
-              <span className={cx('info-value')}>Standalone (오프라인 번들)</span>
+              <span className={cx('info-value')}>
+                Standalone (오프라인 번들)
+              </span>
             </div>
             <div className={cx('info-field')}>
               <span className={cx('label')}>공개 범위</span>
@@ -194,11 +231,15 @@ export default function StandaloneDeploymentDetail() {
             </div>
             <div className={cx('info-field')}>
               <span className={cx('label')}>생성 일시</span>
-              <span className={cx('info-value')}>{project?.create_datetime || '-'}</span>
+              <span className={cx('info-value')}>
+                {project?.create_datetime || '-'}
+              </span>
             </div>
             <div className={cx('info-field')}>
               <span className={cx('label')}>최근 업데이트</span>
-              <span className={cx('info-value')}>{project?.update_datetime || '-'}</span>
+              <span className={cx('info-value')}>
+                {project?.update_datetime || '-'}
+              </span>
             </div>
           </section>
         </div>
@@ -211,8 +252,14 @@ export default function StandaloneDeploymentDetail() {
           <section className={cx('card')}>
             <h3 className={cx('card-title')}>모델 · 런타임</h3>
 
-            <span className={cx('label')} id='sa-engine-label'>런타임 엔진</span>
-            <div className={cx('engine-grid')} role='radiogroup' aria-labelledby='sa-engine-label'>
+            <span className={cx('label')} id='sa-engine-label'>
+              런타임 엔진
+            </span>
+            <div
+              className={cx('engine-grid')}
+              role='radiogroup'
+              aria-labelledby='sa-engine-label'
+            >
               {ENGINES.map((eng) => (
                 <button
                   key={eng.id}
@@ -229,7 +276,11 @@ export default function StandaloneDeploymentDetail() {
                 type='button'
                 role='radio'
                 aria-checked={isCustomEngine}
-                className={cx('engine-opt', 'custom', isCustomEngine && 'selected')}
+                className={cx(
+                  'engine-opt',
+                  'custom',
+                  isCustomEngine && 'selected',
+                )}
                 onClick={() => handleSelectEngine(CUSTOM_ENGINE)}
               >
                 커스텀 이미지
@@ -250,7 +301,9 @@ export default function StandaloneDeploymentDetail() {
 
             <div className={cx('divider')} />
 
-            <label className={cx('label')} htmlFor='sa-model'>모델</label>
+            <label className={cx('label')} htmlFor='sa-model'>
+              모델
+            </label>
             <select
               id='sa-model'
               className={cx('select')}
@@ -259,11 +312,15 @@ export default function StandaloneDeploymentDetail() {
             >
               <option value=''>모델 선택</option>
               {models.map((m) => (
-                <option key={m.id} value={m.id}>{m.name}</option>
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
               ))}
             </select>
 
-            <label className={cx('label')} htmlFor='sa-gguf'>양자화 모델(GGUF)</label>
+            <label className={cx('label')} htmlFor='sa-gguf'>
+              양자화 모델(GGUF)
+            </label>
             <select
               id='sa-gguf'
               className={cx('select')}
@@ -271,7 +328,9 @@ export default function StandaloneDeploymentDetail() {
               onChange={(e) => setLineageId(e.target.value)}
               disabled={!modelId}
             >
-              <option value=''>{modelId ? '양자화 산출물 선택' : '모델 먼저 선택'}</option>
+              <option value=''>
+                {modelId ? '양자화 산출물 선택' : '모델 먼저 선택'}
+              </option>
               {lineage.map((l) => (
                 <option key={l.id} value={l.id}>
                   {l.quantization_type} · {l.gguf_path?.split('/').pop()}
@@ -285,7 +344,10 @@ export default function StandaloneDeploymentDetail() {
                 <span className={cx('sub-title')}>모델 정보</span>
                 <Row k='이름' v={selectedModel.name || '-'} />
                 <Row k='양자화' v={selectedLineage?.quantization_type || '-'} />
-                <Row k='GGUF' v={selectedLineage?.gguf_path?.split('/').pop() || '-'} />
+                <Row
+                  k='GGUF'
+                  v={selectedLineage?.gguf_path?.split('/').pop() || '-'}
+                />
               </>
             )}
           </section>
@@ -311,9 +373,6 @@ export default function StandaloneDeploymentDetail() {
               </div>
             ))}
           </section>
-
-          {/* 3열: 고급 옵션 */}
-          <PlaygroundAdvancedOptions />
         </div>
       )}
 
@@ -337,7 +396,8 @@ export default function StandaloneDeploymentDetail() {
           <section className={cx('card', 'gen-card')}>
             <h3 className={cx('card-title')}>이미지 / 코드 생성</h3>
             <p className={cx('hint')}>
-              오프라인 실행에 필요한 런타임 이미지(tar)와 모델·설정·스크립트를 하나의 번들로 생성합니다.
+              오프라인 실행에 필요한 런타임 이미지(tar)와 모델·설정·스크립트를
+              하나의 번들로 생성합니다.
             </p>
             <div className={cx('gen-actions')}>
               <ButtonV2
@@ -353,7 +413,9 @@ export default function StandaloneDeploymentDetail() {
               />
             </div>
             {!selectedLineage && (
-              <p className={cx('hint')}>[배포] 탭에서 양자화 모델을 먼저 선택하세요.</p>
+              <p className={cx('hint')}>
+                [배포] 탭에서 양자화 모델을 먼저 선택하세요.
+              </p>
             )}
           </section>
         </div>
