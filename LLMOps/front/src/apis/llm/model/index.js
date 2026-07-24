@@ -130,16 +130,6 @@ export const getQuantizeLineage = async (modelId) => {
   });
 };
 
-// [멀티엔진 Phase 2 C-B] 양자화 GGUF 를 llama.cpp 직접 서빙용 commit 모델로 등록.
-// body: { model_name: string, commit_name?: string, commit_message?: string }
-export const registerServable = async (modelId, jobId, body) => {
-  return await callApi({
-    url: `models/${modelId}/quantize/${jobId}/register-servable`,
-    method: 'post',
-    body,
-  });
-};
-
 // 4.5 device → 권장 양자화 매핑 (배지/자동제안용).
 export const getQuantizeDevices = async () => {
   return await callApi({ url: 'models/quantize/devices', method: 'get' });

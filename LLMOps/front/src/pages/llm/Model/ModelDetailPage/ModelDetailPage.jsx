@@ -14,7 +14,6 @@ import { callApi, STATUS_SUCCESS } from '@src/network';
 
 import CommitList from './CommitList';
 import ModelCommitListItem from './CommitList/ModelCommitListItem';
-import Evaluate from './Evaluate';
 import ExternalCheckpointList from './ExternalCheckpointList';
 import FineTuning from './FineTuning';
 import ModelInfo from './ModelInfo';
@@ -107,7 +106,6 @@ const ModelDetailPage = memo(function ModelDetailPage({
       { label: 'information.label', path: `${url}/info` },
       { label: 'fineTuning.label', path: `${url}/fine-tuning` },
       commitOrCheckpoint,
-      { label: 'evaluate.label', path: `${url}/evaluate` },
       { label: 'quantize.label', path: `${url}/quantize` },
     ];
   }, [url, isExternalModel]);
@@ -142,9 +140,6 @@ const ModelDetailPage = memo(function ModelDetailPage({
           </Route>
           <Route path={`${path}/fine-tuning`}>
             <FineTuning navList={navList} {...filteredRest} data={props} />
-          </Route>
-          <Route path={`${path}/evaluate`}>
-            <Evaluate navList={navList} {...filteredRest} data={props} />
           </Route>
           <Route path={`${path}/quantize`}>
             <Quantize navList={navList} {...filteredRest} data={props} />

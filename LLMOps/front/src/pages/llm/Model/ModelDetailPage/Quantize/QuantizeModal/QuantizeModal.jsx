@@ -29,7 +29,6 @@ const QuantizeModal = ({ open, onClose, onConfirm, submitting }) => {
   const [quant, setQuant] = useState('q5');
   const [deviceKey, setDeviceKey] = useState(''); // '' = 미선택, CUSTOM = 직접입력
   const [customDevice, setCustomDevice] = useState('');
-  const [prune, setPrune] = useState(false);
   const [devices, setDevices] = useState([]); // [{key,label,recommended,reason}]
 
   // 4.5 device→권장Q 매핑 로드 (BE authoritative)
@@ -61,7 +60,7 @@ const QuantizeModal = ({ open, onClose, onConfirm, submitting }) => {
     let target_device;
     if (deviceKey === CUSTOM) target_device = customDevice.trim() || undefined;
     else if (deviceKey) target_device = deviceKey;
-    onConfirm({ target_quant: quant, target_device, prune });
+    onConfirm({ target_quant: quant, target_device });
   };
 
   return (
@@ -137,21 +136,6 @@ const QuantizeModal = ({ open, onClose, onConfirm, submitting }) => {
             </label>
           ))}
         </div>
-
-        <label className={cx('prune-row')}>
-          <input
-            type='checkbox'
-            checked={prune}
-            onChange={(e) => setPrune(e.target.checked)}
-            disabled={submitting}
-          />
-          <div className={cx('prune-text')}>
-            <span className={cx('prune-title')}>
-              {t('quantize.prune.label')}
-            </span>
-            <span className={cx('prune-desc')}>{t('quantize.prune.desc')}</span>
-          </div>
-        </label>
 
         <div className={cx('actions')}>
           <ButtonV2
