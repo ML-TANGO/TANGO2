@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { useHistory } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
-import { ButtonV2 } from '@jonathan/ui-react';
+import { ButtonV2, Tooltip } from '@jonathan/ui-react';
 
 import PageHeader from '@src/components/molecules/PageHeader/PageHeader';
 import { toast } from '@src/components/Toast';
@@ -176,6 +176,19 @@ const AdminEdgeWizard = () => {
 
             <label className={cx('field-label')} htmlFor='edge-rm-url'>
               {t('edge.field.remoteManager')}
+              <Tooltip
+                contents={t('edge.field.remoteManager.hint')}
+                globalCustomStyle={{
+                  display: 'inline-flex',
+                  verticalAlign: 'middle',
+                  marginLeft: '4px',
+                }}
+                iconCustomStyle={{
+                  width: '14px',
+                  height: '14px',
+                  display: 'block',
+                }}
+              />
             </label>
             <input
               id='edge-rm-url'
@@ -222,9 +235,7 @@ const AdminEdgeWizard = () => {
               <div className={cx('api-box')}>
                 <div className={cx('api-hint')}>{t('edge.field.deviceId')}</div>
                 <div className={cx('token-row')}>
-                  <code className={cx('token-value')}>
-                    {created.device_id}
-                  </code>
+                  <code className={cx('token-value')}>{created.device_id}</code>
                   <button
                     type='button'
                     className={cx('label-btn')}
