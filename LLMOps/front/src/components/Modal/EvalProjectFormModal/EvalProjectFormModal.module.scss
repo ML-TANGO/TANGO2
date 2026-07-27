@@ -1,0 +1,24 @@
+@import '@src/styles/color.scss';
+
+// NewStyleModalFrame 안에 들어가는 폼 레이아웃 스타일.
+// 필드는 전부 디자인시스템 컴포넌트(InputText/Radio/Selectbox/ModelSelector)라
+// 별도 스타일이 필요 없고, 행 간격만 학습 모달(.row 32px)과 동일하게 맞춘다.
+
+.form {
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  margin-bottom: 32px;
+  &:last-child {
+    margin-bottom: 0px;
+  }
+}
+
+// 워크스페이스에 데이터셋이 없을 때 안내(구 모달 동작 복원).
+.empty {
+  padding: 12px 0;
+  color: $mono204;
+  font-size: 13px;
+}

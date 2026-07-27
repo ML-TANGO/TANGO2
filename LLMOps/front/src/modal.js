@@ -13,6 +13,8 @@ const modalComponents = {
     import('@src/containers/ModalContainer/DeploymentFormModalContainer'),
   EDIT_DEPLOYMENT: () =>
     import('@src/containers/ModalContainer/DeploymentFormModalContainer'),
+  CREATE_EVAL_PROJECT: () =>
+    import('@src/containers/ModalContainer/EvalProjectFormModalContainer'),
   EDIT_WORKER: () =>
     import('@src/containers/ModalContainer/EditWorkerContainer'),
   SYSTEM_LOG: () =>

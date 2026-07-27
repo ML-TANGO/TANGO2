@@ -3,11 +3,11 @@ import { useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
 import { useHistory, useRouteMatch } from 'react-router-dom';
 
-import EvalProjectCreateModal from './EvalProjectCreateModal';
-
 import { deleteEvalProject, listEvalProjects } from '@src/apis/llm/evaluation';
+import { loadModalComponent } from '@src/modal';
 import { startPath } from '@src/store/modules/breadCrumb';
 import { openConfirm } from '@src/store/modules/confirm';
+import { openModal } from '@src/store/modules/modal';
 import { callApi, STATUS_SUCCESS } from '@src/network';
 
 import { errorToastMessage } from '@src/utils';
@@ -43,7 +43,6 @@ const EvaluationMenu = () => {
 
   const [projects, setProjects] = useState(null); // null=로딩, []=빈 상태
   const [modelNames, setModelNames] = useState({}); // model_id → name
-  const [showCreate, setShowCreate] = useState(false);
 
   const fetchProjects = useCallback(async () => {
     const res = await listEvalProjects(workspaceId);
@@ -76,6 +75,7 @@ const EvaluationMenu = () => {
 
   useEffect(() => {
     dispatch(startPath([{ component: { name: 'Evaluation' } }]));
+    loadModalComponent('CREATE_EVAL_PROJECT');
     fetchProjects();
     fetchModelNames();
   }, [dispatch, fetchProjects, fetchModelNames]);
@@ -109,13 +109,27 @@ const EvaluationMenu = () => {
 
   // 생성 성공 → 상세로 이동(get_project shape 는 { project } 또는 flat 방어).
   const handleCreated = (result) => {
-    setShowCreate(false);
     const pid = result?.project?.id ?? result?.id;
     if (pid != null) {
       history.push(`/user/workspace/${workspaceId}/evaluation/project/${pid}`);
     } else {
       fetchProjects();
     }
+  };
+
+  // 생성 모달 열기 — 전역 Redux 모달 시스템(학습/배포 생성 모달과 동일 패턴).
+  //   submit.func 로 생성 성공 결과를 받아 handleCreated 가 상세로 이동. 프레임이 닫기 담당.
+  const openCreateModal = () => {
+    dispatch(
+      openModal({
+        modalType: 'CREATE_EVAL_PROJECT',
+        modalData: {
+          submit: { text: 'evaluation.project.create', func: handleCreated },
+          cancel: { text: 'cancel.label' },
+          workspaceId,
+        },
+      }),
+    );
   };
 
   return (
@@ -128,7 +142,7 @@ const EvaluationMenu = () => {
         <button
           type='button'
           className={cx('new-btn')}
-          onClick={() => setShowCreate(true)}
+          onClick={openCreateModal}
         >
           + {t('evaluation.project.new')}
         </button>
@@ -144,7 +158,7 @@ const EvaluationMenu = () => {
           <button
             type='button'
             className={cx('new-btn')}
-            onClick={() => setShowCreate(true)}
+            onClick={openCreateModal}
           >
             + {t('evaluation.project.new')}
           </button>
@@ -202,14 +216,6 @@ const EvaluationMenu = () => {
             </div>
           ))}
         </div>
-      )}
-
-      {showCreate && (
-        <EvalProjectCreateModal
-          workspaceId={workspaceId}
-          onClose={() => setShowCreate(false)}
-          onCreated={handleCreated}
-        />
       )}
     </div>
   );

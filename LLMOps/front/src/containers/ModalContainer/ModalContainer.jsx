@@ -200,6 +200,9 @@ const DatasetFormModalContainer = React.lazy(() =>
 const DeploymentFormModalContainer = React.lazy(() =>
   import('./DeploymentFormModalContainer'),
 );
+const EvalProjectFormModalContainer = React.lazy(() =>
+  import('./EvalProjectFormModalContainer'),
+);
 const DeployWorkerMemoModalContainer = React.lazy(() =>
   import('./DeployWorkerMemoModalContainer'),
 );
@@ -449,6 +452,13 @@ function ModalContainer() {
           )}
           {modalType === 'EDIT_DEPLOYMENT' && (
             <DeploymentFormModalContainer
+              data={modal[modalType]}
+              type={modalType}
+            />
+          )}
+          {/* Evaluation Project Modal */}
+          {modalType === 'CREATE_EVAL_PROJECT' && (
+            <EvalProjectFormModalContainer
               data={modal[modalType]}
               type={modalType}
             />
