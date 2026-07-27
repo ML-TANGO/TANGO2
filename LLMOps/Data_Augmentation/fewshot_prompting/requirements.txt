@@ -8,6 +8,7 @@ pydantic==2.12.5
 #   dspy 3.2.x     — MIPROv2 + the _MIPROv2RandomSubsets override signature
 #   textgrad 0.1.8 — Variable/TextLoss/TGD apparatus + the ollama-engine rebind
 dspy-ai==3.2.1
+optuna==4.9.0  # dspy 3.2.x makes this optional, but MIPROv2 raises ImportError without it
 textgrad==0.1.8
 openai>=2.0,<3.0
 

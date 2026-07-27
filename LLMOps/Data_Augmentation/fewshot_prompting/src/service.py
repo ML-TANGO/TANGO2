@@ -12,7 +12,7 @@ import json
 import os
 import random
 import urllib.request
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Any
 
 import dspy
@@ -80,12 +80,28 @@ def render_system_prompt(instruction: str | None, demos: Sequence[Example]) -> s
     return "\n\n".join(parts).strip()
 
 
-def optimize_system_prompt(params: RunParams) -> RunResult:
-    """Run the full optimization for one ``/run`` request and return the result."""
+def validate_params(params: RunParams) -> None:
+    """Fail-fast request validation (cheap, no LLM calls). Raises ValueError."""
     if not params.llm_url:
         raise ValueError("llm_url is required (OpenAI-compatible base, e.g. http://host:8000/v1).")
     if len(params.examples) < 2:
         raise ValueError("at least 2 examples are required (need >= 1 seed and >= 1 holdout).")
+
+
+def optimize_system_prompt(
+    params: RunParams,
+    progress_cb: Callable[[int], None] | None = None,
+) -> RunResult:
+    """Run the full optimization for one ``/run`` request and return the result.
+
+    ``progress_cb`` (optional) receives coarse 0-100 checkpoints for the async
+    job's /status report: 10 model resolved, 15 optimization started, 95 done.
+    """
+    validate_params(params)
+
+    def _progress(pct: int) -> None:
+        if progress_cb is not None:
+            progress_cb(pct)
 
     llm_url = params.llm_url.rstrip("/")
     api_key = params.api_key or "EMPTY"
@@ -93,6 +109,7 @@ def optimize_system_prompt(params: RunParams) -> RunResult:
     if not model:
         raise ValueError(f"could not determine model id; pass 'model' or ensure {llm_url}/models is reachable.")
     model_id = f"openai/{model}" if not model.startswith("openai/") else model
+    _progress(10)
 
     # The harvest loop's textgrad engine rebind reads these as a fallback.
     os.environ["LLM_API_BASE"] = llm_url
@@ -126,6 +143,7 @@ def optimize_system_prompt(params: RunParams) -> RunResult:
         seed=params.seed,
     )
 
+    _progress(15)
     result = run_optimization(
         task,
         seeds,
@@ -135,6 +153,7 @@ def optimize_system_prompt(params: RunParams) -> RunResult:
         task_lm=task_lm,
         config=config,
     )
+    _progress(95)
 
     system_prompt = render_system_prompt(result.instruction, result.final_demos)
     return RunResult(

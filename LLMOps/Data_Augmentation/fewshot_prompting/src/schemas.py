@@ -47,6 +47,10 @@ class RunParams(BaseModel):
     mipro_auto: str = "light"
     mipro_num_threads: int | None = None
     seed: int = 0
+    # True: run synchronously and return the result in the /run response
+    # (old behavior; only for small/fast jobs — the platform applies a 60 s
+    # timeout). False (default): submit a job and poll GET /status.
+    sync: bool = False
 
 
 class RunRequest(BaseModel):
@@ -72,6 +76,7 @@ class RunRequest(BaseModel):
     mipro_auto: str | None = None
     mipro_num_threads: int | None = None
     seed: int | None = None
+    sync: bool | None = None
 
     def resolve(self) -> RunParams:
         """Return effective ``RunParams``, merging top-level fallbacks."""
@@ -100,9 +105,3 @@ class RunResult(BaseModel):
     model: str
     metric: str
     history: list[dict[str, Any]]
-
-
-class RunResponse(BaseModel):
-    status: str
-    result: RunResult | None = None
-    message: str | None = None
