@@ -217,3 +217,10 @@
     background: rgba($blue104, 0.03);
   }
 }
+
+// 중단된 배치의 부분 결과 안내(완주 결과로 오인 방지)
+.warn {
+  font-size: 12px;
+  color: #d91a0c;
+  margin-bottom: 8px;
+}

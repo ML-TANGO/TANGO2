@@ -100,4 +100,55 @@
   // PromptCom 은 자체 height(320px)/스크롤 보유 → 부모 높이 불필요.
   width: 100%;
   max-width: 720px;
+
+  // 파드 준비 전 입력 잠금 — running 되면 자동 해제.
+  &.locked {
+    opacity: 0.5;
+    pointer-events: none;
+    user-select: none;
+  }
+}
+
+/* 배포(파드) 상태 바 */
+.status-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fafbfc;
+}
+
+.status-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4b5563;
+}
+
+.status {
+  font-size: 12px;
+  font-weight: 600;
+
+  &.running {
+    color: #1d4ed8;
+  }
+
+  &.installing {
+    color: #ff7a00;
+  }
+
+  &.stop {
+    color: #9ca3af;
+  }
+}
+
+.status-hint {
+  font-size: 12px;
+  color: #6b7280;
 }

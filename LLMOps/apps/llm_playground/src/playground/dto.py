@@ -156,6 +156,34 @@ class CreateDualSessionInput(BaseModel):
     class Config:
         protected_namespaces = ()
 
+class CreateDualShellInput(BaseModel):
+    """이중모델 세션 '셸' 생성(단일 CreatePlaygroundInput 대칭) — 모델/자원 없이 세션 행만 만든다.
+    LLM1/LLM2·GPU 선택과 실제 배포는 상세 화면의 provision(ProvisionDualInput)에서."""
+    workspace_id: int
+    name: str = Field(min_length=1, max_length=64, description="세션 이름")
+    access: Optional[int] = 1
+    owner_id: Optional[int] = None
+
+    class Config:
+        protected_namespaces = ()
+
+class ProvisionDualInput(BaseModel):
+    """이중모델 셸을 실제 배포(단일 RunPlaygroundInput 대칭) — 상세 화면에서 LLM1/LLM2·인스턴스·모델별 GPU를
+    받아 자식(프롬프트생성) 신규 배포 + 부모(추론=셸) bind+start + 링크."""
+    playground_id: int = Field(description="이중 세션 셸(부모) playground id")
+    prompt_gen_model_id: int = Field(description="프롬프트 생성 모델(LLM1, allm) id")
+    inference_model_id: int = Field(description="추론 모델(LLM2, allm) id")
+    model_instance_id: int = Field(description="자원 인스턴스 id (두 모델 공통 적용)")
+    prompt_gen_commit_id: Optional[int] = Field(default=None, description="LLM1 배포 commit id(생략 시 latest)")
+    inference_commit_id: Optional[int] = Field(default=None, description="LLM2 배포 commit id(생략 시 latest)")
+    model_instance_count: Optional[int] = Field(default=1, ge=1, le=16, description="인스턴스 할당 개수(모델당)")
+    model_gpu_count: Optional[int] = Field(default=1, ge=0, le=16, description="GPU 할당 개수(모델당, 모델별 미지정 시 폴백)")
+    prompt_gen_gpu_count: Optional[int] = Field(default=None, ge=0, le=16, description="LLM1 GPU 할당 개수(생략 시 model_gpu_count)")
+    inference_gpu_count: Optional[int] = Field(default=None, ge=0, le=16, description="LLM2 GPU 할당 개수(생략 시 model_gpu_count)")
+
+    class Config:
+        protected_namespaces = ()
+
 class DualBatchInput(BaseModel):
     """이중모델 데이터셋 일괄 추론(WBS 4.3 배치). N 샘플에 LLM1→LLM2 체인 실행 + 인-프로세스
     BLEU/ROUGE 채점(reference 있을 때). 동기 배치라 sample_count 상한 10."""
@@ -168,6 +196,9 @@ class DualBatchInput(BaseModel):
     system_prompt: Optional[str] = Field(default=None, max_length=4000, description="LLM1 시스템 지침(예시기반 최적화)")
     dual_examples: Optional[List[Dict[str, Any]]] = Field(default=None, max_length=10, description="LLM1 few-shot 예시")
     prompt_gen_playground_id: Optional[int] = Field(default=None, description="미지정 시 세션 링크에서 서버 파생")
+    # LLM2 가 외부 SDS(VLM)일 때 공유 멀티모달 입력(image_base64/ais_rows/output_type).
+    #   데이터셋 행이 image/ais 를 실으면 per-sample 값이 우선, 없으면 이 공유 payload 폴백.
+    external_payload: Optional[Dict[str, Any]] = Field(default=None, description="외부 SDS 배치 공유 payload")
 
     class Config:
         protected_namespaces = ()

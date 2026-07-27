@@ -281,6 +281,9 @@ const EditPlaygroundModal = React.lazy(() =>
 const AddPlayground = React.lazy(() =>
   import('@src/components/Modal/AddPlayground'),
 );
+const NewDeploymentModal = React.lazy(() =>
+  import('@src/components/Modal/NewDeploymentModal'),
+);
 const AddPromptModal = React.lazy(() =>
   import('@src/components/Modal/AddPromptModal'),
 );
@@ -784,6 +787,9 @@ function ModalContainer() {
             <SshConnectionGuideModal data={modal[modalType]} type={modalType} />
           )}
           {/* ** LLM ** */}
+          {modalType === 'NEW_DEPLOYMENT' && (
+            <NewDeploymentModal data={modal[modalType]} type={modalType} />
+          )}
           {modalType === 'ADD_PLAYGROUND' && (
             <AddPlayground data={modal[modalType]} type={modalType} />
           )}

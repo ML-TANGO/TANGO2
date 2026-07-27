@@ -445,6 +445,37 @@ async def create_dual_session(body: dto.CreateDualSessionInput):
         traceback.print_exc()
         return response(status=0, message=str(e), result=None)
 
+@playgrounds.post("/dual-session/shell", summary='추론 - 이중모델 세션 셸 생성(구성 전)', tags=TAG_DEPLOYMENT)
+async def create_dual_shell(body: dto.CreateDualShellInput):
+    """이중모델 세션 셸 생성 — 모델/자원 없이 세션 행만(단일 POST /playgrounds 대칭).
+    LLM1/LLM2·GPU 선택과 실제 배포는 상세의 POST /playgrounds/dual-session/provision 에서."""
+    try:
+        user_name, _ = get_auth()
+        res = await svc.create_dual_shell(
+            workspace_id=body.workspace_id, name=body.name, user_name=user_name,
+            access=body.access, owner_id=body.owner_id)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+@playgrounds.post("/dual-session/provision", summary='추론 - 이중모델 세션 배포 실행', tags=TAG_DEPLOYMENT)
+async def provision_dual_session(body: dto.ProvisionDualInput):
+    """이중모델 셸 배포 실행 — LLM1 자식 신규 배포 + LLM2 부모(셸) bind+start + 링크(단일 POST /playgrounds/start 대칭)."""
+    try:
+        user_name, _ = get_auth()
+        res = await svc.provision_dual_session(
+            playground_id=body.playground_id, user_name=user_name,
+            prompt_gen_model_id=body.prompt_gen_model_id, inference_model_id=body.inference_model_id,
+            model_instance_id=body.model_instance_id,
+            prompt_gen_commit_id=body.prompt_gen_commit_id, inference_commit_id=body.inference_commit_id,
+            model_instance_count=body.model_instance_count, model_gpu_count=body.model_gpu_count,
+            prompt_gen_gpu_count=body.prompt_gen_gpu_count, inference_gpu_count=body.inference_gpu_count)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
 @playgrounds.post("/stop", summary='배포 - 중지', tags=TAG_DEPLOYMENT)
 async def stop_playground(body: dto.PlaygroundIdInput):
     """
@@ -567,7 +598,8 @@ async def post_test(body: dto.PlaygroundTestInput):
                     playground_id=body.playground_id,
                     prompt_gen_playground_id=prompt_gen_id,
                     test_question=body.test_question, session_id=body.session_id,
-                    system_prompt=body.system_prompt, examples=body.dual_examples)
+                    system_prompt=body.system_prompt, examples=body.dual_examples,
+                    external_payload=body.external_payload)
                 return response(status=1, result=res, message=message)
         res, message = await svc.playground_test(playground_id=body.playground_id, test_type=body.test_type,
                                         test_dataset_id=body.test_dataset_id, test_dataset_filename=body.test_dataset_filename,
@@ -589,7 +621,8 @@ async def dual_batch_test(body: dto.DualBatchInput):
             playground_id=body.playground_id, prompt_gen_playground_id=prompt_gen_id,
             dataset_id=body.test_dataset_id, filename=body.test_dataset_filename,
             sample_count=body.sample_count, metrics=body.metrics, session_id=body.session_id,
-            system_prompt=body.system_prompt, examples=body.dual_examples)
+            system_prompt=body.system_prompt, examples=body.dual_examples,
+            external_payload=body.external_payload)
         return response(status=1, result=res, message=message)
     except Exception as e:
         traceback.print_exc()
@@ -627,12 +660,71 @@ async def get_playground_status(playground_id: int, request: Request):
             print(f"Connection closed for playground {playground_id}")
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
+@playgrounds.get("/dual-batch/sse", summary='추론 - 이중모델 데이터셋 일괄(스트리밍)', tags=TAG_TEST)
+async def dual_batch_sse(request: Request, playground_id: int, test_dataset_id: int,
+                         test_dataset_filename: str, sample_count: int = 5,
+                         metrics: str = None, output_type: str = None):
+    """이중모델 배치를 SSE 로 스트리밍 — 샘플 완료마다 event 를 보낸다.
+    동기 POST /dual-batch 는 샘플당 ~16s × N 이라 게이트웨이 read timeout(60s)에서 504 가 됨.
+    EventSource 는 GET 만 가능해 파라미터는 query 로 받고, 외부 SDS 출력 옵션은 output_type 만 노출
+    (이미지/AIS 는 데이터셋 행에서 per-sample 로 읽음).
+    session_id 는 query 로 받지 않는다 — 세션 자격증명이 URL(액세스로그/브라우저 히스토리)에
+    남으므로, 다른 SSE 와 동일하게 jf-Session 헤더에서 읽는다."""
+    session_id = request.headers.get("jf-session")
+    metric_list = [m.strip() for m in (metrics or "").split(",") if m.strip()] or None
+    ext_payload = {"output_type": output_type} if output_type else None
+
+    async def event_generator():
+        agen = None
+        try:
+            prompt_gen_id = await svc.resolve_dual_prompt_gen(playground_id)
+            agen = svc.dual_batch_stream(
+                playground_id=playground_id, prompt_gen_playground_id=prompt_gen_id,
+                dataset_id=test_dataset_id, filename=test_dataset_filename,
+                sample_count=sample_count, metrics=metric_list, session_id=session_id,
+                external_payload=ext_payload).__aiter__()
+            while True:
+                # 다음 이벤트를 기다리는 동안 keepalive 를 보낸다 — 샘플 1건이 60s 를 넘으면
+                #   (SDS 지연 등) 게이트웨이 유휴 타임아웃이 스트림을 끊기 때문. status SSE 동형.
+                #   대기 중 disconnect 도 확인 → 끊긴 클라이언트에 다음 샘플 추론을 낭비하지 않음.
+                nxt = asyncio.ensure_future(agen.__anext__())
+                while True:
+                    done, _ = await asyncio.wait({nxt}, timeout=20)
+                    if nxt in done:
+                        break
+                    if await request.is_disconnected():
+                        nxt.cancel()
+                        return
+                    yield "data: \n\n"
+                try:
+                    ev = nxt.result()
+                except StopAsyncIteration:
+                    break
+                yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
+                if await request.is_disconnected():
+                    break
+        except Exception as e:
+            traceback.print_exc()
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"
+        finally:
+            # 제너레이터 확정 종료(중단 시 in-flight 정리를 GC 에 맡기지 않음)
+            if agen is not None:
+                try:
+                    await agen.aclose()
+                except Exception:
+                    traceback.print_exc()
+            print(f"dual-batch SSE closed for playground {playground_id}")
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
 @playgrounds.get("/status-sync/{playground_id}", summary='배포 상태 단건 JSON(s2s 폴링용)', tags=TAG_DEPLOYMENT)
-async def get_playground_status_sync(playground_id: int):
+async def get_playground_status_sync(playground_id: int, skip_dual: bool = False):
     """SSE /status 와 동일 상태를 단건 JSON 으로 반환 — fb_pipeline executor 폴링용
-    (SSE 스트림은 executor 의 response.json() 으로 파싱 불가)."""
+    (SSE 스트림은 executor 의 response.json() 으로 파싱 불가).
+    skip_dual=true: 이중 세션에서 부모(LLM2) 단독 상태만 — 기본은 부모+자식 합산이라
+    어느 모델이 지연인지 구분 불가하므로, FE 가 LLM1/LLM2 를 분리 표시할 때 사용."""
     try:
-        res = await svc.get_playground_status(playground_id)
+        res = await svc.get_playground_status(playground_id, _skip_dual=skip_dual)
         return response(status=1, result=res)
     except Exception as e:
         traceback.print_exc()

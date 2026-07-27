@@ -83,9 +83,14 @@ import style from './UserRouter.module.scss';
 
 const Model = lazy(() => import('../llm/Model'));
 const ModelDetailPage = lazy(() => import('../llm/Model/ModelDetailPage'));
-const EdgeDeploymentDetail = lazy(() => import('../llm/Edge/EdgeDeploymentDetail'));
-const StandaloneDeploymentDetail = lazy(() =>
-  import('../llm/Standalone/StandaloneDeploymentDetail'),
+const EdgeDeploymentDetail = lazy(
+  () => import('../llm/Edge/EdgeDeploymentDetail'),
+);
+const StandaloneDeploymentDetail = lazy(
+  () => import('../llm/Standalone/StandaloneDeploymentDetail'),
+);
+const DualDeployDetail = lazy(
+  () => import('@src/pages/llm/Inference/DualDeployDetail/DualDeployDetail'),
 );
 const RagDetailPage = lazy(() => import('../llm/Rag/RagDetailPage'));
 
@@ -1001,6 +1006,16 @@ const routeArr = [
     activeIcon: IconNavPlaygroundActive,
     platform: 'flightbase',
     render: (props) => <StandaloneDeploymentDetail {...props} />,
+  },
+  {
+    name: 'DualDeploymentDetail',
+    path: '/user/workspace/:id/dual-deploy/:pid',
+    exact: false,
+    disabled: true,
+    icon: IconNavPlaygroundActive,
+    activeIcon: IconNavPlaygroundActive,
+    platform: 'flightbase',
+    render: (props) => <DualDeployDetail {...props} />,
   },
 ];
 

@@ -1,0 +1,156 @@
+.dual-cont {
+  padding: 24px 32px;
+}
+
+.title-bar {
+  margin-bottom: 24px;
+}
+
+.title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.sub {
+  display: block;
+  margin-top: 6px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 960px;
+}
+
+.field-title {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.res-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.res-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid #d9dee5;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease, background 0.15s ease;
+
+  &:hover {
+    border-color: #7aa7ff;
+  }
+
+  &.selected {
+    border-color: #3b82f6;
+    background: #f0f6ff;
+  }
+}
+
+.res-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.res-meta {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.gpu-cols {
+  display: flex;
+  gap: 32px;
+}
+
+.chip-row {
+  display: flex;
+  gap: 8px;
+}
+
+.chip {
+  min-width: 40px;
+  padding: 8px 14px;
+  border: 1px solid #d9dee5;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 14px;
+  color: #374151;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+
+  &:hover {
+    border-color: #7aa7ff;
+  }
+
+  &.selected {
+    border-color: #3b82f6;
+    background: #f0f6ff;
+    color: #1d4ed8;
+    font-weight: 600;
+  }
+}
+
+.note {
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+.warn {
+  font-size: 12px;
+  color: #dc2626;
+}
+
+.empty {
+  font-size: 13px;
+  color: #9ca3af;
+  padding: 8px 0;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.cancel-btn,
+.deploy-btn {
+  padding: 10px 22px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.cancel-btn {
+  background: #fff;
+  border-color: #d1d5db;
+  color: #4b5563;
+}
+
+.deploy-btn {
+  background: #3b82f6;
+  color: #fff;
+
+  &.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}

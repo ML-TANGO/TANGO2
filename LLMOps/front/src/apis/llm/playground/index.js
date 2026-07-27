@@ -160,6 +160,18 @@ export const getPlaygroundStatus = async (playgroundId) => {
   return res;
 };
 
+// 배포/파드 상태 단발 조회(폴링용). status/{id} 는 SSE 스트림이라 폴링에 부적합 → status-sync 사용.
+// 반환 result: { status: 'running'|'installing'|'pending'|'stop', init_deployment: bool }
+// skipDual=true → 이중 세션에서 부모(LLM2) 단독 상태(기본은 부모+자식 합산).
+export const getPlaygroundStatusSync = async (playgroundId, skipDual = false) => {
+  const res = await callApi({
+    url: `playgrounds/status-sync/${playgroundId}`,
+    method: 'get',
+    params: skipDual ? { skip_dual: true } : undefined,
+  });
+  return res;
+};
+
 export const postPlaygroundDeployStart = async ({
   playground_id,
   model_instance_id,
@@ -214,6 +226,50 @@ export const postDualSession = async ({
     body: {
       workspace_id: +workspace_id,
       name,
+      prompt_gen_model_id: +prompt_gen_model_id,
+      inference_model_id: +inference_model_id,
+      model_instance_id: +model_instance_id,
+      prompt_gen_commit_id: prompt_gen_commit_id ? +prompt_gen_commit_id : null,
+      inference_commit_id: inference_commit_id ? +inference_commit_id : null,
+      prompt_gen_gpu_count: +(prompt_gen_gpu_count ?? 1),
+      inference_gpu_count: +(inference_gpu_count ?? 1),
+    },
+  });
+  return res;
+};
+
+// 이중모델 세션 '셸' 생성(단일 postPlayground 대칭) — 모델/자원 없이 세션 행만.
+// LLM1/LLM2·GPU 선택과 실제 배포는 상세(/dual-deploy)의 postDualProvision 에서.
+// 반환 result: { session_playground_id }.
+export const postDualShell = async ({ workspace_id, name }) => {
+  const res = await callApi({
+    url: 'playgrounds/dual-session/shell',
+    method: 'post',
+    body: {
+      workspace_id: +workspace_id,
+      name,
+    },
+  });
+  return res;
+};
+
+// 이중모델 셸 배포 실행(단일 postPlaygroundDeployStart 대칭) — LLM1/LLM2·인스턴스·모델별 GPU 로
+// 자식(프롬프트생성) 신규 배포 + 부모(셸) bind+start + 링크. 반환 result: { session_playground_id, prompt_gen_playground_id }.
+export const postDualProvision = async ({
+  playground_id,
+  prompt_gen_model_id,
+  inference_model_id,
+  model_instance_id,
+  prompt_gen_commit_id,
+  inference_commit_id,
+  prompt_gen_gpu_count,
+  inference_gpu_count,
+}) => {
+  const res = await callApi({
+    url: 'playgrounds/dual-session/provision',
+    method: 'post',
+    body: {
+      playground_id: +playground_id,
       prompt_gen_model_id: +prompt_gen_model_id,
       inference_model_id: +inference_model_id,
       model_instance_id: +model_instance_id,
@@ -312,6 +368,10 @@ export const postPlaygroundTestChat = async ({
     if (Array.isArray(dual_examples) && dual_examples.length) {
       reqbody['dual_examples'] = dual_examples;
     }
+    // 이중 LLM2 가 외부 SDS(VLM)면 image/ais/output_type 동봉 — BE 가 custom_prompt=LLM1출력으로 연결.
+    if (external_payload) {
+      reqbody['external_payload'] = external_payload;
+    }
   } else {
     reqbody['test_dataset_id'] = test_dataset_id;
     reqbody['test_dataset_filename'] = test_dataset_filename;
@@ -327,35 +387,6 @@ export const postPlaygroundTestChat = async ({
 
 // 이중모델 데이터셋 일괄 추론(WBS 4.3 배치) — N 샘플에 LLM1→LLM2 체인 + BLEU/ROUGE 채점.
 // prompt_gen 은 BE 가 세션 링크에서 자동 파생. 반환 result: {samples, summary, has_reference, ...}.
-export const postDualBatch = async ({
-  playground_id,
-  test_dataset_id,
-  test_dataset_filename,
-  sample_count,
-  metrics,
-  session_id,
-  system_prompt,
-  dual_examples,
-}) => {
-  const res = await callApi({
-    url: 'playgrounds/dual-batch',
-    method: 'post',
-    body: {
-      playground_id: +playground_id,
-      test_dataset_id: +test_dataset_id,
-      test_dataset_filename,
-      sample_count: sample_count ?? 5,
-      metrics: metrics ?? null,
-      session_id,
-      system_prompt: system_prompt || null,
-      dual_examples:
-        Array.isArray(dual_examples) && dual_examples.length
-          ? dual_examples
-          : null,
-    },
-  });
-  return res;
-};
 
 export const postBookmark = async (playgroundId) => {
   const res = await callApi({

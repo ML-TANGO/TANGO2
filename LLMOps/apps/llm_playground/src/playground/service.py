@@ -1,4 +1,4 @@
-import traceback, json, subprocess, os, asyncio, aiofiles, httpx
+import traceback, json, subprocess, os, asyncio, aiofiles, httpx, base64, re
 from huggingface_hub import login, model_info, HfApi, hf_hub_download
 from pydantic import BaseModel
 from typing import Optional, List
@@ -156,6 +156,8 @@ async def create_playground(workspace_id, name, description, access, user_name=N
         playgrounds_id = [playground_id]*len(users_id)
         insert_user_playground_result, message = await db.insert_user_playground_list(
             playgrounds_id=playgrounds_id, users_id=users_id)
+        # 생성 id 반환 — FE 가 목록 재조회+이름매칭(동명 경합 시 타 배포로 진입) 없이 바로 상세 이동.
+        return {"playground_id": playground_id}
     except Exception as e:
         traceback.print_exc()
         return False
@@ -271,15 +273,14 @@ async def create_dual_session(workspace_id, name, user_name,
     for _g in (gpu1, gpu2):
         if _g is not None and _g < 0:
             raise Exception("Error: per-model gpu count must be >= 0")
-    # 모델 존재 + 워크스페이스 일치 검증(교차테넌트 모델 배포 차단; genai_unified_pipeline 선례).
-    # 메시지 통합(존재/타워크스페이스 구분 시 model id 열거 오라클) — generic 에러.
-    for _mid in (prompt_gen_model_id, inference_model_id):
+    # LLM1(프롬프트 생성)=텍스트 출력 필요 → 내부 텍스트만. LLM2(추론)=외부 SDS(VLM) 허용(text→SDS).
+    #   교차테넌트 모델 배포 차단(워크스페이스 일치). 메시지 통합(존재/타워크스페이스 열거 오라클 회피).
+    for _mid, _is_prompt in ((prompt_gen_model_id, True), (inference_model_id, False)):
         _m = await db.get_model(model_id=_mid)
         if not _m or _m.get("workspace_id") != workspace_id:
             raise Exception("Error: invalid model selection")
-        # 이중모델 = internal 텍스트 LLM 스코프(external VLM 은 다른 추론 계약 → 범위 외).
-        if (_m.get("training_type") or "") == "external":
-            raise Exception("Error: dual session supports internal text models only")
+        if _is_prompt and (_m.get("training_type") or "") == "external":
+            raise Exception("Error: prompt-gen model(LLM1) must be an internal text model")
 
     # playground.name 은 VARCHAR(32) → 자식 배포명이 초과하지 않게 base 를 절단(-promptgen/-infer 접미사 여유).
     _base = name.strip()[:20]
@@ -319,6 +320,141 @@ async def create_dual_session(workspace_id, name, user_name,
         raise
 
     return {"session_playground_id": pg2, "prompt_gen_playground_id": pg1}
+
+async def create_dual_shell(workspace_id, name, user_name, access=1, owner_id=None):
+    """이중모델 세션 '셸' 생성(단일 create_playground 대칭) — 모델/자원 없이 부모 playground 행만
+    만들고 model.dual={"mode":"dual"} 마커를 스탬프한다(deployment 미설정 → 미프로비저닝 상태).
+    LLM1/LLM2·GPU 선택과 실제 배포는 상세 화면의 provision_dual_session 에서. 반환: {session_playground_id}."""
+    if not name or not isinstance(name, str) or not name.strip():
+        raise Exception("Error: session name is required")
+    user = db.get_user(user_name=user_name)
+    if not user:
+        raise Exception(f"deploy user not found: {user_name}")
+    owner_id = owner_id if owner_id else user.get("id")
+    # playground.name 은 VARCHAR(32) → 절단.
+    shell_name = name.strip()[:32]
+    res, playground_id = await db.insert_playground(
+        workspace_id=workspace_id, name=shell_name, description="dual session",
+        create_user_id=owner_id, access=access, deploy_type='cluster')
+    if not res:
+        raise Exception("create dual shell failed")
+    try:
+        await db.insert_user_playground_list(playgrounds_id=[playground_id], users_id=[owner_id])
+        # dual 마커 스탬프 — 상세(구성/배포)가 이중 셸임을 인지하는 신호. deployment 미설정 = 미프로비저닝.
+        if not await db.update_playground(playground_id=playground_id,
+                                          model=json.dumps({"dual": {"mode": "dual"}})):
+            raise Exception("dual shell mark failed")
+    except Exception:
+        traceback.print_exc()
+        try:
+            await delete_playground(id_list=[playground_id])
+        except Exception:
+            traceback.print_exc()
+        raise
+    return {"session_playground_id": playground_id}
+
+async def provision_dual_session(playground_id, user_name,
+                                 prompt_gen_model_id, inference_model_id, model_instance_id,
+                                 prompt_gen_commit_id=None, inference_commit_id=None,
+                                 model_instance_count=1, model_gpu_count=1,
+                                 prompt_gen_gpu_count=None, inference_gpu_count=None):
+    """이중모델 셸(create_dual_shell 로 만든 부모 playground)을 실제 배포(단일 start_playground 대칭).
+    LLM1(프롬프트생성)은 자식 playground 로 신규 배포(pipeline_deploy), LLM2(추론)는 '기존 셸 부모'에
+    bind+start(update_playground_options + start_playground = pipeline_deploy 부모행 재사용판)로 올린 뒤
+    부모-자식을 링크한다. 부분 실패 시 자식 롤백 + 부모는 셸로 원복(재시도 가능).
+    반환: {session_playground_id, prompt_gen_playground_id}."""
+    if prompt_gen_model_id == inference_model_id:
+        raise Exception("Error: prompt-gen and inference model must differ")
+    if model_instance_count is not None and model_instance_count < 1:
+        raise Exception("Error: model_instance_count must be >= 1")
+    if model_gpu_count is not None and model_gpu_count < 0:
+        raise Exception("Error: model_gpu_count must be >= 0")
+    gpu1 = prompt_gen_gpu_count if prompt_gen_gpu_count is not None else model_gpu_count
+    gpu2 = inference_gpu_count if inference_gpu_count is not None else model_gpu_count
+    for _g in (gpu1, gpu2):
+        if _g is not None and _g < 0:
+            raise Exception("Error: per-model gpu count must be >= 0")
+
+    # 부모 셸 검증 — 이중 셸(model.dual.mode=='dual')이고 아직 미프로비저닝(링크 없음)이어야 함.
+    parent = await db.get_playground(playground_id=playground_id)
+    if not parent:
+        raise Exception("Error: dual session not found")
+    workspace_id = parent.get("workspace_id")
+    parent_model = json.loads(parent.get("model") or "{}")
+    parent_dual = parent_model.get("dual") or {}
+    if parent_dual.get("mode") != "dual":
+        raise Exception("Error: not a dual session shell")
+    if parent_dual.get("prompt_gen_playground_id"):
+        raise Exception("Error: dual session already provisioned")
+
+    # LLM1(프롬프트 생성)=텍스트 출력 필요 → 내부 텍스트만. LLM2(추론)=외부 SDS(VLM) 허용(text→SDS).
+    for _mid, _is_prompt in ((prompt_gen_model_id, True), (inference_model_id, False)):
+        _m = await db.get_model(model_id=_mid)
+        if not _m or _m.get("workspace_id") != workspace_id:
+            raise Exception("Error: invalid model selection")
+        if _is_prompt and (_m.get("training_type") or "") == "external":
+            raise Exception("Error: prompt-gen model(LLM1) must be an internal text model")
+
+    # commit 미지정 시 latest_commit_id 로 해석(internal helm 배포가 commit deref 필수).
+    if inference_commit_id is None:
+        _im = await db.get_model(model_id=inference_model_id)
+        inference_commit_id = (_im or {}).get("latest_commit_id")
+    if inference_commit_id is None:
+        raise Exception(f"model {inference_model_id} has no commit to deploy")
+
+    _base = (parent.get("name") or "").strip()[:20]
+
+    # 1) LLM1(프롬프트 생성) — 자식 playground 신규 배포(pipeline_deploy 자체 롤백 보유).
+    pg1 = (await pipeline_deploy(
+        workspace_id=workspace_id, model_id=prompt_gen_model_id, user_name=user_name,
+        model_instance_id=model_instance_id, model_commit_id=prompt_gen_commit_id,
+        name=f"{_base}-promptgen", model_instance_count=model_instance_count,
+        model_gpu_count=gpu1)).get("playground_id")
+
+    # 2) LLM2(추론) — '기존 셸 부모'에 bind+start(pipeline_deploy 의 부모행 재사용판), 이어서 링크.
+    try:
+        await update_playground_options(
+            playground_id=playground_id, is_rag=False, is_prompt=False, accelerator=False,
+            model_type="commit", model_huggingface_id=None, model_huggingface_token=None,
+            model_allm_id=str(inference_model_id), model_allm_commit_id=str(inference_commit_id),
+            model_info=None, model_temperature=0.7, model_top_p=1.0, model_top_k=-1,
+            model_repetition_penalty=1.0, model_max_new_tokens=512,
+            rag_id=None, rag_chunk_max=0, prompt_id=None, prompt_name=None,
+            prompt_commit_name=None, prompt_system_message=None, prompt_user_message=None)
+        await start_playground(
+            user_name=user_name, playground_id=playground_id,
+            model_instance_id=model_instance_id, model_instance_count=model_instance_count,
+            model_gpu_count=gpu2,
+            embedding_instance_id=0, embedding_instance_count=0, embedding_gpu_count=0,
+            reranker_instance_id=0, reranker_instance_count=0, reranker_gpu_count=0,
+            restart=False)
+        # 3) 부모(추론)-자식(프롬프트생성) 링크.
+        await _link_dual_session(parent_playground_id=playground_id, child_playground_id=pg1,
+                                 prompt_gen_model_id=prompt_gen_model_id)
+    except Exception:
+        traceback.print_exc()
+        # 자식 롤백 + 부모는 미프로비저닝 셸로 원복(재시도 가능하게 dual 마커 재스탬프).
+        try:
+            await delete_playground(id_list=[pg1])
+        except Exception:
+            traceback.print_exc()
+        # 부모(LLM2)는 start_playground 가 이미 실 배포를 올렸을 수 있음 — 셸로 원복 전에 반드시 중지.
+        #   (안 하면 "미프로비저닝 셸"로 보이는 행이 GPU 를 계속 점유 = 쿼터 누수)
+        #   _dual_cascaded=True: 자식은 위에서 직접 삭제했으므로 파트너 캐스케이드 불필요.
+        try:
+            await stop_playground(playground_id=playground_id, _dual_cascaded=True)
+        except Exception:
+            traceback.print_exc()
+        try:
+            _p = await db.get_playground(playground_id=playground_id)
+            _pm = json.loads((_p or {}).get("model") or "{}")
+            _pm["dual"] = {"mode": "dual"}
+            await db.update_playground(playground_id=playground_id, model=json.dumps(_pm))
+        except Exception:
+            traceback.print_exc()
+        raise
+
+    return {"session_playground_id": playground_id, "prompt_gen_playground_id": pg1}
 
 async def delete_playground(id_list):
     try:
@@ -1775,6 +1911,12 @@ _DUAL_BATCH_MAX = 10           # 이중 배치 동기 샘플 상한(체인=2N �
 # 데이터셋 컬럼 자동 감지(evaluate 앱과 동일 후보) — jsonl/json dict 에서 prompt/reference 추출.
 _DS_PROMPT_FIELDS = ["prompt", "instruction", "input", "question", "source", "query"]
 _DS_REFERENCE_FIELDS = ["reference", "output", "response", "answer", "target", "completion", "label"]
+# 이중 batch → 외부 SDS(VLM) 용 per-sample 멀티모달 입력 필드(데이터셋 행이 실어줄 때).
+#   image = 데이터셋 디렉터리 하위 상대경로(샌드박스 검증 후 base64). 미지정 시 요청의 공유 payload 폴백.
+_DS_IMAGE_FIELDS = ["image", "image_path", "img", "image_file"]
+_DS_AIS_FIELDS = ["ais_rows", "ais", "ais_data"]
+_DS_IMAGE_MAX_BYTES = 12 * 1024 * 1024   # 샘플 이미지 상한(배치 N장 base64 → 메모리 폭주 방지)
+_DS_IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
 
 
 def _build_dual_meta(test_question, system_prompt=None, examples=None):
@@ -1878,7 +2020,7 @@ async def _infer_question(test_url, question, session_id=None, timeout=1800):
 
 
 async def playground_dual_test(playground_id, prompt_gen_playground_id, test_question, session_id=None,
-                               system_prompt=None, examples=None):
+                               system_prompt=None, examples=None, external_payload=None):
     """이중모델 추론 — LLM1(prompt_gen_playground_id) 가 메타프롬프트로 사용자 질문을 최적
     프롬프트로 재작성 → LLM2(playground_id, 현 배포모델) 가 그 프롬프트로 추론. 결과에
     optimized_prompt 동봉(화면에 원질문→최적프롬프트→답변 표시). LLM1 실패 시 원 질문 폴백.
@@ -1906,7 +2048,20 @@ async def playground_dual_test(playground_id, prompt_gen_playground_id, test_que
         await _infer_question(gen_url, meta, session_id, timeout=300), test_question)
     if len(optimized) > _DUAL_PROMPT_MAX:
         optimized = optimized[:_DUAL_PROMPT_MAX]    # LLM1 출력(→LLM2 프롬프트) 길이 cap
-    # 2) LLM2: 최적 프롬프트로 추론
+    # 2) LLM2: 최적 프롬프트로 추론. LLM2 가 외부 SDS(VLM)면 BFF /jobs/{id}/run 경로(text→SDS),
+    #    아니면 내부 vLLM 경로. 어느 쪽이든 LLM1 출력(optimized)이 프롬프트로 들어감.
+    _pg2_dep = {}
+    try:
+        _pg2_dep = json.loads(pg2.get("deployment") or "{}") or {}
+    except Exception:
+        _pg2_dep = {}
+    _ext_job_id = _pg2_dep.get("external_job_id")
+    if _ext_job_id:
+        # 외부 SDS(VLM): optimized 를 custom_prompt 로 연결. image_base64 + ais_rows(my_ship=1) 필수
+        #   (SDS 계약 — 텍스트만으로는 추론 불가). playground_test external 분기와 동일 파싱.
+        answer, inner = await _infer_sds_sample(_ext_job_id, optimized, external_payload)
+        return [{"output": answer, "optimized_prompt": optimized,
+                 "original_question": test_question, "result": inner}], None
     try:
         ans_url = await _playground_test_url(playground_id)
     except Exception as e:
@@ -1916,7 +2071,156 @@ async def playground_dual_test(playground_id, prompt_gen_playground_id, test_que
              "original_question": test_question}], None
 
 
-async def _read_dataset_samples(dataset_id, filename, limit, workspace_id=None):
+async def _infer_sds_sample(job_id, optimized_prompt, base_payload, image_b64=None, ais_rows=None):
+    """외부 SDS(VLM) 1회 추론 — LLM1 출력을 custom_prompt 로 연결(text→SDS). Direct/Batch 공용.
+    SDS 계약상 image_base64 + ais_rows(my_ship=1 포함) 필수(텍스트만으로는 추론 불가).
+    응답은 playground_test external 분기와 동일하게 result.result 중첩 파싱. 반환: (text, inner)."""
+    payload = dict(base_payload or {})
+    payload["custom_prompt"] = optimized_prompt
+    if image_b64 is not None:
+        payload["image_base64"] = image_b64
+    if ais_rows is not None:
+        payload["ais_rows"] = ais_rows
+    if not payload.get("image_base64"):
+        raise Exception("external_payload.image_base64 is required")
+    _ais = payload.get("ais_rows") or []
+
+    def _is_my_ship(row):
+        # 데이터셋(업로드 JSON)에서 온 값은 임의 타입일 수 있음 → int() 크래시 대신 비매칭 처리.
+        try:
+            return int(row.get("my_ship", 0)) == 1
+        except (TypeError, ValueError):
+            return False
+
+    if not _ais or not any(_is_my_ship(r) for r in _ais if isinstance(r, dict)):
+        raise Exception("external_payload.ais_rows must contain at least one row with my_ship=1")
+    try:
+        raw = await run_inference(job_id, params=payload)
+    except ExternalInferError as e:
+        traceback.print_exc()
+        raise Exception(f"External inference failed [{e.status_code}]: {e}")
+    outer = raw.get("result") if isinstance(raw, dict) else None
+    inner = outer.get("result") if isinstance(outer, dict) and isinstance(outer.get("result"), dict) else outer
+    if not isinstance(inner, dict):
+        inner = {}
+    return inner.get("text", ""), inner
+
+
+async def _encode_dataset_image(dir_real, rel_path):
+    """데이터셋 디렉터리 하위 이미지 → base64. 경로 탈출/심링크 이탈 차단(_read_dataset_samples 동형),
+    확장자 allowlist + 크기 상한. 읽기 실패/부적합은 "" 반환(배치 전체 실패 방지 — 호출측이 폴백)."""
+    if not rel_path or "\x00" in str(rel_path):
+        return ""
+    if not str(rel_path).lower().endswith(_DS_IMAGE_EXTS):
+        return ""
+    target = os.path.realpath(os.path.join(dir_real, str(rel_path)))
+    if os.path.commonpath([target, dir_real]) != dir_real:
+        return ""
+    if not os.path.isfile(target):
+        return ""
+    try:
+        if os.path.getsize(target) > _DS_IMAGE_MAX_BYTES:
+            return ""
+        async with aiofiles.open(target, mode="rb") as f:
+            return base64.b64encode(await f.read()).decode("ascii")
+    except Exception:
+        traceback.print_exc()
+        return ""
+
+
+_DS_JSON_MAX_BYTES = 64 * 1024 * 1024   # JSON 배열(pretty) 전체 파싱 상한
+_LLAVA_IMAGE_TOKEN = "<image>"
+# SDS 학습 데이터셋(LLaVA)의 '[선박 AIS 정보]' 라인 — 자선/주변선박 공통 포맷.
+_AIS_LINE_RE = re.compile(
+    r'^-\s*(?P<kind>자선|주변선박)\s*\(ID:(?P<sid>\d+)\)'
+    r'(?:.*?위도:(?P<lat>-?[\d.]+))?'
+    r'(?:.*?경도:(?P<lon>-?[\d.]+))?'
+    r'(?:.*?속도:(?P<knot>-?[\d.]+))?'
+    r'(?:.*?방향:(?P<heading>-?[\d.]+))?'
+    r'(?:.*?선체:(?P<length>[\d.]+)m\s*[×x]\s*(?P<width>[\d.]+)m)?'
+    r'(?:.*?흘수:(?P<draft>[\d.]+)m)?'
+)
+
+
+def _parse_ais_rows_from_text(text):
+    """LLaVA human 발화의 '[선박 AIS 정보]' 블록 → 구조화 ais_rows.
+    SDS(EVA VLM)는 ais_rows(자선 my_ship=1 포함)를 필수로 받지만 학습 데이터셋은 AIS를
+    텍스트로만 싣는다 → 배치 추론용으로 되살린다. 포맷이 바뀌면 매치 실패([] 반환)."""
+    rows = []
+    for raw in (text or "").splitlines():
+        line = raw.strip()
+        if not line.startswith("-"):
+            continue
+        m = _AIS_LINE_RE.match(line)
+        if not m:
+            continue
+        g = m.groupdict()
+
+        def _num(key, default=0.0):
+            try:
+                return float(g.get(key)) if g.get(key) is not None else default
+            except (TypeError, ValueError):
+                return default
+
+        rows.append({
+            "ship_id": int(g["sid"]),
+            "my_ship": 1 if g["kind"] == "자선" else 0,
+            "latitude": _num("lat"), "longitude": _num("lon"),
+            "knot": _num("knot"), "heading": _num("heading"),
+            "length": _num("length"), "width": _num("width"), "draft": _num("draft"),
+        })
+    return rows
+
+
+def _llava_turns(obj):
+    """conversations(LLaVA) → (prompt, reference). human=프롬프트(<image> 토큰 제거), gpt=정답."""
+    conv = obj.get("conversations")
+    if not isinstance(conv, list):
+        return "", ""
+    prompt = reference = ""
+    for turn in conv:
+        if not isinstance(turn, dict):
+            continue
+        who = (turn.get("from") or "").lower()
+        val = str(turn.get("value") or "")
+        if who == "human" and not prompt:
+            prompt = val.replace(_LLAVA_IMAGE_TOKEN, "").strip()
+        elif who in ("gpt", "assistant") and not reference:
+            reference = val.strip()
+    return prompt, reference
+
+
+async def _sample_from_record(obj, fallback_line, with_external, dir_real):
+    """데이터셋 레코드(dict) 또는 plain 라인 → 배치 샘플. JSONL/JSON배열 공용.
+    프롬프트/정답은 표준 필드 우선, 없으면 LLaVA conversations. external(SDS)이면
+    image(상대경로→base64) + ais_rows(필드 없으면 발화 텍스트에서 파싱)."""
+    prompt, reference = "", ""
+    img_rel, ais_val = "", None
+    if isinstance(obj, dict):
+        lower = {k.lower(): v for k, v in obj.items()}
+        prompt = next((str(lower[c]) for c in _DS_PROMPT_FIELDS if lower.get(c) is not None), "")
+        reference = next((str(lower[c]) for c in _DS_REFERENCE_FIELDS if lower.get(c) is not None), "")
+        if not prompt:
+            prompt, conv_ref = _llava_turns(obj)
+            reference = reference or conv_ref
+        if with_external:
+            img_rel = next((str(lower[c]) for c in _DS_IMAGE_FIELDS if lower.get(c)), "")
+            ais_val = next((lower[c] for c in _DS_AIS_FIELDS if lower.get(c) is not None), None)
+            if not isinstance(ais_val, list):
+                # 구조화 AIS 필드가 없는 학습 데이터셋 → 발화 텍스트에서 복원.
+                ais_val = _parse_ais_rows_from_text(prompt) or None
+    if not prompt:
+        prompt = fallback_line
+    if not prompt:
+        return None
+    sample = {"input": prompt, "reference": reference}
+    if with_external:
+        sample["image_base64"] = await _encode_dataset_image(dir_real, img_rel) if img_rel else ""
+        sample["ais_rows"] = ais_val if isinstance(ais_val, list) else None
+    return sample
+
+
+async def _read_dataset_samples(dataset_id, filename, limit, workspace_id=None, with_external=False):
     """데이터셋 파일에서 최대 limit 샘플 → [{input, reference}]. jsonl/json dict 는 prompt/
     reference 컬럼 자동 감지, plain 라인은 input 만(reference 없음). 경로 탈출 차단.
     workspace_id 지정 시 데이터셋이 세션과 같은 워크스페이스인지 검증(교차테넌트 읽기 차단)."""
@@ -1943,33 +2247,55 @@ async def _read_dataset_samples(dataset_id, filename, limit, workspace_id=None):
         raise Exception("Error: invalid dataset file path")
     if not os.path.isfile(target):
         raise Exception("Error: dataset file not found")
-    # 스트리밍 — limit 도달 즉시 중단(대용량 데이터셋 전체 로드로 인한 OOM/hang 방지)
     samples = []
+    # 포맷 판별 — 첫 비공백 문자가 '[' 면 JSON 배열(pretty-printed, SDS 학습셋 형식),
+    #   아니면 JSONL 스트리밍(limit 도달 즉시 중단 → 대용량 OOM/hang 방지).
+    async with aiofiles.open(target, mode="r", encoding="utf-8") as f:
+        head = await f.read(64)
+    if head.lstrip().startswith("["):
+        if os.path.getsize(target) > _DS_JSON_MAX_BYTES:
+            raise Exception("Error: dataset file too large to parse as JSON array")
+        async with aiofiles.open(target, mode="r", encoding="utf-8") as f:
+            content = await f.read()
+        try:
+            records = json.loads(content)
+        except (json.JSONDecodeError, ValueError):
+            raise Exception("Error: dataset file is not valid JSON")
+        if not isinstance(records, list):
+            records = [records]
+        for obj in records:
+            sample = await _sample_from_record(obj, "", with_external, dir_real)
+            if sample:
+                samples.append(sample)
+            if len(samples) >= limit:
+                break
+        return samples
+
     async with aiofiles.open(target, mode="r", encoding="utf-8") as f:
         async for raw in f:
             line = raw.strip()
             if not line:
                 continue
-            prompt, reference = line, ""
             try:
                 obj = json.loads(line)
-                if isinstance(obj, dict):
-                    lower = {k.lower(): v for k, v in obj.items()}
-                    prompt = next((str(lower[c]) for c in _DS_PROMPT_FIELDS if lower.get(c) is not None), "") or line
-                    reference = next((str(lower[c]) for c in _DS_REFERENCE_FIELDS if lower.get(c) is not None), "")
             except (json.JSONDecodeError, ValueError):
-                pass
-            if prompt:
-                samples.append({"input": prompt, "reference": reference})
+                obj = None
+            sample = await _sample_from_record(obj, line, with_external, dir_real)
+            if sample:
+                samples.append(sample)
             if len(samples) >= limit:
                 break
     return samples
 
 
-async def dual_batch_test(playground_id, prompt_gen_playground_id, dataset_id, filename,
-                          sample_count=5, metrics=None, session_id=None,
-                          system_prompt=None, examples=None):
-    """이중모델 데이터셋 일괄 추론(WBS 4.3 배치). N(≤_DUAL_BATCH_MAX) 샘플에 LLM1→LLM2 체인
+async def dual_batch_stream(playground_id, prompt_gen_playground_id, dataset_id, filename,
+                            sample_count=5, metrics=None, session_id=None,
+                            system_prompt=None, examples=None, external_payload=None):
+    """이중 배치 스트리밍 제너레이터 — 샘플 하나가 끝날 때마다 결과를 yield.
+    동기 응답(샘플당 ~16s × N)이 API 게이트웨이 read timeout(60s)에 걸려 504 가 되는 문제 해결.
+    이벤트: {"type":"start"|"sample"|"summary"}. dual_batch_test 는 이 제너레이터를 소비(로직 단일화).
+
+    이중모델 데이터셋 일괄 추론(WBS 4.3 배치). N(≤_DUAL_BATCH_MAX) 샘플에 LLM1→LLM2 체인
     실행, reference 있으면 인-프로세스 BLEU/ROUGE 채점. 동기(체인=2N 추론)라 N 상한 고정 —
     SP-5(비동기 K8s 평가)와 별개의 세션 대상 경량 배치. prompt_gen 은 route 가 세션에서 파생."""
     if not prompt_gen_playground_id:
@@ -1984,13 +2310,26 @@ async def dual_batch_test(playground_id, prompt_gen_playground_id, dataset_id, f
     except (TypeError, ValueError):
         n = 5
     metric_set = [m for m in (metrics or ["bleu", "rouge"]) if m in dual_metrics.SELF_METRICS] or ["bleu", "rouge"]
-    samples = await _read_dataset_samples(dataset_id, filename, n, workspace_id=pg2.get("workspace_id"))
+    # LLM2 가 외부 SDS(VLM)면 배치도 BFF /jobs/{id}/run 경로(text→SDS). 이미지/AIS 는
+    #   데이터셋 행(per-sample) 우선, 없으면 요청의 공유 external_payload 폴백.
+    _pg2_dep = {}
+    try:
+        _pg2_dep = json.loads(pg2.get("deployment") or "{}") or {}
+    except Exception:
+        _pg2_dep = {}
+    _ext_job_id = _pg2_dep.get("external_job_id")
+    _shared = dict(external_payload or {})
+    _shared_img = _shared.get("image_base64") or ""
+    _shared_ais = _shared.get("ais_rows") if isinstance(_shared.get("ais_rows"), list) else None
+    samples = await _read_dataset_samples(dataset_id, filename, n, workspace_id=pg2.get("workspace_id"),
+                                         with_external=bool(_ext_job_id))
     if not samples:
         raise Exception("Error: no usable samples in dataset")
     gen_url = await _playground_test_url(prompt_gen_playground_id)
-    ans_url = await _playground_test_url(playground_id)
+    ans_url = None if _ext_job_id else await _playground_test_url(playground_id)
     rows, preds, refs, has_ref = [], [], [], False
-    for s in samples:
+    yield {"type": "start", "total": len(samples)}
+    for idx, s in enumerate(samples):
         q = s["input"]
         ref = s.get("reference") or ""
         meta = _build_dual_meta(q, system_prompt, examples)
@@ -1999,7 +2338,13 @@ async def dual_batch_test(playground_id, prompt_gen_playground_id, dataset_id, f
             await _infer_question(gen_url, meta, session_id, timeout=300), q)
         if len(optimized) > _DUAL_PROMPT_MAX:
             optimized = optimized[:_DUAL_PROMPT_MAX]
-        answer = await _infer_question(ans_url, optimized, session_id, timeout=1800)
+        if _ext_job_id:
+            answer, _ = await _infer_sds_sample(
+                _ext_job_id, optimized, _shared,
+                image_b64=(s.get("image_base64") or _shared_img),
+                ais_rows=(s.get("ais_rows") or _shared_ais))
+        else:
+            answer = await _infer_question(ans_url, optimized, session_id, timeout=1800)
         row = {"input": q, "optimized_prompt": optimized, "output": answer, "reference": ref}
         if ref:
             has_ref = True
@@ -2007,10 +2352,33 @@ async def dual_batch_test(playground_id, prompt_gen_playground_id, dataset_id, f
             preds.append(answer or "")
             refs.append(ref)
         rows.append(row)
+        # 샘플 완료 즉시 스트림 — 3분 배치에서도 게이트웨이가 끊지 않고 부분 결과가 쌓인다.
+        yield {"type": "sample", "index": idx + 1, "total": len(samples), **row}
     # 요약은 코퍼스 단위(BLEU 비선형 → per-sample 평균 부정확; evaluate 앱과 동일)
     summary = dual_metrics.corpus_scores(preds, refs, metric_set) if has_ref else {}
-    return {"samples": rows, "summary": summary, "sample_count": len(rows),
-            "has_reference": has_ref, "metric_set": metric_set}, None
+    yield {"type": "summary", "summary": summary, "sample_count": len(rows),
+           "has_reference": has_ref, "metric_set": metric_set}
+
+
+async def dual_batch_test(playground_id, prompt_gen_playground_id, dataset_id, filename,
+                          sample_count=5, metrics=None, session_id=None,
+                          system_prompt=None, examples=None, external_payload=None):
+    """이중 배치 동기 응답(하위호환) — dual_batch_stream 을 끝까지 소비해 기존 스키마로 반환.
+    ⚠️ 샘플 수가 많으면 게이트웨이 타임아웃(60s) 위험 → FE 는 SSE(/dual-batch/sse) 사용 권장."""
+    rows, final = [], {}
+    async for ev in dual_batch_stream(
+            playground_id=playground_id, prompt_gen_playground_id=prompt_gen_playground_id,
+            dataset_id=dataset_id, filename=filename, sample_count=sample_count,
+            metrics=metrics, session_id=session_id, system_prompt=system_prompt,
+            examples=examples, external_payload=external_payload):
+        if ev.get("type") == "sample":
+            rows.append({k: v for k, v in ev.items() if k not in ("type", "index", "total")})
+        elif ev.get("type") == "summary":
+            final = ev
+    return {"samples": rows, "summary": final.get("summary", {}),
+            "sample_count": final.get("sample_count", len(rows)),
+            "has_reference": final.get("has_reference", False),
+            "metric_set": final.get("metric_set", [])}, None
 
 
 async def playground_test(playground_id, test_type, test_dataset_id, test_dataset_filename, test_question, session_id=None, network_load=0, external_payload: dict = None):

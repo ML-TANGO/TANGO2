@@ -127,6 +127,7 @@ const modalComponents = {
     import('@src/components/Modal/SshConnectionGuideModal'),
 
   // !! LLM !!
+  NEW_DEPLOYMENT: () => import('@src/components/Modal/NewDeploymentModal'),
   ADD_PLAYGROUND: () => import('@src/components/Modal/AddPlayground'),
   EDIT_PLAYGROUND: () => import('@src/components/Modal/EditPlaygroundModal'),
   ADD_MODEL: () => import('@src/components/Modal/AddModel'),

@@ -6,8 +6,6 @@ import { toast } from 'react-toastify';
 
 import CardTemplate from '@src/components/molecules/CardTemplate/CardTemplate';
 
-import NewDeploymentWizard from '@src/components/Modal/NewDeploymentWizard/NewDeploymentWizard';
-
 import {
   deletePlayground,
   deletePlaygroundBookmark,
@@ -28,7 +26,11 @@ import style from './PlaygroundMenu.module.scss';
 const cx = classNames.bind(style);
 
 // 배포 유형(playground.deploy_type) → 유형 라벨 칩(상태 배지 옆). 3종 모두 playground row.
-const TYPE_LABEL = { cluster: '클러스터', edge: '온디바이스', standalone: 'Standalone' };
+const TYPE_LABEL = {
+  cluster: '클러스터',
+  edge: '온디바이스',
+  standalone: 'Standalone',
+};
 
 // 배포 유형별 상세 라우팅 경로.
 const detailPath = (wid, kind, id) => {
@@ -71,6 +73,8 @@ const getPlaygroundInfo = async (workspace_id, setDeployItems) => {
         isAccess: r.access,
         userList: r.users,
         status: r.status,
+        // 이중모델 세션 판별(라우팅용) — mode==='dual' 이면 /dual-deploy 상세로.
+        mode: r.mode,
       };
     });
     const sortArr = list.sort((a, b) => b.isBookMark - a.isBookMark);
@@ -91,30 +95,27 @@ const PlaygroundMenu = () => {
   const { id: workspace_id } = match.params;
 
   const [deployItems, setDeployItems] = useState([]);
-  // D6 v3: "+새 배포" → 스텝 위저드(NewDeploymentWizard). cluster/edge/standalone 모두 생성 진행.
-  const [showNewDeployment, setShowNewDeployment] = useState(false);
 
+  // D6 v3: "+새 배포" → 플랫폼 표준 모달(NewDeploymentModal, 수정 플로우와 대칭).
+  //   cluster/edge/standalone 모두 생성 진행. 생성 후 유형별 상세로 이동.
   const handleCreateCard = useCallback(() => {
-    setShowNewDeployment(true);
-  }, []);
-
-  const handleCloseNewDeployment = useCallback(
-    () => setShowNewDeployment(false),
-    [],
-  );
-  const handleRefreshDeployments = useCallback(
-    () => getPlaygroundInfo(workspace_id, setDeployItems),
-    [workspace_id],
-  );
+    dispatch(
+      openModal({
+        modalType: 'NEW_DEPLOYMENT',
+        modalData: {
+          workspace_id,
+          handleRefresh: () => getPlaygroundInfo(workspace_id, setDeployItems),
+        },
+      }),
+    );
+  }, [dispatch, workspace_id]);
 
   // private(access===0) 배포는 소유자/지정 사용자만 조작 — UI 접근가드(BE authZ 비활성 하 유일 방어선).
   const hasAccess = useCallback(
     (isAccess, constructor, userList) => {
       if (isAccess !== 0) return true;
       if (userName === constructor) return true;
-      return !!(userList || []).find(
-        ({ user_name }) => user_name === userName,
-      );
+      return !!(userList || []).find(({ user_name }) => user_name === userName);
     },
     [userName],
   );
@@ -128,6 +129,11 @@ const PlaygroundMenu = () => {
         return;
       }
       const item = deployItems.find((i) => String(i.id) === String(id));
+      // 이중모델 세션 → 배포측 이중 상세(구성/배포). 상세가 프로비저닝 여부에 따라 추론으로 리다이렉트.
+      if (item?.mode === 'dual') {
+        history.push(`/user/workspace/${workspace_id}/dual-deploy/${id}`);
+        return;
+      }
       history.push(detailPath(workspace_id, item?.kind, id));
     },
     [history, workspace_id, deployItems, hasAccess],
@@ -214,6 +220,7 @@ const PlaygroundMenu = () => {
 
   useEffect(() => {
     loadModalComponent('EDIT_PLAYGROUND');
+    loadModalComponent('NEW_DEPLOYMENT');
 
     breadCrumbHandler(dispatch);
     getPlaygroundInfo(workspace_id, setDeployItems);
@@ -237,13 +244,6 @@ const PlaygroundMenu = () => {
           statusBadge
         />
       </Suspense>
-      {showNewDeployment && (
-        <NewDeploymentWizard
-          wid={workspace_id}
-          onClose={handleCloseNewDeployment}
-          onRefresh={handleRefreshDeployments}
-        />
-      )}
     </div>
   );
 };

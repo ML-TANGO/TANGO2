@@ -163,3 +163,15 @@
     }
   }
 }
+
+// 세션 없음 안내(생성 진입점은 배포 탭) — 인라인 style 대체
+.empty-state {
+  padding: 48px 0;
+  text-align: center;
+  color: #9ca3af;
+}
+
+.empty-state-hint {
+  font-size: 13px;
+  margin-top: 6px;
+}
