@@ -142,10 +142,38 @@ async def lifespan(app: FastAPI):
                 pipeline_parallel_size = gpu_server_count
 
             print('----------------------')
-            # max_model_len 자동 계산: 큰 모델의 경우 KV cache 크기 제한
-            # GPU blocks에서 사용 가능한 토큰 수 기반으로 설정
-            max_model_len = 96  # 기본값: 32K tokens (대부분의 use case에 충분)
-            
+            # max_model_len: 모델 config 에서 자동 유도하되 상한 cap.
+            #   - cap 이유: 32K/128K 컨텍스트 모델은 KV cache 가 GPU 메모리를 넘겨 기동 실패.
+            #   - config 값이 cap 보다 작으면(짧은 컨텍스트 모델) 그 값을 그대로 사용해야 함
+            #     (모델 한도를 넘겨 지정하면 vLLM 이 기동 시 거부).
+            #   과거 상수 96 하드코딩 → 96 토큰 초과 프롬프트가 전부 ValueError 로 실패했음.
+            MAX_MODEL_LEN_CAP = 8192
+            max_model_len = MAX_MODEL_LEN_CAP
+            try:
+                from transformers import AutoConfig
+                # gated/private HF repo 는 토큰 없으면 401 → 조용히 cap 폴백되어
+                # 모델 실한도보다 큰 값을 지정하게 됨(vLLM 기동 거부). 토크나이저와 동일 토큰 사용.
+                _cfg = AutoConfig.from_pretrained(
+                    input_model,
+                    token=input_auth if model_type == "huggingface" else None,
+                    trust_remote_code=True)
+                # config 필드명은 모델 계열마다 다름 — 대표 alias 를 순서대로 확인
+                #   (미인식 시 cap 폴백 → 짧은 컨텍스트 모델이면 vLLM 기동 거부되므로 넓게 커버)
+                _model_max = None
+                for _k in ("max_position_embeddings", "max_sequence_length",
+                           "max_seq_len", "seq_length", "n_positions", "model_max_length"):
+                    _v = getattr(_cfg, _k, None)
+                    if isinstance(_v, int) and _v > 0:
+                        _model_max = _v
+                        break
+                if isinstance(_model_max, int) and _model_max > 0:
+                    max_model_len = min(_model_max, MAX_MODEL_LEN_CAP)
+            except Exception:
+                traceback.print_exc()
+                print(f"max_model_len 자동 유도 실패 → cap({MAX_MODEL_LEN_CAP}) 사용")
+            print(f"max_model_len = {max_model_len}")
+
+
             engine_args = AsyncEngineArgs(
                 model=input_model,
                 # quantization="AWQ",
