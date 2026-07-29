@@ -33,7 +33,9 @@ export const STATUS_INTERNAL_SERVER_ERROR = 'STATUS_INTERNAL_SERVER_ERROR';
 // 불편했음 → 세션 정리 + /login 이동(자동 로그아웃) + 부드러운 안내 토스트로 통일.
 // 동시 다발 401 응답에 토스트/리다이렉트가 중복되지 않도록 1회만 처리(잠시 후 해제 → 재로그인 대비).
 let sessionExpiredHandled = false;
-const handleSessionExpired = () => {
+// export — SSE(EventSource)는 network.js 를 거치지 않아 만료를 스스로 감지할 수 없다.
+// utils/sse.js 가 SSE 실패를 분류한 뒤 만료로 판정되면 이 함수를 직접 호출한다.
+export const handleSessionExpired = () => {
   if (sessionExpiredHandled) return;
   sessionExpiredHandled = true;
   setTimeout(() => {
@@ -48,8 +50,48 @@ const handleSessionExpired = () => {
     return;
   }
   // standalone(TANGO): 부드러운 안내 후 로그인 화면으로 자동 이동(SPA — 토스트 유지).
+  // 만료 시점에 떠 있던 다른 요청들도 줄줄이 실패하며 빨간 토스트를 띄운다
+  // ('Token expired' 등). 로그인 화면으로 나가는 중이라 무의미하고 안내만 가리므로
+  // 잠시 error 토스트를 삼킨다 — 사용자에게는 아래 안내 하나만 보인다.
+  toast.muteErrors(5000);
   toast.info(i18n.t('sessionExpired.message'));
   storeObj.store.dispatch(goToHome('/login'));
+};
+
+// 만료 신호 판정 —
+// 이 플랫폼은 세션 관리를 게이트웨이에 위임했다(fb_user login: login_session 테이블 대신
+// Kong session 사용). 전역 session 플러그인(rolling_timeout 1시간)이 만료되면 요청은
+// anonymous consumer 로 폴백되고 request-termination 이 **403(HTML)** 으로 끊는다.
+// 즉 이 플랫폼의 만료 신호는 401 이 아니라 403 이다 — store/modules/auth.js 의
+// logoutRequest 도 같은 이유로 403 을 '이미 만료' 로 처리한다.
+// 앱이 직접 내는 403(권한 부족)은 JSONResponse 이므로 Content-Type 으로 구분한다.
+const isGatewayTermination = (response) => {
+  const headers = response?.headers || {};
+  const contentType = headers['content-type'] || headers['Content-Type'] || '';
+  return !contentType.includes('application/json');
+};
+
+// 로그인 실패도 401 을 쓴다(fb_user login: "Please retry login with correct ID and
+// password."). 이를 만료로 오인하면 비밀번호 오타에 만료 안내가 뜬다.
+// 로그아웃은 auth.js logoutRequest 가 403 을 이미 처리하므로 중복 안내를 피한다.
+const EXPIRY_EXEMPT_URLS = ['login', 'login/force', 'logout'];
+const isExpiryExemptUrl = (url) =>
+  EXPIRY_EXEMPT_URLS.includes(String(url || '').replace(/^\/+/, ''));
+
+/**
+ * 응답이 세션 만료를 뜻하면 자동 로그아웃을 발동한다.
+ *
+ * @param {Error} error axios 에러
+ * @param {string} [url] 요청 URL (인증 엔드포인트 제외 판정용)
+ * @returns {boolean} 만료로 판정해 로그아웃을 발동했는지 여부
+ */
+const handleIfSessionExpired = (error, url) => {
+  if (isExpiryExemptUrl(url)) return false;
+  const status = error?.response?.status;
+  const isExpired =
+    status === 401 || (status === 403 && isGatewayTermination(error.response));
+  if (isExpired) handleSessionExpired();
+  return isExpired;
 };
 
 export const network = (() => {
@@ -111,7 +153,10 @@ export const network = (() => {
       `${API_HOST}${url}`,
       methodLowercase === 'get' || methodLowercase === 'delete' ? reqOpt : body,
       methodLowercase !== 'get' && methodLowercase !== 'delete' && reqOpt,
-    ).catch(() => {
+    ).catch((error) => {
+      // 만료 신호는 원래 200 + body.expired 였다. 게이트웨이가 만료 세션을 끊는 경우엔
+      // body 가 HTML 이라 그 검사가 안 걸린다 → 상태코드로 판정한다.
+      handleIfSessionExpired(error, url);
       return {
         data: {
           status: 0,
@@ -163,6 +208,11 @@ export const network = (() => {
         method.toLowerCase() !== 'delete' && { headers },
     ).catch((error) => {
       if (!error.response) return { status: -1, message: 'Network error' };
+      // 여기서는 만료 판정을 하지 않는다 — callServiceApi 는 플랫폼 API 가 아니라
+      // 배포된 모델의 추론 엔드포인트(apiUrl)를 직접 호출하며 플랫폼 세션 헤더도
+      // 싣지 않는다. 게시 route 의 key-auth 거부(401/403)를 세션 만료로 오인하면
+      // 추론 테스트 중 엉뚱하게 로그아웃된다. 실제 만료는 같은 화면의 다른
+      // 플랫폼 API 호출이 잡는다.
       return { status: 0, message: error.response.statusText };
     });
     const elapsedTime = new Date() - start;
@@ -209,6 +259,7 @@ export const network = (() => {
         if (successFunc) successFunc(res);
       })
       .catch((error) => {
+        handleIfSessionExpired(error, url);
         if (failFunc) failFunc(error);
       });
   };
@@ -342,6 +393,14 @@ export async function callApiWithForm({
     response.message = message;
     return response;
   } catch (error) {
+    response.httpStatus = error.response?.status || 0;
+    if (handleIfSessionExpired(error, url)) {
+      // 만료는 ISE 가 아니다. 200 + body.expired 경로와 같은 신호를 돌려줘야
+      // 호출부가 빨간 'Internal server error' 토스트를 겹쳐 띄우지 않는다.
+      response.status = STATUS_FAIL;
+      response.message = MSG.TOKEN_EXPIRED;
+      return response;
+    }
     response.status = STATUS_INTERNAL_SERVER_ERROR;
     response.message = MSG.INTERNAL_SERVER_ERROR;
     return response;
@@ -471,9 +530,18 @@ export async function callApi({
 
     return response;
   } catch (error) {
+    response.httpStatus = error.response?.status || 0;
+    // 게이트웨이가 만료 세션을 끊는 경로 — 본문이 HTML 이라 body.expired 검사가
+    // 안 걸리므로 여기서 상태코드로 판정한다.
+    if (handleIfSessionExpired(error, url)) {
+      // 만료는 ISE 가 아니다. 200 + body.expired 경로와 같은 신호를 돌려줘야
+      // 호출부가 빨간 'Internal server error' 토스트를 겹쳐 띄우지 않는다.
+      response.status = STATUS_FAIL;
+      response.message = MSG.TOKEN_EXPIRED;
+      return response;
+    }
     response.status = STATUS_INTERNAL_SERVER_ERROR;
     response.message = MSG.INTERNAL_SERVER_ERROR;
-    response.httpStatus = error.response?.status || 0;
     return response;
   }
 }
@@ -594,6 +662,14 @@ export async function upload({
     response.message = message;
     return response;
   } catch (error) {
+    response.httpStatus = error.response?.status || 0;
+    if (handleIfSessionExpired(error, url)) {
+      // 만료는 ISE 가 아니다. 200 + body.expired 경로와 같은 신호를 돌려줘야
+      // 호출부가 빨간 'Internal server error' 토스트를 겹쳐 띄우지 않는다.
+      response.status = STATUS_FAIL;
+      response.message = MSG.TOKEN_EXPIRED;
+      return response;
+    }
     response.status = STATUS_INTERNAL_SERVER_ERROR;
     response.message = MSG.INTERNAL_SERVER_ERROR;
     return response;
@@ -656,7 +732,11 @@ export const download = async ({
     },
   };
 
-  const res = await axios(reqOpt);
+  // 다운로드도 만료 대상. 기존 계약(reject 전파)은 그대로 두고 로그아웃만 얹는다.
+  const res = await axios(reqOpt).catch((error) => {
+    handleIfSessionExpired(error, url);
+    throw error;
+  });
 
   const headerToken = res.headers?.token;
   const { expired, token: bodyToken } = res.data;
@@ -687,14 +767,19 @@ export const downloadBlob = async ({ url }) => {
   const token = sessionStorage.getItem('token');
   const loginedSession = sessionStorage.getItem('loginedSession');
 
-  const response = await axios.get(`${API_HOST}${url}`, {
-    responseType: 'blob',
-    headers: {
-      'jf-User': userName || 'login',
-      'jf-Token': token || 'login',
-      'jf-Session': loginedSession || 'login',
-    },
-  });
+  const response = await axios
+    .get(`${API_HOST}${url}`, {
+      responseType: 'blob',
+      headers: {
+        'jf-User': userName || 'login',
+        'jf-Token': token || 'login',
+        'jf-Session': loginedSession || 'login',
+      },
+    })
+    .catch((error) => {
+      handleIfSessionExpired(error, url);
+      throw error;
+    });
 
   return response.data;
 };
@@ -705,14 +790,19 @@ export const downloadSshPemBlob = async ({ url }) => {
   const loginedSession = sessionStorage.getItem('loginedSession');
   const cacheBuster = new Date().getTime();
 
-  const response = await axios.get(`${API_HOST}${url}?_=${cacheBuster}`, {
-    responseType: 'blob',
-    headers: {
-      'jf-User': userName || 'login',
-      'jf-Token': token || 'login',
-      'jf-Session': loginedSession || 'login',
-    },
-  });
+  const response = await axios
+    .get(`${API_HOST}${url}?_=${cacheBuster}`, {
+      responseType: 'blob',
+      headers: {
+        'jf-User': userName || 'login',
+        'jf-Token': token || 'login',
+        'jf-Session': loginedSession || 'login',
+      },
+    })
+    .catch((error) => {
+      handleIfSessionExpired(error, url);
+      throw error;
+    });
 
   return response.data;
 };
