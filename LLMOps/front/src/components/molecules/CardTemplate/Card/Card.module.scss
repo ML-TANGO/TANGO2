@@ -27,6 +27,26 @@
     outline-offset: 1px;
   }
 
+  // 접근 불가 카드 — 목록에는 남기되 "들어갈 수 없음"을 시각적으로 명시.
+  // grayscale 은 이 파일의 기존 관례(.active.stop::before)를 따른다.
+  // 카드 내부 버튼(수정/삭제/즐겨찾기)도 함께 비활성화해 오조작을 막고,
+  // 클릭은 카드 루트로만 전달돼 안내 토스트가 뜬다.
+  &.no-access {
+    cursor: not-allowed;
+    filter: grayscale(1);
+    opacity: 0.5;
+
+    // 포커스 링은 지우지 않는다 — 이 카드는 여전히 <button> 이라 Tab 으로 도달하고
+    // Enter/Space 로 활성화된다(클릭 시 "접근 권한이 없습니다" 안내가 뜨는 의도된 동작).
+    // outline: none 을 주면 키보드 사용자가 포커스 위치를 알 수 없다(WCAG 2.4.7).
+
+    .btn-cont {
+      // 마우스 오조작만 막는다. 키보드 도달은 못 막으므로 실제 차단은 핸들러에서 한다
+      // (Model.jsx 의 moveToModelDetail·handleEdit·modelDelete 의 isAccess 가드).
+      pointer-events: none;
+    }
+  }
+
   &.active {
     border: none;
     z-index: 0;
@@ -152,6 +172,22 @@
           border-color: $mono203;
           background: $mono201;
           color: $mono205;
+        }
+        // 평가 유형 칩 — 공용 기본값과 기존 모델/배포 kind 는 유지하고 평가 kind 만 추가한다.
+        &.benchmark {
+          border-color: rgba($blue104, 0.4);
+          background: rgba($blue104, 0.08);
+          color: $blue104;
+        }
+        &.judge {
+          border-color: rgba($orange403, 0.4);
+          background: rgba($orange403, 0.08);
+          color: $orange403;
+        }
+        &.expert {
+          border-color: rgba($lime604, 0.4);
+          background: rgba($lime604, 0.1);
+          color: $lime604;
         }
       }
     }

@@ -10,6 +10,7 @@ import {
   useRouteMatch,
 } from 'react-router-dom';
 
+import { toast } from '@src/components/Toast';
 import { callApi, STATUS_SUCCESS } from '@src/network';
 
 import CommitList from './CommitList';
@@ -68,7 +69,15 @@ const ModelDetailPage = memo(function ModelDetailPage({
         url: `models/fine-tuning/summary?model_id=${modelId}`,
         method: 'get',
       });
-      if (alive && res.status === STATUS_SUCCESS)
+      if (!alive) return;
+      // 상세 진입 게이트 — 비공개+비멤버면 BE 가 forbidden 을 준다(목록 카드는 노출되지만
+      // 진입 불가, 제품 규칙 2026-07-27). URL 직접 진입도 여기서 목록으로 되돌린다.
+      if (res.status !== STATUS_SUCCESS && res.message === 'forbidden') {
+        toast.error('접근 권한이 없습니다.');
+        history.push(`/user/workspace/${workspaceId}/model`);
+        return;
+      }
+      if (res.status === STATUS_SUCCESS)
         setIsExternalModel(
           (res.result?.training_type ?? 'internal') === 'external',
         );
@@ -76,7 +85,7 @@ const ModelDetailPage = memo(function ModelDetailPage({
     return () => {
       alive = false;
     };
-  }, [modelId]);
+  }, [modelId, history, workspaceId]);
 
   /**
    * 뒤로가기

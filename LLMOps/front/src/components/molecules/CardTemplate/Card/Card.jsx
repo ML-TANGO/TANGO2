@@ -40,16 +40,28 @@ const Card = ({
   width,
   height,
   statusBadge = false,
+  // opt-in — 접근 불가 카드. 목록에는 계속 보이되 회색 처리 + 진입 불가임을 시각화.
+  // 클릭 자체는 그대로 핸들러로 보내 "접근 권한이 없습니다" 안내가 뜨게 한다
+  // (조용히 무반응이면 고장으로 보임).
+  noAccess = false,
   typeBadge,
   typeBadgeKind,
+  qualifierBadge,
+  qualifierBadgeKind,
 }) => {
   const { t } = useTranslation();
   return (
     <button
-      className={cx('card-cont', status && status !== 'stop' && 'active')}
+      className={cx(
+        'card-cont',
+        status && status !== 'stop' && 'active',
+        noAccess && 'no-access',
+      )}
       onClick={(e) => handleOnClickCard(e, id, constructor, isAccess, userList)}
       style={{ width, height }}
       aria-label={`${title} 이동`}
+      aria-disabled={noAccess || undefined}
+      title={noAccess ? '접근 권한이 없습니다' : undefined}
     >
       <div className={cx('top-cont')}>
         <div className={cx('owner-cont')}>
@@ -68,6 +80,11 @@ const Card = ({
           )}
           {typeBadge && (
             <span className={cx('type-badge', typeBadgeKind)}>{typeBadge}</span>
+          )}
+          {qualifierBadge && (
+            <span className={cx('type-badge', qualifierBadgeKind)}>
+              {qualifierBadge}
+            </span>
           )}
         </div>
         <div className={cx('btn-cont')}>
