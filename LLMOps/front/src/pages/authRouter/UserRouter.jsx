@@ -517,6 +517,7 @@ const routeArr = [
     exact: true,
     isGroup: true,
     group: datasetGroup,
+    isLastGroup: true,
     icon: IconAnalysis,
     activeIcon: IconAnalysisActive,
     platform: 'flightbase',
@@ -527,7 +528,8 @@ const routeArr = [
     path: '/user/workspace/:id/datasets/synthesis',
     exact: true,
     group: datasetGroup,
-    isLastGroup: true,
+    // 메뉴 미노출 (라우트는 유지 — URL 직접 접근 가능)
+    disabled: true,
     icon: IconSynthesis,
     activeIcon: IconSynthesisActive,
     platform: 'flightbase',
