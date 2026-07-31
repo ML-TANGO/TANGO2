@@ -86,7 +86,10 @@ def send_request(
 def disk_usage(path):
     result = subprocess.run(['du', '-sb', path], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True).stdout
     print(result)
-    return result.split('\t')[0]
+    try:
+        return int(result.split('\t')[0])
+    except ValueError:
+        return 0
 
 # Example usage
 if __name__ == "__main__":

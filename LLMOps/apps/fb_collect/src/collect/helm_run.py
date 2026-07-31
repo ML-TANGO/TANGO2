@@ -63,7 +63,10 @@ def create_public_api_collector(helm_name, collect_info, sub_path, data_path, se
             "NAMESPACE" : namespace,
             "DATA_PATH" : str(data_path),
             "LIMIT_SIZE" : str(size),
-            "COLLECT_CYCLE": str(seconds)
+            "COLLECT_CYCLE": str(seconds),
+            # 수집 잡 파드는 워크스페이스 ns 에서 돌아 jfb-settings ConfigMap(ns=jonathan-system)을
+            # envFrom 으로 붙일 수 없다. utils/settings.py 가 import 시점에 이 값을 요구하므로 명시 주입.
+            "SYSTEM_DOCKER_REGISTRY_URL": registry_url
         }
         
         dataset_pvc_name = f"{namespace}-data-pvc"
@@ -130,7 +133,10 @@ def create_crawling_collector(helm_name, collect_info, sub_path, data_path, seco
             "NAMESPACE" : namespace,
             "DATA_PATH" : str(data_path),
             "LIMIT_SIZE" : str(size),
-            "COLLECT_CYCLE": str(seconds)
+            "COLLECT_CYCLE": str(seconds),
+            # 수집 잡 파드는 워크스페이스 ns 에서 돌아 jfb-settings ConfigMap(ns=jonathan-system)을
+            # envFrom 으로 붙일 수 없다. utils/settings.py 가 import 시점에 이 값을 요구하므로 명시 주입.
+            "SYSTEM_DOCKER_REGISTRY_URL": registry_url
         }
         
         dataset_pvc_name = f"{namespace}-data-pvc"
@@ -197,7 +203,10 @@ def create_remote_server_collector(helm_name, collect_info, sub_path, data_path,
             "NAMESPACE" : namespace,
             "DATA_PATH" : str(data_path),
             "LIMIT_SIZE" : str(size),
-            "COLLECT_CYCLE": str(seconds)
+            "COLLECT_CYCLE": str(seconds),
+            # 수집 잡 파드는 워크스페이스 ns 에서 돌아 jfb-settings ConfigMap(ns=jonathan-system)을
+            # envFrom 으로 붙일 수 없다. utils/settings.py 가 import 시점에 이 값을 요구하므로 명시 주입.
+            "SYSTEM_DOCKER_REGISTRY_URL": registry_url
         }
         
         dataset_pvc_name = f"{namespace}-data-pvc"
@@ -257,7 +266,10 @@ def create_fb_deployment_collector(helm_name, collect_info, sub_path, data_path,
             "NAMESPACE" : namespace,
             "DATA_PATH" : str(data_path),
             "LIMIT_SIZE" : str(size),
-            "COLLECT_CYCLE": str(seconds)
+            "COLLECT_CYCLE": str(seconds),
+            # 수집 잡 파드는 워크스페이스 ns 에서 돌아 jfb-settings ConfigMap(ns=jonathan-system)을
+            # envFrom 으로 붙일 수 없다. utils/settings.py 가 import 시점에 이 값을 요구하므로 명시 주입.
+            "SYSTEM_DOCKER_REGISTRY_URL": registry_url
         }
         
         dataset_pvc_name = f"{namespace}-data-pvc"

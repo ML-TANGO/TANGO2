@@ -32,7 +32,10 @@ HELM_NAME = os.getenv("HELM_NAME",None)
 def disk_usage(path):
     result = subprocess.run(['du', '-sb', path], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True).stdout
     print(result)
-    return result.split('\t')[0]
+    try:
+        return int(result.split('\t')[0])
+    except ValueError:
+        return 0
 
 def collect_data(target_path : Path, destination_path : Path):
     try:
