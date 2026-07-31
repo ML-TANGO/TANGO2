@@ -2,6 +2,11 @@
 #helm repo add nvidia-ngc https://helm.ngc.nvidia.com/nvidia --force-update
 #helm repo update
 
+# 커스텀 dcgm metrics (DCP 프로파일링 제외) ConfigMap 을 helm install 전에 apply.
+# values.yaml 의 dcgmExporter.config.name=dcgm-custom-metrics 가 이걸 참조한다.
+kubectl create namespace gpu-operator 2>/dev/null || true
+kubectl apply -f ./dcgm-custom-metrics.yaml
+
 cd gpu-operator
 # Install GPU Operator
 helm install \
