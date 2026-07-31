@@ -1009,6 +1009,17 @@ const routeArr = [
   },
   {
     name: 'DualDeploymentDetail',
+    path: '/user/workspace/:id/llmplayground/:pid/dual-deploy',
+    exact: false,
+    disabled: true,
+    icon: IconNavPlaygroundActive,
+    activeIcon: IconNavPlaygroundActive,
+    platform: 'flightbase',
+    render: (props) => <DualDeployDetail {...props} />,
+  },
+  {
+    // 기존 북마크/외부 링크 호환 별칭 — 정규 경로는 llmplayground 하위 deploy detail.
+    name: 'DualDeploymentDetailAlias',
     path: '/user/workspace/:id/dual-deploy/:pid',
     exact: false,
     disabled: true,

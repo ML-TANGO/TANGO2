@@ -19,10 +19,14 @@ const stateStyle = {
 
 // 배포 상세의 원본 playgroundId 를 모니터링 대시보드가 쓰는 deployment_id 로
 // 해석한 뒤, 대시보드를 탭 안에 임베드한다. (기존 별도 라우트 대체)
-const PlaygroundMonitoring = () => {
+const PlaygroundMonitoring = ({
+  workspaceId: workspaceIdProp,
+  playgroundId: playgroundIdProp,
+}) => {
   const { t } = useTranslation();
   const match = useRouteMatch();
-  const { id: workspaceId, did: playgroundId } = match.params;
+  const workspaceId = workspaceIdProp ?? match.params.id;
+  const playgroundId = playgroundIdProp ?? match.params.did;
 
   const [deploymentId, setDeploymentId] = useState(null);
   const [isLoading, setIsLoading] = useState(true);

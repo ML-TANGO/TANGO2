@@ -9,11 +9,12 @@ import PlaygroundInstanceSettingInfo from '@src/components/pageContents/llm/Play
 import PlaygroundModel from '@src/components/pageContents/llm/PlaygroundContent/PlaygroundModel';
 import PlaygroundModelParameterSetting from '@src/components/pageContents/llm/PlaygroundContent/PlaygroundModelParameterSetting';
 import PlaygroundMonitoring from '@src/components/pageContents/llm/PlaygroundContent/PlaygroundMonitoring';
-import Tab from '@src/components/molecules/Tab';
+import DeployDetailShell from '@src/components/pageContents/llm/DeployDetail/DeployDetailShell';
 
+// [엑셀러레이터 미사용] getPlaygroundCheckAccel 제거 (apis 정의는 유지)
 import {
   getDetailPlayground,
-  getPlaygroundCheckAccel,
+  getNormalizedPlaygroundDetail,
 } from '@src/apis/llm/playground';
 import {
   handleReset,
@@ -35,10 +36,24 @@ import style from './PlaygroundDetail.module.scss';
 const cx = classNames.bind(style);
 
 // ** [GET] 플레이그라운드 데이터 **
-const getDetailPlaygroundInfo = async (dispatch, playgroundId) => {
-  const { result, message, status, error } =
-    await getDetailPlayground(playgroundId);
-  const { data } = await getPlaygroundCheckAccel();
+const getDetailPlaygroundInfo = async (
+  dispatch,
+  playgroundId,
+  prefetchedResult = null,
+) => {
+  const { result, message, status, error } = prefetchedResult
+    ? {
+        result: prefetchedResult,
+        message: '',
+        status: STATUS_SUCCESS,
+        error: null,
+      }
+    : await getDetailPlayground(playgroundId);
+  // [엑셀러레이터 미사용] /check-accel 호출 제거 (하드코딩 IP 115.71.36.50 로
+  //   나가던 요청). 실패 시 catch 가 주던 값과 동일하게 고정 → 아래
+  //   accellator=false / isAccellator=false 로 기존 동작과 같음.
+  // const { data } = await getPlaygroundCheckAccel();
+  const data = { result: 'error' };
 
   if (status === STATUS_SUCCESS) {
     const payload = {
@@ -150,18 +165,39 @@ const PlaygroundDetail = () => {
     shallowEqual,
   );
 
-  const [tab, setTab] = useState('INFO');
+  const [deployment, setDeployment] = useState(null);
+  const [detailError, setDetailError] = useState('');
+  const [detailLoading, setDetailLoading] = useState(true);
 
-  const tabOptions = [
-    { label: 'information.label', value: 'INFO' },
-    { label: 'Model', value: 'MODEL' },
-    { label: 'Monitoring', value: 'MONITOR', disable: !init_deployment },
-  ];
-
-  // 배포가 중지되어 모니터링 대상이 사라지면 정보 탭으로 되돌린다.
+  // Redux 데이터 계약은 그대로 두고, 공용 shell의 식별/오류 상태만 id 기반 정규화 모델로 공급한다.
   useEffect(() => {
-    if (tab === 'MONITOR' && !init_deployment) setTab('INFO');
-  }, [tab, init_deployment]);
+    let cancelled = false;
+    setDetailLoading(true);
+    setDetailError('');
+    getNormalizedPlaygroundDetail(playgroundId, workspaceId)
+      .then((normalized) => {
+        if (cancelled) return;
+        if (normalized.mode !== 'single') {
+          throw new Error('이 경로는 단일모델 배포 상세 전용입니다.');
+        }
+        getDetailPlaygroundInfo(
+          dispatch,
+          +playgroundId,
+          normalized.rawDetail,
+        );
+        setDeployment(normalized);
+        setDetailError('');
+      })
+      .catch((error) => {
+        if (!cancelled) setDetailError(error.message);
+      })
+      .finally(() => {
+        if (!cancelled) setDetailLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [dispatch, playgroundId, workspaceId]);
 
   // ! [사이드 이펙트] 초기 데이터 렌더 **
   const eventSourceRef = useRef(null);
@@ -178,40 +214,46 @@ const PlaygroundDetail = () => {
     };
   }, [dispatch, playgroundId]);
 
+  const sections = {
+    INFO: (
+      <div className={cx('content-cont')}>
+        <PlaygroundInfo />
+      </div>
+    ),
+    MODEL: (
+      <div className={cx('model-cont')}>
+        <PlaygroundModel workspaceId={workspaceId} />
+        <PlaygroundModelParameterSetting />
+        <div className={cx('stacked-col')}>
+          <PlaygroundInstanceSettingInfo />
+          <PlaygroundExternalApi />
+        </div>
+        {/* <PlaygroundRag workspaceId={workspaceId} playgroundId={playgroundId} /> */}
+        {/* <PlaygroundPrompt workspaceId={workspaceId} /> */}
+      </div>
+    ),
+    MONITOR: <PlaygroundMonitoring />,
+  };
+
   return (
     <div className={cx('playground-cont')}>
-      <PlaygroundHeader
-        title={name}
-        getDetailPlaygroundInfo={getDetailPlaygroundInfo}
-        eventSourceRef={eventSourceRef}
+      <DeployDetailShell
+        deployment={deployment}
+        loading={detailLoading}
+        error={detailError}
+        monitorDisabled={!init_deployment}
+        header={
+          detailLoading || detailError ? null : (
+            <PlaygroundHeader
+              title={name}
+              getDetailPlaygroundInfo={getDetailPlaygroundInfo}
+              eventSourceRef={eventSourceRef}
+              skipFirstDetailRefresh
+            />
+          )
+        }
+        sections={sections}
       />
-      <div className={cx('tab-bar')}>
-        <Tab
-          type='c'
-          sidePaddingNone
-          option={tabOptions}
-          select={{ value: tab }}
-          tabHandler={({ value }) => setTab(value)}
-        />
-      </div>
-      {tab === 'INFO' && (
-        <div className={cx('content-cont')}>
-          <PlaygroundInfo />
-        </div>
-      )}
-      {tab === 'MODEL' && (
-        <div className={cx('model-cont')}>
-          <PlaygroundModel workspaceId={workspaceId} />
-          <PlaygroundModelParameterSetting />
-          <div className={cx('stacked-col')}>
-            <PlaygroundInstanceSettingInfo />
-            <PlaygroundExternalApi />
-          </div>
-          {/* <PlaygroundRag workspaceId={workspaceId} playgroundId={playgroundId} /> */}
-          {/* <PlaygroundPrompt workspaceId={workspaceId} /> */}
-        </div>
-      )}
-      {tab === 'MONITOR' && <PlaygroundMonitoring />}
     </div>
   );
 };

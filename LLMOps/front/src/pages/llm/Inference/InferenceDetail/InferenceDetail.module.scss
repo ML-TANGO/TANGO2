@@ -1,105 +1,78 @@
 @import '@src/styles/color.scss';
 
+// 페이지 여백은 상위 프레임 소관 — 형제 배포 상세(Edge/Standalone .playground-cont)와 동일하게
+//   화면 자체 padding 을 두지 않는다. 뒤로/제목·탭·상태배지는 플랫폼 컴포넌트가 스타일을 소유
+//   (DeployDetailHeader / molecules Tab / 조나단 Badge) → 여기서 재정의하지 않는다.
 .inference-detail {
-  padding: 32px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
 }
 
-.header {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.back-btn {
-  align-self: flex-start;
-  background: none;
-  border: none;
-  padding: 4px 0;
-  font-size: 13px;
-  color: $mono204;
-  cursor: pointer;
-
-  &:hover {
-    color: $blue104;
-  }
-}
-
-.header-info {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.meta-row {
-  flex-basis: 100%;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.meta-tag {
-  font-size: 12px;
-  padding: 4px 10px;
-  border-radius: 6px;
-
-  &.prompt {
-    background: rgba($lime604, 0.14);
-    color: $lime604;
-  }
-
-  &.inference {
-    background: rgba($blue104, 0.1);
-    color: $blue104;
-  }
-}
-
-.title {
-  font-size: 22px;
-  font-weight: 700;
-}
-
+// DeployDetailHeader right 슬롯 — 배지 옆 소유자.
 .owner {
-  color: $mono204;
+  color: $mono205;
+  font-family: SpoqaM;
   font-size: 13px;
+  line-height: 13px;
 }
 
 .not-found {
-  color: $mono204;
+  color: $mono205;
   font-size: 14px;
 }
 
-.mode-tabs {
+.tab-bar {
+  margin-bottom: 24px;
+}
+
+// 배포(파드) 상태 — 플랫폼 카드 idiom(형제 상세 .card 동형).
+.status-card {
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px 24px;
+  margin-bottom: 24px;
+  padding: 24px;
+  border: 1px solid $blue102;
+  border-radius: 16px;
+  background: $mono200;
+}
+
+.status-item {
+  display: inline-flex;
+  align-items: center;
   gap: 8px;
-  border-bottom: 1px solid $mono203;
+  min-width: 0;
 }
 
-.tab {
-  background: none;
-  border: none;
-  padding: 10px 16px;
+.status-label {
+  color: $mono205;
+  font-family: SpoqaM;
   font-size: 14px;
-  font-weight: 500;
-  color: $mono204;
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-
-  &.active {
-    color: $blue104;
-    border-bottom-color: $blue104;
-  }
+  line-height: 14px;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.test-panel {
+.status-hint {
+  flex-basis: 100%;
+  color: $mono205;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.content-cont {
   // 모달 셸(664px) 밖에서 TestComponent 를 인라인 렌더 — 폭만 보정.
   // PromptCom 은 자체 height(320px)/스크롤 보유 → 부모 높이 불필요.
   width: 100%;
   max-width: 720px;
+
+  // 데이터셋 일괄은 결과 표(입력·출력·정답·메트릭 다열)라 720px 로는 읽히지 않음 → 전폭 허용.
+  &.wide {
+    max-width: none;
+  }
 
   // 파드 준비 전 입력 잠금 — running 되면 자동 해제.
   &.locked {
@@ -107,48 +80,4 @@
     pointer-events: none;
     user-select: none;
   }
-}
-
-/* 배포(파드) 상태 바 */
-.status-bar {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 16px;
-  margin-bottom: 16px;
-  padding: 10px 14px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  background: #fafbfc;
-}
-
-.status-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #4b5563;
-}
-
-.status {
-  font-size: 12px;
-  font-weight: 600;
-
-  &.running {
-    color: #1d4ed8;
-  }
-
-  &.installing {
-    color: #ff7a00;
-  }
-
-  &.stop {
-    color: #9ca3af;
-  }
-}
-
-.status-hint {
-  font-size: 12px;
-  color: #6b7280;
 }

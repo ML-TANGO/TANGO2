@@ -1,177 +1,27 @@
 @import '@src/styles/color.scss';
 
+// 페이지 좌우/상하 패딩은 상위 프레임 소관(배포 목록 .playground-cont 와 동일) —
+//   화면 자체에 padding 을 두면 다른 페이지와 여백이 어긋난다.
+// 카드 그리드/카드 룩은 플랫폼 CardList·Card 가 자체 SCSS 로 소유 → 여기서 정의하지 않는다.
 .inference-cont {
-  padding: 32px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.title-bar {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.title {
-  font-size: 22px;
-  font-weight: 700;
-  color: $mono207;
-}
-
-.sub {
-  color: $mono205;
-  font-size: 14px;
-}
-
-.empty {
-  color: $mono204;
-  font-size: 14px;
-}
-
-.card-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 20px;
-}
-
-.create-card {
-  border: 1.5px dashed $blue104;
-  border-radius: 12px;
-  min-height: 130px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  cursor: pointer;
-  color: $blue104;
-  transition: background 0.15s;
-
-  &:hover {
-    background: rgba($blue104, 0.06);
-  }
-
-  .create-plus {
-    font-size: 34px;
-    line-height: 1;
-  }
-
-  .create-label {
-    font-size: 14px;
-    font-weight: 600;
-  }
-}
-
-.session-card {
-  border: 1px solid $mono203;
-  border-radius: 12px;
-  padding: 18px;
-  min-height: 130px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  cursor: pointer;
-  transition: border-color 0.15s, box-shadow 0.15s;
-
-  &:hover {
-    border-color: $blue104;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.07);
-  }
-
-  .card-top {
+  .title-bar {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
+    flex-direction: column;
     gap: 8px;
+    margin-bottom: 40px;
   }
 
-  .session-name {
-    font-size: 16px;
-    font-weight: 700;
-    color: $mono207;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .title {
+    margin: initial;
+    color: $blue107;
+    font-family: SpoqaB;
+    font-size: 24px;
+    line-height: 24px;
   }
 
-  .status {
-    font-size: 12px;
-    font-weight: 600;
-    white-space: nowrap;
-    padding: 3px 10px;
-    border-radius: 12px;
-
-    &.running {
-      color: $lime604;
-      background: rgba($lime604, 0.14);
-    }
-    &.installing {
-      color: $yellow303;
-      background: rgba($yellow303, 0.16);
-    }
-    &.stop {
-      color: $mono205;
-      background: $mono202;
-    }
-  }
-
-  .owner {
-    font-size: 13px;
+  .sub {
     color: $mono205;
+    font-size: 14px;
+    line-height: 20px;
   }
-
-  .model-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-
-  .model-tag {
-    font-size: 12px;
-    padding: 3px 8px;
-    border-radius: 6px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    max-width: 100%;
-
-    &.prompt {
-      background: rgba($lime604, 0.14);
-      color: $lime604;
-    }
-
-    &.inference {
-      background: rgba($blue104, 0.1);
-      color: $blue104;
-    }
-  }
-
-  .mode-badge {
-    align-self: flex-start;
-    margin-top: auto;
-    font-size: 12px;
-    padding: 4px 10px;
-    border-radius: 6px;
-    background: $mono202;
-    color: $mono205;
-
-    &.dual {
-      background: rgba($blue104, 0.1);
-      color: $blue104;
-      font-weight: 600;
-    }
-  }
-}
-
-// 세션 없음 안내(생성 진입점은 배포 탭) — 인라인 style 대체
-.empty-state {
-  padding: 48px 0;
-  text-align: center;
-  color: #9ca3af;
-}
-
-.empty-state-hint {
-  font-size: 13px;
-  margin-top: 6px;
 }

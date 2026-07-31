@@ -1,84 +1,59 @@
 @import '@src/styles/color.scss';
 
+// 폭 제한은 부모(InferenceDetail .content-cont)가 소유 → 여기서 max-width 를 두지 않는다.
 .panel {
   display: flex;
   flex-direction: column;
-  gap: 22px;
-  max-width: 900px;
+  gap: 24px;
 }
 
-.field {
+// 플랫폼 카드 idiom(형제 배포 상세 .card 동형). 카드 안에 또 카드를 두지 않는다.
+.card {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-}
-
-.prompt-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.field-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  color: $mono207;
-
-  .model-hint {
-    font-size: 12px;
-    font-weight: 500;
-    color: $blue104;
-  }
-}
-
-.domain-btn {
-  border: 1px solid $mono203;
+  gap: 16px;
+  min-width: 0;
+  padding: 24px;
+  border: 1px solid $blue102;
+  border-radius: 16px;
   background: $mono200;
-  border-radius: 6px;
-  padding: 4px 10px;
-  font-size: 12px;
-  color: $mono206;
-  cursor: pointer;
-
-  &.active {
-    border-color: $blue104;
-    color: $blue104;
-  }
 }
 
-.textarea {
-  width: 100%;
-  border: 1px solid $mono203;
-  border-radius: 8px;
-  padding: 10px 12px;
-  font-size: 14px;
-  line-height: 1.6;
-  resize: vertical;
-
-  &:focus {
-    outline: none;
-    border-color: $blue104;
-  }
+.card-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
+.card-title {
+  margin: 0;
+  color: $mono207;
+  font-family: SpoqaB;
+  font-size: 18px;
+  line-height: 18px;
+}
+
+// 우측 액션(도메인 최적화 토글) — 제목/배지와 같은 줄 끝.
+.head-actions {
+  margin-left: auto;
+}
+
+// 도메인 최적화 예시 묶음 — 카드 안쪽 보조 표면(카드 중첩 금지 → 옅은 배경 + 작은 radius).
 .domain-panel {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 14px;
+  gap: 16px;
+  padding: 16px;
   border: 1px solid $mono203;
   border-radius: 8px;
-  background: rgba($blue104, 0.03);
+  background: $mono201;
 }
 
 .qa-set {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .qa-header {
@@ -87,29 +62,15 @@
   justify-content: space-between;
 
   .qa-index {
-    font-size: 12px;
-    font-weight: 600;
     color: $mono205;
-  }
-
-  .qa-remove {
-    border: none;
-    background: none;
-    font-size: 12px;
-    color: $red502;
-    cursor: pointer;
+    font-family: SpoqaM;
+    font-size: 13px;
+    line-height: 13px;
   }
 }
 
 .qa-add {
   align-self: flex-start;
-  border: 1px dashed $blue104;
-  background: none;
-  border-radius: 6px;
-  padding: 6px 12px;
-  font-size: 13px;
-  color: $blue104;
-  cursor: pointer;
 }
 
 .run-row {
@@ -117,54 +78,16 @@
   justify-content: flex-end;
 }
 
-.run-btn {
-  border: none;
-  background: $blue104;
-  color: $mono200;
-  border-radius: 8px;
-  padding: 10px 24px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-
-  &.disabled {
-    background: $mono203;
-    cursor: not-allowed;
-  }
-}
-
 .result {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 24px;
 }
 
-.result-box {
-  border: 1px solid $mono203;
-  border-radius: 8px;
-  overflow: hidden;
-
-  &.optimized {
-    border-color: rgba($lime604, 0.5);
-  }
-
-  &.answer {
-    border-color: rgba($blue104, 0.4);
-  }
-
-  .result-head {
-    padding: 8px 14px;
-    font-size: 13px;
-    font-weight: 600;
-    background: $mono202;
-    color: $mono206;
-  }
-
-  .result-body {
-    padding: 14px;
-    font-size: 14px;
-    line-height: 1.7;
-    color: $mono207;
-    white-space: pre-wrap;
-  }
+.result-body {
+  color: $mono207;
+  font-size: 14px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
 }

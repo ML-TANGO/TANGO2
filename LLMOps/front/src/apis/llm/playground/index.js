@@ -62,6 +62,174 @@ export const getDetailPlayground = async (playgroundId) => {
   return res;
 };
 
+const normalizeResource = (role, configured, instance) => ({
+  role,
+  instanceId: configured?.model_instance_id ?? instance?.instance_id ?? null,
+  instanceName: instance?.instance_name ?? null,
+  instanceCount:
+    configured?.model_instance_count ?? instance?.instance_allocate ?? 1,
+  gpuCount: configured?.model_gpu_count ?? instance?.gpu_count ?? null,
+});
+
+const normalizeComponent = (role, playgroundId, detail, resource) => {
+  const model = detail?.model || {};
+  const modelId = model.model_allm_id ?? model.model_hf_id ?? null;
+  const modelName = model.model_allm_name ?? model.model_hf_id ?? null;
+  return {
+    role,
+    playgroundId: playgroundId ? +playgroundId : null,
+    modelId,
+    modelName,
+    modelCommitId: model.model_allm_commit_id ?? null,
+    modelCommitName: model.model_allm_commit_name ?? model.commit ?? null,
+    modelType: model.model_type ?? (modelId ? 'commit' : ''),
+    trainingType: model.training_type ?? '',
+    description: model.description ?? null,
+    access: model.access,
+    createDatetime: model.create_datetime ?? null,
+    updateDatetime: model.update_datetime ?? null,
+    // 역할별 생성 파라미터. 중지 상태에서 재구성할 때 저장값을 그대로 되살려야 하므로
+    //   정규화 모델에 실어 보낸다(상세 API가 model_parameter 를 5키로 내려준다).
+    params: detail?.model_parameter ?? null,
+    resource,
+  };
+};
+
+// 상세 API의 단일/이중 응답을 배포 상세 shell이 소비하는 한 형태로 좁힌다.
+// 이중 자원은 configure/start 사이에도 유지되는 model.dual.resources가 우선이며,
+// 기존 배포 행은 컴포넌트별 GET /playgrounds/{id}의 instance 정보로 폴백한다.
+export const normalizePlaygroundDetail = ({
+  detail,
+  childDetail = null,
+  overallStatus = 'stop',
+  statusComponents = [],
+}) => {
+  const mode = detail?.dual?.mode === 'dual' ? 'dual' : 'single';
+  const configuredResources = new Map(
+    (detail?.dual?.resources || []).map((resource) => [
+      resource.role,
+      resource,
+    ]),
+  );
+
+  const resources =
+    mode === 'dual'
+      ? [
+          normalizeResource(
+            'prompt_gen',
+            configuredResources.get('prompt_gen'),
+            childDetail?.info_instance?.model,
+          ),
+          normalizeResource(
+            'inference',
+            configuredResources.get('inference'),
+            detail?.info_instance?.model,
+          ),
+        ]
+      : [normalizeResource(null, null, detail?.info_instance?.model)];
+
+  const components =
+    mode === 'dual'
+      ? [
+          normalizeComponent(
+            'prompt_gen',
+            detail?.dual?.prompt_gen_playground_id,
+            childDetail,
+            resources[0],
+          ),
+          normalizeComponent(
+            'inference',
+            detail?.info?.id,
+            detail,
+            resources[1],
+          ),
+        ]
+      : [normalizeComponent(null, detail?.info?.id, detail, resources[0])];
+  const componentStatus = new Map(
+    statusComponents.map((component) => [component.role, component.status]),
+  );
+  const componentsWithStatus = components.map((component) => ({
+    ...component,
+    status: componentStatus.get(component.role || 'single') ?? overallStatus,
+  }));
+
+  const isStopped = overallStatus === 'stop';
+  const isDeploying = ['installing', 'pending'].includes(overallStatus);
+  const isRunning = overallStatus === 'running';
+  const isConfigured = componentsWithStatus.every(
+    (component) => component.modelId,
+  );
+
+  return {
+    id: detail?.info?.id ?? null,
+    mode,
+    info: detail?.info || null,
+    components: componentsWithStatus,
+    resources,
+    overallStatus,
+    capabilities: {
+      // 사용자 결정의 단일 UI 계약: 완전히 stop인 세션만 구성 편집 가능.
+      canEditConfig: isStopped,
+      canStart: isStopped && isConfigured,
+      canStop: isRunning || isDeploying,
+      canRestart: isRunning,
+      // 이중은 playground 합성 route가 LLM1→LLM2를 보존하므로 raw LLM2 우회 없이 게시 가능하다.
+      canPublish: isRunning && !!detail?.info?.deployment_id,
+    },
+    rawDetail: detail,
+  };
+};
+
+export const getNormalizedPlaygroundDetail = async (
+  playgroundId,
+  workspaceId,
+) => {
+  const detailResponse = await getDetailPlayground(playgroundId);
+  if (
+    detailResponse.status !== STATUS_SUCCESS ||
+    !detailResponse.result?.info?.id
+  ) {
+    throw new Error(
+      detailResponse.message || '요청한 배포를 찾을 수 없습니다.',
+    );
+  }
+  const detail = detailResponse.result;
+  if (
+    workspaceId != null &&
+    String(detail.info.workspace_id) !== String(workspaceId)
+  ) {
+    throw new Error('현재 워크스페이스에 속한 배포가 아닙니다.');
+  }
+
+  const childId = detail.dual?.prompt_gen_playground_id;
+  // 상태는 aggregate+components 한 번으로 받고, child 상세는 모델/모니터링 메타용으로만 조회한다.
+  const [statusResponse, childResponse] = await Promise.all([
+    getPlaygroundStatusSync(playgroundId),
+    childId ? getDetailPlayground(childId) : Promise.resolve(null),
+  ]);
+  if (statusResponse.status !== STATUS_SUCCESS) {
+    throw new Error(
+      statusResponse.message || '배포 상태를 확인할 수 없습니다.',
+    );
+  }
+  if (
+    childId &&
+    (childResponse?.status !== STATUS_SUCCESS ||
+      !childResponse?.result?.info?.id ||
+      String(childResponse.result.info.workspace_id) !==
+        String(detail.info.workspace_id))
+  ) {
+    throw new Error('이중모델 세션의 LLM1 연결 정보를 확인할 수 없습니다.');
+  }
+
+  return normalizePlaygroundDetail({
+    detail,
+    childDetail: childResponse?.result || null,
+    overallStatus: statusResponse.result?.status || 'stop',
+    statusComponents: statusResponse.result?.components || [],
+  });
+};
+
 export const getPlaygroundModels = async (workspaceId, search, isMine) => {
   const res = await callApi({
     url: `playgrounds/model?workspace_id=${workspaceId}&search=${search}&is_mine=${isMine}`,
@@ -163,7 +331,10 @@ export const getPlaygroundStatus = async (playgroundId) => {
 // 배포/파드 상태 단발 조회(폴링용). status/{id} 는 SSE 스트림이라 폴링에 부적합 → status-sync 사용.
 // 반환 result: { status: 'running'|'installing'|'pending'|'stop', init_deployment: bool }
 // skipDual=true → 이중 세션에서 부모(LLM2) 단독 상태(기본은 부모+자식 합산).
-export const getPlaygroundStatusSync = async (playgroundId, skipDual = false) => {
+export const getPlaygroundStatusSync = async (
+  playgroundId,
+  skipDual = false,
+) => {
   const res = await callApi({
     url: `playgrounds/status-sync/${playgroundId}`,
     method: 'get',
@@ -241,14 +412,77 @@ export const postDualSession = async ({
 // 이중모델 세션 '셸' 생성(단일 postPlayground 대칭) — 모델/자원 없이 세션 행만.
 // LLM1/LLM2·GPU 선택과 실제 배포는 상세(/dual-deploy)의 postDualProvision 에서.
 // 반환 result: { session_playground_id }.
-export const postDualShell = async ({ workspace_id, name }) => {
+export const postDualShell = async ({
+  workspace_id,
+  name,
+  description,
+  access,
+  owner_id,
+  user_id,
+}) => {
   const res = await callApi({
     url: 'playgrounds/dual-session/shell',
     method: 'post',
     body: {
       workspace_id: +workspace_id,
       name,
+      description,
+      access,
+      owner_id,
+      users_id: user_id,
     },
+  });
+  return res;
+};
+
+const dualOptionsBody = ({
+  playground_id,
+  prompt_gen_model_id,
+  inference_model_id,
+  model_instance_id,
+  prompt_gen_commit_id,
+  inference_commit_id,
+  prompt_gen_gpu_count,
+  inference_gpu_count,
+  prompt_gen_params,
+  inference_params,
+}) => ({
+  playground_id: +playground_id,
+  prompt_gen_model_id: +prompt_gen_model_id,
+  inference_model_id: +inference_model_id,
+  model_instance_id: +model_instance_id,
+  prompt_gen_commit_id: prompt_gen_commit_id ? +prompt_gen_commit_id : null,
+  inference_commit_id: inference_commit_id ? +inference_commit_id : null,
+  prompt_gen_gpu_count: +(prompt_gen_gpu_count ?? 1),
+  inference_gpu_count: +(inference_gpu_count ?? 1),
+  // 역할별 playground 행에 따로 저장되는 생성 파라미터를 구성 저장 단계까지 보존한다.
+  prompt_gen_params: prompt_gen_params ?? null,
+  inference_params: inference_params ?? null,
+});
+
+export const putDualOptions = async (options) => {
+  const res = await callApi({
+    url: 'playgrounds/dual-session/options',
+    method: 'put',
+    body: dualOptionsBody(options),
+  });
+  return res;
+};
+
+export const postDualStart = async (playgroundId) => {
+  const res = await callApi({
+    url: 'playgrounds/dual-session/start',
+    method: 'post',
+    body: { playground_id: +playgroundId },
+  });
+  return res;
+};
+
+export const postDualRestart = async (playgroundId) => {
+  const res = await callApi({
+    url: 'playgrounds/dual-session/restart',
+    method: 'post',
+    body: { playground_id: +playgroundId },
   });
   return res;
 };

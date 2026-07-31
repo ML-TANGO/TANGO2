@@ -1,9 +1,19 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useSelector } from 'react-redux';
 import { EventSourcePolyfill } from 'event-source-polyfill';
 import Cookies from 'universal-cookie';
 
+import {
+  Badge,
+  ButtonV2,
+  Checkbox,
+  Radio,
+  Selectbox,
+} from '@jonathan/ui-react';
+
+import EmptyBox from '@src/components/molecules/EmptyBox';
+import InputBoxWithLabel from '@src/components/molecules/InputBoxWithLabel';
 import {
   getPlaygroundTestOptions,
   getPlaygroundTestDataset,
@@ -20,14 +30,20 @@ const MODE = import.meta.env.VITE_REACT_APP_MODE;
 const cookies = new Cookies();
 
 import classNames from 'classnames/bind';
-import style from './DualBatchInference.module.scss';
+import style from './BatchInference.module.scss';
 
 const cx = classNames.bind(style);
 
-// 이중모델 데이터셋 일괄 추론(WBS 4.3 배치, 목업 InferenceDetailPage 배치모드 포팅).
-//   데이터셋 선택 → 샘플 수 → 메트릭 → 일괄 실행(LLM1→LLM2 체인 N회) → 결과(요약+표).
-//   메트릭은 BE 인-프로세스 BLEU/ROUGE(자체메트릭). 동기 배치라 샘플 수 상한 10(실체 부여:
+// 데이터셋 일괄 추론(WBS 4.3 배치, 목업 InferenceDetailPage 배치모드 포팅) — 단독·이중 공용.
+//   데이터셋 선택 → 파일 → 샘플 수 → 메트릭 → 일괄 실행 → 결과(요약+표).
+//   모드는 BE 가 세션에서 판별한다(GET /playgrounds/batch/sse → resolve_dual_prompt_gen):
+//   이중이면 샘플마다 LLM1→LLM2 체인(추론 2N), 단독이면 데이터셋 프롬프트로 바로 추론(N).
+//   FE 는 같은 화면·같은 스트림 규약을 쓰고 isDual 은 호출량 안내 문구에만 쓴다.
+//   메트릭은 BE 인-프로세스 BLEU/ROUGE(자체메트릭). 샘플 수 상한 10(실체 부여:
 //   목업 [10,50,100,500]→[3,5,10]). SPICE/METEOR/CIDEr(목업)는 벤치 컨테이너 전용→미노출.
+//   UI 는 플랫폼 조나단 규약 — 설정=카드 1장(라벨은 InputBoxWithLabel), 선택 컨트롤은
+//   데이터셋/파일=Selectbox(개수 가변·Radio 의 ul 은 flex 라 줄바꿈 불가), 샘플 수=Radio,
+//   메트릭=Checkbox. 진행률/결과 표는 xlib 에 대응 컴포넌트(Progress·Table)가 없어 커스텀 유지.
 const SAMPLE_COUNTS = [3, 5, 10];
 const METRICS = [
   { id: 'bleu', label: 'BLEU', keys: ['bleu'] },
@@ -39,17 +55,28 @@ const METRIC_COLS = [
   { key: 'rouge2', label: 'ROUGE-2' },
   { key: 'rougeL', label: 'ROUGE-L' },
 ];
+const SAMPLE_OPTIONS = SAMPLE_COUNTS.map((n) => ({
+  label: `${n}개`,
+  value: n,
+  disabled: false,
+}));
 
-// 외부 SDS(VLM) 배치 출력 형식 — 배치는 데이터셋만 선택하므로 UI 없이 기본값 사용
-// (이미지/AIS 는 데이터셋 행의 image·ais_rows 에서 per-sample 로 읽음).
-const SDS_BATCH_PARAMS = {
-  output_type: '한글 해상상황묘사',
-  max_new_tokens: 256,
-  repetition_penalty: 1.1,
-  do_sample: false,
+// 외부 SDS(VLM) 배치 — 이미지/AIS 는 데이터셋 행(image·ais_rows)에서 per-sample 로 읽는다.
+//   ⚠️ 출력 유형을 UI 로 노출하지 않는 이유(2026-07-27 클러스터 실측, playground 38 / dataset 7):
+//   현재 배포된 eva-vlm-backend 는 텍스트 프롬프트에 전혀 반응하지 않는다 — custom_prompt 를
+//   바꿔도, custom_prompt 를 빼고 output_type(컨테이너 PROMPT_MAP)만 바꿔도 출력이 바이트 단위
+//   동일했다(배선은 client→BFF→adapter→container→모델입력 4계층 모두 정상 확인). 즉 선택을
+//   노출하면 아무 효과 없는 컨트롤이 된다. 컨테이너가 프롬프트에 반응하게 되면 이 상수를
+//   Selectbox(OUTPUT_TYPE_OPTIONS)로 바꾸고 데이터셋 정답 유형과 맞추도록 안내할 것.
+const SDS_BATCH_OUTPUT_TYPE = '간결 항해조력메시지';
+
+// Selectbox 는 폭을 스스로 잡지 않으므로 폼 컨트롤 폭을 명시(플랫폼 선례와 동일 패턴).
+const SELECT_STYLE = {
+  selectboxForm: { width: '100%' },
+  listForm: { width: '100%' },
 };
 
-const DualBatchInference = ({ playgroundId, isExternal = false }) => {
+const BatchInference = ({ playgroundId, isExternal = false, isDual = false }) => {
   const [datasets, setDatasets] = useState([]);
   const [datasetId, setDatasetId] = useState(null);
   const [files, setFiles] = useState([]);
@@ -95,6 +122,19 @@ const DualBatchInference = ({ playgroundId, isExternal = false }) => {
     setSelectedMetrics((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     );
+
+  // Selectbox 는 {label,value} 리스트 규약 → 원본을 변형하지 않고 표시용으로만 파생.
+  const datasetOptions = useMemo(
+    () => datasets.map((d) => ({ label: d.name, value: d.id })),
+    [datasets],
+  );
+  const fileOptions = useMemo(
+    () => files.map((f) => ({ label: f.file_name, value: f.file_name })),
+    [files],
+  );
+  const selectedDataset =
+    datasetOptions.find((o) => String(o.value) === String(datasetId)) ?? null;
+  const selectedFile = fileOptions.find((o) => o.value === filename) ?? null;
 
   // 결과 렌더는 BE 가 실제 사용한 metric_set 기준(FE 에서 전체 해제해도 BE 기본값과 정합)
   const shownMetrics = result?.metric_set ?? selectedMetrics;
@@ -152,11 +192,11 @@ const DualBatchInference = ({ playgroundId, isExternal = false }) => {
     });
     if (selectedMetrics.length)
       params.set('metrics', selectedMetrics.join(','));
-    // 외부 SDS: 출력 형식만 전달(이미지/AIS 는 데이터셋 행에서 per-sample 로 읽음).
-    if (isExternal) params.set('output_type', SDS_BATCH_PARAMS.output_type);
+    // 외부 SDS: 출력 유형만 전달(이미지/AIS 는 데이터셋 행에서 per-sample 로 읽음).
+    if (isExternal) params.set('output_type', SDS_BATCH_OUTPUT_TYPE);
 
     const es = new EventSourcePolyfill(
-      `${API_HOST}playgrounds/dual-batch/sse?${params.toString()}`,
+      `${API_HOST}playgrounds/batch/sse?${params.toString()}`,
       {
         headers: {
           'Content-Type': 'application/json;charset=UTF-8',
@@ -214,111 +254,132 @@ const DualBatchInference = ({ playgroundId, isExternal = false }) => {
 
   return (
     <div className={cx('panel')}>
-      <section className={cx('section')}>
-        <h3 className={cx('section-title')}>데이터셋 선택</h3>
+      <section className={cx('card')}>
+        <div className={cx('card-head')}>
+          <h3 className={cx('card-title')}>일괄 추론 설정</h3>
+          {isExternal && <Badge type='gray' size='sm' label='SDS · VLM' />}
+        </div>
+
         {isExternal && (
           <p className={cx('note')}>
-            * SDS(VLM) 추론은 샘플별 이미지·AIS가 필요합니다. 데이터셋 각 행에
+            SDS(VLM) 추론은 샘플별 이미지·AIS가 필요합니다. 데이터셋 각 행에
             image(데이터셋 내 상대경로)와 ais_rows(자선 my_ship=1 포함)를 포함해
-            주세요.
+            주세요. AIS 필드가 없으면 프롬프트의 [선박 AIS 정보] 텍스트에서
+            복원합니다.
           </p>
         )}
+
         {datasets.length === 0 ? (
-          <p className={cx('empty')}>사용 가능한 데이터셋이 없습니다.</p>
+          <EmptyBox
+            isBox
+            customStyle={{ height: '120px' }}
+            text='사용 가능한 데이터셋이 없습니다.'
+          />
         ) : (
-          <div className={cx('ds-list')}>
-            {datasets.map((d) => {
-              const sel = String(datasetId) === String(d.id);
-              return (
-                <div
-                  key={d.id}
-                  className={cx('ds-item', sel && 'selected')}
-                  onClick={() => handleDatasetSelect(d.id)}
-                >
-                  <span className={cx('ds-radio', sel && 'on')} />
-                  <span className={cx('ds-name')}>{d.name}</span>
-                </div>
-              );
-            })}
+          <div className={cx('form-row')}>
+            <InputBoxWithLabel
+              labelText='데이터셋'
+              labelSize='large'
+              disableErrorMsg
+            >
+              <Selectbox
+                list={datasetOptions}
+                selectedItem={selectedDataset}
+                placeholder='데이터셋을 선택하세요'
+                onChange={(item) => handleDatasetSelect(item.value)}
+                customStyle={SELECT_STYLE}
+              />
+            </InputBoxWithLabel>
+
+            {/* 데이터셋 안의 파일 선택 — 1개여도 노출(어떤 파일로 추론하는지 명시) */}
+            <InputBoxWithLabel
+              labelText='파일'
+              labelSize='large'
+              disableErrorMsg
+            >
+              <Selectbox
+                list={fileOptions}
+                selectedItem={selectedFile}
+                placeholder={
+                  datasetId ? '파일을 선택하세요' : '데이터셋을 먼저 선택하세요'
+                }
+                isDisable={fileOptions.length === 0}
+                onChange={(item) => setFilename(item.value)}
+                customStyle={SELECT_STYLE}
+              />
+            </InputBoxWithLabel>
           </div>
         )}
-        {/* 데이터셋 안의 파일 선택 — 1개여도 노출(어떤 파일로 추론하는지 명시) */}
-        {files.length > 0 && (
-          <select
-            className={cx('file-select')}
-            aria-label='데이터셋 파일'
-            value={filename ?? ''}
-            onChange={(e) => setFilename(e.target.value)}
-          >
-            {files.map((f) => (
-              <option key={f.file_name} value={f.file_name}>
-                {f.file_name}
-              </option>
-            ))}
-          </select>
-        )}
-      </section>
 
-      <section className={cx('section')}>
-        <h3 className={cx('section-title')}>샘플 수</h3>
-        <div className={cx('chip-row')}>
-          {SAMPLE_COUNTS.map((n) => (
-            <div
-              key={n}
-              className={cx('chip', sampleCount === n && 'selected')}
-              onClick={() => setSampleCount(n)}
-            >
-              {n}개
-            </div>
-          ))}
-        </div>
+        <InputBoxWithLabel
+          labelText='샘플 수'
+          labelSize='large'
+          disableErrorMsg
+        >
+          <Radio
+            name='batch-sample-count'
+            options={SAMPLE_OPTIONS}
+            selectedValue={sampleCount}
+            onChange={(e) => setSampleCount(Number(e.currentTarget.value))}
+          />
+        </InputBoxWithLabel>
         <p className={cx('note')}>
-          * 동기 배치라 최대 10개까지 (샘플당 프롬프트→추론 2회 호출).
+          {isDual
+            ? '샘플당 프롬프트 생성 → 추론 2회를 호출하므로 최대 10개까지 지원합니다.'
+            : '샘플당 추론 1회를 호출합니다. 동기 배치라 최대 10개까지 지원합니다.'}
         </p>
-      </section>
 
-      <section className={cx('section')}>
-        <h3 className={cx('section-title')}>정량 메트릭 (reference 필요)</h3>
-        <div className={cx('chip-row')}>
-          {METRICS.map((m) => (
-            <div
-              key={m.id}
-              className={cx(
-                'chip',
-                selectedMetrics.includes(m.id) && 'selected',
-              )}
-              onClick={() => toggleMetric(m.id)}
-            >
-              {m.label}
-            </div>
-          ))}
-        </div>
+        <InputBoxWithLabel
+          labelText='정량 메트릭'
+          optionalText='reference 필요'
+          labelSize='large'
+          optionalSize='medium'
+          disableErrorMsg
+        >
+          <div className={cx('check-row')}>
+            {METRICS.map((m) => (
+              <Checkbox
+                key={m.id}
+                label={m.label}
+                checked={selectedMetrics.includes(m.id)}
+                onChange={() => toggleMetric(m.id)}
+              />
+            ))}
+          </div>
+        </InputBoxWithLabel>
       </section>
 
       <div className={cx('run-row')}>
-        <button
-          type='button'
-          className={cx(
-            'run-btn',
-            (!datasetId || !filename || running) && 'disabled',
-          )}
-          disabled={!datasetId || !filename || running}
-          onClick={handleRun}
-        >
-          {running ? '일괄 추론 실행 중...' : '일괄 추론 실행'}
-        </button>
-        {/* 샘플당 ~16s → 진행률 표시(무반응 오인 방지) */}
+        {/* 샘플당 ~16s → 진행률 표시(무반응 오인 방지). xlib 에 Progress 컴포넌트 없음 → 텍스트. */}
         {running && progress && (
-          <span className={cx('note')}>
+          <span className={cx('progress')}>
             {progress.done}/{progress.total} 샘플 완료
             {progress.total > progress.done &&
               ` · 남은 예상 ${Math.max(1, Math.round(((progress.total - progress.done) * 16) / 60))}분`}
           </span>
         )}
+        <ButtonV2
+          type='solid'
+          colorType='blue'
+          size='l'
+          label={running ? '일괄 추론 중' : '일괄 추론 실행'}
+          isLoading={running}
+          disabled={!datasetId || !filename || running}
+          onClick={handleRun}
+        />
       </div>
 
       {result && (
-        <div className={cx('results')}>
+        <section className={cx('card')}>
+          <div className={cx('card-head')}>
+            <h3 className={cx('card-title')}>추론 결과</h3>
+            <Badge
+              type={result.partial ? 'yellow' : 'blue'}
+              size='sm'
+              label={`${result.sample_count ?? (result.samples ?? []).length}건`}
+            />
+          </div>
+
           {result.partial && (
             <p className={cx('warn')}>
               중단된 배치의 부분 결과입니다 (완료된 {result.sample_count}건만
@@ -331,9 +392,10 @@ const DualBatchInference = ({ playgroundId, isExternal = false }) => {
               (출력만 표시).
             </p>
           )}
+
           {result.has_reference && result.summary && (
             <div className={cx('summary-box')}>
-              <h3 className={cx('summary-title')}>종합 결과 (평균)</h3>
+              <span className={cx('summary-title')}>종합 결과 (평균)</span>
               <div className={cx('summary-metrics')}>
                 {activeMetricCols.map(
                   (col) =>
@@ -349,6 +411,7 @@ const DualBatchInference = ({ playgroundId, isExternal = false }) => {
               </div>
             </div>
           )}
+
           <div className={cx('table-wrap')}>
             <table className={cx('result-table')}>
               <thead>
@@ -383,10 +446,10 @@ const DualBatchInference = ({ playgroundId, isExternal = false }) => {
               </tbody>
             </table>
           </div>
-        </div>
+        </section>
       )}
     </div>
   );
 };
 
-export default DualBatchInference;
+export default BatchInference;

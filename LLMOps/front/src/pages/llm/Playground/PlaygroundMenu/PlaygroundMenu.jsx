@@ -64,7 +64,12 @@ const getPlaygroundInfo = async (workspace_id, setDeployItems) => {
         id: r.id,
         kind,
         title: r.name,
-        typeBadge: TYPE_LABEL[kind] || kind,
+        // 이중 세션은 deploy_type 을 받지 않아 항상 cluster 다(CreateDualShellInput 에 필드 없음).
+        //   → 유형 칩이 변별력 0 인 중복 정보인데, 상태+유형+이중 3칩이 카드 너비를 넘겨
+        //     줄바꿈되므로 이중 행에서는 유형 칩을 생략한다.
+        typeBadge: r.mode === 'dual' ? undefined : TYPE_LABEL[kind] || kind,
+        qualifierBadge: r.mode === 'dual' ? '이중모델' : undefined,
+        qualifierBadgeKind: r.mode === 'dual' ? 'multimodal' : undefined,
         subTitle: r.description,
         constructor: r.owner,
         updateTime: r.update_datetime,
@@ -73,7 +78,7 @@ const getPlaygroundInfo = async (workspace_id, setDeployItems) => {
         isAccess: r.access,
         userList: r.users,
         status: r.status,
-        // 이중모델 세션 판별(라우팅용) — mode==='dual' 이면 /dual-deploy 상세로.
+        // 이중모델 세션 판별(라우팅용) — mode==='dual' 이면 공용 배포 상세 shell로.
         mode: r.mode,
       };
     });
@@ -129,9 +134,11 @@ const PlaygroundMenu = () => {
         return;
       }
       const item = deployItems.find((i) => String(i.id) === String(id));
-      // 이중모델 세션 → 배포측 이중 상세(구성/배포). 상세가 프로비저닝 여부에 따라 추론으로 리다이렉트.
+      // 이중모델 세션 → 프로비저닝 뒤에도 유지되는 배포 상세(구성/상태/추론 진입).
       if (item?.mode === 'dual') {
-        history.push(`/user/workspace/${workspace_id}/dual-deploy/${id}`);
+        history.push(
+          `/user/workspace/${workspace_id}/llmplayground/${id}/dual-deploy`,
+        );
         return;
       }
       history.push(detailPath(workspace_id, item?.kind, id));

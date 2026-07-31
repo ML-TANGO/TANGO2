@@ -1,5 +1,7 @@
 import { useRef, useState } from 'react';
 
+import { Badge, ButtonV2, Textarea } from '@jonathan/ui-react';
+
 import { postPlaygroundTestChat } from '@src/apis/llm/playground';
 import {
   ImageUploadField,
@@ -27,11 +29,17 @@ const MY_SHIP_DEFAULT = {
   draft: 5,
 };
 
+// 조나단 Textarea 는 rest props 를 wrapper div 로 보내므로 aria-label 은 options 로 넘겨야
+//   내부 <textarea> 에 붙는다(접근성 이름 유지).
+const taOptions = (label, rows) => ({ 'aria-label': label, rows });
+
 // 이중모델 직접 입력 추론(WBS 4.3).
 //   시스템 프롬프트 + 도메인 최적화(예시기반) + 사용자 입력 → BE playground_dual_test
 //   (LLM1 재작성 → LLM2 추론). prompt_gen 은 세션 링크에서 서버 자동 파생.
 //   isExternal=true → LLM2 가 외부 SDS(VLM): 이미지+AIS+출력유형 입력을 추가로 받아
 //   external_payload 로 전달(BE 가 LLM1 출력을 custom_prompt 로 연결). text→SDS.
+//   UI 는 플랫폼 조나단 규약 — 섹션=카드(padding 24/radius 16), 입력=Textarea, 버튼=ButtonV2,
+//   모델/단계 표기=Badge(이모지 미사용).
 const DualDirectInference = ({
   playgroundId,
   promptModelName,
@@ -126,29 +134,30 @@ const DualDirectInference = ({
 
   return (
     <div className={cx('panel')}>
-      <div className={cx('field')}>
-        <div className={cx('prompt-row')}>
-          <label className={cx('field-label')}>
-            시스템 프롬프트
-            {promptModelName && (
-              <span className={cx('model-hint')}>→ {promptModelName}</span>
-            )}
-          </label>
-          <button
-            type='button'
-            className={cx('domain-btn', domainOpen && 'active')}
-            onClick={() => setDomainOpen((v) => !v)}
-          >
-            도메인 최적화 {domainOpen ? '▲' : '▼'}
-          </button>
+      <section className={cx('card')}>
+        <div className={cx('card-head')}>
+          <h3 className={cx('card-title')}>시스템 프롬프트</h3>
+          {promptModelName && (
+            <Badge type='gray' size='sm' label={`LLM1 · ${promptModelName}`} />
+          )}
+          <div className={cx('head-actions')}>
+            <ButtonV2
+              type={domainOpen ? 'solid' : 'outline'}
+              colorType='blue'
+              size='s'
+              label='도메인 최적화'
+              onClick={() => setDomainOpen((v) => !v)}
+            />
+          </div>
         </div>
-        <textarea
-          className={cx('textarea')}
-          rows={3}
-          maxLength={4000}
-          aria-label='시스템 프롬프트'
+        <Textarea
+          size='large'
           placeholder='시스템 역할이나 컨텍스트를 입력하세요 (선택)'
           value={systemPrompt}
+          name='system-prompt'
+          maxLength={4000}
+          options={taOptions('시스템 프롬프트', 3)}
+          customStyle={{ fontSize: '14px', height: '96px' }}
           onChange={(e) => setSystemPrompt(e.target.value)}
         />
         {domainOpen && (
@@ -158,33 +167,35 @@ const DualDirectInference = ({
                 <div className={cx('qa-header')}>
                   <span className={cx('qa-index')}>예시 {i + 1}</span>
                   {examples.length > 1 && (
-                    <button
-                      type='button'
-                      className={cx('qa-remove')}
+                    <ButtonV2
+                      type='clear'
+                      colorType='red'
+                      size='s'
+                      label='삭제'
                       onClick={() => handleExampleRemove(i)}
-                    >
-                      삭제
-                    </button>
+                    />
                   )}
                 </div>
-                <textarea
-                  className={cx('textarea')}
-                  rows={2}
-                  maxLength={2000}
-                  aria-label={`예시 ${i + 1} 질의`}
+                <Textarea
+                  size='large'
                   placeholder='예시 질의를 입력하세요'
                   value={ex.query}
+                  name={`example-query-${ex.id}`}
+                  maxLength={2000}
+                  options={taOptions(`예시 ${i + 1} 질의`, 2)}
+                  customStyle={{ fontSize: '14px', height: '72px' }}
                   onChange={(e) =>
                     handleExampleChange(i, 'query', e.target.value)
                   }
                 />
-                <textarea
-                  className={cx('textarea')}
-                  rows={2}
-                  maxLength={2000}
-                  aria-label={`예시 ${i + 1} 답변`}
+                <Textarea
+                  size='large'
                   placeholder='예시 답변을 입력하세요'
                   value={ex.answer}
+                  name={`example-answer-${ex.id}`}
+                  maxLength={2000}
+                  options={taOptions(`예시 ${i + 1} 답변`, 2)}
+                  customStyle={{ fontSize: '14px', height: '72px' }}
                   onChange={(e) =>
                     handleExampleChange(i, 'answer', e.target.value)
                   }
@@ -192,74 +203,89 @@ const DualDirectInference = ({
               </div>
             ))}
             {examples.length < EXAMPLES_MAX && (
-              <button
-                type='button'
-                className={cx('qa-add')}
-                onClick={handleExampleAdd}
-              >
-                + 예시 추가
-              </button>
+              <div className={cx('qa-add')}>
+                <ButtonV2
+                  type='outline'
+                  colorType='blue'
+                  size='s'
+                  label='예시 추가'
+                  onClick={handleExampleAdd}
+                />
+              </div>
             )}
           </div>
         )}
-      </div>
+      </section>
 
-      <div className={cx('field')}>
-        <label className={cx('field-label')}>
-          사용자 입력
+      <section className={cx('card')}>
+        <div className={cx('card-head')}>
+          <h3 className={cx('card-title')}>사용자 입력</h3>
           {inferenceModelName && (
-            <span className={cx('model-hint')}>→ {inferenceModelName}</span>
+            <Badge
+              type='blue'
+              size='sm'
+              label={`LLM2 · ${inferenceModelName}`}
+            />
           )}
-        </label>
-        <textarea
-          className={cx('textarea')}
-          rows={5}
-          maxLength={4000}
-          aria-label='사용자 입력'
+        </div>
+        <Textarea
+          size='large'
           placeholder='추론할 내용을 입력하세요...'
           value={userInput}
+          name='user-input'
+          maxLength={4000}
+          options={taOptions('사용자 입력', 5)}
+          customStyle={{ fontSize: '14px', height: '148px' }}
           onChange={(e) => setUserInput(e.target.value)}
         />
-      </div>
+      </section>
 
       {isExternal && (
-        <div className={cx('field')}>
-          <label className={cx('field-label')}>
-            SDS(VLM) 입력 — 이미지 · AIS · 출력 유형
-          </label>
+        <section className={cx('card')}>
+          <div className={cx('card-head')}>
+            <h3 className={cx('card-title')}>SDS(VLM) 입력</h3>
+            <Badge type='gray' size='sm' label='이미지 · AIS · 출력 유형' />
+          </div>
           <ImageUploadField value={imageB64} onChange={setImageB64} />
           <OutputTypeSelect value={outputType} onChange={setOutputType} />
           <AISRowsForm value={aisRows} onChange={setAisRows} />
-        </div>
+        </section>
       )}
 
       <div className={cx('run-row')}>
-        <button
-          type='button'
-          className={cx('run-btn', !canRun && 'disabled')}
+        <ButtonV2
+          type='solid'
+          colorType='blue'
+          size='l'
+          label={running ? '추론 중' : '추론 실행'}
+          isLoading={running}
           disabled={!canRun}
           onClick={handleRun}
-        >
-          {running ? '추론 중...' : '추론 실행'}
-        </button>
+        />
       </div>
 
       {result && (
         <div className={cx('result')}>
           {result.optimized_prompt && (
-            <div className={cx('result-box', 'optimized')}>
-              <div className={cx('result-head')}>
-                📝 최적화된 프롬프트 (LLM1)
+            <section className={cx('card')}>
+              <div className={cx('card-head')}>
+                <h3 className={cx('card-title')}>최적화된 프롬프트</h3>
+                <Badge type='gray' size='sm' label='LLM1' />
               </div>
               <div className={cx('result-body')}>{result.optimized_prompt}</div>
-            </div>
+            </section>
           )}
-          <div className={cx('result-box', 'answer')}>
-            <div className={cx('result-head')}>
-              🤖 추론 결과 (LLM2{isExternal ? ' · SDS' : ''})
+          <section className={cx('card')}>
+            <div className={cx('card-head')}>
+              <h3 className={cx('card-title')}>추론 결과</h3>
+              <Badge
+                type='blue'
+                size='sm'
+                label={isExternal ? 'LLM2 · SDS' : 'LLM2'}
+              />
             </div>
             <div className={cx('result-body')}>{result.output || '-'}</div>
-          </div>
+          </section>
         </div>
       )}
     </div>

@@ -32,6 +32,7 @@ import style from './NewDeploymentModal.module.scss';
 const cx = classNames.bind(style);
 
 const EMPTY_LIST = [];
+const DUAL_NAME_MAX_LENGTH = 20;
 
 // 배포 대상(playground.deploy_type) 3종 — 라벨/설명은 i18n(deploymentTarget.*).
 const TARGETS = [
@@ -63,7 +64,7 @@ const detailPath = (wid, kind, id) => {
 // 배포 생성 모달(D6 v3) — 플랫폼 표준 단일 모달. 단일/이중 모두 '무엇을 만들지'만 받고,
 //   모델·자원 선택은 생성 후 상세 화면에서(단일=llmplayground 상세, 이중=/dual-deploy 상세).
 //   [단일] 배포 대상 + 이름/설명/공개범위/소유자 → POST /playgrounds(셸) → 유형별 상세.
-//   [이중] 이름 → POST /playgrounds/dual-session/shell(셸) → 이중 배포 상세(LLM1/LLM2·GPU 선택).
+//   [이중] 이름/설명/공개범위/소유자/사용자 → shell 생성 → 이중 배포 상세(LLM1/LLM2·GPU 선택).
 const NewDeploymentModal = ({ data, type }) => {
   const { t } = useTranslation();
   const dispatch = useDispatch();
@@ -90,15 +91,20 @@ const NewDeploymentModal = ({ data, type }) => {
   }, []);
 
   const nameError = calNameError(name);
-  // 단일 = 배포명 규약(공백·특수문자 제한) / 이중 = 세션명(비어있지 않기만).
+  // 이중은 -promptgen 파생명이 DB VARCHAR(32)에 온전히 들어가도록 부모 이름을 20자로 제한한다.
   const singleFooter = calFooterMessage(name, nameError);
-  const footerMessage = singleFooter;
+  const dualFooter =
+    singleFooter ||
+    (name.trim().length > DUAL_NAME_MAX_LENGTH
+      ? '이중모델 배포 이름은 20자 이하로 입력해 주세요.'
+      : '');
+  const footerMessage = mode === 'dual' ? dualFooter : singleFooter;
 
   const validate =
     mode === 'single'
       ? !!target && !singleFooter && !!owner?.value
-      : // 이중 세션명도 다운스트림에서 배포명(-promptgen/-infer)으로 파생 → 단일과 동일 규약 적용.
-        name.trim().length > 0 && !singleFooter;
+      : // 이중 세션명도 child 배포명(-promptgen)으로 파생 → 단일과 동일 규약 적용.
+        name.trim().length > 0 && !dualFooter && !!owner?.value;
 
   const createSingle = async () => {
     const res = await postPlayground({
@@ -128,7 +134,14 @@ const NewDeploymentModal = ({ data, type }) => {
 
   const createDual = async () => {
     // 셸만 생성(모델/자원 없음) → 이중 배포 상세에서 LLM1/LLM2·GPU 선택 후 배포(provision).
-    const res = await postDualShell({ workspace_id, name: name.trim() });
+    const res = await postDualShell({
+      workspace_id,
+      name: name.trim(),
+      description,
+      access: isAccess,
+      owner_id: owner?.value,
+      user_id: userList.current,
+    });
     if (res.status !== STATUS_SUCCESS) {
       errorToastMessage(res.error, res.message);
       return false;
@@ -136,7 +149,9 @@ const NewDeploymentModal = ({ data, type }) => {
     await handleRefresh?.();
     const newId = Number(res.result?.session_playground_id);
     if (newId > 0) {
-      history.push(`/user/workspace/${workspace_id}/dual-deploy/${newId}`);
+      history.push(
+        `/user/workspace/${workspace_id}/llmplayground/${newId}/dual-deploy`,
+      );
     } else {
       toast.success(
         '이중모델 세션이 생성되었습니다. 배포 목록에서 확인해 주세요.',
@@ -193,8 +208,10 @@ const NewDeploymentModal = ({ data, type }) => {
               onChange={(e) => setName(e.target.value)}
               name='deployment-name'
               value={name}
-              status={nameError || name === '' ? 'error' : 'default'}
-              options={{ maxLength: mode === 'dual' ? 64 : 50 }}
+              status={footerMessage ? 'error' : 'default'}
+              options={{
+                maxLength: mode === 'dual' ? DUAL_NAME_MAX_LENGTH : 50,
+              }}
               autoFocus={true}
               customStyle={{ fontSize: '14px' }}
               disableLeftIcon
@@ -204,71 +221,69 @@ const NewDeploymentModal = ({ data, type }) => {
         </div>
 
         {mode === 'single' && (
-          <>
-            <InputBoxWithLabel
-              labelText='배포 대상'
-              labelSize='large'
-              disableErrorMsg
-            >
-              <div className={cx('target-row')}>
-                {TARGETS.map((tg) => (
-                  <button
-                    key={tg.id}
-                    type='button'
-                    className={cx(
-                      'target-card',
-                      target === tg.id && 'selected',
-                    )}
-                    aria-pressed={target === tg.id}
-                    onClick={() => setTarget(tg.id)}
-                  >
-                    <span className={cx('target-label')}>{t(tg.label)}</span>
-                    <span className={cx('target-desc')}>{t(tg.desc)}</span>
-                  </button>
-                ))}
-              </div>
-            </InputBoxWithLabel>
+          <InputBoxWithLabel
+            labelText='배포 대상'
+            labelSize='large'
+            disableErrorMsg
+          >
+            <div className={cx('target-row')}>
+              {TARGETS.map((tg) => (
+                <button
+                  key={tg.id}
+                  type='button'
+                  className={cx(
+                    'target-card',
+                    target === tg.id && 'selected',
+                  )}
+                  aria-pressed={target === tg.id}
+                  onClick={() => setTarget(tg.id)}
+                >
+                  <span className={cx('target-label')}>{t(tg.label)}</span>
+                  <span className={cx('target-desc')}>{t(tg.desc)}</span>
+                </button>
+              ))}
+            </div>
+          </InputBoxWithLabel>
+        )}
 
-            <InputBoxWithLabel
-              labelText={t('playground.add.desc.label')}
-              optionalText={t('optional.label')}
-              labelSize='large'
-              optionalSize='medium'
-              disableErrorMsg
-            >
-              <Textarea
-                size='large'
-                placeholder={t('playground.add.desc.placeholder')}
-                value={description}
-                name='description'
-                onChange={(e) => setDescription(e.target.value)}
-                customStyle={{ fontSize: '14px', height: '120px' }}
-                isShowMaxLength
-              />
-            </InputBoxWithLabel>
+        <InputBoxWithLabel
+          labelText={t('playground.add.desc.label')}
+          optionalText={t('optional.label')}
+          labelSize='large'
+          optionalSize='medium'
+          disableErrorMsg
+        >
+          <Textarea
+            size='large'
+            placeholder={t('playground.add.desc.placeholder')}
+            value={description}
+            name='description'
+            onChange={(e) => setDescription(e.target.value)}
+            customStyle={{ fontSize: '14px', height: '120px' }}
+            isShowMaxLength
+          />
+        </InputBoxWithLabel>
 
-            <AccessOwnerSelect
-              isAccess={isAccess}
-              handleInputs={handleIsAccess}
-              ownerValue={owner?.value}
-              ownerList={ownerList}
-              handleOwner={handleOwner}
-            />
-            {isAccess === 0 && (
-              <MultiSelect
-                label='users.label'
-                listLabel='availableUsers.label'
-                selectedLabel='chosenUsers.label'
-                list={ownerList}
-                selectedList={EMPTY_LIST}
-                onChange={({ selectedList }) =>
-                  handleSelectedUserList(selectedList)
-                }
-                exceptItem={owner && owner.value}
-                optional
-              />
-            )}
-          </>
+        <AccessOwnerSelect
+          isAccess={isAccess}
+          handleInputs={handleIsAccess}
+          ownerValue={owner?.value}
+          ownerList={ownerList}
+          handleOwner={handleOwner}
+        />
+        {isAccess === 0 && (
+          <MultiSelect
+            label='users.label'
+            listLabel='availableUsers.label'
+            selectedLabel='chosenUsers.label'
+            list={ownerList}
+            selectedList={EMPTY_LIST}
+            onChange={({ selectedList }) =>
+              handleSelectedUserList(selectedList)
+            }
+            exceptItem={owner && owner.value}
+            optional
+          />
         )}
 
         {mode === 'dual' && (
