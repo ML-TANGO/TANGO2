@@ -70,7 +70,13 @@ const calFooterMessage = (type, huggingData, modelBaseData, versionData, t) => {
 const ImportPlaygroundModal = ({ data, type }) => {
   const { t } = useTranslation();
   const dispatch = useDispatch();
-  const { workspaceId, isPrivateToken } = data;
+  const {
+    workspaceId,
+    isPrivateToken,
+    onSelect,
+    allmOnly = false,
+    allowExternal = true,
+  } = data;
 
   const { model } = useSelector((state) => state.llmPlayground, shallowEqual);
 
@@ -79,14 +85,15 @@ const ImportPlaygroundModal = ({ data, type }) => {
   }, [t]);
 
   const modelOptions = useMemo(() => {
+    if (allmOnly) return [{ label: 'GenAI Platform', value: 1 }];
     return [
       { label: 'Hugging Face', value: 0 },
       { label: 'GenAI Platform', value: 1 },
     ];
-  }, []);
+  }, [allmOnly]);
 
   const [modelList, setModelList] = useState(modelListInitial); // allm
-  const [modelTypeValue, setModelTypeValue] = useState(0);
+  const [modelTypeValue, setModelTypeValue] = useState(allmOnly ? 1 : 0);
   const [versionList, setVersionList] = useState([]);
   const [modelBaseData, setModelBaseData] = useState(initialModelData);
 
@@ -135,15 +142,22 @@ const ImportPlaygroundModal = ({ data, type }) => {
           name: model.id,
         }));
 
-        const updatedAllmModelList = allm_model_list.map((model) => ({
-          ...model,
-          create_user_name: model.owner,
-          // external 학습 모델은 이름 옆에 [External] 마커 표시 (multi-modal infer)
-          name:
-            model.training_type === 'external'
-              ? `${model.name} [External]`
-              : model.name,
-        }));
+        const updatedAllmModelList = allm_model_list
+          // LLM1은 서버와 같은 규칙으로 external 모델을 목록에서 제외한다.
+          // 옵션을 넘기지 않는 단일 배포는 기존처럼 모든 모델을 표시한다.
+          .filter(
+            (model) =>
+              allowExternal || model.training_type !== 'external',
+          )
+          .map((model) => ({
+            ...model,
+            create_user_name: model.owner,
+            // external 학습 모델은 이름 옆에 [External] 마커 표시 (multi-modal infer)
+            name:
+              model.training_type === 'external'
+                ? `${model.name} [External]`
+                : model.name,
+          }));
 
         setModelList(() => {
           return {
@@ -159,6 +173,7 @@ const ImportPlaygroundModal = ({ data, type }) => {
       huggingData.selectedOption.value,
       modelBaseData.selectedOption.value,
       modelTypeValue,
+      allowExternal,
       workspaceId,
     ],
   );
@@ -364,50 +379,65 @@ const ImportPlaygroundModal = ({ data, type }) => {
 
   console.log('versionData : ', versionData);
 
+  const selectedModelValue = {
+    model_type: modelTypeValue ? 'commit' : 'huggingface',
+    model_huggingface_id: !modelTypeValue
+      ? huggingData.selectedModel?.name
+      : null,
+    model_allm_id: modelTypeValue ? modelBaseData.selectedModel?.id : null,
+    model_allm_name: modelTypeValue
+      ? modelBaseData.selectedModel?.name
+      : null,
+    model_allm_commit_id: modelTypeValue
+      ? versionData.selectedModel?.model_commit_id
+      : null,
+    model_allm_commit_name: modelTypeValue
+      ? versionData.selectedModel?.name
+      : null,
+    description: !modelTypeValue
+      ? huggingData.selectedModel?.description
+      : versionData.selectedModel?.description,
+    commit: !modelTypeValue
+      ? huggingData.selectedModel?.commit
+      : versionData.selectedModel?.name,
+    access: !modelTypeValue
+      ? huggingData.selectedModel?.access
+      : versionData.selectedModel?.access,
+    create_datetime: !modelTypeValue
+      ? huggingData.selectedModel?.create_datetime
+      : versionData.selectedModel?.create_datetime,
+    update_datetime: !modelTypeValue
+      ? huggingData.selectedModel?.update_time
+      : versionData.selectedModel?.update_datetime,
+  };
+
   return (
     <NewStyleModalFrame
       submit={{
         text: t('saveBtn.label'),
         func: () => {
-          dispatch(
-            handleSetPlaygroundState({
-              type: 'model',
-              model: {
-                ...model,
-                model_type: modelTypeValue ? 'commit' : 'huggingface',
-                model_huggingface_id: !modelTypeValue
-                  ? huggingData.selectedModel.name
-                  : null,
-                model_allm_id: modelTypeValue
-                  ? modelBaseData.selectedModel.id
-                  : null,
-                model_allm_name: modelTypeValue
-                  ? modelBaseData.selectedModel.name
-                  : null,
-                model_allm_commit_id: modelTypeValue
-                  ? versionData.selectedModel.model_commit_id
-                  : null,
-                model_allm_commit_name: modelTypeValue
-                  ? versionData.selectedModel.name
-                  : null,
-                description: !modelTypeValue
-                  ? huggingData.selectedModel.description
-                  : versionData.selectedModel.description,
-                commit: !modelTypeValue
-                  ? huggingData.selectedModel.commit
-                  : versionData.selectedModel.name,
-                access: !modelTypeValue
-                  ? huggingData.selectedModel.access
-                  : versionData.selectedModel.access,
-                create_datetime: !modelTypeValue
-                  ? huggingData.selectedModel.create_datetime
-                  : versionData.selectedModel.create_datetime,
-                update_datetime: !modelTypeValue
-                  ? huggingData.selectedModel.update_time
-                  : versionData.selectedModel.update_datetime,
-              },
-            }),
-          );
+          if (onSelect) {
+            // controlled 호출자는 역할별 상태를 직접 소유하므로 llmPlayground Redux를 건드리지 않는다.
+            if (
+              onSelect({
+                ...selectedModelValue,
+                training_type: modelTypeValue
+                  ? modelBaseData.selectedModel?.training_type || ''
+                  : '',
+              }) === false
+            )
+              return;
+          } else {
+            dispatch(
+              handleSetPlaygroundState({
+                type: 'model',
+                model: {
+                  ...model,
+                  ...selectedModelValue,
+                },
+              }),
+            );
+          }
           dispatch(closeModal(type));
         },
       }}
@@ -428,16 +458,18 @@ const ImportPlaygroundModal = ({ data, type }) => {
         labelSize='large'
         disableErrorMsg
       >
-        <Radio
-          name={'model-type'}
-          value={modelTypeValue}
-          options={modelOptions}
-          customStyle={{
-            marginBottom: '32px',
-          }}
-          onChange={handleModelType}
-          isLabelColor
-        />
+        {!allmOnly && (
+          <Radio
+            name={'model-type'}
+            value={modelTypeValue}
+            options={modelOptions}
+            customStyle={{
+              marginBottom: '32px',
+            }}
+            onChange={handleModelType}
+            isLabelColor
+          />
+        )}
         {modelTypeValue === 0 && (
           <SearchComponent
             firstData={huggingData}

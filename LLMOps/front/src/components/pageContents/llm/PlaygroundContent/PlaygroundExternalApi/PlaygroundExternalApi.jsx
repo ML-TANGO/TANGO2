@@ -184,11 +184,17 @@ export default function PlaygroundExternalApi() {
       <div className={cx('field')}>
         <span className={cx('label')}>요청 JSON 포맷</span>
         {statusType === 'stop' ? (
-          <p className={cx('desc')}>배포가 활성화되면 JSON 포맷이 생성됩니다.</p>
+          <p className={cx('desc')}>
+            배포가 활성화되면 JSON 포맷이 생성됩니다.
+          </p>
         ) : (
           <Textarea
             value={formatJson}
-            customStyle={{ color: '#747474', width: '100%', minHeight: '140px' }}
+            customStyle={{
+              color: '#747474',
+              width: '100%',
+              minHeight: '140px',
+            }}
           />
         )}
       </div>
@@ -272,7 +278,9 @@ export default function PlaygroundExternalApi() {
                 있습니다.
               </p>
               {!isCompleteRunning && (
-                <p className={cx('hint')}>배포가 실행 중일 때 게시할 수 있습니다.</p>
+                <p className={cx('hint')}>
+                  배포가 실행 중일 때 게시할 수 있습니다.
+                </p>
               )}
               <div className={cx('actions')}>
                 <ButtonV2
