@@ -1,0 +1,8 @@
+# 빌트인 전처리 공용 실행 이미지(lean 베이스)의 최소 의존성.
+# 활성 빌트인 4종(FORMAT_CONVERT / MARKER_ANALYSIS / IMAGE_AUGMENT / SDS_LLAVA_CONVERT)만 커버.
+# 스크립트는 이미지에 bake 하지 않고 NFS /built_in 마운트로 주입되므로 런타임 의존성만 둔다.
+# 비활성 빌트인(text/video/audio, torch/nltk/konlpy/opencv 계열)을 켤 때 이 목록을 확장.
+pandas==2.2.2
+pyarrow==16.1.0
+pillow==10.3.0
+numpy==1.26.4
