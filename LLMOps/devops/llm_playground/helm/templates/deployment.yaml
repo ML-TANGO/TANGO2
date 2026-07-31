@@ -24,10 +24,25 @@ spec:
         imagePullPolicy: {{ .Values.global.jfb.image.pullPolicy }}
         command: [ "/bin/bash", "-c",]
         args: ["cd /app; ./run.sh; sleep infinity;"]
+        # uvicorn(손자 프로세스)이 죽어도 PID1 bash 가 `sleep infinity` 로 넘어가 컨테이너는
+        #   Running/Ready 로 남는다 → K8s 가 크래시를 감지 못해 서비스만 죽고 수동 재시작이
+        #   필요했다(2026-07-27 SDS 일괄추론 중 실제 발생: restartCount=0, OOMKilled 이벤트 없음).
+        #   tcpSocket 은 "8000 을 듣는 프로세스가 있는가"만 확인하므로 이 실패모드를 정확히 잡고,
+        #   /healthz(Redis 의존)를 쓸 때처럼 외부 의존 장애로 재시작 루프에 빠지지 않는다.
+        livenessProbe:
+          tcpSocket:
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
         resources:
           limits:
             cpu : 0.5
-            memory : "256M"
+            # 256M → 512M: idle RSS 137MB 가 이미 한계(244MiB)의 56% 이고, SDS 배치는 샘플당
+            #   이미지 base64 2.01MB + httpx json 직렬화로 요청당 6~8MB 가 순간 증가한다.
+            #   실측 피크 232.9MiB(95.4%). 512M 은 기존 14개 앱 차트와 동일 tier.
+            memory : "512M"
           requests:
             cpu : 0.1
             memory : "128M"
