@@ -321,6 +321,12 @@ spec:
     # /tmp — writable scratch (readOnlyRootFilesystem-safe)
     - name: scratch
       mountPath: /tmp
+    # /dev/shm — PyTorch DataLoader 워커 IPC(공유메모리). 컨테이너 기본 64MB 는
+    # VLM 이미지 배치 prefetch(num_workers × 이미지 텐서)로 넘쳐 "bus error
+    # (insufficient shared memory)" → DataLoader worker exited unexpectedly 로
+    # 첫 배치에서 학습이 죽는다. medium=Memory 로 상향(pod memory 회계, 예약 아님).
+    - name: dshm
+      mountPath: /dev/shm
     # /hf-cache — RO HuggingFace model cache (cluster-wide shared NFS).
     # operator 가 `huggingface-cli download` 로 미리 받은 모델이 여기에 들어있고,
     # manifest 의 spec.env 가 HF_HOME=/hf-cache 등을 설정하면 transformers 가
@@ -351,6 +357,14 @@ spec:
       # (sizeLimit 은 상한일 뿐 예약 아님 — 소량 사용 job 엔 영향 없음. 향후 manifest
       #  per-job scratch 선언으로 세분화 가능.)
       sizeLimit: 64Gi
+  # /dev/shm tmpfs — DataLoader worker IPC. medium=Memory 라 pod memory 상한
+  # (resources.limits.memory) 에서 사용분만큼 차감(사전 예약 아님). VLM 학습의
+  # 이미지 배치 prefetch 를 커버하도록 16Gi(모델 로드 후 여유 내). infer/convert
+  # 등 shm 소량 job 엔 영향 없음(사용분만 차감).
+  - name: dshm
+    emptyDir:
+      medium: Memory
+      sizeLimit: 16Gi
   - name: hf-model-cache
     persistentVolumeClaim:
       claimName: hf-model-cache-pvc
