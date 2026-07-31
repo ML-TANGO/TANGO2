@@ -317,9 +317,21 @@ async def _build_time_payload(
     """
     detail_safe = detail or {}
     scalars = _extract_etri_scalars(detail_safe)
-    params = detail_safe.get("params") or {}
-    inner_params = params.get("params") if isinstance(params, dict) else {}
-    total_epoch = (inner_params or {}).get("num_epochs", 0) or 0
+    # detail.params 는 fb_external_container 가 record.params(reserved key 제외한
+    # 사용자 params)를 **평면** dict 로 반환한다(job_router.ExternalJobDetail). launch
+    # 요청 봉투(`{manifest_name, params:{...}}`)와 레벨이 달라, 예전엔 params.params
+    # 를 읽어 total_epoch 이 항상 0 → FE Epoch 이 '—' 로 비었다. 평면 우선 + 봉투째
+    # 넘기는 어댑터가 생겨도 깨지지 않게 중첩은 폴백으로 관용.
+    raw_params = detail_safe.get("params")
+    raw_params = raw_params if isinstance(raw_params, dict) else {}
+    nested = raw_params.get("params")
+    src_params = nested if isinstance(nested, dict) else raw_params
+    # num_epochs 는 사용자 입력(recipe params) — 문자열/실수로 와도 아래 산술
+    # (max(total_epoch, 1), total_steps / total_epoch)이 깨지지 않게 int 강제.
+    try:
+        total_epoch = int(src_params.get("num_epochs", 0) or 0)
+    except (TypeError, ValueError):
+        total_epoch = 0
 
     started_at = _parse_started_at(detail_safe.get("started_at"))
     start_dt_str = _platform_format(started_at) if started_at else None
@@ -337,6 +349,13 @@ async def _build_time_payload(
     # current_step: events 가 partner 보다 신뢰성 ↑
     current_step = max(int(partner_step), int(events_step))
 
+    # partner total_steps 는 전 epoch 합산(HF Trainer max_steps)이라 epoch 당
+    # 스텝은 total_epoch 로 나눈 값. FE 차트의 "1 Epoch = N steps" 표시와 아래
+    # progress_epoch 분모가 같은 수라 여기서 한 번만 구한다. 모르면 0 → FE 가 숨김.
+    steps_per_epoch = (
+        int(total_steps / total_epoch) if total_steps > 0 and total_epoch > 0 else 0
+    )
+
     progress_epoch = current_step  # raw step 번호 노출
     percent: Optional[float] = None
     remaining_time: Optional[float] = None
@@ -348,7 +367,7 @@ async def _build_time_payload(
     elif total_steps and total_steps > 0 and current_step > 0:
         # partner 가 total_steps 정확히 주는 정상 path
         percent = round((current_step / total_steps) * 100, 2)
-        progress_epoch = int(current_step // max(int(total_steps / max(total_epoch, 1)), 1))
+        progress_epoch = current_step // steps_per_epoch if steps_per_epoch else 0
         if started_at and current_step < total_steps:
             elapsed_unix = (datetime.now(timezone.utc) - started_at).total_seconds()
             tps = elapsed_unix / current_step
@@ -364,6 +383,10 @@ async def _build_time_payload(
         "progress_epoch": progress_epoch,
         "percent": percent,
         "remaining_time": remaining_time,
+        # 추가 필드(하위호환) — FE 차트 "1 Epoch = N steps". 내부 학습 경로는
+        # get_model_fine_tuning 의 steps_per_epoch 를 쓰고, external 은 total_steps
+        # 를 아는 이 SSE 가 유일한 출처라 여기에 싣는다.
+        "steps_per_epoch": steps_per_epoch,
     }, new_last
 
 
