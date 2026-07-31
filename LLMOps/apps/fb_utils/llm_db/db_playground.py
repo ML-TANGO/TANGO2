@@ -66,10 +66,15 @@ async def delete_playground(id_list):
     if len(id_list) == 0:
         return True
     try:
+        # id 를 SQL 에 직접 보간하면 인젝션(`1 OR 1=1` → 전 행 삭제)이 되므로 placeholder 바인딩.
+        # 개수만 문자열로 조립하고 값은 전부 params 로 넘긴다(라우트에서 int 로 정규화되지만
+        # 보상 정리 등 내부 호출자도 있으므로 여기서도 int() 로 한 번 더 좁힌다).
+        ids = [int(e) for e in id_list]
+        placeholders = ','.join(['%s'] * len(ids))
         sql = """
             DELETE FROM playground
-            WHERE id in ({})""".format(','.join(str(e) for e in id_list))
-        await commit_query(query=sql)
+            WHERE id in ({})""".format(placeholders)
+        await commit_query(query=sql, params=tuple(ids))
         return True
     except:
         traceback.print_exc()
