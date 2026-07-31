@@ -14,6 +14,7 @@ build
 *.local
 .idea
 .env
+.yarn
 
 # Editor directories and files
 .vscode/*
