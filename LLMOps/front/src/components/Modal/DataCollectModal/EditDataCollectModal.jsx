@@ -29,10 +29,11 @@ import useInstanceSetting from './hooks/useInstanceSetting';
 import useLocation from './hooks/useLocation';
 import NameInput from './NameInput/NameInput';
 import useNameInput from './NameInput/useNameInput';
-import PublicApiSelect from './PublicApiSelect';
+// [공공 API 미노출] import PublicApiSelect from './PublicApiSelect';
 import TooltipContent from './TooltipContent/TooltipContent';
 
-import { calFooterMessage, getCollectOptions, getPublicApi } from './util';
+// [공공 API 미노출] getPublicApi 제거 (util.js 정의는 유지)
+import { calFooterMessage, getCollectOptions } from './util';
 
 export default function EditDataCollectModal({ data, type }) {
   const { t } = useTranslation();
@@ -89,8 +90,8 @@ export default function EditDataCollectModal({ data, type }) {
     handleSelectedLocation,
   } = useLocation(editDatasetId, editDatasetPath);
 
-  // ** [공공 API 데이터 목록]
-  const [publicDataList, setPublicDataList] = useState([]);
+  // ** [공공 API 데이터 목록] — 미노출 (GET collect/public-api 호출 제거)
+  // const [publicDataList, setPublicDataList] = useState([]);
 
   // ** [수집 방법] **
   const {
@@ -99,16 +100,16 @@ export default function EditDataCollectModal({ data, type }) {
     collectMethodColumn,
     collectMethodList,
     collect_information_list,
-    selectedApiList,
+    // [공공 API 미노출] selectedApiList,
     setDeploymentList,
     handleMethod,
     handleMethodModal,
-    handlePublicApiSelect,
+    // [공공 API 미노출] handlePublicApiSelect,
   } = useCollectMethod(
     collect_method,
     editCollectInfoList,
     workspaceId,
-    publicDataList,
+    // [공공 API 미노출] publicDataList (hook 기본값 [] 사용)
   );
 
   // ** [수집 주기] **
@@ -226,7 +227,7 @@ export default function EditDataCollectModal({ data, type }) {
       setDatasetList,
       setDeploymentList,
     );
-    getPublicApi(setPublicDataList);
+    // [공공 API 미노출] getPublicApi(setPublicDataList);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     members,
@@ -296,13 +297,14 @@ export default function EditDataCollectModal({ data, type }) {
         handleSelectedLocation={handleSelectedLocation}
       />
       <CollectMethodRadio value={collectMethod} handleMethod={handleMethod} />
+      {/* [공공 API 미노출] 공공 API 데이터 목록(GET collect/public-api) 섹션
       {collectMethod === 'public_api' && (
         <PublicApiSelect
           options={publicDataList}
           valueList={selectedApiList}
           handleSelected={handlePublicApiSelect}
         />
-      )}
+      )} */}
       <CollectMethodList
         title={collectMethodTitle}
         collectMethodColumn={collectMethodColumn}

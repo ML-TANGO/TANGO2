@@ -1,9 +1,7 @@
 import _ from 'lodash';
 
-import {
-  getDetailPlayground,
-  getPlaygroundCheckAccel,
-} from '@src/apis/llm/playground';
+// [엑셀러레이터 미사용] getPlaygroundCheckAccel 제거 (apis 정의는 유지)
+import { getDetailPlayground } from '@src/apis/llm/playground';
 import {
   handleSetPlaygroundState,
   initialLLMPlaygroundState,
@@ -80,7 +78,11 @@ export const calEqualValue = (info, model, rag, prompt, originValue) => {
 export const getDetailPlaygroundInfo = async (dispatch, playgroundId) => {
   const { result, message, status, error } =
     await getDetailPlayground(playgroundId);
-  const { data } = await getPlaygroundCheckAccel();
+  // [엑셀러레이터 미사용] /check-accel 호출 제거 (하드코딩 IP 115.71.36.50 로
+  //   나가던 요청). 실패 시 catch 가 주던 값과 동일하게 고정 → 아래
+  //   accellator=false / isAccellator=false 로 기존 동작과 같음.
+  // const { data } = await getPlaygroundCheckAccel();
+  const data = { result: 'error' };
 
   if (status === STATUS_SUCCESS) {
     const payload = {
