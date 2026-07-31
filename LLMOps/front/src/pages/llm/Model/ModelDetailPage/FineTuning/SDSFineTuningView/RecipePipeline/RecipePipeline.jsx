@@ -25,6 +25,7 @@ import { STATUS_SUCCESS } from '@src/network';
 
 import BasicLineChart from '../../FineTuningGraph/BasicLineChart';
 import ModelRangeBar from '../../ModelRangeBar/ModelRangeBar';
+import { formatPercentLabel, toPercentValue } from '../progressFormat';
 import MultimodalArchDiagram from './MultimodalArchDiagram';
 
 import classNames from 'classnames/bind';
@@ -337,9 +338,9 @@ const RecipePipeline = ({
   const isMonRunning = monStatus === 'running' || monStatus === 'pending';
   const monLoss = graphData?.['train/loss']?.values?.slice(-1)?.[0];
   const monGrad = graphData?.['train/grad_norm']?.values?.slice(-1)?.[0];
-  const monPct = Number.isFinite(progressData?.percent)
-    ? Math.floor(progressData.percent)
-    : 0;
+  // 바 width 는 숫자, 라벨은 1% 미만에서 소수 2자리(progressFormat 참조).
+  const monPctValue = toPercentValue(progressData?.percent);
+  const monPct = formatPercentLabel(progressData?.percent);
   const monEpoch =
     Number.isFinite(progressData?.progress_epoch) && progressData?.total_epoch
       ? `${progressData.progress_epoch}/${progressData.total_epoch}`
@@ -693,7 +694,7 @@ const RecipePipeline = ({
             </div>
           </div>
           <div className={mx('prog-track')}>
-            <div className={mx('prog-fill')} style={{ width: `${monPct}%` }} />
+            <div className={mx('prog-fill')} style={{ width: `${monPctValue}%` }} />
           </div>
           {selBlockedByChain && !isMonRunning ? (
             <div className={mx('train-hint')}>
@@ -713,6 +714,7 @@ const RecipePipeline = ({
                   title={key}
                   steps={value?.steps ?? []}
                   values={value?.values ?? []}
+                  stepsPerEpoch={progressData?.steps_per_epoch}
                 />
               </div>
             ))}

@@ -23,6 +23,7 @@ import { Badge, ButtonV2 } from '@jonathan/ui-react';
 import SimpleNav from '../../SimpleNav';
 import BasicLineChart from '../FineTuningGraph/BasicLineChart';
 import ModelRangeBar from '../ModelRangeBar/ModelRangeBar';
+import { formatPercentLabel, toPercentValue } from './progressFormat';
 
 import classNames from 'classnames/bind';
 import style from '../FineTuning.module.scss';
@@ -241,11 +242,9 @@ const SDSMultimodalFineTuningView = memo(function SDSMultimodalFineTuningView({
       })
     : [];
   // 표시값: 완료면 100%/full epoch 로 고정(sse-time 끊김 보정), 그 외엔 progressData 기준.
-  const pctShown = isDone
-    ? 100
-    : Number.isFinite(percent)
-      ? Math.floor(percent)
-      : 0;
+  // 바 width 는 숫자, 라벨은 1% 미만에서 소수 2자리(progressFormat 참조).
+  const pctValue = isDone ? 100 : toPercentValue(percent);
+  const pctShown = isDone ? '100' : formatPercentLabel(percent);
   const epochShown = isDone
     ? totalEpoch
       ? `${totalEpoch}/${totalEpoch}`
@@ -921,7 +920,7 @@ const SDSMultimodalFineTuningView = memo(function SDSMultimodalFineTuningView({
               <div className={lx('prog-track')}>
                 <div
                   className={lx('prog-fill')}
-                  style={{ width: `${pctShown}%` }}
+                  style={{ width: `${pctValue}%` }}
                 />
               </div>
               <div className={lx('train-btn-row')}>

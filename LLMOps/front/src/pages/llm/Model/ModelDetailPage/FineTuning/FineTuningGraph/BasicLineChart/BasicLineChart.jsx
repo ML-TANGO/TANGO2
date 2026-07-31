@@ -96,9 +96,13 @@ const BasicLineChart = ({ title, steps, values, stepsPerEpoch, checkpoints }) =>
         <div className={cx('name')}>{title}</div>
       </div>
       <div ref={chartRef} className={cx('graph')} />
-      <div className={cx('step')}>
-        <img src={InfoIcon} alt='icon' />1 Epoch = {stepsPerEpoch} steps
-      </div>
+      {/* 값을 모를 때(external 학습 초반·엔진이 아직 기록 전) 힌트 자체를 숨긴다 —
+          예전엔 '1 Epoch =  steps'/'1 Epoch = 0 steps' 로 빈 라벨이 보였다. */}
+      {stepsPerEpoch ? (
+        <div className={cx('step')}>
+          <img src={InfoIcon} alt='icon' />1 Epoch = {stepsPerEpoch} steps
+        </div>
+      ) : null}
     </div>
   );
 };
