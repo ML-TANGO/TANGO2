@@ -1,3 +1,7 @@
+import { ButtonV2 } from '@jonathan/ui-react';
+
+import GuideBox from '@src/components/molecules/GuideBox';
+
 import classNames from 'classnames/bind';
 import style from './ExpertReview.module.scss';
 
@@ -14,43 +18,35 @@ const ExpertCompletionBanner = ({ avgScore, distribution, onReset, t }) => {
     return Number(distribution[score] ?? distribution[String(score)]) || 0;
   };
   const counts = SCORES.map((s, i) => getCount(s, i));
-  const max = Math.max(1, ...counts);
   const avg = Number(avgScore) || 0;
+  const distributionText = SCORES.map(
+    (score, index) => `${score}: ${counts[index]}`,
+  ).join(' · ');
 
   return (
-    <div className={cx('cb')}>
-      <div className={cx('cb-head')}>
-        <span className={cx('cb-title')}>
-          {t('evaluation.expert.completeTitle')}
-        </span>
-        <span className={cx('cb-avg')}>
-          {t('evaluation.expert.avgScore')} <strong>{avg.toFixed(2)}</strong>/5
-        </span>
+    <div className={cx('completion')}>
+      {/* ⚠️ GuideBox 는 textList 각 항목을 sanitizer 없이 dangerouslySetInnerHTML 로 렌더한다.
+          여기 넘기는 값이 안전한 이유는 (1) 정적 i18n 라벨과 (2) 위에서 Number(...) || 0 으로
+          강제 캐스팅한 숫자(avg/counts)뿐이기 때문이다. 채점 코멘트·rater 명·BE 문자열 등
+          자유 텍스트를 이 textList 에 추가하면 그 즉시 XSS 가 된다 — 추가해야 하면 GuideBox 대신
+          plain JSX({value}) 로 렌더하라(ExpertPromptBox 방식). */}
+      <GuideBox
+        title={t('evaluation.expert.completeTitle')}
+        isTitleIcon
+        textList={[
+          `${t('evaluation.expert.avgScore')}: ${avg.toFixed(2)}/5`,
+          `${t('evaluation.expert.distribution')}: ${distributionText}`,
+        ]}
+      />
+      <div className={cx('completion-actions')}>
+        <ButtonV2
+          type='outline'
+          colorType='blue'
+          size='s'
+          label={t('evaluation.expert.newSession')}
+          onClick={onReset}
+        />
       </div>
-
-      <div className={cx('cb-dist')}>
-        <span className={cx('cb-dist-label')}>
-          {t('evaluation.expert.distribution')}
-        </span>
-        <div className={cx('cb-bars')}>
-          {SCORES.map((s, i) => (
-            <div key={s} className={cx('cb-bar-row')}>
-              <span className={cx('cb-bar-star')}>{s}★</span>
-              <div className={cx('cb-bar-track')}>
-                <div
-                  className={cx('cb-bar-fill')}
-                  style={{ width: `${(counts[i] / max) * 100}%` }}
-                />
-              </div>
-              <span className={cx('cb-bar-count')}>{counts[i]}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <button type='button' className={cx('cb-reset')} onClick={onReset}>
-        {t('evaluation.expert.newSession')}
-      </button>
     </div>
   );
 };

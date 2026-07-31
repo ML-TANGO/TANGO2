@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { Badge, Loading, Radio } from '@jonathan/ui-react';
+
+import NewStyleModalFrame from '@src/components/Modal/NewStyleModalFrame';
+import EmptyBox from '@src/components/molecules/EmptyBox';
+
 import { getPlayground } from '@src/apis/llm/playground';
 import { STATUS_SUCCESS } from '@src/network';
 
@@ -10,6 +15,11 @@ import classNames from 'classnames/bind';
 import style from './ExpertInferenceModal.module.scss';
 
 const cx = classNames.bind(style);
+
+// 배포 상태는 조나단 Badge type으로 매핑한다.
+const DEPLOYMENT_BADGE_TYPE = {
+  running: 'green',
+};
 
 // 전문가 평가 시작 전 "추론에 사용할 배포" 선택 모달.
 //   워크스페이스의 running 배포(playground)를 나열 → 선택 시 그 배포 모델로 지연 단위 VLM
@@ -42,77 +52,117 @@ const ExpertInferenceModal = ({ workspaceId, onConfirm, onClose }) => {
     };
   }, [workspaceId]);
 
+  // NewStyleModalFrame은 Redux 모달 스택(modalKeys.at(-1))을 닫는데, 이 모달은 Redux 가 아닌
+  // 로컬 showInferModal 로 렌더된다. 그래서 (a) Esc 를 capture 단계에서 가로채
+  // stopImmediatePropagation 으로 프레임의 document 핸들러 발화를 막고(안 막으면 무관한 다른
+  // Redux 모달이 같이 닫힌다), (b) 이 모달만 닫는다.
+  useEffect(() => {
+    const handleEscape = (event) => {
+      if (event.key !== 'Escape') return;
+      event.stopImmediatePropagation();
+      onClose();
+    };
+    document.addEventListener('keydown', handleEscape, true);
+    return () => document.removeEventListener('keydown', handleEscape, true);
+  }, [onClose]);
+
+  // 프레임이 마운트 시 body.overflow='hidden' 만 걸고 unmount 복구가 없다
+  // (NewStyleModalFrame.jsx 의 effect 에 cleanup 없음). Redux 모달은 스토어 변경 경로로
+  // 복구되지만 로컬 조건부 렌더는 그 경로를 안 타므로, 평가 시작·백드롭 닫기 후 페이지
+  // 스크롤이 잠긴 채 남는다 → 언마운트 시 직접 복구한다.
+  useEffect(
+    () => () => {
+      document.body.style.overflow = 'auto';
+    },
+    [],
+  );
+
   const loading = deployments === null;
+  const submit = {
+    text: 'evaluation.expert.inferStart',
+    func: () => onConfirm(selected),
+  };
+  const cancel = {
+    text: 'cancel.label',
+    func: onClose,
+  };
+  const modalTitle = t('evaluation.expert.inferTitle');
 
   return (
-    <div className={cx('overlay')} onClick={onClose}>
-      <div
-        className={cx('modal')}
-        onClick={(e) => e.stopPropagation()}
-        role='dialog'
-        aria-modal='true'
+    <div
+      onClick={(event) => {
+        // 기존 수제 오버레이와 동일하게 프레임 바깥을 누르면 닫는다.
+        if (event.target.id === modalTitle) onClose();
+      }}
+    >
+      <NewStyleModalFrame
+        type='expertInferenceModal'
+        title={modalTitle}
+        submit={submit}
+        cancel={cancel}
+        validate={!loading}
+        isResize
+        isMinimize
+        customStyle={{ width: '664px' }}
       >
-        <div className={cx('modal-head')}>
-          <h2 className={cx('modal-title')}>
-            {t('evaluation.expert.inferTitle')}
-          </h2>
-          <button type='button' className={cx('close-btn')} onClick={onClose}>
-            ✕
-          </button>
-        </div>
-
-        <div className={cx('modal-body')}>
+        <div className={cx('inference-content')}>
           <p className={cx('desc')}>{t('evaluation.expert.inferDesc')}</p>
 
           {loading ? (
-            <p className={cx('empty')}>{t('evaluation.project.loading')}</p>
+            <div className={cx('modal-loading')}>
+              <Loading />
+              <span>{t('evaluation.project.loading')}</span>
+            </div>
           ) : (
-            <div className={cx('deploy-list')}>
-              {deployments.map((d) => (
-                <button
-                  key={d.id}
-                  type='button'
-                  className={cx('deploy-card', selected === d.id && 'on')}
-                  onClick={() => setSelected(d.id)}
-                >
-                  <span className={cx('radio', selected === d.id && 'on')} />
-                  <span className={cx('deploy-name')}>{d.name}</span>
-                  <span className={cx('deploy-badge')}>running</span>
-                </button>
+            <div className={cx('deployment-list')}>
+              {deployments.map((deployment) => (
+                <div key={deployment.id} className={cx('deployment-row')}>
+                  <div className={cx('deployment-choice')}>
+                    <Radio
+                      name='expertInferenceDeployment'
+                      options={[
+                        {
+                          label: deployment.name,
+                          value: deployment.id,
+                        },
+                      ]}
+                      selectedValue={selected}
+                      onChange={() => setSelected(deployment.id)}
+                    />
+                  </div>
+                  <Badge
+                    label='running'
+                    type={DEPLOYMENT_BADGE_TYPE.running}
+                    size='sm'
+                  />
+                </div>
               ))}
-              <button
-                type='button'
-                className={cx('deploy-card', selected === null && 'on')}
-                onClick={() => setSelected(null)}
-              >
-                <span className={cx('radio', selected === null && 'on')} />
-                <span className={cx('deploy-name')}>
-                  {t('evaluation.expert.inferNone')}
-                </span>
-              </button>
+              <div className={cx('deployment-row')}>
+                <div className={cx('deployment-choice')}>
+                  <Radio
+                    name='expertInferenceDeployment'
+                    options={[
+                      {
+                        label: t('evaluation.expert.inferNone'),
+                        value: 'mock',
+                      },
+                    ]}
+                    selectedValue={selected === null ? 'mock' : selected}
+                    onChange={() => setSelected(null)}
+                  />
+                </div>
+              </div>
               {deployments.length === 0 && (
-                <p className={cx('hint')}>
-                  {t('evaluation.expert.inferNoRunning')}
-                </p>
+                <EmptyBox
+                  text='evaluation.expert.inferNoRunning'
+                  isBox
+                  customStyle={{ height: '96px' }}
+                />
               )}
             </div>
           )}
         </div>
-
-        <div className={cx('modal-foot')}>
-          <button type='button' className={cx('cancel-btn')} onClick={onClose}>
-            {t('cancel.label')}
-          </button>
-          <button
-            type='button'
-            className={cx('confirm-btn')}
-            disabled={loading}
-            onClick={() => onConfirm(selected)}
-          >
-            {t('evaluation.expert.inferStart')}
-          </button>
-        </div>
-      </div>
+      </NewStyleModalFrame>
     </div>
   );
 };

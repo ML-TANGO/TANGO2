@@ -1,3 +1,5 @@
+import ContentBox from '@src/components/molecules/ContentBox';
+
 import classNames from 'classnames/bind';
 import style from './ExpertReview.module.scss';
 
@@ -8,12 +10,9 @@ const cx = classNames.bind(style);
 const ExpertPromptBox = ({ prompt, t }) => {
   if (!prompt) return null;
   return (
-    <div className={cx('prompt-box')}>
-      <div className={cx('prompt-label')}>
-        {t('evaluation.expert.promptTitle')}
-      </div>
+    <ContentBox title={t('evaluation.expert.promptTitle')}>
       <p className={cx('prompt-text')}>{prompt}</p>
-    </div>
+    </ContentBox>
   );
 };
 

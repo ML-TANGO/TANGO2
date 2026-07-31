@@ -1,5 +1,7 @@
 import { useRef } from 'react';
 
+import { ButtonV2 } from '@jonathan/ui-react';
+
 import classNames from 'classnames/bind';
 import style from './ExpertReview.module.scss';
 
@@ -47,9 +49,11 @@ const StarRating = ({ value = 0, onChange, disabled = false, t }) => {
         // roving tabindex — 선택된 별(미선택이면 첫 별)만 tab 진입점.
         const isTabStop = isSelected || (current === 0 && score === 1);
         return (
-          <button
+          <ButtonV2
             key={score}
-            type='button'
+            type='clear'
+            colorType='gray'
+            size='s'
             data-score={score}
             className={cx('star', filled && 'star--filled')}
             role='radio'
@@ -59,8 +63,8 @@ const StarRating = ({ value = 0, onChange, disabled = false, t }) => {
             disabled={disabled}
             onClick={() => onChange?.(score)}
           >
-            {filled ? '★' : '☆'}
-          </button>
+            <span className={cx('star-icon')} aria-hidden='true' />
+          </ButtonV2>
         );
       })}
       {current > 0 && <span className={cx('star-value')}>{current}/5</span>}

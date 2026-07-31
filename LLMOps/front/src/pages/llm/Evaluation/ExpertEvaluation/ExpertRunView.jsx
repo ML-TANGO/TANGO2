@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { Badge, InputText, Loading } from '@jonathan/ui-react';
+
+import ContentBox from '@src/components/molecules/ContentBox';
+import EmptyBox from '@src/components/molecules/EmptyBox';
+
 import CsvTable from './components/CsvTable';
 import ExpertCompletionBanner from './components/ExpertCompletionBanner';
 import ExpertProgressHeader from './components/ExpertProgressHeader';
@@ -197,10 +202,22 @@ const ExpertRunView = ({ modelId, jobId, onExit }) => {
   };
 
   if (loading) {
-    return <div className={cx('empty')}>{t('evaluation.project.loading')}</div>;
+    return (
+      <div className={cx('loading')}>
+        <Loading />
+        <span>{t('evaluation.project.loading')}</span>
+      </div>
+    );
   }
   if (notFound || !session) {
-    return <div className={cx('empty')}>{t('evaluation.failed')}</div>;
+    return (
+      <EmptyBox
+        text='evaluation.failed'
+        isBox
+        isRed
+        customStyle={{ height: '120px' }}
+      />
+    );
   }
 
   const samples = session.samples;
@@ -239,70 +256,83 @@ const ExpertRunView = ({ modelId, jobId, onExit }) => {
 
       {sample && (
         <div className={cx('review-body')} key={sample.idx}>
-          <div className={cx('review-idx')}>
-            #{sample.idx + 1} / {samples.length}
-          </div>
+          <ContentBox>
+            <div className={cx('review-content')}>
+              <div className={cx('sample-badge')}>
+                <Badge
+                  label={`${sample.idx + 1} / ${samples.length}`}
+                  type='blue'
+                  size='sm'
+                />
+              </div>
 
-          <ExpertSampleImage
-            modelId={mId}
-            jobId={jobId}
-            sample={sample}
-            t={t}
-          />
+              <ExpertSampleImage
+                modelId={mId}
+                jobId={jobId}
+                sample={sample}
+                t={t}
+              />
 
-          <CsvTable rows={sample.csv_rows} text={sample.csv_text} />
+              <CsvTable rows={sample.csv_rows} text={sample.csv_text} />
 
-          {sample.input ? (
-            <div className={cx('input-block')}>
-              <span className={cx('input-label')}>
-                {t('evaluation.expert.input')}
-              </span>
-              <div className={cx('input-text')}>{sample.input}</div>
+              {sample.input ? (
+                <div className={cx('input-block')}>
+                  <span className={cx('input-label')}>
+                    {t('evaluation.expert.input')}
+                  </span>
+                  <div className={cx('input-text')}>{sample.input}</div>
+                </div>
+              ) : null}
+
+              <div className={cx('output-block')}>
+                <span className={cx('output-label')}>
+                  {t('evaluation.expert.output')}
+                </span>
+                <div className={cx('output-text')}>
+                  {infering[sample.idx]
+                    ? t('evaluation.expert.inferring')
+                    : sample.output}
+                </div>
+              </div>
+
+              <div className={cx('rate-block')}>
+                <StarRating
+                  value={r.score}
+                  onChange={(score) => rate(sample.idx, score)}
+                  disabled={progress?.completed || !!infering[sample.idx]}
+                  t={t}
+                />
+                <InputText
+                  size='medium'
+                  placeholder={t('evaluation.expert.commentPlaceholder')}
+                  value={r.comment || ''}
+                  onChange={(e) => setComment(sample.idx, e.target.value)}
+                  onBlur={() => {
+                    // 채점된 샘플의 코멘트 수정은 blur 시 영속(미완료 세션 한정, dedup 이 무변경 차단).
+                    if (r.score && !progress?.completed)
+                      rate(sample.idx, r.score);
+                  }}
+                  disableLeftIcon
+                  disableClearBtn
+                  customStyle={{ width: '100%' }}
+                />
+              </div>
+
+              {r.score && (r.rater || r.ratedAt) && (
+                <div className={cx('audit-line')}>
+                  {t('evaluation.expert.ratedBy', {
+                    rater: r.rater || t('evaluation.expert.unknownRater'),
+                  })}
+                  {r.ratedAt ? ` · ${r.ratedAt}` : ''}
+                  {r.count > 1
+                    ? ` · ${t('evaluation.expert.reRated', {
+                        count: r.count,
+                      })}`
+                    : ''}
+                </div>
+              )}
             </div>
-          ) : null}
-
-          <div className={cx('output-block')}>
-            <span className={cx('output-label')}>
-              {t('evaluation.expert.output')}
-            </span>
-            <div className={cx('output-text')}>
-              {infering[sample.idx]
-                ? t('evaluation.expert.inferring')
-                : sample.output}
-            </div>
-          </div>
-
-          <div className={cx('rate-block')}>
-            <StarRating
-              value={r.score}
-              onChange={(score) => rate(sample.idx, score)}
-              disabled={progress?.completed || !!infering[sample.idx]}
-              t={t}
-            />
-            <input
-              className={cx('comment')}
-              type='text'
-              placeholder={t('evaluation.expert.commentPlaceholder')}
-              value={r.comment || ''}
-              onChange={(e) => setComment(sample.idx, e.target.value)}
-              onBlur={() => {
-                // 채점된 샘플의 코멘트 수정은 blur 시 영속(미완료 세션 한정, dedup 이 무변경 차단).
-                if (r.score && !progress?.completed) rate(sample.idx, r.score);
-              }}
-            />
-          </div>
-
-          {r.score && (r.rater || r.ratedAt) && (
-            <div className={cx('audit-line')}>
-              {t('evaluation.expert.ratedBy', {
-                rater: r.rater || t('evaluation.expert.unknownRater'),
-              })}
-              {r.ratedAt ? ` · ${r.ratedAt}` : ''}
-              {r.count > 1
-                ? ` · ${t('evaluation.expert.reRated', { count: r.count })}`
-                : ''}
-            </div>
-          )}
+          </ContentBox>
         </div>
       )}
     </div>

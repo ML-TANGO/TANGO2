@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react';
 
+import { Loading } from '@jonathan/ui-react';
+
+import EmptyBox from '@src/components/molecules/EmptyBox';
+
 import { fetchExpertImageBlob } from '@src/apis/llm/evaluation';
 
 import classNames from 'classnames/bind';
@@ -44,10 +48,23 @@ const ExpertSampleImage = ({ modelId, jobId, sample, t }) => {
   if (!sample.image_url && !sample.image_served) return null;
   if (err) {
     return (
-      <div className={cx('img-err')}>{t('evaluation.expert.imageError')}</div>
+      <div className={cx('img-status')}>
+        <EmptyBox
+          text='evaluation.expert.imageError'
+          isBox
+          isRed
+          customStyle={{ height: '120px' }}
+        />
+      </div>
     );
   }
-  if (!src) return <div className={cx('img-loading')} />;
+  if (!src)
+    return (
+      <div className={cx('img-status')}>
+        <Loading />
+        <span>{t('evaluation.project.loading')}</span>
+      </div>
+    );
   return <img className={cx('img')} src={src} alt={sample.image || 'sample'} />;
 };
 

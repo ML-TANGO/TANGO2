@@ -1,3 +1,5 @@
+import BorderTable from '@src/components/molecules/BorderTable';
+
 import classNames from 'classnames/bind';
 import style from './ExpertReview.module.scss';
 
@@ -40,27 +42,33 @@ const CsvTable = ({ rows, text }) => {
   const data = Array.isArray(rows) && rows.length > 0 ? rows : parseCsv(text);
   if (!data || data.length === 0) return null;
   const [head, ...body] = data;
+  const columns = (head || []).map((cell, index) => ({
+    name: cell,
+    selector: (row) => row[`column-${index}`],
+    wrap: true,
+  }));
+  const tableData = body.map((row, rowIndex) =>
+    row.reduce(
+      (item, cell, columnIndex) => ({
+        ...item,
+        [`column-${columnIndex}`]: cell,
+      }),
+      { id: rowIndex },
+    ),
+  );
 
   return (
     <div className={cx('csv-wrap')}>
-      <table className={cx('csv-table')}>
-        <thead>
-          <tr>
-            {(head || []).map((cell, i) => (
-              <th key={i}>{cell}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {body.map((row, r) => (
-            <tr key={r} className={cx(r % 2 === 1 && 'csv-row--alt')}>
-              {row.map((cell, i) => (
-                <td key={i}>{cell}</td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <BorderTable
+        columns={columns}
+        data={tableData}
+        loading={false}
+        selectableRows={false}
+        hideSearchBox
+        hideButtons
+        fixedHeader
+        fixedHeaderScrollHeight='320px'
+      />
     </div>
   );
 };

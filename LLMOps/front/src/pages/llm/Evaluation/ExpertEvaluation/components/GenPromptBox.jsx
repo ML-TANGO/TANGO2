@@ -1,3 +1,5 @@
+import ContentBox from '@src/components/molecules/ContentBox';
+
 import classNames from 'classnames/bind';
 import style from './ExpertReview.module.scss';
 
@@ -9,12 +11,9 @@ const cx = classNames.bind(style);
 const GenPromptBox = ({ prompt, t }) => {
   if (!prompt) return null;
   return (
-    <div className={cx('gen-prompt-box')}>
-      <div className={cx('gen-prompt-label')}>
-        {t('evaluation.expert.genPromptTitle')}
-      </div>
-      <p className={cx('gen-prompt-text')}>{prompt}</p>
-    </div>
+    <ContentBox title={t('evaluation.expert.genPromptTitle')}>
+      <p className={cx('prompt-text')}>{prompt}</p>
+    </ContentBox>
   );
 };
 
