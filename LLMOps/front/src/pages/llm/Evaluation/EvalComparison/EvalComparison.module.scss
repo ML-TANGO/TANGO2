@@ -1,112 +1,42 @@
+@import '@src/styles/color.scss';
+
 .comparison {
   margin-top: 8px;
-}
-
-.empty {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 40px 0;
-  border: 1px dashed #d8d8d8;
-  border-radius: 8px;
-  font-size: 14px;
-  color: #999;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .table-wrap {
+  min-width: 0;
   overflow-x: auto;
 }
 
-.comparison-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-
-  th,
-  td {
-    padding: 9px 12px;
-    text-align: left;
-    border-bottom: 1px solid #f0f0f0;
-    white-space: nowrap;
-  }
-
-  th {
-    font-weight: 600;
-    color: #888;
-    background: #fafafa;
-  }
-
-  td {
-    color: #333;
-  }
-}
-
 .model-cell {
-  font-weight: 600;
-  color: #1a1a1a;
+  color: $normal-text-color;
+  font-family: SpoqaB;
 }
 
 .metric-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
   &.best {
-    font-weight: 700;
-    color: #1aa260;
+    color: $lime604;
+    font-family: SpoqaB;
   }
 }
 
-.best-badge {
-  margin-left: 6px;
-  padding: 1px 6px;
-  font-size: 10px;
-  font-weight: 700;
-  color: #1aa260;
-  background: #e6f6ee;
-  border-radius: 10px;
-  vertical-align: middle;
+.action-cell {
+  display: flex;
+  justify-content: center;
+  width: 100%;
 }
 
-.run-status {
-  font-weight: 600;
-
-  &.completed {
-    color: #1aa260;
-  }
-  &.running {
-    color: #2f6fed;
-  }
-  &.failed,
-  &.cancelled {
-    color: #e0483e;
-  }
-}
-
-.action-col {
-  width: 1%;
-  text-align: center;
-}
-
-.delete-btn {
-  padding: 3px 10px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #e0483e;
-  background: #fff;
-  border: 1px solid #f0c9c6;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
-
-  &:hover {
-    background: #fdecea;
-    border-color: #e0483e;
-  }
-
-  &:active {
-    background: #f8d7d4;
-  }
-}
-
-.comparison-hint {
-  margin-top: 10px;
-  font-size: 12px;
-  color: #999;
+.guide {
+  padding: 16px;
+  border: 1px solid $card-border-color;
+  border-radius: 8px;
+  background-color: $background-color;
 }

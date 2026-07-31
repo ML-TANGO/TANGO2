@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
-import { useHistory, useRouteMatch } from 'react-router-dom';
+import { useRouteMatch } from 'react-router-dom';
+
+import { Badge, Checkbox, Loading } from '@jonathan/ui-react';
 
 import EvalComparison from '../EvalComparison/EvalComparison';
+
+import EmptyBox from '@src/components/molecules/EmptyBox';
+import GuideBox from '@src/components/molecules/GuideBox';
 
 import { getEvalCompare } from '@src/apis/llm/evaluation';
 import { startPath } from '@src/store/modules/breadCrumb';
@@ -19,12 +24,11 @@ const cx = classNames.bind(style);
 const MAX_MODELS = 6; // llm_evaluation MAX_COMPARE_MODELS 와 일치(초과 시 BE 422 회피).
 
 // 교차모델 비교 경량 뷰(④, §14.12). 여러 모델의 평가 이력을 한 표에 합쳐 메트릭별 best 를
-//   전역(모델 무관)으로 표시. 런 생성 X — 읽기 전용 비교. 모델 다중선택은 ModelSelector(단일)
-//   를 건드리지 않고 이 화면 전용 경량 칩 피커로 구현.
+//   전역(모델 무관)으로 표시. 런 생성 X — 읽기 전용 비교. 모델 다중선택은 이 화면 전용
+//   Checkbox 목록으로 제공한다.
 const EvalCrossCompare = () => {
   const { t } = useTranslation();
   const dispatch = useDispatch();
-  const history = useHistory();
   const match = useRouteMatch();
   const { id: workspaceId } = match.params;
 
@@ -107,7 +111,10 @@ const EvalCrossCompare = () => {
       return;
     }
     if (selected.length >= MAX_MODELS) {
-      errorToastMessage(null, t('evaluation.compare.modelCap', { max: MAX_MODELS }));
+      errorToastMessage(
+        null,
+        t('evaluation.compare.modelCap', { max: MAX_MODELS }),
+      );
       return;
     }
     const next = [...selected, id];
@@ -117,51 +124,86 @@ const EvalCrossCompare = () => {
 
   return (
     <div className={cx('cross-compare')}>
-      <div className={cx('header')}>
-        <button
-          type='button'
-          className={cx('back-btn')}
-          onClick={() => history.push(`/user/workspace/${workspaceId}/evaluation`)}
-        >
-          ← {t('evaluation.backToHub')}
-        </button>
-        <h1 className={cx('title')}>{t('evaluation.compare.title')}</h1>
-      </div>
-
       <section className={cx('section')}>
-        <h3 className={cx('section-title')}>
-          {t('evaluation.compare.selectModels')} ({selected.length}/{MAX_MODELS})
-        </h3>
+        <div className={cx('section-head')}>
+          <h3 className={cx('section-title')}>
+            {t('evaluation.compare.selectModels')}
+          </h3>
+          <Badge
+            label={`${selected.length}/${MAX_MODELS}`}
+            type='blue'
+            size='sm'
+          />
+        </div>
         {loadingModels ? (
-          <p className={cx('empty')}>{t('evaluation.compare.loading')}</p>
-        ) : models.length === 0 ? (
-          <p className={cx('empty')}>{t('evaluation.compare.noModels')}</p>
-        ) : (
-          <div className={cx('chip-row')}>
-            {models.map((m) => (
-              <button
-                key={m.id}
-                type='button'
-                className={cx('chip', selected.includes(m.id) && 'selected')}
-                onClick={() => toggle(m.id)}
-              >
-                {m.name}
-              </button>
-            ))}
+          <div className={cx('loading-state')}>
+            <Loading />
+            <span>{t('evaluation.compare.loading')}</span>
           </div>
+        ) : models.length === 0 ? (
+          <EmptyBox
+            text='evaluation.compare.noModels'
+            isBox
+            customStyle={{ height: '120px' }}
+          />
+        ) : (
+          <>
+            <div className={cx('model-options')}>
+              {models.map((m) => {
+                const checked = selected.includes(m.id);
+                return (
+                  <div
+                    key={m.id}
+                    className={cx('model-option', checked && 'selected')}
+                  >
+                    <Checkbox
+                      checked={checked}
+                      onChange={() => toggle(m.id)}
+                      label={m.name}
+                      customLabelStyle={{ width: '100%' }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+            <div className={cx('guide')}>
+              <GuideBox
+                title={t('evaluation.compare.modelCap', {
+                  max: MAX_MODELS,
+                })}
+                isTitleIcon
+                textList={[]}
+              />
+            </div>
+          </>
         )}
       </section>
 
       <section className={cx('section')}>
-        <h3 className={cx('section-title')}>{t('evaluation.compare.resultTitle')}</h3>
+        <h3 className={cx('section-title')}>
+          {t('evaluation.compare.resultTitle')}
+        </h3>
         {selected.length === 0 ? (
-          <p className={cx('empty')}>{t('evaluation.compare.pickHint')}</p>
+          <EmptyBox
+            text='evaluation.compare.pickHint'
+            isBox
+            customStyle={{ height: '120px' }}
+          />
         ) : loadingCompare ? (
-          <p className={cx('empty')}>{t('evaluation.compare.loading')}</p>
+          <div className={cx('loading-state')}>
+            <Loading />
+            <span>{t('evaluation.compare.loading')}</span>
+          </div>
         ) : (
           <>
             <EvalComparison comparison={comparison} showModel />
-            <div className={cx('hint')}>{t('evaluation.compare.hint')}</div>
+            <div className={cx('guide')}>
+              <GuideBox
+                title={t('evaluation.compare.hint')}
+                isTitleIcon
+                textList={[]}
+              />
+            </div>
           </>
         )}
       </section>

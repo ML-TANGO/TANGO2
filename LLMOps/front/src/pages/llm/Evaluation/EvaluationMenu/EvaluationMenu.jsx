@@ -3,7 +3,12 @@ import { useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
 import { useHistory, useRouteMatch } from 'react-router-dom';
 
-import { deleteEvalProject, listEvalProjects } from '@src/apis/llm/evaluation';
+import CardTemplate from '@src/components/molecules/CardTemplate/CardTemplate';
+import {
+  deleteEvalProject,
+  getEvalDatasets,
+  listEvalProjects,
+} from '@src/apis/llm/evaluation';
 import { loadModalComponent } from '@src/modal';
 import { startPath } from '@src/store/modules/breadCrumb';
 import { openConfirm } from '@src/store/modules/confirm';
@@ -27,13 +32,13 @@ const STATUS_KEYS = {
   created: 'evaluation.project.status.created',
   running: 'evaluation.project.status.running',
   completed: 'evaluation.project.status.completed',
+  failed: 'evaluation.failed',
+  error: 'evaluation.failed',
 };
 
-const fmtDate = (v) => (v ? String(v).replace('T', ' ').slice(0, 16) : '-');
-
 // 평가 프로젝트 목록 = 평가 표면의 랜딩(구 4카드 허브 대체, 설계 §6).
-//   프로젝트 행 = 이름·유형뱃지·모델·데이터셋수·상태칩·생성자·생성일. "새 프로젝트" → 생성 모달,
-//   행 클릭 → 상세 라우트. 삭제는 확인 후 FK CASCADE(BE). model 이름은 1회 models 조회로 매핑.
+//   플랫폼 표준 CardTemplate 가 생성 타일·카드·유형/상태 배지·삭제 버튼을 소유한다.
+//   카드 클릭 → 상세 라우트. 삭제는 확인 후 FK CASCADE(BE). model 이름은 1회 models 조회로 매핑.
 const EvaluationMenu = () => {
   const { t } = useTranslation();
   const dispatch = useDispatch();
@@ -43,6 +48,7 @@ const EvaluationMenu = () => {
 
   const [projects, setProjects] = useState(null); // null=로딩, []=빈 상태
   const [modelNames, setModelNames] = useState({}); // model_id → name
+  const [datasetNames, setDatasetNames] = useState({}); // dataset_id → name
 
   const fetchProjects = useCallback(async () => {
     const res = await listEvalProjects(workspaceId);
@@ -73,6 +79,22 @@ const EvaluationMenu = () => {
     setModelNames(map);
   }, [workspaceId]);
 
+  // 데이터셋 id→이름 매핑(목록 표시용) — ProjectDetail 과 같은 워크스페이스 목록 1회 조회.
+  const fetchDatasetNames = useCallback(async () => {
+    const res = await getEvalDatasets(workspaceId);
+    if (res.status !== STATUS_SUCCESS) return;
+    const list = Array.isArray(res.result)
+      ? res.result
+      : (res.result?.list ?? []);
+    const map = {};
+    list.forEach((dataset) => {
+      const id = dataset.id ?? dataset.dataset_id;
+      const name = dataset.name ?? dataset.dataset_name;
+      if (id != null && name) map[id] = name;
+    });
+    setDatasetNames(map);
+  }, [workspaceId]);
+
   useEffect(() => {
     dispatch(startPath([{ component: { name: 'Evaluation' } }]));
     loadModalComponent('CREATE_EVAL_PROJECT');
@@ -80,10 +102,17 @@ const EvaluationMenu = () => {
     fetchModelNames();
   }, [dispatch, fetchProjects, fetchModelNames]);
 
-  const openDetail = (p) =>
-    history.push(`/user/workspace/${workspaceId}/evaluation/project/${p.id}`);
+  useEffect(() => {
+    fetchDatasetNames();
+  }, [fetchDatasetNames]);
 
-  const handleDelete = (p, e) => {
+  // Card 의 onClick 규약: (e, id, constructor, isAccess, userList)
+  const openDetail = (e, id) => {
+    e.stopPropagation();
+    history.push(`/user/workspace/${workspaceId}/evaluation/project/${id}`);
+  };
+
+  const handleDelete = (e, id, title) => {
     e.stopPropagation();
     dispatch(
       openConfirm({
@@ -93,7 +122,7 @@ const EvaluationMenu = () => {
         submit: {
           text: 'delete.label',
           func: async () => {
-            const res = await deleteEvalProject(p.id);
+            const res = await deleteEvalProject(id);
             if (res.status !== STATUS_SUCCESS) {
               errorToastMessage(res.error, res.message);
               return;
@@ -102,7 +131,7 @@ const EvaluationMenu = () => {
           },
         },
         cancel: { text: 'cancel.label' },
-        confirmMessage: p.name,
+        confirmMessage: title,
       }),
     );
   };
@@ -132,90 +161,81 @@ const EvaluationMenu = () => {
     );
   };
 
+  const cardItems = (projects ?? []).map((p) => {
+    const isRunning = p.status === 'running';
+    const isError = p.status === 'failed' || p.status === 'error';
+    const datasetIds = Array.isArray(p.dataset_ids) ? p.dataset_ids : [];
+    const resolvedDatasetNames = datasetIds
+      .map((id) => datasetNames[id])
+      .filter(Boolean);
+    const hasAllDatasetNames =
+      datasetIds.length > 0 &&
+      resolvedDatasetNames.length === datasetIds.length;
+    const datasetCountLabel = t('evaluation.project.datasetCount', {
+      n: datasetIds.length,
+    });
+    const datasetLabel = hasAllDatasetNames
+      ? resolvedDatasetNames.length === 1
+        ? resolvedDatasetNames[0]
+        : t('evaluation.project.datasetMore', {
+            name: resolvedDatasetNames[0],
+            n: resolvedDatasetNames.length - 1,
+          })
+      : datasetCountLabel;
+    const datasetTitle = hasAllDatasetNames
+      ? resolvedDatasetNames.join(', ')
+      : datasetCountLabel;
+    return {
+      id: p.id,
+      title: p.name,
+      subTitle: (
+        <>
+          {`${t('evaluation.project.model')}: ${
+            modelNames[p.model_id] || `#${p.model_id}`
+          } · `}
+          <span title={datasetTitle}>
+            {`${t('evaluation.project.dataset')}: ${datasetLabel}`}
+          </span>
+          {' · '}
+          <span
+            className={cx(
+              'card-status',
+              isRunning && 'card-status-running',
+              isError && 'card-status-error',
+            )}
+          >
+            {t(STATUS_KEYS[p.status] || p.status)}
+          </span>
+        </>
+      ),
+      constructor: p.creator,
+      createTime: p.create_datetime,
+      updateTime: p.update_datetime,
+      // 평가 프로젝트는 워크스페이스 단위 목록이며 별도 카드 접근 제한 필드가 없다.
+      isAccess: 1,
+      typeBadge: t(TYPE_KEYS[p.eval_type] || p.eval_type),
+      kind: p.eval_type,
+    };
+  });
+
   return (
     <div className={cx('eval-projects')}>
-      <div className={cx('head')}>
-        <div className={cx('head-text')}>
-          <h1 className={cx('title')}>{t('evaluation.project.title')}</h1>
-          <p className={cx('subtitle')}>{t('evaluation.project.subtitle')}</p>
-        </div>
-        <button
-          type='button'
-          className={cx('new-btn')}
-          onClick={openCreateModal}
-        >
-          + {t('evaluation.project.new')}
-        </button>
+      <div className={cx('title-bar')}>
+        <h1 className={cx('title')}>{t('evaluation.project.title')}</h1>
       </div>
 
       {projects === null ? (
         <div className={cx('placeholder')}>
           {t('evaluation.project.loading')}
         </div>
-      ) : projects.length === 0 ? (
-        <div className={cx('empty')}>
-          <p className={cx('empty-text')}>{t('evaluation.project.empty')}</p>
-          <button
-            type='button'
-            className={cx('new-btn')}
-            onClick={openCreateModal}
-          >
-            + {t('evaluation.project.new')}
-          </button>
-        </div>
       ) : (
-        <div className={cx('project-list')}>
-          {projects.map((p) => (
-            <div
-              key={p.id}
-              className={cx('project-card')}
-              onClick={() => openDetail(p)}
-            >
-              <div className={cx('card-main')}>
-                <div className={cx('card-name-row')}>
-                  <span className={cx('card-name')}>{p.name}</span>
-                  <span className={cx('type-badge', `type-${p.eval_type}`)}>
-                    {t(TYPE_KEYS[p.eval_type] || p.eval_type)}
-                  </span>
-                </div>
-                <div className={cx('card-meta')}>
-                  <span className={cx('meta-item')}>
-                    {t('evaluation.project.model')}:{' '}
-                    {modelNames[p.model_id] || `#${p.model_id}`}
-                  </span>
-                  <span className={cx('meta-sep')}>·</span>
-                  <span className={cx('meta-item')}>
-                    {t('evaluation.project.datasetCount', {
-                      n: (p.dataset_ids || []).length,
-                    })}
-                  </span>
-                  {p.creator && (
-                    <>
-                      <span className={cx('meta-sep')}>·</span>
-                      <span className={cx('meta-item')}>{p.creator}</span>
-                    </>
-                  )}
-                </div>
-              </div>
-              <div className={cx('card-side')}>
-                <span className={cx('status-chip', `status-${p.status}`)}>
-                  {t(STATUS_KEYS[p.status] || p.status)}
-                </span>
-                <span className={cx('card-date')}>
-                  {fmtDate(p.create_datetime)}
-                </span>
-                <button
-                  type='button'
-                  className={cx('del-btn')}
-                  title={t('delete.label')}
-                  onClick={(e) => handleDelete(p, e)}
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+        <CardTemplate
+          createLabel={t('evaluation.project.new')}
+          cardItems={cardItems}
+          handleCreateCard={openCreateModal}
+          handleOnClickCard={openDetail}
+          handleDelete={handleDelete}
+        />
       )}
     </div>
   );

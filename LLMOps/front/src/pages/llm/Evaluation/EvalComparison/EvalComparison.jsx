@@ -1,5 +1,13 @@
 import { useTranslation } from 'react-i18next';
 
+import { Badge, ButtonV2 } from '@jonathan/ui-react';
+
+import BorderTable from '@src/components/molecules/BorderTable';
+import EmptyBox from '@src/components/molecules/EmptyBox';
+import GuideBox from '@src/components/molecules/GuideBox';
+
+import { addNineHours } from '@src/utils';
+
 import classNames from 'classnames/bind';
 import style from './EvalComparison.module.scss';
 
@@ -16,6 +24,16 @@ const fmtMetric = (v) => {
 const METRIC_LABEL_KEYS = {
   expert_avg_score: 'evaluate.metric.expertAvgScore',
   expert_pass_rate: 'evaluate.metric.expertPassRate',
+};
+
+// 실행 상태를 조나단 Badge type으로 매핑한다.
+const STATUS_BADGE_TYPE = {
+  created: 'gray',
+  pending: 'yellow',
+  running: 'blue',
+  completed: 'green',
+  failed: 'red',
+  cancelled: 'gray',
 };
 
 // 스케일 혼재 구분: avg_score 는 `/5`, pass_rate 는 `%`, 그 외는 기본 포맷.
@@ -47,74 +65,113 @@ const EvalComparison = ({ comparison, showModel = false, onDelete }) => {
   const metricLabel = (k) =>
     METRIC_LABEL_KEYS[k] ? t(METRIC_LABEL_KEYS[k]) : k;
 
+  const columns = [
+    showModel && {
+      name: t('evaluate.model.label'),
+      selector: 'model_name',
+      sortable: false,
+      cell: (run) => (
+        <span className={cx('model-cell')}>{run.model_name || '-'}</span>
+      ),
+    },
+    {
+      name: t('evaluate.dataset.label'),
+      selector: 'dataset_name',
+      sortable: false,
+      cell: (run) => run.dataset_name || '-',
+    },
+    ...metricKeys.map((k) => ({
+      name: metricLabel(k),
+      selector: k,
+      sortable: false,
+      cell: (run) => {
+        const v = run.metrics?.[k];
+        const isBest = best[k] === run.id && v !== undefined;
+        return (
+          <span className={cx('metric-cell', isBest && 'best')}>
+            {v !== undefined ? fmtMetricValue(k, v) : '-'}
+            {isBest && (
+              <Badge
+                label={t('evaluate.best.badge')}
+                type='green'
+                size='sm'
+              />
+            )}
+          </span>
+        );
+      },
+    })),
+    {
+      name: t('evaluate.status.label'),
+      selector: 'status',
+      sortable: false,
+      cell: (run) => {
+        const status = run.status || 'pending';
+        return (
+          <Badge
+            label={t(`evaluate.status.${status}`)}
+            type={STATUS_BADGE_TYPE[status] || 'gray'}
+            size='sm'
+          />
+        );
+      },
+    },
+    {
+      name: t('createdAt.label'),
+      selector: 'create_datetime',
+      sortable: false,
+      // ProjectDetail 의 fmtDate 와 같은 앱 공통 규약(addNineHours)을 쓴다. raw 로 두면
+      // 같은 run 이 "실행 목록" 탭과 이 "실행 비교" 탭에서 9시간 다르게 보인다.
+      cell: (run) => addNineHours(run.create_datetime) || '-',
+    },
+    canDelete && {
+      name: t('evaluate.action.label'),
+      selector: 'action',
+      sortable: false,
+      cell: (run) => (
+        <div className={cx('action-cell')}>
+          <ButtonV2
+            type='clear'
+            colorType='red'
+            size='s'
+            label={t('evaluate.action.delete')}
+            onClick={() => onDelete(run)}
+          />
+        </div>
+      ),
+    },
+  ].filter(Boolean);
+
   if (runs.length === 0) {
-    return <div className={cx('empty')}>{t('evaluate.empty')}</div>;
+    return (
+      <EmptyBox
+        text='evaluate.empty'
+        isBox
+        customStyle={{ height: '120px' }}
+      />
+    );
   }
 
   return (
     <div className={cx('comparison')}>
       <div className={cx('table-wrap')}>
-        <table className={cx('comparison-table')}>
-          <thead>
-            <tr>
-              {showModel && <th>{t('evaluate.model.label')}</th>}
-              <th>{t('evaluate.dataset.label')}</th>
-              {metricKeys.map((k) => (
-                <th key={k}>{metricLabel(k)}</th>
-              ))}
-              <th>{t('evaluate.status.label')}</th>
-              <th>{t('createdAt.label')}</th>
-              {canDelete && (
-                <th className={cx('action-col')}>
-                  {t('evaluate.action.label')}
-                </th>
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {runs.map((run) => (
-              <tr key={run.id}>
-                {showModel && (
-                  <td className={cx('model-cell')}>{run.model_name || '-'}</td>
-                )}
-                <td>{run.dataset_name || '-'}</td>
-                {metricKeys.map((k) => {
-                  const v = run.metrics?.[k];
-                  const isBest = best[k] === run.id && v !== undefined;
-                  return (
-                    <td key={k} className={cx('metric-cell', isBest && 'best')}>
-                      {v !== undefined ? fmtMetricValue(k, v) : '-'}
-                      {isBest && (
-                        <span className={cx('best-badge')}>
-                          {t('evaluate.best.badge')}
-                        </span>
-                      )}
-                    </td>
-                  );
-                })}
-                <td className={cx('run-status', run.status)}>
-                  {t(`evaluate.status.${run.status || 'pending'}`)}
-                </td>
-                <td>{run.create_datetime || '-'}</td>
-                {canDelete && (
-                  <td className={cx('action-col')}>
-                    <button
-                      type='button'
-                      className={cx('delete-btn')}
-                      title={t('evaluate.action.delete')}
-                      onClick={() => onDelete(run)}
-                    >
-                      {t('evaluate.action.delete')}
-                    </button>
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <BorderTable
+          columns={columns}
+          data={runs}
+          loading={false}
+          selectableRows={false}
+          hideSearchBox
+          hideButtons
+          fixedHeader
+          fixedHeaderScrollHeight='480px'
+        />
       </div>
-      <div className={cx('comparison-hint')}>
-        {t('evaluate.comparison.hint')}
+      <div className={cx('guide')}>
+        <GuideBox
+          title={t('evaluate.comparison.hint')}
+          isTitleIcon
+          textList={[]}
+        />
       </div>
     </div>
   );

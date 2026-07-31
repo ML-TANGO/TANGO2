@@ -918,7 +918,7 @@ const routeArr = [
     // 평가 프로젝트 상세(목록에서 진입, run 실행·전문가 채점·비교). detail=사이드nav 비노출.
     name: 'ProjectDetail',
     path: '/user/workspace/:id/evaluation/project/:projectId',
-    exact: true,
+    exact: false,
     disabled: true,
     icon: IconModel,
     activeIcon: IconModelActive,

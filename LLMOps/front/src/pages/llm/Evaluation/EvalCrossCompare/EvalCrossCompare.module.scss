@@ -1,35 +1,9 @@
 @import '@src/styles/color.scss';
 
 .cross-compare {
-  padding: 32px;
   display: flex;
   flex-direction: column;
   gap: 24px;
-}
-
-.header {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.back-btn {
-  align-self: flex-start;
-  background: none;
-  border: none;
-  padding: 4px 0;
-  font-size: 13px;
-  color: $mono204;
-  cursor: pointer;
-
-  &:hover {
-    color: $blue104;
-  }
-}
-
-.title {
-  font-size: 22px;
-  font-weight: 700;
 }
 
 .section {
@@ -38,46 +12,56 @@
   gap: 12px;
 }
 
+.section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .section-title {
+  margin: 0;
   font-size: 16px;
-  font-weight: 700;
+  font-family: SpoqaB;
+  color: $normal-text-color;
 }
 
-.empty {
-  color: $mono204;
-  font-size: 14px;
-}
-
-.chip-row {
+.model-options {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.chip {
-  padding: 7px 14px;
-  border: 1px solid $mono203;
-  border-radius: 16px;
-  background-color: #fff;
-  font-size: 13px;
-  color: $mono205;
-  cursor: pointer;
-  transition: border-color 0.12s, background-color 0.12s, color 0.12s;
+.model-option {
+  min-width: 160px;
+  padding: 12px 14px;
+  border: 1px solid $disable-color;
+  border-radius: 8px;
+  background-color: $mono200;
 
-  &:hover {
-    border-color: $blue104;
+  > div,
+  label {
+    width: 100%;
   }
 
   &.selected {
-    border-color: $blue104;
-    background-color: $blue101;
-    color: $blue104;
-    font-weight: 600;
+    border-color: $primary-color;
+    background-color: $background-color;
   }
 }
 
-.hint {
-  margin-top: 10px;
-  font-size: 12px;
-  color: $mono204;
+.loading-state {
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: $sub-text-color;
+  font-size: 14px;
+}
+
+.guide {
+  padding: 16px;
+  border: 1px solid $card-border-color;
+  border-radius: 8px;
+  background-color: $background-color;
 }

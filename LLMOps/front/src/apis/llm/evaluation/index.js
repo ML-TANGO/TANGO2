@@ -14,7 +14,8 @@ export const createEvalProject = async (body) => {
   return await callApi({ url: 'evaluations/projects', method: 'post', body });
 };
 
-// 워크스페이스 프로젝트 목록(최신순). → { workspace_id, projects: [...] }.
+// 워크스페이스 프로젝트 목록(최신순). 프로젝트 update_datetime 은 최근 run 생성 시각이며
+// run 이 없으면 프로젝트 create_datetime 과 같다. → { workspace_id, projects: [...] }.
 export const listEvalProjects = async (workspaceId) => {
   return await callApi({
     url: 'evaluations/projects',

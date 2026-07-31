@@ -1,201 +1,42 @@
 @import '@src/styles/color.scss';
 
+// 페이지 여백은 상위 프레임이, 카드 그리드·카드·배지·버튼 모양은 CardTemplate 이 소유한다.
 .eval-projects {
-  padding: 32px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
-}
+  gap: 40px;
 
-.head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.title {
-  font-size: 22px;
-  font-weight: 700;
-}
-
-.subtitle {
-  color: $mono204;
-  font-size: 14px;
-  margin-top: 6px;
-}
-
-.new-btn {
-  flex-shrink: 0;
-  padding: 10px 18px;
-  border: none;
-  border-radius: 8px;
-  background-color: $blue104;
-  color: #fff;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.15s;
-
-  &:hover {
-    opacity: 0.9;
+  .title-bar {
+    display: flex;
+    flex-direction: column;
   }
-}
 
-.placeholder {
-  padding: 48px 0;
-  text-align: center;
-  color: $mono204;
-  font-size: 14px;
-}
+  .title {
+    margin: initial;
+    color: $title-color;
+    font-family: SpoqaB;
+    font-size: 24px;
+    line-height: 24px;
+  }
 
-.empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-  padding: 64px 24px;
-  border: 1px dashed $mono203;
-  border-radius: 12px;
-  background-color: $mono202;
-
-  .empty-text {
-    color: $mono204;
+  .placeholder {
+    padding: 48px 0;
+    color: $sub-text-color;
     font-size: 14px;
+    text-align: center;
   }
 }
 
-.project-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+.card-status {
+  color: $sub-text-color;
 }
 
-.project-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 18px 20px;
-  border: 1px solid $mono203;
-  border-radius: 12px;
-  background-color: #fff;
-  cursor: pointer;
-  transition: border-color 0.15s, box-shadow 0.15s;
-
-  &:hover {
-    border-color: $blue104;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
-  }
+.card-status-running {
+  color: $lime604;
+  font-family: SpoqaB;
 }
 
-.card-main {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-}
-
-.card-name-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.card-name {
-  font-size: 16px;
-  font-weight: 700;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.type-badge {
-  flex-shrink: 0;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 3px 9px;
-  border-radius: 999px;
-  color: #fff;
-  background-color: $mono204;
-
-  &.type-benchmark {
-    background-color: #3d6df6;
-  }
-  &.type-judge {
-    background-color: #8b5cf6;
-  }
-  &.type-expert {
-    background-color: #0ea5a3;
-  }
-}
-
-.card-meta {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  color: $mono204;
-  font-size: 13px;
-}
-
-.meta-sep {
-  color: $mono203;
-}
-
-.card-side {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-shrink: 0;
-}
-
-.status-chip {
-  font-size: 12px;
-  font-weight: 600;
-  padding: 4px 10px;
-  border-radius: 8px;
-  border: 1px solid $mono203;
-  color: $mono204;
-  background-color: $mono202;
-
-  &.status-created {
-    color: #6b7280;
-    border-color: #d1d5db;
-    background-color: #f3f4f6;
-  }
-  &.status-running {
-    color: #b45309;
-    border-color: #fcd34d;
-    background-color: #fffbeb;
-  }
-  &.status-completed {
-    color: #047857;
-    border-color: #6ee7b7;
-    background-color: #ecfdf5;
-  }
-}
-
-.card-date {
-  font-size: 12px;
-  color: $mono204;
-  min-width: 108px;
-  text-align: right;
-}
-
-.del-btn {
-  width: 28px;
-  height: 28px;
-  border: 1px solid $mono203;
-  border-radius: 6px;
-  background-color: #fff;
-  color: $mono204;
-  font-size: 12px;
-  cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
-
-  &:hover {
-    color: #dc2626;
-    border-color: #fca5a5;
-  }
+.card-status-error {
+  color: $error-color;
+  font-family: SpoqaB;
 }

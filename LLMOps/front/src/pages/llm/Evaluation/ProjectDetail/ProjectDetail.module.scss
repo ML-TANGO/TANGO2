@@ -1,147 +1,205 @@
 @import '@src/styles/color.scss';
 
-.project-detail {
-  padding: 32px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
+.container {
+  padding: 8px 0;
 }
 
-.header {
+.content {
+  min-width: 0;
+}
+
+.back-to-list {
   display: flex;
+  flex-direction: row;
   align-items: center;
-}
-
-.back-btn {
-  border: none;
-  background-color: transparent;
-  color: $mono204;
-  font-size: 14px;
+  width: max-content;
+  margin-bottom: 12px;
   cursor: pointer;
-  padding: 4px 0;
 
-  &:hover {
-    color: $blue104;
+  .back-btn-image {
+    width: 16px;
+    height: 16px;
+  }
+
+  .back-btn-label {
+    margin-left: 4px;
+    color: $normal-text-color;
+    font-family: SpoqaB;
+    font-size: 16px;
+    font-style: normal;
+    font-weight: 700;
+    line-height: 16px;
   }
 }
 
-.placeholder {
-  padding: 48px 0;
-  text-align: center;
-  color: $mono204;
+.loading-state {
+  display: flex;
+  min-height: 120px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: $sub-text-color;
   font-size: 14px;
 }
 
-.fixed-header {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 22px 24px;
-  border: 1px solid $mono203;
-  border-radius: 12px;
-  background-color: #fff;
+// llmModel Redux 상태에 의존하지 않는 평가 전용 SimpleNav 동형 헤더.
+.nav-box {
+  z-index: 3;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 580px;
+  padding-bottom: 16px;
+
+  .title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    min-height: 32px;
+    margin-bottom: 32px;
+    padding-top: 12px;
+    color: $title-color;
+    font-family: SpoqaB;
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 100%;
+    white-space: nowrap;
+
+    .name {
+      display: flex;
+      align-items: center;
+      min-width: 0;
+      font-family: SpoqaB;
+
+      .sub-title {
+        overflow: hidden;
+        margin-left: 8px;
+        color: $sub-text-color;
+        font-family: SpoqaM;
+        font-size: 18px;
+        text-overflow: ellipsis;
+      }
+    }
+
+    .btn {
+      flex-shrink: 0;
+      margin-left: 24px;
+    }
+  }
+
+  .nav {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    border-bottom: 1px solid $disable-color;
+    gap: 16px;
+
+    .nav-item {
+      list-style: none;
+
+      &:hover {
+        background-color: $hover-bg-color;
+
+        a > .stick {
+          background-color: transparent;
+        }
+      }
+
+      a {
+        display: inline-block;
+        box-sizing: border-box;
+        text-decoration: none;
+
+        .link-name {
+          display: block;
+          padding: 0 16px 8px;
+          color: $sub-text-color;
+          font-family: SpoqaM;
+          font-size: 16px;
+          font-weight: 500;
+          line-height: 24px;
+          white-space: nowrap;
+        }
+
+        .stick {
+          display: block;
+          height: 2px;
+          border-radius: 2px;
+          background-color: $new-bg-color;
+        }
+
+        &.active {
+          .link-name {
+            padding: 0 16px 8px;
+            color: $primary-color;
+            font-family: SpoqaM;
+            font-weight: 700;
+          }
+
+          .stick {
+            background-color: $primary-color;
+          }
+        }
+      }
+    }
+  }
 }
 
-.name-row {
+.top-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
-.name {
-  font-size: 20px;
-  font-weight: 700;
-}
-
-.type-badge {
-  font-size: 11px;
-  font-weight: 700;
-  padding: 3px 9px;
-  border-radius: 999px;
-  color: #fff;
-  background-color: $mono204;
-
-  &.type-benchmark {
-    background-color: #3d6df6;
-  }
-  &.type-judge {
-    background-color: #8b5cf6;
-  }
-  &.type-expert {
-    background-color: #0ea5a3;
-  }
-}
-
-.status-chip {
-  font-size: 12px;
-  font-weight: 600;
-  padding: 4px 10px;
-  border-radius: 8px;
-  border: 1px solid $mono203;
-  color: $mono204;
-  background-color: $mono202;
-
-  &.status-created {
-    color: #6b7280;
-    border-color: #d1d5db;
-    background-color: #f3f4f6;
-  }
-  &.status-running {
-    color: #b45309;
-    border-color: #fcd34d;
-    background-color: #fffbeb;
-  }
-  &.status-completed {
-    color: #047857;
-    border-color: #6ee7b7;
-    background-color: #ecfdf5;
-  }
-}
-
-.meta-grid {
+.project-meta {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 16px;
+  grid-template-columns: minmax(240px, 2fr) repeat(3, minmax(140px, 1fr));
+  padding: 8px 20px 20px;
+  gap: 24px;
 }
 
 .meta-item {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  min-width: 0;
+  gap: 8px;
 }
 
 .meta-label {
+  color: $sub-text-color;
+  font-family: SpoqaM;
   font-size: 12px;
-  color: $mono204;
+  font-weight: 500;
 }
 
 .meta-value {
+  display: block;
+  min-width: 0;
+  color: $normal-text-color;
+  font-family: SpoqaM;
   font-size: 14px;
   font-weight: 500;
 }
 
-/* ── 하위 뷰 back(실행 목록으로) ── */
-.sub-back {
-  align-self: flex-start;
-  border: 1px solid $mono203;
-  background: #fff;
-  border-radius: 6px;
-  padding: 6px 12px;
-  font-size: 13px;
-  color: $mono205;
-  cursor: pointer;
-
-  &:hover {
-    border-color: $blue104;
-    color: $blue104;
-  }
+.dataset-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* ── 실행(run) 목록 ── */
 .runs {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  margin-top: 16px;
+}
+
+@media (max-width: 1100px) {
+  .project-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .runs-head {
@@ -151,97 +209,22 @@
 }
 
 .runs-title {
+  margin: 0;
+  color: $normal-text-color;
+  font-family: SpoqaB;
   font-size: 16px;
   font-weight: 700;
 }
 
-.runs-count {
-  font-size: 12px;
-  font-weight: 600;
-  background: $blue101;
-  color: $blue104;
-  border-radius: 12px;
-  padding: 2px 10px;
-}
-
-.runs-spacer {
-  flex: 1;
-}
-
-.compare-btn {
-  border: 1px solid $blue104;
-  background: #fff;
-  color: $blue104;
-  border-radius: 8px;
-  padding: 8px 16px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-
-  &:hover {
-    background: $blue101;
-  }
-}
-
-.new-run-btn {
-  border: none;
-  background: $blue104;
-  color: #fff;
-  border-radius: 8px;
-  padding: 9px 18px;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-
-  &:disabled {
-    background: $mono203;
-    color: $mono204;
-    cursor: not-allowed;
-  }
-}
-
-/* 러너 generate(추론) 실행 — 점수 런과 구분되는 "생성" 스텝. 슬레이트 accent(생성 프롬프트 박스와 일치). */
-.gen-btn {
-  border: 1px solid #5b6b8c;
-  background: #fff;
-  color: #5b6b8c;
-  border-radius: 8px;
-  padding: 8px 16px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-
-  &:hover:not(:disabled) {
-    background: #f6f7fb;
-  }
-
-  &:disabled {
-    border-color: $mono203;
-    color: $mono204;
-    cursor: not-allowed;
-  }
-}
-
 .gen-banner {
-  margin-top: 12px;
   padding: 10px 14px;
+  border: 1px solid $disable-color;
+  border-left: 3px solid $primary-color;
+  border-radius: 8px;
+  background: $mono201;
+  color: $sub-text-color;
   font-size: 12px;
   font-weight: 600;
-  color: #5b6b8c;
-  background: #f6f7fb;
-  border: 1px solid #dcdfe8;
-  border-left: 3px solid #5b6b8c;
-  border-radius: 8px;
-}
-
-.runs-empty {
-  padding: 40px 24px;
-  text-align: center;
-  color: $mono204;
-  font-size: 13px;
-  border: 1px dashed $mono203;
-  border-radius: 12px;
-  background-color: $mono202;
 }
 
 .run-list {
@@ -255,79 +238,62 @@
   align-items: center;
   gap: 16px;
   padding: 14px 18px;
-  border: 1px solid $mono203;
+  border: 1px solid $disable-color;
   border-radius: 10px;
-  background: #fff;
+  background: $mono200;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
 
   &:hover {
-    border-color: $blue104;
-    background: $blue101;
+    border-color: $primary-color;
+    background: $background-color;
   }
 }
 
 .run-main {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
   flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  gap: 4px;
 }
 
 .run-dataset {
+  color: $normal-text-color;
   font-size: 14px;
   font-weight: 700;
-  color: $mono207;
 }
 
 .run-config {
-  font-size: 12px;
-  color: $mono205;
   overflow: hidden;
+  max-width: 420px;
+  color: $sub-text-color;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 420px;
 }
 
 .run-side {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 12px;
-  flex-shrink: 0;
 }
 
 .run-metrics {
+  color: $primary-color;
   font-size: 12px;
-  font-weight: 600;
-  color: $blue104;
   font-variant-numeric: tabular-nums;
+  font-weight: 600;
 }
 
 .run-date {
+  color: $sub-text-color;
   font-size: 12px;
-  color: $mono204;
 }
 
 .run-open {
+  color: $primary-color;
   font-size: 12px;
   font-weight: 700;
-  color: $blue104;
-}
-
-/* 런 삭제(진행중/완료) — EvaluationMenu .del-btn 톤 미러(조나단 일관). 행 클릭과 분리. */
-.run-delete {
-  border: none;
-  background: none;
-  padding: 2px 6px;
-  border-radius: 6px;
-  font-size: 12px;
-  color: $mono204;
-  cursor: pointer;
-  transition: color 0.15s, background 0.15s;
-
-  &:hover {
-    color: #dc2626;
-    background: rgba(220, 38, 38, 0.08);
-  }
 }

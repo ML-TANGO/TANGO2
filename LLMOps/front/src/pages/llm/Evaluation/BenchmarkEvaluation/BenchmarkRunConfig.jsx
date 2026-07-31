@@ -1,6 +1,18 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import {
+  Badge,
+  ButtonV2,
+  Checkbox,
+  InputText,
+  Selectbox,
+} from '@jonathan/ui-react';
+
+import EmptyBox from '@src/components/molecules/EmptyBox';
+import GuideBox from '@src/components/molecules/GuideBox';
+import Tab from '@src/components/molecules/Tab';
+
 import { successToastMessage } from '@src/utils';
 
 import {
@@ -17,9 +29,9 @@ import style from './BenchmarkEvaluation.module.scss';
 
 const cx = classNames.bind(style);
 
-// 벤치마크 실행 설정(프로젝트 상속) — 모델·데이터셋은 프로젝트에서 잠금. image.png 대로
-//   1) 벤치마크 선택 → 2) 벤치마크별 메트릭 지정 → 3) 확인 3단계 위저드.
-//   onRun([{ benchmark, metric }]) 로 상위(ProjectDetail)가 runBenchmark 호출.
+// 벤치마크 실행 설정(프로젝트 상속) — 모델·데이터셋은 프로젝트에서 잠금.
+// 1) 벤치마크 선택, 2) 벤치마크별 메트릭 지정, 3) 확인 순서를 유지한다.
+// onRun([{ benchmark, metric }]) 로 상위(ProjectDetail)가 runBenchmark를 호출한다.
 const STEPS = [
   { n: 1, key: 'evaluation.bench.step1' },
   { n: 2, key: 'evaluation.bench.step2' },
@@ -35,8 +47,8 @@ const BenchmarkRunConfig = ({ running, onRun }) => {
   const [query, setQuery] = useState('');
   const [focusMetric, setFocusMetric] = useState('accuracy'); // 설명 패널 대상
 
-  // 동기 클릭 핸들러라 selected 클로저를 그대로 분기(부수효과를 updater 안에 중첩 안 함 —
-  // React updater 는 순수해야 하며 StrictMode 이중호출/향후 prev 의존 시 오작동 방지).
+  // 동기 클릭 핸들러라 selected 클로저를 그대로 분기한다. React updater 안에는
+  // 부수효과를 넣지 않아 StrictMode 이중 호출에서도 선택/메트릭 상태를 분리해 유지한다.
   const toggleBenchmark = (id) => {
     if (selected.includes(id)) {
       setSelected((prev) => prev.filter((x) => x !== id));
@@ -93,203 +105,240 @@ const BenchmarkRunConfig = ({ running, onRun }) => {
   };
 
   const focus = METRIC_MAP[focusMetric];
+  const categoryOptions = BENCHMARK_CATEGORIES.map((item) => ({
+    label: `${item.label} (${categoryCount(item.id)})`,
+    value: item.id,
+  }));
+  const selectedCategory =
+    categoryOptions.find((item) => item.value === category) ||
+    categoryOptions[0];
+  const stepOptions = STEPS.map((item) => ({
+    label: item.key,
+    value: item.n,
+    disable: item.n > 1 && !canProceed,
+  }));
 
   return (
-    <div className={cx('wz')}>
-      {/* ── 헤더 + 스텝 인디케이터 ── */}
-      <div className={cx('wz-head')}>
-        <div className={cx('wz-head-text')}>
-          <h2 className={cx('wz-title')}>{t('evaluation.bench.setupTitle')}</h2>
-          <p className={cx('wz-subtitle')}>
-            {t('evaluation.bench.setupSubtitle')}
-          </p>
-        </div>
-        <ol className={cx('wz-steps')}>
-          {STEPS.map((s) => (
-            <li
-              key={s.n}
-              className={cx(
-                'wz-step',
-                step === s.n && 'on',
-                step > s.n && 'done',
-              )}
-              onClick={() => goStep(s.n)}
-            >
-              <span className={cx('wz-step-num')}>{s.n}</span>
-              <span className={cx('wz-step-label')}>{t(s.key)}</span>
-            </li>
-          ))}
-        </ol>
+    <div className={cx('wizard')}>
+      <div className={cx('wizard-tabs')}>
+        <Tab
+          type='b'
+          option={stepOptions}
+          select={stepOptions[step - 1]}
+          tabHandler={({ value }) => goStep(value)}
+        />
       </div>
 
-      <div className={cx('wz-body')}>
-        {/* ── 좌: 단계별 본문 ── */}
-        <div className={cx('wz-main')}>
+      <div className={cx('wizard-body')}>
+        <div className={cx('wizard-main')}>
           {step === 1 && (
-            <section className={cx('wz-panel')}>
-              <div className={cx('wz-panel-head')}>
+            <section className={cx('panel')}>
+              <div className={cx('panel-head')}>
                 <div>
-                  <h3 className={cx('wz-panel-title')}>
-                    1. {t('evaluation.bench.selectBenchTitle')}
+                  <h3 className={cx('panel-title')}>
+                    {t('evaluation.bench.selectBenchTitle')}
                   </h3>
-                  <p className={cx('wz-panel-desc')}>
+                  <p className={cx('panel-desc')}>
                     {t('evaluation.bench.selectBenchDesc')}
                   </p>
                 </div>
-                <input
-                  className={cx('wz-search')}
-                  type='text'
-                  value={query}
-                  placeholder={t('evaluation.bench.searchPlaceholder')}
-                  onChange={(e) => setQuery(e.target.value)}
-                />
-              </div>
-
-              <div className={cx('wz-select-body')}>
-                <ul className={cx('wz-cats')}>
-                  <li className={cx('wz-cats-label')}>
-                    {t('evaluation.bench.category')}
-                  </li>
-                  {BENCHMARK_CATEGORIES.map((c) => (
-                    <li
-                      key={c.id}
-                      className={cx('wz-cat', category === c.id && 'on')}
-                      onClick={() => setCategory(c.id)}
-                    >
-                      <span>{c.label}</span>
-                      <span className={cx('wz-cat-count')}>
-                        {categoryCount(c.id)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-
-                <div className={cx('wz-cards')}>
-                  {filtered.map((b) => {
-                    const on = selected.includes(b.id);
-                    return (
-                      <div
-                        key={b.id}
-                        className={cx('wz-card', on && 'on')}
-                        onClick={() => toggleBenchmark(b.id)}
-                      >
-                        <span className={cx('wz-check', on && 'on')}>
-                          {on ? '✓' : ''}
-                        </span>
-                        <div className={cx('wz-card-body')}>
-                          <div className={cx('wz-card-name')}>{b.label}</div>
-                          <div className={cx('wz-card-desc')}>{b.desc}</div>
-                          <span className={cx('wz-tag')}>
-                            {BENCHMARK_CATEGORIES.find(
-                              (c) => c.id === b.category,
-                            )?.label || b.category}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {filtered.length === 0 && (
-                    <div className={cx('wz-cards-empty')}>
-                      {t('evaluation.noSearchResult')}
-                    </div>
-                  )}
+                <div className={cx('filters')}>
+                  <Selectbox
+                    list={categoryOptions}
+                    selectedItem={selectedCategory}
+                    onChange={(item) => setCategory(item.value)}
+                    customStyle={{
+                      selectboxForm: { width: '184px' },
+                      listForm: { width: '184px' },
+                    }}
+                  />
+                  <InputText
+                    size='medium'
+                    value={query}
+                    placeholder={t('evaluation.bench.searchPlaceholder')}
+                    leftIcon='/images/icon/ic-search.svg'
+                    closeIcon='/images/icon/close-c.svg'
+                    disableLeftIcon={false}
+                    disableClearBtn={false}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onClear={() => setQuery('')}
+                    customStyle={{ width: '220px' }}
+                  />
                 </div>
               </div>
 
-              <p className={cx('wz-hint')}>{t('evaluation.bench.minOne')}</p>
+              <div className={cx('benchmark-grid')}>
+                {filtered.map((benchmark) => {
+                  const checked = selected.includes(benchmark.id);
+                  const categoryLabel =
+                    BENCHMARK_CATEGORIES.find(
+                      (item) => item.id === benchmark.category,
+                    )?.label || benchmark.category;
+                  return (
+                    <div
+                      key={benchmark.id}
+                      className={cx('benchmark-option', checked && 'selected')}
+                    >
+                      <Checkbox
+                        checked={checked}
+                        onChange={() => toggleBenchmark(benchmark.id)}
+                        customLabelStyle={{ width: '100%' }}
+                        label={
+                          <div className={cx('benchmark-option-body')}>
+                            <div className={cx('benchmark-option-name')}>
+                              {benchmark.label}
+                            </div>
+                            <div className={cx('benchmark-option-desc')}>
+                              {benchmark.desc}
+                            </div>
+                            <Badge
+                              label={categoryLabel}
+                              type='blue'
+                              size='sm'
+                            />
+                          </div>
+                        }
+                      />
+                    </div>
+                  );
+                })}
+                {filtered.length === 0 && (
+                  <div className={cx('grid-empty')}>
+                    <EmptyBox
+                      text='evaluation.noSearchResult'
+                      isBox
+                      customStyle={{ height: '120px' }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className={cx('guide')}>
+                <GuideBox
+                  title={t('evaluation.bench.step1')}
+                  isTitleIcon
+                  textList={[t('evaluation.bench.minOne')]}
+                />
+              </div>
             </section>
           )}
 
           {step === 2 && (
-            <section className={cx('wz-panel')}>
-              <h3 className={cx('wz-panel-title')}>
-                2. {t('evaluation.bench.metricTitle')}
-              </h3>
-              <p className={cx('wz-panel-desc')}>
-                {t('evaluation.bench.metricDesc')}
-              </p>
+            <section className={cx('panel')}>
+              <div>
+                <h3 className={cx('panel-title')}>
+                  {t('evaluation.bench.metricTitle')}
+                </h3>
+                <p className={cx('panel-desc')}>
+                  {t('evaluation.bench.metricDesc')}
+                </p>
+              </div>
 
-              <div className={cx('wz-metric-body')}>
-                <div className={cx('wz-metric-table')}>
-                  <div className={cx('wz-mt-head')}>
+              <div className={cx('metric-layout')}>
+                <div className={cx('metric-list')}>
+                  <div className={cx('metric-list-head')}>
                     <span>{t('evaluation.bench.colBench')}</span>
                     <span>{t('evaluation.bench.colRecommended')}</span>
                     <span>{t('evaluation.bench.colMetric')}</span>
                     <span />
                   </div>
                   {selected.map((id) => {
-                    const b = BENCHMARK_MAP[id];
+                    const benchmark = BENCHMARK_MAP[id];
+                    const metricOptions = benchmark.metrics.map((metricId) => ({
+                      label: METRIC_MAP[metricId]?.label || metricId,
+                      value: metricId,
+                    }));
+                    const selectedMetric =
+                      metricOptions.find(
+                        (item) => item.value === metricMap[id],
+                      ) || metricOptions[0];
                     return (
-                      <div key={id} className={cx('wz-mt-row')}>
-                        <div className={cx('wz-mt-bench')}>
-                          <div className={cx('wz-card-name')}>{b.label}</div>
-                          <div className={cx('wz-card-desc')}>{b.desc}</div>
+                      <div
+                        key={id}
+                        className={cx('metric-row')}
+                        onClick={() => setFocusMetric(metricMap[id])}
+                      >
+                        <div className={cx('metric-benchmark')}>
+                          <div className={cx('benchmark-option-name')}>
+                            {benchmark.label}
+                          </div>
+                          <div className={cx('benchmark-option-desc')}>
+                            {benchmark.desc}
+                          </div>
                         </div>
-                        <div className={cx('wz-mt-rec')}>
-                          {METRIC_MAP[b.recommended]?.label || b.recommended}
-                        </div>
-                        <select
-                          className={cx('wz-metric-select')}
-                          value={metricMap[id] || ''}
-                          onChange={(e) => setMetric(id, e.target.value)}
-                          onFocus={() => setFocusMetric(metricMap[id])}
-                        >
-                          {b.metrics.map((mid) => (
-                            <option key={mid} value={mid}>
-                              {METRIC_MAP[mid]?.label || mid}
-                            </option>
-                          ))}
-                        </select>
-                        <button
-                          type='button'
-                          className={cx('wz-mt-remove')}
+                        <Badge
+                          label={
+                            METRIC_MAP[benchmark.recommended]?.label ||
+                            benchmark.recommended
+                          }
+                          type='green'
+                          size='sm'
+                        />
+                        <Selectbox
+                          list={metricOptions}
+                          selectedItem={selectedMetric}
+                          onChange={(item) => setMetric(id, item.value)}
+                          customStyle={{
+                            selectboxForm: { width: '100%' },
+                            listForm: { width: '100%' },
+                          }}
+                        />
+                        <ButtonV2
+                          type='clear'
+                          colorType='red'
+                          size='s'
+                          label={t('delete.label')}
                           onClick={() => toggleBenchmark(id)}
-                          aria-label='remove'
-                        >
-                          ✕
-                        </button>
+                        />
                       </div>
                     );
                   })}
-
-                  <button
-                    type='button'
-                    className={cx('wz-add-custom')}
-                    onClick={() =>
-                      successToastMessage(
-                        null,
-                        t('evaluation.bench.addCustomSoon'),
-                      )
-                    }
-                  >
-                    + {t('evaluation.bench.addCustom')}
-                  </button>
+                  <div className={cx('custom-action')}>
+                    <ButtonV2
+                      type='outline'
+                      colorType='blue'
+                      size='s'
+                      label={t('evaluation.bench.addCustom')}
+                      onClick={() =>
+                        successToastMessage(
+                          null,
+                          t('evaluation.bench.addCustomSoon'),
+                        )
+                      }
+                    />
+                  </div>
                 </div>
 
-                {/* 메트릭 설명 패널 */}
-                <aside className={cx('wz-metric-desc')}>
-                  <h4 className={cx('wz-md-title')}>
+                <aside className={cx('metric-description')}>
+                  <h4 className={cx('metric-description-title')}>
                     {t('evaluation.bench.metricPanelTitle')}
                   </h4>
                   {focus && (
                     <>
-                      <div className={cx('wz-md-metric')}>{focus.label}</div>
-                      <div className={cx('wz-md-sub')}>{focus.desc}</div>
+                      <div className={cx('metric-description-name')}>
+                        {focus.label}
+                      </div>
+                      <div className={cx('metric-description-sub')}>
+                        {focus.desc}
+                      </div>
                       {focus.formula && (
-                        <div className={cx('wz-md-formula')}>
+                        <div className={cx('metric-formula')}>
                           {focus.formula}
                         </div>
                       )}
                       {focus.common?.length > 0 && (
                         <>
-                          <div className={cx('wz-md-label')}>
+                          <div className={cx('metric-common-title')}>
                             {t('evaluation.bench.commonBench')}
                           </div>
-                          <div className={cx('wz-md-tags')}>
-                            {focus.common.map((c) => (
-                              <span key={c} className={cx('wz-md-tag')}>
-                                {c}
-                              </span>
+                          <div className={cx('badge-list')}>
+                            {focus.common.map((item) => (
+                              <Badge
+                                key={item}
+                                label={item}
+                                type='gray'
+                                size='sm'
+                              />
                             ))}
                           </div>
                         </>
@@ -302,22 +351,28 @@ const BenchmarkRunConfig = ({ running, onRun }) => {
           )}
 
           {step === 3 && (
-            <section className={cx('wz-panel')}>
-              <h3 className={cx('wz-panel-title')}>
-                3. {t('evaluation.bench.confirmTitle')}
-              </h3>
-              <p className={cx('wz-panel-desc')}>
-                {t('evaluation.bench.summaryInfo')}
-              </p>
-              <div className={cx('wz-confirm-list')}>
+            <section className={cx('panel')}>
+              <div>
+                <h3 className={cx('panel-title')}>
+                  {t('evaluation.bench.confirmTitle')}
+                </h3>
+                <p className={cx('panel-desc')}>
+                  {t('evaluation.bench.summaryInfo')}
+                </p>
+              </div>
+              <div className={cx('confirm-list')}>
                 {selected.map((id) => (
-                  <div key={id} className={cx('wz-confirm-row')}>
-                    <span className={cx('wz-card-name')}>
+                  <div key={id} className={cx('confirm-row')}>
+                    <span className={cx('confirm-name')}>
                       {BENCHMARK_MAP[id].label}
                     </span>
-                    <span className={cx('wz-confirm-metric')}>
-                      {METRIC_MAP[metricMap[id]]?.label || metricMap[id]}
-                    </span>
+                    <Badge
+                      label={
+                        METRIC_MAP[metricMap[id]]?.label || metricMap[id]
+                      }
+                      type='blue'
+                      size='sm'
+                    />
                   </div>
                 ))}
               </div>
@@ -325,41 +380,42 @@ const BenchmarkRunConfig = ({ running, onRun }) => {
           )}
         </div>
 
-        {/* ── 우: 평가 설정 요약(상시) ── */}
-        <aside className={cx('wz-summary')}>
-          <div className={cx('wz-sum-block')}>
-            <div className={cx('wz-sum-head')}>
-              <h4 className={cx('wz-sum-title')}>
+        <aside className={cx('summary')}>
+          <div className={cx('summary-card')}>
+            <div className={cx('summary-head')}>
+              <h4 className={cx('summary-title')}>
                 {t('evaluation.bench.selectedBench')} ({selected.length})
               </h4>
               {selected.length > 0 && (
-                <button
-                  type='button'
-                  className={cx('wz-sum-clear')}
+                <ButtonV2
+                  type='clear'
+                  colorType='red'
+                  size='s'
+                  label={t('evaluation.bench.clearAll')}
                   onClick={clearAll}
-                >
-                  {t('evaluation.bench.clearAll')}
-                </button>
+                />
               )}
             </div>
             {selected.length === 0 ? (
-              <div className={cx('wz-sum-empty')}>
-                {t('evaluation.bench.empty')}
-              </div>
+              <EmptyBox
+                text='evaluation.bench.empty'
+                customStyle={{ height: '72px' }}
+              />
             ) : (
-              <ul className={cx('wz-sum-list')}>
+              <ul className={cx('summary-list')}>
                 {selected.map((id) => (
-                  <li key={id} className={cx('wz-sum-item')}>
-                    <span className={cx('wz-sum-name')}>
-                      {BENCHMARK_MAP[id].label}
-                    </span>
-                    <span className={cx('wz-sum-tag')}>
-                      {
+                  <li key={id} className={cx('summary-item')}>
+                    <span>{BENCHMARK_MAP[id].label}</span>
+                    <Badge
+                      label={
                         BENCHMARK_CATEGORIES.find(
-                          (c) => c.id === BENCHMARK_MAP[id].category,
+                          (item) =>
+                            item.id === BENCHMARK_MAP[id].category,
                         )?.label
                       }
-                    </span>
+                      type='gray'
+                      size='sm'
+                    />
                   </li>
                 ))}
               </ul>
@@ -367,73 +423,76 @@ const BenchmarkRunConfig = ({ running, onRun }) => {
           </div>
 
           {selected.length > 0 && (
-            <div className={cx('wz-sum-block')}>
-              <h4 className={cx('wz-sum-title')}>
+            <div className={cx('summary-card')}>
+              <h4 className={cx('summary-title')}>
                 {t('evaluation.bench.metricMapping')}
               </h4>
-              <ul className={cx('wz-map-list')}>
+              <ul className={cx('summary-list')}>
                 {selected.map((id) => (
-                  <li key={id} className={cx('wz-map-item')}>
-                    <span className={cx('wz-map-bench')}>
-                      {BENCHMARK_MAP[id].label}
-                    </span>
-                    <span className={cx('wz-map-metric')}>
-                      {METRIC_MAP[metricMap[id]]?.label || metricMap[id]}
-                    </span>
+                  <li key={id} className={cx('summary-item')}>
+                    <span>{BENCHMARK_MAP[id].label}</span>
+                    <Badge
+                      label={
+                        METRIC_MAP[metricMap[id]]?.label || metricMap[id]
+                      }
+                      type='blue'
+                      size='sm'
+                    />
                   </li>
                 ))}
               </ul>
             </div>
           )}
 
-          <div className={cx('wz-sum-info')}>
-            {t('evaluation.bench.summaryInfo')}
-            <ul>
-              <li>
-                {t('evaluation.bench.totalBench')}: {selected.length}
-              </li>
-              <li>
-                {t('evaluation.bench.totalMetric')}: {metricCount}
-              </li>
-            </ul>
+          <div className={cx('guide', 'summary-guide')}>
+            <GuideBox
+              title={t('evaluation.bench.setupTitle')}
+              isTitleIcon
+              textList={[
+                t('evaluation.bench.summaryInfo'),
+                `${t('evaluation.bench.totalBench')}: ${selected.length}`,
+                `${t('evaluation.bench.totalMetric')}: ${metricCount}`,
+              ]}
+            />
           </div>
 
-          <div className={cx('wz-sum-actions')}>
+          <div className={cx('wizard-actions')}>
             {step > 1 && (
-              <button
-                type='button'
-                className={cx('wz-btn', 'ghost')}
+              <ButtonV2
+                type='outline'
+                colorType='blue'
+                size='l'
+                label={t('evaluation.bench.prev')}
                 onClick={() => setStep(step - 1)}
-              >
-                {t('evaluation.bench.prev')}
-              </button>
+              />
             )}
             {step < 3 ? (
-              <button
-                type='button'
-                className={cx('wz-btn', 'primary', !canProceed && 'disabled')}
+              <ButtonV2
+                type='solid'
+                colorType='blue'
+                size='l'
+                label={
+                  step === 1
+                    ? t('evaluation.bench.nextToMetric')
+                    : t('evaluation.bench.nextToConfirm')
+                }
                 disabled={!canProceed}
                 onClick={() => goStep(step + 1)}
-              >
-                {step === 1
-                  ? t('evaluation.bench.nextToMetric')
-                  : t('evaluation.bench.nextToConfirm')}
-              </button>
+              />
             ) : (
-              <button
-                type='button'
-                className={cx(
-                  'wz-btn',
-                  'primary',
-                  (!canProceed || running) && 'disabled',
-                )}
+              <ButtonV2
+                type='solid'
+                colorType='blue'
+                size='l'
+                label={
+                  running
+                    ? t('evaluation.running')
+                    : t('evaluation.runBenchmark')
+                }
                 disabled={!canProceed || running}
+                isLoading={running}
                 onClick={handleRun}
-              >
-                {running
-                  ? t('evaluation.running')
-                  : t('evaluation.runBenchmark')}
-              </button>
+              />
             )}
           </div>
         </aside>

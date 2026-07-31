@@ -1,0 +1,45 @@
+@import '@src/styles/color.scss';
+
+.generate-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.desc {
+  color: $sub-text-color;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.modal-loading {
+  display: flex;
+  min-height: 120px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: $sub-text-color;
+  font-size: 13px;
+}
+
+.deployment-list {
+  display: flex;
+  max-height: 320px;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+}
+
+.deployment-row {
+  display: flex;
+  min-height: 44px;
+  padding: 10px 12px;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid $mono203;
+}
+
+.deployment-choice {
+  flex: 1;
+  min-width: 0;
+}

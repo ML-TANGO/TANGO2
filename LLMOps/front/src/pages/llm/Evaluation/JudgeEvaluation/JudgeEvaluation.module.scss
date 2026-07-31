@@ -1,386 +1,184 @@
-.judge {
-  padding: 24px 4px;
-  overflow-y: auto;
-}
+@import '@src/styles/color.scss';
 
-.header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-.back-btn {
-  border: 1px solid #d8d8d8;
-  background: #fff;
-  border-radius: 6px;
-  padding: 6px 12px;
-  font-size: 13px;
-  color: #555;
-  cursor: pointer;
-
-  &:hover {
-    border-color: #2f6fed;
-    color: #2f6fed;
-  }
-}
-
-.title {
-  font-size: 18px;
-  font-weight: 700;
-  color: #1a1a1a;
-}
-
-.mock-badge {
-  padding: 2px 8px;
-  font-size: 11px;
-  font-weight: 700;
-  color: #b25b00;
-  background: #fff1e0;
-  border-radius: 10px;
-}
-
-.section {
-  margin-bottom: 24px;
-}
-
-.section-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: #1a1a1a;
-  margin-bottom: 12px;
-}
-
-.tabs {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 14px;
-}
-
-.tab {
-  flex: 1;
-  padding: 10px;
-  border: 1px solid #e2e6ee;
-  background: #fff;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #666;
-  cursor: pointer;
-
-  &.active {
-    border-color: #2f6fed;
-    background: #eef3ff;
-    color: #2f6fed;
-  }
-}
-
-.judge-cards {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 14px;
-  flex-wrap: wrap;
-}
-
-.judge-card {
+// ── Judge 실행 설정 ───────────────────────────────────────────────────
+.judge-config {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  min-width: 130px;
-  padding: 12px 14px;
-  border: 1px solid #e2e6ee;
-  background: #fff;
-  border-radius: 8px;
-  cursor: pointer;
-
-  &.selected {
-    border-color: #2f6fed;
-    background: #eef3ff;
-  }
+  max-width: 1040px;
+  margin-top: 8px;
+  gap: 20px;
 }
 
-.judge-label {
-  font-size: 13px;
-  font-weight: 700;
-  color: #1a1a1a;
-}
-
-.judge-model {
-  font-size: 11px;
-  color: #888;
-}
-
-.field {
-  margin-bottom: 14px;
-}
-
-.field-label {
-  display: block;
-  font-size: 12px;
-  font-weight: 600;
-  color: #666;
-  margin-bottom: 6px;
-}
-
-.field-input {
-  width: 100%;
-  max-width: 480px;
-  padding: 9px 12px;
-  border: 1px solid #d8d8d8;
-  border-radius: 6px;
-  font-size: 13px;
-
-  &:focus {
-    outline: none;
-    border-color: #2f6fed;
-  }
-}
-
-.field-hint {
-  margin-top: 6px;
-  font-size: 11px;
-  color: #999;
-}
-
-.empty {
-  font-size: 13px;
-  color: #999;
-  padding: 12px 0;
-}
-
-.chip-row {
+.panel {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.chip {
-  padding: 7px 14px;
-  border: 1px solid #d8d8d8;
-  background: #fff;
-  border-radius: 16px;
-  font-size: 12px;
-  color: #555;
-  cursor: pointer;
-
-  &.selected {
-    border-color: #2f6fed;
-    background: #eef3ff;
-    color: #2f6fed;
-    font-weight: 600;
-  }
-}
-
-.prompt {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid #d8d8d8;
-  border-radius: 6px;
-  font-size: 13px;
-  resize: vertical;
-  font-family: inherit;
-
-  &:focus {
-    outline: none;
-    border-color: #2f6fed;
-  }
-}
-
-.run-row {
-  margin: 8px 0 24px;
-}
-
-.run-btn {
-  padding: 11px 28px;
-  border: none;
+  flex-direction: column;
+  padding: 24px;
+  border: 1px solid $disable-color;
   border-radius: 8px;
-  background: #2f6fed;
-  color: #fff;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
+  background-color: $mono200;
+  gap: 18px;
+}
 
-  &.disabled {
-    background: #c5c5c5;
-    cursor: not-allowed;
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.panel-title {
+  margin: 0;
+  color: $title-color;
+  font-family: SpoqaB;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.judge-type {
+  padding-bottom: 16px;
+  border-bottom: 1px solid $mono202;
+}
+
+.form-stack {
+  display: flex;
+  flex-direction: column;
+  max-width: 640px;
+  gap: 18px;
+}
+
+.control {
+  width: 100%;
+  margin-top: 8px;
+
+  > div {
+    width: 100%;
   }
+}
+
+.guide {
+  padding: 16px;
+  border: 1px solid $card-border-color;
+  border-radius: 8px;
+  background-color: $background-color;
+}
+
+.criteria-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.criterion-option {
+  padding: 14px 16px;
+  border: 1px solid $disable-color;
+  border-radius: 8px;
+  background-color: $mono200;
+
+  > div,
+  label {
+    width: 100%;
+  }
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+// ── Judge 결과 ───────────────────────────────────────────────────────
+.judge-result {
+  display: flex;
+  flex-direction: column;
+  max-width: 1040px;
+  margin-top: 8px;
+  gap: 24px;
+}
+
+.result-status {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.result-loading {
+  display: flex;
+  min-height: 120px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid $disable-color;
+  border-radius: 8px;
+  color: $sub-text-color;
+  font-size: 14px;
+  gap: 12px;
+}
+
+.result-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.result-section-title {
+  margin: 0;
+  color: $normal-text-color;
+  font-family: SpoqaB;
+  font-size: 16px;
+  font-weight: 700;
 }
 
 .crit-scores {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 12px;
 }
 
 .crit-card {
-  min-width: 120px;
-  padding: 14px 16px;
-  border: 1px solid #e6e6e6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 18px 16px;
+  border: 1px solid $disable-color;
   border-radius: 8px;
+  background-color: $mono200;
   text-align: center;
+  gap: 8px;
 }
 
 .crit-name {
-  font-size: 12px;
-  color: #888;
-  margin-bottom: 6px;
+  color: $sub-text-color;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .crit-value {
+  color: $primary-color;
   font-size: 22px;
+  font-variant-numeric: tabular-nums;
   font-weight: 700;
-  color: #1aa260;
 }
 
-/* ── 데이터셋 카드 리스트(벤치마크와 동형) ── */
-.ds-section-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.ds-spacer {
-  flex: 1;
-}
-
-.ds-count-badge {
-  font-size: 12px;
-  font-weight: 600;
-  background: #eef3ff;
-  color: #2f6fed;
-  border-radius: 12px;
-  padding: 2px 10px;
-}
-
-.ds-selected-label {
-  font-size: 12px;
-  color: #888;
-
-  strong {
-    color: #2f6fed;
-    font-weight: 700;
-  }
-}
-
-.ds-search-wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.ds-search-input {
-  width: 100%;
-  padding: 8px 32px 8px 12px;
-  border: 1px solid #d8d8d8;
+.result-table {
+  overflow: hidden;
   border-radius: 8px;
-  background: #fff;
-  font-size: 13px;
-  color: #1a1a1a;
-
-  &:focus {
-    outline: none;
-    border-color: #2f6fed;
-  }
-
-  &::placeholder {
-    color: #999;
-  }
 }
 
-.ds-search-clear {
-  position: absolute;
-  right: 8px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 12px;
-  color: #999;
-  padding: 2px 4px;
-  border-radius: 4px;
-
-  &:hover {
-    color: #1a1a1a;
-    background: #f0f0f0;
-  }
+.table-label {
+  color: $normal-text-color;
+  font-weight: 700;
 }
 
-.ds-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 320px;
-  overflow-y: auto;
-  padding-right: 4px;
-
-  &::-webkit-scrollbar {
-    width: 4px;
-  }
-  &::-webkit-scrollbar-thumb {
-    background: #d8d8d8;
-    border-radius: 2px;
-  }
+.table-score {
+  color: $primary-color;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
 }
 
-.ds-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 13px 16px;
-  background: #fff;
-  border: 1px solid #d8d8d8;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
-
-  &:hover {
-    border-color: #2f6fed;
+@media (max-width: 760px) {
+  .panel {
+    padding: 18px;
   }
 
-  &.ds-card--on {
-    border-color: #2f6fed;
-    background: #eef3ff;
+  .criteria-grid,
+  .crit-scores {
+    grid-template-columns: 1fr;
   }
-}
-
-.ds-check {
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
-  border: 1.5px solid #c1c1c1;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  color: #fff;
-  transition: border-color 0.15s, background 0.15s;
-
-  &.ds-check--on {
-    background: #2f6fed;
-    border-color: #2f6fed;
-  }
-}
-
-.ds-card-body {
-  flex: 1;
-  min-width: 0;
-}
-
-.ds-card-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1a1a1a;
-}
-
-.ds-empty {
-  padding: 24px 0;
-  text-align: center;
-  font-size: 13px;
-  color: #999;
-  background: #fff;
-  border: 1px dashed #d8d8d8;
-  border-radius: 10px;
 }
