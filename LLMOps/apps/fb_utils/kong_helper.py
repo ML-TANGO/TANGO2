@@ -47,6 +47,25 @@ def delete_consumer(username: str) -> None:
     _request("delete", f"/consumers/{username}", ok_404=True)
 
 
+# ── service ──
+def get_or_create_service(name: str, url: str):
+    """이름이 같은 upstream service를 재사용하고 없으면 만든다. (service_id, created_now) 반환."""
+    existing = _request("get", f"/services/{name}", ok_404=True)
+    if existing is not None:
+        return existing.json()["id"], False
+    resp = _request(
+        "post", "/services", json={"name": name, "url": url}, ok_409=True)
+    if resp.status_code == 409:
+        existing = _request("get", f"/services/{name}")
+        return existing.json()["id"], False
+    return resp.json()["id"], True
+
+
+def delete_service(name_or_id: str) -> None:
+    """전용 route 삭제 뒤 호출하는 service 멱등 정리."""
+    _request("delete", f"/services/{name_or_id}", ok_404=True)
+
+
 # ── key-auth (API key) ──
 def get_key_auth(username: str) -> Optional[str]:
     resp = _request("get", f"/consumers/{username}/key-auth", ok_404=True)

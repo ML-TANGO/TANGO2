@@ -40,6 +40,16 @@ def external_route_name(deployment_id) -> str:
     return "ext-dep-{}".format(deployment_id)
 
 
+def composite_service_name(deployment_id) -> str:
+    """이중모델 게시 전용 playground-orchestrator Kong service 이름."""
+    return "ext-dual-dep-{}-playground".format(deployment_id)
+
+
+def teardown_composite_service(deployment_id) -> None:
+    """게시 route가 제거된 뒤 배포별 합성 upstream service도 멱등 삭제한다."""
+    kong_helper.delete_service(composite_service_name(deployment_id))
+
+
 def teardown_deployment_api(deployment_id) -> None:
     """게시(D6) Kong 리소스 + deployment_api row 를 완전 취소(revoke). 멱등.
 

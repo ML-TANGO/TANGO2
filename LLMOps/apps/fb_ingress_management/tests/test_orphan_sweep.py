@@ -70,6 +70,7 @@ def test_sweep_deletes_orphan_route(db, kong, dep_api, mtime):
     manager.kong_sweep_orphan_publish()
 
     dep_api.teardown_deployment_api.assert_called_once_with(8)
+    dep_api.teardown_composite_service.assert_called_once_with(8)
 
 
 @patch("ingress_manager.manager.time")
@@ -267,3 +268,6 @@ def test_sweep_continues_after_teardown_error(db, kong, dep_api, mtime):
 
     swept = sorted(c.args[0] for c in dep_api.teardown_deployment_api.call_args_list)
     assert swept == [8, 9]  # 8 이 실패해도 9 는 시도됐다
+    composite_swept = sorted(
+        c.args[0] for c in dep_api.teardown_composite_service.call_args_list)
+    assert composite_swept == [8, 9]  # 기본 정리 실패와 독립적으로 합성 service도 모두 시도

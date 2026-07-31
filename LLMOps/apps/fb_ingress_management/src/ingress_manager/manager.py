@@ -99,11 +99,21 @@ def kong_sweep_orphan_publish():
         if did in set(fresh):  # 스윕 도중 재게시됐거나 여전히 존재 → 보존(raced)
             raced.append(did)
             continue
+        failed = False
         try:
             deployment_api.teardown_deployment_api(did)  # 멱등: route + dep-{id} consumer/key + row
-            swept.append(did)
         except Exception:
+            failed = True
             traceback.print_exc()  # 부분 실패는 다음 주기 재시도
+        try:
+            # 대부분의 단일 배포에는 이 service가 없지만 404 멱등 삭제이므로 기존 정리를 방해하지 않는다.
+            # 앞 정리가 실패해도 독립 시도해 이중 게시의 합성 service가 계속 orphan으로 남지 않게 한다.
+            deployment_api.teardown_composite_service(did)
+        except Exception:
+            failed = True
+            traceback.print_exc()  # Kong 일시 오류는 다음 주기 재시도
+        if not failed:
+            swept.append(did)
     if swept or grace or raced or unconfirmed:
         print("[orphan-sweep] swept=%s grace-skipped=%s raced-skipped=%s unconfirmed=%s" % (
             swept, grace, raced, unconfirmed), file=sys.stderr)
