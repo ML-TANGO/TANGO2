@@ -82,11 +82,12 @@ def create_storage(ip, mountpoint, type, name):
         storage_id = storage_db.insert_storage(ip=ip, name=storageclass_name, mountpoint=mountpoint, type=type, data_sc=DATA_SC, main_sc=MAIN_SC)
         # time.sleep(5)
         if storage_id:
-            # fb_common_app 에서 생성함 
-            # res, message = create_storage_pvc(ip=ip, name=storageclass_name, mountpoint=mountpoint, type=type)
-            # if not res:
-            #     delete_helm(name=storageclass_name)
-            #     raise Exception(message)
+            # runtime 추가 스토리지는 fb_common_app(=values 의 jfStorage)이 PVC 를 만들지 않으므로
+            # 여기서 정적 PVC(storage-<name>)를 생성해야 한다. check job 이 이 PVC 를 마운트해 df 로 size 측정.
+            res, message = create_storage_pvc(ip=ip, name=storageclass_name, mountpoint=mountpoint, type=type)
+            if not res:
+                delete_helm(name=storageclass_name)
+                raise Exception(message)
             job_name = "job-"+storageclass_name
             res, message = create_storage_check_job(name=storageclass_name, helm_name=job_name)
             if not res:
@@ -198,14 +199,14 @@ def get_storage_usage_info():
                         "data_used" : storage['data_alloc'],
                         "main_used" : storage['main_alloc'],
                         "avail": storage['avail'],
-                        "pcent": str((storage['total_alloc']/storage['total'])*100)+"%"
+                        "pcent": (str((storage['total_alloc']/storage['total'])*100)+"%") if storage['total'] else "0%"
                     }
                 }
             )
             result_dict['total']['total_size'] += storage['total']
             result_dict['total']['total_alloc'] += storage['total_alloc']
             result_dict['total']['total_used'] += storage['total_used']
-        result_dict['total']['total_pcent'] = str((result_dict['total']['total_alloc']/result_dict['total']['total_size'])*100) +"%"
+        result_dict['total']['total_pcent'] = (str((result_dict['total']['total_alloc']/result_dict['total']['total_size'])*100) +"%") if result_dict['total']['total_size'] else "0%"
     else:
         storage_list = storage_db.get_storage()
         if storage_list is None:

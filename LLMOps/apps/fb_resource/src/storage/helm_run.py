@@ -25,18 +25,26 @@ def create_storage_pvc(ip, name, mountpoint, type):
         result = subprocess.run(
             command,
             shell=True,
-            check=True,
+            check=False,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
         )
-        return True, result.stdout 
-    except subprocess.CalledProcessError as e:
+        if result.returncode != 0:
+            err_msg = result.stderr.strip()
+            # 멱등 처리 — 형제 함수(create_storage_exporter / create_storage_local_provisioner)와 같은 규약.
+            #   릴리스가 이미 있으면 성공으로 본다. 실패로 돌리면 호출부(storage_service.create_storage)가
+            #   delete_helm(name) 으로 **직전에 정상 생성된 PVC 릴리스를 지우므로**, 복구 재시도가
+            #   자기 PVC 를 삭제하는 결과가 된다(check job 실패로 DB row 만 지워진 뒤 재시도하는 경로).
+            if "cannot re-use a name that is still in use" in err_msg:
+                return True, ""
+            print(f"Warning: Helm install failed for {name}:", file=sys.stderr)
+            print("Error:", err_msg, file=sys.stderr)
+            return False, f"Error executing Helm command: {err_msg}"
+        return True, result.stdout
+    except Exception as e:
         traceback.print_exc()
-        return False, f"Error executing Helm command: {e.stderr}"
-    except:
-        traceback.print_exc()
-        return False, result.stdout
+        return False, str(e)
     
 def delete_helm(name):
     try:
