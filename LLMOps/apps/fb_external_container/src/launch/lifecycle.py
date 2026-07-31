@@ -739,6 +739,12 @@ class JobTracker:
         else:
             record.update_result(status=terminal_status, error=error)
 
+        # readiness 캐시 무효화. pod_ready 는 poll loop 이 partner /health 200 을
+        # 본 시점의 캐시로, job_router 가 매 호출 probe 대신 이 값을 그대로 반환
+        # 한다 (codex Med-1). terminal 도달 = 아래 helm uninstall 로 pod 소멸이라
+        # True 로 남으면 소비자(playground 상태)가 영구 running 으로 오판한다.
+        record.pod_ready = False
+
         # Auto commit hook — terminal=COMPLETED 인데 BFF 가 platform_model_id +
         # output_subdir 를 같이 보냈으면 commit_model row 자동 생성. helm
         # uninstall 보다 *먼저* 시도해야 partner pod NFS 결과물이 아직 살아
