@@ -93,6 +93,25 @@ async def get_playground_url(playground_id):
     res = await select_query(sql, params=(playground_id), fetch_type=FetchType.ONE)
     return res
 
+
+async def get_playground_inference_target(playground_id):
+    """직접 추론 URL과 저장된 이중 세션 LLM1 링크를 한 번에 조회한다."""
+    # 평가가 이중 여부를 확인하려고 상세 API를 한 번 더 호출하면 단일 평가도 느려지므로,
+    # 기존 URL 조회와 같은 JOIN에서 링크까지 함께 읽는 별도 additive helper를 둔다.
+    sql = """
+        SELECT p.id, p.name, p.workspace_id,
+               JSON_EXTRACT(p.deployment, '$.deployment_playground_id') AS deployment_id,
+               msad.api_path,
+               JSON_EXTRACT(p.model, '$.dual.prompt_gen_playground_id') AS prompt_gen_playground_id
+        FROM jonathan_llm.playground p
+        LEFT JOIN msa_jfb.deployment msad
+          ON msad.id = JSON_EXTRACT(p.deployment, '$.deployment_playground_id')
+        WHERE p.id=%s
+        """
+    return await select_query(
+        query=sql, params=(playground_id,), fetch_type=FetchType.ONE)
+
+
 async def get_test_log_list(playground_id):
     sql = """
         SELECT pt.*

@@ -31,6 +31,44 @@ from utils.external_client import (
     get_paired_manifest, ExternalInferError,
 )
 
+DUAL_SHELL_NAME_MAX_LENGTH = 20
+DUAL_PROMPT_CHILD_SUFFIX = "-promptgen"
+
+
+def _dual_shell_names(name):
+    """부모/파생 child 이름을 절단 없이 만든다."""
+    if not name or not isinstance(name, str) or not name.strip():
+        raise Exception("이중모델 배포 이름을 입력해 주세요.")
+    shell_name = name.strip()
+    if len(shell_name) > DUAL_SHELL_NAME_MAX_LENGTH:
+        # DB VARCHAR(32)에 child 접미사까지 온전히 저장해야 하므로 부모를 미리 잘라서는 안 된다.
+        raise Exception("이중모델 배포 이름은 20자 이하로 입력해 주세요.")
+    return shell_name, f"{shell_name}{DUAL_PROMPT_CHILD_SUFFIX}"
+
+
+async def _workspace_playground_names(workspace_id, exclude_ids=None):
+    """배포 유형과 무관하게 워크스페이스의 playground 이름을 비교 가능한 형태로 읽는다."""
+    excluded = set(exclude_ids or [])
+    rows = await db.get_playground_list(workspace_id=workspace_id)
+    # MariaDB의 일반적인 대소문자 비구분 collation보다 느슨해지지 않도록 casefold로 선차단한다.
+    return {
+        str(row.get("name") or "").casefold()
+        for row in rows
+        if row.get("id") not in excluded
+    }
+
+
+async def _ensure_dual_names_available(workspace_id, shell_name, child_name,
+                                       check_shell=True, exclude_ids=None):
+    existing_names = await _workspace_playground_names(
+        workspace_id=workspace_id, exclude_ids=exclude_ids)
+    if check_shell and shell_name.casefold() in existing_names:
+        raise Exception("같은 워크스페이스에 동일한 배포 이름이 이미 존재합니다.")
+    if child_name.casefold() in existing_names:
+        raise Exception(
+            f"파생 프롬프트 생성 배포 이름({child_name})이 같은 워크스페이스에 이미 존재합니다.")
+
+
 # TODO status
 async def get_playground_list(workspace_id, user_id):
     result = []
@@ -62,7 +100,7 @@ async def get_playground_list(workspace_id, user_id):
                 "name" : item.get("name"),
                 "description" : item.get("description"),
                 "create_datetime" : item.get("create_datetime"),
-                "update_datetime" : item.get("create_datetime"),
+                "update_datetime" : item.get("update_datetime"),
                 "access" : item.get("access"),
                 "deploy_type" : item.get("deploy_type") or "cluster",
                 "owner" : db.get_user(user_id=item.get("create_user_id")).get("name"),
@@ -321,25 +359,30 @@ async def create_dual_session(workspace_id, name, user_name,
 
     return {"session_playground_id": pg2, "prompt_gen_playground_id": pg1}
 
-async def create_dual_shell(workspace_id, name, user_name, access=1, owner_id=None):
+async def _create_dual_shell_with_metadata(workspace_id, name, user_name, description,
+                                           access, owner_id, users_id):
     """이중모델 세션 '셸' 생성(단일 create_playground 대칭) — 모델/자원 없이 부모 playground 행만
     만들고 model.dual={"mode":"dual"} 마커를 스탬프한다(deployment 미설정 → 미프로비저닝 상태).
-    LLM1/LLM2·GPU 선택과 실제 배포는 상세 화면의 provision_dual_session 에서. 반환: {session_playground_id}."""
-    if not name or not isinstance(name, str) or not name.strip():
-        raise Exception("Error: session name is required")
+    단일과 같은 playground 행이므로 설명/공개범위/소유자/접근 사용자를 같은 시점에 저장한다."""
+    shell_name, child_name = _dual_shell_names(name)
+    # 단일/edge/standalone/dual 모두 같은 playground 테이블을 쓰므로 유형 필터 없이 검사한다.
+    # UNIQUE migration 없이도 대부분의 충돌을 생성 전에 사용자 친화적 오류로 돌려주기 위한 선검사다.
+    await _ensure_dual_names_available(
+        workspace_id=workspace_id, shell_name=shell_name, child_name=child_name)
     user = db.get_user(user_name=user_name)
     if not user:
         raise Exception(f"deploy user not found: {user_name}")
     owner_id = owner_id if owner_id else user.get("id")
-    # playground.name 은 VARCHAR(32) → 절단.
-    shell_name = name.strip()[:32]
     res, playground_id = await db.insert_playground(
-        workspace_id=workspace_id, name=shell_name, description="dual session",
+        workspace_id=workspace_id, name=shell_name, description=description or "",
         create_user_id=owner_id, access=access, deploy_type='cluster')
     if not res:
         raise Exception("create dual shell failed")
     try:
-        await db.insert_user_playground_list(playgrounds_id=[playground_id], users_id=[owner_id])
+        # 소유자는 private 사용자 선택에서 빠져도 항상 접근 가능해야 한다.
+        member_ids = list(dict.fromkeys([*(users_id or []), owner_id]))
+        await db.insert_user_playground_list(
+            playgrounds_id=[playground_id] * len(member_ids), users_id=member_ids)
         # dual 마커 스탬프 — 상세(구성/배포)가 이중 셸임을 인지하는 신호. deployment 미설정 = 미프로비저닝.
         if not await db.update_playground(playground_id=playground_id,
                                           model=json.dumps({"dual": {"mode": "dual"}})):
@@ -353,16 +396,55 @@ async def create_dual_shell(workspace_id, name, user_name, access=1, owner_id=No
         raise
     return {"session_playground_id": playground_id}
 
-async def provision_dual_session(playground_id, user_name,
+async def create_dual_shell(workspace_id, name, user_name, access=1, owner_id=None):
+    """기존 서비스 호출자의 시그니처를 보존하는 이중 셸 생성 어댑터."""
+    return await _create_dual_shell_with_metadata(
+        workspace_id=workspace_id, name=name, user_name=user_name,
+        description="", access=access, owner_id=owner_id, users_id=[])
+
+# 이중 역할별 생성 파라미터 기본값 — 종전 하드코딩과 동일(미지정 시 동작 불변).
+DUAL_DEFAULT_MODEL_PARAMS = {
+    "temperature": 0.7, "top_p": 1.0, "top_k": -1,
+    "repetition_penalty": 1.0, "max_new_tokens": 512,
+}
+
+def _resolve_dual_model_params(params):
+    """dto.DualModelParams | dict | None → 5종 파라미터 dict. None 필드는 기본값 유지.
+    이 값은 추론 요청이 아니라 배포 시점에 llm_deployment 의 param_* 로 주입된다."""
+    resolved = dict(DUAL_DEFAULT_MODEL_PARAMS)
+    if not params:
+        return resolved
+    raw = params if isinstance(params, dict) else params.dict()
+    for key in resolved:
+        value = raw.get(key)
+        if value is not None:
+            resolved[key] = value
+    return resolved
+
+async def _save_dual_model_options(playground_id, model_id, commit_id, params=None):
+    """단일 PUT /options와 같은 모델 바인딩을 이중 컴포넌트 행에 적용한다.
+    파라미터는 역할마다 달라야 하므로 호출부가 LLM1/LLM2 값을 각각 넘긴다(종전엔 양쪽 하드코딩)."""
+    p = _resolve_dual_model_params(params)
+    saved = await update_playground_options(
+        playground_id=playground_id, is_rag=False, is_prompt=False, accelerator=False,
+        model_type="commit", model_huggingface_id=None, model_huggingface_token=None,
+        model_allm_id=str(model_id), model_allm_commit_id=str(commit_id),
+        model_info=None, model_temperature=p["temperature"], model_top_p=p["top_p"],
+        model_top_k=p["top_k"], model_repetition_penalty=p["repetition_penalty"],
+        model_max_new_tokens=p["max_new_tokens"],
+        rag_id=None, rag_chunk_max=0, prompt_id=None, prompt_name=None,
+        prompt_commit_name=None, prompt_system_message=None, prompt_user_message=None)
+    if not saved:
+        raise Exception("dual session model option save failed")
+
+async def configure_dual_session(playground_id, user_name,
                                  prompt_gen_model_id, inference_model_id, model_instance_id,
                                  prompt_gen_commit_id=None, inference_commit_id=None,
                                  model_instance_count=1, model_gpu_count=1,
-                                 prompt_gen_gpu_count=None, inference_gpu_count=None):
-    """이중모델 셸(create_dual_shell 로 만든 부모 playground)을 실제 배포(단일 start_playground 대칭).
-    LLM1(프롬프트생성)은 자식 playground 로 신규 배포(pipeline_deploy), LLM2(추론)는 '기존 셸 부모'에
-    bind+start(update_playground_options + start_playground = pipeline_deploy 부모행 재사용판)로 올린 뒤
-    부모-자식을 링크한다. 부분 실패 시 자식 롤백 + 부모는 셸로 원복(재시도 가능).
-    반환: {session_playground_id, prompt_gen_playground_id}."""
+                                 prompt_gen_gpu_count=None, inference_gpu_count=None,
+                                 prompt_gen_params=None, inference_params=None):
+    """이중 세션 구성 저장 — child upsert + 양쪽 모델 bind + 링크만 수행하고 배포는 시작하지 않는다.
+    prompt_gen_params/inference_params 는 역할별 생성 파라미터(생략 시 기본값)."""
     if prompt_gen_model_id == inference_model_id:
         raise Exception("Error: prompt-gen and inference model must differ")
     if model_instance_count is not None and model_instance_count < 1:
@@ -375,7 +457,6 @@ async def provision_dual_session(playground_id, user_name,
         if _g is not None and _g < 0:
             raise Exception("Error: per-model gpu count must be >= 0")
 
-    # 부모 셸 검증 — 이중 셸(model.dual.mode=='dual')이고 아직 미프로비저닝(링크 없음)이어야 함.
     parent = await db.get_playground(playground_id=playground_id)
     if not parent:
         raise Exception("Error: dual session not found")
@@ -384,77 +465,230 @@ async def provision_dual_session(playground_id, user_name,
     parent_dual = parent_model.get("dual") or {}
     if parent_dual.get("mode") != "dual":
         raise Exception("Error: not a dual session shell")
-    if parent_dual.get("prompt_gen_playground_id"):
-        raise Exception("Error: dual session already provisioned")
 
-    # LLM1(프롬프트 생성)=텍스트 출력 필요 → 내부 텍스트만. LLM2(추론)=외부 SDS(VLM) 허용(text→SDS).
+    # 단일 배포 모달이 사용하는 동일 instance 목록의 총량(instance 수 × 장비당 GPU)을
+    # 두 컴포넌트가 공유한다. pod 수는 run_worker가 GPU 클러스터링으로 파생하므로 여기서
+    # '이중=2 pod'로 가정하지 않고 요청 GPU 합계만 검증한다.
+    instance_rows = db.get_workspace_instance_list(workspace_id=workspace_id)
+    selected_instance = next(
+        (row for row in instance_rows
+         if str(row.get("instance_id")) == str(model_instance_id)),
+        None,
+    )
+    if not selected_instance:
+        raise Exception("Error: invalid instance selection")
+    gpu_capacity = int(selected_instance.get("instance_allocate") or 0) * int(
+        selected_instance.get("gpu_allocate") or 0)
+    requested_gpu = int(gpu1 or 0) + int(gpu2 or 0)
+    if requested_gpu > gpu_capacity:
+        raise Exception(
+            f"사용 가능한 GPU 수를 초과했습니다 ({requested_gpu}/{gpu_capacity})")
+
+    # UI 플래그와 동일하게 stop에서만 편집 허용한다. 한쪽만 멈춘 저하 상태도
+    # installing으로 집계되므로 구성 덮어쓰기 전에 명시적으로 중지해야 한다.
+    current_status = await get_playground_status(playground_id=playground_id)
+    if current_status.get("status") != TYPE.KUBE_POD_STATUS_STOP:
+        raise Exception("배포 중에는 구성을 변경할 수 없습니다")
+
+    model_rows = {}
     for _mid, _is_prompt in ((prompt_gen_model_id, True), (inference_model_id, False)):
         _m = await db.get_model(model_id=_mid)
         if not _m or _m.get("workspace_id") != workspace_id:
             raise Exception("Error: invalid model selection")
         if _is_prompt and (_m.get("training_type") or "") == "external":
             raise Exception("Error: prompt-gen model(LLM1) must be an internal text model")
+        model_rows[_mid] = _m
 
-    # commit 미지정 시 latest_commit_id 로 해석(internal helm 배포가 commit deref 필수).
+    if prompt_gen_commit_id is None:
+        prompt_gen_commit_id = model_rows[prompt_gen_model_id].get("latest_commit_id")
     if inference_commit_id is None:
-        _im = await db.get_model(model_id=inference_model_id)
-        inference_commit_id = (_im or {}).get("latest_commit_id")
+        inference_commit_id = model_rows[inference_model_id].get("latest_commit_id")
+    if prompt_gen_commit_id is None:
+        raise Exception(f"model {prompt_gen_model_id} has no commit to deploy")
     if inference_commit_id is None:
         raise Exception(f"model {inference_model_id} has no commit to deploy")
 
-    _base = (parent.get("name") or "").strip()[:20]
+    child_id = parent_dual.get("prompt_gen_playground_id")
+    child = await db.get_playground(playground_id=child_id) if child_id else None
+    if child_id and (not child or child.get("workspace_id") != workspace_id):
+        raise Exception("Error: invalid dual session link")
 
-    # 1) LLM1(프롬프트 생성) — 자식 playground 신규 배포(pipeline_deploy 자체 롤백 보유).
-    pg1 = (await pipeline_deploy(
-        workspace_id=workspace_id, model_id=prompt_gen_model_id, user_name=user_name,
-        model_instance_id=model_instance_id, model_commit_id=prompt_gen_commit_id,
-        name=f"{_base}-promptgen", model_instance_count=model_instance_count,
-        model_gpu_count=gpu1)).get("playground_id")
+    created_child = False
+    if not child:
+        # 최초 구성에서만 child 행을 만든다. 재구성은 반드시 위에서 찾은 기존 id를 재사용한다.
+        _, child_name = _dual_shell_names(parent.get("name"))
+        # 셸 생성 뒤 구성 전까지 생긴 동명 배포도 child INSERT 직전에 다시 잡는다.
+        await _ensure_dual_names_available(
+            workspace_id=workspace_id, shell_name=parent.get("name") or "",
+            child_name=child_name, check_shell=False, exclude_ids=[playground_id])
+        res, child_id = await db.insert_playground(
+            workspace_id=workspace_id, name=child_name,
+            description=parent.get("description") or "",
+            create_user_id=parent.get("create_user_id"), access=parent.get("access"),
+            deploy_type='cluster')
+        if not res:
+            raise Exception("create prompt generator playground failed")
+        created_child = True
+        parent_members = await db.get_user_playground_list(playground_id=playground_id)
+        member_ids = list(dict.fromkeys([
+            *[row.get("user_id") for row in parent_members if row.get("user_id")],
+            parent.get("create_user_id"),
+        ]))
+        await db.insert_user_playground_list(
+            playgrounds_id=[child_id] * len(member_ids), users_id=member_ids)
+        child = await db.get_playground(playground_id=child_id)
 
-    # 2) LLM2(추론) — '기존 셸 부모'에 bind+start(pipeline_deploy 의 부모행 재사용판), 이어서 링크.
+    # 기존 stopped 구성을 갱신하다 실패하면 양쪽 모델/배포 설정을 원복한다.
+    # 신규 child만 삭제 가능하며, 링크된 기존 child는 어떤 실패 경로에서도 삭제하지 않는다.
+    snapshot_columns = ("model", "model_parameter", "rag", "prompt", "deployment", "accelerator")
+    parent_snapshot = {key: parent.get(key) for key in snapshot_columns}
+    child_snapshot = {key: child.get(key) for key in snapshot_columns}
     try:
-        await update_playground_options(
-            playground_id=playground_id, is_rag=False, is_prompt=False, accelerator=False,
-            model_type="commit", model_huggingface_id=None, model_huggingface_token=None,
-            model_allm_id=str(inference_model_id), model_allm_commit_id=str(inference_commit_id),
-            model_info=None, model_temperature=0.7, model_top_p=1.0, model_top_k=-1,
-            model_repetition_penalty=1.0, model_max_new_tokens=512,
-            rag_id=None, rag_chunk_max=0, prompt_id=None, prompt_name=None,
-            prompt_commit_name=None, prompt_system_message=None, prompt_user_message=None)
+        await _save_dual_model_options(
+            playground_id=child_id, model_id=prompt_gen_model_id,
+            commit_id=prompt_gen_commit_id, params=prompt_gen_params)
+        await _save_dual_model_options(
+            playground_id=playground_id, model_id=inference_model_id,
+            commit_id=inference_commit_id, params=inference_params)
+        await _link_dual_session(
+            parent_playground_id=playground_id, child_playground_id=child_id,
+            prompt_gen_model_id=prompt_gen_model_id)
+
+        # configure/start 사이에도 자원 선택이 유지되도록 기존 model.dual JSON에 저장한다.
+        configured_parent = await db.get_playground(playground_id=playground_id)
+        configured_model = json.loads(configured_parent.get("model") or "{}")
+        configured_dual = configured_model.get("dual") or {}
+        configured_dual["resources"] = [
+            {
+                "role": "prompt_gen", "model_instance_id": model_instance_id,
+                "model_instance_count": model_instance_count, "model_gpu_count": gpu1,
+            },
+            {
+                "role": "inference", "model_instance_id": model_instance_id,
+                "model_instance_count": model_instance_count, "model_gpu_count": gpu2,
+            },
+        ]
+        configured_model["dual"] = configured_dual
+        if not await db.update_playground(
+                playground_id=playground_id, model=json.dumps(configured_model)):
+            raise Exception("dual session resource save failed")
+    except Exception:
+        traceback.print_exc()
+        await db.update_playground(playground_id=playground_id, **parent_snapshot)
+        if created_child:
+            # 아직 배포 전인 신규 행만 직접 정리한다. dual-aware delete를 쓰면
+            # 부분 링크 상태에서 부모까지 삭제할 수 있으므로 이 보상 경로에는 부적합하다.
+            await db.delete_playground(id_list=[child_id])
+        else:
+            await db.update_playground(playground_id=child_id, **child_snapshot)
+        raise
+
+    return {
+        "session_playground_id": playground_id,
+        "prompt_gen_playground_id": child_id,
+    }
+
+async def start_dual_session(playground_id, user_name):
+    """저장된 이중 구성을 child(LLM1) → parent(LLM2) 순서로 시작한다."""
+    parent = await db.get_playground(playground_id=playground_id)
+    if not parent:
+        raise Exception("Error: dual session not found")
+    parent_dual = (json.loads(parent.get("model") or "{}") or {}).get("dual") or {}
+    child_id = parent_dual.get("prompt_gen_playground_id")
+    if parent_dual.get("mode") != "dual" or not child_id:
+        raise Exception("이중모델 구성을 먼저 저장해 주세요")
+    current_status = await get_playground_status(playground_id=playground_id)
+    if current_status.get("status") != TYPE.KUBE_POD_STATUS_STOP:
+        raise Exception("이미 배포 중인 이중모델 세션입니다")
+
+    resources = {
+        row.get("role"): row for row in (parent_dual.get("resources") or [])
+        if isinstance(row, dict)
+    }
+    prompt_resource = resources.get("prompt_gen")
+    inference_resource = resources.get("inference")
+    if not prompt_resource or not inference_resource:
+        raise Exception("이중모델 자원 구성을 먼저 저장해 주세요")
+
+    async def _start(playground_id, resource):
         await start_playground(
             user_name=user_name, playground_id=playground_id,
-            model_instance_id=model_instance_id, model_instance_count=model_instance_count,
-            model_gpu_count=gpu2,
+            model_instance_id=resource.get("model_instance_id"),
+            model_instance_count=resource.get("model_instance_count"),
+            model_gpu_count=resource.get("model_gpu_count"),
             embedding_instance_id=0, embedding_instance_count=0, embedding_gpu_count=0,
             reranker_instance_id=0, reranker_instance_count=0, reranker_gpu_count=0,
             restart=False)
-        # 3) 부모(추론)-자식(프롬프트생성) 링크.
-        await _link_dual_session(parent_playground_id=playground_id, child_playground_id=pg1,
-                                 prompt_gen_model_id=prompt_gen_model_id)
-    except Exception:
+
+    try:
+        await _start(child_id, prompt_resource)
+        await _start(playground_id, inference_resource)
+    except Exception as start_error:
         traceback.print_exc()
-        # 자식 롤백 + 부모는 미프로비저닝 셸로 원복(재시도 가능하게 dual 마커 재스탬프).
-        try:
-            await delete_playground(id_list=[pg1])
-        except Exception:
-            traceback.print_exc()
-        # 부모(LLM2)는 start_playground 가 이미 실 배포를 올렸을 수 있음 — 셸로 원복 전에 반드시 중지.
-        #   (안 하면 "미프로비저닝 셸"로 보이는 행이 GPU 를 계속 점유 = 쿼터 누수)
-        #   _dual_cascaded=True: 자식은 위에서 직접 삭제했으므로 파트너 캐스케이드 불필요.
-        try:
-            await stop_playground(playground_id=playground_id, _dual_cascaded=True)
-        except Exception:
-            traceback.print_exc()
-        try:
-            _p = await db.get_playground(playground_id=playground_id)
-            _pm = json.loads((_p or {}).get("model") or "{}")
-            _pm["dual"] = {"mode": "dual"}
-            await db.update_playground(playground_id=playground_id, model=json.dumps(_pm))
-        except Exception:
-            traceback.print_exc()
+        # 부분 시작을 성공으로 남기지 않는다. Phase 3의 dual-safe restart는 설계 문서 §5.2에서 별도 구현.
+        child_stopped = await stop_playground(playground_id=child_id, _dual_cascaded=True)
+        parent_stopped = await stop_playground(playground_id=playground_id, _dual_cascaded=True)
+        if not child_stopped or not parent_stopped:
+            raise Exception("이중모델 시작 실패 후 배포 중지에도 실패했습니다") from start_error
+        raise
+    return {
+        "session_playground_id": playground_id,
+        "prompt_gen_playground_id": child_id,
+    }
+
+
+async def _resolve_dual_parent(playground_id):
+    """부모/자식 어느 id를 받아도 저장 링크에서 부모를 먼저 확정한다."""
+    requested = await db.get_playground(playground_id=playground_id)
+    if not requested:
+        raise Exception("Error: dual session not found")
+    dual = (json.loads(requested.get("model") or "{}") or {}).get("dual") or {}
+    parent_id = dual.get("parent_playground_id") if dual.get("role") == "prompt_child" else playground_id
+    parent = await db.get_playground(playground_id=parent_id)
+    if not parent:
+        raise Exception("Error: dual session parent not found")
+    parent_dual = (json.loads(parent.get("model") or "{}") or {}).get("dual") or {}
+    child_id = parent_dual.get("prompt_gen_playground_id")
+    if parent_dual.get("mode") != "dual" or not child_id:
+        raise Exception("Error: not a configured dual session")
+    return parent_id, child_id
+
+
+async def restart_dual_session(playground_id, user_name):
+    """이중 세션 전체를 child→parent 순서로 재기동하고 부분 실패는 완전 정지로 보상한다."""
+    parent_id, child_id = await _resolve_dual_parent(playground_id)
+    if not await stop_playground(playground_id=parent_id):
+        raise Exception("이중모델 재시작을 위한 전체 중지에 실패했습니다")
+    try:
+        return await start_dual_session(playground_id=parent_id, user_name=user_name)
+    except Exception as restart_error:
+        # start_dual_session도 보상하지만, 예외 경로가 늘어나도 최종 상태가 정직한 stop이도록
+        # 두 행을 각각 다시 확인 가능한 동일 stop 경로로 정리한다.
+        child_stopped = await stop_playground(
+            playground_id=child_id, _dual_cascaded=True)
+        parent_stopped = await stop_playground(
+            playground_id=parent_id, _dual_cascaded=True)
+        if not child_stopped or not parent_stopped:
+            raise Exception("이중모델 재시작 실패 후 전체 중지에도 실패했습니다") from restart_error
         raise
 
-    return {"session_playground_id": playground_id, "prompt_gen_playground_id": pg1}
+
+async def provision_dual_session(playground_id, user_name,
+                                 prompt_gen_model_id, inference_model_id, model_instance_id,
+                                 prompt_gen_commit_id=None, inference_commit_id=None,
+                                 model_instance_count=1, model_gpu_count=1,
+                                 prompt_gen_gpu_count=None, inference_gpu_count=None,
+                                 prompt_gen_params=None, inference_params=None):
+    """하위호환 래퍼 — 새 configure + start 2단 경로를 순서대로 호출한다."""
+    await configure_dual_session(
+        playground_id=playground_id, user_name=user_name,
+        prompt_gen_model_id=prompt_gen_model_id, inference_model_id=inference_model_id,
+        model_instance_id=model_instance_id,
+        prompt_gen_commit_id=prompt_gen_commit_id, inference_commit_id=inference_commit_id,
+        model_instance_count=model_instance_count, model_gpu_count=model_gpu_count,
+        prompt_gen_gpu_count=prompt_gen_gpu_count, inference_gpu_count=inference_gpu_count,
+        prompt_gen_params=prompt_gen_params, inference_params=inference_params)
+    return await start_dual_session(playground_id=playground_id, user_name=user_name)
 
 async def delete_playground(id_list):
     try:
@@ -473,10 +707,19 @@ async def delete_playground(id_list):
             except Exception:
                 traceback.print_exc()
         # 배포 삭제
+        # Kong 합성 리소스 정리에 실패한 항목 — 행을 남겨 다음 시도에서 재정리한다(아래 참조).
+        _composite_cleanup_failed_ids = []
         for playground_id in id_list:
             playground_info = await db.get_playground(playground_id=playground_id)
             if playground_info is None:
                 continue
+            _component_dual = (
+                json.loads(playground_info.get("model") or "{}") or {}
+            ).get("dual") or {}
+            _requires_composite_cleanup = (
+                _component_dual.get("mode") == "dual"
+                or _component_dual.get("role") == "prompt_child"
+            )
             playground_deployment_info = playground_info.get("deployment")
             if playground_deployment_info is None:
                 continue
@@ -526,16 +769,35 @@ async def delete_playground(id_list):
             # 게시(D6) 자동 취소 — deployment_api row 는 FK cascade 되나 Kong route/consumer/key 는
             # DB-비관리라 orphan → 삭제 대상 배포마다 공용 teardown(3b-2). embedding/reranker 도 직접
             # 게시 가능(엔드포인트가 타입 제한 안 함)하므로 전부 정리. delete_deployments 前 실행
-            # (row/api_path 가 아직 있어 결정적 정리 가능). best-effort — Kong blip 이 삭제를 막지 않게.
+            # (row/api_path 가 아직 있어 결정적 정리 가능). 이중 합성 route/service 정리 실패는
+            # 행 삭제 전에 실패로 돌려 결정적 키를 보존한다(재시도 없이 orphan 확정되는 것 방지).
+            _composite_cleanup_failed = False
             for _dep_id in deployment_ids:
                 try:
-                    await run_in_threadpool(deployment_api.teardown_deployment_api, _dep_id)
+                    try:
+                        await run_in_threadpool(
+                            deployment_api.teardown_deployment_api, _dep_id)
+                    finally:
+                        await run_in_threadpool(
+                            deployment_api.teardown_composite_service, _dep_id)
                 except Exception:
                     traceback.print_exc()
+                    if _requires_composite_cleanup:
+                        _composite_cleanup_failed = True
+            if _composite_cleanup_failed:
+                # 행 보존 의도(위 주석의 "결정적 키 보존")는 유지하되 **이 항목만** 건너뛴다.
+                # 예전엔 raise 로 두 루프를 모두 탈출해, 같은 요청의 무관한 항목이
+                # (a) 이미 delete_deployments 된 뒤 playground 행만 남아 dangling 이 되거나
+                # (b) 아직 처리 전이라 helm/GPU 가 회수되지 않는 blast radius 가 있었다.
+                _composite_cleanup_failed_ids.append(playground_id)
+                continue
             db.delete_deployments(deployment_ids=deployment_ids)
 
-        # playground 삭제
-        res = await db.delete_playground(id_list=id_list)
+        # playground 삭제 — 정리 실패 항목은 제외해 api_path 를 남기고 다음 시도에서 재정리한다.
+        _target_ids = [i for i in id_list if i not in _composite_cleanup_failed_ids]
+        res = await db.delete_playground(id_list=_target_ids) if _target_ids else True
+        if _composite_cleanup_failed_ids:
+            return False  # 부분 실패 → 라우트가 status=0 으로 사용자에게 알린다
         return True if res else False
     except:
         traceback.print_exc()
@@ -557,8 +819,6 @@ async def get_playground_status(playground_id, _skip_dual=False):
         True일 경우, 초기 배포 이미 한 상태
     """
     try:
-        if playground_id == 192:
-            return result
         # playground deployment info
         playground_info = await db.get_playground(playground_id=playground_id)
         if playground_info is None:
@@ -610,6 +870,18 @@ async def get_playground_status(playground_id, _skip_dual=False):
         if external_job_id:
             try:
                 job_detail = await get_job_status(external_job_id)
+                # terminal(cancelled/failed/completed) 이면 pod 는 이미 helm
+                # uninstall 로 소멸 → pod_ready 값과 무관하게 stop. record 가
+                # 아직 BFF in-memory 에 남아 404 가 안 나는 구간에서도 중지가
+                # 정확히 반영되도록 result.status 를 먼저 본다. (404 분기와 동일
+                # 하게 init_deployment=False → 재배포 가능 상태)
+                _job_result = job_detail.get("result") or {}
+                if str(_job_result.get("status") or "").lower() in (
+                    "cancelled", "failed", "completed",
+                ):
+                    result["status"] = TYPE.KUBE_POD_STATUS_STOP
+                    result["init_deployment"] = False
+                    return result
                 # job record 가 살아있으면 배포는 시작됨 → init_deployment=True
                 result["init_deployment"] = True
                 if job_detail.get("pod_ready"):
@@ -762,10 +1034,16 @@ async def get_playground(playground_id):
         deployment = item.get("deployment")
         model = item.get("model")
         model_parameter = item.get("model_parameter")
+        try:
+            _detail_dual = (json.loads(model or "{}") or {}).get("dual") or {}
+        except (TypeError, ValueError):
+            _detail_dual = {}
+        _is_dual_detail = _detail_dual.get("mode") == "dual"
 
         # INFO
         result["info"] = dict()
         result['info']['id'] = item["id"]
+        result['info']['workspace_id'] = item["workspace_id"]
         result['info']['name'] = item["name"]
         result['info']['access'] = item.get("access")
         result['info']['description'] = item["description"]
@@ -807,25 +1085,34 @@ async def get_playground(playground_id):
                     # playground request
                     # playground 배포는 따로 deployment_data_form을 저장하지 않음, 현재 playground 코드는 고정이므로 데이터폼도 고정
 
+                    # 이중 게시 endpoint는 dataset 요청을 의도적으로 거부하므로, 상세 화면도
+                    # 실제로 수락하는 question 계약만 광고한다. 단일 형식은 기존 그대로 둔다.
+                    request_format = [{
+                        "test_type": "question",
+                        "session_id": "Optional[int]",
+                        "test_question": "str"
+                    }] if _is_dual_detail else [{
+                        "test_type": "dataset",
+                        "session_id": "Optional[int]",
+                        "test_dataset_id": "int",
+                        "test_dataset_filename": "str"
+                    },
+                    {
+                        "test_type": "question",
+                        "session_id": "Optional[int]",
+                        "test_question": "str"
+                    }]
                     result["info_request"]= {
                         "url" : url,
                         "method" : "POST",
-                        "format" : [{
-                            "test_type": "dataset",
-                            "session_id": "Optional[int]",
-                            "test_dataset_id": "int",
-                            "test_dataset_filename": "str"
-                        },
-                        {
-                            "test_type": "question",
-                            "session_id": "Optional[int]",
-                            "test_question": "str"
-                        }]
+                        "format" : request_format
                     }
                     instance_info = await get_workspace_instance_total_info(instance_id=deployment_info.get("instance_id"), workspace_id=deployment_info.get("workspace_id"),
                                                                             instance_allocate=deployment_info.get("instance_allocate"),
                                                                             resource_limit=[{"cpu_limit" : deployment_info.get("deployment_cpu_limit"), "ram_limit" : deployment_info.get("deployment_ram_limit")}]
                                                                             )
+                    # instance.gpu_allocate는 장비 총량이므로 사용자가 선택한 gpu_per_worker를 별도 노출한다.
+                    instance_info["gpu_count"] = deployment_info.get("gpu_per_worker")
                     # playground instance
                     result["info_instance"]["model"] = dict()
                     result["info_instance"]["model"] = instance_info
@@ -954,6 +1241,7 @@ async def get_playground(playground_id):
                 "prompt_gen_model_id": _pgid,
                 "prompt_gen_model_name": _pg_name,
                 "inference_model_name": _inf_name,
+                "resources": _dual.get("resources") or [],
             }
         else:
             result["dual"] = None
@@ -961,6 +1249,47 @@ async def get_playground(playground_id):
         traceback.print_exc()
         result["dual"] = None
     return result
+
+
+async def get_playground_status_detail(playground_id):
+    """새 상태 계약: 세션 집계와 컴포넌트 실측을 한 응답에 함께 담는다."""
+    playground = await db.get_playground(playground_id=playground_id)
+    if not playground:
+        raise Exception("Not Exist Playground")
+    dual = (json.loads(playground.get("model") or "{}") or {}).get("dual") or {}
+    if dual.get("role") == "prompt_child":
+        parent_id, _ = await _resolve_dual_parent(playground_id)
+        playground_id = parent_id
+        playground = await db.get_playground(playground_id=parent_id)
+        dual = (json.loads(playground.get("model") or "{}") or {}).get("dual") or {}
+
+    aggregate = await get_playground_status(playground_id=playground_id)
+    child_id = dual.get("prompt_gen_playground_id")
+    if dual.get("mode") == "dual" and child_id:
+        child = await get_playground_status(child_id, _skip_dual=True)
+        parent = await get_playground_status(playground_id, _skip_dual=True)
+        aggregate["components"] = [
+            {
+                "role": "prompt_gen",
+                "playground_id": child_id,
+                "status": child.get("status"),
+                "init_deployment": child.get("init_deployment", False),
+            },
+            {
+                "role": "inference",
+                "playground_id": playground_id,
+                "status": parent.get("status"),
+                "init_deployment": parent.get("init_deployment", False),
+            },
+        ]
+    else:
+        aggregate["components"] = [{
+            "role": "single",
+            "playground_id": playground_id,
+            "status": aggregate.get("status"),
+            "init_deployment": aggregate.get("init_deployment", False),
+        }]
+    return aggregate
 
 
 
@@ -1325,7 +1654,19 @@ async def start_playground(user_name, playground_id,
         # 재식작일 경우, 중단
         # =============================================================================
         if restart:
-            await stop_playground(playground_id=playground_id)
+            restart_playground_info = await db.get_playground(playground_id=playground_id)
+            if restart_playground_info is None:
+                raise Exception("Not Exist Playground_id")
+            try:
+                restart_dual = (json.loads(restart_playground_info.get("model") or "{}") or {}).get("dual") or {}
+            except Exception:
+                restart_dual = {}
+            # 이중은 저장된 양쪽 자원을 쓰는 전용 오케스트레이션으로 넘겨 한쪽만 뜨는 상태를 막는다.
+            if restart_dual.get("mode") == "dual" or restart_dual.get("role") == "prompt_child":
+                return await restart_dual_session(
+                    playground_id=playground_id, user_name=user_name)
+            if not await stop_playground(playground_id=playground_id):
+                raise Exception("플레이그라운드 재시작을 위한 중지에 실패했습니다")
         # =============================================================================
         # info
         # =============================================================================
@@ -1675,10 +2016,18 @@ async def run_deployment_playground(playground_id, run_embedding=False, run_rera
 
 # 중단
 async def stop_playground(playground_id, _dual_cascaded=False):
+    partner_stopped = True
     try:
         playground_info = await db.get_playground(playground_id=playground_id)
         if playground_info is None:
             return True
+        _component_dual = (
+            json.loads(playground_info.get("model") or "{}") or {}
+        ).get("dual") or {}
+        _requires_composite_cleanup = (
+            _component_dual.get("mode") == "dual"
+            or _component_dual.get("role") == "prompt_child"
+        )
         # workspace_id = playground_info.get("workspace_id")
 
         # Dual 세션: 파트너(부모↔자식)도 함께 중지. 부모/자식 어느 쪽을 stop 해도 짝을 정리.
@@ -1688,9 +2037,12 @@ async def stop_playground(playground_id, _dual_cascaded=False):
                 _dual = (json.loads(playground_info.get("model") or "{}") or {}).get("dual") or {}
                 _partner = _dual.get("prompt_gen_playground_id") or _dual.get("parent_playground_id")
                 if _partner:
-                    await stop_playground(playground_id=_partner, _dual_cascaded=True)
-            except Exception:
+                    partner_stopped = await stop_playground(
+                        playground_id=_partner, _dual_cascaded=True)
+            except Exception as e:
+                print(f"이중모델 파트너 중지 실패 (playground_id={playground_id}): {e}")
                 traceback.print_exc()
+                partner_stopped = False
 
         playground_deployment_info = playground_info.get("deployment")
         if playground_deployment_info is not None:
@@ -1701,10 +2053,22 @@ async def stop_playground(playground_id, _dual_cascaded=False):
             if external_job_id:
                 try:
                     await cancel_infer_job(external_job_id)
-                except ExternalInferError:
+                except ExternalInferError as e:
+                    print(f"외부 플레이그라운드 중지 실패 (playground_id={playground_id}): {e}")
                     traceback.print_exc()
+                    return False
+                # 중지된 job 을 계속 가리키는 dangling id 제거. 재배포는
+                # start_playground 가 model.training_type=='external' 로 다시
+                # 파생해 새 job_id 를 기록하므로 이 키가 없어도 된다.
+                # deployment_run 등 나머지 배포 설정은 보존.
+                playground_deployment_info.pop("external_job_id", None)
+                if not await db.update_playground(
+                    playground_id=playground_id,
+                    deployment=json.dumps(playground_deployment_info),
+                ):
+                    raise Exception("외부 플레이그라운드 중지 상태 저장 실패")
                 await db.delete_playground_test(playground_id)
-                return True
+                return partner_stopped
 
             deployment_playground_id = playground_deployment_info.get("deployment_playground_id")
             deployment_embedding_id = playground_deployment_info.get("deployment_embedding_id")
@@ -1727,31 +2091,49 @@ async def stop_playground(playground_id, _dual_cascaded=False):
 
             # 게시(D6) 자동 취소 — 중지 시 helm uninstall 로 Kong service 가 prune 되어 /ext 가
             # dangling 되고 키가 유효 잔존 → 게시 가능한 모든 배포(primary+embedding+reranker) 정리(3b-2).
-            # deployment row 는 stop 에서 유지되나 게시물은 재게시 전까지 무의미. best-effort.
+            # deployment row 는 stop에서 유지한다. 이중 합성 정리 실패는 stop 실패로 전파해
+            # route/service가 남았는데 성공으로 오인하는 상태를 막는다.
             for _dep_id in (deployment_playground_id, deployment_embedding_id, deployment_reranker_id):
                 if _dep_id is None:
                     continue
                 try:
-                    await run_in_threadpool(deployment_api.teardown_deployment_api, _dep_id)
+                    try:
+                        await run_in_threadpool(
+                            deployment_api.teardown_deployment_api, _dep_id)
+                    finally:
+                        await run_in_threadpool(
+                            deployment_api.teardown_composite_service, _dep_id)
                 except Exception:
                     traceback.print_exc()
+                    if _requires_composite_cleanup:
+                        raise
 
             # DB: playground test 기록 삭제
             await db.delete_playground_test(playground_id)
-        return True
-    except:
+        return partner_stopped
+    except Exception as e:
+        print(f"플레이그라운드 중지 실패 (playground_id={playground_id}): {e}")
         traceback.print_exc()
         return False
 
 # 테스트 ===================================================================================
 async def get_test_options(playground_id):
-    result = {"dataset_list" : [], "test_url" : None}
+    result = {
+        "dataset_list": [],
+        "test_url": None,
+        "prompt_gen_playground_id": None,
+    }
     try:
-        playground_info = await db.get_playground_url(playground_id=playground_id) # URL 까지 가져옴
+        # 평가 서비스가 같은 호출에서 이중 링크를 판별해야 단일은 기존 direct URL fast path를
+        # 유지하고, 이중만 /playgrounds/test 체인으로 보낼 수 있다.
+        playground_info = await db.get_playground_inference_target(
+            playground_id=playground_id)
         if playground_info is None:
             raise Exception("Not Exist Playground")
         workspace_id = playground_info.get("workspace_id")
         base_api_path = playground_info.get("api_path")
+        result["prompt_gen_playground_id"] = playground_info.get(
+            "prompt_gen_playground_id")
 
         # dataset_list
         result["dataset_list"] = await db.get_datasets(workspace_id=workspace_id)
@@ -1952,19 +2334,28 @@ def _dual_optimized_or_fallback(optimized, question):
     return opt
 
 
+async def get_stored_dual_prompt_gen(playground_id):
+    """저장된 dual LLM1을 엄격히 조회한다. DB/JSON 오류는 호출자에게 전파한다."""
+    # 요청 LLM1 허용 여부를 정할 때 조회 실패를 '링크 없음'으로 오인하면 우회가 다시 열리므로,
+    # 보안 결정용 경로는 예외를 삼키지 않는다.
+    pg = await db.get_playground(playground_id=playground_id)
+    if not pg:
+        return None
+    dual = (json.loads(pg.get("model") or "{}") or {}).get("dual") or {}
+    if dual.get("mode") == "dual":
+        return dual.get("prompt_gen_playground_id")
+    return None
+
+
 async def resolve_dual_prompt_gen(playground_id):
     """추론 playground 가 이중 세션의 부모면 링크된 프롬프트생성 playground_id, 아니면 None.
-    prompt_gen 을 request-supplied 가 아니라 세션 링크에서 서버 파생 → 교차테넌트 벡터 제거."""
-    try:
-        pg = await db.get_playground(playground_id=playground_id)
-        if not pg:
-            return None
-        dual = (json.loads(pg.get("model") or "{}") or {}).get("dual") or {}
-        if dual.get("mode") == "dual":
-            return dual.get("prompt_gen_playground_id")
-    except Exception:
-        traceback.print_exc()
-    return None
+
+    조회 실패는 None 으로 낮추지 않고 그대로 전파한다(위 get_stored_dual_prompt_gen 과 같은 규약).
+    호출자(batch_stream·invoke_dual_session)는 None 을 '단독 모드'로 해석하므로, 삼키면 실제
+    이중 세션이 일시적 DB 오류만으로 LLM1 을 건너뛰고 LLM2 만 돌린 결과를 이중 결과로 반환한다
+    (조용한 품질 저하 + 게시 API 의 LLM1 우회). '이중이 아님'과 '모르겠음'은 구분해야 한다.
+    링크가 없는 단독 playground 는 여전히 정상적으로 None 을 받는다."""
+    return await get_stored_dual_prompt_gen(playground_id)
 
 
 async def _playground_test_url(playground_id):
@@ -2190,10 +2581,12 @@ def _llava_turns(obj):
     return prompt, reference
 
 
-async def _sample_from_record(obj, fallback_line, with_external, dir_real):
+def _sample_from_record(obj, fallback_line, with_external):
     """데이터셋 레코드(dict) 또는 plain 라인 → 배치 샘플. JSONL/JSON배열 공용.
     프롬프트/정답은 표준 필드 우선, 없으면 LLaVA conversations. external(SDS)이면
-    image(상대경로→base64) + ais_rows(필드 없으면 발화 텍스트에서 파싱)."""
+    image 상대경로(image_path) + ais_rows(필드 없으면 발화 텍스트에서 파싱).
+    ⚠️ 이미지는 여기서 base64 로 만들지 않는다 — 샘플당 ~2MB 라 N 개를 미리 들고 있으면
+    컨테이너 메모리(limit 256M, 앱 상시 ~136M)를 압박한다. 인코딩은 호출측이 추론 직전에 1건씩."""
     prompt, reference = "", ""
     img_rel, ais_val = "", None
     if isinstance(obj, dict):
@@ -2215,13 +2608,13 @@ async def _sample_from_record(obj, fallback_line, with_external, dir_real):
         return None
     sample = {"input": prompt, "reference": reference}
     if with_external:
-        sample["image_base64"] = await _encode_dataset_image(dir_real, img_rel) if img_rel else ""
+        sample["image_path"] = img_rel or ""
         sample["ais_rows"] = ais_val if isinstance(ais_val, list) else None
     return sample
 
 
 async def _read_dataset_samples(dataset_id, filename, limit, workspace_id=None, with_external=False):
-    """데이터셋 파일에서 최대 limit 샘플 → [{input, reference}]. jsonl/json dict 는 prompt/
+    """데이터셋 파일에서 최대 limit 샘플 → ([{input, reference, ...}], dir_real). jsonl/json dict 는 prompt/
     reference 컬럼 자동 감지, plain 라인은 input 만(reference 없음). 경로 탈출 차단.
     workspace_id 지정 시 데이터셋이 세션과 같은 워크스페이스인지 검증(교차테넌트 읽기 차단)."""
     if not filename or "\x00" in str(filename):
@@ -2264,12 +2657,12 @@ async def _read_dataset_samples(dataset_id, filename, limit, workspace_id=None, 
         if not isinstance(records, list):
             records = [records]
         for obj in records:
-            sample = await _sample_from_record(obj, "", with_external, dir_real)
+            sample = _sample_from_record(obj, "", with_external)
             if sample:
                 samples.append(sample)
             if len(samples) >= limit:
                 break
-        return samples
+        return samples, dir_real
 
     async with aiofiles.open(target, mode="r", encoding="utf-8") as f:
         async for raw in f:
@@ -2280,31 +2673,36 @@ async def _read_dataset_samples(dataset_id, filename, limit, workspace_id=None, 
                 obj = json.loads(line)
             except (json.JSONDecodeError, ValueError):
                 obj = None
-            sample = await _sample_from_record(obj, line, with_external, dir_real)
+            sample = _sample_from_record(obj, line, with_external)
             if sample:
                 samples.append(sample)
             if len(samples) >= limit:
                 break
-    return samples
+    return samples, dir_real
 
 
-async def dual_batch_stream(playground_id, prompt_gen_playground_id, dataset_id, filename,
-                            sample_count=5, metrics=None, session_id=None,
-                            system_prompt=None, examples=None, external_payload=None):
-    """이중 배치 스트리밍 제너레이터 — 샘플 하나가 끝날 때마다 결과를 yield.
+async def batch_stream(playground_id, prompt_gen_playground_id=None, dataset_id=None, filename=None,
+                       sample_count=5, metrics=None, session_id=None,
+                       system_prompt=None, examples=None, external_payload=None):
+    """데이터셋 일괄 추론 스트리밍 제너레이터 — 샘플 하나가 끝날 때마다 결과를 yield.
     동기 응답(샘플당 ~16s × N)이 API 게이트웨이 read timeout(60s)에 걸려 504 가 되는 문제 해결.
     이벤트: {"type":"start"|"sample"|"summary"}. dual_batch_test 는 이 제너레이터를 소비(로직 단일화).
 
-    이중모델 데이터셋 일괄 추론(WBS 4.3 배치). N(≤_DUAL_BATCH_MAX) 샘플에 LLM1→LLM2 체인
-    실행, reference 있으면 인-프로세스 BLEU/ROUGE 채점. 동기(체인=2N 추론)라 N 상한 고정 —
+    prompt_gen_playground_id 유무로 이중/단독 두 모드를 겸한다(루프·채점·스트리밍 규약 동일):
+      - 있으면 이중모델(WBS 4.3): 샘플마다 LLM1 재작성 → LLM2 추론(추론 2N 회).
+      - 없으면 단독 배포: 데이터셋 프롬프트를 그대로 추론 모델에 보낸다(추론 N 회).
+        SDS(외부 VLM) 단독에서는 이 프롬프트가 custom_prompt 가 되어 데이터셋 조건을 재현하므로
+        reference 채점이 의미를 갖는다(빈 프롬프트면 VLM 기본 프롬프트로 돌아 정답과 어긋남).
+    reference 있으면 인-프로세스 BLEU/ROUGE 채점. 동기라 N 상한(_DUAL_BATCH_MAX) 고정 —
     SP-5(비동기 K8s 평가)와 별개의 세션 대상 경량 배치. prompt_gen 은 route 가 세션에서 파생."""
-    if not prompt_gen_playground_id:
-        raise Exception("Error: prompt generator(LLM1) not available")
-    # 같은 워크스페이스 가드(dual_test 동형) + 메시지 통합(열거 오라클 회피)
     pg2 = await db.get_playground(playground_id=playground_id)
-    pg1 = await db.get_playground(playground_id=prompt_gen_playground_id)
-    if not pg1 or not pg2 or pg1.get("workspace_id") != pg2.get("workspace_id"):
-        raise Exception("Error: prompt generator(LLM1) not available")
+    if not pg2:
+        raise Exception("Error: playground not found")
+    if prompt_gen_playground_id:
+        # 같은 워크스페이스 가드(dual_test 동형) + 메시지 통합(열거 오라클 회피)
+        pg1 = await db.get_playground(playground_id=prompt_gen_playground_id)
+        if not pg1 or pg1.get("workspace_id") != pg2.get("workspace_id"):
+            raise Exception("Error: prompt generator(LLM1) not available")
     try:
         n = max(1, min(int(sample_count), _DUAL_BATCH_MAX))
     except (TypeError, ValueError):
@@ -2321,27 +2719,35 @@ async def dual_batch_stream(playground_id, prompt_gen_playground_id, dataset_id,
     _shared = dict(external_payload or {})
     _shared_img = _shared.get("image_base64") or ""
     _shared_ais = _shared.get("ais_rows") if isinstance(_shared.get("ais_rows"), list) else None
-    samples = await _read_dataset_samples(dataset_id, filename, n, workspace_id=pg2.get("workspace_id"),
-                                         with_external=bool(_ext_job_id))
+    # dir_real 을 함께 받는다 — 이미지는 미리 인코딩하지 않고 샘플 직전에 1건씩 만든다.
+    samples, ds_dir = await _read_dataset_samples(dataset_id, filename, n, workspace_id=pg2.get("workspace_id"),
+                                                 with_external=bool(_ext_job_id))
     if not samples:
         raise Exception("Error: no usable samples in dataset")
-    gen_url = await _playground_test_url(prompt_gen_playground_id)
+    gen_url = await _playground_test_url(prompt_gen_playground_id) if prompt_gen_playground_id else None
     ans_url = None if _ext_job_id else await _playground_test_url(playground_id)
     rows, preds, refs, has_ref = [], [], [], False
     yield {"type": "start", "total": len(samples)}
     for idx, s in enumerate(samples):
         q = s["input"]
         ref = s.get("reference") or ""
-        meta = _build_dual_meta(q, system_prompt, examples)
-        # LLM1 재작성 → 퇴행 시 원 질문 폴백(playground_dual_test 동형)
-        optimized = _dual_optimized_or_fallback(
-            await _infer_question(gen_url, meta, session_id, timeout=300), q)
+        if gen_url:
+            meta = _build_dual_meta(q, system_prompt, examples)
+            # LLM1 재작성 → 퇴행 시 원 질문 폴백(playground_dual_test 동형)
+            optimized = _dual_optimized_or_fallback(
+                await _infer_question(gen_url, meta, session_id, timeout=300), q)
+        else:
+            # 단독 배포 — LLM1 단계가 없으므로 데이터셋 프롬프트를 그대로 추론에 사용.
+            optimized = q
         if len(optimized) > _DUAL_PROMPT_MAX:
             optimized = optimized[:_DUAL_PROMPT_MAX]
         if _ext_job_id:
+            # 이미지는 이 샘플을 보낼 때만 인코딩하고 루프를 벗어나면 버린다 — 샘플당 ~2MB 라
+            #   N 개를 상주시키면 컨테이너 메모리(limit 256M)에서 배치가 커질수록 위험해진다.
+            _img = await _encode_dataset_image(ds_dir, s["image_path"]) if s.get("image_path") else ""
             answer, _ = await _infer_sds_sample(
                 _ext_job_id, optimized, _shared,
-                image_b64=(s.get("image_base64") or _shared_img),
+                image_b64=(_img or _shared_img),
                 ais_rows=(s.get("ais_rows") or _shared_ais))
         else:
             answer = await _infer_question(ans_url, optimized, session_id, timeout=1800)
@@ -2363,10 +2769,11 @@ async def dual_batch_stream(playground_id, prompt_gen_playground_id, dataset_id,
 async def dual_batch_test(playground_id, prompt_gen_playground_id, dataset_id, filename,
                           sample_count=5, metrics=None, session_id=None,
                           system_prompt=None, examples=None, external_payload=None):
-    """이중 배치 동기 응답(하위호환) — dual_batch_stream 을 끝까지 소비해 기존 스키마로 반환.
-    ⚠️ 샘플 수가 많으면 게이트웨이 타임아웃(60s) 위험 → FE 는 SSE(/dual-batch/sse) 사용 권장."""
+    """배치 동기 응답(하위호환) — batch_stream 을 끝까지 소비해 기존 스키마로 반환.
+    prompt_gen_playground_id=None 이면 단독 배포 배치(LLM1 단계 없음)로 동작한다.
+    ⚠️ 샘플 수가 많으면 게이트웨이 타임아웃(60s) 위험 → FE 는 SSE(/batch/sse) 사용 권장."""
     rows, final = [], {}
-    async for ev in dual_batch_stream(
+    async for ev in batch_stream(
             playground_id=playground_id, prompt_gen_playground_id=prompt_gen_playground_id,
             dataset_id=dataset_id, filename=filename, sample_count=sample_count,
             metrics=metrics, session_id=session_id, system_prompt=system_prompt,
@@ -2400,6 +2807,11 @@ async def playground_test(playground_id, test_type, test_dataset_id, test_datase
         playground_deployment_info = json.loads(playground_deployment_info)
         deployment_playground_id = playground_deployment_info.get("deployment_playground_id")
         external_job_id = playground_deployment_info.get("external_job_id")
+
+        # 중지 상태(external_job_id 정리됨 + internal 배포 없음)에서 테스트가 들어오면
+        # 아래 internal 경로가 get_deployment(None) 을 타 모호한 AttributeError 를 낸다.
+        if not external_job_id and deployment_playground_id is None:
+            raise Exception("Playground is not deployed — 배포를 먼저 시작하세요")
 
         # ── External partner container 분기 ─────────────────────────────
         if external_job_id:

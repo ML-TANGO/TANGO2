@@ -160,9 +160,31 @@ class CreateDualShellInput(BaseModel):
     """이중모델 세션 '셸' 생성(단일 CreatePlaygroundInput 대칭) — 모델/자원 없이 세션 행만 만든다.
     LLM1/LLM2·GPU 선택과 실제 배포는 상세 화면의 provision(ProvisionDualInput)에서."""
     workspace_id: int
-    name: str = Field(min_length=1, max_length=64, description="세션 이름")
+    # 길이는 서비스에서 한국어 envelope 오류로 검증한다. DTO 선검증(422)이 서비스 오류를 가리지 않게 한다.
+    name: str = Field(description="세션 이름(최대 20자, -promptgen 파생명 여유 포함)")
+    description: Optional[str] = None
     access: Optional[int] = 1
     owner_id: Optional[int] = None
+    users_id: Optional[list] = Field(default=list(), description="접근 사용자 id")
+
+    class Config:
+        protected_namespaces = ()
+
+class DualModelParams(BaseModel):
+    """역할별 생성 파라미터 — 단일 UpdatePlaygroundOptionsInput 의 model_* 5종과 같은 계약.
+    파라미터는 추론 요청이 아니라 **배포 시점**에 서빙 컨테이너로 주입되므로(llm_deployment param_*),
+    값을 바꾸려면 재배포가 필요하다 = 중지 상태에서만 편집 가능한 구성의 일부.
+    생략(None) 시 서비스의 기존 기본값을 그대로 쓴다(하위호환)."""
+    temperature: Optional[float] = Field(default=None, ge=0, le=2)
+    # top_p·repetition_penalty 는 0 을 허용하면 안 된다: 서빙 파드가 그대로 vLLM
+    #   SamplingParams 로 넘겨 ValueError(top_p in (0,1], repetition_penalty>0) 로
+    #   lifespan 크래시한다(같은 제약이 service.py 기본값 고정 주석에도 적혀 있다).
+    #   배포는 성공하고 서빙만 죽는 형태라 경계에서 막는다.
+    top_p: Optional[float] = Field(default=None, gt=0, le=1)
+    # top_k = -1 은 '비활성(제한 없음)' 관례라 하한을 -1 로 둔다.
+    top_k: Optional[int] = Field(default=None, ge=-1, le=1000)
+    repetition_penalty: Optional[float] = Field(default=None, gt=0, le=10)
+    max_new_tokens: Optional[int] = Field(default=None, ge=1, le=131072)
 
     class Config:
         protected_namespaces = ()
@@ -180,6 +202,10 @@ class ProvisionDualInput(BaseModel):
     model_gpu_count: Optional[int] = Field(default=1, ge=0, le=16, description="GPU 할당 개수(모델당, 모델별 미지정 시 폴백)")
     prompt_gen_gpu_count: Optional[int] = Field(default=None, ge=0, le=16, description="LLM1 GPU 할당 개수(생략 시 model_gpu_count)")
     inference_gpu_count: Optional[int] = Field(default=None, ge=0, le=16, description="LLM2 GPU 할당 개수(생략 시 model_gpu_count)")
+    # 역할별 생성 파라미터. 이중은 부모(LLM2)·자식(LLM1)이 각각 playground 행이라
+    #   model_parameter JSON 컬럼도 역할별로 이미 존재 → 마이그레이션 없이 분리 저장된다.
+    prompt_gen_params: Optional[DualModelParams] = Field(default=None, description="LLM1(프롬프트 생성) 생성 파라미터(생략 시 기본값)")
+    inference_params: Optional[DualModelParams] = Field(default=None, description="LLM2(추론) 생성 파라미터(생략 시 기본값). 외부 SDS 모델은 미적용")
 
     class Config:
         protected_namespaces = ()
@@ -205,6 +231,17 @@ class DualBatchInput(BaseModel):
 
 class PlaygroundIdInput(BaseModel):
     playground_id: int
+
+
+class DualInvokeInput(BaseModel):
+    """게시된 이중모델 API 요청 — 단일 게시의 question format과 같은 필드명을 사용한다."""
+    test_type: Optional[str] = Field(default="question")
+    # 타입도 단일 계약(PlaygroundTestInput·DualBatchInput 의 Optional[str])과 같아야 한다.
+    #   int 로 좁히면 기존 게시 클라이언트가 보내는 UUID 형태 session_id 가 이 경로에서만
+    #   422 가 돼, 위에 적은 "같은 question format" 이 깨진다.
+    session_id: Optional[str] = None
+    test_question: str
+    external_payload: Optional[Dict[str, Any]] = None
 
 
 
