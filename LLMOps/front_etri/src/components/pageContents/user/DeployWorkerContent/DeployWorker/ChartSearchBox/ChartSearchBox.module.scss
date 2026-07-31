@@ -1,0 +1,29 @@
+@import '../DeployWorker.module.scss';
+
+.setting-wrap {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background-color: rgba($mono200, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  border-radius: 4px 4px 0 0;
+  border-bottom: 1px solid $card-border-color;
+  grid-gap: 16px;
+  padding: $padding-small;
+  .label {
+    display: block;
+    color: $mono205;
+    font-size: 14px;
+    margin-bottom: 4px;
+    height: 20px;
+  }
+  .toggle-btn {
+    .btn-box {
+      display: flex;
+      flex-direction: row;
+    }
+  }
+}

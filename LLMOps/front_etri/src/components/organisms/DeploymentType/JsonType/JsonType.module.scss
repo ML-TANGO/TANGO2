@@ -1,0 +1,58 @@
+@import '@src/styles/color.scss';
+
+.en-jsonType-label {
+  p {
+    font-size: 14px;
+  }
+  & > :nth-child(3) {
+    font-size: 14px;
+    img {
+      width: 11px;
+    }
+  }
+}
+.jsonType-label {
+  display: flex;
+  background-color: $mono202;
+  padding: 12px;
+  margin-bottom: 10px;
+  border-radius: 4px;
+  align-items: center;
+  font-size: 15px;
+  p {
+    color: $mono206;
+    margin: 0px;
+  }
+  & > :first-child {
+    font-family: SpoqaB;
+    margin-right: 3px;
+  }
+  & > :nth-child(2) {
+    font-family: SpoqaM;
+    margin-right: 6px;
+  }
+  & > :nth-child(3) {
+    font-family: SpoqaM;
+    color: $blue104;
+    &:hover {
+      cursor: pointer;
+    }
+    img {
+      margin-left: 4px;
+    }
+  }
+}
+
+.edit {
+  opacity: 0.5;
+}
+.jsonType-contents {
+  border: 1px solid $mono203;
+  display: block;
+  position: relative;
+  padding: 10px;
+  height: 350px;
+  & > div {
+    height: 100%;
+  }
+}

@@ -1,0 +1,226 @@
+@import '../modal.scss';
+
+.label {
+  display: inline-block;
+  font-size: 16px;
+  font-family: SpoqaB;
+  color: $title-color;
+  margin-bottom: 8px;
+  &.pointer {
+    cursor: pointer;
+  }
+  .optional {
+    color: $mono205;
+    font-size: 16px;
+    font-family: SpoqaM;
+  }
+}
+
+.notice {
+  font-size: 14px;
+  color: $mono205;
+  margin-top: -12px;
+  margin-bottom: 36px;
+  padding-bottom: 12px;
+  font-family: SpoqaR;
+  border-bottom: 1px solid $mono203;
+}
+
+.float-box {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  .column {
+    flex: 1;
+    margin-right: 10px;
+    &:last-child {
+      margin-right: 0;
+    }
+    > label {
+      font-size: 14px;
+    }
+  }
+}
+
+.error-message {
+  height: 48px;
+  color: $error-color;
+  font-size: 14px;
+}
+
+.import-box {
+  display: flex;
+  flex-direction: column;
+  margin-right: 48px;
+  position: absolute;
+  top: 2px;
+  right: 0;
+  border-radius: 4px;
+  z-index: 2;
+
+  &.show {
+    width: 370px;
+    box-shadow: 0 3px 9px 0 rgba(18, 22, 25, 0.08), 0 2px 4px 1px rgba(18, 22, 25, 0.14);
+    .title-box {
+      background-color: $mono200;
+      border-bottom: 1px solid $mono202;
+    }
+    .contents-box {
+      height: 108px;
+      transition: height 0.3s;
+    }
+  }
+  &.hide {
+    width: 210px;
+    &.name {
+      width: 330px;
+    }
+    .title-box {
+      border-radius: 4px;
+    }
+    .contents-box {
+      height: 0;
+      padding: 0;
+      transition: none;
+      visibility: hidden;
+    }
+  }
+
+  .title-box {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px 8px 16px;
+    border-radius: 4px 4px 0 0;
+    background-color: $mono202;
+    cursor: pointer;
+
+    .import-label {
+      display: flex;
+      align-items: center;
+      margin-right: 8px;
+      font-family: SpoqaB;
+      font-size: 14px;
+      color: $mono207;
+      cursor: pointer;
+    }
+    .file-name {
+      flex: 1;
+      font-size: 12px;
+      color: $mono205;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+  }
+
+  .contents-box {
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    contain: content;
+    padding: 12px 16px 16px 16px;
+    border-radius: 0 0 4px 4px;
+    background-color: $mono200;
+    .file-input-wrap {
+      display: flex;
+      align-items: center;
+      margin-bottom: 8px;
+      .btn {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        padding: 8px 14px 8px 10px;
+        margin-right: 12px;
+        color: $mono200;
+        background-color: $mono205;
+        font-family: SpoqaB;
+        font-size: 14px;
+        width: auto;
+        height: 36px;
+        border: none;
+        border-radius: 4px;
+        box-sizing: border-box;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+      .file-name {
+        color: $primary-color;
+        font-size: 16px;
+        font-family: SpoqaB;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+    }
+  }
+}
+
+.control-box {
+  margin-right: 48px;
+
+  .active-box {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    flex: 1;
+    justify-content: flex-end;
+    .switch-box {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      > div {
+        margin-bottom: -4px !important;
+      }
+      .switch-label {
+        font-family: SpoqaB;
+        font-size: 16px;
+        color: $mono207;
+        margin-right: 6px;
+        margin-bottom: 1px;
+      }
+      &.training {
+        margin-right: 20px;
+        margin-left: 8px;
+      }
+    }
+  }
+}
+
+.template-box {
+  border-radius: 4px;
+  background-color: rgba($blue104, 0.08);
+  margin-bottom: 48px;
+  padding: 24px;
+  &.show {
+    height: auto;
+    opacity: 1;
+    transition: height 0s 0s, opacity 0.6s 0s;
+  }
+  &.hide {
+    padding: 0;
+    overflow: hidden;
+    height: 0;
+    opacity: 0;
+    transition: height 0s 0.4s, opacity 0.4s 0s;
+  }
+}
+
+.hide-line {
+  height: 1px;
+  border: 0;
+  background-color: rgba($blue104, 0.08);
+  margin: 0;
+}
+
+.show-hide-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  .arrow-btn {
+    width: 20px;
+    height: 20px;
+    vertical-align: bottom;
+  }
+}

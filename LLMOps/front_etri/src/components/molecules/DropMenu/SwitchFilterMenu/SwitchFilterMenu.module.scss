@@ -1,0 +1,19 @@
+@import '@src/styles/color.scss';
+
+.switch-filter-list {
+  padding: 8px 0;
+  .switch-filter {
+    display: flex;
+    align-items: center;
+    padding: 8px 14px;
+    justify-content: space-between;
+    .icon {
+      flex: 0 0 20px;
+    }
+    .filter-name {
+      flex: 1;
+      white-space: nowrap;
+      padding: 0 6px;
+    }
+  }
+}

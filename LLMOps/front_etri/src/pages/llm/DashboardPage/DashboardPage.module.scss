@@ -1,0 +1,79 @@
+@import '@src/styles/color.scss';
+
+.title-cont {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  .title-txt {
+    text-wrap: nowrap;
+  }
+  .platform-cont {
+    width: 231px;
+    display: flex;
+    align-items: center;
+    float: right;
+    gap: 16px;
+    flex-wrap: wrap;
+    text-wrap: nowrap;
+    .item {
+      display: flex;
+      gap: 8px;
+      .dot {
+        width: 10px;
+        height: 10px;
+        align-content: center;
+        border-radius: 50%;
+      }
+      .label {
+        color: $mono205;
+        font-family: SpoqaM;
+        font-size: 12px;
+        line-height: 12px;
+        letter-spacing: -0.18px;
+      }
+    }
+  }
+}
+
+.dashboard-cont {
+  display: grid;
+  gap: 48px;
+  .first {
+    display: grid;
+    grid-template-columns: 808fr 808fr;
+    gap: 24px;
+  }
+  .second {
+    display: grid;
+    grid-template-columns: 808fr 808fr;
+    gap: 24px;
+  }
+  .third {
+    display: grid;
+    grid-template-columns: 808fr 808fr;
+    gap: 24px;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1199px) {
+  .dashboard-cont {
+    .first {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+}
+
+/* 모바일 */
+@media (max-width: 767px) {
+  .dashboard-cont {
+    .first {
+      grid-template-columns: 1fr;
+    }
+    .second,
+    .third {
+      display: grid;
+      grid-template-columns: 808fr;
+      gap: 24px;
+    }
+  }
+}

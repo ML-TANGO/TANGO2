@@ -1,0 +1,22 @@
+.progress-status-box {
+  position: fixed;
+  // bottom: 20px;
+  bottom: -200px;
+  right: 20px;
+  width: 300px;
+  background: #ffffff;
+  border: 1px solid #ececec;
+  border-radius: 4px;
+  opacity: 0;
+  transition: bottom 0.4s ease-in-out, opacity 0.5s ease-in-out;
+  .top {
+    display: flex;
+    justify-content: flex-end;
+    padding: 8px;
+    border-bottom: 1px solid #ececec;
+  }
+  .progress-list {
+    max-height: 160px;
+    overflow-y: auto;
+  }
+}

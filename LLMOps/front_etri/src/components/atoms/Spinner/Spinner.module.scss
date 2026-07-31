@@ -1,0 +1,63 @@
+@import 'src/styles/color.scss';
+
+.container {
+  .spinner {
+    animation: rotate 1s linear infinite;
+    &.xs {
+      width: 16px;
+      height: 16px;
+    }
+    &.sm {
+      width: 18px;
+      height: 18px;
+    }
+    &.md {
+      width: 20px;
+      height: 20px;
+    }
+    &.lg {
+      width: 22px;
+      height: 22px;
+    }
+    .primary {
+      fill: $blue104;
+    }
+
+    .light {
+      fill: $blue108;
+    }
+    .gray {
+      fill: $mono208;
+    }
+    .yellow {
+      fill: $yellow304;
+    }
+    .orange {
+      fill: $orange403;
+    }
+    .red {
+      fill: $red503;
+    }
+  }
+}
+
+@keyframes rotation {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes rotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  40% {
+    transform: rotate(300deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}

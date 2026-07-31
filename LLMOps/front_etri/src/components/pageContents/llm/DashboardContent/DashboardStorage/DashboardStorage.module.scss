@@ -1,0 +1,150 @@
+@import '@src/styles/color.scss';
+
+.grid-column {
+  display: grid;
+  height: 100%;
+  grid-template-rows: 1fr 1fr;
+  box-sizing: border-box;
+}
+
+.error {
+  padding: 0 24px;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  word-break: normal;
+  span {
+    color: $mono207;
+    font-family: SpoqaM;
+    font-size: 14px;
+    line-height: 14px;
+  }
+}
+
+.storage-cont {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  &:first-child {
+    border-bottom: 1px solid #dee9ff;
+  }
+  .graph-cont {
+    min-width: 300px;
+    display: flex;
+    gap: 48px;
+    padding: 0 48px;
+    align-items: center;
+    height: 100%;
+    border-right: 1px solid #dee9ff;
+    box-sizing: border-box;
+    .graph {
+      position: relative;
+      align-content: center;
+      width: 125px;
+      height: 125px;
+      .circle-cont {
+        position: absolute;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        align-items: center;
+        top: 47%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        .label,
+        .value {
+          color: $mono207;
+          font-family: SpoqaB;
+          font-size: 16px;
+        }
+      }
+    }
+    .label-list {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 8px;
+      .label-item {
+        display: flex;
+        gap: 4px;
+        font-family: SpoqaM;
+        font-size: 14px;
+        line-height: 14px;
+        flex-wrap: wrap;
+        .label {
+          color: $mono205;
+        }
+        .value {
+          color: $mono207;
+        }
+      }
+    }
+  }
+  .bar-cont {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    flex-direction: column;
+    .bar-label {
+      display: flex;
+      align-items: center;
+      height: 50px;
+      box-sizing: border-box;
+      margin: initial;
+      padding: 0 16px;
+      border-bottom: 1px solid $mono203;
+      color: $mono205;
+      font-family: SpoqaB;
+      font-size: 14px;
+    }
+    .content-list {
+      display: flex;
+      flex-direction: column;
+      height: 203px;
+      overflow-y: auto;
+      .content-item-cont {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 16px 16px 15px 16px;
+        border-bottom: 1px solid $mono203;
+        .item-title {
+          color: $mono207;
+          font-family: SpoqaM;
+          font-size: 14px;
+          line-height: 14px;
+        }
+        .item-bar-cont {
+          display: flex;
+          justify-content: space-between;
+          gap: 32px;
+          .percent {
+            text-wrap: nowrap;
+          }
+        }
+      }
+    }
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1199px) {
+  .storage-cont {
+    .graph-cont {
+      gap: 24px;
+      padding: 0 24px;
+    }
+  }
+}
+
+/* 모바일 */
+@media (max-width: 767px) {
+  .storage-cont {
+    .graph-cont {
+      min-width: 200px;
+      gap: 24px;
+      padding: 0 24px;
+      justify-content: none;
+    }
+  }
+}

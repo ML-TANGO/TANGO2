@@ -1,0 +1,160 @@
+@import '@src/styles/color.scss';
+
+.frame {
+  height: 1250px;
+  border: 1px solid $blue102;
+  border-radius: 16px;
+  background-color: #fff;
+  box-sizing: border-box;
+}
+
+.thead {
+  padding: 24px 24px 0 24px;
+  border-radius: 16px;
+  .title {
+    color: $mono205;
+    font-family: SpoqaM;
+    font-size: 14px;
+    line-height: 14px;
+    margin: initial;
+    padding-bottom: 15px;
+    border-bottom: 1px solid $mono203;
+  }
+  position: sticky;
+  top: 0;
+  background-color: #fff;
+}
+
+.tbody {
+  padding: 24px;
+  padding-top: 0px;
+  height: 1104px;
+  overflow-y: auto;
+}
+
+.tr {
+  display: flex;
+  gap: 16px;
+  height: 46px;
+  box-sizing: border-box;
+  align-items: center;
+  border-bottom: 1px solid $mono203;
+  .td,
+  .th {
+    text-align: center;
+    text-wrap: nowrap;
+    flex: 1;
+  }
+
+  .th {
+    color: $mono205;
+    font-family: SpoqaB;
+    font-size: 14px;
+    line-height: 14px;
+  }
+
+  .td {
+    color: $mono207;
+    font-family: SpoqaM;
+    font-size: 13px;
+    line-height: 13px;
+    overflow: hidden; /* 내용이 영역을 초과하면 숨기기 */
+    white-space: nowrap; /* 텍스트를 한 줄로 유지 */
+    text-overflow: ellipsis; /* 말줄임(...) 표시 */
+    &:last-child {
+      display: flex;
+      justify-content: center;
+      a:visited {
+        color: #121619;
+      }
+      a {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        text-decoration: none;
+        color: #121619;
+        img {
+          width: 16px;
+          height: 16px;
+        }
+      }
+    }
+  }
+  &.cursor {
+    cursor: pointer;
+  }
+}
+
+.expand-cont {
+  display: flex;
+  padding: 24px;
+  flex-direction: column;
+  background: #f5f7fb;
+  .header-cont {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    padding-bottom: 15px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid $mono203;
+    .left-cont,
+    .right-cont {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      span {
+        font-family: SpoqaB;
+        font-size: 14px;
+        line-height: 14px;
+        &:first-child {
+          color: $mono205;
+        }
+        &:last-child {
+          color: $mono207;
+          font-family: SpoqaM;
+        }
+      }
+    }
+  }
+  .body-cont {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    .params-txt {
+      color: $mono205;
+      font-family: SpoqaB;
+      font-size: 14px;
+      line-height: 14px;
+    }
+    .table-cont {
+      display: flex;
+      flex-direction: column;
+      background-color: #fff;
+      border: 1px solid $mono203;
+      border-radius: 16px;
+      overflow: hidden;
+      .header-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        padding: 0 16px;
+        color: $mono205;
+        font-family: SpoqaM;
+        font-size: 13px;
+        line-height: 13px;
+        text-align: center;
+        height: 44px;
+        align-items: center;
+        border-bottom: 1px solid $mono203;
+        .first,
+        .second {
+          height: 100%;
+          align-content: center;
+          justify-content: center;
+          text-align: center;
+          white-space: nowrap; /* 줄바꿈 방지 */
+          overflow: hidden; /* 넘치는 텍스트 숨기기 */
+          text-overflow: ellipsis; /* 말줄임표(...) 표시 */
+        }
+      }
+    }
+  }
+}

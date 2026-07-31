@@ -1,0 +1,89 @@
+@import '@src/styles/color.scss';
+
+.container {
+  display: flex;
+  flex-direction: column;
+
+  .desc {
+    font-size: 16px;
+    line-height: 24px;
+    color: $mono205;
+  }
+
+  .profit-status {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-top: 32px;
+    border-bottom: 1px solid $mono203;
+    padding-bottom: 24px;
+
+    .title {
+      font-size: 16px;
+      color: $mono207;
+    }
+
+    .profit-checkbox {
+      display: flex;
+      gap: 16px;
+
+      .value {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+
+        input[type='checkbox'] {
+          width: 16px;
+          height: 16px;
+        }
+
+        .label {
+          font-size: 14px;
+          color: $blue104;
+
+          &.not-select {
+            color: $mono205;
+          }
+        }
+      }
+    }
+  }
+
+  .workspace-status {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-top: 24px;
+
+    .title {
+      font-size: 16px;
+      color: $mono207;
+    }
+
+    .workspace-checkbox {
+      display: grid;
+      grid-template-columns: 140px 140px 120px;
+      gap: 16px;
+
+      .value {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+
+        input[type='checkbox'] {
+          width: 16px;
+          height: 16px;
+        }
+
+        .label {
+          font-size: 14px;
+          color: $blue104;
+
+          &.not-select {
+            color: $mono205;
+          }
+        }
+      }
+    }
+  }
+}

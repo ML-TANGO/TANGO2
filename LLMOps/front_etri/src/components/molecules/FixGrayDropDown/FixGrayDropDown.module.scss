@@ -1,0 +1,90 @@
+@import '@src/styles/color.scss';
+
+.container {
+  box-sizing: border-box;
+  position: relative;
+  font-family: SpoqaM;
+
+  &.isReadOnly {
+    .default-box {
+      cursor: not-allowed;
+      pointer-events: none;
+      border: 1px solid $mono204;
+      background: $mono202;
+    }
+  }
+
+  .default-box {
+    box-sizing: border-box;
+    display: flex;
+    position: relative;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0px 16px;
+    height: 36px;
+    border: 1px solid $mono203;
+    border-radius: 8px;
+    font-size: 14px;
+    color: $mono205;
+    cursor: pointer;
+    background-color: white;
+    overflow: hidden;
+
+    .label {
+      color: $mono207;
+      color: $mono207;
+      padding-right: 40px;
+      overflow: hidden;
+    }
+
+    .arrow-btn {
+      position: absolute;
+      top: 10px;
+      right: 16px;
+    }
+
+    &.isOpen {
+      border-bottom-left-radius: 0px;
+      border-bottom-right-radius: 0px;
+    }
+
+    &.isSelected {
+      border: 1px solid $blue104;
+    }
+  }
+}
+
+.list-box {
+  box-sizing: border-box;
+  width: 100%;
+  // position: absolute;
+  background-color: white;
+  z-index: 20;
+  top: 36px;
+  left: 0px;
+  border: 1px solid $mono203;
+  border-top: 0px;
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+  overflow-x: hidden !important;
+
+  .list {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    padding: 0px 16px;
+    height: 36px;
+    font-size: 14px;
+    color: $mono205;
+    cursor: pointer;
+    border-bottom: 1px solid $mono203;
+
+    &:last-child {
+      border-bottom: 0px;
+    }
+
+    &:hover {
+      background-color: $mono201;
+    }
+  }
+}

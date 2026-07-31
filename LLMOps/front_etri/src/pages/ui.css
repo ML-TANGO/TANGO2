@@ -1,0 +1,59 @@
+.input-box {
+  box-sizing: border-box;
+  padding: 50px;
+}
+.fb.input {
+  display: block;
+  position: relative;
+}
+.fb.input > label {
+  display: inline-block;
+  font-family: SpoqaB;
+  font-size: 16px;
+  color: #212121;
+  margin-bottom: 8px;
+}
+.fb.input > .input-wrap {
+  border-radius: 8px;
+  /* border: 1px solid rgb(145, 142, 142); */
+}
+.fb.input > .input-wrap > input {
+  width: 100%;
+  height: 44px;
+  box-sizing: border-box;
+  line-height: 1.2em;
+  font-size: 16px;
+  transition-property: border-color, height, padding-right, color;
+  transition-duration: 0.2s, 0s;
+  outline: none;
+  background: #ffffff;
+  padding: 0 0.94118em;
+  vertical-align: middle;
+  color: rgba(0, 0, 0, 0.84);
+  font-family: SpoqaM;
+  border-radius: 8px;
+  border: 1px solid #acafb7;
+}
+
+.fb.input > .input-wrap > input:active,
+.fb.input > .input-wrap > input:focus {
+  border: 2px solid #0e4bff;
+  padding: 0 calc(0.94118em - 1px);
+}
+.fb.input > .input-wrap > input::placeholder {
+  color: #cbcdd1;
+}
+.fb.input.error > .input-wrap {
+  border-color: #ff5953;
+  background-color: #ff5953;
+}
+.fb.input.error > .input-wrap > input {
+  border-color: #ff5953;
+}
+.fb.input.success > .input-wrap {
+  border-color: #0e4bff;
+  background-color: #0e4bff;
+}
+.fb.input.success > .input-wrap > input {
+  border-color: #0e4bff;
+}

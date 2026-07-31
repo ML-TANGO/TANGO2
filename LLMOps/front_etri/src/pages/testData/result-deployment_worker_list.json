@@ -1,0 +1,184 @@
+{
+    "result": [
+        {
+            "deployment_worker_id": 37,
+            "descritpion": "",
+            "run_env": [
+                {
+                    "docker_image": "jf-default-TEST"
+                },
+                {
+                    "gpu_model": [
+                        {
+                            "model": "NVIDIA-GeForce-GTX-1080-Ti",
+                            "node_list": [
+                                "jf-node-02"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "gpu_count": 1
+                },
+                {
+                    "run_code": "/src/api.py"
+                }
+            ],
+            "running_info": [
+                {
+                    "configurations": "NVIDIA GeForce GTX 1080 Ti"
+                },
+                {
+                    "cpu_coures": "12"
+                },
+                {
+                    "ram": "62Gi"
+                },
+                {
+                    "network": null
+                }
+            ],
+            "worker_status": {
+                "status": "running",
+                "reason": null,
+                "phase": "Running",
+                "interval": 70652.0,
+                "restart_count": 0
+            }
+        },
+        {
+            "deployment_worker_id": 35,
+            "descritpion": "",
+            "run_env": [
+                {
+                    "docker_image": "jf-default-TEST"
+                },
+                {
+                    "gpu_model": [
+                        {
+                            "model": "NVIDIA-GeForce-GTX-1080-Ti",
+                            "node_list": [
+                                "jf-node-02"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "gpu_count": 1
+                },
+                {
+                    "run_code": "/src/api.py"
+                }
+            ],
+            "running_info": [
+                {
+                    "configurations": "NVIDIA GeForce GTX 1080 Ti"
+                },
+                {
+                    "cpu_coures": "12"
+                },
+                {
+                    "ram": "62Gi"
+                },
+                {
+                    "network": null
+                }
+            ],
+            "worker_status": {
+                "status": "running",
+                "reason": null,
+                "phase": "Running",
+                "interval": 70821.0,
+                "restart_count": 0
+            }
+        },
+        {
+            "deployment_worker_id": 31,
+            "descritpion": "",
+            "run_env": [
+                {
+                    "docker_image": "jf-default-TEST"
+                },
+                {
+                    "gpu_model": [
+                        {
+                            "model": "NVIDIA-GeForce-GTX-1080-Ti",
+                            "node_list": [
+                                "jf-node-02"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "gpu_count": 1
+                },
+                {
+                    "run_code": "/src/api.py"
+                }
+            ],
+            "running_info": [
+                {
+                    "configurations": "NVIDIA GeForce GTX 1080 Ti"
+                },
+                {
+                    "cpu_coures": null
+                },
+                {
+                    "ram": null
+                },
+                {
+                    "network": null
+                }
+            ],
+            "worker_status": {
+                "status": "stop",
+                "reason": null
+            }
+        },
+        {
+            "deployment_worker_id": 30,
+            "descritpion": "",
+            "run_env": [
+                {
+                    "docker_image": "jf-default-TEST"
+                },
+                {
+                    "gpu_model": [
+                        {
+                            "model": "NVIDIA-GeForce-GTX-1080-Ti",
+                            "node_list": [
+                                "jf-node-02"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "gpu_count": 1
+                },
+                {
+                    "run_code": "/src/api.py"
+                }
+            ],
+            "running_info": [
+                {
+                    "configurations": "NVIDIA GeForce GTX 1080 Ti"
+                },
+                {
+                    "cpu_coures": null
+                },
+                {
+                    "ram": null
+                },
+                {
+                    "network": null
+                }
+            ],
+            "worker_status": {
+                "status": "stop",
+                "reason": null
+            }
+        }
+    ],
+    "message": null,
+    "status": 1
+}

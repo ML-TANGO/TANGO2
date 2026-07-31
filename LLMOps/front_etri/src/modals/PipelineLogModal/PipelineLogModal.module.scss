@@ -1,0 +1,39 @@
+@import '@src/styles/color.scss';
+
+.top-cont {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  .status-cont {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    .sub-title {
+      color: $mono207;
+      font-family: SpoqaB;
+      font-size: 16px;
+      line-height: 16px; /* 100% */
+    }
+  }
+}
+
+.paragraph-cont {
+  padding: 16px;
+  height: 560px;
+  background-color: #f9fafb;
+  border-radius: 7px;
+  color: #000;
+  box-sizing: border-box;
+  overflow-y: auto;
+  .log-paragraph {
+    margin: initial;
+  }
+}
+
+.spinner-cont {
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}

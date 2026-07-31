@@ -1,0 +1,27 @@
+@import '../modal.scss';
+
+.name {
+  display: block;
+  font-size: 16px;
+  font-family: SpoqaB;
+  padding-bottom: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: calc(100% - 48px);
+}
+.form {
+  padding-top: 0;
+  .image {
+    max-width: 680px;
+  }
+  .text {
+    margin: 0;
+    background-color: $mono202;
+    padding: 16px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: SpoqaM;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+  }
+}

@@ -1,0 +1,19 @@
+@import '@src/styles/color.scss';
+
+.result-obj {
+  width: 100%;
+  margin-bottom: 20px;
+  .title {
+    font-family: SpoqaB;
+    font-size: 16px;
+    color: $mono207;
+    display: block;
+    padding-bottom: 12px;
+  }
+  .download {
+    font-size: 14px;
+    padding-bottom: 4px;
+    display: inline-block;
+    color: $primary-color;
+  }
+}

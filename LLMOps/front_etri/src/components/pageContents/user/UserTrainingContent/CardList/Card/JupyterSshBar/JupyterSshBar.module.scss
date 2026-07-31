@@ -1,0 +1,174 @@
+@import '@src/styles/color.scss';
+
+.jupyter-ssh {
+  display: flex;
+  gap: 5px;
+  // justify-content: stretch;
+  // background-color: $mono201;
+  // padding: 15px 20px;
+  & > div {
+    flex: 1;
+  }
+  .btn-wrap {
+    display: flex;
+    align-items: center;
+    background-color: rgba($blue104, 0.08);
+    border-radius: 4px;
+    padding: 2px;
+    box-sizing: border-box;
+    cursor: default;
+    & > div {
+      flex: 1;
+    }
+    .btn {
+      position: relative;
+      width: 100%;
+      // max-width: 80px;
+      // min-width: 60px;
+      height: 32px;
+      border-radius: 4px;
+      font-family: SpoqaM;
+      color: $primary-color;
+      background-color: transparent;
+      border: none;
+      outline: none;
+      cursor: default;
+      white-space: nowrap;
+
+      &.loading {
+        color: transparent;
+        text-indent: -9999999px;
+      }
+
+      &.loading::after {
+        opacity: 1;
+      }
+
+      &.active,
+      &:hover {
+        background-color: rgba(#4766ff, 0.1);
+      }
+
+      &::after {
+        content: '';
+        display: block;
+        width: 1.2em;
+        height: 1.2em;
+        position: absolute;
+        left: calc(50% - 0.75em);
+        top: calc(50% - 0.75em);
+        border: 0.15em solid transparent;
+        border-right-color: $blue104;
+        border-radius: 50%;
+        animation: button-anim 0.7s linear infinite;
+        opacity: 0;
+      }
+    }
+    &.stop {
+      background-color: $mono201;
+      .btn {
+        color: $mono203;
+        cursor: default;
+        &:hover {
+          color: $mono203;
+          background-color: $mono201;
+        }
+      }
+      .divider {
+        background-color: $mono203;
+      }
+    }
+    &.running {
+      background-color: rgba($blue104, 0.08);
+      .btn {
+        color: $primary-color;
+        cursor: pointer;
+        &.active,
+        &:hover {
+          background-color: rgba(#4766ff, 0.1);
+        }
+      }
+    }
+    &.pending {
+      background-color: rgba($yellow304, 0.08);
+      .btn {
+        color: $orange402;
+        cursor: default;
+        &.active,
+        &:hover {
+          background-color: transparent;
+        }
+      }
+    }
+    &.error {
+      background-color: rgba($red502, 0.08);
+      .btn {
+        color: $red502;
+        cursor: default;
+        &.active,
+        &:hover {
+          background-color: transparent;
+        }
+      }
+    }
+    &.installing {
+      background-color: rgba($yellow304, 0.08);
+      .btn {
+        color: $orange402;
+        cursor: default;
+        &.active,
+        &:hover {
+          background-color: transparent;
+        }
+      }
+    }
+    &.expired {
+      background-color: $mono201;
+      .btn {
+        color: $mono203;
+        cursor: default;
+        &:hover {
+          color: $mono203;
+          background-color: $mono201;
+        }
+      }
+      .divider {
+        background-color: $mono203;
+      }
+    }
+    .divider {
+      display: inline-block;
+      width: 1px;
+      height: 14px;
+      background-color: #cad3ff;
+      margin: 0 6px;
+      cursor: default;
+    }
+  }
+}
+
+.action-btn::after {
+  content: '';
+  display: block;
+  width: 1.2em;
+  height: 1.2em;
+  position: absolute;
+  left: calc(50% - 0.75em);
+  top: calc(50% - 0.75em);
+  border: 0.15em solid transparent;
+  border-right-color: white;
+  border-radius: 50%;
+  animation: button-anim 0.7s linear infinite;
+  opacity: 0;
+}
+
+@keyframes button-anim {
+  from {
+    transform: rotate(0);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* em values are used to adjust button values such as padding, radius etc. based on font-size */

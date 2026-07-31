@@ -1,0 +1,431 @@
+@import '../modal.scss';
+
+@mixin header-style {
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+
+    .number {
+      width: 32px;
+      height: 32px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 20px;
+      color: $blue104;
+      border-radius: 8px;
+      box-shadow: 0px 3px 6px 0px rgba(45, 118, 248, 0.1);
+    }
+
+    .text {
+      font-size: 18px;
+      font-style: normal;
+      font-weight: 700;
+    }
+  }
+}
+.copy-icon {
+  cursor: pointer;
+}
+
+.tab-container {
+  display: flex;
+  width: 264px;
+  height: 36px;
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(222, 233, 255, 0.5);
+  margin-bottom: 20px;
+
+  .tab {
+    width: 84px;
+    height: 16px;
+    padding: 10px 24px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-style: normal;
+    font-weight: 700;
+    color: $blue104;
+    cursor: pointer;
+
+    &.selected {
+      background-color: #fff;
+      box-shadow: 0px 3px 6px 0px rgba(45, 118, 248, 0.1);
+    }
+  }
+}
+
+.first-step {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  @include header-style;
+
+  .content {
+    display: flex;
+    align-items: center;
+    padding-left: 16px;
+
+    .left-line {
+      width: 2px;
+      height: 240px;
+      background-color: $blue101;
+      margin-right: 32px;
+    }
+
+    .profile-text {
+      margin-right: 24px;
+      font-size: 14px;
+      font-style: normal;
+      font-weight: 500;
+    }
+
+    .sample-image {
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      width: 272px;
+      height: 220px;
+      padding: 32px;
+      margin-right: 24px;
+      border-radius: 8px;
+      box-shadow: 0px 3px 6px 0px rgba(45, 118, 248, 0.1);
+
+      .first-column {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 16px;
+
+        span:first-child {
+          font-size: 14px;
+          font-style: normal;
+          font-weight: 700;
+        }
+
+        span:last-child {
+          font-size: 13px;
+          font-style: normal;
+          font-weight: 500;
+          color: $mono205;
+        }
+      }
+
+      .second-column {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-style: normal;
+        font-weight: 700;
+        margin-bottom: 20px;
+
+        span:first-child {
+          font-size: 20px;
+        }
+
+        span:last-child {
+          font-size: 14px;
+        }
+      }
+
+      .third-column {
+        font-size: 13px;
+        font-style: normal;
+        font-weight: 500;
+        color: $blue104;
+        margin-bottom: 20px;
+      }
+
+      .download {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 176px;
+        height: 28px;
+        padding: 4px 16px;
+        border-radius: 4px;
+        background-color: $blue101;
+        color: $blue104;
+        font-size: 13px;
+        font-family: SpoqaB;
+      }
+    }
+
+    .click-text {
+      font-size: 14px;
+      font-style: normal;
+      font-weight: 500;
+    }
+  }
+}
+
+.second-step {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 24px;
+  @include header-style;
+
+  .content {
+    display: flex;
+    padding-left: 16px;
+
+    .left-line {
+      width: 2px;
+      height: 410px;
+      background-color: $blue101;
+      margin-right: 46px;
+    }
+
+    .change-step {
+      display: flex;
+      flex-direction: column;
+      padding-top: 24px;
+      gap: 8px;
+
+      .first {
+        box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 490px;
+        height: 72px;
+        padding-left: 24px;
+        border: 1px solid $blue101;
+        border-radius: 10px;
+        font-size: 16px;
+        font-style: normal;
+        font-weight: 700;
+      }
+
+      .second {
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 8px;
+        width: 490px;
+        height: 138px;
+        padding-left: 24px;
+        border: 1px solid $blue101;
+        border-radius: 10px;
+
+        .desc {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          font-size: 16px;
+          font-style: normal;
+          font-weight: 700;
+        }
+
+        .sample {
+          font-size: 14px;
+          font-style: normal;
+          font-weight: 500;
+          color: $mono206;
+        }
+
+        .command {
+          box-sizing: border-box;
+          display: flex;
+          align-items: center;
+          margin-top: 4px;
+          padding-left: 24px;
+          width: 442px;
+          height: 34px;
+          background-color: $mono205;
+          color: white;
+          font-size: 14px;
+          font-style: normal;
+          font-weight: 500;
+        }
+      }
+
+      .third {
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 12px;
+        width: 490px;
+        height: 170px;
+        border: 1px solid $blue101;
+        border-radius: 10px;
+        padding-left: 24px;
+
+        .desc {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          font-size: 16px;
+          font-style: normal;
+          font-weight: 700;
+        }
+
+        .command {
+          box-sizing: border-box;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          width: 442px;
+          padding: 10px 0px;
+          padding-left: 24px;
+          background-color: $mono205;
+          color: white;
+          font-size: 14px;
+          font-style: normal;
+          font-weight: 500;
+        }
+      }
+    }
+  }
+}
+
+.third-step {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 24px;
+
+  @include header-style;
+
+  .content {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-left: 62px;
+
+    .direct-ssh {
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 12px;
+      padding: 0px 24px;
+      width: 490px;
+      height: 140px;
+      border: 1px solid $blue101;
+      border-radius: 10px;
+      font-size: 16px;
+      font-style: normal;
+      font-weight: 700;
+
+      .header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+      }
+
+      .command {
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        width: 448px;
+        height: 70px;
+        background-color: $mono205;
+        color: white;
+        font-size: 14px;
+        font-style: normal;
+        font-weight: 500;
+        padding-left: 24px;
+      }
+    }
+
+    .ssh-config-file {
+      box-sizing: border-box;
+      width: 490px;
+      padding: 24px;
+      border: 1px solid $blue101;
+      border-radius: 10px;
+
+      .header {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        font-size: 16px;
+        font-style: normal;
+        font-weight: 700;
+        margin-bottom: 8px;
+      }
+
+      .sample {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        font-size: 12px;
+        font-style: normal;
+        font-weight: 500;
+        color: $mono205;
+        margin-bottom: 16px;
+      }
+
+      .config {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+
+        .desc {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          font-size: 14px;
+          font-style: normal;
+          font-weight: 500;
+        }
+
+        .command {
+          box-sizing: border-box;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          width: 442px;
+          padding: 24px;
+          background-color: $mono205;
+          color: white;
+          font-size: 14px;
+          font-style: normal;
+          font-weight: 500;
+          white-space: nowrap;
+        }
+      }
+
+      .line {
+        width: 442px;
+        height: 1px;
+        background-color: $mono203;
+        margin: 24px 0px;
+      }
+
+      .ssh {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+
+        .desc {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          font-size: 14px;
+          font-style: normal;
+          font-weight: 500;
+        }
+
+        .command {
+          box-sizing: border-box;
+          width: 442px;
+          padding: 10px 24px;
+          background-color: $mono205;
+          color: white;
+          font-size: 14px;
+          font-style: normal;
+          font-weight: 500;
+        }
+      }
+    }
+  }
+}

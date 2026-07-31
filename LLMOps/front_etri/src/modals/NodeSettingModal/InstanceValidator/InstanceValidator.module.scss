@@ -1,0 +1,66 @@
+@import '@src/styles/color.scss';
+
+.validation-cont {
+  display: flex;
+  flex-direction: column;
+  font-family: SpoqaM;
+  font-size: 14px;
+  line-height: 14px;
+  .warn {
+    color: $red502;
+  }
+  .success {
+    color: $blue104;
+  }
+
+  .validation-check-cont {
+    width: fit-content;
+    padding: 14px 16px;
+    border: 1px solid $blue104;
+    border-radius: 9px;
+    margin-bottom: 16px;
+    .name-paragraph {
+      display: flex;
+      margin: initial;
+      color: $blue104;
+      font-family: SpoqaM;
+      font-size: 14px;
+      line-height: 14px;
+      flex-wrap: wrap;
+      gap: 4px;
+      span {
+        text-wrap: nowrap;
+      }
+    }
+  }
+  .validation-check-cont {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .footer-cont {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 32px;
+    .isValidate-cont {
+      > p {
+        margin: inherit;
+      }
+    }
+    .btn-cont {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+    }
+  }
+  .line {
+    height: 1px;
+    background-color: $mono203;
+    margin-bottom: 32px;
+  }
+  .last-index-btn-cont {
+    display: flex;
+    justify-content: space-between;
+  }
+}

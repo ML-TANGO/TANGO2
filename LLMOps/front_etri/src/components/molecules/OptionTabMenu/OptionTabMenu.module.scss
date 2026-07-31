@@ -1,0 +1,60 @@
+@import '@src/styles/color.scss';
+
+.sub-menu {
+  display: flex;
+  border-radius: 4px;
+  height: auto;
+  width: fit-content;
+  background-color: $mono200;
+  &.responsive {
+    flex-wrap: wrap;
+    .menu-item {
+      flex: auto;
+    }
+  }
+  .menu-item {
+    height: 36px;
+    contain: content;
+    white-space: nowrap;
+    border-right: solid 1px $mono202;
+    box-sizing: border-box;
+    .hide-input {
+      display: none;
+    }
+    &:first-child {
+      border-radius: 4px 0 0 4px;
+    }
+    &:last-child {
+      border-radius: 0 4px 4px 0;
+      border-right: none !important;
+    }
+    .btn {
+      display: flex;
+      align-items: center;
+      height: 36px;
+      font-family: SpoqaM;
+      font-size: 14px;
+      color: $mono205;
+      background-color: $mono202;
+      padding: 0 14px;
+      box-sizing: border-box;
+      cursor: pointer;
+      &.selected {
+        color: $mono200 !important;
+        background-color: $primary-color !important;
+      }
+      &:hover {
+        background-color: $mono203;
+        color: $mono205;
+      }
+      &.disabled {
+        cursor: not-allowed;
+      }
+      .label-icon {
+        width: 18px;
+        height: 18px;
+        margin-right: 6px;
+      }
+    }
+  }
+}

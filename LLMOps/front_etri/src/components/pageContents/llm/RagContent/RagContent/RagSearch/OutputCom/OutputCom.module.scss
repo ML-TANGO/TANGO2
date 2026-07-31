@@ -1,0 +1,13 @@
+@import '@src/styles/color.scss';
+.container {
+  max-height: 638px;
+  overflow-y: auto;
+
+  .item {
+    font-size: 14px;
+    line-height: 28px;
+    font-family: SpoqaM;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+}

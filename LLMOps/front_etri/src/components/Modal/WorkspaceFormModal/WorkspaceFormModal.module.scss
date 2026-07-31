@@ -1,0 +1,77 @@
+@import '../modal.scss';
+
+.row {
+  margin-bottom: 32px;
+  .flex-cont {
+    display: flex;
+    width: 100%;
+    gap: 48px;
+    .calendar {
+      min-width: 260px;
+      width: 100%;
+    }
+    .manager {
+      min-width: 260px;
+      width: 100%;
+    }
+  }
+  &:last-child {
+    margin-bottom: 0px;
+  }
+}
+
+.group-title {
+  display: flex;
+  font-size: 20px;
+  margin-bottom: 20px;
+  font-family: SpoqaB;
+  color: $mono207;
+  .text {
+    margin-right: 10px;
+  }
+}
+
+.calendar {
+  display: flex;
+  flex-direction: column;
+  & > label {
+    margin-bottom: 8px;
+    font-family: SpoqaB;
+  }
+}
+
+.number-input {
+  & > label {
+    display: inline-block;
+    font-size: 16px;
+    font-family: SpoqaB;
+    color: $title-color;
+    margin-bottom: 8px;
+  }
+  .error-info {
+    display: block;
+    height: 48px;
+    box-sizing: border-box;
+    padding: 4px 0 0 0;
+    font-size: 14px;
+    font-weight: 500;
+    color: $mono205;
+    .error {
+      color: $error-color;
+    }
+  }
+}
+
+.input-group {
+  padding: 20px 24px;
+  margin-bottom: 49px;
+  border-radius: 4px;
+  background-color: rgba($blue104, 0.08);
+}
+
+.calendar-box {
+  padding: 20px 24px;
+  margin-bottom: 49px;
+  border-radius: 4px;
+  background-color: rgba($blue104, 0.08);
+}

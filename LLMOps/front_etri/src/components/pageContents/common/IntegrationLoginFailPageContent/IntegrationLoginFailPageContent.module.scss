@@ -1,0 +1,78 @@
+@import '@src/styles/color.scss';
+
+.container {
+  width: 100%;
+  height: 100vh;
+  padding: 30px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.logo {
+  margin-right: 100px;
+  content: url(@src/static/images/logo/BI_Flightbase_v.svg);
+  background-repeat: no-repeat;
+  width: 269px;
+}
+
+.message-box {
+  width: 432px;
+}
+
+.title {
+  width: 100%;
+  word-break: keep-all;
+  font-family: SpoqaB;
+  font-size: 80px;
+  color: #000;
+  margin: 0;
+}
+
+.blue {
+  color: #2d76f8;
+}
+
+.content {
+  width: 100%;
+  font-family: SpoqaM;
+  font-size: 16px;
+  line-height: 1.5;
+  color: #747474;
+  margin: 16px 0 32px;
+}
+
+@media (max-width: 1100px) {
+  .container {
+    flex-direction: column;
+    margin: auto;
+  }
+
+  .logo {
+    margin-bottom: 40px;
+    content: url(@src/static/images/logo/BI_Flightbase.svg);
+    background-repeat: no-repeat;
+    width: 302px;
+  }
+}
+
+@media (max-width: 540px) {
+  .logo {
+    margin-bottom: 20px;
+    width: 210px;
+  }
+
+  .message-box {
+    width: 315px;
+  }
+
+  .title {
+    font-size: 40px;
+  }
+
+  .content {
+    font-size: 13px;
+  }
+}

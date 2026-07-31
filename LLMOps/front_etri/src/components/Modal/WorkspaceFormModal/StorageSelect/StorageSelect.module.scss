@@ -1,0 +1,324 @@
+// @import '@src/styles/color.scss';
+
+// .container {
+//   padding: 20px 24px;
+//   margin-bottom: 49px;
+//   border-radius: 4px;
+//   background-color: rgba($blue104, 0.08);
+
+//   .title {
+//     color: $mono207;
+//     font-family: SpoqaB;
+//     font-size: 20px;
+//     margin-bottom: 20px;
+//   }
+//   .sub-title {
+//     color: $mono206;
+//     font-size: 16px;
+//     margin-bottom: 4px;
+//     .card-header {
+//       display: flex;
+//       align-items: center;
+//       font-size: 14px;
+//       color: $mono205;
+//       border-bottom: 1px solid $mono203;
+//       padding-bottom: 4px;
+//       margin-bottom: 8px;
+//       > div {
+//         flex: 1; // 기본적으로 모든 div가 같은 크기를 차지합니다.
+//         margin: 0 8px;
+//         min-width: 90px;
+
+//         &:first-child {
+//           flex: 3; // 첫 번째 div는 세 배 크기를 차지합니다.
+//         }
+
+//         &:last-child {
+//           flex: 2; // 마지막 div는 두 배 크기를 차지합니다.
+//         }
+//       }
+//       .sub-col {
+//         display: flex;
+//         flex-direction: column;
+//         align-items: center;
+//       }
+//     }
+//   }
+//   .card-list {
+//     max-height: 400px;
+//     margin-bottom: 24px;
+//     overflow: auto;
+//   }
+//   .allocate {
+//     position: relative;
+//     animation: fadeInDown 1s;
+//     .usage-title {
+//       color: $mono206;
+//       font-size: 16px;
+//       margin-bottom: 4px;
+//     }
+//     .usage-tip {
+//       color: $orange403;
+//       font-size: 12px;
+//       margin-bottom: 4px;
+//     }
+//     .input-box {
+//       display: flex;
+//       align-items: center;
+//       justify-content: flex-start;
+//       .current-usage-box {
+//         display: flex;
+//         flex-direction: row;
+//         align-items: center;
+//         font-family: SpoqaR;
+//         color: $mono206;
+//         font-size: 14px;
+//         .plus {
+//           padding: 0 6px;
+//         }
+//       }
+//       .input {
+//         display: flex;
+//         align-items: center;
+//         .gb {
+//           color: $mono206;
+//           font-size: 14px;
+//         }
+//       }
+//       .total-usage-box {
+//         display: flex;
+//         flex-direction: row;
+//         align-items: center;
+//         .equal {
+//           padding: 0 6px;
+//           font-size: 14px;
+//           font-family: SpoqaR;
+//           color: $mono206;
+//         }
+//         .usage {
+//           font-family: SpoqaM;
+//           font-size: 14px;
+//           color: $mono206;
+//           padding-right: 6px;
+//         }
+//         .label {
+//           font-family: SpoqaR;
+//           font-size: 12px;
+//           color: $mono205;
+//         }
+//       }
+
+//       .size-box {
+//         display: flex;
+//         background-color: $mono202;
+//         padding: 9.5px 16px;
+//         font-size: 12px;
+//         font-family: SpoqaR;
+//         width: 461px;
+//         white-space: nowrap;
+//         .min {
+//           color: $mono205;
+//           margin-right: 8px;
+//         }
+//         .max {
+//           color: $mono205;
+//           margin-right: 8px;
+//           margin-left: 111px;
+//         }
+//         .value {
+//           color: $mono206;
+//         }
+//       }
+//     }
+//     .error {
+//       margin-top: 4px;
+//       margin-bottom: 8px;
+//       font-size: 12px;
+//       color: $red502;
+//     }
+//   }
+// }
+// @keyframes fadeInDown {
+//   0% {
+//     opacity: 0;
+//     transform: translate3d(0, -100%, 0);
+//   }
+//   to {
+//     opacity: 1;
+//     transform: translateZ(0);
+//   }
+// }
+
+@import '@src/styles/color.scss';
+
+.container {
+  padding: 20px 24px;
+  margin-bottom: 49px;
+  border-radius: 4px;
+  background-color: rgba($blue104, 0.08);
+
+  .title {
+    color: $mono207;
+    font-family: SpoqaB;
+    font-size: 20px;
+    margin-bottom: 20px;
+  }
+
+  .sub-title {
+    color: $mono206;
+    font-size: 16px;
+    margin-bottom: 4px;
+    .storage-type {
+      margin-bottom: 30px;
+    }
+
+    .card-header {
+      display: grid;
+      grid-template-columns: 27% 17% 17% 17% 22%;
+      align-items: center;
+      font-size: 14px;
+      color: $mono205;
+      border-bottom: 1px solid $mono203;
+
+      margin-bottom: 8px;
+      padding: 0 8px 4px 8px;
+
+      > div {
+        padding: 10px;
+        box-sizing: border-box;
+      }
+
+      .sub-col {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-width: 105px;
+      }
+      > div:last-child {
+        justify-self: flex-end;
+      }
+    }
+  }
+
+  .card-list {
+    max-height: 400px;
+    margin-bottom: 24px;
+    overflow: auto;
+  }
+
+  .allocate {
+    position: relative;
+    animation: fadeInDown 1s;
+
+    .usage-title {
+      color: $mono206;
+      font-size: 16px;
+      margin-bottom: 4px;
+    }
+
+    .usage-tip {
+      color: $orange403;
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+
+    .input-box {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+
+      .current-usage-box {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        font-family: SpoqaR;
+        color: $mono206;
+        font-size: 14px;
+
+        .plus {
+          padding: 0 6px;
+        }
+      }
+
+      .input {
+        display: flex;
+        align-items: center;
+
+        .gb {
+          color: $mono206;
+          font-size: 14px;
+        }
+      }
+
+      .total-usage-box {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+
+        .equal {
+          padding: 0 6px;
+          font-size: 14px;
+          font-family: SpoqaR;
+          color: $mono206;
+        }
+
+        .usage {
+          font-family: SpoqaM;
+          font-size: 14px;
+          color: $mono206;
+          padding-right: 6px;
+        }
+
+        .label {
+          font-family: SpoqaR;
+          font-size: 12px;
+          color: $mono205;
+        }
+      }
+
+      .size-box {
+        display: flex;
+        background-color: $mono202;
+        padding: 9.5px 16px;
+        font-size: 12px;
+        font-family: SpoqaR;
+        width: 461px;
+        white-space: nowrap;
+
+        .min {
+          color: $mono205;
+          margin-right: 8px;
+        }
+
+        .max {
+          color: $mono205;
+          margin-right: 8px;
+          margin-left: 111px;
+        }
+
+        .value {
+          color: $mono206;
+        }
+      }
+    }
+
+    .error {
+      margin-top: 4px;
+      margin-bottom: 8px;
+      font-size: 12px;
+      color: $red502;
+    }
+  }
+}
+
+@keyframes fadeInDown {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -100%, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateZ(0);
+  }
+}

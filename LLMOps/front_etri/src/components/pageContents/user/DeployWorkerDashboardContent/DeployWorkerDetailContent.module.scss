@@ -1,0 +1,11 @@
+.worker-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  .loading-box {
+    display: flex;
+    min-height: 40px;
+    justify-content: center;
+    align-items: center;
+  }
+}

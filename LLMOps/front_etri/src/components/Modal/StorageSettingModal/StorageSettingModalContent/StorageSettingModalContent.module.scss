@@ -1,0 +1,173 @@
+@import '@src/styles/color.scss';
+
+.container {
+  .label {
+    margin-top: 32px;
+    margin-bottom: 8px;
+    font-size: 16px;
+    .distribution-method-box {
+      margin-top: 8px;
+      min-height: 356px;
+      display: flex;
+      justify-content: space-between;
+
+      .allocate {
+        width: 330px;
+        background-color: $mono201;
+        cursor: pointer;
+        .allocate-label {
+          font-size: 14px;
+          height: 38px;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+        }
+        .image-box {
+          .image {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 220px;
+          }
+          .bottom-message {
+            padding: 0 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0 12px;
+            background-color: $mono202;
+            color: $mono206;
+            text-align: center;
+            height: 40px;
+            font-family: spoqaR;
+            font-size: 13px;
+          }
+        }
+
+        .btn {
+          height: 46px;
+          margin-top: 12px;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          color: $mono204;
+          background-color: $mono202;
+          &:hover {
+            background-color: $blue101;
+          }
+        }
+        &.disabled {
+          pointer-events: none;
+          opacity: 0.5;
+        }
+        &.main-disabled {
+          pointer-events: none;
+          opacity: 0.5;
+        }
+        &:hover {
+          .btn {
+            background-color: $blue101;
+          }
+        }
+        &.check {
+          background-color: $blue101;
+          .btn {
+            background-color: $blue104;
+            color: $mono200;
+          }
+        }
+      }
+
+      .share {
+        width: 330px;
+        background-color: $mono201;
+        cursor: pointer;
+        .share-label {
+          font-size: 14px;
+          height: 38px;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+        }
+        .image-box {
+          .image {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 220px;
+          }
+          .bottom-message {
+            padding: 0 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0 12px;
+            background-color: $mono202;
+            color: $mono206;
+            text-align: center;
+            height: 40px;
+            font-family: spoqaR;
+            font-size: 13px;
+          }
+        }
+        .btn {
+          height: 46px;
+          margin-top: 12px;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          color: $mono204;
+          background-color: $mono202;
+          &:hover {
+            background-color: $blue101;
+          }
+        }
+        &.disabled {
+          pointer-events: none;
+          opacity: 0.5;
+        }
+        &.main-disabled {
+          pointer-events: none;
+          opacity: 0.5;
+        }
+        &:hover {
+          .btn {
+            background-color: $blue101;
+          }
+        }
+        &.check {
+          background-color: $blue101;
+          .btn {
+            background-color: $blue104;
+            color: $mono200;
+          }
+        }
+      }
+      &.disabled-box {
+        min-height: 320px;
+        .allocate {
+          cursor: auto;
+        }
+        .share {
+          cursor: auto;
+        }
+      }
+    }
+
+    .new-create-box {
+      display: flex;
+      margin-top: 8px;
+      .button {
+        cursor: not-allowed;
+      }
+    }
+    .tooltip-icon {
+      width: 20px;
+      margin-left: 6px;
+    }
+  }
+  .error {
+    font-size: 14px;
+    color: $red502;
+  }
+}

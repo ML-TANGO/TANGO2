@@ -1,0 +1,39 @@
+@import '@src/styles/color.scss';
+
+.column-cont {
+  display: flex;
+  flex-direction: column;
+}
+
+.row-cont {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 9px;
+  .inner-row-cont {
+    display: flex;
+    gap: 8px;
+
+    span {
+      &:first-child {
+        color: $mono205;
+        font-family: SpoqaM;
+        font-size: 14px;
+        line-height: 14px;
+      }
+
+      &:last-child {
+        color: $mono207;
+        font-family: SpoqaM;
+        font-size: 14px;
+        line-height: 14px;
+      }
+    }
+  }
+}
+
+.bold-txt {
+  color: $mono207;
+  font-family: SpoqaB;
+  font-size: 16px;
+  line-height: 16px;
+}

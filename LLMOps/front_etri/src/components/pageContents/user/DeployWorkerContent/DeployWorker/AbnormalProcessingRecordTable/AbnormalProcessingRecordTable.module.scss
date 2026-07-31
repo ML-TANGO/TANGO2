@@ -1,0 +1,22 @@
+@import '../DeployWorker.module.scss';
+
+.abnormal-processing-record {
+  padding: $padding-small;
+  .abnormal-title-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+    color: $mono205;
+    width: 100%;
+    label {
+      span {
+        font-size: 14px;
+        margin-right: 4px;
+      }
+      div {
+        color: $mono207;
+      }
+    }
+  }
+}

@@ -1,0 +1,32 @@
+@import '@src/styles/color.scss';
+
+.flex-32 {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.border {
+  width: 100%;
+  height: 1px;
+  background-color: $mono203;
+}
+
+.message-cont {
+  display: flex;
+  flex-direction: column;
+}
+
+.model-instance-message {
+  margin: initial;
+  font-family: SpoqaM;
+  font-size: 12px;
+  line-height: 20px; /* 166.667% */
+  letter-spacing: -0.18px;
+  &.blue {
+    color: $blue104;
+  }
+  &.red {
+    color: $red502;
+  }
+}

@@ -1,0 +1,69 @@
+@import '@src/styles/color.scss';
+
+.output-box {
+  display: flex;
+  flex-direction: column;
+  height: auto;
+  width: 100%;
+  padding: 36px;
+  background-color: $mono201;
+  box-sizing: border-box;
+  border-top: 1px solid $card-border-color;
+  overflow-x: scroll;
+  .result-container {
+    .result-text {
+      color: $primary-color;
+      font-family: SpoqaB;
+      font-size: 20px;
+      margin-bottom: 20px;
+      .title {
+        font-size: 16px;
+        color: $mono207;
+        display: block;
+        padding-bottom: 12px;
+      }
+      span {
+        word-break: break-all;
+      }
+    }
+    .result-image,
+    .result-audio,
+    .result-video {
+      width: 100%;
+      margin-bottom: 20px;
+      .title {
+        font-family: SpoqaB;
+        font-size: 16px;
+        color: $mono207;
+        display: block;
+        padding-bottom: 12px;
+      }
+      .image {
+        max-width: 100%;
+        height: auto;
+        cursor: pointer;
+      }
+      .video {
+        max-width: 100%;
+        height: auto;
+      }
+    }
+    .result-table {
+      min-width: 580px;
+      width: max-content;
+      max-width: 100%;
+      margin-bottom: 20px;
+      .title {
+        font-family: SpoqaB;
+        font-size: 16px;
+        color: $mono207;
+        display: block;
+        padding-bottom: 12px;
+      }
+    }
+    .error-text {
+      font-size: 14px;
+      color: $mono205;
+    }
+  }
+}

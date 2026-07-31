@@ -1,0 +1,40 @@
+@import '@src/styles/color.scss';
+
+.cont {
+  .project-title-txt {
+    margin: initial;
+    color: $mono207;
+    font-family: SpoqaB;
+    font-size: 14px;
+    line-height: 14px;
+    margin-top: 32px;
+    margin-bottom: 8px;
+  }
+  .body-cont {
+    border-radius: 12px;
+    border: 1px solid $mono203;
+    .first-body-cont,
+    .second-body-cont {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding: 16px;
+      .title {
+        color: $mono207;
+        margin: initial;
+        font-family: SpoqaB;
+        font-size: 13px;
+        line-height: 13px;
+      }
+      .flex-row {
+        display: flex;
+        gap: 16px;
+      }
+      .border {
+        width: 100%;
+        height: 1px;
+        background-color: #dbdbdb;
+      }
+    }
+  }
+}

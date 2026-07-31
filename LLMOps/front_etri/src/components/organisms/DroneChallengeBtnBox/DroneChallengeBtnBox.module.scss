@@ -1,0 +1,50 @@
+@import '@src/styles/color.scss';
+
+.challenge-container {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  height: 200px;
+  padding: 20px 45px;
+  margin-top: 20px;
+  border-radius: 8px;
+  background-color: $mono200;
+  box-sizing: border-box;
+
+  .logo-box {
+    flex: 1;
+    display: flex;
+    align-items: center;
+
+    .logo {
+      width: 60%;
+      min-width: 200px;
+      max-width: 400px;
+      margin-right: 20px;
+    }
+  }
+
+  .btn-box {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+
+    .challenge-name {
+      margin-bottom: 10px;
+      font-family: SpoqaB;
+      font-size: 28px;
+      text-align: left;
+      color: #7a869d;
+      white-space: nowrap;
+      .dark {
+        color: #5c6371;
+      }
+    }
+
+    button {
+      width: 248px;
+    }
+  }
+}

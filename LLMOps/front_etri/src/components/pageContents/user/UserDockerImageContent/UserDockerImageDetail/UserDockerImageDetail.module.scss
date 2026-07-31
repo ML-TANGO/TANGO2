@@ -1,0 +1,86 @@
+@import '@src/styles/color.scss';
+
+.detail {
+  padding: 48px;
+  .header {
+    border-bottom: 1px solid $mono205;
+    margin: 0 40px;
+    .title {
+      margin: 0;
+      height: 31px;
+      font-family: SpoqaR;
+      font-size: 24px;
+      color: $mono207;
+    }
+    .desc {
+      font-family: SpoqaM;
+      font-size: 16px;
+      line-height: normal;
+      color: $mono205;
+    }
+  }
+  .horizon-box {
+    display: flex;
+    margin: 24px 40px;
+    .box {
+      width: 25%;
+      font-family: SpoqaM;
+      .label {
+        display: block;
+        font-size: 16px;
+        color: $mono205;
+      }
+      .value {
+        display: block;
+        font-size: 16px;
+        color: $mono207;
+      }
+    }
+  }
+  .block {
+    padding: 24px 40px 30px;
+    background-color: $mono200;
+    .block-title {
+      font-family: SpoqaR;
+      font-size: 18px;
+      color: $mono207;
+      margin-top: 0;
+      .name {
+        font-family: spoqaB;
+        margin-right: 4px;
+      }
+    }
+    .info-list {
+      display: flex;
+      flex-direction: row;
+      flex-wrap: wrap;
+      .list-item {
+        margin-right: 24px;
+        width: calc(25% - 24px);
+        font-family: SpoqaM;
+        &:last-child {
+          flex: 2;
+        }
+        .label {
+          display: inline-block;
+          margin-bottom: 4px;
+          height: 21px;
+          font-size: 16px;
+          color: $mono205;
+        }
+        .value {
+          font-size: 16px;
+          height: 21px;
+          color: $mono207;
+        }
+      }
+    }
+  }
+  .table-box {
+    margin: 0 40px;
+    .disabled {
+      color: $mono203;
+      cursor: not-allowed;
+    }
+  }
+}

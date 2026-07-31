@@ -1,0 +1,12 @@
+@import '@src/styles/color.scss';
+
+.flex-cont {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  .border {
+    width: 100%;
+    height: 1px;
+    background-color: $mono203;
+  }
+}

@@ -1,0 +1,22 @@
+@import '@src/styles/color.scss';
+
+.gpu-server-tab {
+  .dashboard {
+    display: flex;
+    gap: 20px;
+    width: 100%;
+    padding: 10px 2px;
+    margin: 20px 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    &.margin-item {
+      margin-bottom: 40px;
+    }
+    & > div:first-child {
+      flex: 1;
+    }
+    & > div:last-child {
+      // flex: 0 0 340px;
+    }
+  }
+}

@@ -1,0 +1,49 @@
+@import '@src/styles/color.scss';
+
+.accordion-cont {
+  background-color: #fff;
+  border-radius: 8px;
+  cursor: pointer;
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px;
+    .label {
+      color: $mono207;
+      font-family: SpoqaM;
+      font-size: 14px;
+      line-height: 14px;
+    }
+    .arrow-img {
+      width: 16px;
+      height: 16px;
+      &.reverse {
+        transform: scaleY(-1);
+      }
+    }
+  }
+  .content-cont {
+    width: 310px;
+    background-color: #fff;
+    padding: 8px;
+    border-top: 1px solid $mono203;
+    box-sizing: border-box;
+    .log-cont {
+      width: 294px;
+      box-sizing: border-box;
+      color: #fff;
+      background-color: $mono206;
+      padding: 8px;
+      border-radius: 4px;
+      font-family: SpoqaM;
+      font-size: 12px;
+      line-height: 20px;
+      letter-spacing: -0.18px;
+
+      /* 줄바꿈 처리 */
+      word-wrap: break-word; /* 오래된 브라우저용 */
+      word-break: break-word; /* 최신 브라우저용 */
+    }
+  }
+}

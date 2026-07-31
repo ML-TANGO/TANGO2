@@ -1,0 +1,142 @@
+@import '@src/styles/color.scss';
+
+.notice-message {
+  color: $mono205;
+  font-family: SpoqaM;
+  font-size: 12px;
+  line-height: 12px;
+  letter-spacing: -0.18px;
+  margin: initial;
+  margin-top: 8px;
+  margin-bottom: 16px;
+}
+
+.data-url-p {
+  color: $mono205;
+  font-family: SpoqaM;
+  font-size: 12px;
+  line-height: 12px;
+  letter-spacing: -0.18px;
+  margin: initial;
+  margin-bottom: 8px;
+}
+
+.copy-cont {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  padding: 16px;
+  margin-bottom: 32px;
+  border-radius: 7px;
+  border: 1px solid $mono203;
+  background-color: #fff;
+  justify-content: space-between;
+  .url {
+    width: 100%;
+    margin: initial;
+    white-space: nowrap; /* 텍스트를 한 줄로 표시 */
+    overflow: hidden; /* 넘치는 텍스트를 숨김 */
+    text-overflow: ellipsis; /* 넘치는 텍스트에 말줄임 표시 추가 */
+    overflow: hidden;
+    color: $mono207;
+    font-family: SpoqaM;
+    font-size: 12px;
+    line-height: 12px;
+    letter-spacing: -0.18px;
+  }
+  .copy-btn {
+    border: none;
+    background-color: initial;
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+  }
+}
+
+.parameter-box {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+
+  .param-header {
+    display: flex;
+    height: 42px;
+    align-items: center;
+    font-size: 12px;
+    color: $mono205;
+    border: 1px solid $mono203;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+
+    .desc-text {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+    }
+  }
+
+  .param-list {
+    padding: 8px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border: 1px solid $mono203;
+    border-bottom-left-radius: 10px;
+    border-bottom-right-radius: 10px;
+    border-top: 0px;
+
+    .empty-info {
+      display: flex;
+      justify-content: center;
+      font-size: 14px;
+      color: $mono204;
+      font-weight: 500;
+    }
+
+    .list-box {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+
+      .label {
+        flex: 1;
+        display: flex;
+        justify-content: center;
+        font-size: 14px;
+        color: $mono205;
+      }
+
+      .input {
+        flex: 1;
+      }
+    }
+  }
+}
+
+.readme-btn-cont {
+  height: 48px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-radius: 7px;
+  border: 1px solid $mono203;
+  padding: 16px;
+  margin-bottom: 32px;
+  box-sizing: border-box;
+  span {
+    color: $mono207;
+    font-family: SpoqaM;
+    font-size: 12px;
+    line-height: 12px;
+    letter-spacing: -0.18px;
+  }
+  button {
+    border: none;
+    background-color: transparent;
+    cursor: pointer;
+    img {
+      width: 16px;
+      height: 16px;
+    }
+  }
+}

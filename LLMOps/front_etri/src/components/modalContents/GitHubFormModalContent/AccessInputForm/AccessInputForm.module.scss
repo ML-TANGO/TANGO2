@@ -1,0 +1,38 @@
+@import '@src/styles/color.scss';
+
+.input-wrap {
+  padding: 24px;
+  border-radius: 4px;
+  background-color: rgba($blue104, 0.08);
+
+  &.show {
+    height: auto;
+    opacity: 1;
+    transition: height 0s 0s, opacity 0.6s 0s;
+  }
+  &.hide {
+    padding: 0;
+    overflow: hidden;
+    height: 0;
+    opacity: 0;
+    transition: height 0s 0.4s, opacity 0.4s 0s;
+  }
+}
+
+.hide-line {
+  height: 1px;
+  border: 0;
+  background-color: rgba($blue104, 0.08);
+  margin: 0;
+}
+
+.show-hide-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  .arrow-btn {
+    width: 20px;
+    height: 20px;
+    vertical-align: bottom;
+  }
+}

@@ -1,0 +1,60 @@
+@import '@src/styles/color.scss';
+
+.worker-list-view {
+  margin-bottom: 20px;
+
+  .list-box {
+    display: flex;
+    flex-direction: column;
+
+    .middle-line {
+      width: 100%;
+      height: 1px;
+      background-color: $mono203;
+      margin: 16px 0px;
+    }
+    .list-item {
+      width: 100%;
+
+      .message {
+        font-size: 15px;
+        margin-bottom: 12px;
+        color: $mono205;
+      }
+
+      .list {
+        width: 100%;
+        min-height: 60px;
+        max-height: 120px;
+        padding: 5px;
+        box-sizing: border-box;
+        overflow: auto;
+        border: 1px solid $mono203;
+        background-color: $mono201;
+        border-radius: 4px;
+        li {
+          font-size: 14px;
+          padding: 4px;
+        }
+      }
+      .empty-box {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 80px;
+        max-height: 80px;
+        background-color: $mono201;
+        color: $mono205;
+        border-radius: 4px;
+        font-size: 14px;
+        border: 1px solid $mono203;
+      }
+    }
+  }
+  .error-message {
+    font-size: 14px;
+    color: $error-color;
+    margin-top: 8px;
+  }
+}

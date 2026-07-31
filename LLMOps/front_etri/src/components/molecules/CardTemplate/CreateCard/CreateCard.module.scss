@@ -1,0 +1,59 @@
+@import '@src/styles/color.scss';
+
+.create-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 405px;
+  text-align: center;
+  box-sizing: border-box;
+  border-radius: 12px;
+  background-color: $mono200;
+  border: 1px dashed $blue103;
+  padding: 20px;
+  cursor: pointer;
+  font-size: 20px;
+  font-family: SpoqaB;
+  color: $blue104;
+  opacity: 1;
+  box-shadow: 0px 3px 4px 0px rgba(45, 118, 248, 0.06);
+
+  &:focus {
+    outline: 1px solid $blue104;
+    border-radius: 8px;
+    outline-offset: 1px;
+  }
+
+  .inner-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    .text {
+      margin-top: 10px;
+    }
+    .plus {
+      display: inline-block;
+      width: 60px;
+      height: 60px;
+      background: linear-gradient($primary-color, $primary-color),
+        linear-gradient($primary-color, $primary-color);
+      background-position: center;
+      background-size: 100% 2px, 2px 100%; /*thickness = 2px, length = 50% (25px)*/
+      background-repeat: no-repeat;
+    }
+  }
+
+  &:hover {
+    border-color: $primary-color;
+    color: $primary-color;
+    background-color: $hover-bg-color;
+    opacity: 1;
+    .inner-box > .plus {
+      background: linear-gradient($primary-color, $primary-color),
+        linear-gradient($primary-color, $primary-color);
+      background-position: center;
+      background-size: 100% 2px, 2px 100%; /*thickness = 2px, length = 50% (25px)*/
+      background-repeat: no-repeat;
+    }
+  }
+}

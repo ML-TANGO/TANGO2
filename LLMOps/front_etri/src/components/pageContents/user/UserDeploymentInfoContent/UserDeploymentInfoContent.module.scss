@@ -1,0 +1,18 @@
+@import '@src/styles/color.scss';
+
+.deployment-info-page {
+  .title-box {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid $mono204;
+    padding-bottom: 8px;
+    margin-bottom: 32px;
+    .btn-box {
+      display: flex;
+      flex-direction: row;
+      grid-gap: 12px;
+    }
+  }
+}

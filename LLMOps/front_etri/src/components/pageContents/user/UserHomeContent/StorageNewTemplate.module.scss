@@ -1,0 +1,46 @@
+@import '@src/styles/color.scss';
+
+.node-dashboard-template {
+  display: flex;
+  // min-width: 700px;
+  height: 204px;
+  background-color: $mono200;
+  border-radius: 8px;
+  border: 1px solid $card-border-color;
+  box-shadow: 0px 3px 4px 0px rgba(45, 118, 248, 0.06);
+
+  @media (max-width: 1600px) {
+    height: 316px;
+  }
+
+  &.top {
+    border-radius: 0px;
+    border-bottom: none;
+  }
+  &.bottom {
+    border-top-left-radius: 0px;
+    border-top-right-radius: 0px;
+  }
+  &.has-stack-bar {
+    min-width: 900px;
+  }
+  .pie-chart-box {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    padding: 16px 24px;
+    border-right: 1px solid $card-border-color;
+    text-align: center;
+    box-sizing: border-box;
+
+    @media (max-width: 1600px) {
+      padding: 24px 24px 32px;
+      flex: 0.5;
+    }
+  }
+
+  .table-box {
+    flex: 1;
+    overflow: hidden;
+  }
+}

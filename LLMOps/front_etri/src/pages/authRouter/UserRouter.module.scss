@@ -1,0 +1,50 @@
+.strange-header-alarm,
+.strange-header-data {
+  @media (max-width: 1240px) {
+    display: none;
+  }
+}
+
+.platform-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-left: 8px;
+  margin-top: 32px;
+  .item {
+    display: flex;
+    height: 48px;
+    align-items: center;
+    background-color: #fff;
+    padding: 8px 12px;
+    border-radius: 10px;
+    box-sizing: border-box;
+    gap: 8px;
+    margin-right: 8px;
+    cursor: pointer;
+
+    img {
+      width: fit-content;
+    }
+
+    &.selected {
+      background: linear-gradient(
+          0deg,
+          rgba(45, 118, 248, 0.4) 0%,
+          rgba(45, 118, 248, 0.4) 100%
+        ),
+        #fff;
+      box-shadow: 0px 3px 4px 0px rgba(45, 118, 248, 0.16);
+    }
+
+    &.marker {
+      background-color: inherit;
+    }
+  }
+}
+
+.border {
+  width: 152px;
+  height: 1px;
+  background-color: #dbdbdb;
+}

@@ -1,0 +1,134 @@
+{
+  "hash": "450117fc",
+  "browserHash": "ff56403a",
+  "optimized": {
+    "react-app-polyfill/ie11": {
+      "src": "../../node_modules/react-app-polyfill/ie11.js",
+      "file": "react-app-polyfill_ie11.js",
+      "fileHash": "97f3dabb",
+      "needsInterop": true
+    },
+    "react-app-polyfill/stable": {
+      "src": "../../node_modules/react-app-polyfill/stable.js",
+      "file": "react-app-polyfill_stable.js",
+      "fileHash": "61da28d6",
+      "needsInterop": true
+    },
+    "element-closest": {
+      "src": "../../node_modules/element-closest/index.mjs",
+      "file": "element-closest.js",
+      "fileHash": "f0f8a8b4",
+      "needsInterop": false
+    },
+    "react": {
+      "src": "../../node_modules/react/index.js",
+      "file": "react.js",
+      "fileHash": "40b2a1bf",
+      "needsInterop": true
+    },
+    "react-dom/client": {
+      "src": "../../node_modules/react-dom/client.js",
+      "file": "react-dom_client.js",
+      "fileHash": "260bd2d2",
+      "needsInterop": true
+    },
+    "smoothscroll-polyfill": {
+      "src": "../../node_modules/smoothscroll-polyfill/dist/smoothscroll.js",
+      "file": "smoothscroll-polyfill.js",
+      "fileHash": "2c19d900",
+      "needsInterop": true
+    },
+    "buffer": {
+      "src": "../../node_modules/buffer/index.js",
+      "file": "buffer.js",
+      "fileHash": "0e58e592",
+      "needsInterop": true
+    },
+    "react-redux": {
+      "src": "../../node_modules/react-redux/es/index.js",
+      "file": "react-redux.js",
+      "fileHash": "de92c53d",
+      "needsInterop": false
+    },
+    "redux-persist/integration/react": {
+      "src": "../../node_modules/redux-persist/es/integration/react.js",
+      "file": "redux-persist_integration_react.js",
+      "fileHash": "0047f5af",
+      "needsInterop": false
+    },
+    "react-router-dom": {
+      "src": "../../node_modules/react-router-dom/esm/react-router-dom.js",
+      "file": "react-router-dom.js",
+      "fileHash": "d99fab25",
+      "needsInterop": false
+    },
+    "i18next": {
+      "src": "../../node_modules/i18next/dist/esm/i18next.js",
+      "file": "i18next.js",
+      "fileHash": "fc4a7081",
+      "needsInterop": false
+    },
+    "i18next-xhr-backend": {
+      "src": "../../node_modules/i18next-xhr-backend/dist/esm/i18nextXHRBackend.js",
+      "file": "i18next-xhr-backend.js",
+      "fileHash": "2544d10a",
+      "needsInterop": false
+    },
+    "i18next-localstorage-cache": {
+      "src": "../../node_modules/i18next-localstorage-cache/dist/es/index.js",
+      "file": "i18next-localstorage-cache.js",
+      "fileHash": "82eeca7b",
+      "needsInterop": false
+    },
+    "react-i18next": {
+      "src": "../../node_modules/react-i18next/dist/es/index.js",
+      "file": "react-i18next.js",
+      "fileHash": "912851cc",
+      "needsInterop": false
+    },
+    "dayjs": {
+      "src": "../../node_modules/dayjs/dayjs.min.js",
+      "file": "dayjs.js",
+      "fileHash": "2f74c118",
+      "needsInterop": true
+    },
+    "classnames/bind": {
+      "src": "../../node_modules/classnames/bind.js",
+      "file": "classnames_bind.js",
+      "fileHash": "66355ae3",
+      "needsInterop": true
+    }
+  },
+  "chunks": {
+    "chunk-QC42HCUQ": {
+      "file": "chunk-QC42HCUQ.js"
+    },
+    "chunk-VZAHKZSJ": {
+      "file": "chunk-VZAHKZSJ.js"
+    },
+    "chunk-JQAXZYAK": {
+      "file": "chunk-JQAXZYAK.js"
+    },
+    "chunk-32TVRLJU": {
+      "file": "chunk-32TVRLJU.js"
+    },
+    "chunk-OQ64YVYA": {
+      "file": "chunk-OQ64YVYA.js"
+    },
+    "chunk-SHCVVRCJ": {
+      "file": "chunk-SHCVVRCJ.js"
+    },
+    "chunk-NYQDER2B": {
+      "file": "chunk-NYQDER2B.js"
+    },
+    "chunk-CMV7FJ6M": {
+      "file": "chunk-CMV7FJ6M.js"
+    },
+    "chunk-UMBEC6V5": {
+      "file": "chunk-UMBEC6V5.js"
+    },
+    "chunk-ROME4SDB": {
+      "file": "chunk-ROME4SDB.js"
+    }
+  }
+}

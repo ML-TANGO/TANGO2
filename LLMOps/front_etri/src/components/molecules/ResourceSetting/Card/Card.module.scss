@@ -1,0 +1,197 @@
+@import '@src/styles/color.scss';
+
+@mixin card-flex {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  margin: 0 8px;
+}
+
+.card {
+  padding: 4px 0;
+  background-color: $mono200;
+  border-radius: 4px;
+  display: grid;
+  grid-template-columns: 15% 29% 16% 16% 24%;
+  align-items: center;
+  cursor: pointer;
+  white-space: nowrap;
+
+  color: $mono207;
+  font-size: 14px;
+  font-weight: 500;
+
+  .name-box {
+    display: flex;
+    align-items: center;
+    font-size: 14px;
+    color: $mono207;
+
+    .storage-name {
+      display: flex;
+      align-items: center;
+      width: 150px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    &.lock {
+      display: flex;
+      align-items: center;
+      width: 130px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+
+      .storage-name {
+        width: 100%;
+      }
+
+      .icon {
+        // display: flex;
+        // flex-direction: column;
+        position: relative;
+        width: 24px;
+      }
+    }
+  }
+
+  .distribution {
+    font-size: 14px;
+    color: $mono207;
+    margin-left: 0px;
+
+    .type {
+      margin-right: 7px;
+    }
+  }
+
+  .usage {
+    font-size: 14px;
+    color: $mono207;
+    @include card-flex;
+
+    .value {
+      color: $mono207;
+      margin: 0 8px;
+    }
+  }
+
+  .capacity {
+    font-size: 14px;
+    color: $mono207;
+    @include card-flex;
+
+    .value {
+      color: $mono207;
+      margin: 0 8px;
+    }
+  }
+
+  .input {
+    position: relative;
+    width: 100%;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    justify-self: end;
+    grid-column: 5;
+    .gb {
+      position: absolute;
+      top: 50%;
+      right: 10px;
+      transform: translateY(-50%);
+      &.opacity {
+        opacity: 0.3;
+      }
+    }
+  }
+
+  &.selected {
+    .storage-name::after {
+      content: '';
+      display: inline-block;
+      margin-left: 8px;
+      width: 16px;
+      height: 16px;
+      background-image: url('@images/icon/00-ic-check-active.svg'); /* SVG 이미지 경로 */
+      background-size: cover;
+      background-repeat: no-repeat;
+      // position: absolute;
+      // top: 0;
+      // left: 0;
+    }
+  }
+
+  // &.selected {
+  //   background-color: $primary-color;
+
+  //   .storage-name {
+  //     color: $mono200;
+  //   }
+
+  //   .distribution {
+  //     .type {
+  //       color: $blue102;
+  //     }
+  //   }
+
+  //   .capacity {
+  //     color: $blue102;
+
+  //     .value {
+  //       color: $mono200;
+  //     }
+  //   }
+
+  //   .usage {
+  //     color: $blue102;
+
+  //     .value {
+  //       color: $mono200;
+  //     }
+  //   }
+
+  //   .desc {
+  //     color: $mono200;
+  //   }
+  // }
+
+  &.deselected {
+    opacity: 0.3;
+  }
+
+  &.disabled {
+    cursor: unset;
+
+    .title {
+      .model-name {
+        color: $mono207 !important;
+        opacity: 0.3;
+      }
+
+      .badge > span {
+        opacity: 0.3;
+      }
+    }
+
+    .desc {
+      color: $mono207 !important;
+      opacity: 0.3;
+    }
+  }
+
+  &.read-only {
+    .name-box,
+    .distribution,
+    .usage,
+    .capacity {
+      opacity: 0.3;
+    }
+
+    pointer-events: none;
+    cursor: unset;
+  }
+}

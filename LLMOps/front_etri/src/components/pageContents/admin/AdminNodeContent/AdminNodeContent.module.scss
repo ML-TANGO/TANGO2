@@ -1,0 +1,8 @@
+@import '@src/styles/color.scss';
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  margin-top: 24px;
+}

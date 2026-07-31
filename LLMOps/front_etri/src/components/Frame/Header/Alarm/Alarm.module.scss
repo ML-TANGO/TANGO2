@@ -1,0 +1,39 @@
+@import '@src/styles/color.scss';
+.alarm-outer-cont {
+  position: relative;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  .alarm-cont {
+    display: flex;
+    align-items: center;
+    .center-cont {
+      position: relative;
+      display: flex;
+      .alarm-icon {
+        cursor: pointer;
+      }
+      .circle {
+        align-items: center;
+        gap: 8px;
+        width: 24px;
+        height: 18px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        position: absolute;
+        top: -4px;
+        right: -10px;
+        // right: 0;
+        &.red {
+          background-color: $red502;
+          border-radius: 16px;
+        }
+        span {
+          font-size: 10px;
+          color: #fff;
+        }
+      }
+    }
+  }
+}

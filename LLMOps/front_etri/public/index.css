@@ -1,0 +1,13 @@
+/* Job Progressbar */
+.react-sweet-progress-line,
+.react-sweet-progress-line-inner,
+.react-sweet-progress-line-inner-status-active {
+  height: 4px;
+  min-height: 4px !important;
+  border-radius: 2px !important;
+  overflow: hidden;
+}
+.react-sweet-progress-symbol {
+  display: none !important;
+}
+/* Job Progressbar End */

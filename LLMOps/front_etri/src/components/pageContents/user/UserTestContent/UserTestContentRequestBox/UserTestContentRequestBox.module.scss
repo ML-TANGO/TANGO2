@@ -1,0 +1,120 @@
+@import '@src/styles/color.scss';
+
+.request-box {
+  padding-top: 48px;
+  // background-color: $mono200;
+  border-top: 1px solid $mono203;
+  .label-box {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 8px;
+    gap: 16px;
+
+    .label {
+      font-size: 20px;
+      font-family: SpoqaB;
+      color: $mono207;
+      display: inline-block;
+    }
+    .send-box {
+      .analysis-btn {
+        position: relative;
+        background-color: $blue101;
+        border: 1px solid $blue101;
+        color: $primary-color;
+        // padding: 9px 15px;
+        border-radius: 4px;
+        font-family: SpoqaM;
+        box-sizing: border-box;
+        font-size: 14px;
+        height: 32px;
+        width: 87px;
+
+        cursor: pointer;
+        &:hover {
+          background-color: $blue101;
+          border: 1px solid $blue104;
+          color: $primary-color;
+        }
+        &:before {
+          position: absolute;
+          content: '';
+          bottom: 0;
+          left: 0;
+          width: 0%;
+          height: 100%;
+          background-color: $blue107;
+        }
+        &.loading {
+          color: rgba($primary-color, 0.4);
+          &:after {
+            border-top-color: rgba($blue104, 0.4);
+            border-left-color: $blue104;
+            border-right-color: rgba($blue104, 0.4);
+            border-bottom-color: rgba($blue104, 0.4);
+          }
+        }
+        &.disabled,
+        &:disabled {
+          background-color: $mono201;
+          border: 1px solid $mono201;
+          color: $mono203;
+          cursor: default;
+          pointer-events: none;
+          .icon {
+            opacity: 0.3;
+            filter: grayscale(1);
+          }
+        }
+        &.loading::after {
+          content: '';
+          display: block;
+          width: 1.2em;
+          height: 1.2em;
+          position: absolute;
+          left: calc(50% - 0.75em);
+          top: calc(50% - 0.75em);
+          border: 0.15em solid transparent;
+          border-top-color: $mono202;
+          border-left-color: $mono200;
+          border-right-color: $mono202;
+          border-bottom-color: $mono202;
+          border-radius: 50%;
+          animation: button-anim 0.7s linear infinite;
+          opacity: 1;
+        }
+      }
+    }
+  }
+  .one-line {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+    .api-address-box {
+      flex: 1;
+      display: flex;
+      flex-direction: row;
+      justify-content: flex-start;
+      & > div:first-child {
+        width: 226px !important;
+        margin-right: 8px;
+      }
+      .text-input {
+        flex: 1;
+        min-width: 300px;
+      }
+    }
+  }
+}
+
+@keyframes button-anim {
+  from {
+    transform: rotate(0);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

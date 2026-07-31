@@ -1,0 +1,57 @@
+@import '@src/styles/color.scss';
+
+.llm-container {
+  width: 800px;
+  height: 522px;
+  border: 1px solid #dbdbdb;
+  border-radius: 4px;
+  .llm-chat-box {
+    height: 404px;
+    overflow-y: auto;
+  }
+  .llm-bottom-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    .regenerate-btn {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      border: 1px solid $mono207;
+      padding: 10px 12px;
+      width: 130px;
+      border-radius: 4px;
+      cursor: pointer;
+      &.unloading {
+        border: 1px solid $mono207;
+        opacity: 0.3;
+      }
+
+      .regenerate-txt {
+        font-size: 14px;
+        font-weight: 500;
+        color: $mono207; //$mono204
+      }
+    }
+    .input-box {
+      display: flex;
+      gap: 12px;
+      width: 100%;
+      height: 40px;
+      .generate-input {
+        width: 100%;
+        padding: 0px 16px;
+        border: 1px solid $mono204;
+        box-sizing: border-box;
+        border-radius: 5px;
+        font-size: 16px;
+        font-weight: 400;
+        ::placeholder {
+          color: $mono204;
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,60 @@
+@import '@src/styles/color.scss';
+.chart-item {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  border-radius: 12px;
+  border: 1px solid var(--blue102, #c8dbfd);
+  background: #fff;
+  padding: 24px;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.05);
+  height: 534px;
+  box-sizing: border-box;
+
+  .title {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    font-size: 16px;
+    font-style: normal;
+    font-weight: 700;
+    line-height: 16px;
+    font-family: SpoqaB;
+  }
+  .info-container {
+    width: 100%;
+    height: 446px; /* 고정 */
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    font-size: 14px;
+    font-style: normal;
+    font-weight: 500;
+    line-height: 14px;
+    font-family: SpoqaM;
+    cursor: pointer;
+    .item {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      color: $mono205;
+    }
+    .value {
+      color: $mono207;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      &.no-desc {
+        color: $mono204;
+      }
+    }
+  }
+
+  .epoch {
+    font-size: 12px;
+    color: #666;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+}

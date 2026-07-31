@@ -1,0 +1,56 @@
+@import '@src/styles/color.scss';
+
+.form {
+  height: 300px;
+  display: flex;
+  flex-direction: column;
+
+  .ip {
+    margin-bottom: 8px;
+  }
+
+  .ip-range {
+    margin-bottom: 16px;
+  }
+
+  .ip,
+  .ip-range {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-end;
+
+    > label {
+      display: flex;
+      width: 78px;
+      height: 36px;
+      align-items: center;
+      font-size: 14px;
+    }
+
+    .dot {
+      width: 4px;
+      padding: 4px;
+      text-align: center;
+    }
+
+    .slash {
+      width: 8px;
+      padding: 8px;
+      text-align: center;
+    }
+  }
+
+  .error-message {
+    display: flex;
+    align-items: center;
+    height: 20px;
+    color: $error-color;
+    margin-bottom: 20px;
+    font-size: 14px;
+    padding-left: 78px;
+
+    .icon {
+      margin-right: 4px;
+    }
+  }
+}

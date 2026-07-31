@@ -1,0 +1,89 @@
+@import '@src/styles/color.scss';
+
+@mixin ellipse() {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  word-break: break-all;
+}
+.container {
+  display: grid;
+  align-items: center;
+  justify-content: center;
+  margin-top: 20px;
+  width: 100%;
+  min-width: 646px;
+  box-sizing: border-box;
+  grid-template-columns: repeat(2, 50%);
+
+  .group-container {
+    height: 600px;
+    background: $mono200;
+    border: 1px solid $card-border-color;
+    border-radius: 4px 0px 0px 4px;
+    border-right: 0px;
+
+    .group-list {
+      overflow-y: scroll;
+      overflow-x: hidden;
+      height: calc(100% - 73px);
+      padding: 8px 16px;
+    }
+  }
+
+  .template-container {
+    height: 600px;
+    background: $mono200;
+    border-width: 1px 1px 1px 0px;
+    border: 1px solid $card-border-color;
+    border-radius: 0px 4px 4px 0px;
+    padding-right: 1px;
+  }
+
+  .template-list {
+    height: calc(100% - 73px);
+    overflow-y: scroll;
+    overflow-x: hidden;
+    padding: 8px 16px;
+  }
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid $card-border-color;
+    padding: 10px 16px 10px 24px;
+    font-size: 14px;
+    .title {
+      width: auto;
+      margin: 0px 8px 0px 0px;
+      font-family: SpoqaM;
+      white-space: nowrap;
+    }
+    .ungrouped-title {
+      color: $mono204;
+      font-family: SpoqaM;
+      margin: 0px 8px 0px 0px;
+    }
+    .ungrouped-title-sub {
+      white-space: nowrap;
+      margin: 0;
+    }
+    .grouped-title-sub {
+      display: flex;
+      align-items: center;
+
+      .group-name {
+        color: $blue106;
+        font-family: SpoqaB;
+        margin: 0px 2px 0px 0px;
+        @include ellipse();
+      }
+      .template-label {
+        white-space: nowrap;
+        margin: 0px 8px 0px 0px;
+      }
+    }
+  }
+}

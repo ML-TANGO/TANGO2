@@ -1,0 +1,61 @@
+@import '../modal.scss';
+
+.row {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+
+  .message {
+    color: $mono205;
+    font-family: SpoqaM;
+    font-size: 12px;
+    font-style: normal;
+    font-weight: 500;
+    line-height: 12px;
+    letter-spacing: -0.18px;
+    margin-top: 8px;
+  }
+
+  .read-me-text {
+    font-size: 12px;
+    color: $mono205;
+    margin: 16px 0px 8px;
+  }
+
+  .read-me-download {
+    height: 48px;
+    padding: 0px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border: 1px solid $mono203;
+    border-radius: 7px;
+    font-size: 12px;
+    color: $mono207;
+
+    .icon {
+      cursor: pointer;
+    }
+  }
+
+  .no-content {
+    display: none;
+  }
+
+  .gpu-rows {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    // border: 1px solid $mono203;
+    // border-radius: 8px;
+    // padding: 20px 24px;
+    // margin-top: 10px;
+
+    .single-row {
+      &.option {
+        margin-bottom: 32px;
+      }
+    }
+  }
+}

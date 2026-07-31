@@ -1,0 +1,123 @@
+@import '@src/styles/color.scss';
+
+.footer {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 70px;
+  padding: 0 52px;
+  box-sizing: border-box;
+  background-color: $mono201;
+  transition: width 0.7s, left 0.7s;
+  font-size: 11px;
+
+  .footer-left {
+    display: flex;
+    align-items: center;
+    color: $mono205;
+    flex-wrap: wrap;
+    .logo-img {
+      margin-right: 12px;
+      height: 22px;
+      &.custom {
+        filter: grayscale(100%);
+        height: 16px;
+      }
+    }
+    span {
+      white-space: nowrap;
+      margin-right: 12px;
+    }
+  }
+
+  .footer-right {
+    display: flex;
+    align-items: center;
+    color: $mono205;
+    .integration-footer {
+      border-right: 1px solid $mono203;
+      padding-right: 12px;
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      .info {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        .item {
+          white-space: nowrap;
+          cursor: pointer;
+          &:not(:last-child) {
+            margin-right: 10px;
+          }
+          a {
+            color: $mono205;
+            text-decoration: none;
+          }
+        }
+        .bullet {
+          margin-right: 10px;
+          width: 4px;
+          height: 4px;
+          background-color: $mono205;
+          border-radius: 2px;
+        }
+      }
+    }
+  }
+}
+
+@media (max-width: 1280px) {
+  .footer.expand.integration {
+    display: flex;
+    flex-direction: column-reverse;
+    justify-content: center;
+    align-items: center;
+    min-width: 440px;
+    .footer-right {
+      align-items: flex-end;
+    }
+  }
+}
+
+@media (max-width: 1050px) {
+  .footer.integration {
+    display: flex;
+    flex-direction: column-reverse;
+    justify-content: center;
+    align-items: center;
+    min-width: 440px;
+    .footer-right {
+      align-items: flex-end;
+    }
+  }
+
+  @media (max-width: 420px) {
+    .footer-left {
+      display: block !important;
+      padding: 10px;
+      font-size: 10px;
+      position: static;
+      left: 0%;
+      text-align: center;
+      .logo-img {
+        margin-bottom: 2px;
+      }
+      .copyright-version {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        .border-item {
+          display: none;
+        }
+      }
+    }
+  }
+}
+
+@media (max-width: 500px) {
+  .footer {
+    padding: 0 20px;
+  }
+}

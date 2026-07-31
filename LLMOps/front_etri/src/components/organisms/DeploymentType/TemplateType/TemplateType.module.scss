@@ -1,0 +1,42 @@
+@import '@src/styles/color.scss';
+
+.container {
+  display: flex;
+  flex-direction: row;
+  .group-container {
+    flex: 1;
+    width: 50%;
+    border: 1px solid $mono203;
+    .contents {
+      overflow-y: scroll;
+      max-height: 340px;
+      height: 340px;
+      padding: 0px 10px 10px 10px;
+      contain: content;
+    }
+  }
+  .template-container {
+    width: 50%;
+    border: 1px solid $mono203;
+    border-left: 0px;
+    position: relative;
+    .contents {
+      padding: 0px 10px 0px 10px;
+      height: 300px;
+      overflow-y: scroll;
+    }
+  }
+  .search-box {
+    padding: 10px;
+    background-color: $mono202;
+  }
+
+  .empty-list {
+    color: $mono204;
+    font-size: 14px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}

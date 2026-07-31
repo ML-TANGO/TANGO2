@@ -1,0 +1,39 @@
+@import '@src/styles/color.scss';
+
+.no-data {
+  width: 100%;
+  height: 100px;
+  display: flex;
+  border-radius: 8px;
+  align-items: center;
+  justify-content: center;
+  background: $mono202;
+  color: $mono205;
+}
+
+.apexcharts-canvas {
+  .apexcharts-svg {
+    .apexcharts-yaxis {
+      .apexcharts-yaxis-texts-g {
+        .apexcharts-text.apexcharts-yaxis-label {
+          font-family: SpoqaM !important;
+          font-size: 12px !important;
+          font-weight: 500 !important;
+        }
+      }
+    }
+    .apexcharts-legend {
+      .apexcharts-legend-series {
+        .apexcharts-legend-marker {
+          margin-right: 4px;
+          margin-top: 2px;
+        }
+        .apexcharts-legend-text {
+          color: $mono207 !important;
+          font-weight: 500 !important;
+          font-family: SpoqaM !important;
+        }
+      }
+    }
+  }
+}

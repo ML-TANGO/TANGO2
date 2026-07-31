@@ -1,0 +1,109 @@
+@import '@src/styles/color.scss';
+
+.list-wrapper {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 12px;
+  .list-item {
+    width: 100%;
+    border-radius: 8px;
+    border: 1px solid $blue101;
+    background-color: $mono200;
+    box-sizing: border-box;
+    padding: 24px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 20px;
+
+    .status-box {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      width: 300px;
+      .status-round {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 20px;
+      }
+      .datetime {
+        font-size: 14px;
+        color: $mono206;
+      }
+    }
+
+    .info-box {
+      border-left: 1px solid $blue101;
+      flex: 1;
+      display: flex;
+      flex-direction: row;
+      justify-content: flex-start;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 20px;
+      padding-left: 20px;
+      .item {
+        font-size: 14px;
+        color: $mono207;
+        .label {
+          display: flex;
+          height: 18px;
+          align-items: center;
+          padding-bottom: 8px;
+          font-family: SpoqaM;
+          font-size: 14px;
+          color: $mono205;
+          white-space: nowrap;
+        }
+        .value {
+          height: 20px;
+          font-family: SpoqaB;
+          font-size: 14px;
+          color: $mono207;
+          width: 100%;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          &.params {
+            display: flex;
+            flex-direction: row;
+            flex-wrap: wrap;
+            .param {
+              margin-right: 12px;
+              display: flex;
+              flex-direction: row;
+              align-items: center;
+              .label {
+                height: 18px;
+                font-family: SpoqaB;
+                font-size: 14px;
+                color: $mono205;
+                margin-right: 8px;
+                white-space: nowrap;
+              }
+              .key {
+                margin-right: 4px;
+                font-family: SpoqaR;
+                font-size: 14px;
+                color: $mono205;
+                word-break: break-word;
+              }
+              .value {
+                font-family: SpoqaB;
+                font-size: 14px;
+                color: $mono207;
+                word-break: break-word;
+                color: $mono207;
+                border-radius: 4px;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

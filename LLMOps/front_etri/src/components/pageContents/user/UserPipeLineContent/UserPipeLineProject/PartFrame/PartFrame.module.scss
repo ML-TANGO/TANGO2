@@ -1,0 +1,31 @@
+@import '@src/styles/color.scss';
+
+.frame-cont {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+  height: 100%;
+  .flex-cont {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    text-wrap: nowrap;
+    .sub-title {
+      color: $mono205;
+      font-family: SpoqaB;
+      font-size: 16px;
+      line-height: 16px;
+    }
+    .line {
+      width: 100%;
+      height: 1px;
+      background-color: $blue103;
+    }
+    .message {
+      font-family: SpoqaM;
+      font-size: 14px;
+      line-height: 14px; /* 100% */
+    }
+  }
+}

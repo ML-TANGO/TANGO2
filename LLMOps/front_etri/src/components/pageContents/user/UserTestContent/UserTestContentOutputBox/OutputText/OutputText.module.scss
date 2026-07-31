@@ -1,0 +1,17 @@
+@import '@src/styles/color.scss';
+
+.result-text {
+  color: $primary-color;
+  font-family: SpoqaB;
+  font-size: 20px;
+  margin-bottom: 20px;
+  .title {
+    font-size: 16px;
+    color: $mono207;
+    display: block;
+    padding-bottom: 12px;
+  }
+  span {
+    word-break: break-all;
+  }
+}

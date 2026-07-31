@@ -1,0 +1,12 @@
+@import '../modal.scss';
+
+.row.flex-cont {
+  width: 100%;
+  display: flex;
+  gap: 123px;
+}
+
+.sub-title {
+  margin-top: 32px;
+  margin-bottom: 16px;
+}

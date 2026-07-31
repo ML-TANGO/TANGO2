@@ -1,0 +1,43 @@
+@import '@src/styles/color.scss';
+
+.flex-32 {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.flex-16 {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.flex-row-8 {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.label {
+  color: $mono205;
+  font-family: SpoqaM;
+  font-size: 14px;
+  line-height: 14px;
+}
+
+.value {
+  margin: initial;
+  color: #121619;
+  font-family: SpoqaM;
+  font-size: 14px;
+  line-height: 22px;
+  &.desc {
+    display: inline-block;
+    max-height: 374px;
+  }
+}
+
+.dataset-icon {
+  width: 16px;
+  height: 16px;
+}

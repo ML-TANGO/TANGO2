@@ -1,0 +1,85 @@
+@import '@src/styles/color.scss';
+
+.template-container {
+  border-radius: 5px;
+  margin-top: 20px;
+  width: 100%;
+  height: auto;
+  right: 44px;
+  top: 77px;
+  background: $mono201;
+  align-items: center;
+
+  .header {
+    align-items: center;
+    justify-content: space-between;
+    padding: 15px;
+    display: flex;
+    & > .title {
+      display: flex;
+      align-items: center;
+      font-family: SpoqaB;
+      font-size: 14px;
+    }
+    .cancel {
+      font-size: 14px;
+      color: $red502;
+      &:hover {
+        cursor: pointer;
+      }
+    }
+    .save {
+      font-size: 14px;
+      color: $blue104;
+      &:hover {
+        cursor: pointer;
+      }
+    }
+  }
+  .body-close {
+    height: auto;
+    visibility: visible;
+    padding: 10px;
+    border-top: 1px solid $mono203;
+    border-radius: 0px 0px 5px 5px;
+  }
+  .body-open {
+    height: 0px;
+    visibility: none;
+    border-radius: 2px;
+  }
+  .body {
+    box-sizing: border-box;
+    left: 44px;
+    top: 121px;
+    background: $mono201;
+    contain: content;
+
+    .row {
+      margin-bottom: 12px;
+      .title-container {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-family: SpoqaM;
+        font-size: 13px;
+        margin-bottom: 4px;
+        .name {
+          color: $mono208;
+        }
+        .count {
+          display: flex;
+          color: $mono206;
+          .blue {
+            color: $blue104;
+          }
+        }
+      }
+    }
+  }
+}
+
+.error-message {
+  color: $error-color;
+  font-size: 13px;
+}

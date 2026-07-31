@@ -1,0 +1,99 @@
+@import '../modal.scss';
+
+.name {
+  display: block;
+  font-size: 16px;
+  font-family: SpoqaM;
+  padding-top: 16px;
+  padding-bottom: 8px;
+  width: calc(100% - 48px);
+  color: $mono207;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  &.switch {
+    width: calc(100% - 208px);
+  }
+}
+.contents {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  overflow: auto;
+  position: static;
+  .arrow-area {
+    position: absolute;
+    width: 100px;
+    height: 240px;
+    display: block;
+    z-index: 1;
+    &.left {
+      left: 0px;
+    }
+    &.right {
+      right: 48px;
+    }
+    &:hover {
+      .arrow {
+        display: block;
+        background-color: rgba($mono207, 0.2);
+      }
+    }
+    .arrow {
+      display: none;
+      position: absolute;
+      top: calc(50% - 24px);
+      width: 48px;
+      height: 48px;
+      cursor: pointer;
+      &.left {
+        left: 0;
+      }
+      &.right {
+        right: 0;
+      }
+    }
+  }
+  .form {
+    width: 100%;
+    min-height: 200px;
+    padding-top: 0;
+    text-align: center;
+    .image {
+      max-width: 100%;
+      max-height: 60vmin;
+    }
+    .text {
+      text-align: left;
+      margin: 0;
+      background-color: $mono202;
+      padding: 16px;
+      border-radius: 4px;
+      font-size: 14px;
+      font-family: SpoqaM;
+      white-space: pre-wrap;
+      overflow-wrap: break-word;
+    }
+    .md {
+      text-align: left;
+      margin: 0;
+      background-color: $mono202;
+      padding: 16px;
+      border-radius: 4px;
+      font-size: 14px;
+      font-family: SpoqaM;
+      overflow-wrap: break-word;
+      pre {
+        white-space: pre-wrap;
+      }
+    }
+    .markdown {
+      .view-change {
+        position: absolute;
+        right: 48px;
+        top: 66px;
+        padding-bottom: 4px;
+      }
+    }
+  }
+}

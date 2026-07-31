@@ -1,0 +1,357 @@
+@import '@src/styles/color.scss';
+
+.detail {
+  padding: 32px;
+  background-color: $mono200;
+  .header {
+    border-bottom: 1px solid $mono203;
+    .title {
+      margin: 0 0 16px 0;
+      height: 31px;
+      font-family: SpoqaR;
+      font-size: 24px;
+      color: $blue107;
+      span:first-child {
+        font-size: 20px;
+        font-family: SpoqaB;
+        margin-right: 8px;
+      }
+      span:nth-child(2) {
+        font-family: SpoqaM;
+        font-size: 14px;
+      }
+    }
+    .desc {
+      font-family: SpoqaM;
+      font-size: 16px;
+      line-height: normal;
+      color: $mono205;
+    }
+  }
+  .info-list {
+    margin-top: 16px;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    .list-item {
+      margin-right: 24px;
+      margin-bottom: 24px;
+      width: calc(25% - 24px);
+      max-width: 720px;
+      font-family: SpoqaM;
+      .label {
+        display: inline-block;
+        margin-bottom: 4px;
+        font-size: 14px;
+        color: $mono205;
+      }
+      .value {
+        font-size: 16px;
+        color: $mono207;
+        width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        &.user {
+          overflow: visible;
+          white-space: normal;
+        }
+      }
+      &.advanced {
+        width: calc(50% - 24px);
+      }
+    }
+  }
+  .block {
+    background-color: $mono200;
+    padding: 30px 0;
+    display: flex;
+    flex-direction: row;
+    .item {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      .title {
+        font-family: SpoqaM;
+        font-size: 18px;
+        color: $mono207;
+        margin: 0 0 12px;
+        .job-stop-btn {
+          vertical-align: bottom;
+          margin-left: 7px;
+          cursor: pointer;
+          &.disabled {
+            cursor: not-allowed;
+            opacity: 0.2;
+          }
+        }
+      }
+      &.built-in {
+        .title {
+          margin: 0 0 9px;
+          display: flex;
+          flex-direction: row;
+          flex-wrap: wrap;
+          align-items: center;
+          .name {
+            margin-right: 12px;
+          }
+        }
+        .desc {
+          color: $mono207;
+          font-family: SpoqaM;
+          font-size: 14px;
+          width: calc(100% - 24px);
+          height: 36px;
+          line-height: 18px;
+          overflow: hidden;
+          white-space: pre;
+          text-overflow: ellipsis;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+        }
+      }
+      .jupyter {
+        display: flex;
+        flex-direction: row;
+        .training-type {
+          padding-left: 16px;
+          border-left: solid 1px $mono203;
+        }
+        .editor-type,
+        .training-type {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          margin-right: 7px;
+          min-width: 330px;
+          max-width: calc(50% - 16px);
+          .control-div {
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+            height: 24px;
+            margin-bottom: 4px;
+            div {
+              display: flex;
+              flex-direction: row;
+              align-items: flex-start;
+              .type {
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                box-sizing: border-box;
+                width: 36px;
+                height: 18px;
+                border-radius: 15px;
+                border: solid 2px $mono205;
+                font-size: 10px;
+                font-family: SpoqaB;
+                text-align: center;
+                color: $mono205;
+                margin-right: 4px;
+                &.running {
+                  border: solid 2px $lime603;
+                  color: $lime603;
+                }
+                &.installing {
+                  border: solid 2px $yellow304;
+                  color: $yellow304;
+                }
+                &.error {
+                  border: solid 2px $red502;
+                  color: $red502;
+                }
+              }
+              .jupyter-label {
+                height: 18px;
+                line-height: 18px;
+                font-family: SpoqaM;
+                font-size: 14px;
+                color: $mono207;
+                margin-right: 6px;
+              }
+              .switch {
+                width: 40px;
+                height: 20px;
+              }
+            }
+            .jupyter {
+              display: flex;
+              flex-direction: row;
+              justify-content: center;
+              align-items: center;
+              width: 88px;
+              height: 24px;
+              box-sizing: border-box;
+              border-radius: 4px;
+              background-color: rgba(255, 255, 255, 0);
+              opacity: 0.15;
+              cursor: not-allowed;
+              &.running:not(.private) {
+                opacity: 1;
+                cursor: pointer;
+              }
+              .jupyter-link {
+                width: 59px;
+                height: 16px;
+                margin-right: 1px;
+              }
+              .arrow {
+                width: 16px;
+                height: 16px;
+              }
+            }
+          }
+          .text-div {
+            height: 18px;
+            font-family: SpoqaM;
+            font-size: 14px;
+            color: $mono207;
+          }
+        }
+      }
+      .job {
+        display: flex;
+        flex-direction: column;
+        margin-right: 9px;
+        .progress {
+          height: 8px;
+          margin-bottom: 8px;
+        }
+        .status {
+          display: flex;
+          flex-direction: row;
+          justify-content: space-between;
+          .count {
+            display: flex;
+            flex-direction: row;
+            justify-content: flex-start;
+            & > div {
+              margin-right: 20px;
+              .label {
+                height: 21px;
+                font-family: SpoqaM;
+                font-size: 16px;
+                color: $mono205;
+              }
+              .value {
+                font-family: SpoqaM;
+                font-size: 16px;
+                color: $mono207;
+                display: inline-block;
+                margin: 2px 0 0 4px;
+              }
+            }
+          }
+          .percent {
+            height: 21px;
+            display: flex;
+            flex-direction: row;
+            align-items: baseline;
+            .status {
+              font-size: 16px;
+              font-family: SpoqaB;
+              color: $mono204;
+              &.running {
+                color: $lime603;
+              }
+            }
+            .rate {
+              color: $mono207;
+              font-size: 16px;
+              font-family: SpoqaM;
+              margin-left: 4px;
+            }
+          }
+        }
+      }
+    }
+  }
+  .table-box {
+    .table-title {
+      font-size: 18px;
+      color: $blue107;
+      font-family: SpoqaB;
+      margin-bottom: 8px;
+    }
+  }
+}
+
+.progress-box {
+  width: 100%;
+  display: flex !important;
+  align-items: center;
+  .progress-value {
+    flex: 1;
+  }
+  .progress-status {
+    margin-left: 20px;
+  }
+}
+.badge {
+  // width: 80px;
+  // border: 1px solid red;
+  margin-right: 4px;
+}
+.access-title {
+  color: $mono207;
+}
+.access-box {
+  display: flex !important;
+  grid-gap: 8px;
+  margin-left: -4px;
+  .access-content {
+    padding: 2px 4px;
+    border-radius: 4px;
+    color: $mono205;
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-end;
+    align-items: center;
+    box-sizing: border-box;
+    cursor: pointer;
+    grid-gap: 3px;
+    img {
+      width: 21px;
+    }
+    &:hover {
+      background-color: $mono200;
+    }
+  }
+
+  .not-access {
+    padding: 2px 4px;
+    border-radius: 4px;
+    color: $mono205;
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-end;
+    align-items: center;
+    box-sizing: border-box;
+    cursor: not-allowed;
+  }
+}
+
+.tool-replica-number {
+  margin: 0 8px 0 6px;
+  padding-top: 7px;
+  text-align: center;
+  width: 35px;
+  height: 28px;
+  color: $mono205 !important;
+  line-height: 1;
+  background-color: $mono202;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+.icon-block {
+  pointer-events: none;
+}
+
+.table-icon {
+  margin-right: 6px;
+  cursor: pointer;
+}

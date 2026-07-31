@@ -1,0 +1,145 @@
+{
+  "result": [
+    {
+      "training_tool_id": 4869,
+      "tool_status": { "status": "stop", "reason": null },
+      "tool_type": 0,
+      "tool_type_name": "editor",
+      "run_env": [
+        { "docker_image": "jf-default" },
+        { "gpu_model": null },
+        { "gpu_count": 0 },
+        {
+          "port_forwarding_info": [
+            {
+              "training_id": 32,
+              "training_tool_id": 4869,
+              "name": "jupyter",
+              "target_port": 8888,
+              "protocol": "TCP",
+              "node_port": null,
+              "description": "Default",
+              "system_definition": 1,
+              "service_type": "ClusterIP",
+              "status": 1
+            },
+            {
+              "training_id": 32,
+              "training_tool_id": 4869,
+              "name": "ssh",
+              "target_port": 22,
+              "protocol": "TCP",
+              "node_port": null,
+              "description": "Default",
+              "system_definition": 1,
+              "service_type": "NodePort",
+              "status": 1
+            }
+          ]
+        }
+      ],
+      "running_info": [
+        { "configurations": null },
+        { "network": null },
+        { "cpu_cores": null },
+        { "ram": null },
+        { "port_forwarding_info": [] }
+      ],
+      "start_datetime": null,
+      "end_datetime": null
+    },
+    {
+      "training_tool_id": 4870,
+      "tool_status": {
+        "status": "running",
+        "reason": null,
+        "phase": "Running",
+        "interval": 3837.0,
+        "restart_count": 0
+      },
+      "tool_type": 1,
+      "tool_type_name": "jupyter",
+      "run_env": [
+        { "docker_image": "jf-default" },
+        {
+          "gpu_model": [
+            {
+              "model": "NVIDIA-GeForce-GTX-1080-Ti",
+              "node_list": ["jf-node-02"]
+            }
+          ]
+        },
+        { "gpu_count": 1 },
+        {
+          "port_forwarding_info": [
+            {
+              "training_id": 32,
+              "training_tool_id": 4870,
+              "name": "jupyter",
+              "target_port": 8888,
+              "protocol": "TCP",
+              "node_port": null,
+              "description": "Default",
+              "system_definition": 1,
+              "service_type": "ClusterIP",
+              "status": 1
+            },
+            {
+              "training_id": 32,
+              "training_tool_id": 4870,
+              "name": "port2",
+              "target_port": 123,
+              "protocol": "TCP",
+              "node_port": null,
+              "description": "QRK",
+              "system_definition": 0,
+              "service_type": "NodePort",
+              "status": 1
+            },
+            {
+              "training_id": 32,
+              "training_tool_id": 4870,
+              "name": "port3",
+              "target_port": 125,
+              "protocol": "TCP",
+              "node_port": null,
+              "description": "",
+              "system_definition": 0,
+              "service_type": "NodePort",
+              "status": 1
+            },
+            {
+              "training_id": 32,
+              "training_tool_id": 4870,
+              "name": "ssh",
+              "target_port": 22,
+              "protocol": "TCP",
+              "node_port": null,
+              "description": "Default",
+              "system_definition": 1,
+              "service_type": "NodePort",
+              "status": 1
+            }
+          ]
+        }
+      ],
+      "running_info": [
+        { "configurations": "NVIDIA GeForce GTX 1080 Ti" },
+        { "network": null },
+        { "cpu_cores": "12" },
+        { "ram": "62Gi" },
+        {
+          "port_forwarding_info": [
+            { "node_port": 30425, "target_port": 22, "name": "ssh" },
+            { "node_port": 30753, "target_port": 123, "name": "port2" },
+            { "node_port": 31650, "target_port": 125, "name": "port3" }
+          ]
+        }
+      ],
+      "start_datetime": "2021-10-19 08:44:37",
+      "end_datetime": null
+    }
+  ],
+  "message": null,
+  "status": 1
+}

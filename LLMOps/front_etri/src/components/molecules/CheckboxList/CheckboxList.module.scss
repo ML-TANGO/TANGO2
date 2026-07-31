@@ -1,0 +1,167 @@
+@import '@src/components/atoms/input/input.scss';
+
+.label-wrap {
+  display: flex;
+  align-items: center;
+  font-family: SpoqaB;
+  color: $mono207;
+  margin-bottom: 16px !important;
+  .label-right-item {
+    display: inline-block;
+    margin-left: 4px;
+  }
+  .optional {
+    color: $mono205;
+    font-size: 16px;
+    font-family: SpoqaM;
+  }
+}
+
+/* Checkbox arrangement */
+.checkboxes-container {
+  &.horizontal {
+    display: flex;
+  }
+}
+
+/* The container */
+.check-container {
+  display: block;
+  position: relative;
+  padding-left: 24px;
+  margin-right: 24px;
+  cursor: pointer;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+
+  &:not(:last-child) {
+    margin-bottom: 20px;
+  }
+
+  &.disabled {
+    cursor: default;
+  }
+
+  .labeltext {
+    font-family: SpoqaM;
+    font-size: 14px;
+    line-height: 16px;
+    color: $mono207;
+    display: block;
+    &.readOnly,
+    &.disabled {
+      opacity: 0.2;
+    }
+  }
+  /* Subtext */
+  .subtext {
+    display: block;
+    margin-top: 4px;
+    font-family: SpoqaR;
+    font-size: 12px;
+    font-weight: 500;
+    color: $mono205;
+    white-space: pre;
+
+    > span {
+      display: block;
+    }
+    &.readOnly,
+    &.disabled {
+      opacity: 0.5;
+    }
+  }
+
+  /* Checkbox Custom */
+
+  /* Hide the browser's default checkbox */
+  input {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+    height: 0;
+    width: 0;
+  }
+
+  /* Create a custom checkbox */
+  .checkmark {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 16px;
+    width: 16px;
+    background-color: $mono200;
+    border-radius: 2px;
+    border: solid 2px $mono204;
+    box-sizing: border-box;
+    margin: 0;
+
+    /* Create the checkmark/indicator (hidden when not checked) */
+    &:after {
+      content: '';
+      position: absolute;
+      display: none;
+      top: 1px;
+      left: 4px;
+      width: 4px;
+      height: 7px;
+      border: solid $mono200;
+      border-width: 0 2px 2px 0;
+      -webkit-transform: rotate(45deg);
+      -ms-transform: rotate(45deg);
+      transform: rotate(45deg);
+    }
+  }
+
+  /* When the checkbox is checked */
+  input:checked ~ .checkmark {
+    background-color: $primary-color;
+    border: solid 2px $primary-color;
+  }
+
+  /* When the checkbox is disabled */
+  input:disabled ~ .checkmark {
+    background-color: $mono202;
+    border: solid 2px $mono203;
+
+    &:after {
+      content: '';
+      position: absolute;
+      display: none;
+      left: 4px;
+      top: 1px;
+      width: 4px;
+      height: 7px;
+      border: solid 2px $mono203;
+      border-width: 0 2px 2px 0;
+      -webkit-transform: rotate(45deg);
+      -ms-transform: rotate(45deg);
+      transform: rotate(45deg);
+    }
+  }
+
+  /* Show the checkmark when checked */
+  input:checked ~ .checkmark:after {
+    display: block;
+  }
+
+  /* On mouse-over */
+  // &:hover:not(.readOnly) {
+  //   input ~ .checkmark {
+  //     background-color: $blue102;
+  //     border: solid 2px $primary-color;
+  //   }
+  //   input:checked ~ .checkmark {
+  //     background-color: $blue102;
+  //     border: solid 2px $primary-color;
+  //   }
+  //   input:disabled ~ .checkmark {
+  //     background-color: $mono201;
+  //     border: solid 2px rgba($mono205, 0.2);
+  //   }
+  // }
+  /* Checkbox Custom End*/
+}

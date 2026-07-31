@@ -1,0 +1,144 @@
+@import '@src/styles/color.scss';
+
+.label {
+  font-family: SpoqaM;
+  font-size: 12px;
+  color: $mono208;
+  margin: 10px 0px 8px 0px;
+}
+.template-info {
+  background: $mono200;
+  border: 1px dashed $blue103;
+  border-radius: 2px;
+  color: $blue104;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 0px 10px 0px;
+  font-family: SpoqaM;
+  font-size: 12px;
+}
+.clicked-list {
+  .name {
+    font-family: SpoqaB;
+    word-break: break-all;
+    font-size: 14px;
+    color: $mono206;
+    margin: 0px 0px 5px 0px;
+  }
+  .description {
+    color: $mono206;
+    font-family: SpoqaM;
+    font-size: 12px;
+    margin: 0px 0px 5px 0px;
+  }
+  .template-container {
+    padding: 20px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    padding: 12px;
+    width: 100%;
+    height: 32px;
+    background: $mono201;
+    border-width: 1px 1px 1px 1px;
+    border-style: solid;
+    border-color: $blue102;
+    border-radius: 2px 0px 0px 2px;
+    margin: 7px 0px 7px 0px;
+  }
+  .template-list {
+    :hover {
+      cursor: pointer;
+    }
+    .template-list-container {
+      background: $mono201;
+      padding: 10px 12px;
+      margin: 6px 0px 0px 0px;
+      border-radius: 2px;
+      font-size: 12px;
+      font-family: SpoqaM;
+      box-sizing: border-box;
+      overflow: hidden;
+      white-space: nowrap;
+      .name-desc {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: $mono205;
+        font-size: 12px;
+        font-family: SpoqaM;
+        .name {
+          color: $mono206;
+        }
+        .desc {
+          margin-left: 8px;
+        }
+        .error {
+          padding-right: 4px;
+          img {
+            height: 18px;
+            vertical-align: middle;
+          }
+        }
+      }
+    }
+    .active-template-list-container {
+      border-width: 1px 1px 0px 1px;
+      border-style: solid;
+      border-color: $blue102;
+      border-radius: 2px 2px 0px 0px;
+      color: $blue104;
+      .name-desc > .name {
+        color: $blue104;
+      }
+    }
+    .clicked-template-list-detail {
+      contain: content;
+      max-height: 500px !important;
+      transition: max-height 0.2s ease-in-out;
+      border-color: $blue102;
+      border-radius: 0px 0px 2px 2px;
+    }
+    .detail-container {
+      padding: 6px 10px 6px 10px;
+      & > div {
+        display: flex;
+        font-family: spoqaM;
+        & > :first-child {
+          font-size: 12px;
+          color: $mono205;
+          flex: 0.2;
+        }
+        & > :nth-child(2) {
+          display: flex;
+          align-items: center;
+          margin: 0;
+          flex: 1;
+          font-size: 12px;
+          color: $mono206;
+          & > p {
+            padding-left: 2px;
+          }
+        }
+        .env-contents {
+          flex-direction: column;
+          display: block;
+        }
+      }
+    }
+    .template-list-detail {
+      contain: content;
+    }
+  }
+  .empty-list {
+    color: $mono204;
+    font-size: 14px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 40px;
+  }
+}

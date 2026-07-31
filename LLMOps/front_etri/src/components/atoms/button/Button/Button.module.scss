@@ -1,0 +1,224 @@
+@import '@src/styles/color.scss';
+
+@mixin button-style($height, $border-radius, $font-size) {
+  min-width: $height;
+  transition-property: background-color, border-color, color, opacity;
+  transition-duration: 0.2s;
+  border: 1px solid $mono200;
+  border-radius: $border-radius;
+  background-color: $mono200;
+  cursor: pointer;
+  padding: 0;
+  height: $height;
+  vertical-align: middle;
+  text-decoration: none;
+  line-height: 1.5;
+  color: $mono205;
+  font-size: $font-size;
+  font-weight: bold;
+  font-family: SpoqaB;
+  box-sizing: border-box !important;
+  overflow: hidden;
+  -webkit-appearance: none;
+  white-space: nowrap;
+  .text-wrap {
+    padding: 0 1.41176em;
+  }
+
+  .children-wrap {
+    display: flex;
+    align-items: center;
+    &.padding-left {
+      padding: 0 1.41176em 0 0.9em;
+      .text {
+        padding-left: 6px;
+      }
+    }
+    &.padding-right {
+      padding: 0 0.9em 0 1.41176em;
+      .text {
+        padding-right: 6px;
+      }
+    }
+  }
+  .icon-wrap {
+    display: inline-block;
+    width: $height;
+  }
+  .icon {
+    vertical-align: middle;
+    width: 20px;
+    height: 20px;
+  }
+  &:hover,
+  &:focus,
+  &.active {
+    background-color: $mono202;
+    border: 1px solid $mono202;
+    text-decoration: none;
+    color: $mono205;
+  }
+  &.primary {
+    position: relative;
+    background-color: $primary-color;
+    border: 1px solid $primary-color;
+    color: $mono200;
+    &:not(.nohover):hover {
+      background-color: $primary-color;
+      border: 1px solid $primary-color;
+      color: $mono200;
+    }
+    &:before {
+      position: absolute;
+      content: '';
+      bottom: 0;
+      left: 0;
+      width: 0%;
+      height: 100%;
+      background-color: $blue107;
+    }
+  }
+  &.white {
+    position: relative;
+    background-color: $mono200;
+    color: $primary-color;
+    &:not(.nohover):hover {
+      background-color: rgba($blue104, 0.08);
+    }
+    &:before {
+      position: absolute;
+      content: '';
+      bottom: 0;
+      left: 0;
+      width: 0%;
+      height: 100%;
+      background-color: $blue107;
+    }
+  }
+
+  &.transparent {
+    position: relative;
+    background-color: transparent;
+    border: none;
+    color: $primary-color;
+    &:not(.nohover):hover {
+      background-color: rgba($blue104, 0.08);
+      border: none;
+      color: $primary-color;
+    }
+  }
+
+  &.secondary {
+    position: relative;
+    background-color: $mono205;
+    border: 1px solid $mono205;
+    color: $mono200;
+    &:not(.nohover):hover {
+      background-color: $mono204;
+      border: 1px solid $mono204;
+      color: $mono200;
+    }
+  }
+
+  &.gray {
+    position: relative;
+    background-color: $mono203;
+    border: 1px solid $mono203;
+    color: $mono205;
+    &:not(.nohover):hover {
+      background-color: $mono203;
+      border: 1px solid $mono203;
+      color: $mono205;
+    }
+  }
+
+  &.none-border {
+    position: relative;
+    background-color: transparent;
+    border: none;
+    color: $mono205;
+    &:not(.nohover):hover {
+      background-color: $mono203;
+      border: none;
+      color: $mono205;
+    }
+  }
+
+  &.disabled,
+  &:disabled {
+    background-color: $mono202;
+    border: 1px solid $mono202;
+    color: $mono200;
+    cursor: default;
+    .icon {
+      opacity: 0.3;
+    }
+  }
+
+  &.disabled:hover,
+  &:disabled:hover {
+    background-color: $mono202 !important;
+    border: 1px solid $mono202 !important;
+    color: $mono200 !important;
+  }
+
+  img {
+    height: $height;
+  }
+}
+
+.fb {
+  position: relative;
+  &.btn {
+    @include button-style(36px, 4px, 14px);
+    &.x-large {
+      @include button-style(60px, 4px, 18px);
+    }
+    &.large {
+      @include button-style(44px, 4px, 16px);
+    }
+    &.medium {
+      @include button-style(36px, 4px, 14px);
+    }
+    &.small {
+      @include button-style(30px, 4px, 14px);
+    }
+    &.x-small {
+      @include button-style(24px, 4px, 12px);
+    }
+
+    &::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 5px;
+      height: 5px;
+      background: rgba(255, 255, 255, 0.2);
+      opacity: 0;
+      border-radius: 100%;
+      transform: scale(1, 1) translate(-50%);
+      transform-origin: 50% 50%;
+    }
+
+    @keyframes ripple {
+      0% {
+        transform: scale(0, 0);
+        opacity: 1;
+      }
+      20% {
+        transform: scale(25, 25);
+        opacity: 1;
+      }
+      100% {
+        opacity: 0;
+        transform: scale(40, 40);
+      }
+    }
+
+    &:hover:not(:disabled)::after,
+    &:focus:not(:active)::after {
+      animation: ripple 1s ease-out;
+    }
+  }
+}

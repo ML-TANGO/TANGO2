@@ -1,0 +1,20 @@
+@import '../modal.scss';
+.row {
+  margin-bottom: 32px;
+  .radio {
+    margin-bottom: 32px;
+  }
+  .example {
+    margin-top: 20px;
+    .label {
+      font-size: 12px;
+      color: $mono205;
+    }
+    .value {
+      background-color: $blue100;
+      font-size: 12px;
+      padding: 16px;
+      margin-top: 4px;
+    }
+  }
+}

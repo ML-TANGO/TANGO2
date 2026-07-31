@@ -1,0 +1,115 @@
+@import '@src/styles/color.scss';
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(0deg, #2a2d3e, #2a2d3e),
+    linear-gradient(0deg, rgba(0, 102, 255, 0.3), rgba(0, 102, 255, 0.3)),
+    #1b2029;
+  color: $mono200;
+  .left-box {
+    padding-left: 24px;
+    display: flex;
+    flex: 0 0 202px;
+    a {
+      height: 28px;
+      .logo {
+        height: 28px;
+      }
+    }
+  }
+  .right-box {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-right: 34px;
+
+    @media (max-width: 420px) {
+      > div:not(:first-child) {
+        display: none;
+      }
+    }
+
+    .powered-by {
+      display: flex;
+      align-items: center;
+      margin-left: 20px;
+      .text {
+        font-size: 11px;
+        color: $mono204;
+        white-space: nowrap;
+      }
+      .logo {
+        height: 16px;
+        margin-left: 6px;
+      }
+    }
+  }
+}
+
+.menu-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  margin-right: 24px;
+  border: none;
+  background-color: transparent;
+  .line-wrapper {
+    cursor: pointer;
+    width: 20px;
+    height: 20px;
+    position: relative;
+  }
+
+  /* 추가된 부분 */
+  .line {
+    background: $mono200;
+    margin-top: 4px;
+    margin-bottom: 4px;
+    width: 20px;
+    height: 2px;
+    border-radius: 2px;
+  }
+}
+
+@media (max-width: 1023px) {
+  .header {
+    .left-box {
+      flex: 0 0 48px;
+    }
+    .center-box {
+      padding-left: 0px;
+    }
+    .menu-btn {
+      display: flex;
+    }
+  }
+}
+
+.logo-icon {
+  font-size: 20px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  margin-right: 16px;
+  color: #dbdbdb;
+
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+}
+a:has(.logo-icon) {
+  text-decoration: none !important;
+  color: #dbdbdb !important;
+}
+
+a:has(.logo-icon) * {
+  text-decoration: none !important;
+  color: inherit;
+}

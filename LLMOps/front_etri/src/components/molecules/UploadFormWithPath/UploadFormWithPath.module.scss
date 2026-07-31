@@ -1,0 +1,25 @@
+@import '@src/styles/color.scss';
+
+.wrapper {
+  flex: 1;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  border-radius: 4px;
+  background-color: rgba(25, 64, 255, 0.08);
+
+  .form-type {
+    margin: 0 0 4px 0;
+    color: $mono207;
+    font-size: 16px;
+    font-family: SpoqaB;
+  }
+
+  .form-desc {
+    margin: 0 0 12px 0;
+    font-family: SpoqaM;
+    font-size: 14px;
+    color: $mono205;
+  }
+}

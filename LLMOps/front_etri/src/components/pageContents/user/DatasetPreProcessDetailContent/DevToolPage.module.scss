@@ -1,0 +1,56 @@
+@import '@src/styles/color.scss';
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+
+  .addBtn-box {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 48px;
+
+    .btn {
+      box-sizing: border-box;
+      padding: 0px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      height: 88px;
+      border-radius: 16px;
+      background-color: white;
+      border: 1px solid $blue102;
+      cursor: pointer;
+
+      .left-side {
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        font-size: 16px;
+        font-weight: 700;
+        color: $mono207;
+      }
+    }
+  }
+
+  .empty-tool {
+    display: flex;
+    justify-content: center;
+    font-size: 14px;
+    color: $mono205;
+    margin-top: 150px;
+  }
+
+  .card-container {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 48px;
+  }
+
+  @media (max-width: 1600px) {
+    .card-container,
+    .addBtn-box {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+}

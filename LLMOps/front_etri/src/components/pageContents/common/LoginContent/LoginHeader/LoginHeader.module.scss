@@ -1,0 +1,35 @@
+.header {
+  display: flex;
+  flex-direction: row-reverse;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 48px;
+  height: 100%;
+  .company-logo {
+    height: 2vh;
+  }
+  .partner-logo {
+    height: 6vh;
+    &.dgtp {
+      height: 4.8vh;
+    }
+    &.wellcare {
+      height: 3.6vh;
+    }
+  }
+  @media (max-width: 768px) {
+    padding: 0 30px;
+    .company-logo {
+      height: 1.4vh;
+    }
+    .partner-logo {
+      height: 4.8vh;
+      &.dgtp {
+        height: 3.6vh;
+      }
+      &.wellcare {
+        height: 2.4vh;
+      }
+    }
+  }
+}

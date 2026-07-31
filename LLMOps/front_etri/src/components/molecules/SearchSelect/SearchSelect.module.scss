@@ -1,0 +1,133 @@
+@import '@src/components/atoms/input/input.scss';
+
+.fb.input {
+  display: block;
+  position: relative;
+  & > .label {
+    display: inline-block;
+    font-size: 16px;
+    font-weight: bold;
+    color: $mono207;
+    margin-bottom: 8px;
+  }
+}
+
+.search-select {
+  position: relative;
+  border-radius: 4px;
+  &.read-only {
+    .select-controller {
+      border: 1px solid $mono204 !important;
+      padding: 0 0.94118em;
+    }
+    .search-input-box {
+      .tooltip-box {
+        position: absolute;
+        top: 20%;
+        left: 52%;
+        &.tooltip-eng {
+          left: 62%;
+        }
+      }
+      .selected {
+        color: $mono205;
+        background-color: transparent;
+        outline: none;
+      }
+    }
+  }
+  .icon {
+    position: absolute;
+    top: calc(50% + 1px);
+    right: 10px;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+  }
+  .search-input-box {
+    position: relative;
+    .selected {
+      position: absolute;
+      top: 50%;
+      left: 0.94118em;
+      width: calc(100% - 0.94118em - 0.94118em);
+      transform: translateY(-50%);
+      font-size: 16px;
+      color: rgba(0, 0, 0, 0.84);
+      font-family: SpoqaM;
+      &.div-check-box {
+        padding-left: 19px;
+      }
+      outline: none;
+    }
+    .input-check-icon {
+      position: absolute;
+      top: 30%;
+      left: 1%;
+      width: 20px;
+      height: 20px;
+    }
+
+    .input-box::placeholder,
+    .input-box::-webkit-input-placeholder {
+      color: $mono205 !important;
+    }
+    .input-box {
+      &.check-box::-webkit-input-placeholder {
+        padding-left: 19px;
+      }
+    }
+  }
+  .select-options {
+    position: absolute;
+    top: 50px;
+    left: 0px;
+    width: 100%;
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid $mono203;
+    background-color: $mono200;
+    border-radius: 4px;
+    box-shadow: 0 3px 9px 0 rgba(18, 22, 25, 0.08), 0 2px 4px 1px rgba(18, 22, 25, 0.14);
+    padding: 10px 4px;
+    box-sizing: border-box;
+    z-index: 2;
+    margin-bottom: 4px;
+
+    .option {
+      padding: 10px 16px;
+      font-size: 14px;
+      color: $mono207;
+      border-radius: 4px;
+      font-family: SpoqaM;
+      &:hover {
+        background-color: $hover-bg-color;
+      }
+      &.disabled {
+        color: $mono204;
+        &:hover {
+          background-color: $mono200;
+        }
+      }
+      .icon-right {
+        margin-left: 5px;
+      }
+    }
+  }
+}
+
+span.error {
+  display: block;
+  height: 48px;
+  box-sizing: border-box;
+  padding: 4px 0 0 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: $error-color;
+}
+
+input {
+  &:focus {
+    outline: none;
+  }
+}

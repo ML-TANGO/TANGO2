@@ -1,0 +1,60 @@
+@import '@src/styles/color.scss';
+
+.allocate-cont {
+  display: flex;
+  .stack-cont {
+    width: 206px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-right: 16px;
+    .label-cont {
+      display: flex;
+      gap: 8px;
+      font-size: 12px;
+      line-height: 12px;
+      letter-spacing: -0.18px;
+      .label {
+        color: $mono205;
+        font-family: SpoqaM;
+      }
+      .value {
+        color: $mono207;
+        font-family: SpoqaM;
+      }
+    }
+  }
+  .percent-label-cont {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: $mono205;
+    font-family: SpoqaM;
+    font-size: 12px;
+    .percent-txt {
+      width: 40px;
+      display: inline-block;
+      margin-right: 4px;
+      font-family: SpoqaB;
+      font-size: 12px;
+      color: $mono207;
+      text-wrap: nowrap;
+    }
+    .special-txt {
+      display: inline-block;
+    }
+    .value-txt {
+      display: inline-block;
+      min-width: 34px;
+      text-align: center;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .unit-txt {
+      display: inline-block;
+      width: 34px;
+      text-align: center;
+    }
+  }
+}

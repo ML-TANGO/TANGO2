@@ -1,0 +1,122 @@
+@import '@src/styles/color.scss';
+
+.detail {
+  padding: 40px 80px;
+  .header {
+    border-bottom: 1px solid $mono205;
+    padding-bottom: 16px;
+    margin-bottom: 20px;
+    .title {
+      margin: 0;
+      height: 31px;
+      font-family: SpoqaR;
+      font-size: 24px;
+      color: $mono207;
+    }
+  }
+  .info {
+    display: flex;
+    flex-direction: row;
+    .first {
+      flex: 1;
+      border-right: 1px solid $mono203;
+      min-width: 300px;
+      padding-right: 24px;
+      .ip-range {
+        .contents {
+          padding-bottom: 20px;
+          color: $mono207;
+        }
+      }
+      .interface {
+        .node-interfaces-table {
+          width: 100%;
+          font-size: 14px;
+          border-collapse: separate;
+          border-spacing: 0;
+          text-align: left;
+          line-height: 1.5;
+          border-top: 1px solid $mono204;
+          border-left: 1px solid $mono204;
+          tr {
+            th,
+            td {
+              padding: 4px 16px;
+              vertical-align: top;
+              border-right: 1px solid $mono204;
+              border-bottom: 1px solid $mono204;
+            }
+            th {
+              font-weight: bold;
+              vertical-align: top;
+              border-top: 1px solid $mono200;
+              border-left: 1px solid $mono200;
+              background: $mono202;
+              text-align: center;
+            }
+            td {
+              background: $mono200;
+            }
+          }
+        }
+      }
+    }
+    .second {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding-left: 24px;
+
+      .test {
+        .contents {
+          margin-top: -27px;
+          display: flex;
+          flex-direction: column;
+          align-items: flex-end;
+          .message {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background-color: $mono200;
+            padding: 16px;
+            width: 100%;
+            min-height: 120px;
+            border: 1px solid $mono204;
+            border-radius: 4px;
+            margin-top: 8px;
+            box-sizing: border-box;
+            font-size: 14px;
+            color: $mono204;
+            &.success {
+              color: $lime603;
+              align-items: flex-start;
+              justify-content: left;
+            }
+            &.error {
+              color: $red502;
+              align-items: flex-start;
+              justify-content: left;
+              .line-item {
+                margin: 0;
+                line-height: 1.5;
+              }
+            }
+          }
+        }
+      }
+    }
+    .title {
+      font-size: 14px;
+      margin: 0 0 8px;
+      color: $mono205;
+      font-family: SpoqaM;
+    }
+    .contents {
+      width: 100%;
+      font-size: 16px;
+      color: $mono207;
+      font-family: SpoqaM;
+    }
+  }
+}

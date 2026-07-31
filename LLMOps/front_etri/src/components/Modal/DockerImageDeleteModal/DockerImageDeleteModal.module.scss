@@ -1,0 +1,38 @@
+.title {
+  margin: 0;
+}
+
+.close-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  cursor: pointer;
+}
+
+.message {
+  margin: 12px 0 24px;
+}
+
+.modal-footer {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  padding-top: 24px;
+  margin-top: auto;
+  .right {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    & > button {
+      margin-left: 12px;
+    }
+  }
+  .left {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    & > button {
+      margin-right: 12px;
+    }
+  }
+}

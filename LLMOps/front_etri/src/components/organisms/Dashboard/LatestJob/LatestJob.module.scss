@@ -1,0 +1,399 @@
+@import '@src/styles/color.scss';
+
+.history-row {
+  border-bottom: 1px solid $blue101;
+  &:last-child {
+    border-bottom: none;
+  }
+
+  .training-container {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 88px;
+    padding: 12px 16px;
+    gap: 14px;
+
+    .basic-info {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      .first {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+
+        .badge {
+          display: flex;
+          padding: 3px 10px;
+          align-items: center;
+          gap: 8px;
+          border-radius: 16px;
+          background-color: $orange401;
+          font-size: 13px;
+          font-style: normal;
+          font-weight: 500;
+          color: $orange402;
+
+          &.preprocessing {
+            background-color: $lime601;
+            color: $lime602;
+          }
+        }
+
+        .name {
+          font-size: 16px;
+          font-style: normal;
+          font-weight: 700;
+        }
+      }
+
+      .second {
+        display: flex;
+        gap: 16px;
+
+        @media (max-width: 1600px) {
+          gap: 8px;
+        }
+
+        .empty-instance {
+          font-size: 12px;
+          font-style: normal;
+          font-weight: 500;
+          color: $red502;
+        }
+
+        .info {
+          display: flex;
+          gap: 8px;
+          font-size: 12px;
+          font-style: normal;
+          font-weight: 500;
+
+          @media (max-width: 1600px) {
+            gap: 2px;
+            font-size: 10px;
+          }
+
+          .resource {
+            color: $mono205;
+          }
+
+          .detail {
+            color: $mono207;
+          }
+        }
+      }
+    }
+
+    .running-info {
+      display: flex;
+      justify-content: space-between;
+      padding-left: 56px;
+
+      &.preprocessing {
+        padding-left: 66px;
+      }
+
+      .tool-container {
+        display: flex;
+        gap: 32px;
+
+        .tool {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          font-size: 14px;
+          font-style: normal;
+          font-weight: 500;
+
+          .count {
+            white-space: nowrap;
+            margin-left: 8px;
+          }
+        }
+
+        .tool-list {
+          display: flex;
+          flex-direction: column;
+
+          .tool-info {
+            display: flex;
+            flex-direction: column;
+
+            .name {
+              display: flex;
+              gap: 8px;
+              font-size: 14px;
+              font-style: normal;
+              font-weight: 700;
+              text-transform: capitalize;
+            }
+
+            .date {
+              font-size: 14px;
+              font-style: normal;
+              font-weight: 500;
+              color: $mono206;
+              margin-top: 8px;
+              margin-bottom: 24px;
+            }
+
+            .detail {
+              display: flex;
+              gap: 16px;
+
+              .resource {
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+                font-size: 14px;
+                font-style: normal;
+                font-weight: 500;
+                color: $mono205;
+              }
+
+              .value {
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+                font-size: 14px;
+                font-style: normal;
+                font-weight: 500;
+              }
+            }
+
+            .line {
+              margin: 18px 0px;
+              height: 1px;
+              background-color: $mono203;
+            }
+          }
+        }
+      }
+
+      .job-container {
+        display: flex;
+        gap: 8px;
+        .job {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          font-size: 14px;
+          font-style: normal;
+          font-weight: 700;
+        }
+
+        .working {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 14px;
+          font-style: normal;
+          font-weight: 500;
+          .train-list {
+            display: flex;
+            flex-direction: column;
+
+            .train-info {
+              display: flex;
+              flex-direction: column;
+
+              .name {
+                display: flex;
+                gap: 8px;
+                font-size: 14px;
+                font-style: normal;
+                font-weight: 700;
+              }
+
+              .date {
+                font-size: 14px;
+                font-style: normal;
+                font-weight: 500;
+                color: $mono206;
+                margin-top: 8px;
+                margin-bottom: 24px;
+              }
+
+              .detail {
+                display: flex;
+                gap: 16px;
+
+                .resource {
+                  display: flex;
+                  flex-direction: column;
+                  gap: 4px;
+                  font-size: 14px;
+                  font-style: normal;
+                  font-weight: 500;
+                  color: $mono205;
+                }
+
+                .value {
+                  display: flex;
+                  flex-direction: column;
+                  gap: 4px;
+                  font-size: 14px;
+                  font-style: normal;
+                  font-weight: 500;
+                }
+              }
+
+              .line {
+                margin: 18px 0px;
+                height: 1px;
+                background-color: $mono203;
+              }
+            }
+          }
+        }
+
+        .pending {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          font-size: 14px;
+          font-style: normal;
+          font-weight: 500;
+          color: $mono204;
+        }
+        .status {
+          margin-left: 8px;
+          font-size: 14px;
+          font-style: normal;
+          font-weight: 500;
+          color: #ffab31;
+        }
+      }
+    }
+  }
+
+  .deployment-container {
+    box-sizing: border-box;
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    height: 52px;
+    padding: 28px 16px;
+    // border-bottom: 1px solid $blue101;
+    &.empty {
+      background-color: $mono201;
+    }
+
+    .left-side {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+
+      .badge {
+        display: flex;
+        padding: 3px 10px;
+        align-items: center;
+        gap: 8px;
+        border-radius: 16px;
+        background-color: $blue101;
+        font-size: 13px;
+        font-style: normal;
+        font-weight: 500;
+        color: $blue104;
+      }
+
+      .name {
+        font-size: 16px;
+        font-style: normal;
+        font-weight: 700;
+      }
+    }
+
+    .right-side {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+
+      .worker {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        font-style: normal;
+        font-weight: 700;
+      }
+
+      .info {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        font-style: normal;
+        font-weight: 500;
+
+        .worker-list {
+          display: flex;
+          flex-direction: column;
+
+          .worker-info {
+            display: flex;
+            flex-direction: column;
+
+            .name {
+              display: flex;
+              gap: 8px;
+              font-size: 14px;
+              font-style: normal;
+              font-weight: 700;
+            }
+
+            .date {
+              font-size: 14px;
+              font-style: normal;
+              font-weight: 500;
+              color: $mono206;
+              margin-top: 8px;
+              margin-bottom: 24px;
+            }
+
+            .detail {
+              display: flex;
+              gap: 16px;
+
+              .resource {
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+                font-size: 14px;
+                font-style: normal;
+                font-weight: 500;
+                color: $mono205;
+              }
+
+              .value {
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+                font-size: 14px;
+                font-style: normal;
+                font-weight: 500;
+              }
+            }
+
+            .line {
+              margin: 18px 0px;
+              height: 1px;
+              background-color: $mono203;
+            }
+          }
+        }
+      }
+
+      .status {
+        margin-left: 8px;
+        font-size: 14px;
+        font-style: normal;
+        font-weight: 500;
+        color: $blue104;
+      }
+    }
+  }
+}

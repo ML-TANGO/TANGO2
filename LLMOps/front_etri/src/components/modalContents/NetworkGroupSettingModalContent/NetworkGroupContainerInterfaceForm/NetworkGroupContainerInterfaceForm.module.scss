@@ -1,0 +1,162 @@
+@import '@src/styles/color.scss';
+
+.form {
+  display: flex;
+  flex-direction: column;
+  .contents {
+    display: flex;
+    flex-direction: column;
+    .title-div {
+      display: flex;
+      flex-direction: row;
+      align-items: baseline;
+      justify-content: space-between;
+    }
+    .list-container {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      border: 1px solid $mono204;
+      border-radius: 2px;
+      margin-bottom: 30px;
+      font-size: 14px;
+      .list-header {
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+        background-color: $mono201;
+        border-bottom: 1px solid $mono204;
+        label {
+          flex: 1;
+          padding: 4px 16px;
+        }
+        div {
+          display: flex;
+          align-items: center;
+          &.left-header {
+            flex: 1;
+            border-right: 1px solid $mono204;
+          }
+          &.right-header {
+            flex: 2;
+          }
+        }
+      }
+      .list-box-container {
+        display: flex;
+        flex-direction: row;
+      }
+      .list-box {
+        width: 100%;
+        height: 428px;
+        overflow: auto;
+        display: flex;
+        flex-direction: column;
+        .selected-list {
+          width: 100%;
+          li {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: space-between;
+            > span {
+              flex: 1;
+              padding: 8px 16px;
+            }
+            &:hover:not(.empty-message):not(.error-message) {
+              background-color: $blue100;
+            }
+            &.empty-message {
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              height: 172px;
+              color: $mono204;
+            }
+          }
+          .error-message {
+            .icon {
+              margin-right: 4px;
+              width: 16px;
+              height: 16px;
+            }
+            display: flex;
+            justify-content: flex-start;
+            color: $error-color;
+            font-size: 12px;
+            padding: 0 16px 4px;
+          }
+        }
+      }
+      .btn {
+        display: flex;
+        justify-content: center;
+        max-width: 60px;
+        width: 60px;
+        .icon {
+          width: 24px;
+          aspect-ratio: 1;
+          border-radius: 50%;
+          cursor: pointer;
+          box-sizing: border-box;
+          &.disabled {
+            opacity: 0.3;
+            pointer-events: none;
+          }
+          &:hover {
+            background-color: $mono200;
+          }
+        }
+      }
+      .name {
+        max-width: 240px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        &.input {
+          display: flex;
+          align-items: center;
+          height: 16px;
+          font-size: 14px;
+          border-radius: 4px;
+          &.edit {
+            background-color: $mono200;
+            outline: 1px solid $blue101;
+          }
+        }
+        &.read-only {
+          display: flex;
+          align-items: center;
+          height: 16px;
+          font-size: 14px;
+          .icon {
+            display: none;
+          }
+          &:hover {
+            display: flex;
+            align-items: center;
+            .icon {
+              display: inline-block;
+              width: 20px;
+              height: 20px;
+              margin-left: 4px;
+              cursor: pointer;
+            }
+          }
+        }
+        &.error {
+          color: $error-color;
+        }
+      }
+
+      .center {
+        display: flex;
+        justify-content: center;
+      }
+
+      .number {
+        max-width: 70px;
+      }
+    }
+  }
+}

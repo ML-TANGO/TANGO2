@@ -1,0 +1,128 @@
+@import '@src/styles/color.scss';
+
+.cell {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 33px;
+  line-height: 20px;
+  text-align: center;
+  color: $mono204;
+  font-size: 14px;
+  &.this-month {
+    color: $mono207;
+  }
+  &:hover:not(.disabled) {
+    background-color: rgba($blue104, 0.08);
+    border-radius: 50%;
+  }
+  &.selected {
+    background-color: rgba($blue104, 0.08);
+    border-radius: 0 !important;
+  }
+  &.disabled {
+    .inner-cell {
+      background-color: unset !important;
+    }
+  }
+  &.today {
+    position: relative;
+    &::after {
+      content: '';
+      position: absolute;
+      top: 4px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background-color: $primary-color;
+    }
+  }
+  .inner-cell {
+    // display: inline-block;
+    width: 33px;
+    height: 33px;
+    border-radius: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    &:hover {
+      background-color: rgba($blue104, 0.08);
+    }
+  }
+  &.from,
+  &.to {
+    background-color: rgba($blue104, 0.08);
+    .inner-cell {
+      background-color: $primary-color;
+      color: $mono200;
+    }
+  }
+  &.from {
+    border-radius: 18px 0 0 18px !important;
+  }
+  &.to {
+    border-radius: 0 18px 18px 0 !important;
+  }
+  &.from.to {
+    border-radius: 18px !important;
+  }
+  &.disabled {
+    color: $mono204;
+  }
+  .count {
+    position: absolute;
+    bottom: 3px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: block;
+    width: 20px;
+    height: 11px;
+    line-height: 11px;
+    font-size: 10px;
+    color: $mono200;
+    background-color: $mono203;
+    border-radius: 6px;
+    overflow: hidden;
+    &.lime {
+      background-color: $lime603;
+    }
+    &.yellow {
+      background-color: $yellow303;
+    }
+    &.red {
+      background-color: $red502;
+    }
+    &:after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.5);
+      opacity: 0;
+      border-radius: 100%;
+    }
+    &.loading {
+      @keyframes ripple {
+        0% {
+          width: 0;
+          opacity: 1;
+        }
+        20% {
+          width: 20%;
+          opacity: 1;
+        }
+        100% {
+          width: 100%;
+          opacity: 0;
+        }
+      }
+      &:after {
+        animation: ripple 1s ease-out infinite;
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+@import '@src/styles/color.scss';
+
+.job-list {
+  z-index: 1;
+  min-height: 508px;
+  max-height: 508px;
+  overflow-y: auto;
+
+  // @media (max-width: 1600px) {
+  //   min-height: 508px;
+  //   max-height: 508px;
+  // }
+}

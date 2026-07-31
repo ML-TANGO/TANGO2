@@ -1,0 +1,161 @@
+@import '@src/styles/color.scss';
+
+.empty-box {
+  display: flex;
+  flex-direction: row;
+  padding: 48px 0px 0;
+  gap: 32px;
+  .left-box {
+    max-width: 460px;
+    min-width: 460px;
+    display: flex;
+    flex-direction: column;
+
+    .title {
+      font-size: 36px;
+      font-family: SpoqaB;
+      color: $mono207;
+      margin-bottom: 30px;
+    }
+    .description {
+      font-size: 13px;
+      font-family: SpoqaR;
+      color: $mono206;
+      word-break: keep-all;
+    }
+    .img {
+      // display: flex;
+      // justify-content: center;
+      height: auto;
+      margin-top: 9px;
+    }
+  }
+  .right-box {
+    flex: 1;
+  }
+  @media (max-width: 768px) {
+    flex-wrap: wrap;
+    justify-content: center;
+    padding: 24px 0;
+    .left-box {
+      text-align: center;
+      margin-right: 0;
+      .description {
+        margin-bottom: 24px;
+      }
+      .img {
+        display: none;
+      }
+    }
+    .right-box {
+      flex: 1;
+      > div {
+        align-items: center;
+      }
+    }
+  }
+}
+
+@mixin border-style {
+  border-radius: 12px;
+  border: 1px solid $blue102;
+  background-color: white;
+  padding: 24px;
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+
+  .header-content {
+    display: flex;
+    gap: 32px;
+    color: $mono207;
+
+    .left-side {
+      box-sizing: border-box;
+      @include border-style;
+      max-width: 460px;
+      min-width: 460px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-size: 24px;
+      font-weight: 700;
+
+      .icon-box {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 12px;
+        border-radius: 8px;
+        background-color: $orange401;
+      }
+    }
+
+    .right-side {
+      @include border-style;
+      flex: 1;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+
+      .instance-info {
+        display: flex;
+        font-size: 14px;
+        gap: 50px;
+
+        .type {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+          font-weight: 700;
+          color: $mono205;
+        }
+
+        .value {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+          font-weight: 500;
+          color: $mono207;
+        }
+      }
+    }
+  }
+
+  .option-container {
+    display: flex;
+    justify-content: space-between;
+
+    .left-option {
+      display: flex;
+      gap: 24px;
+      color: $mono205;
+      font-size: 14px;
+
+      .all-btn {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        cursor: pointer;
+      }
+    }
+
+    .right-option {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+
+      .delete-btn {
+        padding: 10px 20px;
+        border-radius: 8px;
+        font-size: 14px;
+        color: $red502;
+        background-color: $red501;
+        cursor: pointer;
+      }
+    }
+  }
+}

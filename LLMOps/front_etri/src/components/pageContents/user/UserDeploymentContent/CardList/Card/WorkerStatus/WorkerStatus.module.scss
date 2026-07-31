@@ -1,0 +1,120 @@
+@import '@src/styles/color.scss';
+
+.worker-status {
+  flex: 2;
+  .btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 33px;
+    padding: 7px 28px;
+    border: transparent;
+    border-radius: 4px;
+    background-color: rgba($primary-color, 0.08);
+    box-sizing: border-box;
+    color: $blue105;
+    white-space: nowrap;
+    font-family: SpoqaM;
+    cursor: pointer;
+    &.error {
+      color: $red502;
+      background-color: rgba($red502, 0.08);
+      &.active,
+      &:hover {
+        background-color: rgba($red502, 0.2);
+      }
+    }
+
+    &.active,
+    &:hover {
+      background-color: rgba($primary-color, 0.2);
+    }
+
+    &.readonly {
+      cursor: default;
+      &:hover {
+        background-color: rgba($primary-color, 0.08);
+      }
+    }
+  }
+
+  .popup {
+    z-index: 10;
+    position: absolute;
+    margin-top: 4px;
+    background-color: $mono200;
+    border-radius: 4px;
+    box-shadow: 0 3px 9px 0 rgba(18, 22, 25, 0.08),
+      0 2px 4px 1px rgba(18, 22, 25, 0.14);
+    transition: max-height 0.8s ease-in-out;
+    animation: visible 0.5s;
+    min-width: 290px;
+    display: flex;
+    flex-direction: column;
+    cursor: default;
+    .status-box {
+      display: flex;
+      flex-direction: column;
+      padding: 12px;
+      border-bottom: 1px solid $mono204;
+      .label {
+        color: $mono207;
+        font-size: 13px;
+        margin-bottom: 4px;
+      }
+      .status {
+        display: flex;
+        align-items: center;
+        grid-gap: 6px;
+        .badge {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: $mono200;
+          width: 88px;
+          height: 22px;
+          border-radius: 4px;
+          &.installing {
+            background-color: $yellow303;
+          }
+          &.running {
+            background-color: #5874f7;
+          }
+          &.error {
+            background-color: $error-color;
+          }
+          &.pending {
+            background-color: $yellow303;
+          }
+        }
+      }
+    }
+
+    .configuration-box {
+      display: flex;
+      flex-direction: column;
+      padding: 12px;
+      .label {
+        color: $mono207;
+        font-size: 13px;
+        margin-bottom: 4px;
+      }
+      .configurations {
+        span {
+          display: block;
+          color: $mono205;
+        }
+      }
+    }
+  }
+
+  @keyframes visible {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+}

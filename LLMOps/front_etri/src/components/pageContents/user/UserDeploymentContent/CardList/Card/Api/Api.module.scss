@@ -1,0 +1,94 @@
+@import '@src/styles/color.scss';
+
+.api-info {
+  flex: 1;
+  position: relative;
+  .btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 33px;
+    padding: 7px 24px;
+    border: transparent;
+    border-radius: 4px;
+    background-color: rgba($primary-color, 0.08);
+    box-sizing: border-box;
+    color: $blue105;
+    font-family: SpoqaM;
+    cursor: pointer;
+    &.active,
+    &:hover {
+      background-color: rgba($primary-color, 0.2);
+    }
+    &.readonly {
+      cursor: default;
+      &:hover {
+        background-color: rgba($primary-color, 0.08);
+      }
+    }
+  }
+
+  .popup {
+    z-index: 10;
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    margin-bottom: 37px;
+    background-color: $mono200;
+    border-radius: 4px;
+    box-shadow: 0 -3px 9px 0 rgba(18, 22, 25, 0.08),
+      0 2px 4px 1px rgba(18, 22, 25, 0.14);
+    transition: max-height 0.8s ease-in-out;
+    animation: visible 0.5s;
+    width: 220px;
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+    cursor: default;
+    .label {
+      color: $mono207;
+      font-size: 13px;
+      margin-bottom: 4px;
+      font-family: SpoqaM;
+    }
+    .value-box {
+      display: flex;
+      align-items: center;
+
+      .value {
+        width: 100%;
+        height: 18px;
+        font-size: 13px;
+        color: $mono205;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        &.api,
+        &.token {
+          height: 28px;
+          line-height: 28px;
+          width: auto;
+          max-width: calc(100% - 30px);
+        }
+      }
+      .copy-btn {
+        width: 28px;
+        height: 28px;
+        border: none;
+        border-radius: 4px;
+        background-image: url(@src/static/images/icon/00-ic-basic-copy-o.svg);
+        background-position: center;
+        background-size: 75%;
+        background-repeat: no-repeat;
+        vertical-align: middle;
+        cursor: pointer;
+        margin: 0 0 2px 4px;
+        background-color: $mono200;
+        &:hover {
+          background-color: $mono202;
+        }
+      }
+    }
+  }
+}

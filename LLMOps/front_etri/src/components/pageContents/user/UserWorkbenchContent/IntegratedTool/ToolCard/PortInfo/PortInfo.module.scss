@@ -1,0 +1,26 @@
+@import '@src/styles/color.scss';
+
+.port-list {
+  .port-info {
+    margin-bottom: 10px;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    background-color: $mono203;
+    border-radius: 4px;
+    padding: 6px;
+    font-size: 12px;
+    .title {
+      margin-right: 4px;
+      font-family: SpoqaB;
+    }
+    .port {
+      display: flex;
+      align-items: center;
+      font-family: SpoqaR;
+      white-space: nowrap;
+    }
+  }
+}

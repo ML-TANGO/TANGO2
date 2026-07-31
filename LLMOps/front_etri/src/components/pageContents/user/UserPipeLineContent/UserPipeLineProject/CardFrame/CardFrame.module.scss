@@ -1,0 +1,339 @@
+@import '@src/styles/color.scss';
+
+@mixin status($color1, $color2, $color3) {
+  border: none;
+  z-index: 0;
+  overflow: hidden;
+  &::before {
+    content: '';
+    position: absolute;
+    z-index: -2;
+    left: -50%;
+    top: -50%;
+    width: 200%;
+    height: 200%;
+    background-color: $primary-color;
+    background-repeat: no-repeat;
+    background-size: 50% 50%, 50% 50%;
+    background-position: 0 0, 100% 0, 100% 100%, 0 100%;
+    background-image: linear-gradient($color3, $color1),
+      linear-gradient($color1, $color2), linear-gradient($color2, $color3),
+      linear-gradient($color3, $color1);
+    animation: rotate 2.5s linear infinite;
+  }
+  &::after {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    left: 2px;
+    top: 2px;
+    width: calc(100% - 4px);
+    height: calc(100% - 4px);
+    background: inherit;
+    border-radius: 16px;
+  }
+  &.stop::before {
+    filter: grayscale(1);
+  }
+  @keyframes rotate {
+    100% {
+      transform: rotate(1turn);
+    }
+  }
+}
+
+.card-cont {
+  position: relative;
+  width: 240px;
+  border-radius: 16px;
+  background-color: #fff;
+  box-sizing: border-box;
+
+  &.error {
+    color: $red502 !important;
+    border: 1px solid $red502 !important;
+  }
+
+  &.pre {
+    border: 1px solid $blue104;
+    &.running {
+      @include status($blue101, $blue102, $blue104);
+    }
+  }
+  &.train {
+    border: 1px solid $orange403;
+    &.running {
+      @include status($orange401, $orange402, $orange403);
+    }
+  }
+  &.deployment {
+    border: 1px solid $lime603;
+    &.running {
+      @include status($lime601, $lime602, $lime603);
+    }
+  }
+
+  &.done {
+    border: 1px solid $mono204;
+  }
+
+  &:hover {
+    .card-header-cont {
+      .delete-btn {
+        opacity: 1;
+      }
+    }
+  }
+
+  .card-header-cont {
+    position: relative;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+    border-radius: 16px 16px 0 0;
+    box-sizing: border-box;
+
+    .type-cont {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      .type-img {
+        width: 16px;
+        height: 16px;
+      }
+
+      .error-icon {
+        width: 16px;
+        height: 16px;
+      }
+
+      .card-title {
+        font-family: SpoqaB;
+        font-size: 14px;
+        line-height: 14px;
+        &.pre {
+          color: $blue104;
+        }
+        &.train {
+          color: $orange403;
+        }
+        &.deployment {
+          color: $lime603;
+        }
+        &.done {
+          color: $mono205;
+        }
+        &.error {
+          color: $red502;
+        }
+      }
+    }
+
+    &.pre {
+      background-color: #eff4fe;
+    }
+    &.train {
+      background-color: $orange401;
+    }
+    &.deployment {
+      background-color: $lime601;
+    }
+    &.error {
+      background-color: $red501;
+    }
+
+    .delete-btn {
+      position: absolute;
+      opacity: 0;
+      color: $blue104;
+      font-size: 16px;
+      font-family: SpoqaM;
+      width: 32px;
+      height: 32px;
+      border: none;
+      background-color: #fff;
+      border-radius: 50%;
+      top: -16px;
+      right: -16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    &.pre {
+      border-bottom: 1px solid $blue104;
+    }
+    &.train {
+      border-bottom: 1px solid $orange402;
+    }
+    &.deployment {
+      border-bottom: 1px solid $lime602;
+    }
+
+    &.running {
+      margin: 2px;
+      &.pre {
+        border-bottom: 2px solid $blue102;
+      }
+      &.train {
+        border-bottom: 2px solid $orange402;
+      }
+      &.deployment {
+        border-bottom: 2px solid $lime602;
+      }
+    }
+
+    &.done {
+      margin: none;
+      border-bottom: 1px solid $mono204;
+    }
+
+    &.error {
+      border-bottom: 1px solid $red502;
+    }
+
+    .arrow-img {
+      cursor: pointer;
+      transform: rotate(180deg);
+      &.open {
+        transform: rotate(0deg);
+      }
+    }
+  }
+  .card-body-cont {
+    padding: 16px 24px;
+    min-height: 152px;
+    box-sizing: border-box;
+
+    .body-top-cont {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      .name-cont {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        height: 65px;
+        .name-txt {
+          text-align: start;
+          color: $mono207;
+          font-family: SpoqaB;
+          font-size: 18px;
+          line-height: 28px;
+          white-space: nowrap; /* 줄바꿈 방지 */
+          overflow: hidden; /* 넘친 텍스트 숨김 */
+          text-overflow: ellipsis;
+        }
+        .status-txt {
+          font-family: SpoqaM;
+          font-size: 12px;
+          font-weight: 500;
+          line-height: 12px; /* 100% */
+          letter-spacing: -0.18px;
+          &.done {
+            color: $mono205;
+          }
+          &.running {
+            color: $blue104;
+          }
+          &.pending,
+          &.installing {
+            color: $orange403;
+          }
+        }
+      }
+      .log-btn-cont {
+        width: 100%;
+        display: flex;
+        justify-content: flex-end;
+      }
+      .gpu-alloc-cont,
+      .tool-cont {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+        img {
+          width: 16px;
+          height: 16px;
+          cursor: pointer;
+        }
+      }
+      .tool-message {
+        margin: initial;
+        overflow: hidden;
+        color: $mono204;
+        font-family: SpoqaM;
+        font-size: 12px;
+        line-height: 12px; /* 100% */
+        letter-spacing: -0.18px;
+      }
+    }
+    .body-bottom-cont {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start !important;
+      gap: 16px;
+      margin-top: 16px;
+      .border {
+        width: 100%;
+        height: 1px;
+        background-color: #dbdbdb;
+      }
+    }
+  }
+}
+
+.gray-font {
+  color: $mono205;
+  font-family: SpoqaM;
+  text-wrap: nowrap;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.dark-font {
+  display: inline-block;
+  width: 100%;
+  height: 15.5px;
+  color: $mono207;
+  font-family: SpoqaM;
+  font-size: 14px;
+  line-height: 14px;
+  white-space: nowrap; /* 텍스트가 줄바꿈 없이 한 줄로 표시되도록 설정 */
+  overflow: hidden; /* 넘치는 텍스트를 숨김 */
+  text-overflow: ellipsis;
+}
+
+.built-in-params-cont {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.gpu-cont {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-family: SpoqaM;
+  font-size: 14px;
+  .gpu-label {
+    color: #747474;
+  }
+  .gpu-value {
+    color: $mono207;
+  }
+  .multi-gpu-value {
+    color: $mono205;
+    font-family: SpoqaM;
+    font-size: 12px;
+    line-height: 12px;
+    letter-spacing: -0.18px;
+  }
+}

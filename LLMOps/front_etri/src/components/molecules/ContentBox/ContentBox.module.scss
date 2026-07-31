@@ -1,0 +1,16 @@
+@import '@src/styles/color.scss';
+
+.content-box {
+  box-sizing: border-box;
+  border-radius: 4px;
+  background-color: $mono200;
+  box-shadow: 0 3px 9px 0 rgb(18 22 25 / 8%), 0 2px 4px 1px rgb(18 22 25 / 14%);
+  .title {
+    padding: 20px 20px 10px 20px;
+    color: $mono207;
+    margin: 0;
+    display: block;
+    font-size: 13px;
+    font-family: SpoqaB;
+  }
+}

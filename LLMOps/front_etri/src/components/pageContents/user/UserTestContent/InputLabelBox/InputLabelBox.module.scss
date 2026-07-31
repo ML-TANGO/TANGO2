@@ -1,0 +1,44 @@
+@import '@src/styles/color.scss';
+
+.wrapper {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 8px;
+  white-space: nowrap;
+
+  .top {
+    height: 36px;
+    line-height: 19px;
+    font-size: 16px;
+    margin-right: 14px;
+    display: flex;
+    align-items: center;
+    flex-direction: row;
+    .index {
+      color: $mono207;
+      font-family: SpoqaB;
+      margin-right: 4px;
+      font-size: 20px;
+    }
+  }
+}
+
+.bottom {
+  display: flex;
+  margin-top: 32px;
+  margin-bottom: 16px;
+  .type {
+    font-size: 16px;
+    margin-right: 16px;
+    display: flex;
+    font-family: SpoqaB;
+    color: $blue104;
+  }
+  .key {
+    color: $mono207;
+    font-size: 16px;
+    font-family: SpoqaB;
+  }
+}

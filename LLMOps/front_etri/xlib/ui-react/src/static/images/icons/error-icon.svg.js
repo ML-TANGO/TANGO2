@@ -1,0 +1,5 @@
+var img = "data:image/svg+xml,%3csvg width='18' height='18' viewBox='0 0 18 18' fill='none' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M9.00008 0.666992C4.40008 0.666992 0.666748 4.40033 0.666748 9.00033C0.666748 13.6003 4.40008 17.3337 9.00008 17.3337C13.6001 17.3337 17.3334 13.6003 17.3334 9.00033C17.3334 4.40033 13.6001 0.666992 9.00008 0.666992ZM9.83342 13.167H8.16675V11.5003H9.83342V13.167ZM9.83342 9.83366H8.16675V4.83366H9.83342V9.83366Z' fill='%23FFB72C'/%3e%3c/svg%3e";
+  var errorIcon = img;
+
+export { errorIcon as default };
+//# sourceMappingURL=error-icon.svg.js.map

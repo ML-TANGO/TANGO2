@@ -1,0 +1,60 @@
+@import '@src/styles/color.scss';
+
+.back-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 24px;
+  span {
+    color: $mono208;
+    font-family: SpoqaB;
+    font-size: 16px;
+    line-height: 16px;
+    cursor: pointer;
+  }
+  img {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+  }
+}
+.header-content-cont {
+  display: flex;
+  justify-content: space-between;
+  box-sizing: border-box;
+  height: 32px;
+  margin-bottom: 32px;
+  .title-cont {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    .commit-title {
+      display: inline-block;
+      margin: initial;
+      color: $mono207;
+      font-family: SpoqaB;
+      font-size: 24px;
+      line-height: 100%;
+    }
+    .project-txt {
+      color: #747474;
+      font-family: SpoqaM;
+      font-size: 18px;
+      line-height: 18px; /* 100% */
+    }
+  }
+  .header-content-right {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    .error-message-paragraph {
+      margin: initial;
+      color: $red502;
+      font-family: SpoqaM;
+      font-size: 14px;
+      font-weight: 500;
+      line-height: 14px;
+      text-wrap: nowrap;
+    }
+  }
+}

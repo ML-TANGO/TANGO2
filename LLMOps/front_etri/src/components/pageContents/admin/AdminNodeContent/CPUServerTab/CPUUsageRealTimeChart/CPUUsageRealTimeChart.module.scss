@@ -1,0 +1,12 @@
+@import '@src/styles/color.scss';
+
+.controller {
+  padding: 12px 19px;
+}
+.cpu-usage-chart {
+  height: 280px;
+  background-color: $mono200;
+  border-radius: 8px;
+  border: 1px solid $card-border-color;
+  box-sizing: border-box;
+}

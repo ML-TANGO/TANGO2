@@ -1,0 +1,82 @@
+@import '@src/styles/color.scss';
+
+.basic-info {
+  margin: 0 0 20px 0;
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    .title {
+      color: $mono207;
+      font-size: 16px;
+      font-family: SpoqaB;
+    }
+    .btn-wrap {
+      display: flex;
+      gap: 10px;
+    }
+  }
+  .content {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 20px 0;
+    border-bottom: 1px solid $mono203;
+    .item {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: flex-start;
+      &.model-type {
+        align-items: flex-start;
+      }
+      &.model {
+        align-items: flex-start;
+      }
+      .label {
+        font-family: SpoqaM;
+        font-size: 14px;
+        color: $mono205;
+        width: 150px;
+      }
+      .value {
+        flex: 1;
+        font-family: SpoqaR;
+        font-size: 14px;
+        color: $mono206;
+        display: block;
+        &.type-value {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+        .desc {
+          margin: 8px 0 0;
+        }
+        .deleted {
+          width: max-content;
+          display: flex;
+          align-items: center;
+          color: $error-color;
+          background-color: rgba($red501, 0.6);
+          padding: 2px 4px;
+          border-radius: 2px;
+          margin-right: 8px;
+          line-height: 1.2;
+          font-family: SpoqaM;
+          font-size: 12px;
+          img {
+            margin-right: 4px;
+            width: 16px;
+            height: 16px;
+          }
+        }
+        .model-type-value {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,41 @@
+@import '@src/styles/color.scss';
+
+.sample {
+  font-size: 14px;
+  color: $sub-text-color;
+  font-family: SpoqaM;
+}
+.label {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.item-list {
+  width: 100%;
+  .item {
+    margin-bottom: 10px;
+    &:after {
+      clear: both;
+      content: '';
+      display: block;
+    }
+    .remove-btn {
+      float: left;
+      width: 44px;
+      height: 44px;
+      border: none;
+      border-radius: 4px;
+      padding: 4px;
+      margin-left: 12px;
+      background-position: 50%;
+      background-image: url(@src/static/images/icon/minus.svg);
+      background-size: 36px 36px;
+      background-color: $mono205;
+      background-repeat: no-repeat;
+      cursor: pointer;
+    }
+  }
+  .add-btn {
+    margin-top: 10px;
+  }
+}

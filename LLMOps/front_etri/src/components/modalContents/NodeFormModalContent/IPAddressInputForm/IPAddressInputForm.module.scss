@@ -1,0 +1,10 @@
+.ip-input-wrap {
+  display: flex;
+  gap: 10px;
+  &>:first-child {
+    flex: 1;
+  }
+  & > button:last-child {
+    flex: 0 0 fit-content;
+  }
+}

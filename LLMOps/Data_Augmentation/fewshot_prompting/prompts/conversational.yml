@@ -1,2 +1,0 @@
-system_message_prefix: "You are a helpful assistant. Based on the following examples, have a conversation."
-example_template: "Query: {query}\nResponse: {response}"

@@ -1,0 +1,13 @@
+@import '@src/styles/color.scss';
+
+.page-header-cont {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: 16px;
+  border-bottom: 1px solid $mono203;
+  margin-bottom: 8px;
+  .right-cont {
+    min-height: 36px;
+  }
+}

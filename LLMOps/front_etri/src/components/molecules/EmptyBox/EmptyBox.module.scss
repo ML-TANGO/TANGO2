@@ -1,0 +1,20 @@
+@import '@src/styles/color.scss';
+
+.no-data {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  font-size: 14px;
+  font-family: SpoqaM;
+  color: $mono207;
+  &.box {
+    border-radius: 8px;
+    background: $mono202;
+    color: $mono205;
+  }
+
+  &.red {
+    color: $red502;
+  }
+}

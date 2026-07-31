@@ -1,0 +1,41 @@
+@import '@src/styles/color.scss';
+
+.info-list {
+  display: flex;
+  gap: 32px;
+  height: 140px;
+  box-sizing: border-box;
+  .info-item {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 24px 32px;
+    border: 1px solid #d3ecff;
+    border-radius: 16px;
+    box-shadow: 0px 3px 12px 0px rgba(45, 118, 248, 0.1);
+    text-wrap: nowrap;
+    .header-cont {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      img {
+        width: 24px;
+        height: 24px;
+      }
+      .label {
+        color: $blue104;
+        font-family: SpoqaB;
+        font-size: 20px;
+        line-height: 20px; /* 100% */
+      }
+    }
+    .value {
+      color: $mono207;
+      text-align: right;
+      font-family: SpoqaB;
+      font-size: 24px;
+      line-height: 24px;
+    }
+  }
+}

@@ -1,0 +1,41 @@
+@import '@src/styles/color.scss';
+
+.container {
+  display: flex;
+  flex-direction: column;
+
+  .process-name {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: $blue107;
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 48px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid $mono203;
+
+    .visual-guide-btn {
+      width: 176px;
+      height: 32px;
+      border: 1px solid #fff;
+      border-radius: 4px;
+      background-color: #fff;
+      box-shadow: 0px 3px 6px 0px rgba(45, 118, 248, 0.1);
+      color: #2d76f8;
+      font-family: SpoqaM;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 16px;
+      cursor: pointer;
+      &:hover {
+        border: 1px solid $blue104;
+        box-shadow: 0px 3px 6px 0px rgba(45, 118, 248, 0.1);
+      }
+      &:active {
+        border: 1px solid $blue104;
+        box-shadow: 0px 3px 6px 0px rgba(45, 118, 248, 0.16);
+      }
+    }
+  }
+}

@@ -1,0 +1,46 @@
+@import '@src/styles/color.scss';
+
+.title-cont {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  .title {
+    color: $mono207;
+    font-family: SpoqaB;
+    font-size: 18px;
+    line-height: 18px;
+  }
+  .type-cont {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    img {
+      width: 24px;
+      height: 24px;
+    }
+    span {
+      color: $mono205;
+      font-family: SpoqaM;
+      font-size: 18px;
+      line-height: 16px;
+    }
+  }
+}
+
+.warn-message {
+  color: #fa4e57;
+  font-family: SpoqaM;
+  font-size: 12px;
+  line-height: 12px;
+  letter-spacing: -0.18px;
+}
+
+.dataset-message {
+  margin: initial;
+  margin-top: 8px;
+  color: $mono205;
+  font-family: SpoqaM;
+  font-size: 12px;
+  line-height: 12px;
+  letter-spacing: -0.18px;
+}

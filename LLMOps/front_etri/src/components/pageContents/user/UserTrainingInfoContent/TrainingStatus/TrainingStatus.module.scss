@@ -1,0 +1,74 @@
+@import '@src/styles/color.scss';
+
+.training-status {
+  margin: 0 0 32px 0;
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    .title {
+      color: $mono207;
+      font-size: 16px;
+      font-family: SpoqaB;
+    }
+    .btn-wrap {
+      display: flex;
+      gap: 10px;
+    }
+  }
+  .content {
+    .training-list {
+      padding: 32px 0;
+      .training-item {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+        padding: 20px;
+        border: 1px solid $mono202;
+        margin-bottom: 20px;
+        background-color: $mono200;
+        .status-icon {
+          position: absolute;
+          top: 24px;
+          right: 20px;
+          width: 10px;
+          height: 10px;
+          border-radius: 5px;
+          background-color: $lime602;
+          &.running {
+            background-color: $lime602;
+          }
+          &.installing {
+            background-color: $yellow303;
+          }
+          &.error {
+            background-color: $red502;
+          }
+          &.stop {
+            background-color: $mono203;
+          }
+        }
+        .item {
+          display: flex;
+          align-items: center;
+          .label {
+            width: 150px;
+            color: $mono207;
+            font-size: 14px;
+            font-family: SpoqaM;
+            margin-bottom: 2px;
+          }
+          .value {
+            flex: 1;
+            color: $mono206;
+            font-size: 14px;
+            font-family: SpoqaR;
+            display: block;
+            min-height: 20px;
+          }
+        }
+      }
+    }
+  }
+}

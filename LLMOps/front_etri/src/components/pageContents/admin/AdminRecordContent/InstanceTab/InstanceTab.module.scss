@@ -1,0 +1,146 @@
+@import '@src/styles/color.scss';
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap-reverse;
+  margin-bottom: 12px;
+  .title {
+    display: flex;
+    align-items: center;
+    font-family: SpoqaM;
+    font-size: 20px;
+    color: $mono207;
+    margin: 0;
+    white-space: nowrap;
+    .title-select-box {
+      margin-left: 8px;
+    }
+  }
+  .group-select-divide {
+    padding: 0 8px 0 4px;
+  }
+}
+
+.summary {
+  display: flex;
+  flex-direction: row;
+  padding-bottom: 20px;
+  margin-bottom: 36px;
+  border-bottom: solid 1px $mono203;
+  flex-wrap: wrap;
+
+  .instance-uptime {
+    display: flex;
+    flex-direction: row;
+    flex: 1;
+  }
+
+  .card {
+    flex: 1;
+    border-radius: 8px;
+    border: 1px solid $card-border-color;
+    background-color: $mono200;
+    margin: 16px 16px 16px 0;
+    padding: 24px;
+    box-sizing: border-box;
+    &.gpu-allocation {
+      flex: 1;
+      min-width: 148px;
+    }
+    &:last-child {
+      margin-right: 0 !important;
+    }
+    .label {
+      font-family: SpoqaM;
+      font-size: 14px;
+      color: $mono205;
+      height: 18px;
+    }
+    .list-box {
+      margin-top: 12px;
+      height: 78px;
+      overflow: auto;
+      .list {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+        &:last-child {
+          margin-bottom: 0;
+        }
+        .period {
+          font-family: SpoqaM;
+          font-size: 14px;
+          color: $mono207;
+          width: 320px;
+          .start {
+            display: inline-block;
+            margin-right: 3px;
+          }
+          .end {
+            margin-left: 3px;
+            display: inline-block;
+          }
+        }
+        .gpus {
+          white-space: nowrap;
+          font-size: 14px;
+          color: $mono205;
+        }
+        .bold {
+          font-family: SpoqaB;
+          font-size: 14px;
+          color: $mono207;
+        }
+      }
+    }
+    .info {
+      display: grid;
+      grid-template-columns: repeat(1, minmax(200px, 1fr));
+      grid-column-gap: 36px;
+      grid-row-gap: 24px;
+      .list {
+        display: flex;
+        flex-direction: column;
+        .label {
+          margin: 0 0 4px 0;
+          font-family: SpoqaM;
+          img {
+            width: 16px;
+            height: 16px;
+            margin: 0 4px 2px 0;
+            vertical-align: middle;
+          }
+        }
+        .value {
+          font-family: SpoqaM;
+          font-size: 16px;
+          color: $mono207;
+          height: 22px;
+        }
+      }
+    }
+  }
+
+  @media (max-width: 1280px) {
+    flex-direction: column;
+    .gpu-allocation {
+      min-height: 162px;
+      margin: 16px 0 0 0 !important;
+    }
+  }
+}
+
+.no-response,
+.no-data {
+  height: 78px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  font-size: 14px;
+  font-family: SpoqaM;
+  color: $mono207;
+}

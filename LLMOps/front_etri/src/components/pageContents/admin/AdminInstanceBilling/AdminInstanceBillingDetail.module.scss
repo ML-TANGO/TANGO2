@@ -1,0 +1,109 @@
+@import '@src/styles/color.scss';
+
+.container {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: 32px;
+  background-color: white;
+  font-family: SpoqaM;
+  color: $mono207;
+
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0px 12px;
+
+    .package-name {
+      font-size: 20px;
+      font-size: 700;
+    }
+
+    .cost {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+
+      .unit {
+        font-size: 16px;
+        color: $mono205;
+      }
+
+      .money {
+        font-size: 18px;
+        font-family: 700;
+      }
+    }
+  }
+
+  .gray-line {
+    width: 100%;
+    height: 1px;
+    background-color: $mono203;
+    margin: 16px 0px 24px;
+  }
+
+  .title {
+    font-size: 16px;
+    font-weight: 700;
+    padding-left: 24px;
+    padding-bottom: 16px;
+  }
+
+  .instance-table {
+    border: 1px solid $mono204;
+    border-radius: 12px;
+    font-size: 14px;
+  }
+
+  .type {
+    display: flex;
+    padding: 16px 114px;
+    font-size: 14px;
+    font-weight: 700;
+    color: $mono205;
+    border-bottom: 1px solid $mono203;
+
+    .name,
+    .domain,
+    .cost {
+      display: flex;
+      flex: 1;
+      justify-content: center;
+    }
+
+    .spec {
+      display: flex;
+      flex: 2;
+      justify-content: center;
+    }
+  }
+
+  .info {
+    display: flex;
+    padding: 16px 114px;
+    font-size: 14px;
+    font-weight: 700;
+    color: $mono207;
+    border-bottom: 1px solid $mono203;
+
+    &:last-child {
+      border-bottom: none;
+    }
+
+    .name,
+    .domain,
+    .cost {
+      display: flex;
+      flex: 1;
+      justify-content: center;
+    }
+
+    .spec {
+      display: flex;
+      flex: 2;
+      justify-content: center;
+    }
+  }
+}

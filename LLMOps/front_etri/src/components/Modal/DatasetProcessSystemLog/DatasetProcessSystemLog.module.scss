@@ -1,0 +1,75 @@
+@import '../modal.scss';
+
+.row {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+
+  .header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    .left-side {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+
+      .name {
+        font-size: 16px;
+        font-weight: 700;
+        color: $mono207;
+      }
+
+      .status {
+        padding: 4px 6px;
+        border-radius: 16px;
+        font-size: 10px;
+
+        &.pending,
+        &.scheduling {
+          background-color: $orange401;
+          color: $orange403;
+        }
+        &.done {
+          background-color: $mono202;
+          color: $mono205;
+        }
+        &.installing {
+          background-color: $lime601;
+          color: $lime603;
+        }
+        &.running {
+          color: $blue104;
+          background-color: $blue101;
+        }
+        &.error {
+          background-color: $red501;
+          color: $red502;
+        }
+      }
+    }
+
+    .download-btn {
+      padding: 8px 16px;
+      border-radius: 7px;
+      background-color: $blue101;
+      color: $blue104;
+      font-size: 12px;
+      cursor: pointer;
+    }
+  }
+
+  .log-content {
+    font-family: SpoqaM;
+    padding: 16px;
+    height: 560px;
+    max-height: 570px;
+    overflow-y: auto;
+    background-color: $mono201;
+    border-radius: 7px;
+    font-size: 14px;
+    margin: 0px;
+  }
+}

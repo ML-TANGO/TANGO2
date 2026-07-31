@@ -1,0 +1,36 @@
+@import '@src/styles/color.scss';
+
+.scroll-cont {
+  width: 100%;
+  padding: 16px 0;
+  border-radius: 16px;
+  background-color: $blue100;
+}
+
+.log-cont {
+  padding: 0 16px;
+  height: 454px;
+  display: flex;
+  overflow-y: auto;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.start-date-txt {
+  float: right;
+  color: $mono205;
+  font-family: SpoqaM;
+  font-size: 12px;
+  padding-right: 24px;
+  line-height: 12px;
+  letter-spacing: -0.18px;
+}
+
+.nodata {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}

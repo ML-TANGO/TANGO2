@@ -1,0 +1,39 @@
+@import '@src/styles/color.scss';
+
+.usage-chart {
+  width: 181px;
+  height: 181px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  &.user {
+    height: 160px;
+    width: 100%;
+    .name {
+      margin: 16px 0 3px;
+    }
+  }
+  .name {
+    font-family: SpoqaM;
+    font-size: 14px;
+    text-align: center;
+    color: $mono205;
+    margin: 8px 0 4px;
+  }
+  .usage,
+  .unit {
+    height: 31px;
+    font-family: SpoqaM;
+    font-size: 24px;
+    text-align: center;
+    color: $mono207;
+  }
+  .unit {
+    margin-left: 5px;
+  }
+
+  @media (max-width: 1024px) {
+    width: 142px;
+    height: 142px;
+  }
+}

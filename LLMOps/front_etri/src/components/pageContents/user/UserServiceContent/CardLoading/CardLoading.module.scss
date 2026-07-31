@@ -1,0 +1,75 @@
+@import '@src/styles/color.scss';
+
+.card-skeleton {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: auto;
+  box-sizing: border-box;
+  border-radius: 10px;
+  background-color: $mono200;
+  padding: 30px;
+  border: 1px solid $card-border-color;
+  .skeleton-box {
+    position: relative;
+    overflow: hidden;
+    background-color: $mono203;
+    height: 20px;
+    &.skeleton-1 {
+      width: 20%;
+      margin-bottom: 20px;
+    }
+    &.skeleton-2 {
+      width: 60%;
+      margin-bottom: 6px;
+    }
+    &.skeleton-3 {
+      width: 80%;
+      margin-bottom: 10px;
+    }
+    &.skeleton-4 {
+      width: 90%;
+      margin-bottom: 30px;
+    }
+    &.skeleton-5 {
+      width: 30%;
+      margin-bottom: 6px;
+    }
+    &.skeleton-6 {
+      width: 65%;
+      margin-bottom: 12px;
+    }
+    &.skeleton-7 {
+      width: 45%;
+      margin-bottom: 6px;
+    }
+    &.skeleton-8 {
+      width: 35%;
+      margin-bottom: 6px;
+    }
+
+    &::after {
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      transform: translateX(-100%);
+      background-image: linear-gradient(
+        90deg,
+        rgba($mono202, 0) 0,
+        rgba($mono202, 0.2) 20%,
+        rgba($mono202, 0.5) 60%,
+        rgba($mono202, 0)
+      );
+      animation: shimmer 2s infinite;
+      content: '';
+    }
+
+    @keyframes shimmer {
+      100% {
+        transform: translateX(100%);
+      }
+    }
+  }
+}

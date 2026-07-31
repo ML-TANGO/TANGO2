@@ -1,0 +1,20 @@
+@import '@src/styles/color.scss';
+
+.search-box {
+  margin-bottom: 10px;
+}
+
+.card-list {
+  max-height: 400px;
+  margin-bottom: 24px;
+  overflow: auto;
+  &.no-margin {
+    margin-bottom: 0;
+  }
+}
+.placeholder {
+  text-align: center;
+  font-size: 14px;
+  color: $mono207;
+  margin-top: 20px;
+}

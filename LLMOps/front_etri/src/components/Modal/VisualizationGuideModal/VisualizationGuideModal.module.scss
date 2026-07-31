@@ -1,0 +1,157 @@
+@import '../modal.scss';
+
+.no-guide {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: $mono208;
+  color: $mono201;
+  height: 400px;
+}
+
+.desc-template {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 8px;
+
+  .first {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 8px;
+
+    .number {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      font-size: 20px;
+      font-style: normal;
+      font-weight: 700;
+      color: $blue104;
+      box-shadow: 0px 3px 6px 0px rgba(45, 118, 248, 0.1);
+    }
+
+    .text {
+      font-size: 18px;
+      font-style: normal;
+      font-weight: 700;
+    }
+  }
+
+  .second {
+    display: flex;
+    padding-left: 16px;
+    gap: 32px;
+
+    .left-bar {
+      width: 2px;
+      height: 170px;
+      background-color: $blue101;
+
+      &.white {
+        background-color: white;
+        height: 0px;
+      }
+    }
+
+    .desc {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+
+      .first-text {
+        font-size: 14px;
+        font-style: normal;
+        font-weight: 500;
+      }
+
+      .second-text {
+        font-size: 12px;
+        font-style: normal;
+        font-weight: 500;
+        color: $mono205;
+      }
+
+      .command {
+        box-sizing: border-box;
+        display: flex;
+        justify-content: center;
+        flex-direction: column;
+        width: 520px;
+        height: 60px;
+        padding-left: 24px;
+        background-color: $mono205;
+        color: white;
+        font-size: 14px;
+        font-style: normal;
+        font-weight: 500;
+
+        .left-indent {
+          padding-left: 12px;
+        }
+      }
+    }
+  }
+}
+
+.middle-divider {
+  width: 568px;
+  height: 2px;
+  background-color: $mono203;
+  margin-top: 48px;
+  margin-bottom: 48px;
+}
+
+.code-container {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+
+  .box {
+    box-sizing: border-box;
+    width: 568px;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    padding: 24px;
+    border: 1px solid $blue101;
+    border-radius: 10px;
+
+    .text {
+      font-size: 16px;
+      font-style: normal;
+      font-weight: 700;
+    }
+
+    .command {
+      color: white;
+      background-color: $mono205;
+      font-size: 14px;
+      font-style: normal;
+      font-weight: 500;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 10px 24px;
+
+      .sub {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding-left: 12px;
+      }
+
+      .empty-div {
+        margin: 10px 0px;
+      }
+    }
+
+    .graph {
+      border: 2px solid $blue103;
+    }
+  }
+}

@@ -1,0 +1,252 @@
+@import '@src/styles/color.scss';
+
+$margin-top: 40px;
+$padding-xsmall: 16px;
+$padding-small: 20px;
+
+@mixin box-area() {
+  border-radius: 4px;
+  border: 1px solid $card-border-color;
+  background-color: $mono200;
+}
+
+@mixin sort-center() {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.worker-detail-wrap {
+  .back-to-list {
+    margin-bottom: 12px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    width: max-content;
+    cursor: pointer;
+    .back-btn-image {
+      width: 22px;
+      height: 22px;
+      margin-right: 4px;
+    }
+    .back-btn-label {
+      font-size: 16px;
+      color: $mono205;
+    }
+  }
+  .worker-detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 2px 0 20px 0;
+    .worker-btn {
+      display: flex;
+      gap: 12px;
+      .system-btn {
+        all: unset;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 110px;
+        height: 38px;
+        border-radius: 4px;
+        color: $blue104;
+        background-color: white;
+        cursor: pointer;
+      }
+
+      .stop-btn {
+        all: unset;
+        box-sizing: border-box;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 132px;
+        height: 38px;
+        padding: 0px 16px;
+        border-radius: 4px;
+        color: $red502;
+        background-color: white;
+        box-shadow: 0px 3px 6px 0px rgba(250, 78, 87, 0.1);
+        cursor: pointer;
+      }
+    }
+
+    .worker-name {
+      margin: 0;
+      font-size: 28px;
+    }
+  }
+  .ram-cpu-chart {
+    display: grid;
+    column-gap: 30px;
+    grid-template-columns: repeat(2, minmax(440px, 1fr));
+    grid-template-rows: repeat(auto-fill, minmax(240px, auto));
+    @media (max-width: 1368px) {
+      grid-template-columns: 100%;
+      row-gap: 30px;
+      grid-template-rows: repeat(2, minmax(240px, auto));
+    }
+    @media (max-width: 1024px) {
+      column-gap: 20px;
+      row-gap: 20px;
+    }
+    .chart {
+      @include box-area();
+      padding: $padding-xsmall $padding-small $padding-xsmall $padding-small;
+      font-family: SpoqaM;
+      & > div {
+        display: flex;
+        justify-content: space-between;
+        & > label {
+          font-size: 14px;
+          color: $mono205;
+        }
+      }
+    }
+  }
+  .gpu-chart {
+    margin-top: $margin-top;
+    & > ul {
+      @include box-area();
+      padding: $padding-small;
+      overflow: scroll;
+      display: flex;
+      flex-wrap: nowrap;
+      & > li {
+        margin-right: 24px;
+        margin-left: 24px;
+        &:nth-child(1) {
+          margin-left: 0 !important;
+        }
+        display: flex;
+        flex-direction: column;
+        min-width: 500px;
+        .chart-wrap {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(50%, auto));
+          .left,
+          .right {
+            margin-right: 1em;
+            .label {
+              display: flex;
+              justify-content: space-between;
+              font-size: 13px;
+              color: $mono205;
+            }
+            .chart-area {
+              width: 100%;
+              height: 120px;
+              outline: 1px solid $mono203;
+            }
+          }
+        }
+        & > label {
+          font-size: 14px;
+          color: $mono205;
+        }
+      }
+    }
+  }
+
+  .worker-chart {
+    @include box-area();
+    margin-top: $margin-top;
+    .setting-wrap {
+      display: flex;
+      border-bottom: 1px solid $card-border-color;
+      padding: $padding-small $padding-small $padding-small $padding-small;
+      .toggle-btn {
+        margin-right: 16px;
+        & > span {
+          color: $mono205;
+          font-size: 14px;
+        }
+        & > div {
+          margin-top: 6px;
+          display: flex;
+        }
+      }
+      .input-date {
+        margin-right: 16px;
+        & > span {
+          color: $mono205;
+          font-size: 14px;
+        }
+      }
+      .resolution {
+        margin-right: 16px;
+        & > span {
+          color: $mono205;
+          font-size: 14px;
+        }
+      }
+      .search-btn {
+        margin-top: 20px;
+      }
+    }
+    .chart-info {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(25%, auto));
+      padding: $padding-small $padding-xsmall $padding-small $padding-xsmall;
+      & > div {
+        border: 1px solid $blue104;
+        border-radius: 3px;
+        padding-top: $padding-xsmall;
+        padding-bottom: $padding-xsmall;
+        margin-right: 7px;
+        margin-left: 7px;
+        & > span {
+          @include sort-center();
+          white-space: nowrap;
+          &:nth-child(1) {
+            color: $mono205;
+            font-size: 11px;
+            padding-left: $padding-xsmall;
+            padding-right: $padding-xsmall;
+            & > label {
+              margin-right: 8px;
+              margin-left: 8px;
+            }
+          }
+          &:nth-child(2) {
+            font-size: 24px;
+            font-weight: bold;
+            padding-top: $padding-xsmall;
+            padding-bottom: $padding-xsmall;
+          }
+          &:nth-child(3) {
+            font-size: 13px;
+            color: $mono204;
+          }
+        }
+        &.call {
+          & > span {
+            &:nth-child(1) {
+              padding-top: 10px;
+            }
+            &:nth-child(2) {
+              padding-top: 26px;
+            }
+          }
+        }
+      }
+    }
+    .select-chart {
+      display: flex;
+      justify-content: space-between;
+      padding-left: $padding-small;
+      padding-right: $padding-small;
+      .left {
+        display: flex;
+      }
+    }
+    .chart-area {
+      padding: $padding-xsmall $padding-small $padding-xsmall $padding-small;
+      & > div {
+        background-color: $mono203;
+        height: 456px;
+      }
+    }
+  }
+}

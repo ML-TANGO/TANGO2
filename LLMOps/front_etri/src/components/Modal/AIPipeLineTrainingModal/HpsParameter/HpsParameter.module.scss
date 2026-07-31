@@ -1,0 +1,37 @@
+@import '@src/styles/color.scss';
+
+.search-param-box {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid $mono203;
+  border-radius: 10px;
+  padding: 24px;
+
+  .range-param {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+
+    .header-text {
+      font-size: 14px;
+      color: $mono207;
+      font-weight: 700;
+    }
+  }
+
+  .add-btn {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    padding: 8px 16px;
+    font-size: 12px;
+    color: $blue104;
+    background-color: white;
+    cursor: pointer;
+
+    &.bottom-line {
+      padding-bottom: 16px;
+      border-bottom: 1px solid $mono203;
+    }
+  }
+}

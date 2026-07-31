@@ -1,0 +1,46 @@
+@import '@src/styles/color.scss';
+
+.navigate-header-cont {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 30px;
+  .back-btn,
+  .monitor-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    span {
+      color: $mono208;
+      font-family: SpoqaB;
+      font-size: 16px;
+      line-height: 16px;
+      cursor: pointer;
+    }
+    img {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+    }
+  }
+
+  .monitor-btn {
+    img {
+      transform: scaleX(-1);
+    }
+  }
+}
+
+.button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background-color: initial;
+  cursor: pointer;
+
+  &:focus {
+    outline: 1px solid $blue104;
+    border-radius: 8px;
+    outline-offset: 1px;
+  }
+}

@@ -1,0 +1,28 @@
+@import '../modal.scss';
+
+.error {
+  display: flex;
+  flex-direction: column;
+  color: $red503;
+  padding-left: 12px;
+}
+
+.row {
+  margin-bottom: 32px;
+  .account {
+    display: flex;
+    gap: 8px;
+    div:first-child {
+      flex: 1;
+    }
+    div:last-child {
+      flex: 1;
+    }
+  }
+  .sub-title {
+    font-family: SpoqaB;
+    font-size: 16px;
+    margin-bottom: 8px;
+    color: $mono207;
+  }
+}

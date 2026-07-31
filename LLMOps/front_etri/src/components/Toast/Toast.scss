@@ -1,0 +1,70 @@
+/*
+  ReactToastify Custom styles
+  Overwrite this style to the ReactToastify style.
+*/
+@import '@src/styles/color.scss';
+
+.Toastify__toast-container {
+  min-width: 284px;
+  max-width: 700px;
+  width: fit-content;
+}
+
+.Toastify__toast {
+  min-height: 36px;
+  padding: 0;
+  border-radius: 8px;
+  box-sizing: border-box;
+  box-shadow: 0 3px 9px 0 rgba(18, 22, 25, 0.08),
+    0 2px 4px 1px rgba(18, 22, 25, 0.14);
+}
+
+.Toastify__close-button {
+  display: none;
+}
+
+.Toastify__toast-body {
+  padding: 6px 44px 6px 0;
+  margin: 0 20px;
+  background-repeat: no-repeat;
+  background-position: right 50%;
+  background-size: 20px 20px;
+  white-space: pre-line;
+  line-height: 24px;
+}
+
+.Toastify__toast--info {
+  .Toastify__toast-body {
+    background-image: url('@src/static/images/icon/close.svg');
+  }
+  background: $mono200;
+  color: $mono207;
+}
+
+.Toastify__toast--success {
+  .Toastify__toast-body {
+    background-image: url('@src/static/images/icon/close-w.svg');
+  }
+  background: $lime603;
+  color: $mono200;
+}
+
+.Toastify__toast--error {
+  .Toastify__toast-body {
+    background-image: url('@src/static/images/icon/close-w.svg');
+  }
+  background: $error-color;
+  color: $mono200;
+}
+
+// Custom styles that aren't in the ReactToastify style.
+.Toastify__toast-body-title {
+  font-family: SpoqaM;
+  font-size: 14px;
+  // font-weight: bold;
+}
+
+.Toastify__toast-body-subtitle {
+  font-family: SpoqaM;
+  font-size: 14px;
+}

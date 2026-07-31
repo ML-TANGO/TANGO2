@@ -1,0 +1,267 @@
+@import '@src/styles/color.scss';
+
+$icon-path: '/src/static/images/icon'; // 기본적인 icon 위치 그 뒤로는 인자로
+
+@mixin user-icon(
+  $icon-name,
+  $width: 16px,
+  $height: 16px,
+  $background-size: 16px,
+  $top: 10px,
+  $left: 16px
+) {
+  position: absolute;
+  background: url(#{$icon-path}/#{$icon-name}.svg);
+  display: inline-block;
+  width: $width;
+  height: $height;
+  z-index: 1;
+  background-size: $background-size;
+  top: $top;
+  left: $left;
+}
+
+.header {
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 10px;
+  .close-button {
+    width: 18px;
+    height: 18px;
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: transparent;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+  }
+  .img {
+    width: 34px;
+    height: 34px;
+    margin: 10px 0;
+  }
+  .title {
+    font-family: SpoqaB;
+    font-size: 25px;
+    margin-bottom: 8px;
+  }
+  .sub-title {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    font-size: 14px;
+  }
+}
+
+.wrapper {
+  margin-top: 20px;
+  .form {
+    padding: 0 30px;
+    .user-input {
+      position: relative;
+      display: inline-block;
+      width: 100%;
+      .position-ico {
+        @include user-icon('00-ic-bag');
+      }
+      .member-ico {
+        @include user-icon('00-ic-member');
+      }
+      .person-ico {
+        @include user-icon('00-ic-person');
+      }
+      .mail-ico {
+        @include user-icon('00-ic-mail');
+      }
+      .lock-ico {
+        @include user-icon('00-ic-lock');
+      }
+    }
+
+    .id-input {
+      position: relative;
+      display: flex;
+      gap: 12px;
+      width: 100%;
+      .user-ico {
+        @include user-icon('00-ic-person');
+      }
+      .id-check-btn {
+        width: 78px;
+        height: 36px;
+        border: 1px solid $primary-color;
+        border-radius: 4px;
+        font-size: 14px;
+        font-weight: 700;
+        background-color: #fff;
+        color: $primary-color;
+        padding: 0 10px;
+        text-wrap: nowrap;
+        cursor: pointer;
+        box-sizing: border-box;
+        &:active {
+          background-color: rgba(200, 219, 253, 0.5);
+        }
+        &.disabled {
+          color: $mono204;
+          background-color: $mono202;
+          border: 1px solid $mono202;
+        }
+      }
+      .none {
+        display: none;
+      }
+    }
+
+    .login-input {
+      width: 100%;
+      // margin-bottom: 12px;
+
+      &[name='user_id'],
+      &[name='position'],
+      &[name='department'],
+      &[name='name'],
+      &[name='user_mail'],
+      &[name='mail'],
+      &[name='password'],
+      &[name='confirmPassword'] {
+        position: relative;
+        width: 100%;
+        height: 36px;
+        padding: 12px 16px 12px 45px;
+        font-size: 14px;
+        font-weight: 500;
+        color: $mono207;
+        border: 1px solid $mono204;
+        border-radius: 4px;
+        box-sizing: border-box;
+
+        &[name='user_name'] {
+          text-transform: lowercase;
+          &::placeholder {
+            text-transform: none;
+          }
+
+          &:focus:not(:read-only) {
+            padding-left: 55px !important;
+            border: solid 1px $primary-color;
+            outline: solid 1px $primary-color;
+          }
+          &:read-only {
+            background-color: $mono202 !important;
+          }
+        }
+
+        &[name='user_id'],
+        &[name='position'],
+        &[name='department'],
+        &[name='name'],
+        &[name='mail'],
+        &[name='password'],
+        &[name='confirmPassword'] {
+          letter-spacing: 3px;
+          margin-bottom: 8px;
+
+          &:focus {
+            border: solid 1px $primary-color;
+            outline: solid 1px $primary-color;
+          }
+        }
+        &[name='password'],
+        &[name='confirmPassword'] {
+          padding: 12px 32px 12px 45px;
+        }
+        &[name='position'] {
+          margin-bottom: 18px;
+        }
+      }
+    }
+    .password-input {
+      position: relative;
+      display: inline-block;
+      width: 100%;
+      .password-ico {
+        @include user-icon('00-ic-lock');
+      }
+      .show-hide-btn {
+        position: absolute;
+        top: 6px;
+        right: 16px;
+        width: 20px;
+        border: none;
+        background: none;
+        cursor: pointer;
+        > img {
+          width: 20px;
+          height: 20px;
+        }
+      }
+    }
+
+    .user-mail {
+      position: relative;
+      display: inline-block;
+      width: 100%;
+
+      .mail-ico {
+        @include user-icon('00-ic-mail');
+      }
+      .show-hide-btn {
+        position: absolute;
+        top: 8px;
+        left: calc(100% - 48px);
+        width: 36px;
+        border: none;
+        background: none;
+        cursor: pointer;
+        > img {
+          width: 20px;
+          height: 20px;
+        }
+      }
+    }
+
+    .signup-btn {
+      color: $mono200;
+      background-color: $primary-color;
+      height: 36px;
+      font-size: 16px;
+      border-radius: 4px;
+      border: none;
+      width: 100%;
+      font-family: SpoqaM;
+      cursor: pointer;
+      &:hover {
+        background-color: $primary-color;
+      }
+      &:active {
+        box-shadow: 0px 3px 6px 0px rgba(45, 118, 248, 0.16);
+      }
+    }
+
+    .disabled {
+      color: $mono204;
+      background-color: $mono202;
+      cursor: not-allowed;
+      &:hover {
+        background-color: $mono202;
+      }
+    }
+  }
+  .message {
+    margin-bottom: 8px;
+    height: 28px;
+    display: flex;
+    justify-content: flex-star;
+    align-items: flex-end;
+    font-size: 13px;
+    color: #fa4e57;
+    line-height: 14px;
+    font-weight: 500;
+  }
+}

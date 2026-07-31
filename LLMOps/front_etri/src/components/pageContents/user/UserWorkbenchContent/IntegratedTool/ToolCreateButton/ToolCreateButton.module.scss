@@ -1,0 +1,62 @@
+@import '@src/styles/color.scss';
+
+.duplicate-btn {
+  background-color: $mono200;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  width: 366px;
+  height: 88px;
+  padding: 24px;
+  border-radius: 12px;
+  border: 1px solid $blue102;
+  box-sizing: border-box;
+  cursor: pointer;
+  &:hover {
+    border: 1px solid $blue102;
+  }
+  &:active {
+    border: 1px solid $blue102;
+    background-color: rgba(222, 233, 255, 0.2);
+  }
+  .icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 8px;
+    box-sizing: border-box;
+    border-radius: 4px;
+    border: solid 1px $mono203;
+    margin-right: 20px;
+    img {
+      width: 24px;
+      height: 24px;
+    }
+  }
+  .label {
+    flex: 1;
+    color: $mono207;
+    font-family: SpoqaB;
+    font-size: 16px;
+    font-weight: normal;
+    line-height: 14px;
+    cursor: pointer;
+  }
+  .plus {
+    width: 20px;
+    height: 20px;
+    background: linear-gradient($mono208, $mono208),
+      linear-gradient($mono208, $mono208);
+    background-position: center;
+    background-size: 100% 1px, 1px 100%;
+    background-repeat: no-repeat;
+  }
+}
+
+@media screen and (max-width: 768px) {
+  .duplicate-btn {
+    width: 352px;
+  }
+}

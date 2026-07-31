@@ -1,0 +1,14 @@
+@import '../modal.scss';
+
+.dataset-label {
+  height: 36px;
+}
+.label {
+  display: block;
+  color: $mono207;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 16px;
+  font-family: SpoqaB;
+  margin-bottom: 8px;
+}

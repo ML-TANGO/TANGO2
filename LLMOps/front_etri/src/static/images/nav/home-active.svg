@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="24px" height="24px" viewBox="0 0 24 24" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <title>icon/home-focused</title>
+    <defs>
+        <polygon id="path-1" points="10.2084309 20 10.2084309 13.7916667 13.7915691 13.7916667 13.7915691 20 19.1873536 20 19.1873536 11.9583333 19.8618267 12.5 21 11.1041667 12 4 3 11.1041667 4.1381733 12.5 4.81264637 11.9583333 4.81264637 20"></polygon>
+    </defs>
+    <g id="icon/home-focused" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <mask id="mask-2" fill="white">
+            <use xlink:href="#path-1"></use>
+        </mask>
+        <g id="Mask"></g>
+        <rect id="_color" fill="#2d76f8" mask="url(#mask-2)" x="0" y="0" width="24" height="24"></rect>
+    </g>
+</svg>

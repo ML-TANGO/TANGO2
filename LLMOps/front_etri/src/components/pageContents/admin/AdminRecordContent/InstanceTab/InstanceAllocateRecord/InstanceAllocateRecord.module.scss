@@ -1,0 +1,328 @@
+@import '@src/styles/color.scss';
+
+.summary {
+  min-width: 580px;
+  display: flex;
+  gap: 32px;
+  padding-bottom: 32px;
+  margin-bottom: 32px;
+  border-bottom: solid 1px $mono203;
+  flex-wrap: nowrap;
+
+  .card {
+    width: 50%;
+    height: 320px;
+    border-radius: 16px;
+    border: 1px solid $mono203;
+    background-color: $mono200;
+    box-sizing: border-box;
+    .headers {
+      align-items: center;
+      height: 46px;
+      box-sizing: border-box;
+      padding: 0 32px;
+      gap: 24px;
+      border-bottom: 1px solid #dee9ff;
+      color: $mono205;
+      text-align: center;
+      font-family: SpoqaB;
+      font-size: 14px;
+      line-height: 14px;
+    }
+    .gpu-allocation-list {
+      height: 268px;
+      display: flex;
+      flex-direction: column;
+      box-sizing: border-box;
+      overflow-y: scroll;
+      overflow-x: hidden;
+
+      &.center {
+        justify-content: center;
+        align-items: center;
+      }
+
+      .gpu-allocation-item {
+        padding: 8px 32px;
+        gap: 24px;
+        align-items: center;
+        text-align: center;
+        border-bottom: 1px solid #dee9ff;
+        &:last-child {
+          border-bottom: none;
+          padding-bottom: 16px;
+        }
+        .workspace-content {
+          text-align: left;
+        }
+        .usage-content {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          p {
+            display: flex;
+            gap: 4px;
+            font-family: SpoqaM;
+            font-size: 14px;
+            line-height: 14px;
+            margin: initial;
+            .gray {
+              color: $mono205;
+            }
+            .date {
+              color: $mono207;
+            }
+          }
+        }
+        .instance-content {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          text-align: left;
+          p {
+            margin: initial;
+            text-overflow: ellipsis;
+            color: $mono207;
+            font-family: SpoqaM;
+            font-size: 14px;
+            font-weight: 500;
+            line-height: 14px;
+          }
+        }
+      }
+    }
+
+    &:last-child {
+      margin-right: 0 !important;
+    }
+    .label {
+      font-family: SpoqaM;
+      font-size: 14px;
+      color: $mono205;
+      height: 18px;
+    }
+    .list-box {
+      margin-top: 6px;
+      .list {
+        display: flex;
+        flex-direction: row;
+        gap: 12px;
+        margin-bottom: 6px;
+        align-items: center;
+        &:last-child {
+          margin-bottom: 0;
+        }
+        .period,
+        workspaceName-txt {
+          font-family: SpoqaM;
+          font-size: 14px;
+          color: $mono207;
+          width: 320px;
+          white-space: nowrap;
+          .start {
+            display: inline-block;
+            margin-right: 3px;
+          }
+          .end {
+            margin-left: 3px;
+            display: inline-block;
+          }
+        }
+        .instanceInfo {
+          white-space: nowrap;
+          font-size: 14px;
+          color: $mono205;
+        }
+        .workspaceName-txt {
+          display: inline-block;
+          white-space: nowrap;
+        }
+        .bold {
+          font-family: SpoqaB;
+          font-size: 14px;
+          color: $mono207;
+        }
+      }
+    }
+    .info {
+      display: grid;
+      grid-template-columns: repeat(1, minmax(200px, 1fr));
+      grid-column-gap: 36px;
+      grid-row-gap: 24px;
+      .list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        .label {
+          margin: 0 0 4px 0;
+          font-family: SpoqaM;
+          img {
+            width: 16px;
+            height: 16px;
+            margin: 0 4px 2px 0;
+            vertical-align: middle;
+          }
+        }
+        .value-cont {
+          display: flex;
+          justify-content: space-between;
+          .value {
+            display: inline-block;
+            width: 50%;
+            height: 22px;
+            font-family: SpoqaM;
+            font-size: 16px;
+            color: $mono207;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            &:nth-child(2) {
+              text-align: right;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  .avg-time-cont {
+    width: 50%;
+    height: 320px;
+    border-radius: 16px;
+    border: 1px solid $mono203;
+    overflow: hidden;
+    box-sizing: border-box;
+    .back-card {
+      height: 286px;
+      .usage-time-header-cont {
+        height: 48px;
+        box-sizing: border-box;
+        display: flex;
+        border-bottom: 1px solid $mono203;
+        padding: 12px 24px;
+        background-color: #fff;
+      }
+      .storage-cont,
+      .record-instance-time-cont {
+        display: flex;
+        flex-direction: column;
+        background-color: #fff;
+        .storage-header-cont,
+        .record-time-header-cont {
+          height: 48px;
+          box-sizing: border-box;
+          display: flex;
+          align-items: center;
+          padding: 12px 0 12px 24px;
+          gap: 4px;
+          border-bottom: 1px solid $mono203;
+          .avg-time-txt,
+          .record-time-txt {
+            margin: initial;
+            color: $blue107;
+            font-size: 14px;
+            font-weight: 700;
+            line-height: 14px; /* 100% */
+          }
+        }
+        .storage-instance-cont,
+        .record-instance-cont {
+          display: flex;
+          flex-direction: column;
+          height: 90px;
+          overflow-y: auto;
+          &.height-78 {
+            height: 78px;
+          }
+          &.borderBottom {
+            border-bottom: 1px solid $mono203;
+          }
+          &.center {
+            justify-content: center;
+            align-items: center;
+          }
+          .storage-instance,
+          .record-instance {
+            width: 100%;
+            height: 30px;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0px 32px 0px 24px;
+            border-bottom: 1px solid $mono203;
+            &:last-child {
+              border-bottom: none;
+            }
+            .instance-name-txt,
+            .record-name-txt {
+              margin: initial;
+              padding: 8px 0 8px;
+              width: 480px;
+              color: $mono207;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+              font-family: SpoqaM;
+              font-size: 14px;
+              font-weight: 500;
+              line-height: 14px;
+            }
+
+            .instance-memory-txt,
+            .record-memory-txt {
+              font-family: SpoqaM;
+              font-size: 14px;
+              font-weight: 500;
+              line-height: 14px;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+            }
+          }
+
+          .record-instance:last-child {
+            border-bottom: none;
+          }
+        }
+      }
+    }
+  }
+}
+
+.rows {
+  display: flex;
+  .cell1,
+  .cell2,
+  .cell2 p,
+  .cell3,
+  .cell3 p {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .cell1 {
+    flex: 200;
+  }
+  .cell2,
+  .cell2 p {
+    flex: 165;
+    min-width: 160px;
+  }
+  .cell3,
+  .cell3 p {
+    flex: 335;
+  }
+}
+
+@media (max-width: 1360px) {
+  .summary {
+    flex-wrap: wrap;
+
+    .card,
+    .avg-time-cont {
+      width: 100%;
+    }
+  }
+}

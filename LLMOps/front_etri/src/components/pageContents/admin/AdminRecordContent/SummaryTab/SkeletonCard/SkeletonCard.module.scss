@@ -1,0 +1,107 @@
+@import '@src/styles/color.scss';
+
+.card {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  max-height: 420px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  border: 1px solid $card-border-color;
+  background-color: $mono200;
+  min-width: 320px;
+  overflow: scroll;
+  .status-box,
+  .content-info-box {
+    padding: 24px;
+    box-sizing: border-box;
+  }
+  .status-box {
+    width: 100%;
+    border-bottom: 1px solid $card-border-color;
+    .name {
+      font-family: SpoqaM;
+      font-size: 24px;
+      color: $mono207;
+      margin: 4px 24px 6px 0;
+    }
+    .range {
+      white-space: nowrap;
+      color: $mono205;
+      font-size: 14px;
+      font-family: SpoqaR;
+    }
+  }
+  .content-info-box {
+    width: 100%;
+    .content-title {
+      margin: inherit;
+      margin-bottom: 12px;
+    }
+    .right-box {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      .info-item {
+        .label {
+          font-family: SpoqaR;
+          white-space: nowrap;
+          color: $mono205;
+          font-size: 14px;
+          margin: 0 0 4px 0;
+          height: 18px;
+          img {
+            width: 16px;
+            height: 16px;
+            margin-right: 4px;
+            vertical-align: top;
+          }
+        }
+        ul {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          li {
+            display: flex;
+            justify-content: space-between;
+            margin: inherit;
+          }
+        }
+      }
+      // flex-wrap: wrap;
+      // align-content: space-between;
+    }
+  }
+}
+
+.skeleton-box {
+  position: relative;
+  overflow: hidden;
+  background-color: $mono203;
+  height: 16px;
+  width: 100%;
+
+  &::after {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    transform: translateX(-100%);
+    background-image: linear-gradient(
+      90deg,
+      rgba($mono202, 0) 0,
+      rgba($mono202, 0.2) 20%,
+      rgba($mono202, 0.5) 60%,
+      rgba($mono202, 0)
+    );
+    animation: shimmer 2s infinite;
+    content: '';
+  }
+
+  @keyframes shimmer {
+    100% {
+      transform: translateX(100%);
+    }
+  }
+}

@@ -1,0 +1,141 @@
+@import '@src/styles/color.scss';
+
+.container {
+  min-width: 600px;
+
+  box-sizing: border-box;
+  .title {
+    color: $mono207;
+    font-size: 18px;
+    font-family: SpoqaB;
+    padding: 16px 32px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid $blue101;
+    box-sizing: border-box;
+    width: 100%;
+  }
+  .content {
+    border-bottom: 1px solid $blue101;
+    display: flex;
+    min-width: 600px;
+    overflow-x: auto;
+    height: 124px;
+
+    &:last-of-type {
+      border-bottom: none;
+    }
+
+    .left {
+      padding: 16px 32px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+
+      min-width: 245px;
+      box-sizing: border-box;
+      border-right: 1px solid $blue101;
+
+      .resource {
+        font-size: 18px;
+        // margin-bottom: 34px;
+        color: $blue107;
+        font-family: SpoqaB;
+        line-height: 18px;
+      }
+      .fig-box {
+        .fig {
+          display: flex;
+          gap: 16px;
+          align-items: center;
+          font-size: 16px;
+          .label {
+            color: $mono205;
+            font-family: SpoqaM;
+            font-size: 14px;
+          }
+          .value {
+            color: $mono207;
+            font-family: SpoqaB;
+          }
+        }
+      }
+    }
+    .right {
+      // width: 100%;
+      padding: 16px 32px;
+      width: 100%;
+      font-size: 12px;
+
+      .br {
+        background-color: $mono203;
+        width: 100%;
+        height: 1px;
+      }
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      .alloc {
+        display: flex;
+        align-items: center;
+
+        .progress-box {
+          flex: 1;
+          .progress-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            .label {
+              color: $mono205;
+              font-family: SpoqaM;
+              // font-size: 14px;
+            }
+            .value {
+              color: $mono207;
+              font-family: SpoqaB;
+            }
+          }
+          .progress {
+            height: 4px;
+            background-color: #c1c1c1;
+            border-radius: 4px;
+            overflow: hidden;
+            box-sizing: border-box;
+            min-width: 128px;
+
+            .progress-bar {
+              height: 100%;
+              transition: width 0.3s ease, background-color 0.3s ease; // 부드러운 전환 효과
+              border-radius: 4px; // 둥근 모서리
+            }
+          }
+        }
+
+        .pcent {
+          flex: 0 0 45px;
+          margin: 0 8px 0 16px;
+        }
+        .value {
+          flex: 1;
+        }
+        @media (max-width: 1440px) {
+          justify-content: space-between;
+
+          .progress-box {
+            flex: 3;
+          }
+
+          .pcent {
+            flex: 1;
+          }
+
+          .value {
+            flex: 1;
+          }
+        }
+      }
+    }
+  }
+}

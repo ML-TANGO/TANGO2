@@ -1,0 +1,51 @@
+@import '@src/styles/color.scss';
+
+.list-item {
+  display: flex;
+  align-items: center;
+  padding-top: 8px;
+  font-size: 14px;
+
+  .check {
+    flex: 3.5;
+    margin: 0 8px;
+    display: flex;
+    .check-label-cont {
+      max-width: 200px;
+    }
+  }
+
+  > div {
+    flex: 1;
+    margin: 0 8px;
+
+    &:nth-child(3) {
+      flex: 1.5;
+    }
+
+    &:last-child {
+      flex: 2;
+      margin-right: 0px;
+    }
+
+    &.sub-row {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .server-selected {
+      display: inline-block;
+      font-family: SpoqaM;
+      font-size: 14px;
+      padding: 4px 0;
+      cursor: pointer;
+
+      .fixed {
+        display: inline-block;
+        width: 48px;
+        margin-left: 4px;
+        text-align: left;
+      }
+    }
+  }
+}

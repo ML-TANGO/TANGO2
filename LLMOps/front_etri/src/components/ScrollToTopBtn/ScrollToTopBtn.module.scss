@@ -1,0 +1,31 @@
+@import '@src/styles/color.scss';
+
+.scroll-to-top-btn {
+  position: fixed;
+  bottom: 112px;
+  right: 4px;
+  width: 44px;
+  height: 44px;
+  border-radius: 22px 0 0 22px;
+  border: none;
+  box-shadow: 0 5px 20px 0 rgba(18, 22, 25, 0.16),
+    0 6px 6px -3px rgba(18, 22, 25, 0.22);
+  background-color: $mono200;
+  color: $primary-color;
+  font-family: SpoqaM;
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity 0.3s ease-out;
+  cursor: default;
+  img {
+    width: 14px;
+    height: 14px;
+  }
+  &.show {
+    opacity: 1;
+    cursor: pointer;
+  }
+  &:hover {
+    background-color: $hover-bg-color;
+  }
+}

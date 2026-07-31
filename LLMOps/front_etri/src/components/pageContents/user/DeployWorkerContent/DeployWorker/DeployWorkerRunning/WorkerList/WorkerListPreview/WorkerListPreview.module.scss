@@ -1,0 +1,334 @@
+@import '../WorkerList.module.scss';
+
+@keyframes rotate360 {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@mixin worker-status-visible($background-color) {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 15px;
+  margin-top: 3%;
+  background-color: $background-color;
+}
+
+.preview {
+  display: flex;
+  height: 156px;
+  background-color: $mono200;
+  border-radius: 16px;
+  border: 1px solid $blue103;
+  margin-top: 10px;
+  font-size: 16px;
+
+  &.pending {
+    border: 1px solid $yellow304;
+  }
+
+  &.installing {
+    border: 1px solid $lime603;
+  }
+
+  &.error {
+    border: 1px solid $red502;
+  }
+
+  &.overview {
+    border-bottom-left-radius: 0px;
+    border-bottom-right-radius: 0px;
+    border-bottom: none;
+  }
+
+  .left {
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    .worker-status {
+      @include sort-center();
+      & > label {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-right: 5px;
+        &.installing,
+        &.pending {
+          color: $mono205;
+          & > div {
+            @include worker-status-visible($yellow304);
+          }
+        }
+        &.running {
+          color: $mono206;
+          & > div {
+            @include worker-status-visible($blue104);
+          }
+        }
+        &.error {
+          color: $red502;
+          & > div {
+            @include worker-status-visible($red502);
+          }
+        }
+      }
+    }
+
+    &.installing {
+      height: 78px;
+    }
+    .btn-box {
+      flex: 1;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-left: 8px;
+      .worker-stop-btn {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-left: 32px;
+        width: 82px;
+        display: flex;
+        justify-content: center;
+
+        @keyframes spin {
+          0% {
+            transform: rotate(0deg);
+          }
+          100% {
+            transform: rotate(360deg);
+          }
+        }
+
+        .spinner {
+          animation: spin 2s linear infinite;
+        }
+
+        .btn {
+          all: unset;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          width: 82px;
+          height: 32px;
+          // padding: 0px 16px;
+          border-radius: 4px;
+          box-shadow: 0px 3px 6px 0px rgba(250, 78, 87, 0.1);
+          font-size: 14px;
+          font-style: normal;
+          font-weight: 700;
+          cursor: pointer;
+          color: $red502;
+
+          &:hover {
+            background-color: $red501;
+          }
+        }
+      }
+    }
+
+    .overview-append-btn {
+      display: flex;
+      align-items: center;
+      max-width: 16px;
+      height: 100%;
+      cursor: pointer;
+      margin-right: 12px;
+
+      .empty-box {
+        width: 18px;
+        height: 18px;
+      }
+
+      .installing-animation {
+        width: 4px;
+        height: 4px;
+        & > div {
+          @include install-animation();
+        }
+      }
+      & > label {
+        font-size: 16px;
+        color: $primary-color;
+      }
+    }
+  }
+
+  .instance-info {
+    display: flex;
+    flex-direction: column;
+    width: 400px;
+    padding-top: 16px;
+    margin-left: 24px;
+
+    @media (max-width: 1600px) {
+      & {
+        width: 500px;
+      }
+    }
+
+    .first-row {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+
+      .worker-id {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 700;
+      }
+
+      .circle {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+
+        &.pending {
+          background-color: $yellow304;
+        }
+        &.running {
+          background-color: $blue104;
+        }
+        &.error {
+          background-color: $red502;
+        }
+        &.installing {
+          background-color: $lime603;
+        }
+      }
+    }
+
+    .second-row {
+      display: flex;
+      flex-direction: column;
+      margin-left: 28px;
+      gap: 8px;
+      white-space: nowrap;
+
+      .start-time {
+        font-size: 14px;
+        font-style: normal;
+        font-weight: 500;
+        color: $mono205;
+        margin-bottom: 4px;
+      }
+
+      .info {
+        display: flex;
+        gap: 15px;
+        font-size: 13px;
+        font-style: normal;
+        font-weight: 500;
+
+        .resource,
+        .ram {
+          color: $mono205;
+        }
+
+        .ram {
+          margin-right: 6px;
+        }
+      }
+    }
+  }
+  .right {
+    display: grid;
+    padding: 20px;
+    padding-left: 50px;
+
+    .status {
+      display: flex;
+      align-items: center;
+      width: 700px;
+      height: 120px;
+      gap: 12px;
+
+      @media (max-width: 1600px) {
+        width: 550px;
+      }
+
+      .text {
+        color: $lime603;
+        font-size: 16px;
+        font-style: normal;
+        font-weight: 500;
+
+        &.pending {
+          color: $orange403;
+        }
+
+        &.installing {
+          color: $lime603;
+        }
+      }
+    }
+
+    .chart {
+      display: flex;
+      width: 100%;
+      .chart-wrap {
+        width: 100%;
+        .preview-chart {
+          display: flex;
+          justify-content: space-between;
+
+          & > label {
+            display: flex;
+            justify-content: center;
+            font-size: 13px;
+            color: $mono205;
+          }
+        }
+        .chart-area {
+          border-radius: 2px;
+          &:hover {
+            outline: 1px solid $blue104;
+          }
+        }
+        &:nth-child(1) {
+          padding-right: 20px;
+          padding-left: 20px;
+        }
+      }
+    }
+  }
+}
+
+@media screen and (max-width: 1220px) {
+  .preview {
+    flex-direction: column;
+    height: auto;
+    .left {
+      width: auto;
+      padding: 16px;
+      border-right: none;
+      border-bottom: 1px solid $card-border-color;
+    }
+    .right {
+      width: auto;
+      display: flex;
+      flex-direction: row;
+      flex-wrap: wrap;
+      grid-gap: 12px;
+      padding: 16px;
+      .chart {
+        .chart-wrap {
+          padding: 0;
+        }
+      }
+      .overview-append-btn {
+        margin-left: 12px;
+      }
+    }
+  }
+}
+
+.tooltip-contents-box {
+  margin-bottom: 8px;
+}

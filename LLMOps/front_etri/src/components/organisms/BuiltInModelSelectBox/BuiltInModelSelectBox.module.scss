@@ -1,0 +1,47 @@
+@import '@src/styles/color.scss';
+
+.model-select-box {
+  padding: 20px 24px;
+  margin-top: 12px;
+  margin-bottom: 48px;
+  border-radius: 4px;
+  background-color: rgba($blue104, 0.08);
+  .row {
+    margin-bottom: 24px;
+    ::spelling-error &:last-child {
+      margin-bottom: 0px;
+    }
+    .step {
+      margin: 0 0 8px 0;
+      font-size: 16px;
+      color: $mono207;
+    }
+    .float-box {
+      display: flex;
+      justify-content: space-between;
+      & > div:first-child {
+        width: calc(30% - 4px);
+        margin-right: 4px;
+      }
+      & > div:last-child {
+        width: 70%;
+      }
+    }
+    .empty-message {
+      text-align: center;
+      font-size: 14px;
+      color: $mono207;
+      margin-top: 20px;
+    }
+  }
+  .job-box {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    .group {
+      display: flex;
+      flex-direction: row;
+      gap: 4px;
+    }
+  }
+}

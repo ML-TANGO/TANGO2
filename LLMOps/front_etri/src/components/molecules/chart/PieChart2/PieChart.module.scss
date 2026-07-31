@@ -1,0 +1,49 @@
+@import '@src/styles/color.scss';
+
+.pie-chart-wrap {
+  .chart-title {
+    font-size: 12px;
+    text-align: center;
+    color: $mono206;
+    margin: 20px 0 0 0;
+  }
+  .chart-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 30px;
+    position: relative;
+    .pcent {
+      color: $mono207;
+      position: relative;
+      display: flex;
+      justify-content: center;
+      bottom: 83px;
+      left: 3px;
+      font-size: 20px;
+    }
+  }
+  .legend {
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 8px;
+      &:last-child {
+        margin-bottom: 0px;
+      }
+      .color-i {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        border-radius: 4px;
+        margin-right: 4px;
+      }
+      .legend-text {
+        font-size: 12px;
+        &.total {
+          font-family: SpoqaB;
+        }
+      }
+    }
+  }
+}

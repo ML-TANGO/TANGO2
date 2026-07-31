@@ -1,0 +1,46 @@
+@import '@src/styles/color.scss';
+
+.status {
+  width: 39px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
+
+  &.working,
+  &.serviceRunning,
+  &.running,
+  &.active {
+    color: $blue104;
+    background-color: $blue101;
+  }
+  &.installing {
+    color: $lime603;
+    background-color: $lime601;
+  }
+
+  &.reserved,
+  &.installing,
+  &.attaching &.pending,
+  &.scheduling {
+    color: #ff7a00;
+    background-color: #fff0e4;
+  }
+  &.complete,
+  &.done,
+  &.stop {
+    color: $mono205;
+    background-color: $mono201;
+  }
+  &.expired,
+  &.fail,
+  &.disconnecting,
+  &.failed,
+  &.error {
+    color: #fa4e57;
+    background-color: #ffe6e5;
+  }
+}

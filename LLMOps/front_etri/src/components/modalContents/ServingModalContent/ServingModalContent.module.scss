@@ -1,0 +1,41 @@
+@import '@src/styles/color.scss';
+
+.container {
+  padding: 0px 48px 22px 48px;
+  .title-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    .name {
+      width: auto;
+      font-family: SpoqaB;
+      font-size: 16px;
+      color: $mono207;
+    }
+    .count {
+      display: flex;
+      font-size: 12px;
+      font-family: SpoqaM;
+      & > p {
+        margin: 0px;
+        color: #2d76f8;
+      }
+    }
+    .description-container {
+      align-items: center;
+      display: flex;
+      .description {
+        font-family: SpoqaB;
+        font-size: 14px;
+        line-height: 14px;
+        color: $mono205;
+      }
+    }
+  }
+
+  .error-message {
+    height: 48px;
+    color: $error-color;
+    font-size: 14px;
+  }
+}

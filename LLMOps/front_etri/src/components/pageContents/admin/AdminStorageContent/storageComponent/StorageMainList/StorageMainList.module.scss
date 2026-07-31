@@ -1,0 +1,126 @@
+@import '@src/styles/color.scss';
+
+.table {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  max-height: 487px;
+  border: 1px solid $blue101;
+  border-radius: 16px;
+  overflow-x: auto;
+  box-sizing: border-box;
+  background-color: #fff;
+  overflow: hidden;
+  .scroll-cont {
+    overflow-x: auto;
+    .thead,
+    .tbody {
+      width: 100%;
+      min-height: 35px;
+      .tr {
+        display: flex;
+        align-items: center;
+        box-sizing: border-box;
+        color: $mono206;
+        font-size: 12px;
+        text-wrap: nowrap;
+        .td {
+          display: flex;
+          align-items: center;
+          font-size: 14px;
+          font-family: SpoqaB;
+          color: #747474;
+          padding-right: 55px;
+          padding: 16px 0;
+          border-bottom: 1px solid $blue101;
+          .border {
+            width: 100%;
+            height: 1px;
+            background-color: #dbdbdb;
+          }
+
+          &.flex-cont {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+          }
+
+          &.cursor {
+            cursor: pointer;
+          }
+
+          &:first-child {
+            flex: 1 240px;
+            min-width: 240px;
+            padding-left: 32px;
+            padding-right: 42px;
+            gap: 8px;
+          }
+
+          &:nth-child(2) {
+            flex: 1 60px;
+            min-width: 60px;
+            justify-content: center;
+            padding-right: 42px;
+          }
+
+          &:nth-child(3) {
+            flex: 1 80px;
+            min-width: 80px;
+            justify-content: center;
+            padding-right: 55px;
+          }
+
+          &:nth-child(4) {
+            flex: 1 484px;
+            min-width: 484px;
+            justify-content: center;
+            padding-right: 32px;
+          }
+        }
+      }
+      .nodata {
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+    }
+    .thead {
+      position: absolute;
+      top: 0;
+      z-index: 50;
+      background-color: #fff;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .tbody {
+      padding-top: 52px;
+      position: relative;
+      height: 256px;
+      .tr {
+        .td {
+          height: 86px;
+          &:first-child {
+            &:after {
+              content: '';
+              display: inline-block;
+              width: 16px;
+              height: 16px;
+              background-image: url(@src/static/images/icon/ic-shortcut-gray.svg);
+              background-size: contain;
+              background-repeat: no-repeat;
+            }
+          }
+        }
+      }
+      .spinner-cont {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+      }
+    }
+  }
+}

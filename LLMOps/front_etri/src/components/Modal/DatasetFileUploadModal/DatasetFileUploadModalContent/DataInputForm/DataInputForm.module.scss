@@ -1,0 +1,14 @@
+@import '@src/styles/color.scss';
+
+.wrapper {
+  padding: 16px 0px 0px 0px;
+  border-radius: 4px;
+  .row {
+    padding-bottom: 32px;
+    .guide {
+      font-size: 12px;
+      font-family: SpoqaM;
+      margin-top: 6px;
+    }
+  }
+}

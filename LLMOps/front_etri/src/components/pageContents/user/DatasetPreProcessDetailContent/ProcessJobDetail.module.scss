@@ -1,0 +1,234 @@
+@import '@src/styles/color.scss';
+
+.container {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  background-color: white;
+  border: 1px solid $blue102;
+  border-radius: 16px;
+  &.open {
+    border-bottom-right-radius: 0px;
+    border-bottom-left-radius: 0px;
+    border-bottom: 0px;
+  }
+
+  .basic-info {
+    display: flex;
+    align-items: center;
+
+    &.open {
+      padding-bottom: 24px;
+      border-bottom: 2px solid $blue101;
+    }
+
+    .arrow {
+      cursor: pointer;
+      margin-right: 32px;
+    }
+
+    .system-log {
+      padding: 8px 16px;
+      margin-right: 32px;
+      color: $blue104;
+      font-size: 12px;
+      cursor: pointer;
+
+      &.disabled {
+        color: $mono203;
+        cursor: not-allowed;
+      }
+
+      &:hover {
+        background-color: $mono201;
+      }
+    }
+
+    .status {
+      padding: 6px 8px;
+      border-radius: 16px;
+      font-size: 12px;
+
+      &.pending,
+      &.scheduling {
+        background-color: $orange401;
+        color: $orange403;
+      }
+      &.done {
+        background-color: $mono202;
+        color: $mono205;
+      }
+      &.installing {
+        background-color: $lime601;
+        color: $lime603;
+      }
+      &.running {
+        color: $blue104;
+        background-color: $blue101;
+      }
+      &.error {
+        background-color: $red501;
+        color: $red502;
+      }
+    }
+
+    .info-box {
+      display: flex;
+      flex: 1;
+
+      .first-info {
+        flex: 1.3;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+      }
+
+      .detail {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        font-size: 14px;
+        font-weight: 500;
+
+        &.runcode {
+          flex: 2;
+        }
+
+        .name {
+          font-weight: 700;
+          font-size: 16px;
+        }
+
+        .type,
+        .time {
+          color: $mono205;
+        }
+      }
+
+      .btn-box {
+        // flex: 1;
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        justify-content: flex-end;
+
+        .tool-tip-content {
+          display: flex;
+          flex-direction: column;
+          font-size: 16px;
+          font-weight: 500;
+          line-height: 150%; /* 24px */
+        }
+
+        .process-download-btn {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+          padding: 8px 16px;
+          border-radius: 8px;
+          font-size: 12px;
+          border: 1px solid $mono203;
+          color: $mono203;
+          cursor: pointer;
+
+          &.orange {
+            border: 1px solid $orange403;
+            color: $orange403;
+          }
+        }
+
+        .trash-btn {
+          cursor: pointer;
+        }
+      }
+    }
+  }
+
+  .detail-info {
+    display: flex;
+    align-items: center;
+    background-color: white;
+    padding-top: 24px;
+    padding-left: 56px;
+
+    .stop-btn-box {
+      display: flex;
+      width: 90px;
+      justify-content: center;
+      margin-right: 32px;
+
+      .stop-btn {
+        cursor: pointer;
+      }
+    }
+
+    .info-box {
+      display: flex;
+      flex: 1;
+
+      .pending-ui {
+        flex: 1.3;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: $orange403;
+        font-size: 12px;
+      }
+
+      .detail {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        font-size: 14px;
+        font-weight: 500;
+
+        &.first-detail {
+          flex: 1.3;
+          .duration {
+            color: $mono205;
+          }
+        }
+        &.long-detail {
+          flex: 3;
+        }
+
+        .name {
+          font-weight: 700;
+          font-size: 16px;
+        }
+
+        .type,
+        .time {
+          color: $mono205;
+        }
+
+        .value {
+          &.paramValue {
+            display: inline;
+            gap: 24px;
+            word-break: break-all;
+
+            .param {
+              .param-key {
+                color: $mono205;
+                margin-right: 8px;
+              }
+
+              .param-value {
+                color: $mono207;
+                margin-right: 24px;
+              }
+            }
+          }
+        }
+      }
+
+      .empty-width {
+        width: 24px;
+      }
+    }
+  }
+}

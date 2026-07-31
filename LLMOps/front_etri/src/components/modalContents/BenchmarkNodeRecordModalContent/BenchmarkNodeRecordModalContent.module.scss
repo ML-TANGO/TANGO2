@@ -1,0 +1,338 @@
+@import '@src/styles/color.scss';
+
+.title {
+  display: flex;
+  flex-direction: row;
+  margin-top: 0;
+  margin-bottom: 20px;
+  font-family: SpoqaB;
+  font-size: 20px;
+  color: $mono207;
+  .node-name {
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    width: fit-content;
+    background-color: $mono202;
+    color: $mono207;
+    margin-left: 12px;
+    padding: 4px 16px;
+    border-radius: 20px;
+    .icon {
+      width: 18px;
+      height: 18px;
+      padding: 0 5px 0 0;
+      &.arrow {
+        padding: 0 12px;
+      }
+    }
+  }
+}
+.modal-content {
+  padding: 0 44px 10px 0;
+  max-height: 60vh;
+  overflow: auto;
+
+  .index {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    color: $mono205;
+    background-color: transparent;
+    border: 1px solid $mono205;
+    width: 14px;
+    height: 14px;
+    font-size: 10px;
+    line-height: 1;
+    font-family: SpoqaM;
+    margin-left: 6px;
+  }
+
+  .summary-box {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    margin-bottom: 12px;
+    .group-box {
+      display: flex;
+      flex-direction: row;
+      flex-wrap: wrap;
+      align-items: center;
+      grid-gap: 8px;
+      .button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: auto;
+        min-width: 80px;
+        height: 30px;
+        padding: 0 10px;
+        border: 1px solid $mono204;
+        border-radius: 4px;
+        font-size: 13px;
+        font-family: SpoqaM;
+        color: $mono205;
+        white-space: nowrap;
+        box-sizing: border-box;
+        cursor: pointer;
+        &.show {
+          border: 1px solid $blue104;
+        }
+        &.hide {
+          border: 1px solid $mono204;
+        }
+        &.selected {
+          background-color: rgba($blue104, 0.04);
+          border: 1px solid $blue104;
+          color: $blue104;
+          .index {
+            color: $mono200;
+            background-color: $blue104;
+            border: 1px solid $blue104;
+          }
+        }
+        &:hover {
+          background-color: $hover-bg-color;
+        }
+      }
+    }
+    .info-box {
+      display: flex;
+      flex-direction: column;
+      margin-top: 8px;
+      padding: 16px 20px 20px;
+      border: 1px solid $mono204;
+      border-radius: 4px;
+      background-color: $mono201;
+      .interface {
+        color: $mono207;
+        font-size: 14px;
+        margin-bottom: 16px;
+        .icon {
+          width: 14px;
+          margin: 0 4px;
+          vertical-align: baseline;
+        }
+      }
+      .bandwidth-box {
+        display: flex;
+        flex-direction: row;
+        justify-content: space-evenly;
+        .item {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: flex-start;
+          border-radius: 50%;
+          width: 180px;
+          height: 180px;
+          padding: 16px;
+          box-sizing: border-box;
+          label {
+            font-size: 14px;
+            display: inline-block;
+            margin-bottom: 36px;
+          }
+          .bandwidth {
+            font-size: 22px;
+            font-family: SpoqaB;
+            margin-bottom: 10px;
+          }
+          .datetime {
+            font-size: 11px;
+            font-family: SpoqaR;
+            color: $mono205 !important;
+            width: 90px;
+            text-align: center;
+          }
+          &.max {
+            color: $blue107;
+            border: 2px solid $blue107;
+            background-color: rgba($blue106, 0.08);
+          }
+          &.min {
+            color: $yellow304;
+            border: 2px solid $yellow304;
+            background-color: rgba($yellow304, 0.08);
+          }
+          &.avg {
+            color: $lime603;
+            border: 2px solid $lime603;
+            background-color: rgba($lime603, 0.08);
+          }
+        }
+      }
+    }
+  }
+
+  .btn-box {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    margin-bottom: 10px;
+    margin-right: 4px;
+  }
+
+  .table-container {
+    width: 100%;
+    max-height: 560px;
+    overflow: auto;
+    .benchmark-history-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      text-align: left;
+      line-height: 1.5;
+      border-left: 1px solid $mono204;
+      font-size: 13px;
+      thead {
+        position: sticky;
+        top: 0px;
+      }
+      tbody {
+        tr {
+          th {
+            border-top: 0;
+          }
+        }
+      }
+      tr {
+        th,
+        td {
+          min-width: 60px;
+          padding: 8px;
+          text-align: center;
+          vertical-align: middle;
+          border-bottom: 1px solid $mono204;
+          border-right: 1px solid $mono204;
+          box-sizing: border-box;
+          &.disabled {
+            color: $mono204;
+            background-color: $mono202;
+          }
+        }
+        th {
+          border-top: 1px solid $mono204;
+          border-left: 1px solid $mono200;
+          background: $mono202;
+          &.datetime {
+            width: 145px;
+            min-width: 95px;
+          }
+          &.network {
+            min-width: 135px;
+          }
+          &.bandwidth {
+            min-width: 140px;
+          }
+        }
+        td {
+          background: $mono200;
+          .bandwidth {
+            color: $mono207;
+          }
+          .error {
+            color: $error-color;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            img {
+              width: 20px;
+              height: 20px;
+            }
+          }
+        }
+        &.selected {
+          td:not(.datetime) {
+            background-color: rgba($blue104, 0.08);
+            color: $blue104;
+            .bandwidth {
+              color: $blue104;
+            }
+            .index {
+              color: $mono200;
+              background-color: $blue104;
+              border: 1px solid $blue104;
+            }
+          }
+        }
+
+        &.min {
+          td:not(.datetime) {
+            background-color: rgba($yellow304, 0.08);
+            color: $yellow304;
+            &.network {
+              border-top: 1px solid $yellow304;
+              border-bottom: 1px solid $yellow304;
+              border-left: 1px solid $yellow304;
+            }
+            &.interface {
+              border-top: 1px solid $yellow304;
+              border-bottom: 1px solid $yellow304;
+            }
+            &.bandwidth {
+              border-top: 1px solid $yellow304;
+              border-bottom: 1px solid $yellow304;
+              border-right: 1px solid $yellow304;
+            }
+            .bandwidth-value {
+              color: $yellow304;
+            }
+            .index {
+              color: $mono200;
+              background-color: $yellow304;
+              border: 1px solid $yellow304;
+            }
+          }
+        }
+
+        &.max {
+          td:not(.datetime) {
+            background-color: rgba($blue106, 0.08);
+            color: $blue107;
+            &.network {
+              border-top: 1px solid $blue107;
+              border-bottom: 1px solid $blue107;
+              border-left: 1px solid $blue107;
+            }
+            &.interface {
+              border-top: 1px solid $blue107;
+              border-bottom: 1px solid $blue107;
+            }
+            &.bandwidth {
+              border-top: 1px solid $blue107;
+              border-bottom: 1px solid $blue107;
+              border-right: 1px solid $blue107;
+            }
+            .bandwidth-value {
+              color: $blue107;
+            }
+            .index {
+              color: $mono200;
+              background-color: $blue107;
+              border: 1px solid $blue107;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  .no-data-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: $mono206;
+    .icon {
+      width: 32px;
+      height: 32px;
+      margin-bottom: 8px;
+    }
+    .message {
+      margin-bottom: 20px;
+      font-size: 16px;
+    }
+  }
+}

@@ -1,0 +1,80 @@
+@import '@src/styles/color.scss';
+
+.search-box {
+  padding: 24px;
+  border-radius: 8px;
+  background-color: $blue100;
+  margin-bottom: 16px;
+  .select-area {
+    display: flex;
+    & > div {
+      margin-right: 8px;
+    }
+  }
+}
+
+.chips-area {
+  border-top: 1px solid $mono203;
+  padding-top: 12px;
+  margin-top: 12px;
+  .param-group {
+    display: inline-block;
+    margin-right: 10px;
+    margin-bottom: 8px;
+    word-break: keep-all;
+    .param-name {
+      font-family: SpoqaM;
+      font-size: 14px;
+      color: $mono207;
+    }
+    .param-value {
+      color: $mono205;
+    }
+    .chip {
+      position: relative;
+      display: inline-block;
+      height: 24px;
+      padding: 0 28px 0 12px;
+      margin-right: 10px;
+      margin-bottom: 6px;
+      line-height: 24px;
+      word-break: keep-all;
+      border-radius: 12px;
+      font-size: 14px;
+      background-color: $mono204;
+      color: $mono200;
+      .remove-btn {
+        position: absolute;
+        top: calc(50% - 1px);
+        right: 6px;
+        transform: translateY(-50%);
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+      }
+    }
+  }
+}
+
+.show-more-area {
+  position: relative;
+  text-align: center;
+  .show-more-btn {
+    position: absolute;
+    width: 36px;
+    height: 36px;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: transparent;
+    border: none;
+    cursor: pointer;
+    img {
+      width: 28x;
+      height: 28px;
+      &.hide {
+        transform: rotate(180deg);
+      }
+    }
+  }
+}

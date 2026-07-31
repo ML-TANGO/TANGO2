@@ -1,0 +1,190 @@
+@import '@src/styles/color.scss';
+
+@mixin box-content {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  border-radius: 16px;
+  border: 1px solid $blue102;
+  background-color: #fff;
+}
+
+.container {
+  display: flex;
+  gap: 32px;
+
+  .info-container {
+    @include box-content;
+    flex: 3;
+    gap: 32px;
+
+    &.running {
+      background-color: $mono201;
+      border: 1px solid $mono203;
+    }
+
+    .info-box {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      font-size: 14px;
+
+      .type {
+        color: $mono205;
+      }
+
+      .value {
+        display: flex;
+        gap: 16px;
+        color: $mono207;
+        word-break: break-all;
+
+        .gray-text {
+          color: $mono205;
+        }
+      }
+    }
+  }
+
+  .option {
+    @include box-content;
+    flex: 1;
+    color: $mono207;
+    font-size: 14px;
+
+    &.running {
+      background-color: $mono201;
+      border: 1px solid $mono203;
+    }
+
+    .title {
+      display: flex;
+      gap: 8px;
+      font-weight: 700;
+      margin-bottom: 32px;
+
+      .condition-text {
+        font-size: 14px;
+        font-weight: 500;
+        color: $red502;
+
+        &.enough {
+          color: $blue104;
+        }
+      }
+    }
+
+    .instance {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 16px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid $mono203;
+
+      .name {
+        display: flex;
+        gap: 8px;
+
+        span:first-child {
+          color: $mono205;
+        }
+      }
+
+      .info {
+        display: flex;
+        gap: 8px;
+      }
+    }
+
+    .resource {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+
+      .detail {
+        display: flex;
+        justify-content: space-between;
+
+        .type {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          color: $mono205;
+
+          .condition {
+            font-size: 10px;
+            padding: 4px 6px;
+            border-radius: 5px;
+            background-color: $red501;
+            color: $red502;
+
+            &.enough {
+              background-color: $blue101;
+              color: $blue104;
+            }
+          }
+
+          .tool-tip-content {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+
+            .header {
+              font-size: 14px;
+              font-weight: 700;
+              color: $mono207;
+              padding-bottom: 8px;
+              border-bottom: 1px solid $mono203;
+            }
+
+            .used-box {
+              .deploy-type {
+                box-sizing: border-box;
+                flex: none;
+                display: inline-flex;
+                justify-content: center;
+                align-items: center;
+                border-radius: 16px;
+                font-size: 10px;
+                padding: 4px 6px;
+
+                &.deployment,
+                &.collect,
+                &.analyzer {
+                  color: $orange403;
+                  background-color: $orange401;
+                }
+
+                &.project,
+                &.preprocessing,
+                &.fine_tuning {
+                  color: $blue104;
+                  background-color: $blue101;
+                }
+              }
+
+              .info {
+                display: flex;
+                justify-content: space-between;
+                font-size: 14px;
+                padding-left: 4px;
+
+                .resource {
+                  color: $mono205;
+                }
+              }
+            }
+          }
+        }
+
+        .info {
+          display: flex;
+          gap: 8px;
+          color: $mono207;
+        }
+      }
+    }
+  }
+}

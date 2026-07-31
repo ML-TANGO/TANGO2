@@ -1,0 +1,33 @@
+@import '@src/styles/color.scss';
+
+.integrated-tool-box {
+  display: flex;
+  flex-direction: column;
+
+  .tool-title {
+    font-size: 20px;
+    font-weight: normal;
+    font-family: SpoqaB;
+    color: #121619;
+    margin: 0 0 24px 0;
+  }
+
+  .tool-list {
+    display: flex;
+    flex-wrap: wrap;
+    grid-gap: 48px;
+    @media screen and (max-width: 768px) {
+      grid-gap: 20px;
+    }
+  }
+  .add-btn-box {
+    margin-bottom: 24px;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    grid-gap: 48px;
+    @media screen and (max-width: 768px) {
+      grid-gap: 20px;
+    }
+  }
+}

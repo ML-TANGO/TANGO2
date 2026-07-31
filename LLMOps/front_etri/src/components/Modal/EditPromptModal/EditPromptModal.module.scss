@@ -1,0 +1,12 @@
+.row {
+  margin-bottom: 32px;
+}
+
+.bottom-box {
+  display: flex;
+  margin-top: 32px;
+
+  .content {
+    flex: 1;
+  }
+}

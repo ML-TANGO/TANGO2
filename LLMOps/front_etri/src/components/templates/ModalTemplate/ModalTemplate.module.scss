@@ -1,0 +1,42 @@
+@import '@src/styles/color.scss';
+
+.shadow {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.6);
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 100;
+  width: 780px;
+  border-radius: 8px;
+  box-shadow: 0 3px 16px 0 rgba(0, 0, 0, 0.1);
+  background-color: $mono200;
+  box-sizing: border-box;
+  opacity: 0;
+  transition: width 0.3s, height 0.3s, opacity 0.3s;
+  .dim {
+    z-index: 1;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    border-radius: 8px;
+  }
+  .modal-content-wrap {
+    max-height: 60vh;
+    overflow: auto;
+  }
+}

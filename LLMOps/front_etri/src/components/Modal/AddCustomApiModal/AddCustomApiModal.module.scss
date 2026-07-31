@@ -1,0 +1,55 @@
+@import '@src/styles/color.scss';
+
+.table {
+  border: 1px solid $mono203;
+  border-radius: 10px;
+  .thead {
+    display: grid;
+    grid-template-columns: 233fr 233fr 38fr;
+    gap: 16px;
+    padding: 16px;
+    color: $mono205;
+    font-family: SpoqaM;
+    font-size: 12px;
+    line-height: 12px;
+    letter-spacing: -0.18px;
+    border-bottom: 1px solid $mono203;
+    span {
+      display: inline-block;
+      text-align: center;
+    }
+  }
+  .list {
+    padding: 0px 16px;
+    .item {
+      display: grid;
+      grid-template-columns: 233fr 233fr 38fr;
+      gap: 16px;
+      padding: 8px 0 0 0;
+      .trash-btn {
+        border: none;
+        background-color: initial;
+        img {
+          width: 16px;
+          height: 16px;
+        }
+      }
+    }
+  }
+  .btn-cont {
+    display: flex;
+    justify-content: flex-end;
+    padding: 16px;
+  }
+}
+
+.trash-btn,
+.edit-btn {
+  border: none;
+  background-color: inherit;
+  cursor: pointer;
+  img {
+    width: 16px;
+    height: 16px;
+  }
+}

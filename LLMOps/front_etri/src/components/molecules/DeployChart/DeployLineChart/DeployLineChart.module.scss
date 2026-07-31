@@ -1,0 +1,15 @@
+@import 'src/styles/color.scss';
+
+.tooltip {
+  background-color: $mono200;
+  padding: 8px;
+  border-radius: 6px;
+  font-family: SpoqaM;
+  box-shadow: 0 3px 9px 0 rgb(18 22 25 / 8%), 0 2px 4px 1px rgb(18 22 25 / 14%);
+  &.small {
+    font-size: 12px;
+  }
+  &.medium {
+    font-size: 14px;
+  }
+}

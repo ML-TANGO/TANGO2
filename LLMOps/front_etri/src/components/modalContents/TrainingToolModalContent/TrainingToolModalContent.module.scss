@@ -1,0 +1,62 @@
+@import '@src/styles/color.scss';
+
+.modal-title {
+  display: flex;
+  align-items: center;
+  flex-direction: row;
+  font-family: SpoqaB;
+  font-size: 20px;
+  .divide {
+    margin: 0 8px;
+  }
+  .tool-icon {
+    width: 24px;
+    height: 24px;
+    margin-right: 4px;
+  }
+  .tool-label {
+    font-size: 20px;
+    font-family: SpoqaM;
+  }
+  .replica-number {
+    height: 28px;
+    padding: 6px 10px;
+    color: $mono205;
+    font-size: 16px;
+    margin-right: 4px;
+    line-height: 1;
+    background-color: $mono202;
+    border-radius: 4px;
+    box-sizing: border-box;
+    margin-left: 8px;
+  }
+}
+
+.modal-content {
+  padding: 22px 48px 22px 48px;
+  .default-box {
+    margin: 20px 0 40px 0;
+    font-size: 16px;
+    font-family: SpoqaB;
+    color: $mono207;
+  }
+  .row {
+    margin-bottom: 20px;
+    &.margin-bottom-48 {
+      margin-bottom: 48px;
+    }
+    .input-label {
+      display: inline-block;
+      font-size: 16px;
+      font-family: SpoqaB;
+      color: $mono207;
+      margin-bottom: 8px;
+      .optional {
+        color: $mono205;
+        font-size: 16px;
+        font-family: SpoqaM;
+        margin-left: 4px;
+      }
+    }
+  }
+}

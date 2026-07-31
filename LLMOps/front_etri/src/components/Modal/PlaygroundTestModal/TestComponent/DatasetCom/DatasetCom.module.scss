@@ -1,0 +1,15 @@
+.message-cont {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 8px 0;
+  .warn-message {
+    display: inline-block;
+    margin: initial;
+    color: #fa4e57;
+  }
+}
+.btn-cont {
+  display: flex;
+  justify-content: right;
+}

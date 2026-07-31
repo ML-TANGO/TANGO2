@@ -1,0 +1,17 @@
+@import '@src/styles/color.scss';
+
+.powered-by {
+  display: flex;
+  align-items: center;
+  margin-left: 20px;
+  .text {
+    font-family: SpoqaR;
+    font-size: 11px;
+    color: $mono201;
+    white-space: nowrap;
+  }
+  .logo {
+    height: 16px;
+    margin-left: 6px;
+  }
+}

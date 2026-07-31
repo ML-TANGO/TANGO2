@@ -1,0 +1,1 @@
+{"version":3,"file":"constant.js","sources":["../../../../../../../modules/d3-selection/src/constant.js"],"sourcesContent":["export default function(x) {\n  return function() {\n    return x;\n  };\n}\n"],"names":[],"mappings":"AAAe,iBAAQ,CAAC,CAAC,EAAE;AAC3B,EAAE,OAAO,WAAW;AACpB,IAAI,OAAO,CAAC,CAAC;AACb,GAAG,CAAC;AACJ;;;;"}

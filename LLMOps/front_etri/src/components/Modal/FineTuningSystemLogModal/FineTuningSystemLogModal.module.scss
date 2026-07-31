@@ -1,0 +1,35 @@
+@import '@src/styles/color.scss';
+
+.container {
+  .title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .content {
+    margin-top: 24px;
+    height: 400px;
+    overflow-y: auto;
+    background-color: $mono201;
+    padding: 16px;
+    box-sizing: border-box;
+    white-space: pre-wrap;
+    font-family: SpoqaM;
+    font-size: 14px;
+    font-style: normal;
+    font-weight: 500;
+    line-height: 22px;
+  }
+  .noData {
+    margin-top: 24px;
+    height: 400px;
+    background-color: $mono201;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    font-family: SpoqaM;
+    color: $mono205;
+  }
+}

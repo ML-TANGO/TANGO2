@@ -1,0 +1,23 @@
+@import '@src/styles/color.scss';
+
+.content {
+  .btn-filter {
+    display: flex;
+    flex-direction: row;
+
+    button {
+      margin-right: 8px;
+    }
+    > div {
+      width: 184px;
+    }
+  }
+  .name-box {
+    .name {
+      color: $mono207;
+    }
+    .workspace {
+      color: $mono205;
+    }
+  }
+}

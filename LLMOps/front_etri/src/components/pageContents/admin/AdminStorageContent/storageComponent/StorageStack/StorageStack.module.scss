@@ -1,0 +1,58 @@
+@import '@src/styles/color.scss';
+
+.stack-wrap {
+  display: flex;
+  align-items: center;
+
+  .stack {
+    flex: 1;
+    position: relative;
+    height: 6px;
+    border-radius: 2px;
+    background-color: $mono200;
+    overflow: hidden;
+    border: 1px solid $mono203;
+    .fill {
+      position: absolute;
+      display: flex;
+      top: 0;
+      left: 0;
+      width: 0;
+      height: 6px;
+      background-color: $primary-color;
+      transition: width 0.4s;
+      z-index: 1;
+
+      &.danger {
+        background-color: $error-color;
+      }
+      &.warn {
+        background-color: $caution-color;
+      }
+    }
+    .allocation {
+      z-index: 0;
+      position: absolute;
+      display: flex;
+      top: 0;
+      left: 0;
+      width: 0;
+      height: 4px;
+      background-color: $primary-color;
+      transition: width 0.4s;
+      background-color: $mono204;
+    }
+  }
+  .rate {
+    flex: 0 0 40px;
+    font-size: 12px;
+    color: $mono206;
+    padding-left: 15px;
+    .error {
+      color: $error-color;
+    }
+    .bar {
+      margin: 0 3px;
+    }
+  }
+}

@@ -1,0 +1,49 @@
+@import '@src/styles/color.scss';
+
+.lang-setting {
+  position: relative;
+  .options {
+    top: 0;
+    right: 0;
+    width: auto;
+    padding: 8px 0;
+    box-sizing: border-box;
+    display: block;
+
+    .option_li {
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      width: 122px;
+      height: 36px;
+      padding: 9px 10px;
+      text-align: center;
+      cursor: pointer;
+      font-size: 14px;
+      font-family: SpoqaM;
+      color: $mono207;
+      box-sizing: border-box;
+
+      .flag {
+        width: 21px;
+        height: 14px;
+        margin: 2px 8px 1px 0;
+        border: solid 1px $mono202;
+      }
+
+      &.selected {
+        color: $blue108;
+        &::after {
+          content: '';
+          display: inline-block;
+          margin-bottom: 10px;
+          margin-left: 3px;
+          width: 4px;
+          height: 4px;
+          background-color: $blue108;
+          border-radius: 50%;
+        }
+      }
+    }
+  }
+}

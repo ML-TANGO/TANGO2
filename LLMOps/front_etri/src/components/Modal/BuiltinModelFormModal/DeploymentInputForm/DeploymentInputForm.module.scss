@@ -1,0 +1,43 @@
+@import '@src/styles/color.scss';
+
+.input-list {
+  .input-item {
+    &:not(:first-child) {
+      padding-top: 30px;
+      margin-top: 48px;
+      border-top: 1px solid $mono204;
+    }
+
+    .float-box {
+      display: flex;
+      align-items: flex-end;
+      margin: 0 0 36px;
+
+      .text-wrap {
+        flex: 1;
+        margin-right: 10px;
+      }
+
+      .remove-btn {
+        width: 36px;
+        height: 36px;
+        border: none;
+        border-radius: 4px;
+        padding: 4px;
+        background-position: 50%;
+        background-image: url(@src/static/images/icon/minus.svg);
+        background-size: 24px 24px;
+        background-color: $mono205;
+        background-repeat: no-repeat;
+        cursor: pointer;
+        &.disabled {
+          opacity: 0.2;
+          cursor: not-allowed;
+        }
+      }
+    }
+  }
+}
+.btn-wrap {
+  margin-top: 36px;
+}

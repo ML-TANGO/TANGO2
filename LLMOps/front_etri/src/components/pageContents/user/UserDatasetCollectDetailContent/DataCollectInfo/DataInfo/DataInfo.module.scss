@@ -1,0 +1,27 @@
+@import '@src/styles/color.scss';
+
+.flex-24 {
+  display: grid;
+  grid-template-rows: 1026fr 194fr;
+  height: 1244px;
+  gap: 24px;
+}
+
+@media (min-width: 768px) and (max-width: 1199px) {
+  .flex-24 {
+    height: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+}
+
+/* 모바일 */
+@media (max-width: 767px) {
+  .flex-24 {
+    height: auto;
+    gap: 24px;
+    display: flex;
+    flex-direction: column;
+  }
+}

@@ -1,0 +1,1 @@
+{"version":3,"file":"constant.js","sources":["../../../../../../../modules/d3-drag/src/constant.js"],"sourcesContent":["export default x => () => x;\n"],"names":[],"mappings":"AAAA,eAAe,CAAC,IAAI,MAAM,CAAC;;;;"}

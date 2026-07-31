@@ -1,0 +1,35 @@
+@import '@src/styles/color.scss';
+
+.task-status {
+  padding: 0 20px 20px 20px;
+  .title {
+    margin: 0;
+    padding: 0 0 10px 0;
+  }
+  .filter {
+    margin-bottom: 10px;
+  }
+  .list {
+    margin-bottom: 20px;
+    background-color: $mono202;
+    padding: 10px;
+    border-radius: 4px;
+  }
+  .switch-btn {
+    width: 100%;
+    height: 24px;
+    margin-top: 10px;
+    line-height: 24px;
+    border: none;
+    color: $mono205;
+    background-color: $mono200;
+    border: 1px solid $mono203;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    &.active {
+      color: $mono200;
+      background-color: $primary-color;
+    }
+  }
+}

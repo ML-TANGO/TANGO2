@@ -1,0 +1,33 @@
+.chart-container {
+  position: relative;
+}
+
+.legend-wrap {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  justify-content: center;
+}
+.legend {
+  list-style: none;
+  display: flex;
+  margin: 0;
+  padding: 0;
+  li {
+    margin-right: 10px;
+    display: flex;
+    align-items: center;
+    font-size: 12px;
+    white-space: nowrap;
+    .bullet {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 3px;
+      background-color: #ccc;
+      margin-right: 4px;
+    }
+  }
+}

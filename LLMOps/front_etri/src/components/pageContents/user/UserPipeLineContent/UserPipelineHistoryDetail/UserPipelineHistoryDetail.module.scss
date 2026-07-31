@@ -1,0 +1,80 @@
+@import '@src/styles/color.scss';
+
+.header-cont {
+  margin-bottom: 32px;
+  text-wrap: nowrap;
+  .back-btn {
+    color: $mono208;
+    font-family: SpoqaB;
+    font-size: 16px;
+    line-height: 16px;
+    display: flex;
+    gap: 4px;
+    margin-bottom: 24px;
+    cursor: pointer;
+  }
+  .header-content-cont {
+    display: flex;
+    justify-content: space-between;
+    height: 32px;
+    margin-bottom: 32px;
+    .title-cont {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin-right: 8px;
+      gap: 8px;
+      .header-title {
+        display: inline-block;
+        margin: initial;
+        color: $mono207;
+        font-family: SpoqaB;
+        font-size: 24px;
+        line-height: 100%;
+      }
+    }
+  }
+  .info-list {
+    display: flex;
+    border: 1px solid $blue102;
+    border-radius: 16px;
+    padding: 24px;
+    background-color: #fff;
+    gap: 32px;
+    margin-bottom: 32px;
+    .info-item {
+      width: 200px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      .label {
+        color: $mono205;
+        font-family: SpoqaM;
+        font-size: 14px;
+        line-height: 14px;
+      }
+      .value {
+        color: $mono207;
+        font-family: SpoqaM;
+        font-size: 14px;
+        line-height: 14px;
+      }
+    }
+  }
+}
+
+.pipeline-title {
+  margin: initial;
+  margin-bottom: 16px;
+  color: $mono205;
+  font-family: SpoqaM;
+  font-size: 14px;
+  line-height: 14px;
+}
+
+.pipeline-cont {
+  padding: 48px;
+  background-color: #fff;
+  border: 1px solid #c8dbfd;
+  border-radius: 16px;
+}

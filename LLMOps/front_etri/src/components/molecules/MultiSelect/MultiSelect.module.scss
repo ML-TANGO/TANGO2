@@ -1,0 +1,176 @@
+@import '@src/styles/color.scss';
+
+.multi-select {
+  .label {
+    display: inline-block;
+    font-size: 16px;
+    font-family: SpoqaB;
+    color: $title-color;
+    margin-bottom: 8px;
+    .optional {
+      display: inline-block;
+      margin-left: 8px;
+      color: $mono205;
+      font-size: 14px;
+      font-weight: 500;
+      font-family: SpoqaR;
+    }
+  }
+  .list-controller-box {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    .list-box {
+      height: 238px;
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      border: 1px solid $mono203;
+      border-radius: 4px;
+      box-sizing: border-box;
+      .search-box {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        border-bottom: 1px solid $mono203;
+        .search-input {
+          font-size: 14px;
+          font-family: SpoqaR;
+          width: 100%;
+          margin: 0px;
+          height: 30px;
+          border: none;
+          box-sizing: border-box;
+          &::placeholder {
+            color: $mono204;
+          }
+        }
+        .search-icon {
+          width: 25px;
+          height: 25px;
+          padding-left: 12px;
+        }
+        .search-index {
+          text-wrap: nowrap;
+          padding-right: 12px;
+          font-size: 14px;
+          font-family: SpoqaR;
+          color: $mono205;
+        }
+      }
+
+      .title {
+        background: $mono203;
+        font-size: 16px;
+        font-family: SpoqaM;
+        color: $mono205;
+        padding: 8px 16px;
+        margin: 0px;
+        border-radius: 4px 4px 0 0;
+      }
+      .list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 5px;
+        box-sizing: border-box;
+        .delete-disable {
+          margin-bottom: 4px;
+          background: $mono200;
+          border-radius: 4px;
+          overflow: hidden;
+          button {
+            width: 100%;
+            height: 36px;
+            padding: 6px 10px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-family: SpoqaM;
+            text-align: left;
+            color: $mono205;
+            background-color: transparent;
+          }
+        }
+        .list-item {
+          margin-bottom: 4px;
+          background: $mono200;
+          border-radius: 4px;
+          overflow: hidden;
+          &:hover {
+            background: $hover-bg-color;
+          }
+          button {
+            width: 100%;
+            height: 36px;
+            padding: 6px 10px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-family: SpoqaM;
+            text-align: left;
+            color: $mono207;
+            background-color: transparent;
+          }
+        }
+        .selected {
+          background: $hover-bg-color;
+          margin-bottom: 4px;
+          & > button {
+            width: 100%;
+            height: 36px;
+            padding: 6px 10px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-family: SpoqaM;
+            text-align: left;
+            color: $mono207;
+            background-color: transparent;
+          }
+        }
+      }
+    }
+    .selected-list {
+      .title {
+        background-color: $primary-color;
+        color: $mono200;
+      }
+    }
+    .btns {
+      width: 36px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      grid-gap: 8px;
+      button {
+        position: relative;
+        width: 36px;
+        height: 36px;
+        border-radius: 4px;
+        background-color: $mono205;
+        color: $mono200;
+        border: none;
+        cursor: pointer;
+        img {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          width: 26px;
+          height: 26px;
+          color: $mono200;
+        }
+      }
+    }
+  }
+  .error {
+    display: block;
+    height: 48px;
+    box-sizing: border-box;
+    padding: 4px 0 0 0;
+    font-size: 14px;
+    font-weight: 500;
+    color: $error-color;
+  }
+}

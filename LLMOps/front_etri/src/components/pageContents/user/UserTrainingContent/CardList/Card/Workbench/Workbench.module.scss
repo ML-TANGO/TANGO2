@@ -1,0 +1,79 @@
+@import '@src/styles/color.scss';
+
+.workbench {
+  flex: 1;
+  max-height: 200px;
+  .tool-item {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    // justify-content: space-between;
+    padding: 8px 12px;
+    width: 236px;
+    cursor: default;
+    .tool-resource {
+      display: flex;
+      align-items: center;
+    }
+    .tool-icon {
+      width: 24px;
+      height: 24px;
+      margin-right: 8px;
+    }
+    .tool-replica-number {
+      height: 26px;
+      padding: 6px 8px;
+      color: $mono205;
+      font-size: 14px;
+      margin-right: 4px;
+      line-height: 1;
+      background-color: $mono202;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+    .tool-name {
+      // width: 90px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: $mono206;
+      font-size: 14px;
+      margin-right: 4px;
+    }
+    .tool-btn {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      .status {
+        padding-left: 10px;
+        font-size: 14px;
+        white-space: nowrap;
+        &.running {
+          color: $lime603;
+        }
+        &.installing,
+        &.scheduling,
+        &.pending {
+          color: $yellow303;
+        }
+        &.error {
+          color: $error-color;
+        }
+      }
+      .btn-label {
+        max-width: 76px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
+  }
+  &.disabled {
+    pointer-events: none;
+  }
+
+  .link-btn {
+    transform: translateX(10px);
+  }
+}

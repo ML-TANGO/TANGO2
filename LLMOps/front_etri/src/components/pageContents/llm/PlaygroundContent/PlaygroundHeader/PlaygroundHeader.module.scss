@@ -1,0 +1,61 @@
+@import '@src/styles/color.scss';
+
+.header-cont {
+  .navigate-header-cont {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 30px;
+    .back-btn,
+    .monitor-btn {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      span {
+        color: $mono208;
+        font-family: SpoqaB;
+        font-size: 16px;
+        line-height: 16px;
+        cursor: pointer;
+      }
+      img {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+      }
+    }
+
+    .monitor-btn {
+      img {
+        transform: scaleX(-1);
+      }
+    }
+  }
+  .header-content-cont {
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    margin-bottom: 38px;
+    .header-title {
+      display: inline-block;
+      margin: initial;
+      color: $mono207;
+      font-family: SpoqaB;
+      font-size: 24px;
+      line-height: 100%;
+    }
+    .header-content-right {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      .error-message-paragraph {
+        margin: initial;
+        color: $red502;
+        font-family: SpoqaM;
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 14px;
+        text-wrap: nowrap;
+      }
+    }
+  }
+}

@@ -1,0 +1,49 @@
+@import '@src/styles/color.scss';
+
+.chart {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.text-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 34px;
+  .min-max {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 14px;
+    height: 16px;
+    line-height: 16px;
+    color: $mono205;
+    font-family: SpoqaM;
+    .min,
+    .max {
+      &.caution {
+        color: $caution-color;
+      }
+      &.warning {
+        color: $error-color;
+      }
+    }
+
+    .divide {
+      display: inline-block;
+      padding: 0 6px;
+      height: 14px;
+      overflow: hidden;
+    }
+  }
+
+  .size {
+    font-size: 12px;
+    font-family: SpoqaR;
+    color: $mono205;
+  }
+}

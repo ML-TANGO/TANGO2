@@ -1,0 +1,61 @@
+@import '@src/styles/color.scss';
+
+.cont {
+  display: grid;
+  grid-template-columns: 722fr 402fr 402fr;
+  gap: 32px;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  h2 {
+    color: #121619;
+    font-family: SpoqaB;
+    font-size: 14px;
+    line-height: 14px;
+    margin: initial;
+    text-wrap: nowrap;
+  }
+
+  .training-dataset-txt {
+    color: $mono207;
+    font-family: SpoqaM;
+    font-size: 14px;
+    line-height: 14px;
+  }
+
+  .label-cont {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    .label {
+      color: $mono205;
+      font-family: SpoqaM;
+      font-size: 14px;
+      line-height: 14px;
+      text-wrap: nowrap;
+    }
+    .value {
+      margin: initial;
+      color: #121619;
+      font-family: SpoqaM;
+      font-size: 14px;
+      line-height: 22px;
+      word-break: break-all;
+      .preprocessing-list {
+        display: flex;
+      }
+    }
+  }
+}
+
+/* 모바일 */
+@media (max-width: 767px) {
+  .cont {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+  }
+}

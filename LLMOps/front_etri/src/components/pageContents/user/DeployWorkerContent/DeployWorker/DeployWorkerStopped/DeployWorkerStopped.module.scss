@@ -1,0 +1,10 @@
+@import '../DeployWorker.module.scss';
+
+.worker-stopped-wrap {
+  .top {
+    margin-top: $padding-small;
+    margin-bottom: $padding-primary;
+    display: flex;
+    float: right;
+  }
+}

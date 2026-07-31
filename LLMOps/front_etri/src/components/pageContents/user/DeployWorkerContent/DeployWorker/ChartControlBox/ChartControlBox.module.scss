@@ -1,0 +1,113 @@
+@import '../DeployWorker.module.scss';
+
+.chart-info {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(276px, calc(25% - 12px)));
+  grid-gap: 16px;
+  padding: $padding-small;
+  @media (max-width: 1530px) {
+    grid-template-columns: repeat(auto-fill, minmax(276px, calc(50% - 7px)));
+    grid-gap: 14px;
+  }
+  .contents {
+    position: relative;
+    padding-top: $padding-xsmall;
+    padding-bottom: $padding-xsmall;
+    white-space: nowrap;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid $mono204;
+    border-radius: 4px;
+    cursor: pointer;
+    @include sort-center();
+    &:hover {
+      background-color: $hover-bg-color;
+      border: 1px solid $blue104;
+    }
+    &.show {
+      border: 1px solid $blue104;
+    }
+    &.hide {
+      border: 1px solid $mono204;
+    }
+    .label-box {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: center;
+      white-space: nowrap;
+      height: 32px;
+      .label {
+        cursor: pointer;
+        color: $mono205;
+        font-size: 13px;
+        padding-right: 4px;
+      }
+    }
+    & > span {
+      &:nth-child(2) {
+        font-size: 24px;
+        font-family: SpoqaB;
+        padding: 8px;
+      }
+      &:nth-child(3) {
+        font-size: 13px;
+        font-family: SpoqaM;
+        color: $mono204;
+      }
+    }
+    &.selected {
+      background-color: rgba($blue104, 0.04);
+      border: 1px solid $blue104;
+    }
+  }
+}
+
+.select-chart {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  grid-gap: 8px;
+  padding-left: $padding-small;
+  padding-right: $padding-small;
+  .btn-box {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    grid-gap: 12px;
+    .button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: auto;
+      min-width: 80px;
+      height: 36px;
+      padding: 0 14px;
+      border: 1px solid $mono204;
+      border-radius: 4px;
+      font-size: 13px;
+      font-family: SpoqaM;
+      color: $mono205;
+      white-space: nowrap;
+      box-sizing: border-box;
+      cursor: pointer;
+      &.show {
+        border: 1px solid $blue104;
+      }
+      &.hide {
+        border: 1px solid $mono204;
+      }
+      &.selected {
+        background-color: rgba($blue104, 0.04);
+        border: 1px solid $blue104;
+        color: $blue104;
+      }
+      &:hover {
+        background-color: $hover-bg-color;
+        border: 1px solid $blue104;
+        color: $blue104;
+      }
+    }
+  }
+}

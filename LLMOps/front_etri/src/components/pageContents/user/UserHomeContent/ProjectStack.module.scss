@@ -1,0 +1,89 @@
+@import '@src/styles/color.scss';
+
+.stack-wrap {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  .stack {
+    position: relative;
+    flex: 1;
+    display: flex;
+    height: 4px;
+    border-radius: 2px;
+    border: 1px solid $mono203;
+    background-color: $mono200;
+    .remain {
+      position: relative;
+      &:hover {
+        .tool-tip {
+          visibility: visible;
+        }
+        .tool-tip::after {
+          content: '';
+          position: absolute;
+          top: 1px;
+          right: 50%;
+          transform: translateX(50%);
+          width: 0;
+          height: 0;
+          border: 14px solid transparent;
+          border-bottom-color: $mono205;
+          border-top: 0;
+          margin-left: -14px;
+          margin-top: -14px;
+        }
+      }
+    }
+    .project-info {
+      height: 4px;
+      position: relative;
+    }
+  }
+  .rate {
+    flex: 0 0 40px;
+    color: $mono207;
+    font-size: 14px;
+    font-style: normal;
+    font-weight: 700;
+    padding-left: 10px;
+    d .error {
+      color: $error-color;
+    }
+  }
+}
+
+.tool-tip {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 10px;
+  color: white;
+  border-radius: 4px;
+  .basic-info {
+    display: flex;
+    gap: 8px;
+    text-wrap: nowrap;
+  }
+
+  .middle-line {
+    height: 1px;
+    background-color: white;
+  }
+
+  .instance-info {
+    display: flex;
+    gap: 8px;
+
+    .resource {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .value {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+  }
+}

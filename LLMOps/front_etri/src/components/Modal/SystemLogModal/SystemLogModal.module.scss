@@ -1,0 +1,46 @@
+@import '@src/styles/color.scss';
+
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  max-height: 88vh !important;
+  .title {
+    font-size: 20px;
+    margin: 0 0 60px;
+  }
+  .head-box {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    align-items: center;
+    padding-right: 48px;
+    margin-bottom: 24px;
+    .head {
+      font-size: 16px;
+      font-style: normal;
+      font-weight: 700;
+      margin: 0;
+    }
+  }
+  .log-data-box {
+    flex: 1;
+    margin-right: 48px;
+    font-size: 14px;
+    padding: 16px;
+    min-height: 80px;
+    max-height: calc(65vh - 70px);
+    background-color: $mono202;
+    overflow: auto;
+    box-sizing: border-box;
+    white-space: pre-wrap;
+
+    .no-data {
+      display: flex;
+      justify-content: center;
+    }
+    &::-webkit-scrollbar {
+      width: 8px;
+      border-radius: 8px;
+    }
+  }
+}

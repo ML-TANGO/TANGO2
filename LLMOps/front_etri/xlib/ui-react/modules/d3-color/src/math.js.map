@@ -1,0 +1,1 @@
+{"version":3,"file":"math.js","sources":["../../../../../../../modules/d3-color/src/math.js"],"sourcesContent":["export const radians = Math.PI / 180;\nexport const degrees = 180 / Math.PI;\n"],"names":[],"mappings":"AAAY,MAAC,OAAO,GAAG,IAAI,CAAC,EAAE,GAAG,IAAI;AACzB,MAAC,OAAO,GAAG,GAAG,GAAG,IAAI,CAAC;;;;"}

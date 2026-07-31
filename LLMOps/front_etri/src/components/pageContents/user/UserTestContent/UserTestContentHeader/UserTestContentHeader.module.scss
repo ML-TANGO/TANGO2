@@ -1,0 +1,144 @@
+@import '@src/styles/color.scss';
+
+.info-box {
+  display: flex;
+  flex-direction: row;
+  margin-bottom: 48px;
+  gap: 48px;
+  .left {
+    // flex: 1;
+    display: flex;
+
+    min-width: 366px;
+    height: 120px;
+    padding: 36px;
+    box-sizing: border-box;
+    border-radius: 8px;
+    border: 1px solid $card-border-color;
+    background-color: $mono200;
+    .left-content {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+
+      .service-title {
+        font-family: SpoqaB;
+        font-size: 24px;
+        font-weight: 700;
+        color: $mono207;
+      }
+    }
+    .type {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      margin-bottom: 13px;
+      .type-icon {
+        width: 18px;
+        height: 18px;
+        margin-right: 4px;
+      }
+      .type-label {
+        height: 18px;
+        font-size: 14px;
+        color: $mono207;
+      }
+    }
+
+    .meta {
+      display: flex;
+      flex-direction: row;
+      font-size: 16px;
+      align-items: center;
+      label {
+        font-family: SpoqaM;
+        color: $mono205;
+        margin-right: 12px;
+        height: 19px;
+      }
+      span {
+        color: $mono207;
+        height: 19px;
+      }
+    }
+  }
+
+  .right {
+    flex: 1;
+    padding: 36px;
+    display: flex;
+    box-sizing: border-box;
+    border-radius: 8px;
+    border: 1px solid $card-border-color;
+    background-color: $mono200;
+    height: 120px;
+
+    .service-description {
+      flex: 1;
+      display: inline-block;
+      font-family: SpoqaM;
+      font-size: 16px;
+      color: $mono205;
+      word-break: break-word;
+      box-sizing: border-box;
+      min-width: 150px;
+    }
+    .service-info {
+      flex: 1;
+
+      .meta {
+        font-size: 14px;
+        display: flex;
+        .label {
+          font-family: SpoqaR;
+          color: $mono205;
+          margin-bottom: 1px;
+          min-width: 135px;
+
+          font-weight: 700;
+        }
+        .value {
+          color: $mono207;
+          margin-bottom: 12px;
+          height: 19px;
+          font-weight: 500;
+        }
+      }
+    }
+    .copyright-box {
+      display: flex;
+      flex-direction: column;
+      font-size: 11px;
+      font-family: SpoqaM;
+      color: $mono205;
+      word-break: break-word;
+      margin-top: 4px;
+      .copyright-element {
+        margin-top: 6px;
+        .highlight {
+          display: block;
+          font-family: SpoqaB;
+          color: $mono205;
+        }
+      }
+    }
+  }
+}
+@media (max-width: 1024px) {
+  .info-box {
+    flex-direction: column;
+    .left {
+      border-right: none;
+      border-bottom: 1px solid $card-border-color;
+      padding-bottom: 24px;
+    }
+    .right {
+      padding-left: 0;
+      padding-top: 24px;
+      .workspace-info .meta:last-child > span {
+        margin-bottom: 0;
+      }
+    }
+  }
+}

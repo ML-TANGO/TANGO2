@@ -1,0 +1,37 @@
+@import '@src/styles/color.scss';
+
+.container {
+  padding: 20px 44px 20px 0;
+  overflow-y: scroll;
+  max-height: 70vh;
+  .title-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    .name {
+      width: auto;
+      font-family: SpoqaB;
+      font-size: 16px;
+      color: $mono207;
+      margin-bottom: 8px;
+    }
+    .count {
+      display: flex;
+      font-size: 12px;
+      font-family: SpoqaM;
+      .blue {
+        color: $blue104;
+      }
+    }
+  }
+  .deployment-type {
+    margin-top: 50px;
+    margin-bottom: 50px;
+  }
+}
+
+.error-message {
+  height: 48px;
+  color: $error-color;
+  font-size: 14px;
+}

@@ -1,0 +1,107 @@
+@import '@src/components/atoms/input/input.scss';
+
+// Number Input Style
+@mixin number-input($height, $fontSize, $borderRadius, $iconSize) {
+  display: block;
+  position: relative;
+  .btn-box {
+    position: absolute;
+    top: 50%;
+    left: 6px;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    .up-btn,
+    .down-btn {
+      display: contents;
+      background-color: transparent;
+      padding: 0;
+      border: none;
+      & > img {
+        width: $iconSize;
+        height: $iconSize;
+      }
+    }
+  }
+  &.focus {
+    .close-btn {
+      display: block;
+      width: 20px;
+      height: 20px;
+    }
+  }
+  & > input {
+    width: 100%;
+    height: $height;
+    box-sizing: border-box;
+    line-height: 1.2em;
+    font-size: $fontSize;
+    transition-property: border-color, height, padding-right, color;
+    transition-duration: 0.2s, 0s;
+    outline: none;
+    background: $mono200;
+    padding: 8px 1.8em 8px 1.8em;
+    vertical-align: middle;
+    color: $normal-text-color;
+    font-family: SpoqaM;
+    border-radius: $borderRadius;
+    border: 1px solid $mono204;
+    // Crome, Safari, Edge, Opera 화살표 버튼 숨기기
+    &::-webkit-inner-spin-button,
+    &::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    // Firefox 화살표 숨기기
+    &[type='number'] {
+      appearance: textfield;
+      -moz-appearance: textfield;
+    }
+    &.lowercase {
+      &::placeholder {
+        text-transform: none;
+      }
+      text-transform: lowercase;
+    }
+    &:active,
+    &:focus {
+      border: 1px solid $primary-color;
+      .close-btn {
+        display: block;
+      }
+    }
+    &::placeholder {
+      color: $placeholder-text-color;
+    }
+    &:read-only {
+      border: 1px solid $mono204 !important;
+      padding: 0 1.8em !important;
+      color: $mono205;
+      background-color: $mono202;
+    }
+    &:disabled {
+      border: 1px solid $mono202 !important;
+      color: $mono203;
+      background-color: $mono202;
+      border-color: $mono202 !important;
+    }
+  }
+  &.error > input {
+    border: 1px solid $red502;
+  }
+}
+
+.fb {
+  &.input {
+    @include number-input(36px, 14px, 4px, 16px);
+    &.small {
+      @include number-input(30px, 14px, 4px, 14px);
+    }
+    &.medium {
+      @include number-input(36px, 14px, 4px, 16px);
+    }
+    &.large {
+      @include number-input(44px, 16px, 4px, 18px);
+    }
+  }
+}

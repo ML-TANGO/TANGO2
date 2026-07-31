@@ -1,0 +1,185 @@
+@import '@src/styles/color.scss';
+
+// header
+.rs-table-cell-header {
+  &:hover {
+    .rs-table-column-resize-spanner {
+      background-color: #34c3ff;
+    }
+  }
+}
+
+.rs-table-body-wheel-area {
+  width: 100%;
+}
+
+.rs-table-row {
+  box-sizing: border-box;
+  .rs-table-cell-group-fixed-left {
+    box-shadow: 3px 0px 5px rgb(9 9 9 / 8%);
+  }
+  .rs-table-cell-content {
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+    font-size: 14px;
+  }
+}
+
+// Pagination
+.rs-table-pagination-toolbar {
+  font-size: 12px;
+  line-height: 1.66666667;
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  align-items: center;
+  margin-top: 20px;
+  -webkit-box-pack: justify;
+  -ms-flex-pack: justify;
+  justify-content: space-between;
+  .rs-table-pagination-start {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    // visibility: hidden;
+  }
+  .rs-table-pagination-end {
+  }
+}
+
+.rs-table-pagination-length-menu {
+  color: #a4a9b3;
+  display: inline-block;
+  vertical-align: middle;
+  & > span:last-child {
+    display: none;
+  }
+  .rs-picker-select {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    height: 32px;
+    box-sizing: border-box;
+    line-height: 1.2em;
+    font-size: 14px;
+    transition-property: border-color, height, padding-right, color;
+    transition-duration: 0.2s, 0s;
+    outline: none;
+    outline-color: initial;
+    outline-style: none;
+    outline-width: initial;
+    background: $mono200;
+    padding: 8px 0.94118em;
+    vertical-align: middle;
+    color: rgba(0, 0, 0, 0.84);
+    font-family: SpoqaM;
+    border-radius: 4px;
+    border: 1px solid $mono204;
+  }
+}
+
+.rs-picker-menu {
+  position: absolute;
+  text-align: left;
+  z-index: 7;
+  border-radius: 6px;
+  background-color: $mono200;
+  -webkit-box-shadow: 0 0 10px 1px rgb(0 0 0 / 20%),
+    0 4px 4px 3px rgb(0 0 0 / 24%);
+  box-shadow: 0 0 10px 1px rgb(0 0 0 / 20%), 0 4px 4px 3px rgb(0 0 0 / 24%);
+  overflow: hidden;
+  -webkit-transition: none;
+  transition: none;
+  left: 388px;
+  top: 2227px;
+  // min-width: 60px;
+  .rs-picker-select-menu-items {
+    margin-bottom: 6px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    .rs-picker-select-menu-item {
+      display: block;
+      padding: 8px 12px;
+      clear: both;
+      font-weight: 400;
+      line-height: 1.42857143;
+      color: $mono207;
+      cursor: pointer;
+      -webkit-transition: color 0.3s linear, background-color 0.3s linear;
+      transition: color 0.3s linear, background-color 0.3s linear;
+      text-decoration: none;
+      width: 100%;
+    }
+  }
+}
+
+.rs-pagination {
+  display: flex;
+  gap: 10px;
+  padding-left: 0;
+  margin-bottom: 0;
+  & > li {
+    &.rs-pagination-btn:first-child {
+      & > a {
+        background-color: $mono200;
+        background: url('/static/images/icon/icon-drop-first.svg') no-repeat 9px
+          9px;
+      }
+      &:not(.rs-pagination-btn-disabled) > a:hover {
+        background: #4d7bfe url('/static/images/icon/icon-drop-first-hover.svg')
+          no-repeat 9px 9px;
+      }
+    }
+    &.rs-pagination-btn:last-child {
+      & > a {
+        background-color: $mono200;
+        background: url('/static/images/icon/icon-drop-last.svg') no-repeat 9px
+          9px;
+      }
+      &:not(.rs-pagination-btn-disabled) > a:hover {
+        background: #4d7bfe url('/static/images/icon/icon-drop-last-hover.svg')
+          no-repeat 9px 9px;
+      }
+    }
+    &.rs-pagination-btn:nth-child(2) {
+      & > a {
+        background-color: $mono200;
+        background: url('/static/images/icon/icon-drop-l.svg') no-repeat 9px 9px;
+      }
+      &:not(.rs-pagination-btn-disabled) > a:hover {
+        background: #4d7bfe url('/static/images/icon/icon-drop-l-hover.svg')
+          no-repeat 9px 9px;
+      }
+    }
+    &.rs-pagination-btn:nth-last-child(2) {
+      & > a {
+        background-color: $mono200;
+        background: url('/static/images/icon/icon-drop-r.svg') no-repeat 9px 9px;
+      }
+      &:not(.rs-pagination-btn-disabled) > a:hover {
+        background: #4d7bfe url('/static/images/icon/icon-drop-r-hover.svg')
+          no-repeat 9px 9px;
+      }
+    }
+    &.rs-pagination-btn-disabled {
+      opacity: 0.3;
+    }
+    & > a {
+      display: inline-block;
+      width: 32px;
+      height: 32px;
+      line-height: 32px;
+      text-align: center;
+      border-radius: 16px;
+      &:hover {
+        background-color: #4d7bfe;
+        color: $mono200;
+      }
+    }
+    &.rs-pagination-btn-active > a {
+      background-color: #4d7bfe;
+      color: $mono200;
+    }
+  }
+}

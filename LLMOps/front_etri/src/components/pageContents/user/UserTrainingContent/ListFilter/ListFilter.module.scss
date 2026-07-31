@@ -1,0 +1,31 @@
+@import '@src/styles/color.scss';
+
+.list-filter {
+  z-index: 1;
+  position: sticky;
+  top: 0;
+  left: 0;
+  display: flex;
+  flex-wrap: wrap;
+  grid-gap: 10px;
+  align-items: center;
+  border-bottom: 1px solid $mono203;
+  padding: 8px 0;
+  backdrop-filter: blur(10px);
+  .filter-wrap {
+    flex: 1;
+    gap: 8px;
+    display: flex;
+    justify-content: flex-end;
+    .cover-wrap {
+      display: flex;
+      gap: 8px;
+    }
+    .divider {
+      width: 1px;
+      height: 36px;
+      background-color: $mono203;
+      margin: 0 4px;
+    }
+  }
+}

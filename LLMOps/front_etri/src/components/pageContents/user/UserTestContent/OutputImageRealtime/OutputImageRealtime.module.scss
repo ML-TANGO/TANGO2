@@ -1,0 +1,138 @@
+@import '@src/styles/color.scss';
+
+.wrapper {
+  .flex-box {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    .title {
+      font-size: 24px;
+    }
+    .control-box {
+      display: flex;
+      flex-direction: row-reverse;
+      gap: 4px;
+      align-items: center;
+      font-size: 14px;
+      input {
+        padding: 8px 8px 8px 1.8em !important;
+      }
+    }
+  }
+  .data-info-box {
+    background-color: $mono200;
+    border: 1px solid $mono203;
+    border-radius: 8px;
+    padding: 30px;
+    font-size: 14px;
+    margin: 10px 0 20px;
+    display: flex;
+    flex-direction: row;
+    box-sizing: border-box;
+    .left-box {
+      flex: 1;
+      padding-right: 30px;
+      table {
+        margin-top: 12px;
+      }
+    }
+    .right-box {
+      flex: 1;
+      border-left: 1px solid $mono204;
+      padding-left: 30px;
+      &.hide {
+        display: none;
+        border-left: 0;
+      }
+      .button-box {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        .reset-icon {
+          width: 20px;
+          height: 20px;
+          margin-left: 8px;
+          cursor: pointer;
+        }
+      }
+      table {
+        margin-top: 4px;
+        margin-bottom: 12px;
+      }
+    }
+    label {
+      display: inline-block;
+      margin-right: 8px;
+      font-family: SpoqaM;
+      color: $mono207;
+    }
+    table {
+      border-collapse: separate;
+      border-spacing: 0;
+      text-align: left;
+      line-height: 1.5;
+      border-top: 1px solid $mono204;
+      border-left: 1px solid $mono204;
+      tr {
+        th,
+        td {
+          width: 120px;
+          padding: 4px;
+          vertical-align: top;
+          border-right: 1px solid $mono204;
+          border-bottom: 1px solid $mono204;
+          text-align: center;
+          &.two-column {
+            width: 251px;
+          }
+        }
+        th {
+          font-weight: bold;
+          vertical-align: top;
+          border-top: 1px solid $mono200;
+          border-left: 1px solid $mono200;
+          background: $mono202;
+        }
+        td {
+          background: $mono200;
+        }
+      }
+      &.data-count-table {
+        margin-bottom: 8px;
+      }
+    }
+  }
+  .image-box {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 24px;
+    .input-box,
+    .output-box {
+      flex: 1;
+      .label {
+        display: block;
+        font-size: 18px;
+        margin-bottom: 8px;
+        color: $mono207;
+        font-family: SpoqaM;
+      }
+      .image {
+        width: 100%;
+        min-width: 300px;
+      }
+      .empty-box {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: $mono205;
+        width: 100%;
+        height: 360px;
+        min-width: 300px;
+        background-color: $mono202;
+        border: 1px solid $mono202;
+      }
+    }
+  }
+}

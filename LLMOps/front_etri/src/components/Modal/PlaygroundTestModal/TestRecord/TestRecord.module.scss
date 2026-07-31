@@ -1,0 +1,78 @@
+@import '@src/styles/color.scss';
+
+.table {
+  .thead,
+  .tbody {
+    .tr {
+      display: flex;
+      gap: 16px;
+      .th,
+      .td {
+        color: $mono205;
+        font-family: SpoqaM;
+        font-size: 14px;
+        line-height: 14px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        &:first-child {
+          flex: 1 60px;
+          text-align: center;
+        }
+        &:nth-child(2) {
+          flex: 1 200px;
+        }
+        &:nth-child(3) {
+          flex: 1 200px;
+        }
+        &:nth-child(4) {
+          flex: 1 60px;
+          text-align: center;
+        }
+      }
+    }
+  }
+
+  .thead {
+    .tr {
+      margin-bottom: 8px;
+    }
+  }
+
+  .tbody {
+    height: 273px;
+    overflow-y: auto;
+    .tr {
+      display: flex;
+      align-items: center;
+      border-top: 1px solid $mono203;
+      height: 37px;
+      box-sizing: border-box;
+      &.purple {
+        background-color: #fafcff;
+      }
+      .td {
+        color: $mono207;
+        font-family: SpoqaM;
+        font-size: 14px;
+        line-height: 22px;
+
+        &:first-child {
+          color: $mono205;
+        }
+      }
+    }
+
+    .nodata {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: initial;
+      margin-top: 120px;
+      color: $mono205;
+      font-family: SpoqaM;
+      font-size: 14px;
+      line-height: 14px;
+    }
+  }
+}

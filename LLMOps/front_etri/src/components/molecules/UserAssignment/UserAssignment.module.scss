@@ -1,0 +1,24 @@
+@import '@src/styles/color.scss';
+
+.user-assign-cont {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  .label {
+    display: inline-flex;
+    gap: 8px;
+    font-size: 16px;
+    font-family: SpoqaB;
+    color: $title-color;
+    > small {
+      color: $mono205;
+      font-size: 14px;
+      font-family: SpoqaR;
+    }
+  }
+
+  .select-cont {
+    display: flex;
+    justify-content: space-between;
+  }
+}

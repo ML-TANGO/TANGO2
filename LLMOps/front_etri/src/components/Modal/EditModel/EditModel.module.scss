@@ -1,0 +1,28 @@
+@import '../modal.scss';
+.row {
+  margin-bottom: 32px;
+
+  .radio {
+    margin-bottom: 32px;
+  }
+  .model {
+    .hugging-message {
+      color: $mono205;
+      font-family: SpoqaM;
+      font-size: 12px;
+      font-style: normal;
+      font-weight: 500;
+      line-height: 12px;
+      letter-spacing: -0.18px;
+    }
+  }
+}
+
+.bottom-box {
+  display: flex;
+  margin-top: 32px;
+
+  .content {
+    flex: 1;
+  }
+}

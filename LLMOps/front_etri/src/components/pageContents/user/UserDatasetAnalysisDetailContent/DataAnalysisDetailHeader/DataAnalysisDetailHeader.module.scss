@@ -1,0 +1,66 @@
+@import '@src/styles/color.scss';
+
+.header-cont {
+  .back-btn {
+    border: none;
+    background-color: initial;
+    padding: initial;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    margin-bottom: 24px;
+    img {
+      width: 16px;
+      height: 16px;
+    }
+    span {
+      color: $mono208;
+      font-family: SpoqaB;
+      font-size: 16px;
+      line-height: 16px;
+    }
+  }
+  .title-wrapper {
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 32px;
+    .title-cont {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      .title {
+        margin: initial;
+        color: $blue107;
+        font-family: SpoqaB;
+        font-size: 24px;
+        line-height: 100%;
+      }
+    }
+  }
+
+  .btn-list {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+    justify-content: flex-end;
+    box-sizing: border-box;
+    .form {
+      width: 200px;
+    }
+
+    .bar {
+      background-color: $mono203;
+      height: 32px;
+      width: 1px;
+      margin: 0 8px;
+
+      justify-content: flex-end; // 오른쪽 정렬
+    }
+  }
+}

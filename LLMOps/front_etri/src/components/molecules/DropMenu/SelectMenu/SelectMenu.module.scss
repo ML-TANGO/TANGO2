@@ -1,0 +1,33 @@
+@import '@src/styles/color.scss';
+
+.option-list {
+  min-width: 130px;
+  padding: 8px 0;
+  .option {
+    display: flex;
+    align-items: center;
+    padding: 8px 14px;
+    color: $mono207;
+    font-size: 14px;
+    cursor: pointer;
+    .text {
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    .icon {
+      margin-right: 4px;
+      width: 20px;
+      height: 20px;
+    }
+    &:hover {
+      background-color: rgba($blue107, 0.08);
+    }
+    &.disable {
+      opacity: 0.3;
+      cursor: default;
+      &:hover {
+        background-color: $mono200;
+      }
+    }
+  }
+}

@@ -1,0 +1,16 @@
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 32px;
+  height: 32px;
+}
+
+.title {
+  overflow: hidden;
+  color: #042659;
+  font-family: SpoqaB;
+  font-size: 24px;
+  line-height: 24px;
+  margin: initial;
+}

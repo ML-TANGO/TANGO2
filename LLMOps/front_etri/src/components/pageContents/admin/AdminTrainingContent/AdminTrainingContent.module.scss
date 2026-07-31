@@ -1,0 +1,80 @@
+@import '@src/styles/color.scss';
+
+.fl-box {
+  width: 100%;
+  height: 80px;
+  position: absolute;
+  top: 78px;
+  right: 48px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.content {
+  &.fl {
+    margin-top: 36px;
+  }
+  margin-top: 6px;
+  .badge {
+    width: 80px;
+  }
+}
+
+.name-box {
+  .name {
+    color: $mono207;
+  }
+  .workspace {
+    color: $mono205;
+  }
+}
+
+@media (max-width: 1024px) {
+  .fl-box {
+    position: relative;
+    top: -32px;
+    right: 0;
+  }
+  .content {
+    &.fl {
+      margin-top: 0;
+    }
+  }
+}
+
+@media (max-width: 700px) {
+  .fl-box {
+    top: 0;
+  }
+  .content {
+    &.fl {
+      margin-top: 12px;
+    }
+  }
+}
+
+.tooltip-wrapper {
+  .tooltip {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    > * {
+      margin-bottom: 8px;
+    }
+
+    .tool-icon {
+      width: 24px;
+      height: 24px;
+      margin-right: 4px;
+    }
+
+    > *:last-child {
+      margin-bottom: 0;
+    }
+  }
+}
+
+.stack {
+  width: 100%;
+}

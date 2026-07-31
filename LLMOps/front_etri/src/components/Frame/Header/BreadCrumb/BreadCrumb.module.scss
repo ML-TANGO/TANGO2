@@ -1,0 +1,118 @@
+@import '@src/styles/color.scss';
+
+.path-wrapper {
+  display: flex;
+  gap: 16px;
+  .dropdown-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    .dropdown-cont {
+      display: flex;
+      gap: 8px;
+      margin-left: 8px;
+      position: relative;
+      .select-cont {
+        align-content: center;
+        width: 240px;
+        background-color: rgba(200, 219, 253, 0.2);
+        padding: 10px 12px 10px 24px;
+        border-radius: 8px;
+        color: #fff;
+        font-family: SpoqaM;
+        font-size: 12px;
+        line-height: 12px;
+        letter-spacing: -0.18px;
+      }
+      .dropdown-btn {
+        padding: 8px;
+        background-color: rgba(200, 219, 253, 0.2);
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        .arrow-img {
+          width: 16px;
+          height: 16px;
+          transform: scaleY(-1);
+          &.reverse {
+            transform: none;
+          }
+        }
+        &:hover {
+          box-shadow: 0px 3px 6px 0px rgba(255, 255, 255, 0.1);
+        }
+      }
+      .workspace-list {
+        width: 100%;
+        position: absolute;
+        top: 40px;
+        background-color: rgba(74, 80, 100, 0.95);
+        border-radius: 8px;
+        max-height: 216px;
+        overflow-y: auto;
+        .workspace-item {
+          display: flex;
+          gap: 8px;
+          padding: 10px 24px;
+          height: 36px;
+          color: #fff;
+          border-bottom: 1px solid #fff;
+          box-sizing: border-box;
+          font-family: SpoqaM;
+          font-size: 12px;
+          cursor: pointer;
+        }
+      }
+    }
+  }
+}
+
+.path-cont {
+  display: flex;
+}
+
+.path-wrap {
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  color: $mono203;
+  font-size: 14px;
+  font-family: SpoqaR;
+  width: 100%;
+  .path-box {
+    display: flex;
+    align-items: center;
+    .separator {
+      margin: 0 4px;
+    }
+    .name {
+      &.path {
+        cursor: pointer;
+        &:hover {
+          text-decoration: underline;
+        }
+      }
+    }
+  }
+
+  @media (max-width: 900px) {
+    &.long {
+      .path-box {
+        .name {
+          display: flex;
+          align-items: center;
+          &.ws,
+          .var {
+            display: inline-block;
+            max-width: 64px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+        }
+      }
+    }
+  }
+  @media (max-width: 767px) {
+    display: none;
+  }
+}

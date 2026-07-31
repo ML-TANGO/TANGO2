@@ -1,0 +1,94 @@
+@import '@src/styles/color.scss';
+
+.gpu-setting-cont {
+  border: 1px solid $mono203;
+  border-radius: 8px;
+  margin-bottom: 32px;
+  .gpuSetting-cont {
+    display: flex;
+    width: 100%;
+    padding: 16px 0;
+    border-bottom: 1px solid $mono203;
+    .gpuSetting-title {
+      width: 100%;
+      display: inline-block;
+      padding-left: 16px;
+      color: $mono207;
+      font-family: SpoqaB;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 14px;
+    }
+  }
+  .wrapper {
+    padding: 16px 20px 40px 20px;
+    border-radius: 4px;
+    box-sizing: border-box;
+
+    .slider-title {
+      margin-bottom: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+
+      .switch {
+        display: flex;
+        font-size: 12px;
+        align-items: center;
+        color: $mono206;
+
+        .switch-title {
+          padding-right: 7px;
+        }
+      }
+    }
+
+    .info {
+      font-size: 13px;
+      color: $mono207;
+      margin: 4px 0 12px;
+    }
+
+    .list-header {
+      display: flex;
+      align-items: center;
+      font-size: 14px;
+      color: $mono205;
+      border-bottom: 1px solid $mono203;
+      padding-bottom: 8px;
+
+      > div {
+        flex: 1; // 기본적으로 모든 div가 같은 크기를 차지합니다.
+        margin: 0 8px;
+
+        &:first-child {
+          flex: 3.5; // 첫 번째 div는 세 배 크기를 차지합니다.
+        }
+
+        &:nth-child(3) {
+          flex: 1.5;
+        }
+
+        &:last-child {
+          flex: 2; // 마지막 div는 두 배 크기를 차지합니다.
+          margin-right: 0px;
+        }
+      }
+
+      .sub-col {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+    }
+
+    .list-body {
+      .empty-item {
+        color: $mono207;
+        text-align: center;
+        font-size: 14px;
+        margin-top: 20px;
+      }
+    }
+  }
+}

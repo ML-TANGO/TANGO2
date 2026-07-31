@@ -1,0 +1,127 @@
+@import '@src/styles/color.scss';
+
+@mixin box-border {
+  border: 1px solid #c8dbfd;
+  border-radius: 16px;
+  box-shadow: 0px 3px 12px 0px rgba(45, 118, 248, 0.1);
+}
+
+.table-container {
+  @include box-border;
+  display: flex;
+  flex-direction: column;
+
+  .table-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 32px;
+
+    .title {
+      font-size: 18px;
+      font-weight: 700;
+      color: $mono207;
+    }
+
+    .sort-box {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-size: 14px;
+      color: $mono205;
+    }
+  }
+
+  .table-column {
+    display: flex;
+    padding: 16px 32px;
+    border-top: 1px solid $mono203;
+    border-bottom: 1px solid $mono203;
+    font-size: 14px;
+    font-weight: 700;
+    color: $mono205;
+  }
+
+  .table-row {
+    display: flex;
+    flex-direction: column;
+    max-height: 530px;
+    overflow-y: auto;
+
+    .row-box {
+      display: flex;
+      flex-direction: column;
+      border-bottom: 1px solid $mono203;
+
+      &:last-child {
+        border-bottom: 0;
+      }
+    }
+
+    .row-data {
+      display: flex;
+      padding: 16px 32px;
+      align-items: center;
+      cursor: pointer;
+
+      &:hover {
+        background-color: $mono201;
+      }
+    }
+
+    .data {
+      font-size: 14px;
+      font-weight: 500;
+      color: $mono207;
+
+      &:nth-child(1) {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 2;
+
+        .manager {
+          color: $mono205;
+        }
+
+        .order {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 20px;
+          height: 20px;
+          border-radius: 10px;
+          background-color: $mono202;
+          color: $mono205;
+          font-size: 13px;
+        }
+      }
+
+      &:nth-child(2) {
+        flex: 2.5;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+
+        .type {
+          color: $mono205;
+        }
+        .type-value {
+          font-weight: 700;
+        }
+      }
+
+      &:nth-child(3),
+      &:nth-child(4) {
+        flex: 1.5;
+      }
+
+      &:nth-child(5),
+      &:nth-child(6),
+      &:nth-child(7),
+      &:nth-child(8) {
+        flex: 1;
+      }
+    }
+  }
+}

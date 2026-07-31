@@ -1,0 +1,27 @@
+@import '@src/styles/color.scss';
+
+.container {
+  .upload-status {
+    font-family: SpoqaM;
+    font-size: 14px;
+
+    .failed {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      img {
+        width: 16px;
+        height: 16px;
+      }
+    }
+    .uploading {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+
+      > span:last-child {
+        color: $mono205;
+      }
+    }
+  }
+}

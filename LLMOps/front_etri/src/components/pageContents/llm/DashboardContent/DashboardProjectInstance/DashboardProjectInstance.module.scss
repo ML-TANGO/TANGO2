@@ -1,0 +1,82 @@
+@import '@src/styles/color.scss';
+
+.dashboard-frame-cont {
+  width: 100%;
+  height: 560px;
+  border-radius: 16px;
+  border: 1px solid #dee9ff;
+  background-color: #fff;
+  box-shadow: 0px 3px 6px 0px rgba(45, 118, 248, 0.1);
+  box-sizing: border-box;
+}
+
+.title-cont {
+  height: 50px;
+  padding: 16px 24px;
+  border-bottom: 1px solid #dee9ff;
+  color: #121619;
+  font-family: SpoqaB;
+  font-size: 18px;
+  line-height: 18px;
+  box-sizing: border-box;
+}
+
+.thead {
+  width: 100%;
+  .tr {
+    display: grid;
+    grid-template-columns: 320fr 280fr 64fr;
+    gap: 48px;
+    padding: 15.5px 24px;
+    border-bottom: 1px solid $blue101;
+    .td {
+      color: $mono205;
+      text-align: center;
+      font-family: SpoqaB;
+      font-size: 14px;
+      text-wrap: nowrap;
+    }
+  }
+}
+
+.tbody {
+  height: 452px;
+  overflow: auto;
+  .tr {
+    display: grid;
+    grid-template-columns: minmax(0, 320fr) minmax(0, 280fr) minmax(0, 64fr);
+    gap: 48px;
+    padding: 15.5px 24px;
+    border-bottom: 1px solid $blue101;
+    .td {
+      color: $mono205;
+      text-align: center;
+      font-family: SpoqaB;
+      font-size: 14px;
+      overflow: hidden; /* 넘치는 콘텐츠 숨기기 */
+      text-overflow: ellipsis; /* 말줄임표 추가 */
+      white-space: nowrap; /* 한 줄로 유지 */
+      &:first-child {
+        text-align: start;
+      }
+      &:nth-child(2) {
+        overflow: visible;
+        text-overflow: initial;
+      }
+
+      .projectName-txt {
+        color: $mono207;
+        font-family: SpoqaB;
+        font-size: 16px;
+        line-height: 16px;
+        margin-left: 8px;
+      }
+      .instanceName-txt {
+        color: $mono207;
+        font-family: SpoqaM;
+        font-size: 14px;
+        line-height: 14px;
+      }
+    }
+  }
+}

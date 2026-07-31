@@ -1,0 +1,87 @@
+@import '@src/styles/color.scss';
+
+.user-select-cont {
+  min-width: 250px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid $mono203;
+  border-radius: 4px;
+  .select-title {
+    display: inline-block;
+    font-size: 16px;
+    font-family: SpoqaM;
+    background: #dbdbdb;
+    color: #747474;
+    padding: 8px 16px;
+    margin: 0px;
+    border-radius: 4px 4px 0 0;
+    &.selected {
+      background-color: #2d76f8;
+      color: #fff;
+    }
+  }
+  .search-input-cont {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-right: 12px;
+    border-bottom: 1px solid $mono203;
+    .search-input[type='text'] {
+      width: 100%;
+      height: 31px;
+      font-size: 14px;
+      font-family: SpoqaR;
+      border: none;
+      box-sizing: border-box;
+      background-image: url('/images/icon/ic-search.svg');
+      background-position: 10px 3px;
+      background-size: 25px;
+      background-repeat: no-repeat;
+      padding-left: 37px;
+      padding-right: 12px;
+      &::placeholder {
+        color: $mono204;
+      }
+    }
+    .txt-count {
+      font-size: 14px;
+      font-family: SpoqaR;
+      color: #747474;
+    }
+  }
+  .user-list {
+    height: 168px;
+    overflow-y: auto;
+    padding: 5px;
+    box-sizing: border-box;
+    .user-item {
+      height: 36px;
+      align-content: center;
+      text-align: left;
+      font-size: 14px;
+      font-family: SpoqaM;
+      color: #121619;
+      padding: 6px 10px;
+      margin-bottom: 4px;
+      border-radius: 4px;
+      box-sizing: border-box;
+      cursor: pointer;
+
+      white-space: nowrap; /* 텍스트가 한 줄로 표시되게 설정 */
+      overflow: hidden; /* 넘치는 텍스트는 숨기기 */
+      text-overflow: ellipsis; /* 넘친 텍스트를 '...'으로 표시 */
+
+      &:last-child {
+        margin-bottom: 0px;
+      }
+
+      &.selected {
+        background-color: $hover-bg-color;
+      }
+
+      &:hover {
+        background-color: $hover-bg-color;
+      }
+    }
+  }
+}

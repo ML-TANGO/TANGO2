@@ -1,0 +1,38 @@
+@import '@src/styles/color.scss';
+
+.btn-list {
+  min-width: 130px;
+  padding: 8px 0;
+  .btn {
+    display: flex;
+    align-items: center;
+    padding: 8px 14px;
+    color: $mono205;
+    font-size: 12px;
+    cursor: default;
+    .text {
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    .icon {
+      margin-right: 4px;
+      width: 20px;
+      height: 20px;
+    }
+    &.hover {
+      font-size: 14px;
+      color: $mono207;
+      cursor: pointer;
+      &:hover {
+        background-color: rgba($blue107, 0.08);
+      }
+    }
+    &.disable {
+      opacity: 0.3;
+      cursor: default;
+      &:hover {
+        background-color: $mono200;
+      }
+    }
+  }
+}

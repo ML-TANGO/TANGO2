@@ -1,0 +1,115 @@
+@import '@src/styles/color.scss';
+
+@mixin gray-input {
+  flex: 1;
+  box-sizing: border-box;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid $mono203;
+  padding: 12px;
+  width: 0px;
+  min-width: 0px;
+  font-size: 14px;
+  color: $mono207;
+  font-family: SpoqaM;
+
+  &::placeholder {
+    font-size: 14px;
+    color: $mono204;
+  }
+
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
+.bound-inner-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  .unit-form {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+
+    .text {
+      min-width: 94px;
+      max-width: 94px;
+      font-size: 16px;
+      color: $mono205;
+    }
+
+    .unit-input {
+      @include gray-input;
+      flex-basis: calc(100% - 64px);
+
+      &.entered {
+        border: 1px solid $blue104;
+      }
+    }
+
+    .select-box {
+      box-sizing: border-box;
+      flex: 1;
+      width: 0px;
+      min-width: 0px;
+      flex-basis: calc(100% + 64px);
+    }
+  }
+
+  .cost-form {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+
+    .text {
+      min-width: 94px;
+      max-width: 94px;
+      font-size: 16px;
+      color: $mono205;
+    }
+
+    .unit {
+      position: absolute;
+      right: 126px;
+      top: 10px;
+      font-family: SpoqaM;
+      color: $mono205;
+      font-size: 14px;
+
+      &.first-cost {
+        right: 16px;
+        top: 8px;
+      }
+    }
+
+    .cost-input {
+      @include gray-input;
+      padding-right: 34px;
+      text-align: right;
+
+      &::placeholder {
+        text-align: left;
+      }
+
+      &.entered {
+        border: 1px solid $blue104;
+      }
+    }
+
+    .delete {
+      padding: 10px 20px;
+      font-size: 14px;
+      color: $red502;
+      cursor: pointer;
+
+      &:hover {
+        background-color: $mono201;
+      }
+    }
+  }
+}

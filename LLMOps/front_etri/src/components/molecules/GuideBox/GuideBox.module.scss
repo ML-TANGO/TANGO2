@@ -1,0 +1,58 @@
+@import '@src/styles/color.scss';
+
+.guide-box {
+  .title {
+    display: flex;
+    align-items: center;
+    font-size: 16px;
+    font-family: SpoqaB;
+    margin: 0 0 4px;
+    &.icon::before {
+      content: '';
+      display: inline-block;
+      background-image: url(@src/static/images/icon/00-ic-alert-info-o-blue.svg);
+      background-size: 24px 24px;
+      width: 24px;
+      height: 24px;
+      margin-right: 6px;
+    }
+    &.no-icon {
+      margin: 20px 0 4px 30px;
+    }
+  }
+
+  .subtitle {
+    font-size: 14px;
+    font-family: SpoqaM;
+    margin: 8px 0 12px 30px;
+  }
+
+  ol.info {
+    margin: 0;
+    padding-left: 46px;
+    li {
+      list-style: decimal !important;
+      font-size: 14px;
+      font-family: SpoqaM;
+      line-height: 1.5;
+      b {
+        color: $blue104;
+        font-family: SpoqaB;
+      }
+    }
+  }
+
+  ul.notice {
+    margin: 20px 0 0 0;
+    padding-left: 30px;
+    li {
+      font-size: 14px;
+      font-family: SpoqaM;
+      line-height: 1.5;
+      b {
+        color: $blue104;
+        font-family: SpoqaB;
+      }
+    }
+  }
+}

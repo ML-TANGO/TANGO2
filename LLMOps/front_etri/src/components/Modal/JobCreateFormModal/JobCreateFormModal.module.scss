@@ -1,0 +1,178 @@
+@import '@src/styles/color.scss';
+
+.form {
+  .float-box {
+    .title-wrap {
+      display: flex;
+      justify-content: space-between;
+      .left-icon-box {
+        .prev-path {
+          color: $mono204;
+          font-family: SpoqaR;
+        }
+        .parser-path {
+          color: $blue104;
+        }
+        .curr-path {
+          font-family: SpoqaR;
+          &.parser-path {
+            color: $blue104;
+          }
+        }
+      }
+      .right-icon-box {
+        .dataset-type-box {
+          padding: 4px 10px 4px 10px;
+          background-color: $mono203;
+          color: $mono206;
+          font-size: 14px;
+          margin: 0px 0px 3px 4px;
+          border-radius: 5px;
+          .description {
+            margin-left: 3px;
+          }
+
+          &.description-box {
+            padding-right: 6px;
+          }
+        }
+        .parse-box {
+          margin-left: 6px;
+          color: $blue104;
+          padding: 0 5px 2px 5px;
+          border: 1px solid $blue104;
+          border-radius: 15px;
+          font-size: 13px;
+        }
+      }
+    }
+
+    .sort-box {
+      border-radius: 7px;
+      padding: 10px;
+      margin-bottom: 25px;
+      background-color: $blue100;
+    }
+    .datasest-select-box {
+      margin-top: 8px;
+      margin-bottom: 20px;
+      width: 100%;
+    }
+    &.dataset-category {
+      margin-bottom: 32px;
+      .dataset-type-box {
+        padding: 4px 10px 4px 10px;
+        background-color: $mono203;
+        color: $mono206;
+        font-size: 14px;
+        margin: 0px 0px 3px 5px;
+        border-radius: 5px;
+        .description {
+          margin-left: 3px;
+        }
+        &.description-box {
+          padding: 4px 6px 5px 10px;
+        }
+      }
+    }
+    .dataset-title {
+      font-family: SpoqaB;
+      color: $mono207;
+      margin-bottom: 8px;
+    }
+  }
+
+  .parse-box {
+    margin-left: 6px;
+    color: $blue104;
+    padding: 0 5px 2px 5px;
+    border: 1px solid $blue104;
+    border-radius: 15px;
+    font-size: 13px;
+  }
+
+  .search-method-row {
+    margin-bottom: 10px;
+  }
+
+  .dataset-error {
+    display: block;
+    margin-bottom: 5px;
+    padding: 0 0 2px 1px;
+    box-sizing: border-box;
+    font-size: 14px;
+    font-weight: 500;
+    color: $error-color;
+    &.dataset-form-rule {
+      color: $mono207;
+    }
+  }
+
+  .save-load-input {
+    .save-load-label {
+      display: inline-block;
+      margin-bottom: 20px;
+      color: $mono207;
+      font-family: SpoqaB;
+    }
+    .input-wrapper-box {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      & > div {
+        flex: 1;
+      }
+    }
+  }
+}
+
+.docker-gpu-row {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  margin-bottom: 32px;
+
+  .docker,
+  .gpu {
+    flex: 1;
+    // max-width: 262px;
+  }
+}
+
+.checkpoint-border {
+  border: 1px solid $mono203;
+}
+
+.gpu-option-row {
+  border: 1px solid $disable-color;
+  border-radius: 8px;
+  padding: 28px 24px;
+  margin-bottom: 48px;
+  padding-bottom: 0px;
+
+  .divider-line {
+    width: 100%;
+    height: 1px;
+    background-color: $disable-color;
+    margin-bottom: 20px;
+
+    &.top {
+      margin-top: 20px;
+    }
+  }
+
+  .cluster-info {
+    color: $blue104;
+    margin: 10px 6px 24px;
+    font-family: SpoqaM;
+    font-size: 12px;
+
+    .not-recommand {
+      color: $mono205;
+    }
+
+    .warning {
+      color: $red502;
+    }
+  }
+}

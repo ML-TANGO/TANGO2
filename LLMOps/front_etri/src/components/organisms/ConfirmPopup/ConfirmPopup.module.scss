@@ -1,0 +1,68 @@
+@import '@src/styles/color.scss';
+
+.shadow {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.6);
+  z-index: 1001;
+}
+
+.popup {
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 100;
+  min-width: 520px;
+  max-width: 90%;
+  box-sizing: border-box;
+  padding: 32px 48px;
+  border-radius: 8px;
+  box-shadow: 0 5px 20px 0 rgba(18, 22, 25, 0.16),
+    0 6px 6px -3px rgba(18, 22, 25, 0.22);
+  background-color: $mono200;
+  .popup-close-btn {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    cursor: pointer;
+  }
+  .title {
+    z-index: 1;
+    top: 0px;
+    margin-bottom: 12px;
+    margin-top: 0px;
+    font-family: SpoqaB;
+    font-weight: 700;
+    font-size: 24px;
+    color: $mono206;
+  }
+  .content {
+    color: $mono205;
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 150%;
+    margin-bottom: 44px;
+    max-height: 65vh;
+    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    .confirm-message-input {
+      margin-top: 8px;
+    }
+  }
+  .popup-footer {
+    padding-top: 20px;
+    margin-top: auto;
+    display: flex;
+    justify-content: flex-end;
+    button {
+      margin-left: 12px;
+    }
+  }
+}

@@ -1,0 +1,5 @@
+var img = "data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='26' height='26' viewBox='0 0 26 26'%3e %3cdefs%3e %3cpath id='nsmfsbbu7a' d='M9.866 21.125L18.417 12.994 9.885 4.881 8.686 6.043 15.979 12.994 8.667 19.944z'/%3e %3c/defs%3e %3cg fill='none' fill-rule='evenodd'%3e %3cpath fill='black' fill-opacity='0' d='M0 0H26V26H0z'/%3e %3cmask id='k9a49ccccb' fill='white'%3e %3cuse xlink:href='%23nsmfsbbu7a'/%3e %3c/mask%3e %3cuse fill='white' fill-opacity='0' fill-rule='nonzero' xlink:href='%23nsmfsbbu7a'/%3e %3cpath fill='%23979899' d='M0 0H26V26H0z' mask='url(%23k9a49ccccb)'/%3e %3c/g%3e%3c/svg%3e";
+  var right = img;
+
+export { right as default };
+//# sourceMappingURL=ic-right.svg.js.map

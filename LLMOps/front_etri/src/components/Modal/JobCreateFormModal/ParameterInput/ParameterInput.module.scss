@@ -1,0 +1,74 @@
+@import '@src/components/atoms/input/input.scss';
+
+.lowercase {
+  text-transform: lowercase;
+}
+
+.item-list {
+  width: 100%;
+  .item {
+    margin-bottom: 10px;
+    &:after {
+      clear: both;
+      content: '';
+      display: block;
+    }
+    .input-wrap {
+      background-color: $hover-bg-color;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 10px;
+      .title-box {
+        display: flex;
+        align-items: center;
+        font-family: SpoqaB;
+        font-size: 14px;
+        .param-key {
+          width: 260px;
+          padding-right: 10px;
+        }
+        .param-value {
+          flex: 1;
+        }
+        .remove-btn {
+          width: 36px;
+          height: 36px;
+          border: none;
+          border-radius: 4px;
+          padding: 4px;
+          background-position: 50%;
+          background-image: url(@src/static/images/icon/minus.svg);
+          background-size: 28px 28px;
+          background-color: $mono205;
+          background-repeat: no-repeat;
+          cursor: pointer;
+          &.disabled {
+            opacity: 0.2;
+          }
+        }
+      }
+      .input-box-item {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        .param-key {
+          display: block;
+          width: 260px;
+          padding-right: 10px;
+          word-break: break-word;
+          font-size: 14px;
+        }
+        .param-value {
+          flex: 1;
+          height: 36px;
+          font-size: 14px;
+        }
+      }
+    }
+  }
+  .add-btn {
+    margin-top: 10px;
+  }
+}

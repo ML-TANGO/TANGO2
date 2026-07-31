@@ -1,0 +1,5 @@
+var img = "data:image/svg+xml,%3csvg width='13' height='13' viewBox='0 0 13 13' fill='none' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.6276 1.31408H10.6335L10.6264 9.21246L2.02096 0.606974L0.606742 2.02119L9.21223 10.6267L1.31385 10.6337V12.6278H12.6276V1.31408Z' fill='%23FFBC3B'/%3e%3c/svg%3e";
+  var lowArrow = img;
+
+export { lowArrow as default };
+//# sourceMappingURL=low_arrow.svg.js.map

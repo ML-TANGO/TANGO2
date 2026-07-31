@@ -1,0 +1,86 @@
+@import '@src/styles/color.scss';
+
+.container {
+  display: flex;
+  flex-direction: column;
+  padding: 32px 24px;
+  background-color: white;
+  font-family: SpoqaR;
+
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0px 24px 16px;
+    border-bottom: 1px solid $mono203;
+
+    .name {
+      font-size: 20px;
+      font-weight: 700;
+      color: $mono207;
+    }
+
+    .cost-info {
+      display: flex;
+      gap: 16px;
+
+      .text {
+        font-size: 16px;
+        color: $mono205;
+      }
+
+      .cost {
+        font-size: 18px;
+        font-weight: 700;
+        color: $mono207;
+      }
+    }
+  }
+
+  .package {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+    padding: 16px 24px 32px;
+    border-bottom: 1px solid $mono203;
+
+    .name {
+      font-size: 16px;
+      font-weight: 700;
+      color: $mono207;
+    }
+
+    .info-list {
+      display: flex;
+
+      .info {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        font-size: 14px;
+        flex: 1;
+
+        .type {
+          color: $mono205;
+        }
+
+        .value {
+          color: $mono207;
+        }
+      }
+    }
+  }
+
+  .workspace {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 32px 24px 0px;
+
+    .title {
+      font-size: 16px;
+      font-weight: 700;
+      color: $mono207;
+    }
+  }
+}

@@ -1,0 +1,18 @@
+@import '@src/styles/color.scss';
+
+.page-title {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 0;
+  color: $blue107;
+  font-size: 24px;
+  font-family: SpoqaB;
+  font-weight: 700;
+
+  .page-desc {
+    font-size: 14px;
+    font-weight: 500;
+    color: $mono207;
+  }
+}

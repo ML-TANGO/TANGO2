@@ -1,0 +1,26 @@
+.tooltip {
+  position: relative;
+  .tooltip-content {
+    padding: 8px;
+    color: #fff;
+    border-radius: 4px;
+    background-color: #042659;
+  }
+  .arrow-hidden {
+    height: 16px;
+    visibility: hidden;
+  }
+  .svg-cont {
+    position: absolute;
+    &.top {
+      bottom: 0px;
+      left: 50%;
+      transform: translate(-50%, 0);
+    }
+    &.bottom {
+      top: 10px;
+      left: 50%;
+      transform: translate(-50%, -50%) scaleY(-1);
+    }
+  }
+}

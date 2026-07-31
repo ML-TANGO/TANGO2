@@ -1,0 +1,80 @@
+@import '@src/styles/color.scss';
+
+.card-container {
+  min-width: 340px;
+  // max-width: 680px;
+  width: 100%;
+  padding: 24px;
+  background-color: $mono206;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow: hidden;
+  &.open {
+    border: 1px solid $card-border-color;
+    background-color: $mono200;
+    .header {
+      .title-box {
+        .subject {
+          color: $mono205;
+          height: 12px;
+        }
+        .title {
+          color: $mono207;
+        }
+      }
+      .icon-box {
+        width: 24px;
+        .icon {
+          transform: rotate(180deg);
+          filter: invert(1);
+        }
+      }
+    }
+    .contents {
+      opacity: 1;
+      height: auto;
+      padding-top: 32px;
+      transition: opacity 0.5s;
+    }
+  }
+  .header {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    color: $mono200;
+    cursor: pointer;
+    .title-box {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      margin-right: 24px;
+      .subject {
+        font-size: 12px;
+        font-family: SpoqaR;
+        color: $mono200;
+        margin-bottom: 8px;
+      }
+      .title {
+        font-size: 16px;
+        font-family: SpoqaM;
+        color: $mono200;
+      }
+    }
+    .icon-box {
+      width: 24px;
+      .icon {
+        width: 24px;
+        height: 24px;
+      }
+    }
+  }
+  .contents {
+    font-size: 13px;
+    font-family: SpoqaR;
+    color: $mono206;
+    height: 0;
+    opacity: 0;
+  }
+}

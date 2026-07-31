@@ -1,0 +1,227 @@
+@import '../../modal.scss';
+
+.input-group {
+  margin: 10px 0 32px;
+  border: 1px solid #dbdbdb;
+  border-radius: 8px;
+  background-color: #fff;
+  .label {
+    margin-bottom: 16px;
+    color: #000;
+    font-size: 15px;
+    font-weight: 700;
+  }
+}
+
+.input-wrap,
+.textarea-wrap,
+.radio-wrap {
+  width: 100%;
+  .label {
+    width: 100%;
+    margin-bottom: 8px;
+    &.normal {
+      font-family: SpoqaB;
+      font-weight: normal;
+      font-size: 15px;
+      margin-bottom: 16px;
+    }
+  }
+  .height37 {
+    height: 37px;
+  }
+  &.duplicate {
+    margin-bottom: 48px;
+  }
+}
+
+.mb-0 {
+  margin-bottom: 0px;
+}
+
+.mb-32 {
+  margin-bottom: 32px;
+}
+
+.selectbox-wrap,
+.order-input-wrap {
+  .order-cont {
+    display: flex;
+    align-items: center;
+    height: 24px;
+    margin-bottom: 5px;
+    .number-cont {
+      width: 24.4px;
+      height: 24.4px;
+      display: inline-block;
+      border: 1px solid #dee9ff;
+      border-radius: 4px;
+      margin-right: 8px;
+      text-align: center;
+      position: relative;
+      span {
+        position: absolute;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        color: #2d76f8;
+        font-size: 16px;
+        font-weight: 700;
+      }
+    }
+  }
+  .label {
+    display: inline-block;
+    font-family: SpoqaB;
+    font-weight: normal;
+    margin: initial;
+    &.mb-16 {
+      margin-bottom: 16px;
+    }
+  }
+  .line-cont {
+    display: flex;
+    height: 84px;
+    margin-bottom: 15px;
+    &.height-38 {
+      height: 38px;
+    }
+    .line {
+      width: 2px;
+      height: 84px;
+      margin-left: 12px;
+      margin-right: 20px;
+      background-color: #dee9ff;
+      &.height-52 {
+        height: 52px;
+      }
+    }
+    .selectbox-cont {
+      width: 100%;
+      padding-top: 12px;
+    }
+  }
+}
+
+.order-input-wrap {
+  .line-cont {
+    .line {
+      background-color: #fff;
+    }
+  }
+}
+
+@mixin optional {
+  display: flex;
+  align-items: flex-end;
+  font-family: SpoqaM;
+  font-size: 14px;
+  font-weight: 500;
+  color: #747474;
+  margin-left: 8px;
+}
+
+.textarea-wrap {
+  .label {
+    span {
+      @include optional();
+    }
+  }
+  .text-length-box {
+    color: #dbdbdb;
+    font-size: 12px;
+    font-weight: 500;
+    .text-length {
+      color: #dbdbdb;
+      font-size: 12px;
+      font-weight: 500;
+    }
+  }
+}
+
+.input-wrap {
+  .label {
+    .optional-txt {
+      @include optional();
+    }
+  }
+}
+
+.commit-box {
+  display: flex;
+}
+
+@mixin highlight {
+  color: $mono207;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 18px; /* 85.714% */
+}
+
+@mixin notice {
+  color: $mono205;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px; /* 150% */
+}
+
+@mixin normal {
+  color: $mono207;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 18px; /* 128.571% */
+}
+
+.tooltip {
+  padding: 28px 24px;
+  p {
+    margin: initial;
+    color: #121619;
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .tooltip-header {
+    color: $mono207;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 12px; /* 75% */
+    padding-bottom: 12px;
+    border-bottom: 1px solid #dbdbdb;
+    margin-bottom: 12px;
+  }
+  .docker-hightlight {
+    @include highlight();
+    margin-bottom: 8px;
+  }
+  .docker-normal {
+    @include normal();
+    margin-bottom: 16px;
+  }
+  .docker-notice {
+    @include notice();
+    position: relative;
+    padding-left: 12px; /* 텍스트 들여쓰기 */
+
+    &::before {
+      content: '•'; /* 불릿 문자 추가 */
+      position: absolute;
+      left: 0;
+      color: black; /* 불릿 색상 */
+      font-size: 12px; /* 불릿 크기 */
+      line-height: 1; /* 불릿 높이 */
+    }
+  }
+  .tar-highlight,
+  .commit-highlight {
+    @include highlight();
+    margin-bottom: 8px;
+  }
+  .tar-normal {
+    @include normal();
+  }
+  .ngc-hightlight {
+    @include highlight();
+  }
+  .commit-notice {
+    @include notice();
+  }
+}

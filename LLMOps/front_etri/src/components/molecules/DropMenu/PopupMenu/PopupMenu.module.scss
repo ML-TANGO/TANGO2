@@ -1,0 +1,22 @@
+@import '@src/styles/color.scss';
+
+.menu {
+  z-index: 1;
+  position: absolute;
+  background-color: $mono200;
+  border-radius: 4px;
+  box-shadow: 0 3px 9px 0 rgba(18, 22, 25, 0.08),
+    0 2px 4px 1px rgba(18, 22, 25, 0.14);
+  max-height: 0;
+  transition: max-height 0.3s ease-in-out;
+  animation: visible 0.3s;
+}
+
+@keyframes visible {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

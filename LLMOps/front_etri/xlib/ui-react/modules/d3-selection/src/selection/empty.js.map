@@ -1,0 +1,1 @@
+{"version":3,"file":"empty.js","sources":["../../../../../../../../modules/d3-selection/src/selection/empty.js"],"sourcesContent":["export default function() {\n  return !this.node();\n}\n"],"names":[],"mappings":"AAAe,wBAAQ,GAAG;AAC1B,EAAE,OAAO,CAAC,IAAI,CAAC,IAAI,EAAE,CAAC;AACtB;;;;"}

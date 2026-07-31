@@ -1,0 +1,18 @@
+@import '@src/styles/color.scss';
+.tab {
+  box-sizing: border-box;
+  display: flex;
+
+  .type {
+    padding: 8px 16px;
+    color: $mono205;
+    font-weight: 700;
+    font-family: SpoqaB;
+    cursor: pointer;
+
+    &.selected {
+      border-bottom: 3px solid $blue104;
+      color: $blue104;
+    }
+  }
+}

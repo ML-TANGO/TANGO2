@@ -1,0 +1,211 @@
+@import '@src/styles/color.scss';
+
+.content {
+  // padding-top: 8px;
+
+  .back-to-list {
+    margin-top: 12px;
+    margin-bottom: 48px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    width: max-content;
+    cursor: pointer;
+    .back-btn-image {
+      width: 22px;
+      height: 22px;
+      margin-right: 24px;
+    }
+    .back-btn-label {
+      font-size: 20px;
+      color: $mono206;
+    }
+  }
+
+  .test-box {
+    // border: 1px solid $card-border-color;
+    // border-radius: 8px;
+    overflow: hidden;
+    .test-label {
+      font-family: SpoqaB;
+      font-size: 16px;
+      color: $mono207;
+      white-space: nowrap;
+    }
+    .run-box {
+      border-top: solid 1px $mono203;
+      padding-top: 24px;
+      margin-bottom: 48px;
+      max-width: 760px;
+      button {
+        width: 100%;
+        max-width: 760px !important;
+      }
+    }
+    .loading-container {
+      display: block;
+      width: 760px;
+      text-align: center;
+    }
+    .output-box {
+      display: flex;
+      flex-direction: column;
+      height: auto;
+      width: 100%;
+      // padding: 36px;
+      background-color: $mono201;
+      box-sizing: border-box;
+      border-top: 1px solid $card-border-color;
+      .result-label {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-bottom: 24px;
+        gap: 16px;
+        row-gap: 8px;
+        .label {
+          font-size: 20px;
+        }
+        .response-status {
+          font-size: 14px;
+          display: flex;
+          flex-direction: row;
+          align-items: center;
+          > div:first-of-type {
+            // tooltip
+            margin-right: 4px;
+          }
+          .key {
+            color: $mono207;
+            margin-right: 4px;
+          }
+          .value {
+            color: $blue104;
+            margin-right: 10px;
+            white-space: nowrap;
+          }
+        }
+      }
+
+      .result-container {
+        .result-text {
+          color: $primary-color;
+          font-family: SpoqaB;
+          font-size: 20px;
+          margin-bottom: 20px;
+          .title {
+            font-size: 16px;
+            color: $mono207;
+            display: block;
+            padding-bottom: 12px;
+          }
+          span {
+            word-break: break-all;
+          }
+        }
+        .result-image,
+        .result-audio,
+        .result-video {
+          width: 100%;
+          margin-bottom: 20px;
+          .title {
+            font-family: SpoqaB;
+            font-size: 16px;
+            color: $mono207;
+            display: block;
+            padding-bottom: 12px;
+          }
+          .image {
+            max-width: 100%;
+            height: auto;
+            cursor: pointer;
+          }
+          .video {
+            max-width: 100%;
+            height: auto;
+          }
+        }
+        .result-table {
+          min-width: 580px;
+          width: max-content;
+          max-width: 100%;
+          margin-bottom: 20px;
+          .title {
+            font-family: SpoqaB;
+            font-size: 16px;
+            color: $mono207;
+            display: block;
+            padding-bottom: 12px;
+          }
+          .table {
+            font-family: SpoqaM;
+            font-size: 16px;
+            width: 100%;
+            border-collapse: collapse;
+            border-top: 3px solid $primary-color;
+            background-color: $mono200;
+            color: $mono207;
+            box-sizing: border-box;
+            th {
+              color: $primary-color;
+              background: $hover-bg-color;
+              text-align: center;
+            }
+            th,
+            td {
+              padding: 10px 16px;
+              border: 1px solid $mono203;
+              text-align: center;
+            }
+            th:first-child,
+            td:first-child {
+              border-left: 0;
+            }
+            th:last-child,
+            td:last-child {
+              border-right: 0;
+            }
+            .rowspan {
+              max-width: 250px;
+              word-break: keep-all;
+            }
+          }
+        }
+        .result-chart {
+          width: 100%;
+          padding-bottom: 40px;
+          margin-bottom: 20px;
+          .title {
+            font-family: SpoqaB;
+            font-size: 16px;
+            color: $mono207;
+            display: block;
+            padding-bottom: 12px;
+          }
+        }
+        .result-obj {
+          width: 100%;
+          margin-bottom: 20px;
+          .title {
+            font-family: SpoqaB;
+            font-size: 16px;
+            color: $mono207;
+            display: block;
+            padding-bottom: 12px;
+          }
+          .download {
+            font-size: 14px;
+            padding-bottom: 4px;
+            display: inline-block;
+            color: $primary-color;
+          }
+        }
+        .error-text {
+          font-size: 14px;
+          color: $mono205;
+        }
+      }
+    }
+  }
+}

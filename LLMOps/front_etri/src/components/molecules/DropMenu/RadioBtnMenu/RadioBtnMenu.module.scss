@@ -1,0 +1,46 @@
+@import '@src/styles/color.scss';
+
+.radio-btn-menu {
+  min-width: 130px;
+  padding: 12px 16px;
+  .group {
+    margin-bottom: 12px;
+    .group-name {
+      margin: 4px 0 8px 0;
+      font-size: 12px;
+      color: $mono204;
+    }
+    .options {
+      display: flex;
+      .radio-btn {
+        min-width: 140px;
+        height: 36px;
+        border: 1px solid $mono205;
+        background-color: $mono200;
+        margin-left: -1px;
+        cursor: pointer;
+        &:first-child {
+          border-radius: 4px 0 0 4px;
+        }
+        &:last-child {
+          border-radius: 0 4px 4px 0;
+        }
+        &:hover {
+          z-index: 1;
+          border-color: $primary-color;
+          background-color: rgba($primary-color, 0.08);
+          color: $primary-color;
+        }
+        &.active {
+          border-color: $primary-color;
+          background-color: $primary-color;
+          color: $mono200;
+        }
+      }
+    }
+  }
+  .bottom-box {
+    display: flex;
+    justify-content: flex-end;
+  }
+}

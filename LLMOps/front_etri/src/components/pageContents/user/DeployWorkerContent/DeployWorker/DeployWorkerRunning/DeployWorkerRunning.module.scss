@@ -1,0 +1,46 @@
+@import '../DeployWorker.module.scss';
+
+.worker-running-wrap {
+  display: flex;
+  flex-direction: column;
+  margin: 20px 3px 0;
+  .worker-list {
+    display: flex;
+    flex-direction: column;
+    .loading-box {
+      height: 158px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+  }
+
+  .info {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 24px;
+    color: mono206;
+    font-size: 13px;
+    font-style: normal;
+    gap: 8px;
+    align-items: center;
+
+    .text-desc {
+      display: flex;
+      gap: 32px;
+
+      .desc {
+        display: flex;
+        gap: 16px;
+
+        .title {
+          font-weight: 700;
+        }
+
+        .content {
+          font-weight: 500;
+        }
+      }
+    }
+  }
+}
