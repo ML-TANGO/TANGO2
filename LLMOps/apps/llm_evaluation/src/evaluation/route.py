@@ -30,8 +30,11 @@ async def create_project(body: dto.EvalProjectCreateBody,
 
 @evaluations.get("/projects", summary="평가 프로젝트 목록(워크스페이스)", tags=TAG)
 async def list_projects(workspace_id: int):
+    """목록 프로젝트마다 최근 run 활동 기준 update_datetime 을 additive 로 제공한다."""
     try:
         res = await svc.list_projects(workspace_id=workspace_id)
+        # 기존 envelope 는 유지하고 result 내부의 신규 필드 계약만 경계에서 검증한다.
+        dto.EvalProjectListResult.model_validate(res)
         return response(status=1, result=res)
     except Exception as e:
         traceback.print_exc()

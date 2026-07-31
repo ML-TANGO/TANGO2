@@ -951,15 +951,30 @@ async def create_eval_project(workspace_id : int, name : str, model_id : int,
 
 async def list_eval_projects(workspace_id : int) -> list:
     """워크스페이스의 평가 프로젝트 목록(최신순). dataset_ids 는 JSON 컬럼(문자열 반환) —
-    호출부(서비스)가 파싱."""
+    호출부(서비스)가 파싱. 프로젝트 본문은 생성 후 불변이므로 update_datetime 은 별도 컬럼이
+    아니라 최근 run 생성 시각(없으면 프로젝트 생성 시각)으로 파생한다."""
     sql = """
-        SELECT id, workspace_id, name, model_id, dataset_ids, eval_type, status, creator,
-               DATE_FORMAT(create_datetime, %s) AS create_datetime
-        FROM eval_project
-        WHERE workspace_id = %s
-        ORDER BY id DESC
+        SELECT p.id, p.workspace_id, p.name, p.model_id, p.dataset_ids, p.eval_type,
+               p.status, p.creator,
+               DATE_FORMAT(p.create_datetime, %s) AS create_datetime,
+               DATE_FORMAT(
+                   COALESCE(
+                       (SELECT MAX(r.create_datetime)
+                        FROM eval_result AS r
+                        WHERE r.eval_project_id = p.id),
+                       p.create_datetime
+                   ),
+                   %s
+               ) AS update_datetime
+        FROM eval_project AS p
+        WHERE p.workspace_id = %s
+        ORDER BY p.id DESC
     """
-    res = await select_query(sql, params=(TYPE.TIME_DATE_FORMAT_SQL, workspace_id),
+    res = await select_query(sql, params=(
+                                 TYPE.TIME_DATE_FORMAT_SQL,
+                                 TYPE.TIME_DATE_FORMAT_SQL,
+                                 workspace_id,
+                             ),
                              fetch_type=FetchType.ALL)
     return res or []
 

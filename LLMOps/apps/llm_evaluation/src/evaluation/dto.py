@@ -41,6 +41,23 @@ class EvalProjectCreateBody(BaseModel):
         return v
 
 
+class EvalProjectListItem(BaseModel):
+    """프로젝트 목록 응답의 additive 계약. 기존 키는 extra 로 그대로 보존하고, 최근 run
+    활동 시각(없으면 프로젝트 생성 시각)인 update_datetime 존재만 경계에서 검증한다."""
+
+    model_config = {"extra": "allow", "protected_namespaces": ()}
+
+    update_datetime: Optional[str] = Field(
+        ..., description="최근 평가 run 생성 시각, run이 없으면 프로젝트 생성 시각")
+
+
+class EvalProjectListResult(BaseModel):
+    """평가 프로젝트 목록 응답."""
+
+    workspace_id: int
+    projects: List[EvalProjectListItem]
+
+
 class BenchmarkMetricPair(BaseModel):
     """벤치마크 1개 + 그 벤치마크에 쓸 메트릭 1개. 벤치마크(ARC·MMLU…)와 메트릭(Accuracy·F1…)을
     분리 — 기존의 섞인 flat metric_set 을 폐기하고 '벤치마크→메트릭' 매핑으로 대체."""
