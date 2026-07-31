@@ -28,11 +28,11 @@ from utils import redis_key, TYPE, PATH, settings, common, topic_key, workspace_
 from utils.redis import get_redis_client_async
 from utils.llm_db import db_model
 from utils.msa_db import db_workspace, db_user, db_instance
+from utils.access_check import is_workspace_user
 from model.dto import FineTuningConfig, FineTuningPodInfo
 from utils.crypt import session_cipher, front_cipher
 # from utils.mongodb_async import urls_collection
 from utils.kube import PodName, create_or_replace_secret, delete_secret
-from utils.access_check import is_workspace_user
 
 
 def _redact_secrets(cmd: str) -> str:
@@ -703,20 +703,50 @@ def _is_under(path: str, root: str) -> bool:
         return False
 
 
+def is_admin_user_id(user_id: int) -> bool:
+    """관리자 판정 — utils/resource.py 의 is_admin_user() 와 같은 기준(user_type==0)."""
+    try:
+        user = db_user.get_user(user_id=user_id)
+        return bool(user) and user.get("user_type") == 0
+    except Exception:
+        traceback.print_exc()
+        return False
+
+
 async def user_can_access_model(user_id: int, model_id: int) -> bool:
-    """모델 카드 접근 권한 — 소유자 OR (공유(access=1) → 워크스페이스 멤버). 비공개(access!=1)는 소유자만.
-    SSE(학습 그래프/시간/상태) 구독 게이팅(보안리뷰 H-3). model/route.py 의 기존 get_user_id() 패턴과
-    동형(데코레이터 아님). is_workspace_user 는 db_workspace.get_user_workspace 로 멤버십 확인."""
+    """모델 접근 권한 **정본** — 아래 넷 중 하나면 접근 가능(2026-07-27 결정).
+
+    1. 관리자(user_type=0) — 운영 점검용 전역 예외
+    2. 소유자(create_user_id)
+    3. 공개(access=1) + 같은 워크스페이스 구성원
+    4. 비공개(access=0) 면 모델 멤버 목록(user_model)에 포함된 사용자
+
+    즉 "공개면 워크스페이스 사람 누구나, 비공개면 소유자·명시 멤버만".
+
+    ⚠️ ``access`` 는 오래 dead 였던 필드다: ``db_model.get_model`` 의 SELECT 에
+    ``m.access`` 가 없어 항상 None 이었고, 그 탓에 예전 공유 분기가 무력화돼
+    "공유로 바꿨는데도 소유자만 접근" 증상을 냈다. 지금은 SELECT 에 추가해 3번이
+    실제로 동작한다 — get_model 에서 access 를 빼면 이 게이트가 조용히 어긋난다(짝).
+
+    ⚠️ 이 규칙은 3곳이 동일해야 한다: 여기(BE 게이트) / ``get_models`` 의 is_access
+    (목록 플래그 — FE 카드 회색처리·진입 차단의 근거) / 상세 진입 라우트 게이트.
+    SSE(학습 그래프/시간/상태)·체크포인트 계열 라우트 게이팅(보안리뷰 H-3)에 쓰인다."""
     if not user_id:
         return False
+    if is_admin_user_id(user_id):
+        return True
     model = await db_model.get_model(model_id=model_id)
     if not model:
         return False
     if model.get("create_user_id") == user_id:
         return True
     if model.get("access") == 1:
+        # 공개 모델 — 같은 워크스페이스 구성원이면 누구나. (워크스페이스 밖 사용자는 차단:
+        # 무조건 True 로 열면 다른 워크스페이스 사용자에게도 노출된다.)
         return is_workspace_user(user_id=user_id, workspace_id=model["workspace_id"])
-    return False
+    # 비공개(또는 예상 밖 값) — 명시된 모델 멤버만. fail-closed.
+    members = await db_model.get_model_user_list(model_id=model_id)
+    return user_id in [m["user_id"] for m in members]
 
 
 async def move_checkpoint_files_to_parent(path):
@@ -982,14 +1012,32 @@ async def get_models(workspace_id : int, header_user_id : int) -> List[dict]:
     favorites_model = await db_model.get_favorite_models(header_user_id)
 
     favorites_model_id = [model["model_id"] for model in favorites_model]
-    
+
+    # 목록의 is_access 는 user_can_access_model 과 **동일 규칙**이어야 한다
+    # (관리자 OR 소유자 OR (공개 AND 워크스페이스 구성원) OR 모델 멤버).
+    # 관리자/워크스페이스 멤버십은 이 목록 안에서 모델마다 같으니(단일 workspace_id) 1회만 조회.
+    is_admin = is_admin_user_id(header_user_id) if header_user_id else False
+    in_workspace = (
+        is_workspace_user(user_id=header_user_id, workspace_id=workspace_id)
+        if header_user_id
+        else False
+    )
+
     async def process_model(model):
         private_users  = await db_model.get_model_user_list(model_id=model["id"])
         res = {
             "id" : model["id"],
             "name" : model["name"],
             "bookmark" : model["id"] in favorites_model_id,
-            "is_access" :  True if model["access"] == 1 or header_user_id in [user["user_id"] for user in private_users]  else False,
+            # 상세 진입 가능 여부 — FE 가 이 값으로 카드 회색처리/클릭·수정 차단을 한다.
+            # user_can_access_model 과 동일 규칙: 관리자 OR 소유자 OR
+            # (공개 AND 워크스페이스 구성원) OR 모델 멤버.
+            "is_access" :  True if (
+                is_admin
+                or model["create_user_id"] == header_user_id
+                or (model["access"] == 1 and in_workspace)
+                or header_user_id in [user["user_id"] for user in private_users]
+            ) else False,
             "users" : private_users,
             "status" : {
                 "fine_tuning" : model["latest_fine_tuning_status"],

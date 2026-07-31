@@ -310,6 +310,10 @@ async def run_model_fine_tuning(body: dto.PostFineTuningRun):
 @model.get("/fine-tuning/summary", summary='get - fine tuning', tags=TAG_FINE_TUNING)
 async def get_model_fine_tuning_summary(model_id: int):
     try:
+        # ModelDetailPage 가 진입 시 처음 호출하는 엔드포인트 → 상세 진입 게이트.
+        # FE 는 message=='forbidden' 를 보고 목록으로 되돌린다(직접 URL 진입 방어).
+        if not await svc.user_can_access_model(get_user_id(), model_id):
+            return response(status=0, message="forbidden", result=None)
         res = None
         res = await svc.get_model_summary(model_id=model_id)
         return response(status=1, result=res)
@@ -599,7 +603,11 @@ async def get_models(workspace_id: int=None, model_id: int=None):
         user_id = get_user_id()
         # ?model_id=N → 단건 조회 (frontend ModelDetailPage 가 training_type
         # 분기를 위해 사용). workspace_id 만 주면 list 응답.
+        # 목록(list)은 게이트하지 않는다 — 비공개 모델도 카드로는 보이고 진입만 막는
+        # 제품 규칙(2026-07-27). 단건 조회는 상세 진입 경로라 게이트한다.
         if model_id is not None:
+            if not await svc.user_can_access_model(user_id, model_id):
+                return response(status=0, message="forbidden", result=None)
             res = await svc.get_model_summary(model_id=model_id)
         else:
             res = await svc.get_models(workspace_id=workspace_id, header_user_id=user_id)

@@ -110,7 +110,7 @@ async def get_model_simple(model_id: int) -> dict:
 
 async def get_model(model_id : int) -> dict:
     sql = """
-        SELECT m.id, m.description, m.name, m.create_user_id, m.workspace_id, m.steps_per_epoch,
+        SELECT m.id, m.description, m.name, m.create_user_id, m.workspace_id, m.access, m.steps_per_epoch,
         m.gpu_count, m.instance_id, m.huggingface_git, m.huggingface_model_id, m.commit_model_name, m.commit_type,
         m.latest_fine_tuning_config,
         m.latest_fine_tuning_status,
