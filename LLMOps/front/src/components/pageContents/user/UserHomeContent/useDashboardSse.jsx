@@ -6,6 +6,13 @@ import { toast } from 'react-toastify';
 
 import { EventSourcePolyfill } from 'event-source-polyfill';
 
+import {
+  classifySseFailure,
+  SSE_FAILURE,
+  SSE_RETRY,
+  sseRetryDelay,
+} from '@src/utils/sse';
+
 const initial = {
   info: {
     description: '-',
@@ -92,6 +99,15 @@ const useDashboardSse = ({ workspaceId }) => {
   const [dashboardData, setDashboardData] = useState(initial);
 
   const eventSourceRef = useRef(null);
+  // 재마운트/의존성 변경에도 유지되는 재시도 상태 + 실패 판별용 URL/헤더.
+  const retryCountRef = useRef(0);
+  const errorNotifiedRef = useRef(false);
+  // classifySseFailure 는 probe fetch 를 기다려 최대 5초 await 된다. 그 사이 언마운트되면
+  // cleanup 이 이미 끝나 있어, 늦게 resolve 된 핸들러가 만드는 타이머/EventSource 는
+  // 아무도 정리하지 못한다(좀비 재연결 루프). 그래서 재연결 직전에 이 값을 검사한다.
+  const aliveRef = useRef(true);
+  const sseUrlRef = useRef(null);
+  const sseHeadersRef = useRef(null);
   const { auth } = useSelector((state) => ({
     auth: state.auth,
     headerOptions: state.headerOptions,
@@ -99,29 +115,49 @@ const useDashboardSse = ({ workspaceId }) => {
   const { userName } = auth;
 
   useEffect(() => {
-    let recount = 0;
     let errorTimeout;
 
     // ** SSE **
     const connectSSE = () => {
-      const handleErrorReset = (error) => {
-        eventSourceRef.current.close();
-        toast.error('[SSE CONNECT ERROR] SSE 연결이 끊어졌습니다.');
+      // 첫 실패 1회만 안내 + 조용한 지수 백오프. 만료는 자동 로그아웃, 권한 없음은 중단.
+      // (기존엔 실패 1건당 토스트 1+최대6개, recount 가 지역변수라 재마운트마다 되살아났다.)
+      const handleErrorReset = async (error) => {
+        eventSourceRef.current?.close();
         console.log('[SSE CONNECT ERROR] ', error);
 
-        errorTimeout = setTimeout(() => {
-          if (recount < 6) {
-            recount++;
+        const verdict = await classifySseFailure({
+          errorEvent: error,
+          url: sseUrlRef.current,
+          headers: sseHeadersRef.current,
+        });
+        if (verdict === SSE_FAILURE.EXPIRED) return;
+        if (verdict === SSE_FAILURE.FATAL) {
+          if (!errorNotifiedRef.current) {
+            errorNotifiedRef.current = true;
             toast.error(
-              `[${recount}번 연결 시도] SSE 연결을 다시 시도합니다. 최대 5번까지 시도합니다. 5번 실패 후 메뉴 페이지로 나가게 됩니다. `,
+              '[SSE] 이 데이터에 접근할 수 없어 실시간 갱신을 중단합니다.',
             );
-            connectSSE();
-          } else {
-            clearTimeout(errorTimeout);
-            eventSourceRef.current.close();
-            // history.goBack(-1);
           }
-        }, 1000);
+          return;
+        }
+
+        if (!errorNotifiedRef.current) {
+          errorNotifiedRef.current = true;
+          toast.error(
+            '[SSE CONNECT ERROR] SSE 연결이 끊어졌습니다. 재연결을 시도합니다.',
+          );
+        }
+
+        // await 후 언마운트 확인 — 아니면 cleanup 이 추적 못하는 타이머가 남는다.
+        if (!aliveRef.current) return;
+        // 상한(6곳 공용 SSE_RETRY.GIVE_UP_AFTER)을 둔다. 예전엔 상한이 없어 영구히 죽은
+        // 서버에도 30초마다 계속 요청했다(PlaygroundHeader 는 6회 제한이라 정책이 갈렸다).
+        if (retryCountRef.current >= SSE_RETRY.GIVE_UP_AFTER) return;
+        const delay = sseRetryDelay(retryCountRef.current);
+        retryCountRef.current += 1;
+        errorTimeout = setTimeout(() => {
+          if (aliveRef.current) connectSSE();
+        }, delay);
       };
       const option = {
         headers: {
@@ -131,7 +167,13 @@ const useDashboardSse = ({ workspaceId }) => {
       };
 
       const url = `${API_HOST}dashboard/user/sse?workspace_id=${workspaceId}&platform_type=a-llm`;
+      sseUrlRef.current = url;
+      sseHeadersRef.current = option.headers;
       eventSourceRef.current = new EventSourcePolyfill(url, option);
+      eventSourceRef.current.onopen = () => {
+        retryCountRef.current = 0;
+        errorNotifiedRef.current = false;
+      };
 
       eventSourceRef.current.onmessage = (event) => {
         try {
@@ -149,7 +191,8 @@ const useDashboardSse = ({ workspaceId }) => {
           }));
 
           if (errorTimeout) {
-            recount = 0;
+            retryCountRef.current = 0;
+            errorNotifiedRef.current = false;
             clearTimeout(errorTimeout);
           }
         } catch (error) {
@@ -177,10 +220,14 @@ const useDashboardSse = ({ workspaceId }) => {
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    // 재마운트 시 cleanup 이 내린 alive 를 다시 올린다(ref 는 마운트 간 유지되므로 필수).
+    aliveRef.current = true;
     connectSSE();
 
     // ** useEffect cleanup function **
     return () => {
+      // 진행 중인 classifySseFailure await 가 늦게 resolve 돼도 재연결하지 않도록 먼저 내린다.
+      aliveRef.current = false;
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (eventSourceRef.current) {
         eventSourceRef.current.close();

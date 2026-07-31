@@ -29,6 +29,42 @@ export const SSE_FAILURE = {
   RETRY: 'retry',
 };
 
+/**
+ * 재연결 정책 — 6개 SSE 소비처가 **공유**한다.
+ * 파일마다 상한/백오프를 따로 두면 정책이 조용히 갈린다(실제로 갈려 있었다:
+ * 대시보드는 무한 재시도, PlaygroundHeader 는 6회 제한).
+ */
+export const SSE_RETRY = {
+  BASE_DELAY_MS: 1000,
+  MAX_DELAY_MS: 30000,
+  /** 연속 실패 상한 — 초과 시 재연결 중단(영구히 죽은 서버에 계속 요청하지 않는다). */
+  GIVE_UP_AFTER: 6,
+};
+
+/** 연속 실패 횟수(0-base) → 백오프 지연(ms). 상한 SSE_RETRY.MAX_DELAY_MS. */
+export const sseRetryDelay = (attempt) =>
+  Math.min(
+    SSE_RETRY.BASE_DELAY_MS * 2 ** Math.max(0, attempt),
+    SSE_RETRY.MAX_DELAY_MS,
+  );
+
+/**
+ * SSE 재시도 상태. `useRef(createSseRetryState())` 로 컴포넌트 수명에 고정해 쓴다.
+ *
+ *  - `alive`: effect cleanup 에서 false 로 내린다. `classifySseFailure` 는 200+비스트림
+ *    케이스에서 probe fetch 를 기다려 **최대 PROBE_TIMEOUT_MS 만큼 await 된다**. 그 사이
+ *    사용자가 화면을 벗어나면 cleanup 이 이미 끝난 뒤 핸들러가 늦게 resolve 되어,
+ *    아무도 추적하지 않는 타이머/EventSource 를 새로 만든다(정리 불가한 좀비 재연결 루프).
+ *    → await 직후와 재연결 직전에 반드시 검사한다.
+ *  - `attempt`/`notified`: effect 지역변수로 두면 재마운트마다 0 으로 초기화돼
+ *    "첫 실패 1회만 안내" 가 무너지고 토스트 폭주가 되살아난다.
+ */
+export const createSseRetryState = () => ({
+  alive: true,
+  attempt: 0,
+  notified: false,
+});
+
 const PROBE_TIMEOUT_MS = 5000;
 
 /**
