@@ -163,8 +163,6 @@ const PlaygroundDetail = lazy(
   () => import('../llm/Playground/PlaygroundDetail'),
 );
 
-const LLMDatasetPage = lazy(() => import('@src/pages/llm/LLMDatasetPage'));
-
 // Pages
 const UserDashboardPage = lazy(() => import('@src/pages/UserDashboardPage'));
 const UserDockerImagePage = lazy(
@@ -305,109 +303,6 @@ const noneArr = [
     activeIcon: IconLnbTestBlue,
     platform: null,
     render: () => <SelectedPage />,
-  },
-];
-
-const llmRouteArr = [
-  ...noneArr,
-  // {
-  //   name: 'Home',
-  //   path: '/user/workspace/:id/llmhome',
-  //   exact: true,
-  //   disabled: false,
-  //   icon: IconLnbHomeGray,
-  //   activeIcon: IconLnbHomeBlue,
-  //   platform: 'llm',
-  //   render: (props) => <Dashboard {...props} />,
-  // },
-
-  {
-    name: 'Dataset',
-    path: '/user/workspace/:id/llm-datasets',
-    exact: true,
-    icon: IconLnbDatasetsGray,
-    activeIcon: IconLnbDatasetsBlue,
-    platform: 'llm',
-    render: (props) => <LLMDatasetPage {...props} />,
-  },
-  {
-    name: 'Dataset Detail',
-    path: '/user/workspace/:id/llm-datasets/:did/files',
-    exact: true,
-    disabled: true,
-    icon: IconLnbDatasetsGray,
-    activeIcon: IconLnbDatasetsBlue,
-    platform: 'llm',
-    render: (props) => <DatasetDetailPage {...props} />,
-  },
-  {
-    name: 'Model',
-    path: '/user/workspace/:id/model',
-    exact: true,
-    disabled: false,
-    icon: IconModel,
-    activeIcon: IconModelActive,
-    platform: 'llm',
-    render: (props) => <Model {...props} />,
-  },
-  {
-    name: 'Model Detail',
-    path: '/user/workspace/:id/model/:mId',
-    exact: false,
-    disabled: true,
-    icon: IconModel,
-    activeIcon: IconModelActive,
-    platform: 'llm',
-    render: (props) => <ModelDetailPage {...props} />,
-  },
-  {
-    name: 'Model CommitList Item',
-    path: '/user/workspace/:id/model/:mId/commit-list/:cId',
-    exact: false,
-    disabled: true,
-    icon: IconModel,
-    activeIcon: IconModelActive,
-    platform: 'llm',
-    render: (props) => <ModelCommitListItem {...props} />,
-  },
-  {
-    name: 'Playground',
-    path: '/user/workspace/:id/llmplayground',
-    exact: true,
-    icon: IconNavPlayground,
-    activeIcon: IconNavPlaygroundActive,
-    platform: 'llm',
-    render: (props) => <PlaygroundMenu {...props} />,
-  },
-  {
-    name: 'PlaygroundDetail',
-    path: '/user/workspace/:id/llmplayground/:did/llmplayground',
-    exact: false,
-    disabled: true,
-    icon: IconNavPlaygroundActive,
-    activeIcon: IconNavPlaygroundActive,
-    platform: 'llm',
-    render: (props) => <PlaygroundDetail {...props} />,
-  },
-  {
-    name: 'PlaygroundMonitoring',
-    path: '/user/workspace/:id/llmplayground/:did/detail/:newId/playgroundmonitor',
-    exact: false,
-    disabled: true,
-    icon: IconNavPlaygroundActive,
-    activeIcon: IconNavPlaygroundActive,
-    platform: 'llm',
-    render: (props) => <DeployDashboardPage {...props} />,
-  },
-  {
-    name: 'EdgeDeploymentDetail',
-    path: '/user/workspace/:id/edge-deploy/:deployId',
-    exact: false,
-    disabled: true,
-    icon: IconNavPlaygroundActive,
-    activeIcon: IconNavPlaygroundActive,
-    platform: 'llm',
-    render: (props) => <EdgeDeploymentDetail {...props} />,
   },
 ];
 
