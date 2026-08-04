@@ -294,10 +294,11 @@ const BenchmarkRunConfig = ({ running, onRun }) => {
                     );
                   })}
                   <div className={cx('custom-action')}>
+                    {/* 섹션 단위 "추가" 액션 — 하우스(Advanced·RagSettingCenter·FineTuning)와 같은 outline+l. */}
                     <ButtonV2
                       type='outline'
                       colorType='blue'
-                      size='s'
+                      size='l'
                       label={t('evaluation.bench.addCustom')}
                       onClick={() =>
                         successToastMessage(
@@ -367,9 +368,7 @@ const BenchmarkRunConfig = ({ running, onRun }) => {
                       {BENCHMARK_MAP[id].label}
                     </span>
                     <Badge
-                      label={
-                        METRIC_MAP[metricMap[id]]?.label || metricMap[id]
-                      }
+                      label={METRIC_MAP[metricMap[id]]?.label || metricMap[id]}
                       type='blue'
                       size='sm'
                     />
@@ -409,8 +408,7 @@ const BenchmarkRunConfig = ({ running, onRun }) => {
                     <Badge
                       label={
                         BENCHMARK_CATEGORIES.find(
-                          (item) =>
-                            item.id === BENCHMARK_MAP[id].category,
+                          (item) => item.id === BENCHMARK_MAP[id].category,
                         )?.label
                       }
                       type='gray'
@@ -432,9 +430,7 @@ const BenchmarkRunConfig = ({ running, onRun }) => {
                   <li key={id} className={cx('summary-item')}>
                     <span>{BENCHMARK_MAP[id].label}</span>
                     <Badge
-                      label={
-                        METRIC_MAP[metricMap[id]]?.label || metricMap[id]
-                      }
+                      label={METRIC_MAP[metricMap[id]]?.label || metricMap[id]}
                       type='blue'
                       size='sm'
                     />

@@ -15,6 +15,19 @@
   width: max-content;
   margin-bottom: 12px;
   cursor: pointer;
+  // 다른 화면의 뒤로가기는 div 라 크롬이 없지만 여기는 키보드 접근성 때문에 button 이다
+  // (ProjectDetail.jsx 참고). UA 기본 배경/테두리/패딩을 벗겨 하우스 룩과 일치시킨다.
+  padding: 0;
+  border: 0;
+  background: none;
+  appearance: none;
+
+  // 전역 `*:focus { outline: none }` 이 링을 지워서 button 으로 만든 취지가 반감된다.
+  // 키보드 사용자에게만 링을 되돌린다.
+  &:focus-visible {
+    outline: 2px solid $primary-color;
+    outline-offset: 2px;
+  }
 
   .back-btn-image {
     width: 16px;
@@ -23,7 +36,7 @@
 
   .back-btn-label {
     margin-left: 4px;
-    color: $normal-text-color;
+    color: $mono208;
     font-family: SpoqaB;
     font-size: 16px;
     font-style: normal;
@@ -57,7 +70,7 @@
     min-height: 32px;
     margin-bottom: 32px;
     padding-top: 12px;
-    color: $title-color;
+    color: $blue107;
     font-family: SpoqaB;
     font-size: 24px;
     font-weight: 700;
@@ -183,10 +196,10 @@
   font-weight: 500;
 }
 
+// 말줄임 + 호버 툴팁으로 전체 이름을 보여주던 자리다. 툴팁이 보이는 값과 같은 문자열을
+// 되풀이해 노이즈였으므로 걷어내고, 대신 줄바꿈을 허용해 전체 이름이 항상 보이게 한다.
 .dataset-value {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .runs {

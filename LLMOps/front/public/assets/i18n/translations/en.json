@@ -320,7 +320,6 @@
   "evaluation.project.creator": "Creator",
   "evaluation.project.create": "Create",
   "evaluation.project.creating": "Creating...",
-  "evaluation.project.backToList": "Evaluation Projects",
   "evaluation.project.detailPlaceholder": "Run list, new evaluation run, and comparison will be available in the next step.",
   "evaluation.project.status.created": "Pending",
   "evaluation.project.status.running": "Running",

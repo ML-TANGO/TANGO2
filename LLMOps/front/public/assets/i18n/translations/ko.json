@@ -323,7 +323,6 @@
   "evaluation.project.creator": "생성자",
   "evaluation.project.create": "생성",
   "evaluation.project.creating": "생성 중...",
-  "evaluation.project.backToList": "평가 프로젝트",
   "evaluation.project.detailPlaceholder": "실행 목록·새 평가 실행·비교는 다음 단계에서 제공됩니다.",
   "evaluation.project.status.created": "대기",
   "evaluation.project.status.running": "진행 중",

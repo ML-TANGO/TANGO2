@@ -182,9 +182,6 @@ const EvaluationMenu = () => {
             n: resolvedDatasetNames.length - 1,
           })
       : datasetCountLabel;
-    const datasetTitle = hasAllDatasetNames
-      ? resolvedDatasetNames.join(', ')
-      : datasetCountLabel;
     return {
       id: p.id,
       title: p.name,
@@ -193,9 +190,7 @@ const EvaluationMenu = () => {
           {`${t('evaluation.project.model')}: ${
             modelNames[p.model_id] || `#${p.model_id}`
           } · `}
-          <span title={datasetTitle}>
-            {`${t('evaluation.project.dataset')}: ${datasetLabel}`}
-          </span>
+          {`${t('evaluation.project.dataset')}: ${datasetLabel}`}
           {' · '}
           <span
             className={cx(

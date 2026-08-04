@@ -39,10 +39,11 @@ const ExpertCompletionBanner = ({ avgScore, distribution, onReset, t }) => {
         ]}
       />
       <div className={cx('completion-actions')}>
+        {/* 카드 푸터 액션 — 하우스 액션 푸터(ConfirmPopup·NewStyleModalFrame)와 같은 size='l'. */}
         <ButtonV2
           type='outline'
           colorType='blue'
-          size='s'
+          size='l'
           label={t('evaluation.expert.newSession')}
           onClick={onReset}
         />

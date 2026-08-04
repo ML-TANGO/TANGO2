@@ -11,7 +11,7 @@ import {
   useRouteMatch,
 } from 'react-router-dom';
 
-import { Badge, ButtonV2, Loading, Tooltip } from '@jonathan/ui-react';
+import { Badge, ButtonV2, Loading } from '@jonathan/ui-react';
 
 import BenchmarkResultView from '../BenchmarkEvaluation/BenchmarkResultView';
 import BenchmarkRunConfig from '../BenchmarkEvaluation/BenchmarkRunConfig';
@@ -478,7 +478,7 @@ const ProjectDetail = () => {
     return (
       <div className={cx('container')}>
         <DetailBack
-          label={t('evaluation.project.backToList')}
+          label={t('evaluation.project.title')}
           onClick={backToList}
         />
         <EmptyBox
@@ -493,7 +493,7 @@ const ProjectDetail = () => {
   const isRunsRoot =
     normalizedPath === url.replace(/\/+$/, '') || normalizedPath === runsPath;
   const backLabel = isRunsRoot
-    ? t('evaluation.project.backToList')
+    ? t('evaluation.project.title')
     : t('evaluation.run.backToRuns');
   const goBack = isRunsRoot ? backToList : backToRuns;
   const typeLabel = t(TYPE_KEYS[project.eval_type] || project.eval_type);
@@ -539,10 +539,11 @@ const ProjectDetail = () => {
         type={STATUS_BADGE_TYPE[project.status] || 'gray'}
         size='sm'
       />
+      {/* SimpleNav 의 topButtonList 슬롯과 같은 자리라 하우스와 같은 size='l' 을 쓴다. */}
       <ButtonV2
         type='outline'
         colorType='gray'
-        size='s'
+        size='l'
         label={
           genRunning
             ? t('evaluation.generate.running')
@@ -555,14 +556,14 @@ const ProjectDetail = () => {
       {runs.length >= 2 && (
         <ButtonV2
           type='outline'
-          size='s'
+          size='l'
           label={t('evaluation.project.detail.compare')}
           onClick={openCompare}
         />
       )}
       <ButtonV2
         type='solid'
-        size='s'
+        size='l'
         label={
           starting
             ? t('evaluation.running')
@@ -593,16 +594,9 @@ const ProjectDetail = () => {
               <span className={cx('meta-label')}>
                 {t('evaluation.project.dataset')}
               </span>
-              <Tooltip
-                contents={datasetLabel}
-                contentsAlign={{ vertical: 'top', horizontal: 'left' }}
-                globalCustomStyle={{ width: '100%' }}
-                customStyle={{ width: '100%' }}
-              >
-                <span className={cx('meta-value', 'dataset-value')}>
-                  {datasetLabel}
-                </span>
-              </Tooltip>
+              <span className={cx('meta-value', 'dataset-value')}>
+                {datasetLabel}
+              </span>
             </div>
             <div className={cx('meta-item')}>
               <span className={cx('meta-label')}>
