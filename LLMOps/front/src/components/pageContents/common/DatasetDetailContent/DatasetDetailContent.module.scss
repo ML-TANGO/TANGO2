@@ -478,3 +478,34 @@
     color: #6b7684;
   }
 }
+
+// 포맷 변환 진행/결과 인라인 배너 (파일 목록 위)
+.format-convert-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 12px 0;
+  padding: 10px 16px;
+  border: 1px solid rgba(45, 118, 248, 0.4);
+  border-radius: 8px;
+  background-color: #f7f9ff;
+
+  .text {
+    font-family: SpoqaM;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #3e3e3e;
+    white-space: normal;
+  }
+
+  &.done {
+    border-color: rgba(0, 166, 118, 0.4);
+    background-color: #f2fbf7;
+  }
+
+  &.failed {
+    border-color: rgba(235, 62, 42, 0.4);
+    background-color: #fdf4f3;
+  }
+}

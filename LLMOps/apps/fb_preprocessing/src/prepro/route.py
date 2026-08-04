@@ -193,6 +193,26 @@ async def run_preprocessing_job(args: dto.JOBPostModel):
         traceback.print_exc()
         return response(status=0, message="Unknown Error : {}".format(e))
 
+@prepro.post("/format-convert/ensure", tags=TAG_PREPROCESSING)
+async def post_format_convert_ensure(args: dto.FormatConvertEnsureModel):
+    """데이터셋 상세 '포맷 변환' 전용 built-in 프로젝트 find-or-create (멱등).
+
+    FE 가 전처리 프로젝트를 고르지 않고 버튼 한 번으로 변환하도록, 워크스페이스당
+    FORMAT_CONVERT 프로젝트 하나를 보장하고 preprocessing_id 를 돌려준다.
+    """
+    try:
+        user_id = get_user_id()
+        preprocessing_id = await svc.ensure_format_convert_project(workspace_id=args.workspace_id,
+                                                                   owner_id=user_id, header_user_id=user_id)
+        return response(status=1, result={"preprocessing_id": preprocessing_id})
+    except CustomErrorList as ce:
+        return ce.response()
+    except Exception as e:
+        traceback.print_exc()
+        # CustomError 는 CustomErrorList 에서 제외돼 여기로 떨어진다 — message 속성을 그대로 노출.
+        error_msg = getattr(e, 'message', str(e))
+        return response(status=0, message="Format convert project ensure error : {}".format(error_msg))
+
 @prepro.put("/tool/run", tags=TAG_TOOL)
 async def run_preprocessing_tool(args: dto.ToolControlModel):
     try:

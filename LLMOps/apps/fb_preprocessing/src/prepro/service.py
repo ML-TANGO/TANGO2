@@ -1514,6 +1514,98 @@ async def create_preprocessing(preprocessing_name: str, preprocessing_type: str,
         traceback.print_exc()
         raise e
 
+
+# 데이터셋 상세 '포맷 변환' 버튼이 자동 생성/재사용하는 예약 프로젝트 이름.
+# is_good_name(소문자·숫자·단일 '-') 규칙 준수. preprocessing UNIQUE KEY(workspace_id, name)
+# 가 이 이름의 멱등성(동시 호출 중복 생성 방지)을 DB 차원에서 보장한다.
+FORMAT_CONVERT_PROJECT_NAME = "dataset-format-convert"
+
+
+def pick_min_cpu_instance(instances : List[dict]) -> dict:
+    """포맷 변환용 최소 인스턴스 선택.
+
+    포맷 변환은 순수 데이터 변환이라 GPU 가 필요 없다(잡은 gpu_count=0 으로 실행).
+    실증 중 학습과 쿼터가 충돌하지 않도록 gpu_allocate=0(=CPU 인스턴스)을 우선하고,
+    그 다음 cpu/ram 이 작은 순으로 고른다. instance_id 로 tie-break 해 결정적으로 만든다.
+    워크스페이스에 할당량(instance_allocate)이 없는 인스턴스는 후보에서 제외.
+    """
+    candidates = [i for i in (instances or []) if (i.get("instance_allocate") or 0) >= 1]
+    if not candidates:
+        raise CustomError("No instance is allocated to this workspace. Ask an administrator to allocate one.")
+    return sorted(candidates, key=lambda i: (
+        i.get("gpu_allocate") or 0,
+        i.get("cpu_allocate") or 0,
+        i.get("ram_allocate") or 0,
+        i.get("instance_id") or 0,
+    ))[0]
+
+
+async def ensure_format_convert_project(workspace_id : int, owner_id : int, header_user_id : int) -> int:
+    """데이터셋 상세 '포맷 변환' 전용 built-in 프로젝트 find-or-create (멱등).
+
+    FE 가 프로젝트를 고르지 않도록 워크스페이스당 하나의 FORMAT_CONVERT 프로젝트를
+    보장한다. run_job 은 프로젝트에 instance 할당을 요구하므로(Allocate the instance)
+    instance_id 가 있는 프로젝트만 재사용 가능으로 본다.
+
+    Return: preprocessing_id
+    """
+    projects = await db_prepro.get_preprocessing_list(workspace_id=workspace_id,
+                                                      preprocessing_type=TYPE.PREPROCESSING_TYPE_B)
+    matched = sorted(
+        [p for p in (projects or []) if p.get("built_in_data_tf") == TYPE_BUILT_IN.FORMAT_CONVERT],
+        key=lambda p: p["id"]
+    )
+
+    # 1) 바로 쓸 수 있는(인스턴스 할당된) 기존 프로젝트 재사용 — 가장 낮은 id(결정적).
+    for project in matched:
+        if project.get("instance_id"):
+            return project["id"]
+
+    instance = pick_min_cpu_instance(await db_prepro.get_workspace_instances(workspace_id=workspace_id))
+
+    # 2) 예약 프로젝트가 인스턴스 없이 남아있는 경우(예: instance 삭제 → ON DELETE SET NULL)
+    #    만 자동 재할당. 사용자가 직접 만든 프로젝트는 건드리지 않는다.
+    reserved = next((p for p in matched if p.get("name") == FORMAT_CONVERT_PROJECT_NAME), None)
+    if reserved:
+        users = await db_prepro.get_preprocessing_user_list(preprocessing_id=reserved["id"])
+        await update_preprocessing(
+            preprocessing_id=reserved["id"],
+            user_list=[u["id"] for u in (users or [])],
+            access=reserved["access"],
+            description=reserved.get("description") or "",
+            instance_id=instance["instance_id"],
+            instance_allocate=1,
+            owner_id=reserved["owner_id"],
+            header_user_id=header_user_id,
+        )
+        return reserved["id"]
+
+    # 3) 없으면 생성. 동시 호출은 UNIQUE KEY(workspace_id, name) 위반으로 한쪽만 성공하고
+    #    패자는 아래 재조회에서 승자의 id 를 그대로 돌려받는다(멱등).
+    try:
+        await create_preprocessing(
+            preprocessing_name=FORMAT_CONVERT_PROJECT_NAME,
+            preprocessing_type=TYPE.PREPROCESSING_TYPE_B,
+            workspace_id=workspace_id,
+            owner_id=owner_id,
+            access=1,  # public — 워크스페이스 공용 유틸리티 프로젝트
+            description="Auto-created for dataset format conversion (CSV/TXT/Parquet to JSON/JSONL).",
+            instance_id=instance["instance_id"],
+            instance_allocate=1,
+            user_list=[],
+            built_in_data_type=TYPE_BUILT_IN.PREPROCESSING_BUILT_IN_TABULAR_TYPE,
+            built_in_data_tf=TYPE_BUILT_IN.FORMAT_CONVERT,
+        )
+    except Exception:
+        # 중복 생성(동시 호출 패자)일 수 있으므로 삼키고 재조회로 판정.
+        traceback.print_exc()
+
+    created = await db_prepro.get_preprocessing(workspace_id=workspace_id,
+                                                preprocessing_name=FORMAT_CONVERT_PROJECT_NAME)
+    if not created or not created.get("instance_id"):
+        raise CustomError("Failed to prepare the format conversion project.")
+    return created["id"]
+
 #=======================================================
 # UPDATE
 #=======================================================

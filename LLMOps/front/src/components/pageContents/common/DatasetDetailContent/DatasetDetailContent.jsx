@@ -25,6 +25,7 @@ import { openModal } from '@src/store/modules/modal';
 import { callApi, STATUS_SUCCESS } from '@src/network';
 
 import DatasetFinder from './DatasetFinder';
+import DatasetFormatConvert from './DatasetFormatConvert';
 // import UploadButton from './UploadButton';
 import DatasetMoveCopy from './DatasetMoveCopy';
 import EditIcon from './EditIcon';
@@ -129,6 +130,10 @@ function DatasetDetailContent({
   switchStatus,
   rowClickFetching,
   fromUploadFetching,
+  onFormatConvert, // 포맷 변환 실행 (선택 파일 1개)
+  converting, // 포맷 변환 요청 중
+  convertJob, // 진행 중/직전 포맷 변환 잡 { id, name, status, reason }
+  onOpenConvertLog, // 포맷 변환 시스템 로그 모달 열기
 }) {
   const filebrowserDisable = accessType === 0 && permissionLevel > 3;
 
@@ -173,6 +178,26 @@ function DatasetDetailContent({
   const isDisabledBtn =
     (Number(accessType) === 1 && Number(permissionLevel) > 4) ||
     (Number(accessType) === 0 && Number(permissionLevel) > 3);
+
+  /**
+   * 포맷 변환 — 파일 "1개"만 대상.
+   * format_convert.py 는 realpath(input_data) 의 dirname 에 결과를 쓰므로 폴더/루트를
+   * 넘기면 결과가 상위(또는 파드 루트)에 생긴다. 따라서 파일(type === 'file')이 정확히
+   * 1개일 때만 활성 — 폴더·다중 선택은 비활성.
+   * 지원 확장자(csv/txt/parquet)가 아니면 잡이 확정 실패하므로 함께 차단.
+   */
+  const FORMAT_CONVERT_EXTS = ['csv', 'txt', 'parquet'];
+  const convertTarget = selectedRows.length === 1 ? selectedRows[0] : null;
+  const convertTargetExt = (convertTarget?.name || '')
+    .split('.')
+    .pop()
+    .toLowerCase();
+  const isFormatConvertDisabled =
+    !convertTarget ||
+    convertTarget.type !== 'file' ||
+    !FORMAT_CONVERT_EXTS.includes(convertTargetExt) ||
+    isDisabledBtn ||
+    isTempPath;
 
   const searchOptions = [{ label: t('name.label'), value: 'name' }];
 
@@ -617,6 +642,13 @@ function DatasetDetailContent({
       >
         {t('decompression.label')}
       </Button>
+      <DatasetFormatConvert
+        targetFileName={convertTarget?.name || ''}
+        disabled={isFormatConvertDisabled}
+        converting={converting}
+        onConfirm={onFormatConvert}
+        btnCustomStyle={{ marginRight: '12px' }}
+      />
       <Button
         type='red-light'
         onClick={openDeleteConfirmPopup}
@@ -943,6 +975,36 @@ function DatasetDetailContent({
               '파일을 여기로 끌어다 놓거나 클릭해 업로드하세요',
             )}
           </span>
+        </div>
+      )}
+      {convertJob && (
+        <div
+          className={cx(
+            'format-convert-banner',
+            convertJob.failed ? 'failed' : convertJob.finished ? 'done' : '',
+          )}
+        >
+          <span className={cx('text')}>
+            {convertJob.failed
+              ? t('formatConvertFailed.message', '포맷 변환에 실패했습니다.')
+              : convertJob.finished
+                ? t(
+                    'formatConvertDone.message',
+                    '포맷 변환이 완료되었습니다. 결과 파일이 원본과 같은 폴더에 생성되었습니다.',
+                  )
+                : t(
+                    'formatConvertRunning.message',
+                    '포맷 변환을 실행하는 중입니다.',
+                  )}
+            {convertJob.reason ? ` (${convertJob.reason})` : ''}
+          </span>
+          <Button
+            type='none-border'
+            size='small'
+            onClick={() => onOpenConvertLog?.(convertJob)}
+          >
+            {t('systemLog.label')}
+          </Button>
         </div>
       )}
       <Table

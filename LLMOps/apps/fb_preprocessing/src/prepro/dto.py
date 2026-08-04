@@ -44,6 +44,10 @@ class PreprocessingModelPUT(BaseModel):
     access: int = Field(description='Access')
     description: Optional[str] = Field(default="", description="description 200 len")
     
+class FormatConvertEnsureModel(BaseModel):
+    """데이터셋 상세 '포맷 변환' 전용 built-in 프로젝트 find-or-create 요청."""
+    workspace_id: int = Field(description='workspace id')
+
 class JOBCRUDModel(BaseModel):
     search_key: Optional[str] = Field(default=None, description='training JOB Search Key "name" or "user_name"... ')
     size: Optional[int] = Field(default=None, description='training JOB List Item Size')
