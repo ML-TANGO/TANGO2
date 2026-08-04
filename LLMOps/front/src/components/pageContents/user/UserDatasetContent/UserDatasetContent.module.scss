@@ -30,31 +30,6 @@
   gap: 14px;
 }
 
-.delete-btn {
-  padding: 8px 16px;
-  border-radius: 8px;
-  border: 1px solid $mono203;
-  background: $mono200;
-  color: $mono205;
-  font-size: 13px;
-  cursor: pointer;
-
-  &:hover:not(:disabled) {
-    border-color: $red502;
-    color: $red502;
-  }
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-}
-
-.list-footer {
-  display: flex;
-  justify-content: flex-start;
-  padding-top: 4px;
-}
-
 .list-toolbar {
   display: flex;
   align-items: center;
@@ -73,24 +48,13 @@
   align-items: center;
 }
 
+// 높이 제한 없음 — 카드가 페이지 아래로 쭉 흐르고 스크롤은 템플릿의 content-area
+// (xlib PageTemplate, overflow:auto) 가 담당. 내부 스크롤 박스를 만들면 목록이
+// 중간에서 잘려 보이므로 중첩 스크롤을 두지 않는다.
 .ds-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: 440px;
-  overflow-y: auto;
-  padding-right: 4px;
-
-  &::-webkit-scrollbar {
-    width: 4px;
-  }
-  &::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  &::-webkit-scrollbar-thumb {
-    background: $mono203;
-    border-radius: 2px;
-  }
 }
 
 .ds-card {

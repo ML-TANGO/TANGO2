@@ -225,6 +225,17 @@ function UserDatasetContent({
               customStyle={{ width: '220px' }}
             />
           </div>
+          {/* 선택 데이터셋 삭제 — 목록 위 툴바 우측 끝.
+              (그래프 분석 헤더 .btn-list 관행: 우측정렬 툴바에 필터 뒤로 선택의존 삭제) */}
+          <ButtonV2
+            colorType='red'
+            size='l'
+            label={`${t('delete.label')}${
+              localSelected.size > 0 ? ` (${localSelected.size})` : ''
+            }`}
+            disabled={localSelected.size === 0}
+            onClick={openDeleteConfirmPopup}
+          />
         </div>
 
         {/* 카드 리스트 */}
@@ -350,19 +361,6 @@ function UserDatasetContent({
             })}
           </div>
         )}
-
-        {/* 하단 좌측: 선택 데이터셋 삭제 */}
-        <div className={cx('list-footer')}>
-          <button
-            type='button'
-            className={cx('delete-btn')}
-            onClick={openDeleteConfirmPopup}
-            disabled={localSelected.size === 0}
-          >
-            {t('delete.label')}
-            {localSelected.size > 0 ? ` (${localSelected.size})` : ''}
-          </button>
-        </div>
       </div>
     </div>
   );
