@@ -7,7 +7,13 @@ import style from './BasicLineChart.module.scss';
 
 const cx = classNames.bind(style);
 
-const BasicLineChart = ({ title, steps, values, stepsPerEpoch, checkpoints }) => {
+const BasicLineChart = ({
+  title,
+  steps,
+  values,
+  stepsPerEpoch,
+  checkpoints,
+}) => {
   const chartRef = useRef(null);
 
   useEffect(() => {

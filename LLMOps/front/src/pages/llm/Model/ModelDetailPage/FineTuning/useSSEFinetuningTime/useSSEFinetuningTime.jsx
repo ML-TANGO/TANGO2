@@ -154,7 +154,14 @@ const useSSEFinetuningTime = (
       }
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [modelId, userName, setProgressData, fineTuningStatus, mode, disconnectSSE]);
+  }, [
+    modelId,
+    userName,
+    setProgressData,
+    fineTuningStatus,
+    mode,
+    disconnectSSE,
+  ]);
 };
 
 export default useSSEFinetuningTime;

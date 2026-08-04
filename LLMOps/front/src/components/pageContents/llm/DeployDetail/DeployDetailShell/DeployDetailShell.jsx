@@ -103,11 +103,7 @@ const DeployDetailShell = ({
       <div className={cx('shell')}>
         {shellHeader}
         <DeployDetailSection>
-          <EmptyBox
-            isBox
-            customStyle={{ height: '180px' }}
-            text={error}
-          />
+          <EmptyBox isBox customStyle={{ height: '180px' }} text={error} />
         </DeployDetailSection>
       </div>
     );

@@ -13,7 +13,12 @@ const OPTIONS = [
 export default function OutputTypeSelect({ value, onChange }) {
   return (
     <label
-      style={{ display: 'block', marginBottom: 12, fontSize: 13, fontWeight: 600 }}
+      style={{
+        display: 'block',
+        marginBottom: 12,
+        fontSize: 13,
+        fontWeight: 600,
+      }}
     >
       출력 유형
       <select

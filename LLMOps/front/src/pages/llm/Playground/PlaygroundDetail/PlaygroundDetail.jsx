@@ -180,11 +180,7 @@ const PlaygroundDetail = () => {
         if (normalized.mode !== 'single') {
           throw new Error('이 경로는 단일모델 배포 상세 전용입니다.');
         }
-        getDetailPlaygroundInfo(
-          dispatch,
-          +playgroundId,
-          normalized.rawDetail,
-        );
+        getDetailPlaygroundInfo(dispatch, +playgroundId, normalized.rawDetail);
         setDeployment(normalized);
         setDetailError('');
       })

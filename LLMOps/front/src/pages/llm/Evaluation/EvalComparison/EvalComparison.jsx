@@ -91,11 +91,7 @@ const EvalComparison = ({ comparison, showModel = false, onDelete }) => {
           <span className={cx('metric-cell', isBest && 'best')}>
             {v !== undefined ? fmtMetricValue(k, v) : '-'}
             {isBest && (
-              <Badge
-                label={t('evaluate.best.badge')}
-                type='green'
-                size='sm'
-              />
+              <Badge label={t('evaluate.best.badge')} type='green' size='sm' />
             )}
           </span>
         );
@@ -144,11 +140,7 @@ const EvalComparison = ({ comparison, showModel = false, onDelete }) => {
 
   if (runs.length === 0) {
     return (
-      <EmptyBox
-        text='evaluate.empty'
-        isBox
-        customStyle={{ height: '120px' }}
-      />
+      <EmptyBox text='evaluate.empty' isBox customStyle={{ height: '120px' }} />
     );
   }
 

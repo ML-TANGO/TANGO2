@@ -97,7 +97,9 @@ const useSSEGraph = (
           const { graph } = data ?? { graph: null };
           setGraphData(graph);
           // ⑩ 체크포인트 점 마킹 (SP-5) — payload 의 checkpoints[] 를 그래프로 전달.
-          setCheckpoints(Array.isArray(data?.checkpoints) ? data.checkpoints : []);
+          setCheckpoints(
+            Array.isArray(data?.checkpoints) ? data.checkpoints : [],
+          );
         } catch (error) {
           console.error('Error SSE:', error);
         }
