@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useHistory, useRouteMatch } from 'react-router-dom';
 
 import { ButtonV2 } from '@jonathan/ui-react';
@@ -20,6 +21,7 @@ import style from './UserSynthesisPromptOptimizeContent.module.scss';
 const cx = classNames.bind(style);
 
 export default function UserSynthesisPromptOptimizeContent() {
+  const { t } = useTranslation();
   const history = useHistory();
   const match = useRouteMatch();
   const { id: workspaceId, sid: projectId } = match.params;
@@ -49,12 +51,13 @@ export default function UserSynthesisPromptOptimizeContent() {
     fetchCandidates();
   }, [fetchProject, fetchCandidates]);
 
-  if (!project) return <div className={cx('cont')}>불러오는 중...</div>;
+  if (!project)
+    return <div className={cx('cont')}>{t('synthesis.loading')}</div>;
 
   const handleRegenerate = async () => {
     const { status, message } = await regeneratePromptCandidates(projectId);
     if (status === STATUS_SUCCESS) {
-      toast.success('후보를 재생성했습니다.');
+      toast.success(t('synthesis.toast.candidatesRegenerated'));
       fetchProject();
       fetchCandidates();
     } else {
@@ -65,7 +68,7 @@ export default function UserSynthesisPromptOptimizeContent() {
   const handleAdopt = async (c) => {
     const { status, message } = await adoptPromptCandidate(projectId, c.id);
     if (status === STATUS_SUCCESS) {
-      toast.success('프롬프트를 채택했습니다.');
+      toast.success(t('synthesis.toast.promptAdopted'));
       fetchProject();
       fetchCandidates();
     } else {
@@ -79,46 +82,61 @@ export default function UserSynthesisPromptOptimizeContent() {
     else toast.error(message);
   };
 
-  const visible = (data.candidates || []).filter((c) => c.status !== 'discarded');
+  const visible = (data.candidates || []).filter(
+    (c) => c.status !== 'discarded',
+  );
 
   return (
     <div className={cx('cont')}>
       <button
-        className={cx('back')}
+        className={cx('back-to-list')}
         onClick={() =>
           history.push(
             `/user/workspace/${workspaceId}/datasets/synthesis/${projectId}/overview`,
           )
         }
       >
-        ← 개요
+        <img
+          className={cx('back-btn-image')}
+          src='/images/icon/00-ic-basic-arrow-02-left.svg'
+          alt='<'
+        />
+        <span className={cx('back-btn-label')}>
+          {t('synthesis.overview.label')}
+        </span>
       </button>
-      <h1 className={cx('title')}>프롬프트 최적화 — LLM1</h1>
+      <h1 className={cx('title')}>{t('synthesis.promptOptimize.title')}</h1>
       <p className={cx('desc')}>
-        메타프롬프트로부터 최적 프롬프트/인스트럭션을 생성합니다. (방식:{' '}
-        {data.method} · iteration {data.iteration}){' '}
+        {t('synthesis.promptOptimize.desc', {
+          method: data.method,
+          iteration: data.iteration,
+        })}{' '}
         {data.mock && (
-          <span className={cx('mock')}>[mock — 고려대 LLM1 수령 시 교체]</span>
+          <span className={cx('mock')}>
+            {t('synthesis.promptOptimize.mockNote')}
+          </span>
         )}
       </p>
 
       <div className={cx('meta-box')}>
-        <b>메타프롬프트</b>
+        <b>{t('synthesis.info.metaPrompt')}</b>
         <div>{project.params?.meta_prompt || '-'}</div>
         {data.adopted_prompt && (
-          <div className={cx('adopted')}>✓ 채택됨: {data.adopted_prompt}</div>
+          <div className={cx('adopted')}>
+            {t('synthesis.prompt.adopted', { prompt: data.adopted_prompt })}
+          </div>
         )}
       </div>
 
       <div className={cx('run-row')}>
         <ButtonV2
           colorType='blue'
-          label='🔁 최적화 실행'
+          label={t('synthesis.action.runOptimize')}
           onClick={handleRegenerate}
         />
         <ButtonV2
           type='outline'
-          label='📋 후보 전체 목록'
+          label={t('synthesis.action.allCandidates')}
           onClick={() =>
             history.push(
               `/user/workspace/${workspaceId}/datasets/synthesis/${projectId}/prompt-list`,
@@ -127,11 +145,13 @@ export default function UserSynthesisPromptOptimizeContent() {
         />
       </div>
 
-      <h2 className={cx('sub')}>생성된 프롬프트 후보 (점수순)</h2>
+      <h2 className={cx('sub')}>
+        {t('synthesis.promptOptimize.candidatesTitle')}
+      </h2>
       <div className={cx('candidates')}>
         {visible.length === 0 && (
           <div className={cx('empty')}>
-            후보가 없습니다. “최적화 실행”을 누르세요.
+            {t('synthesis.promptOptimize.empty')}
           </div>
         )}
         {visible.map((c) => (
@@ -140,17 +160,19 @@ export default function UserSynthesisPromptOptimizeContent() {
             <div className={cx('prompt')}>{c.prompt}</div>
             <div className={cx('cand-actions')}>
               {c.status === 'adopted' ? (
-                <span className={cx('adopted-tag')}>✓ 채택됨</span>
+                <span className={cx('adopted-tag')}>
+                  {t('synthesis.prompt.adoptedTag')}
+                </span>
               ) : (
                 <>
                   <ButtonV2
                     colorType='skyblue'
-                    label='✓ 채택'
+                    label={t('synthesis.action.adopt')}
                     onClick={() => handleAdopt(c)}
                   />
                   <ButtonV2
                     type='outline'
-                    label='폐기'
+                    label={t('synthesis.action.discard')}
                     onClick={() => handleDiscard(c)}
                   />
                 </>

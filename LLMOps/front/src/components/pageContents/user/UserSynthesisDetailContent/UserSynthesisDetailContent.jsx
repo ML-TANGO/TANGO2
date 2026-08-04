@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
 import { useHistory, useRouteMatch } from 'react-router-dom';
 
@@ -23,15 +24,35 @@ import style from './UserSynthesisDetailContent.module.scss';
 const cx = classNames.bind(style);
 
 const MODULES = [
-  { key: 'LLM1', label: '프롬프트 생성기', desc: '메타프롬프트 → 최적 프롬프트/인스트럭션' },
-  { key: 'LLM2', label: '데이터 생성기', desc: '데이터 생성 프롬프트 → 데이터 라벨' },
-  { key: 'LLM3', label: '알고리즘 호출자', desc: 'API Call → 학습 알고리즘/환경' },
+  {
+    key: 'LLM1',
+    labelKey: 'synthesis.module.llm1.label',
+    descKey: 'synthesis.module.llm1.desc',
+  },
+  {
+    key: 'LLM2',
+    labelKey: 'synthesis.module.llm2.label',
+    descKey: 'synthesis.module.llm2.desc',
+  },
+  {
+    key: 'LLM3',
+    labelKey: 'synthesis.module.llm3.label',
+    descKey: 'synthesis.module.llm3.desc',
+  },
 ];
 
-const statusLabel = (s) =>
-  ({ created: '대기', running: '실행 중', completed: '완료', failed: '실패', cancelled: '취소' }[s] || s || '-');
+const STATUS_KEYS = {
+  created: 'synthesis.status.created',
+  running: 'synthesis.status.running',
+  completed: 'synthesis.status.completed',
+  failed: 'synthesis.status.failed',
+  cancelled: 'synthesis.status.cancelled',
+};
+
+const statusLabel = (t, s) => (STATUS_KEYS[s] ? t(STATUS_KEYS[s]) : s || '-');
 
 export default function UserSynthesisDetailContent() {
+  const { t } = useTranslation();
   const dispatch = useDispatch();
   const history = useHistory();
   const match = useRouteMatch();
@@ -69,12 +90,13 @@ export default function UserSynthesisDetailContent() {
     return () => clearInterval(iv);
   }, [project, fetchAll]);
 
-  if (!project) return <div className={cx('cont')}>불러오는 중...</div>;
+  if (!project)
+    return <div className={cx('cont')}>{t('synthesis.loading')}</div>;
 
   const handleRun = async () => {
     const { status, message } = await runSynthesis(projectId);
     if (status === STATUS_SUCCESS) {
-      toast.success('생성 실행을 시작했습니다.');
+      toast.success(t('synthesis.toast.runStarted'));
       fetchAll();
     } else {
       toast.error(message);
@@ -101,24 +123,24 @@ export default function UserSynthesisDetailContent() {
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (e) {
-      toast.error('다운로드에 실패했습니다.');
+      toast.error(t('synthesis.toast.downloadFailed'));
     }
   };
 
   const handleSaveDataset = async () => {
     if (!dsName.trim()) {
-      toast.error('데이터셋 이름을 입력하세요.');
+      toast.error(t('synthesis.toast.datasetNameRequired'));
       return;
     }
     const { status, message } = await saveSynthesisDataset(projectId, {
       dataset_name: dsName.trim(),
     });
     if (status === STATUS_SUCCESS) {
-      toast.success('데이터셋으로 저장했습니다.');
+      toast.success(t('synthesis.toast.datasetSaved'));
       setSaveOpen(false);
       setDsName('');
     } else {
-      toast.error(message || '데이터셋 저장에 실패했습니다.');
+      toast.error(message || t('synthesis.toast.datasetSaveFailed'));
     }
   };
 
@@ -130,25 +152,30 @@ export default function UserSynthesisDetailContent() {
     <div className={cx('cont')}>
       <div className={cx('top')}>
         <button
-          className={cx('back')}
+          className={cx('back-to-list')}
           onClick={() =>
             history.push(`/user/workspace/${workspaceId}/datasets/synthesis`)
           }
         >
-          ← 목록
+          <img
+            className={cx('back-btn-image')}
+            src='/images/icon/00-ic-basic-arrow-02-left.svg'
+            alt='<'
+          />
+          <span className={cx('back-btn-label')}>{t('synthesis.label')}</span>
         </button>
         <div className={cx('title-row')}>
           <span className={cx('field')}>{project.field || '-'}</span>
           <h1 className={cx('title')}>{project.name}</h1>
           <span className={cx('status', project.status)}>
-            {statusLabel(project.status)}
+            {statusLabel(t, project.status)}
             {running ? progressTxt : ''}
           </span>
         </div>
         <div className={cx('actions')}>
           <ButtonV2
             type='outline'
-            label='🧭 마법사'
+            label={t('synthesis.action.wizard')}
             onClick={() =>
               history.push(
                 `/user/workspace/${workspaceId}/datasets/synthesis/${projectId}/wizard`,
@@ -157,7 +184,7 @@ export default function UserSynthesisDetailContent() {
           />
           <ButtonV2
             type='outline'
-            label='🔗 캔버스'
+            label={t('synthesis.action.canvas')}
             onClick={() =>
               history.push(
                 `/user/workspace/${workspaceId}/datasets/synthesis/${projectId}/canvas`,
@@ -166,7 +193,7 @@ export default function UserSynthesisDetailContent() {
           />
           <ButtonV2
             type='outline'
-            label='⚙ 프롬프트 최적화'
+            label={t('synthesis.action.promptOptimize')}
             onClick={() =>
               history.push(
                 `/user/workspace/${workspaceId}/datasets/synthesis/${projectId}/prompt-optimize`,
@@ -175,13 +202,13 @@ export default function UserSynthesisDetailContent() {
           />
           <ButtonV2
             colorType='skyblue'
-            label='설정 수정'
+            label={t('synthesis.action.editConfig')}
             onClick={handleEdit}
             disabled={running}
           />
           <ButtonV2
             colorType='blue'
-            label='생성 실행'
+            label={t('synthesis.action.run')}
             onClick={handleRun}
             disabled={running}
           />
@@ -193,11 +220,11 @@ export default function UserSynthesisDetailContent() {
           <React.Fragment key={m.key}>
             <div className={cx('module', i === 1 && 'active')}>
               <div className={cx('mod-key')}>{m.key}</div>
-              <div className={cx('mod-label')}>{m.label}</div>
-              <div className={cx('mod-desc')}>{m.desc}</div>
+              <div className={cx('mod-label')}>{t(m.labelKey)}</div>
+              <div className={cx('mod-desc')}>{t(m.descKey)}</div>
               {i === 1 && (
                 <div className={cx('mod-status')}>
-                  {statusLabel(project.status)}
+                  {statusLabel(t, project.status)}
                   {running ? progressTxt : ''}
                 </div>
               )}
@@ -209,16 +236,19 @@ export default function UserSynthesisDetailContent() {
 
       <div className={cx('info')}>
         <div>
-          <b>생성 모듈</b>: {project.manifest_name} ({project.manifest_version})
+          <b>{t('synthesis.info.module')}</b>: {project.manifest_name} (
+          {project.manifest_version})
         </div>
         <div>
-          <b>메타프롬프트</b>: {project.params?.meta_prompt || '-'}
+          <b>{t('synthesis.info.metaPrompt')}</b>:{' '}
+          {project.params?.meta_prompt || '-'}
         </div>
         <div>
-          <b>프롬프트 최적화</b>: {project.params?.optimize_method || '-'}
+          <b>{t('synthesis.info.optimizeMethod')}</b>:{' '}
+          {project.params?.optimize_method || '-'}
         </div>
         <div>
-          <b>생성 개수</b>: {project.params?.count ?? '-'}
+          <b>{t('synthesis.info.count')}</b>: {project.params?.count ?? '-'}
         </div>
         <div>
           <b>GPU</b>: {project.gpu_count}
@@ -228,27 +258,33 @@ export default function UserSynthesisDetailContent() {
       {(log || running) && (
         <div className={cx('logwrap')}>
           <h2 className={cx('log-title')}>
-            실행 로그 {running && <span className={cx('live')}>● LIVE</span>}
+            {t('synthesis.log.title')}{' '}
+            {running && <span className={cx('live')}>● LIVE</span>}
           </h2>
-          <pre className={cx('log-box')}>{log || '로그를 불러오는 중...'}</pre>
+          <pre className={cx('log-box')}>
+            {log || t('synthesis.log.loading')}
+          </pre>
         </div>
       )}
 
       <div className={cx('result')}>
         <div className={cx('result-head')}>
           <h2 className={cx('result-title')}>
-            생성 결과 {result.total ? `(${result.total}건)` : ''}
+            {t('synthesis.result.title')}{' '}
+            {result.total
+              ? t('synthesis.result.count', { n: result.total })
+              : ''}
           </h2>
           {result.total > 0 && (
             <div className={cx('result-actions')}>
               <ButtonV2
                 type='outline'
-                label='결과 다운로드'
+                label={t('synthesis.action.download')}
                 onClick={handleDownload}
               />
               <ButtonV2
                 colorType='skyblue'
-                label='데이터셋으로 저장'
+                label={t('synthesis.action.saveDataset')}
                 onClick={() => setSaveOpen((v) => !v)}
               />
             </div>
@@ -258,22 +294,24 @@ export default function UserSynthesisDetailContent() {
           <div className={cx('save-row')}>
             <input
               className={cx('save-input')}
-              placeholder='새 데이터셋 이름'
+              placeholder={t('synthesis.dataset.namePlaceholder')}
               value={dsName}
               onChange={(e) => setDsName(e.target.value)}
             />
-            <ButtonV2 colorType='blue' label='저장' onClick={handleSaveDataset} />
+            <ButtonV2
+              colorType='blue'
+              label={t('saveBtn.label')}
+              onClick={handleSaveDataset}
+            />
             <ButtonV2
               type='outline'
-              label='취소'
+              label={t('cancel.label')}
               onClick={() => setSaveOpen(false)}
             />
           </div>
         )}
         {result.records.length === 0 ? (
-          <div className={cx('empty')}>
-            아직 생성된 데이터가 없습니다. “생성 실행” 후 확인하세요.
-          </div>
+          <div className={cx('empty')}>{t('synthesis.result.empty')}</div>
         ) : (
           <table className={cx('table')}>
             <thead>

@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { Badge, ButtonV2, Textarea } from '@jonathan/ui-react';
 
@@ -46,6 +47,7 @@ const DualDirectInference = ({
   inferenceModelName,
   isExternal = false,
 }) => {
+  const { t } = useTranslation();
   const [systemPrompt, setSystemPrompt] = useState('');
   const [userInput, setUserInput] = useState('');
   const [domainOpen, setDomainOpen] = useState(false);
@@ -82,11 +84,11 @@ const DualDirectInference = ({
   const handleRun = async () => {
     if (!canRun || runningRef.current) return;
     if (isExternal && !imageB64) {
-      errorToastMessage(null, '이미지를 업로드해 주세요.');
+      errorToastMessage(null, t('inference.dual.imageRequired'));
       return;
     }
     if (isExternal && !aisRows.some((r) => Number(r.my_ship) === 1)) {
-      errorToastMessage(null, '자선(my_ship=1) 행이 필요합니다.');
+      errorToastMessage(null, t('inference.dual.myShipRequired'));
       return;
     }
     runningRef.current = true;
@@ -125,7 +127,7 @@ const DualDirectInference = ({
       }
       errorToastMessage(res.error, res.message);
     } catch (err) {
-      errorToastMessage(null, '추론 중 오류가 발생했습니다.');
+      errorToastMessage(null, t('inference.dual.runError'));
     } finally {
       runningRef.current = false;
       setRunning(false);
@@ -136,7 +138,9 @@ const DualDirectInference = ({
     <div className={cx('panel')}>
       <section className={cx('card')}>
         <div className={cx('card-head')}>
-          <h3 className={cx('card-title')}>시스템 프롬프트</h3>
+          <h3 className={cx('card-title')}>
+            {t('inference.dual.systemPrompt')}
+          </h3>
           {promptModelName && (
             <Badge type='gray' size='sm' label={`LLM1 · ${promptModelName}`} />
           )}
@@ -145,18 +149,18 @@ const DualDirectInference = ({
               type={domainOpen ? 'solid' : 'outline'}
               colorType='blue'
               size='s'
-              label='도메인 최적화'
+              label={t('inference.dual.domainOptimize')}
               onClick={() => setDomainOpen((v) => !v)}
             />
           </div>
         </div>
         <Textarea
           size='large'
-          placeholder='시스템 역할이나 컨텍스트를 입력하세요 (선택)'
+          placeholder={t('inference.dual.systemPromptPlaceholder')}
           value={systemPrompt}
           name='system-prompt'
           maxLength={4000}
-          options={taOptions('시스템 프롬프트', 3)}
+          options={taOptions(t('inference.dual.systemPrompt'), 3)}
           customStyle={{ fontSize: '14px', height: '96px' }}
           onChange={(e) => setSystemPrompt(e.target.value)}
         />
@@ -165,24 +169,29 @@ const DualDirectInference = ({
             {examples.map((ex, i) => (
               <div key={ex.id} className={cx('qa-set')}>
                 <div className={cx('qa-header')}>
-                  <span className={cx('qa-index')}>예시 {i + 1}</span>
+                  <span className={cx('qa-index')}>
+                    {t('inference.dual.exampleIndex', { n: i + 1 })}
+                  </span>
                   {examples.length > 1 && (
                     <ButtonV2
                       type='clear'
                       colorType='red'
                       size='s'
-                      label='삭제'
+                      label={t('delete.label')}
                       onClick={() => handleExampleRemove(i)}
                     />
                   )}
                 </div>
                 <Textarea
                   size='large'
-                  placeholder='예시 질의를 입력하세요'
+                  placeholder={t('inference.dual.exampleQueryPlaceholder')}
                   value={ex.query}
                   name={`example-query-${ex.id}`}
                   maxLength={2000}
-                  options={taOptions(`예시 ${i + 1} 질의`, 2)}
+                  options={taOptions(
+                    t('inference.dual.exampleQueryAria', { n: i + 1 }),
+                    2,
+                  )}
                   customStyle={{ fontSize: '14px', height: '72px' }}
                   onChange={(e) =>
                     handleExampleChange(i, 'query', e.target.value)
@@ -190,11 +199,14 @@ const DualDirectInference = ({
                 />
                 <Textarea
                   size='large'
-                  placeholder='예시 답변을 입력하세요'
+                  placeholder={t('inference.dual.exampleAnswerPlaceholder')}
                   value={ex.answer}
                   name={`example-answer-${ex.id}`}
                   maxLength={2000}
-                  options={taOptions(`예시 ${i + 1} 답변`, 2)}
+                  options={taOptions(
+                    t('inference.dual.exampleAnswerAria', { n: i + 1 }),
+                    2,
+                  )}
                   customStyle={{ fontSize: '14px', height: '72px' }}
                   onChange={(e) =>
                     handleExampleChange(i, 'answer', e.target.value)
@@ -208,7 +220,7 @@ const DualDirectInference = ({
                   type='outline'
                   colorType='blue'
                   size='s'
-                  label='예시 추가'
+                  label={t('inference.dual.exampleAdd')}
                   onClick={handleExampleAdd}
                 />
               </div>
@@ -219,7 +231,7 @@ const DualDirectInference = ({
 
       <section className={cx('card')}>
         <div className={cx('card-head')}>
-          <h3 className={cx('card-title')}>사용자 입력</h3>
+          <h3 className={cx('card-title')}>{t('inputUser.label')}</h3>
           {inferenceModelName && (
             <Badge
               type='blue'
@@ -230,11 +242,11 @@ const DualDirectInference = ({
         </div>
         <Textarea
           size='large'
-          placeholder='추론할 내용을 입력하세요...'
+          placeholder={t('inference.dual.userInputPlaceholder')}
           value={userInput}
           name='user-input'
           maxLength={4000}
-          options={taOptions('사용자 입력', 5)}
+          options={taOptions(t('inputUser.label'), 5)}
           customStyle={{ fontSize: '14px', height: '148px' }}
           onChange={(e) => setUserInput(e.target.value)}
         />
@@ -243,8 +255,12 @@ const DualDirectInference = ({
       {isExternal && (
         <section className={cx('card')}>
           <div className={cx('card-head')}>
-            <h3 className={cx('card-title')}>SDS(VLM) 입력</h3>
-            <Badge type='gray' size='sm' label='이미지 · AIS · 출력 유형' />
+            <h3 className={cx('card-title')}>{t('inference.dual.sdsInput')}</h3>
+            <Badge
+              type='gray'
+              size='sm'
+              label={t('inference.dual.sdsInputBadge')}
+            />
           </div>
           <ImageUploadField value={imageB64} onChange={setImageB64} />
           <OutputTypeSelect value={outputType} onChange={setOutputType} />
@@ -257,7 +273,9 @@ const DualDirectInference = ({
           type='solid'
           colorType='blue'
           size='l'
-          label={running ? '추론 중' : '추론 실행'}
+          label={
+            running ? t('inference.dual.running') : t('inference.dual.run')
+          }
           isLoading={running}
           disabled={!canRun}
           onClick={handleRun}
@@ -269,7 +287,9 @@ const DualDirectInference = ({
           {result.optimized_prompt && (
             <section className={cx('card')}>
               <div className={cx('card-head')}>
-                <h3 className={cx('card-title')}>최적화된 프롬프트</h3>
+                <h3 className={cx('card-title')}>
+                  {t('inference.dual.optimizedPrompt')}
+                </h3>
                 <Badge type='gray' size='sm' label='LLM1' />
               </div>
               <div className={cx('result-body')}>{result.optimized_prompt}</div>
@@ -277,7 +297,9 @@ const DualDirectInference = ({
           )}
           <section className={cx('card')}>
             <div className={cx('card-head')}>
-              <h3 className={cx('card-title')}>추론 결과</h3>
+              <h3 className={cx('card-title')}>
+                {t('inference.result.title')}
+              </h3>
               <Badge
                 type='blue'
                 size='sm'

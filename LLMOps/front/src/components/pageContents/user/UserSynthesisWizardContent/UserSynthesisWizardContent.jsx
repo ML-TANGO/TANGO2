@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
 import { useHistory, useRouteMatch } from 'react-router-dom';
 
@@ -22,18 +23,44 @@ import style from './UserSynthesisWizardContent.module.scss';
 const cx = classNames.bind(style);
 
 const STEPS = [
-  { label: '데이터 준비', sub: '원천 데이터 + 사용자 입력' },
-  { label: '프롬프트·인스트럭션 생성', sub: 'LLM1 · 최적화' },
-  { label: '데이터 생성', sub: 'LLM2 · 데이터 라벨' },
-  { label: '알고리즘 호출', sub: 'LLM3 · API Call' },
-  { label: '학습 실행', sub: '학습 알고리즘/환경' },
-  { label: '결과 모델', sub: 'SDx 특화 LLM · 평가' },
+  {
+    labelKey: 'synthesis.wizard.step1.label',
+    subKey: 'synthesis.wizard.step1.sub',
+  },
+  {
+    labelKey: 'synthesis.wizard.step2.label',
+    subKey: 'synthesis.wizard.step2.sub',
+  },
+  {
+    labelKey: 'synthesis.wizard.step3.label',
+    subKey: 'synthesis.wizard.step3.sub',
+  },
+  {
+    labelKey: 'synthesis.wizard.step4.label',
+    subKey: 'synthesis.wizard.step4.sub',
+  },
+  {
+    labelKey: 'synthesis.wizard.step5.label',
+    subKey: 'synthesis.wizard.step5.sub',
+  },
+  {
+    labelKey: 'synthesis.wizard.step6.label',
+    subKey: 'synthesis.wizard.step6.sub',
+  },
 ];
 
-const statusLabel = (s) =>
-  ({ created: '대기', running: '실행 중', completed: '완료', failed: '실패', cancelled: '취소' }[s] || s || '-');
+const STATUS_KEYS = {
+  created: 'synthesis.status.created',
+  running: 'synthesis.status.running',
+  completed: 'synthesis.status.completed',
+  failed: 'synthesis.status.failed',
+  cancelled: 'synthesis.status.cancelled',
+};
+
+const statusLabel = (t, s) => (STATUS_KEYS[s] ? t(STATUS_KEYS[s]) : s || '-');
 
 export default function UserSynthesisWizardContent() {
+  const { t } = useTranslation();
   const dispatch = useDispatch();
   const history = useHistory();
   const match = useRouteMatch();
@@ -41,7 +68,12 @@ export default function UserSynthesisWizardContent() {
 
   const [step, setStep] = useState(0);
   const [project, setProject] = useState(null);
-  const [cand, setCand] = useState({ candidates: [], method: 'OPRO', adopted_prompt: null, mock: false });
+  const [cand, setCand] = useState({
+    candidates: [],
+    method: 'OPRO',
+    adopted_prompt: null,
+    mock: false,
+  });
   const [discarded, setDiscarded] = useState([]);
   const [result, setResult] = useState({ records: [], total: 0 });
   const loading = useRef(false);
@@ -88,7 +120,8 @@ export default function UserSynthesisWizardContent() {
     return () => clearInterval(iv);
   }, [step, project, projectId, fetchProject]);
 
-  if (!project) return <div className={cx('cont')}>불러오는 중...</div>;
+  if (!project)
+    return <div className={cx('cont')}>{t('synthesis.loading')}</div>;
 
   const handleEdit = () =>
     dispatch(
@@ -99,10 +132,14 @@ export default function UserSynthesisWizardContent() {
     );
 
   const handleAdopt = async (prompt) => {
-    const params = { ...(project.params || {}), meta_prompt: prompt, adopted_prompt: prompt };
+    const params = {
+      ...(project.params || {}),
+      meta_prompt: prompt,
+      adopted_prompt: prompt,
+    };
     const { status } = await updateSynthesisProject(projectId, { params });
     if (status === STATUS_SUCCESS) {
-      toast.success('프롬프트를 채택했습니다.');
+      toast.success(t('synthesis.toast.promptAdopted'));
       fetchProject();
     }
   };
@@ -110,7 +147,7 @@ export default function UserSynthesisWizardContent() {
   const handleRun = async () => {
     const { status, message } = await runSynthesis(projectId);
     if (status === STATUS_SUCCESS) {
-      toast.success('생성 실행을 시작했습니다.');
+      toast.success(t('synthesis.toast.runStarted'));
       fetchProject();
     } else {
       toast.error(message);
@@ -123,27 +160,53 @@ export default function UserSynthesisWizardContent() {
     if (step === 0)
       return (
         <div className={cx('panel')}>
-          <div className={cx('row')}><b>생성 모듈</b> {project.manifest_name} ({project.manifest_version})</div>
-          <div className={cx('row')}><b>메타프롬프트</b> {project.params?.meta_prompt || '-'}</div>
-          <div className={cx('row')}><b>생성 개수</b> {project.params?.count ?? '-'} · <b>GPU</b> {project.gpu_count}</div>
-          <ButtonV2 colorType='skyblue' label='설정 수정' onClick={handleEdit} disabled={running} />
+          <div className={cx('row')}>
+            <b>{t('synthesis.info.module')}</b> {project.manifest_name} (
+            {project.manifest_version})
+          </div>
+          <div className={cx('row')}>
+            <b>{t('synthesis.info.metaPrompt')}</b>{' '}
+            {project.params?.meta_prompt || '-'}
+          </div>
+          <div className={cx('row')}>
+            <b>{t('synthesis.info.count')}</b> {project.params?.count ?? '-'} ·{' '}
+            <b>GPU</b> {project.gpu_count}
+          </div>
+          <ButtonV2
+            colorType='skyblue'
+            label={t('synthesis.action.editConfig')}
+            onClick={handleEdit}
+            disabled={running}
+          />
         </div>
       );
     if (step === 1)
       return (
         <div className={cx('panel')}>
           <p className={cx('hint')}>
-            LLM1 (프롬프트 생성기) · {cand.method}
+            {t('synthesis.wizard.llm1Hint', { method: cand.method })}
             {cand.mock && <span className={cx('mock')}> [mock]</span>}
           </p>
-          {cand.adopted_prompt && <div className={cx('adopted')}>✓ 채택됨: {cand.adopted_prompt}</div>}
+          {cand.adopted_prompt && (
+            <div className={cx('adopted')}>
+              {t('synthesis.prompt.adopted', { prompt: cand.adopted_prompt })}
+            </div>
+          )}
           {cand.candidates.map((c, i) =>
             discarded.includes(i) ? null : (
               <div key={i} className={cx('cand')}>
                 <span className={cx('score')}>{c.score}</span>
                 <span className={cx('prompt')}>{c.prompt}</span>
-                <ButtonV2 colorType='skyblue' label='✓ 채택' onClick={() => handleAdopt(c.prompt)} />
-                <ButtonV2 type='outline' label='폐기' onClick={() => setDiscarded((d) => [...d, i])} />
+                <ButtonV2
+                  colorType='skyblue'
+                  label={t('synthesis.action.adopt')}
+                  onClick={() => handleAdopt(c.prompt)}
+                />
+                <ButtonV2
+                  type='outline'
+                  label={t('synthesis.action.discard')}
+                  onClick={() => setDiscarded((d) => [...d, i])}
+                />
               </div>
             ),
           )}
@@ -153,17 +216,36 @@ export default function UserSynthesisWizardContent() {
       return (
         <div className={cx('panel')}>
           <div className={cx('row')}>
-            <b>상태</b> {statusLabel(project.status)}
-            {project.progress != null ? ` · ${Math.round(project.progress * 100)}%` : ''}
+            <b>{t('status.label')}</b> {statusLabel(t, project.status)}
+            {project.progress != null
+              ? ` · ${Math.round(project.progress * 100)}%`
+              : ''}
           </div>
-          <ButtonV2 colorType='blue' label='데이터 생성 실행' onClick={handleRun} disabled={running} />
-          <div className={cx('result-count')}>생성 데이터: {result.total || 0}건</div>
+          <ButtonV2
+            colorType='blue'
+            label={t('synthesis.wizard.runGenerate')}
+            onClick={handleRun}
+            disabled={running}
+          />
+          <div className={cx('result-count')}>
+            {t('synthesis.card.resultCount', { n: result.total || 0 })}
+          </div>
           {result.records.length > 0 && (
             <table className={cx('table')}>
-              <thead><tr><th>image</th><th>instruction</th><th>output</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>image</th>
+                  <th>instruction</th>
+                  <th>output</th>
+                </tr>
+              </thead>
               <tbody>
                 {result.records.slice(0, 5).map((r, i) => (
-                  <tr key={i}><td>{r.image || '-'}</td><td>{r.instruction || '-'}</td><td>{r.output || r.raw || '-'}</td></tr>
+                  <tr key={i}>
+                    <td>{r.image || '-'}</td>
+                    <td>{r.instruction || '-'}</td>
+                    <td>{r.output || r.raw || '-'}</td>
+                  </tr>
                 ))}
               </tbody>
             </table>
@@ -173,7 +255,7 @@ export default function UserSynthesisWizardContent() {
     return (
       <div className={cx('panel')}>
         <div className={cx('placeholder')}>
-          후속 단계 — 고려대 LLM3(알고리즘 호출)·학습·결과 평가 연동 (P3).
+          {t('synthesis.wizard.laterSteps')}
         </div>
       </div>
     );
@@ -182,13 +264,26 @@ export default function UserSynthesisWizardContent() {
   return (
     <div className={cx('cont')}>
       <button
-        className={cx('back')}
-        onClick={() => history.push(`/user/workspace/${workspaceId}/datasets/synthesis/${projectId}/overview`)}
+        className={cx('back-to-list')}
+        onClick={() =>
+          history.push(
+            `/user/workspace/${workspaceId}/datasets/synthesis/${projectId}/overview`,
+          )
+        }
       >
-        ← 개요
+        <img
+          className={cx('back-btn-image')}
+          src='/images/icon/00-ic-basic-arrow-02-left.svg'
+          alt='<'
+        />
+        <span className={cx('back-btn-label')}>
+          {t('synthesis.overview.label')}
+        </span>
       </button>
-      <h1 className={cx('title')}>{project.name} · 단계별 마법사</h1>
-      <p className={cx('jump')}>↩ Jump 루프: 결과 보고 이전 단계로 회귀 재최적화</p>
+      <h1 className={cx('title')}>
+        {t('synthesis.wizard.title', { name: project.name })}
+      </h1>
+      <p className={cx('jump')}>{t('synthesis.wizard.jump')}</p>
 
       <div className={cx('stepper')}>
         {STEPS.map((s, i) => (
@@ -198,8 +293,8 @@ export default function UserSynthesisWizardContent() {
             onClick={() => setStep(i)}
           >
             <div className={cx('num')}>{i + 1}</div>
-            <div className={cx('step-label')}>{s.label}</div>
-            <div className={cx('step-sub')}>{s.sub}</div>
+            <div className={cx('step-label')}>{t(s.labelKey)}</div>
+            <div className={cx('step-sub')}>{t(s.subKey)}</div>
           </div>
         ))}
       </div>
@@ -207,8 +302,18 @@ export default function UserSynthesisWizardContent() {
       {renderStep()}
 
       <div className={cx('nav')}>
-        <ButtonV2 type='outline' label='← 이전 단계' onClick={() => setStep((s) => Math.max(0, s - 1))} disabled={step === 0} />
-        <ButtonV2 colorType='blue' label='다음 단계 →' onClick={() => setStep((s) => Math.min(STEPS.length - 1, s + 1))} disabled={step === STEPS.length - 1} />
+        <ButtonV2
+          type='outline'
+          label={t('synthesis.wizard.prev')}
+          onClick={() => setStep((s) => Math.max(0, s - 1))}
+          disabled={step === 0}
+        />
+        <ButtonV2
+          colorType='blue'
+          label={t('synthesis.wizard.next')}
+          onClick={() => setStep((s) => Math.min(STEPS.length - 1, s + 1))}
+          disabled={step === STEPS.length - 1}
+        />
       </div>
     </div>
   );

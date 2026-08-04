@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useHistory, useRouteMatch } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
 
 import { ButtonV2 } from '@jonathan/ui-react';
@@ -86,6 +87,7 @@ function Row({ k, v }) {
 //         | [디바이스 정보(디바이스 선택) + 현재 배포 상태(배포 실행)].
 //   모니터링: /metrics 폴링 + heartbeat 자원/상태.
 export default function EdgeDeploymentDetail() {
+  const { t } = useTranslation();
   const history = useHistory();
   const match = useRouteMatch();
   // deployId = 배포(playground row, deploy_type='edge') id. 배포 대상 디바이스는 아래 targetId 로 별도 선택.
@@ -203,9 +205,9 @@ export default function EdgeDeploymentDetail() {
     setParams((p) => ({ ...p, [key]: +value }));
 
   const handleDeploy = async () => {
-    if (!worker) return toast.error('디바이스를 선택하세요.');
-    if (!selectedLineage) return toast.error('양자화 모델을 선택하세요.');
-    if (!image) return toast.error('런타임 이미지를 확인하세요.');
+    if (!worker) return toast.error(t('edge.toast.selectDevice'));
+    if (!selectedLineage) return toast.error(t('edge.toast.selectQuantModel'));
+    if (!image) return toast.error(t('edge.toast.checkImage'));
     setDeploying(true);
     const { status, message } = await deployEdgeWorker(targetId, {
       image,
@@ -215,10 +217,10 @@ export default function EdgeDeploymentDetail() {
     });
     setDeploying(false);
     if (status === STATUS_SUCCESS) {
-      toast.success('배포를 요청했습니다.');
+      toast.success(t('edge.toast.deployRequested'));
       loadWorkers();
     } else {
-      toast.error(message || '배포에 실패했습니다.');
+      toast.error(message || t('edgeDeploy.toast.fail'));
     }
   };
 
@@ -235,20 +237,22 @@ export default function EdgeDeploymentDetail() {
   const isOnline = worker?.conn_status === 'online';
   const tabOptions = [
     { label: 'information.label', value: 'INFO' },
-    { label: '배포', value: 'DEPLOY' },
+    { label: 'deployment.label', value: 'DEPLOY' },
     { label: 'Monitoring', value: 'MONITOR' },
   ];
 
   return (
     <div className={cx('playground-cont')}>
       <DeployDetailHeader
-        title={project?.name || '온디바이스 배포'}
+        title={project?.name || t('edge.detail.title')}
         onBack={() =>
           history.push(`/user/workspace/${workspaceId}/llmplayground`)
         }
         right={
           <>
-            <span className={cx('type-chip', 'edge')}>온디바이스</span>
+            <span className={cx('type-chip', 'edge')}>
+              {t('edge.detail.onDevice')}
+            </span>
             {worker && (
               <span className={cx('conn', isOnline ? 'on' : 'off')}>
                 {worker.conn_status}
@@ -272,33 +276,37 @@ export default function EdgeDeploymentDetail() {
       {tab === 'INFO' && (
         <div className={cx('content-cont')}>
           <section className={cx('card')}>
-            <h3 className={cx('card-title')}>정보</h3>
+            <h3 className={cx('card-title')}>{t('information.label')}</h3>
             <div className={cx('info-field')}>
-              <span className={cx('label')}>설명</span>
+              <span className={cx('label')}>{t('description.label')}</span>
               <p className={cx('info-value')}>{project?.description || '-'}</p>
             </div>
             <div className={cx('info-field')}>
-              <span className={cx('label')}>배포 유형</span>
-              <span className={cx('info-value')}>온디바이스 (엣지)</span>
+              <span className={cx('label')}>{t('deploymentType.label')}</span>
+              <span className={cx('info-value')}>
+                {t('deploymentTarget.edge.label')}
+              </span>
             </div>
             <div className={cx('info-field')}>
-              <span className={cx('label')}>공개 범위</span>
+              <span className={cx('label')}>{t('releaseType.label')}</span>
               <span className={cx('info-value')}>
                 {project?.access ? 'Public' : 'Private'}
               </span>
             </div>
             <div className={cx('info-field')}>
-              <span className={cx('label')}>소유자</span>
+              <span className={cx('label')}>{t('owner.label')}</span>
               <span className={cx('info-value')}>{project?.owner || '-'}</span>
             </div>
             <div className={cx('info-field')}>
-              <span className={cx('label')}>생성 일시</span>
+              <span className={cx('label')}>{t('createdAt.label')}</span>
               <span className={cx('info-value')}>
                 {project?.create_datetime || '-'}
               </span>
             </div>
             <div className={cx('info-field')}>
-              <span className={cx('label')}>최근 업데이트</span>
+              <span className={cx('label')}>
+                {t('deployDetail.info.lastUpdated')}
+              </span>
               <span className={cx('info-value')}>
                 {project?.update_datetime || '-'}
               </span>
@@ -312,10 +320,12 @@ export default function EdgeDeploymentDetail() {
         <div className={cx('deploy-cont')}>
           {/* 1열: 런타임 엔진 + 모델 선택/정보 */}
           <section className={cx('card')}>
-            <h3 className={cx('card-title')}>모델 · 런타임</h3>
+            <h3 className={cx('card-title')}>
+              {t('deployDetail.section.modelRuntime')}
+            </h3>
 
             <span className={cx('label')} id='edge-engine-label'>
-              런타임 엔진
+              {t('deployDetail.field.engine')}
             </span>
             <div
               className={cx('engine-grid')}
@@ -345,12 +355,14 @@ export default function EdgeDeploymentDetail() {
                 )}
                 onClick={() => handleSelectEngine(CUSTOM_ENGINE)}
               >
-                커스텀 이미지
+                {t('deployDetail.engine.custom')}
               </button>
             </div>
 
             <label className={cx('label')} htmlFor='edge-image'>
-              {isCustomEngine ? '커스텀 도커 이미지 (pull)' : '런타임 이미지'}
+              {isCustomEngine
+                ? t('deployDetail.field.customImage')
+                : t('deployDetail.field.runtimeImage')}
             </label>
             <input
               id='edge-image'
@@ -364,7 +376,7 @@ export default function EdgeDeploymentDetail() {
             <div className={cx('divider')} />
 
             <label className={cx('label')} htmlFor='edge-model'>
-              모델
+              {t('model.label')}
             </label>
             <select
               id='edge-model'
@@ -372,7 +384,7 @@ export default function EdgeDeploymentDetail() {
               value={modelId}
               onChange={(e) => setModelId(e.target.value)}
             >
-              <option value=''>모델 선택</option>
+              <option value=''>{t('deployDetail.model.select')}</option>
               {models.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.name}
@@ -381,7 +393,7 @@ export default function EdgeDeploymentDetail() {
             </select>
 
             <label className={cx('label')} htmlFor='edge-gguf'>
-              양자화 모델(GGUF)
+              {t('deployDetail.field.ggufModel')}
             </label>
             <select
               id='edge-gguf'
@@ -391,7 +403,9 @@ export default function EdgeDeploymentDetail() {
               disabled={!modelId}
             >
               <option value=''>
-                {modelId ? '양자화 산출물 선택' : '모델 먼저 선택'}
+                {modelId
+                  ? t('deployDetail.gguf.select')
+                  : t('deployDetail.gguf.selectModelFirst')}
               </option>
               {lineage.map((l) => (
                 <option key={l.id} value={l.id}>
@@ -403,9 +417,14 @@ export default function EdgeDeploymentDetail() {
             {selectedModel && (
               <>
                 <div className={cx('divider')} />
-                <span className={cx('sub-title')}>모델 정보</span>
-                <Row k='이름' v={selectedModel.name || '-'} />
-                <Row k='양자화' v={selectedLineage?.quantization_type || '-'} />
+                <span className={cx('sub-title')}>
+                  {t('deployDetail.section.modelInfo')}
+                </span>
+                <Row k={t('name.label')} v={selectedModel.name || '-'} />
+                <Row
+                  k={t('deployDetail.row.quantization')}
+                  v={selectedLineage?.quantization_type || '-'}
+                />
                 <Row
                   k='GGUF'
                   v={selectedLineage?.gguf_path?.split('/').pop() || '-'}
@@ -416,7 +435,7 @@ export default function EdgeDeploymentDetail() {
 
           {/* 2열: 파라미터 */}
           <section className={cx('card')}>
-            <h3 className={cx('card-title')}>파라미터 설정</h3>
+            <h3 className={cx('card-title')}>{t('parameterSettings.label')}</h3>
             {PARAM_META.map((p) => (
               <div key={p.key} className={cx('param')}>
                 <div className={cx('param-head')}>
@@ -439,9 +458,11 @@ export default function EdgeDeploymentDetail() {
           {/* 3열: 디바이스 정보(선택) + 현재 배포 상태 */}
           <div className={cx('stacked-col')}>
             <section className={cx('card')}>
-              <h3 className={cx('card-title')}>디바이스 정보</h3>
+              <h3 className={cx('card-title')}>
+                {t('edge.detail.deviceInfo')}
+              </h3>
               <label className={cx('label')} htmlFor='edge-device'>
-                엣지 디바이스
+                {t('edge.field.device')}
               </label>
               <select
                 id='edge-device'
@@ -450,7 +471,9 @@ export default function EdgeDeploymentDetail() {
                 onChange={(e) => setTargetId(e.target.value)}
               >
                 {workers.length === 0 && (
-                  <option value={targetId}>디바이스 없음</option>
+                  <option value={targetId}>
+                    {t('edge.field.device.none')}
+                  </option>
                 )}
                 {workers.map((w) => (
                   <option key={w.id} value={String(w.id)}>
@@ -459,33 +482,43 @@ export default function EdgeDeploymentDetail() {
                   </option>
                 ))}
               </select>
-              <Row k='유형' v={worker?.device_type || '-'} />
-              <Row k='연결' v={worker?.conn_status || '-'} />
+              <Row k={t('type.label')} v={worker?.device_type || '-'} />
               <Row
-                k='자원'
+                k={t('edge.detail.connection')}
+                v={worker?.conn_status || '-'}
+              />
+              <Row
+                k={t('resource.label')}
                 v={`CPU ${worker?.cpu_cores ?? '-'} / ${worker?.gpu_info || 'GPU -'}`}
               />
             </section>
 
             <section className={cx('card')}>
-              <h3 className={cx('card-title')}>현재 배포 상태</h3>
-              <Row k='상태' v={worker?.deploy_state || '미배포'} />
+              <h3 className={cx('card-title')}>
+                {t('edge.detail.currentDeploy')}
+              </h3>
               <Row
-                k='로드 모델'
+                k={t('status.label')}
+                v={worker?.deploy_state || t('edge.detail.notDeployed')}
+              />
+              <Row
+                k={t('edge.detail.loadedModel')}
                 v={worker?.deploy_model || heartbeat?.model_loaded || '-'}
               />
-              <Row k='최근 확인' v={worker?.last_seen || '-'} />
+              <Row k={t('edge.detail.lastSeen')} v={worker?.last_seen || '-'} />
               <ButtonV2
-                label={deploying ? '배포 중…' : '배포 실행'}
+                label={
+                  deploying
+                    ? t('edge.detail.deploying')
+                    : t('edge.detail.runDeploy')
+                }
                 colorType='skyblue'
                 disabled={deploying || !isOnline}
                 onClick={handleDeploy}
                 style={{ width: '100%', marginTop: '8px' }}
               />
               {!isOnline && (
-                <p className={cx('hint')}>
-                  디바이스가 online일 때 배포할 수 있습니다.
-                </p>
+                <p className={cx('hint')}>{t('edge.detail.onlineOnly')}</p>
               )}
             </section>
           </div>
@@ -496,26 +529,43 @@ export default function EdgeDeploymentDetail() {
       {tab === 'MONITOR' && (
         <div className={cx('grid', 'monitor-grid')}>
           <section className={cx('card')}>
-            <h3 className={cx('card-title')}>자원 / 상태</h3>
-            <Row k='연결' v={worker?.conn_status || '-'} />
-            <Row k='배포 상태' v={worker?.deploy_state || '-'} />
-            <Row k='CPU 코어' v={worker?.cpu_cores ?? '-'} />
-            <Row k='메모리(GB)' v={worker?.mem_total ?? '-'} />
-            <Row k='GPU' v={worker?.gpu_info || '-'} />
-            <Row k='컨테이너 수' v={worker?.container_count ?? '-'} />
+            <h3 className={cx('card-title')}>
+              {t('edge.monitor.resourceStatus')}
+            </h3>
+            <Row
+              k={t('edge.detail.connection')}
+              v={worker?.conn_status || '-'}
+            />
+            <Row
+              k={t('edge.monitor.deployStatus')}
+              v={worker?.deploy_state || '-'}
+            />
+            <Row k={t('cpuCores.label')} v={worker?.cpu_cores ?? '-'} />
+            <Row k={t('edge.monitor.memory')} v={worker?.mem_total ?? '-'} />
+            <Row k={t('gpu.label')} v={worker?.gpu_info || '-'} />
+            <Row
+              k={t('edge.monitor.containers')}
+              v={worker?.container_count ?? '-'}
+            />
           </section>
           <section className={cx('card')}>
             <h3 className={cx('card-title')}>Heartbeat</h3>
-            <Row k='최근 확인' v={worker?.last_seen || '-'} />
+            <Row k={t('edge.detail.lastSeen')} v={worker?.last_seen || '-'} />
             {heartbeat ? (
               <>
                 <Row k='CPU %' v={heartbeat.cpu_pct ?? '-'} />
                 <Row k='GPU %' v={heartbeat.gpu_pct ?? '-'} />
-                <Row k='로드 모델' v={heartbeat.model_loaded || '-'} />
-                <Row k='추론 수' v={heartbeat.inference_count_total ?? '-'} />
+                <Row
+                  k={t('edge.detail.loadedModel')}
+                  v={heartbeat.model_loaded || '-'}
+                />
+                <Row
+                  k={t('edge.monitor.inferenceCount')}
+                  v={heartbeat.inference_count_total ?? '-'}
+                />
               </>
             ) : (
-              <p className={cx('hint')}>heartbeat 수신 대기 중…</p>
+              <p className={cx('hint')}>{t('edge.monitor.heartbeatWaiting')}</p>
             )}
           </section>
         </div>

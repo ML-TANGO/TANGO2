@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { useTranslation } from 'react-i18next';
 import { useSelector } from 'react-redux';
 import { EventSourcePolyfill } from 'event-source-polyfill';
 import Cookies from 'universal-cookie';
@@ -55,12 +56,6 @@ const METRIC_COLS = [
   { key: 'rouge2', label: 'ROUGE-2' },
   { key: 'rougeL', label: 'ROUGE-L' },
 ];
-const SAMPLE_OPTIONS = SAMPLE_COUNTS.map((n) => ({
-  label: `${n}개`,
-  value: n,
-  disabled: false,
-}));
-
 // 외부 SDS(VLM) 배치 — 이미지/AIS 는 데이터셋 행(image·ais_rows)에서 per-sample 로 읽는다.
 //   ⚠️ 출력 유형을 UI 로 노출하지 않는 이유(2026-07-27 클러스터 실측, playground 38 / dataset 7):
 //   현재 배포된 eva-vlm-backend 는 텍스트 프롬프트에 전혀 반응하지 않는다 — custom_prompt 를
@@ -76,7 +71,12 @@ const SELECT_STYLE = {
   listForm: { width: '100%' },
 };
 
-const BatchInference = ({ playgroundId, isExternal = false, isDual = false }) => {
+const BatchInference = ({
+  playgroundId,
+  isExternal = false,
+  isDual = false,
+}) => {
+  const { t } = useTranslation();
   const [datasets, setDatasets] = useState([]);
   const [datasetId, setDatasetId] = useState(null);
   const [files, setFiles] = useState([]);
@@ -122,6 +122,16 @@ const BatchInference = ({ playgroundId, isExternal = false, isDual = false }) =>
     setSelectedMetrics((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     );
+
+  const sampleOptions = useMemo(
+    () =>
+      SAMPLE_COUNTS.map((n) => ({
+        label: t('inference.batch.sampleOption', { n }),
+        value: n,
+        disabled: false,
+      })),
+    [t],
+  );
 
   // Selectbox 는 {label,value} 리스트 규약 → 원본을 변형하지 않고 표시용으로만 파생.
   const datasetOptions = useMemo(
@@ -234,10 +244,7 @@ const BatchInference = ({ playgroundId, isExternal = false, isDual = false }) =>
         });
         closeStream();
       } else if (ev.type === 'error') {
-        errorToastMessage(
-          null,
-          ev.message || '일괄 추론 중 오류가 발생했습니다.',
-        );
+        errorToastMessage(null, ev.message || t('inference.batch.runError'));
         finalizePartial();
         closeStream();
       }
@@ -245,7 +252,7 @@ const BatchInference = ({ playgroundId, isExternal = false, isDual = false }) =>
 
     es.onerror = () => {
       if (runningRef.current) {
-        errorToastMessage(null, '일괄 추론 연결이 끊어졌습니다.');
+        errorToastMessage(null, t('inference.batch.connectionLost'));
         finalizePartial();
       }
       closeStream();
@@ -256,36 +263,33 @@ const BatchInference = ({ playgroundId, isExternal = false, isDual = false }) =>
     <div className={cx('panel')}>
       <section className={cx('card')}>
         <div className={cx('card-head')}>
-          <h3 className={cx('card-title')}>일괄 추론 설정</h3>
+          <h3 className={cx('card-title')}>
+            {t('inference.batch.settingsTitle')}
+          </h3>
           {isExternal && <Badge type='gray' size='sm' label='SDS · VLM' />}
         </div>
 
         {isExternal && (
-          <p className={cx('note')}>
-            SDS(VLM) 추론은 샘플별 이미지·AIS가 필요합니다. 데이터셋 각 행에
-            image(데이터셋 내 상대경로)와 ais_rows(자선 my_ship=1 포함)를 포함해
-            주세요. AIS 필드가 없으면 프롬프트의 [선박 AIS 정보] 텍스트에서
-            복원합니다.
-          </p>
+          <p className={cx('note')}>{t('inference.batch.sdsNote')}</p>
         )}
 
         {datasets.length === 0 ? (
           <EmptyBox
             isBox
             customStyle={{ height: '120px' }}
-            text='사용 가능한 데이터셋이 없습니다.'
+            text={t('inference.batch.datasetEmpty')}
           />
         ) : (
           <div className={cx('form-row')}>
             <InputBoxWithLabel
-              labelText='데이터셋'
+              labelText={t('dataset.label')}
               labelSize='large'
               disableErrorMsg
             >
               <Selectbox
                 list={datasetOptions}
                 selectedItem={selectedDataset}
-                placeholder='데이터셋을 선택하세요'
+                placeholder={t('inference.batch.datasetPlaceholder')}
                 onChange={(item) => handleDatasetSelect(item.value)}
                 customStyle={SELECT_STYLE}
               />
@@ -293,7 +297,7 @@ const BatchInference = ({ playgroundId, isExternal = false, isDual = false }) =>
 
             {/* 데이터셋 안의 파일 선택 — 1개여도 노출(어떤 파일로 추론하는지 명시) */}
             <InputBoxWithLabel
-              labelText='파일'
+              labelText={t('file.label')}
               labelSize='large'
               disableErrorMsg
             >
@@ -301,7 +305,9 @@ const BatchInference = ({ playgroundId, isExternal = false, isDual = false }) =>
                 list={fileOptions}
                 selectedItem={selectedFile}
                 placeholder={
-                  datasetId ? '파일을 선택하세요' : '데이터셋을 먼저 선택하세요'
+                  datasetId
+                    ? t('inference.batch.filePlaceholder')
+                    : t('inference.batch.filePlaceholderNoDataset')
                 }
                 isDisable={fileOptions.length === 0}
                 onChange={(item) => setFilename(item.value)}
@@ -312,26 +318,26 @@ const BatchInference = ({ playgroundId, isExternal = false, isDual = false }) =>
         )}
 
         <InputBoxWithLabel
-          labelText='샘플 수'
+          labelText={t('inference.batch.sampleCount')}
           labelSize='large'
           disableErrorMsg
         >
           <Radio
             name='batch-sample-count'
-            options={SAMPLE_OPTIONS}
+            options={sampleOptions}
             selectedValue={sampleCount}
             onChange={(e) => setSampleCount(Number(e.currentTarget.value))}
           />
         </InputBoxWithLabel>
         <p className={cx('note')}>
           {isDual
-            ? '샘플당 프롬프트 생성 → 추론 2회를 호출하므로 최대 10개까지 지원합니다.'
-            : '샘플당 추론 1회를 호출합니다. 동기 배치라 최대 10개까지 지원합니다.'}
+            ? t('inference.batch.noteDual')
+            : t('inference.batch.noteSingle')}
         </p>
 
         <InputBoxWithLabel
-          labelText='정량 메트릭'
-          optionalText='reference 필요'
+          labelText={t('inference.batch.metrics')}
+          optionalText={t('inference.batch.metricsOptional')}
           labelSize='large'
           optionalSize='medium'
           disableErrorMsg
@@ -353,16 +359,26 @@ const BatchInference = ({ playgroundId, isExternal = false, isDual = false }) =>
         {/* 샘플당 ~16s → 진행률 표시(무반응 오인 방지). xlib 에 Progress 컴포넌트 없음 → 텍스트. */}
         {running && progress && (
           <span className={cx('progress')}>
-            {progress.done}/{progress.total} 샘플 완료
+            {t('inference.batch.progress', {
+              done: progress.done,
+              total: progress.total,
+            })}
             {progress.total > progress.done &&
-              ` · 남은 예상 ${Math.max(1, Math.round(((progress.total - progress.done) * 16) / 60))}분`}
+              t('inference.batch.progressEta', {
+                minutes: Math.max(
+                  1,
+                  Math.round(((progress.total - progress.done) * 16) / 60),
+                ),
+              })}
           </span>
         )}
         <ButtonV2
           type='solid'
           colorType='blue'
           size='l'
-          label={running ? '일괄 추론 중' : '일괄 추론 실행'}
+          label={
+            running ? t('inference.batch.running') : t('inference.batch.run')
+          }
           isLoading={running}
           disabled={!datasetId || !filename || running}
           onClick={handleRun}
@@ -372,30 +388,30 @@ const BatchInference = ({ playgroundId, isExternal = false, isDual = false }) =>
       {result && (
         <section className={cx('card')}>
           <div className={cx('card-head')}>
-            <h3 className={cx('card-title')}>추론 결과</h3>
+            <h3 className={cx('card-title')}>{t('inference.result.title')}</h3>
             <Badge
               type={result.partial ? 'yellow' : 'blue'}
               size='sm'
-              label={`${result.sample_count ?? (result.samples ?? []).length}건`}
+              label={t('inference.batch.resultCount', {
+                n: result.sample_count ?? (result.samples ?? []).length,
+              })}
             />
           </div>
 
           {result.partial && (
             <p className={cx('warn')}>
-              중단된 배치의 부분 결과입니다 (완료된 {result.sample_count}건만
-              표시, 종합 메트릭 없음).
+              {t('inference.batch.partialWarn', { n: result.sample_count })}
             </p>
           )}
           {!result.has_reference && !result.partial && (
-            <p className={cx('note')}>
-              데이터셋에 reference 컬럼이 없어 메트릭은 산출하지 않았습니다
-              (출력만 표시).
-            </p>
+            <p className={cx('note')}>{t('inference.batch.noReferenceNote')}</p>
           )}
 
           {result.has_reference && result.summary && (
             <div className={cx('summary-box')}>
-              <span className={cx('summary-title')}>종합 결과 (평균)</span>
+              <span className={cx('summary-title')}>
+                {t('inference.batch.summaryTitle')}
+              </span>
               <div className={cx('summary-metrics')}>
                 {activeMetricCols.map(
                   (col) =>
@@ -417,9 +433,11 @@ const BatchInference = ({ playgroundId, isExternal = false, isDual = false }) =>
               <thead>
                 <tr>
                   <th>#</th>
-                  <th>입력</th>
-                  <th>출력</th>
-                  {result.has_reference && <th>정답</th>}
+                  <th>{t('input.label')}</th>
+                  <th>{t('output.label')}</th>
+                  {result.has_reference && (
+                    <th>{t('inference.batch.colReference')}</th>
+                  )}
                   {result.has_reference &&
                     activeMetricCols.map((col) => (
                       <th key={col.key}>{col.label}</th>

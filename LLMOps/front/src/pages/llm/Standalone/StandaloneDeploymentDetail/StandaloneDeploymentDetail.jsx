@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useHistory, useRouteMatch } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 import { ButtonV2 } from '@jonathan/ui-react';
 
@@ -77,6 +78,7 @@ function Row({ k, v }) {
 //   배포: 2열 [모델·런타임(6+커스텀)] | 파라미터 (인스턴스/API/디바이스 열 없음).
 //   스크립트: 배포 실행 스크립트 + 이미지/코드 생성(오프라인 번들). 모니터링 탭 대체.
 export default function StandaloneDeploymentDetail() {
+  const { t } = useTranslation();
   const history = useHistory();
   const match = useRouteMatch();
   const { id: workspaceId, deployId } = match.params;
@@ -180,14 +182,14 @@ export default function StandaloneDeploymentDetail() {
 
   const tabOptions = [
     { label: 'information.label', value: 'INFO' },
-    { label: '배포', value: 'DEPLOY' },
-    { label: '스크립트', value: 'SCRIPT' },
+    { label: 'deployment.label', value: 'DEPLOY' },
+    { label: 'standalone.tab.script', value: 'SCRIPT' },
   ];
 
   return (
     <div className={cx('playground-cont')}>
       <DeployDetailHeader
-        title={project?.name || 'Standalone 배포'}
+        title={project?.name || t('standalone.title')}
         onBack={() =>
           history.push(`/user/workspace/${workspaceId}/llmplayground`)
         }
@@ -208,35 +210,37 @@ export default function StandaloneDeploymentDetail() {
       {tab === 'INFO' && (
         <div className={cx('content-cont')}>
           <section className={cx('card')}>
-            <h3 className={cx('card-title')}>정보</h3>
+            <h3 className={cx('card-title')}>{t('information.label')}</h3>
             <div className={cx('info-field')}>
-              <span className={cx('label')}>설명</span>
+              <span className={cx('label')}>{t('description.label')}</span>
               <p className={cx('info-value')}>{project?.description || '-'}</p>
             </div>
             <div className={cx('info-field')}>
-              <span className={cx('label')}>배포 유형</span>
+              <span className={cx('label')}>{t('deploymentType.label')}</span>
               <span className={cx('info-value')}>
-                Standalone (오프라인 번들)
+                {t('standalone.deployType')}
               </span>
             </div>
             <div className={cx('info-field')}>
-              <span className={cx('label')}>공개 범위</span>
+              <span className={cx('label')}>{t('releaseType.label')}</span>
               <span className={cx('info-value')}>
                 {project?.access ? 'Public' : 'Private'}
               </span>
             </div>
             <div className={cx('info-field')}>
-              <span className={cx('label')}>소유자</span>
+              <span className={cx('label')}>{t('owner.label')}</span>
               <span className={cx('info-value')}>{project?.owner || '-'}</span>
             </div>
             <div className={cx('info-field')}>
-              <span className={cx('label')}>생성 일시</span>
+              <span className={cx('label')}>{t('createdAt.label')}</span>
               <span className={cx('info-value')}>
                 {project?.create_datetime || '-'}
               </span>
             </div>
             <div className={cx('info-field')}>
-              <span className={cx('label')}>최근 업데이트</span>
+              <span className={cx('label')}>
+                {t('deployDetail.info.lastUpdated')}
+              </span>
               <span className={cx('info-value')}>
                 {project?.update_datetime || '-'}
               </span>
@@ -250,10 +254,12 @@ export default function StandaloneDeploymentDetail() {
         <div className={cx('deploy-cont')}>
           {/* 1열: 런타임 엔진 + 모델 선택/정보 */}
           <section className={cx('card')}>
-            <h3 className={cx('card-title')}>모델 · 런타임</h3>
+            <h3 className={cx('card-title')}>
+              {t('deployDetail.section.modelRuntime')}
+            </h3>
 
             <span className={cx('label')} id='sa-engine-label'>
-              런타임 엔진
+              {t('deployDetail.field.engine')}
             </span>
             <div
               className={cx('engine-grid')}
@@ -283,12 +289,14 @@ export default function StandaloneDeploymentDetail() {
                 )}
                 onClick={() => handleSelectEngine(CUSTOM_ENGINE)}
               >
-                커스텀 이미지
+                {t('deployDetail.engine.custom')}
               </button>
             </div>
 
             <label className={cx('label')} htmlFor='sa-image'>
-              {isCustomEngine ? '커스텀 도커 이미지 (pull)' : '런타임 이미지'}
+              {isCustomEngine
+                ? t('deployDetail.field.customImage')
+                : t('deployDetail.field.runtimeImage')}
             </label>
             <input
               id='sa-image'
@@ -302,7 +310,7 @@ export default function StandaloneDeploymentDetail() {
             <div className={cx('divider')} />
 
             <label className={cx('label')} htmlFor='sa-model'>
-              모델
+              {t('model.label')}
             </label>
             <select
               id='sa-model'
@@ -310,7 +318,7 @@ export default function StandaloneDeploymentDetail() {
               value={modelId}
               onChange={(e) => setModelId(e.target.value)}
             >
-              <option value=''>모델 선택</option>
+              <option value=''>{t('deployDetail.model.select')}</option>
               {models.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.name}
@@ -319,7 +327,7 @@ export default function StandaloneDeploymentDetail() {
             </select>
 
             <label className={cx('label')} htmlFor='sa-gguf'>
-              양자화 모델(GGUF)
+              {t('deployDetail.field.ggufModel')}
             </label>
             <select
               id='sa-gguf'
@@ -329,7 +337,9 @@ export default function StandaloneDeploymentDetail() {
               disabled={!modelId}
             >
               <option value=''>
-                {modelId ? '양자화 산출물 선택' : '모델 먼저 선택'}
+                {modelId
+                  ? t('deployDetail.gguf.select')
+                  : t('deployDetail.gguf.selectModelFirst')}
               </option>
               {lineage.map((l) => (
                 <option key={l.id} value={l.id}>
@@ -341,9 +351,14 @@ export default function StandaloneDeploymentDetail() {
             {selectedModel && (
               <>
                 <div className={cx('divider')} />
-                <span className={cx('sub-title')}>모델 정보</span>
-                <Row k='이름' v={selectedModel.name || '-'} />
-                <Row k='양자화' v={selectedLineage?.quantization_type || '-'} />
+                <span className={cx('sub-title')}>
+                  {t('deployDetail.section.modelInfo')}
+                </span>
+                <Row k={t('name.label')} v={selectedModel.name || '-'} />
+                <Row
+                  k={t('deployDetail.row.quantization')}
+                  v={selectedLineage?.quantization_type || '-'}
+                />
                 <Row
                   k='GGUF'
                   v={selectedLineage?.gguf_path?.split('/').pop() || '-'}
@@ -354,7 +369,7 @@ export default function StandaloneDeploymentDetail() {
 
           {/* 2열: 파라미터 */}
           <section className={cx('card')}>
-            <h3 className={cx('card-title')}>파라미터 설정</h3>
+            <h3 className={cx('card-title')}>{t('parameterSettings.label')}</h3>
             {PARAM_META.map((p) => (
               <div key={p.key} className={cx('param')}>
                 <div className={cx('param-head')}>
@@ -381,41 +396,38 @@ export default function StandaloneDeploymentDetail() {
         <div className={cx('grid')}>
           <section className={cx('card', 'script-card')}>
             <div className={cx('card-head')}>
-              <h3 className={cx('card-title')}>배포 실행 스크립트</h3>
+              <h3 className={cx('card-title')}>
+                {t('standalone.script.title')}
+              </h3>
               <button
                 type='button'
                 className={cx('copy-btn')}
                 onClick={() => copyToClipboardWithToast(runScript)}
               >
-                복사
+                {t('copy.label')}
               </button>
             </div>
             <pre className={cx('script')}>{runScript}</pre>
           </section>
 
           <section className={cx('card', 'gen-card')}>
-            <h3 className={cx('card-title')}>이미지 / 코드 생성</h3>
-            <p className={cx('hint')}>
-              오프라인 실행에 필요한 런타임 이미지(tar)와 모델·설정·스크립트를
-              하나의 번들로 생성합니다.
-            </p>
+            <h3 className={cx('card-title')}>{t('standalone.bundle.title')}</h3>
+            <p className={cx('hint')}>{t('standalone.bundle.desc')}</p>
             <div className={cx('gen-actions')}>
               <ButtonV2
-                label='런타임 이미지 빌드'
+                label={t('standalone.bundle.build')}
                 type='outline'
                 size='m'
                 disabled={!selectedLineage}
               />
               <ButtonV2
-                label='오프라인 번들 다운로드 (.tar.gz)'
+                label={t('standalone.bundle.download')}
                 colorType='skyblue'
                 disabled={!selectedLineage}
               />
             </div>
             {!selectedLineage && (
-              <p className={cx('hint')}>
-                [배포] 탭에서 양자화 모델을 먼저 선택하세요.
-              </p>
+              <p className={cx('hint')}>{t('standalone.bundle.hint')}</p>
             )}
           </section>
         </div>

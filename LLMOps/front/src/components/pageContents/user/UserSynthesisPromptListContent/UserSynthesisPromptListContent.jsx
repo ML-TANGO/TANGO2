@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useHistory, useRouteMatch } from 'react-router-dom';
 
 import { ButtonV2 } from '@jonathan/ui-react';
@@ -13,14 +14,23 @@ import style from './UserSynthesisPromptListContent.module.scss';
 
 const cx = classNames.bind(style);
 
-const STATUS_LABEL = { candidate: '후보', adopted: '채택', discarded: '폐기' };
+const STATUS_LABEL_KEYS = {
+  candidate: 'synthesis.prompt.status.candidate',
+  adopted: 'synthesis.prompt.status.adopted',
+  discarded: 'synthesis.prompt.status.discarded',
+};
 
 export default function UserSynthesisPromptListContent() {
+  const { t } = useTranslation();
   const history = useHistory();
   const match = useRouteMatch();
   const { id: workspaceId, sid: projectId } = match.params;
 
-  const [data, setData] = useState({ candidates: [], method: 'OPRO', mock: false });
+  const [data, setData] = useState({
+    candidates: [],
+    method: 'OPRO',
+    mock: false,
+  });
 
   const fetchCandidates = useCallback(async () => {
     const { result, status, message } = await getPromptCandidates(projectId);
@@ -37,20 +47,27 @@ export default function UserSynthesisPromptListContent() {
   return (
     <div className={cx('cont')}>
       <button
-        className={cx('back')}
+        className={cx('back-to-list')}
         onClick={() =>
           history.push(
             `/user/workspace/${workspaceId}/datasets/synthesis/${projectId}/overview`,
           )
         }
       >
-        ← 개요
+        <img
+          className={cx('back-btn-image')}
+          src='/images/icon/00-ic-basic-arrow-02-left.svg'
+          alt='<'
+        />
+        <span className={cx('back-btn-label')}>
+          {t('synthesis.overview.label')}
+        </span>
       </button>
       <div className={cx('head')}>
-        <h1 className={cx('title')}>프롬프트 후보 목록</h1>
+        <h1 className={cx('title')}>{t('synthesis.promptList.title')}</h1>
         <ButtonV2
           type='outline'
-          label='⚙ 최적화/큐레이션'
+          label={t('synthesis.action.optimizeCuration')}
           onClick={() =>
             history.push(
               `/user/workspace/${workspaceId}/datasets/synthesis/${projectId}/prompt-optimize`,
@@ -59,15 +76,12 @@ export default function UserSynthesisPromptListContent() {
         />
       </div>
       <p className={cx('desc')}>
-        LLM1 이 생성한 모든 프롬프트 후보와 채택/폐기 이력입니다. (방식:{' '}
-        {data.method}){' '}
+        {t('synthesis.promptList.desc', { method: data.method })}{' '}
         {data.mock && <span className={cx('mock')}>[mock]</span>}
       </p>
 
       {rows.length === 0 ? (
-        <div className={cx('empty')}>
-          후보가 없습니다. “최적화/큐레이션” 화면에서 생성하세요.
-        </div>
+        <div className={cx('empty')}>{t('synthesis.promptList.empty')}</div>
       ) : (
         <table className={cx('table')}>
           <thead>
@@ -75,7 +89,7 @@ export default function UserSynthesisPromptListContent() {
               <th>iteration</th>
               <th>score</th>
               <th>prompt</th>
-              <th>상태</th>
+              <th>{t('status.label')}</th>
             </tr>
           </thead>
           <tbody>
@@ -86,7 +100,9 @@ export default function UserSynthesisPromptListContent() {
                 <td className={cx('prompt-cell')}>{c.prompt}</td>
                 <td>
                   <span className={cx('badge', c.status)}>
-                    {STATUS_LABEL[c.status] || c.status}
+                    {STATUS_LABEL_KEYS[c.status]
+                      ? t(STATUS_LABEL_KEYS[c.status])
+                      : c.status}
                   </span>
                 </td>
               </tr>

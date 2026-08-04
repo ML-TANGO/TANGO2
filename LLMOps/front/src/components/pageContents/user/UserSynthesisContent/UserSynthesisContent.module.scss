@@ -1,3 +1,5 @@
+@import '@src/styles/color.scss';
+
 .cont {
   padding: 32px 40px;
 }
@@ -11,7 +13,7 @@
 .title {
   font-size: 24px;
   font-weight: 700;
-  color: #1a1a1a;
+  color: $blue107;
 }
 
 .desc {

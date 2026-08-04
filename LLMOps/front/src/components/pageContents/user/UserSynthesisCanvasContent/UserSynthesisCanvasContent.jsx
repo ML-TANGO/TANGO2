@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useHistory, useRouteMatch } from 'react-router-dom';
 
 import { ReactFlow, Background, Controls } from '@xyflow/react';
@@ -15,17 +16,35 @@ import style from './UserSynthesisCanvasContent.module.scss';
 const cx = classNames.bind(style);
 
 const MODULES = [
-  { key: 'LLM1', label: '프롬프트 생성기', desc: '메타프롬프트 → 프롬프트/인스트럭션' },
-  { key: 'LLM2', label: '데이터 생성기', desc: '프롬프트 → 데이터 라벨' },
-  { key: 'LLM3', label: '알고리즘 호출자', desc: 'API Call → 학습 알고리즘' },
+  {
+    key: 'LLM1',
+    labelKey: 'synthesis.module.llm1.label',
+    descKey: 'synthesis.canvas.module.llm1.desc',
+  },
+  {
+    key: 'LLM2',
+    labelKey: 'synthesis.module.llm2.label',
+    descKey: 'synthesis.canvas.module.llm2.desc',
+  },
+  {
+    key: 'LLM3',
+    labelKey: 'synthesis.module.llm3.label',
+    descKey: 'synthesis.canvas.module.llm3.desc',
+  },
 ];
 
-const statusLabel = (s) =>
-  ({ created: '대기', running: '실행 중', completed: '완료', failed: '실패', cancelled: '취소' }[s] ||
-    s ||
-    '-');
+const STATUS_KEYS = {
+  created: 'synthesis.status.created',
+  running: 'synthesis.status.running',
+  completed: 'synthesis.status.completed',
+  failed: 'synthesis.status.failed',
+  cancelled: 'synthesis.status.cancelled',
+};
+
+const statusLabel = (t, s) => (STATUS_KEYS[s] ? t(STATUS_KEYS[s]) : s || '-');
 
 export default function UserSynthesisCanvasContent() {
+  const { t } = useTranslation();
   const history = useHistory();
   const match = useRouteMatch();
   const { id: workspaceId, sid: projectId } = match.params;
@@ -47,8 +66,8 @@ export default function UserSynthesisCanvasContent() {
       label: (
         <div className={cx('node')}>
           <div className={cx('node-key')}>{m.key}</div>
-          <div className={cx('node-label')}>{m.label}</div>
-          <div className={cx('node-desc')}>{m.desc}</div>
+          <div className={cx('node-label')}>{t(m.labelKey)}</div>
+          <div className={cx('node-desc')}>{t(m.descKey)}</div>
         </div>
       ),
     },
@@ -68,23 +87,32 @@ export default function UserSynthesisCanvasContent() {
   return (
     <div className={cx('cont')}>
       <button
-        className={cx('back')}
+        className={cx('back-to-list')}
         onClick={() =>
           history.push(
             `/user/workspace/${workspaceId}/datasets/synthesis/${projectId}/overview`,
           )
         }
       >
-        ← 개요
+        <img
+          className={cx('back-btn-image')}
+          src='/images/icon/00-ic-basic-arrow-02-left.svg'
+          alt='<'
+        />
+        <span className={cx('back-btn-label')}>
+          {t('synthesis.overview.label')}
+        </span>
       </button>
       <div className={cx('head')}>
-        <h1 className={cx('title')}>캔버스 — {project?.name || ''}</h1>
+        <h1 className={cx('title')}>
+          {t('synthesis.canvas.title', { name: project?.name || '' })}
+        </h1>
         <span className={cx('status', project?.status)}>
-          {statusLabel(project?.status)}
+          {statusLabel(t, project?.status)}
         </span>
         <ButtonV2
           type='outline'
-          label='🧭 마법사'
+          label={t('synthesis.action.wizard')}
           onClick={() =>
             history.push(
               `/user/workspace/${workspaceId}/datasets/synthesis/${projectId}/wizard`,
@@ -92,9 +120,7 @@ export default function UserSynthesisCanvasContent() {
           }
         />
       </div>
-      <p className={cx('desc')}>
-        3-모듈 오케스트레이션 캔버스 뷰(고급). 마법사와 같은 합성 프로젝트의 자유편집 뷰.
-      </p>
+      <p className={cx('desc')}>{t('synthesis.canvas.desc')}</p>
       <div className={cx('canvas')}>
         <ReactFlow
           nodes={nodes}

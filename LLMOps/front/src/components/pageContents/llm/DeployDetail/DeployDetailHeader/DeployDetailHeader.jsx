@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+
 import classNames from 'classnames/bind';
 import style from './DeployDetailHeader.module.scss';
 
@@ -8,14 +10,18 @@ const cx = classNames.bind(style);
 export default function DeployDetailHeader({
   title,
   onBack,
-  backLabel = '배포 목록',
+  backLabel,
   right = null,
 }) {
+  const { t } = useTranslation();
+  // 뒤로 라벨 기본값 — 목적지(/llmplayground = PlaygroundMenu) h1 과 같은 키 재사용
+  const backText = backLabel ?? t('Deployment');
+
   return (
     <div className={cx('header-cont')}>
       <div className={cx('navigate-header-cont')}>
         <button type='button' className={cx('back-btn')} onClick={onBack}>
-          <span>← {backLabel}</span>
+          <span>← {backText}</span>
         </button>
       </div>
       <div className={cx('header-content-cont')}>
