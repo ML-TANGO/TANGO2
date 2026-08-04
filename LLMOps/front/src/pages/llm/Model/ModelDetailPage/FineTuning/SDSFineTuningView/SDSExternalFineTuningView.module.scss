@@ -1,60 +1,16 @@
-.top-buttons {
-  display: flex;
-  gap: 8px;
-}
+@import '@src/styles/color.scss';
+@import '@src/styles/focus.scss';
 
-// SDS 레시피 master-detail 컨테이너 — 세로 풀폭 스택(메타 → 카드 행 → 상세).
-.recipe-box {
-  display: flex;
-  flex-direction: column;
-  margin-top: 16px;
-}
+// W&B run 링크 — 하우스 모델 박스(`FineTuning.module.scss` 의 `.name`) 안에 놓인다.
+// 키보드 도달 가능한 유일한 컨트롤이라 전역 `*:focus{outline:none}` 을 되살린다.
+.wandb-link {
+  color: #3babff;
+  text-decoration: none;
 
-.panel {
-  padding: 20px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  background: #fff;
-  margin-bottom: 16px;
-}
+  @include focus-ring;
 
-.panel-title {
-  font-size: 15px;
-  font-weight: 600;
-  margin-bottom: 12px;
-  color: #222;
-}
-
-.meta-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.meta-row {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: 13px;
-
-  .meta-label {
-    color: #6b7280;
-    font-size: 12px;
-  }
-  .meta-value {
-    color: #222;
-    font-family: 'SpoqaM', sans-serif;
-    word-break: break-all;
-  }
-  .wandb-link {
-    color: #3babff;
-    text-decoration: none;
-    &:hover {
-      text-decoration: underline;
-    }
+  &:hover {
+    text-decoration: underline;
   }
 }
 

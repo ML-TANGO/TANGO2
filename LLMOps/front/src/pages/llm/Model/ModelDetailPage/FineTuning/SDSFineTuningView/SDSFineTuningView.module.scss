@@ -1,4 +1,5 @@
 @import '@src/styles/color';
+@import '@src/styles/focus.scss';
 
 // ── Page shell ──────────────────────────────────────────────────────────────────
 .page {
@@ -138,6 +139,23 @@
   display: flex;
   flex-direction: column;
   gap: 32px;
+  // 하우스 슬롯(`FineTuning.module.scss` .box > .right)은 **block + min-height** 만
+  // 가진다. 이 컬럼이 height 를 선언하지 않으면 높이가 auto 로 남고, 그 안의
+  // `FineTuningGraph` `.container{height:100%}` 도 auto 로 무너져 그래프 박스가
+  // 내용 높이로 쪼그라든다(= 빈 상태 빨간 문구가 박스를 넘치는 것처럼 보이는 증상).
+  // `.right` 는 `.box`(display:flex) 의 stretch 된 flex item 이라 사용 높이가 확정되므로
+  // 100% 로 받아 아래 `.monitor-graph` 로 흘린다. 하우스 수치(821px) 복제 없음 —
+  // 하우스가 바뀌면 그대로 따라간다.
+  height: 100%;
+}
+
+// 그래프 슬롯 — 요약 카드가 쓰고 남은 높이를 전부 차지해 컬럼 바닥까지 내려온다.
+// 자식인 `FineTuningGraph` 의 `.container` 가 `height:100%` 이므로, 이 슬롯 높이가
+// flex 로 확정되면 그래프 박스도 같이 채워진다(그래프가 없을 때도 박스 높이 유지 →
+// `.no-data`/`.error-container` 의 absolute + center-flex 가 박스 안에서 중앙 정렬).
+// min-height 는 기본값(auto = 내용 하한) 유지 — 차트가 남은 높이보다 커도 잘리지 않게.
+.monitor-graph {
+  flex: 1 1 auto;
 }
 
 // 좁은 화면: 1-컬럼 스택(설정 위, 모니터링 아래)
@@ -172,14 +190,6 @@
   background: none;
 }
 
-.section-label {
-  font-family: SpoqaB;
-  font-size: 16px;
-  color: $mono207;
-  padding-left: 12px;
-  border-left: 3px solid $blue104;
-}
-
 // ── Dataset list ─────────────────────────────────────────────────────────────────
 .dataset-list {
   display: flex;
@@ -188,22 +198,6 @@
   max-height: 264px;
   overflow-y: auto;
   padding-right: 4px;
-}
-
-.dataset-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  padding: 16px 20px;
-  border: 1px solid $mono203;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: border-color 0.15s, box-shadow 0.15s;
-  &:hover { border-color: rgba($blue104, 0.5); }
-  &--on {
-    border-color: $blue104;
-    background: rgba($blue104, 0.04);
-  }
 }
 
 .ds-check {
@@ -288,31 +282,6 @@
   font-size: 15px;
   color: $mono206;
   min-width: 90px;
-}
-
-.chip-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.chip {
-  background: $mono200;
-  border: 1.5px solid $mono203;
-  border-radius: 8px;
-  padding: 8px 18px;
-  font-family: SpoqaM;
-  font-size: 14px;
-  color: $mono205;
-  cursor: pointer;
-  transition: all 0.15s;
-  &:hover { border-color: rgba($blue104, 0.5); }
-  &--on {
-    border-color: $blue104;
-    background: rgba($blue104, 0.08);
-    color: $blue104;
-    font-family: SpoqaB;
-  }
 }
 
 // ── Multimodal badge ──────────────────────────────────────────────────────────────
@@ -592,12 +561,6 @@
 }
 
 // ── Hyperparameter grid ──────────────────────────────────────────────────────────
-.params-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 16px;
-}
-
 .param-item {
   display: flex;
   flex-direction: column;
@@ -790,49 +753,6 @@
   &:hover { border-color: $red502; color: $red502; }
 }
 
-// ── Charts ────────────────────────────────────────────────────────────────────────
-.charts-grid {
-  display: grid;
-  // 1열 스택 — 설정 컬럼이 길어 우측 학습 추이가 아래까지 채우도록 세로 적층(차트도 전폭으로 커짐).
-  grid-template-columns: minmax(0, 1fr);
-  gap: 20px;
-}
-
-// 좁은 화면(또는 1-컬럼 스택 시)에선 차트도 1열로 — 과도하게 좁아지는 것 방지.
-@media (max-width: 900px) {
-  .charts-grid { grid-template-columns: 1fr; }
-}
-
-.chart-card {
-  border: 1px solid $mono203;
-  border-radius: 12px;
-  padding: 16px 16px 12px;
-  background: $mono200;
-}
-
-.chart-title {
-  font-family: SpoqaB;
-  font-size: 15px;
-  color: $mono206;
-  margin-bottom: 8px;
-}
-
-.chart-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 160px;
-  font-family: SpoqaM;
-  font-size: 13px;
-  color: $mono204;
-}
-
-.chart-svg {
-  width: 100%;
-  height: auto;
-  display: block;
-}
-
 // ── Checkpoint list ──────────────────────────────────────────────────────────────
 .ckpt-list {
   display: flex;
@@ -897,31 +817,6 @@
   border: 1px solid rgba($blue104, 0.3);
   padding: 2px 7px;
   border-radius: 4px;
-}
-
-// ── Training mode selector (Multimodal) ──────────────────────────────────────────
-.train-mode-block {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  background: $mono201;
-  border: 1px solid $mono203;
-  border-radius: 10px;
-}
-
-.train-mode-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.train-mode-label {
-  font-family: SpoqaM;
-  font-size: 14px;
-  color: $mono205;
-  min-width: 80px;
-  flex-shrink: 0;
 }
 
 .train-warn {
@@ -1067,26 +962,6 @@
   gap: 10px;
 }
 
-// 학습 제어 헤더 우측 유틸 액션(커밋 불러오기 / 시스템 로그) — 메인 액션과 구분되는 ghost 버튼.
-.head-actions {
-  margin-left: auto;
-  display: flex;
-  gap: 8px;
-}
-.head-btn {
-  padding: 6px 12px;
-  border-radius: 7px;
-  border: 1px solid $mono203;
-  background: $mono200;
-  font-family: SpoqaM;
-  font-size: 13px;
-  color: $mono206;
-  cursor: pointer;
-  transition: border-color 0.15s, color 0.15s, background 0.15s;
-  &:hover:not(:disabled) { border-color: $blue104; color: $blue104; background: $blue100; }
-  &:disabled { opacity: 0.45; cursor: default; }
-}
-
 .status-badge {
   padding: 2px 10px;
   border-radius: 999px;
@@ -1159,63 +1034,21 @@
   color: $mono204;
   font-size: 13px;
   padding: 0 6px;
+  @include focus-ring;
   &:hover { color: $mono206; }
 }
 
-// ── 인라인 데이터셋 선택 ──
-.ds-sub-label {
-  font-family: SpoqaM;
-  font-size: 12px;
-  color: $mono205;
-  margin: 14px 0 8px;
-}
-.ds-bound-tag {
-  font-family: SpoqaM;
-  font-size: 10px;
-  color: $lime604;
-  background: $lime601;
-  border: 1px solid $lime602;
-  border-radius: 4px;
-  padding: 1px 6px;
-  margin-right: 8px;
-  flex-shrink: 0;
-}
-.ds-owner {
-  margin-left: auto;
-  font-family: SpoqaM;
-  font-size: 11px;
-  color: $mono204;
-}
-.file-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.file-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 16px;
-  border: 1px solid $mono203;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
-  &:hover { border-color: rgba($blue104, 0.5); background: rgba($blue104, 0.03); }
-}
-.file-name {
-  font-family: SpoqaM;
-  font-size: 13px;
-  color: $mono207;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.file-bind {
-  font-family: SpoqaM;
-  font-size: 12px;
-  color: $blue104;
-  flex-shrink: 0;
-  margin-left: 12px;
-}
-
 // 체크포인트 레지스트리 UI 는 커밋 상세(ModelCommitListItem)로 이전(Phase 2-C).
+// 인라인 데이터셋/파일 피커 UI 는 하우스 `DataList` + `FINETUNING_DATA_UPLOAD` 모달로
+// 통일(Phase 3) — 잔여 `ds-sub-label`/`ds-bound-tag`/`ds-owner`/`file-*` 규칙 제거(Phase 5).
+
+// ── 데이터 범위 라디오(5지선다) 래퍼 ──
+// 조나단 `Radio` 의 `ul` 은 `display:flex`(nowrap) + `li{margin-right:20px}` 이라
+// 402px 좌측 컬럼(padding 제외 354px)에서 5지선다가 넘칠 수 있다. 컴포넌트 수정은
+// 전역 파급이므로(설계 §10) 이 자리에서만 래핑을 허용한다.
+.radio-wrap {
+  ul {
+    flex-wrap: wrap;
+    row-gap: 10px;
+  }
+}

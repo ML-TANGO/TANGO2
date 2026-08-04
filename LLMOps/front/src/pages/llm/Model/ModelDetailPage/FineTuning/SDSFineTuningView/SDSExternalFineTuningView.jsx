@@ -22,17 +22,24 @@ import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallowEqual, useDispatch, useSelector } from 'react-redux';
 
-import { ButtonV2 } from '@jonathan/ui-react';
-
 import { openModal } from '@src/store/modules/modal';
 import { openConfirm } from '@src/store/modules/confirm';
 import { callApi, STATUS_SUCCESS } from '@src/network';
 import { loadModalComponent } from '@src/modal';
-import { errorToastMessage, defaultSuccessToastMessage } from '@src/utils';
+import { errorToastMessage, successToastMessage } from '@src/utils';
 
-import SimpleNav from '../../SimpleNav';
 import FineTuningGraph from '../FineTuningGraph';
-import RecipePipeline from './RecipePipeline';
+import FineTuningShell from '../FineTuningShell';
+import SDSRawParamsPanel from './SDSRawParamsPanel';
+import SDSRecipeFineTuningView from './SDSRecipeFineTuningView';
+import SDSTopButtons from './SDSTopButtons';
+import { toMonitorProps } from './monitorProps';
+import {
+  applyChaining,
+  buildExternalJobBody,
+  parseRawParams,
+} from './payload/recipeParams';
+import { derivePhaseCommitMap } from './payload/recipeState';
 import useSSEStatus from '../useSSEStatus';
 import useSSETime from '../useSSEFinetuningTime';
 import useSSEGraph from '../useSSEGraph';
@@ -56,6 +63,11 @@ const idleFineStatus = {
   },
 };
 
+// 하우스 `.name`(FineTuning.module.scss:59) 에는 break 규칙이 없다. manifest /
+// job id 같은 긴 식별자가 402px 좌측 컬럼을 넘기지 않도록 값 쪽에만 적용한다
+// (하우스 SCSS 무변경 — 하우스 화면 회귀 0).
+const breakAllStyle = { wordBreak: 'break-all' };
+
 // Defense in depth: the BFF already restricts wandb_url to http/https, but the
 // value lands in an href so we re-check the scheme client-side and surface the
 // destination host (anti-phishing — partner URL is untrusted). Returns
@@ -72,9 +84,6 @@ const parseSafeHttpUrl = (u) => {
   }
   return null;
 };
-
-// 정규식 메타문자 이스케이프 — phase.id 를 anchored 커밋 매칭 패턴에 끼울 때 사용.
-const escapeRegExp = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const SDSExternalFineTuningView = memo(function SDSExternalFineTuningView({
   navList,
@@ -273,18 +282,10 @@ const SDSExternalFineTuningView = memo(function SDSExternalFineTuningView({
   // :1495). phase.id 가 하이픈을 허용하므로 startsWith(`${id}-`) 는 `lora` 가
   // `lora-cc3m-...` 를 오매칭할 수 있다 → 타임스탬프까지 anchored 정규식으로 정확
   // 매칭(code F2/codex HIGH). ts 고정폭이라 lexicographic 정렬=시간순.
-  const phaseCommitMap = useMemo(() => {
-    const m = {};
-    (recipe?.phases || []).forEach((p) => {
-      const re = new RegExp(`^${escapeRegExp(p.id)}-\\d{8}-\\d{6}$`);
-      const matched = commits
-        .map((c) => c && c.name)
-        .filter((n) => typeof n === 'string' && re.test(n))
-        .sort();
-      if (matched.length) m[p.id] = matched[matched.length - 1];
-    });
-    return m;
-  }, [commits, recipe]);
+  const phaseCommitMap = useMemo(
+    () => derivePhaseCommitMap(commits, recipe?.phases),
+    [commits, recipe],
+  );
 
   // 완료 phase = 커밋이 존재하는 phase (세션 아님 → reload 후에도 유지).
   const donePhases = useMemo(
@@ -323,18 +324,18 @@ const SDSExternalFineTuningView = memo(function SDSExternalFineTuningView({
       const launch = await callApi({
         url: 'external/jobs',
         method: 'post',
-        body: {
-          manifest_name: manifestName,
-          manifest_version: manifestVersion,
-          workspace_id: Number(workspaceId),
-          namespace: namespaceInput.trim(),
+        body: buildExternalJobBody({
+          manifestName,
+          manifestVersion,
+          workspaceId,
+          namespace: namespaceInput,
           params,
-          instance_id: instanceId,
-          instance_count: parseInt(instanceCount, 10),
-          gpu_count: parseInt(gpuCount, 10),
-          platform_model_id: Number(modelId),
-          output_subdir: outputSubdir || null,
-        },
+          instanceId,
+          instanceCount,
+          gpuCount,
+          modelId,
+          outputSubdir,
+        }),
       });
       if (!(
         launch.status === STATUS_SUCCESS &&
@@ -356,7 +357,7 @@ const SDSExternalFineTuningView = memo(function SDSExternalFineTuningView({
         errorToastMessage(bind.error, bind.message);
         return false;
       }
-      defaultSuccessToastMessage(t('externalTraining.start.success.label'));
+      successToastMessage(null, t('finetuning.start.success.message'));
       if (typeof refresh === 'function') refresh();
       return true;
     },
@@ -374,28 +375,15 @@ const SDSExternalFineTuningView = memo(function SDSExternalFineTuningView({
   // 단일 launch (recipe 없는 manifest) — 좌측 params textarea 사용.
   const launchTraining = useCallback(
     async ({ instanceId, instanceCount, gpuCount }) => {
-      let parsedParams;
-      try {
-        parsedParams = JSON.parse(paramsInput);
-        if (
-          parsedParams === null ||
-          typeof parsedParams !== 'object' ||
-          Array.isArray(parsedParams)
-        ) {
-          throw new Error('not an object');
-        }
-      } catch (_) {
+      // 파싱/검증/outputSubdir 파생은 순수 함수. 토스트만 여기 남는다.
+      const parsed = parseRawParams(paramsInput);
+      if (!parsed.ok) {
         errorToastMessage(null, t('externalTraining.start.invalidJson.label'));
         return false;
       }
-      // output_checkpoint_name 은 partner-specific 출력 폴더 이름 키.
-      const outputSubdir =
-        typeof parsedParams.output_checkpoint_name === 'string'
-          ? parsedParams.output_checkpoint_name.trim()
-          : null;
       return submitExternalJob({
-        params: parsedParams,
-        outputSubdir,
+        params: parsed.params,
+        outputSubdir: parsed.outputSubdir,
         instanceId,
         instanceCount,
         gpuCount,
@@ -414,52 +402,37 @@ const SDSExternalFineTuningView = memo(function SDSExternalFineTuningView({
           editedParams && typeof editedParams === 'object'
             ? editedParams
             : phase.params;
-        const params = { ...(base || {}) };
-        // 체이닝: chain_from phase 의 최신 커밋(`{phase.id}-{ts}`)을 직전 산출물로
-        // 잇는다. (1) `_base_model={name: <model>}` 로 그 모델의 commit_models 를
-        // /models/checkpoints 에 mount(pod.yaml). (2) chain_inputs 템플릿의
-        // {checkpoint_name} 을 커밋명으로 치환해 partner param(projector_path/
-        // resume_lora_path 등)에 주입. 커밋 경로 규약은 manifest recipe 가 소유.
-        if (phase.chain_from) {
-          const priorCommit = phaseCommitMap[phase.chain_from];
-          if (!priorCommit) {
+        // 체이닝 + 이어서 학습 마커 번역 = 순수 applyChaining(payload/recipeParams.js).
+        //   체이닝: chain_from phase 의 최신 커밋(`{phase.id}-{ts}`)을 직전 산출물로 잇는다.
+        //     (1) chain_inputs 템플릿의 {checkpoint_name} 을 커밋명으로 치환해 partner
+        //         param(projector_path/resume_lora_path 등)에 주입. 경로 규약은 recipe 소유.
+        //     (2) `_base_model={name: <model>}` 로 그 모델의 commit_models 를
+        //         /models/checkpoints 에 mount(pod.yaml).
+        //   이어서 학습: RecipePipeline 이 심은 FE-내부 마커 `_resume_checkpoint` 를
+        //     resume_lora_path/projector_path 로 번역하고 마커는 제거(파트너 미전송).
+        //   ⚠️ (1)→(2)→마커 순서 불변식은 그 순수 함수가 고정한다 — recipe 가
+        //     chain_inputs 로 예약키를 덮어써 mount 를 무력화하지 못하게(codex MED).
+        const resolved = applyChaining({
+          params: base,
+          phase,
+          phaseCommitMap,
+          // _base_model.name = 모델 실제 dir 이름. commit API 의 model_name(=
+          // model_info["name"], commit_external_artifacts 가 쓰는 그 값)을 권위
+          // source 로 사용 — client 추정(fineTuningData.model_name) 대비 안전
+          // (code F4/codex HIGH).
+          baseModelName: commitModelName || modelName,
+        });
+        if (!resolved.ok) {
+          if (resolved.code === 'CHAIN_MISSING') {
             errorToastMessage(
               null,
               t('externalTraining.recipe.chainMissing.label'),
             );
-            return false;
           }
-          // chain_inputs 를 먼저 적용한 뒤 _base_model 을 주입 — recipe 가
-          // chain_inputs 로 예약키(_base_model 등)를 덮어써 mount 를 무력화하지
-          // 못하게(codex MED, 스키마도 예약키 차단). {checkpoint_name} → 직전 커밋명.
-          const chainInputs = phase.chain_inputs || {};
-          Object.keys(chainInputs).forEach((key) => {
-            params[key] = String(chainInputs[key]).replace(
-              /\{checkpoint_name\}/g,
-              priorCommit,
-            );
-          });
-          // _base_model.name = 모델 실제 dir 이름. commit API 의 model_name(=
-          // model_info["name"], commit_external_artifacts 가 쓰는 그 값)을 권위
-          // source 로 사용 — client 추정(fineTuningData.model_name) 대비 안전
-          // (code F4/codex HIGH). 그 모델 commit_models 가 /models/checkpoints 마운트.
-          const baseName = commitModelName || modelName;
-          if (baseName) params._base_model = { name: baseName };
-        }
-        // 이어서 학습(가중치 warm-start) — RecipePipeline 이 심은 FE-내부 마커를 여기서
-        // resume_lora_path/projector_path 로 변환. chain_inputs 뒤라 사용자 선택이 자동 체인을
-        // override. 그 체크포인트가 있는 commit_models 를 /models/checkpoints 로 마운트하도록
-        // _base_model 도 보장(chain_from 없는 phase 에서도). 마커는 파트너로 보내지 않는다.
-        if (params._resume_checkpoint) {
-          const rel = String(params._resume_checkpoint);
-          params.resume_lora_path = `/models/checkpoints/${rel}`;
-          params.projector_path = `/models/checkpoints/${rel}/projector.bin`;
-          delete params._resume_checkpoint;
-          const rbase = commitModelName || modelName;
-          if (rbase && !params._base_model) params._base_model = { name: rbase };
+          return false;
         }
         const ok = await submitExternalJob({
-          params,
+          params: resolved.params,
           outputSubdir: phase.id,
           instanceId,
           instanceCount,
@@ -517,12 +490,12 @@ const SDSExternalFineTuningView = memo(function SDSExternalFineTuningView({
       method: 'post',
     });
     if (response.status === STATUS_SUCCESS) {
-      defaultSuccessToastMessage('externalTraining.stop.success.label');
+      successToastMessage(null, t('finetuning.stop.requested.message'));
       if (typeof refresh === 'function') refresh();
     } else {
       errorToastMessage(response.error, response.message);
     }
-  }, [externalJobId, refresh]);
+  }, [externalJobId, refresh, t]);
 
   const onClickStop = useCallback(() => {
     if (!externalJobId) return;
@@ -564,173 +537,148 @@ const SDSExternalFineTuningView = memo(function SDSExternalFineTuningView({
     workspaceId,
   ]);
 
-  // recipe(SDS) 모드는 상단 버튼 없음(실행=모니터 근처, 시스템로그=모니터 헤더). MM 뷰 동일.
-  // 비-recipe 단일 launch 만 상단에 시스템로그 + 실행/중지.
-  const topButtonList =
-    recipe && Array.isArray(recipe.phases) ? null : (
-      <div className={lx('top-buttons')}>
-        <ButtonV2
-          type='outline'
-          size='l'
-          label={t('systemLog.label')}
-          onClick={onClickSystemLog}
-          disabled={!externalJobId || !fineTuningStatus}
-        />
-        {isRunning ? (
-          <ButtonV2
-            type='solid'
-            size='l'
-            colorType='red'
-            label={t('externalTraining.stop.label')}
-            onClick={onClickStop}
-          />
-        ) : (
-          <ButtonV2
-            type='solid'
-            size='l'
-            colorType='skyblue'
-            label={
-              externalJobId
-                ? t('externalTraining.model.restart.label')
-                : t('externalTraining.model.startTraining.label')
-            }
-            onClick={onClickRun}
-            disabled={!manifestName}
-          />
-        )}
+  // 좌측 1 — W&B run 링크. 하우스 모델 박스(FineTuning.jsx:519–546)와 같은 자리·같은
+  // 클래스(`model-box` / `title` / `name`)를 쓴다.
+  //
+  // 읽기전용 메타 4행(모델명 / `manifest@version` / Workspace / Job ID)은 **유저 요청으로
+  // 제거**했다 — 좌측 설정 컬럼을 잡아먹는 군더더기였고, 모델명과 manifest 는 이미
+  // `SimpleNav` 의 `titleName`/`subTitle` 에 그대로 나온다. CSS 로 숨기지 않고 마크업을
+  // 지운다(표시 전용이라 남길 이유가 없다).
+  // W&B 는 메타 표시가 아니라 학습 run 으로 나가는 **기능성 외부 링크**라 유지한다.
+  // 링크가 없으면 섹션 자체를 렌더하지 않는다(빈 박스 방지).
+  //
+  // recipe / 비-recipe **공용** — 두 갈래 모두 같은 자리에 이 노드를 놓는다.
+  // `wordBreak` 인라인: W&B host 가 402px 좌측 컬럼을 넘길 수 있는데 하우스 `.name` 에는
+  // break 규칙이 없다 → 하우스 SCSS 를 고치지 않고 값 쪽만 처리.
+  const modelSection = wandb ? (
+    <div className={cx('model-box')}>
+      <div className={cx('title')}>{t('externalTraining.wandb.label')}</div>
+      <div className={cx('name')} style={breakAllStyle}>
+        <a
+          className={lx('wandb-link')}
+          href={wandb.url}
+          target='_blank'
+          rel='noopener noreferrer'
+          title={t('externalTraining.wandb.viewRun.label')}
+        >
+          {wandb.host} ↗
+        </a>
       </div>
-    );
+    </div>
+  ) : null;
 
   const recipeMode = !!(recipe && Array.isArray(recipe.phases));
 
-  // 라이브 모니터링(그래프/진행) — 단일 launch 의 우측 컬럼이자, recipe mode
-  // 에서 실행 중 phase 의 상세 패널에 주입되는 slot.
-  const monitoringSlot = (
-    <FineTuningGraph
-      fineTuningType={1}
-      data={graphData}
-      fineStatus={fineStatus}
-      fineTuningData={fineTuningData}
-      progressData={progressData}
+  // ── recipe(SDS) 모드 — 하우스 골격(FineTuningShell)으로 렌더(설계 §8 Phase 4).
+  //    과거 `RecipePipeline`(자체 2컬럼 + 모니터 안 실행 버튼)을 해체해
+  //    `SDSRecipeFineTuningView`(RecipeStepNav + 하우스 좌측 섹션 + SDSMonitorSummary
+  //    + FineTuningGraph, 실행/중지/로그는 상단 버튼줄)로 대체했다.
+  //
+  //    ⚠️ payload 2단 프로토콜(설계 §9 R2) — 이 컴포넌트 경계를 **없애지 않는다.**
+  //       1단 `mergePhaseParams`(마커 `_resume_checkpoint` 심기) = 자식(recipe 뷰),
+  //       2단 `applyChaining`(번역·제거) = 이 파일의 `launchPhase`.
+  //       `onRunPhase(phase, editedParams)` 계약과 호출 순서 무변경.
+  //    ⚠️ `key={manifest@version}` = phase 폼/선택/체크포인트 상태의 리셋 장치(무변경).
+  if (recipeMode) {
+    return (
+      <SDSRecipeFineTuningView
+        key={`${manifestName}@${manifestVersion}`}
+        navList={navList}
+        filteredRest={filteredRest}
+        t={t}
+        titleName={fineTuningData?.model_name}
+        modelSection={modelSection}
+        phases={recipe.phases}
+        modelId={modelId}
+        activePhaseId={activePhaseId}
+        activePhaseStatus={fineTuningStatus}
+        donePhases={donePhases}
+        phaseCommitMap={phaseCommitMap}
+        onRunPhase={onRunPhase}
+        graphData={graphData}
+        progressData={progressData}
+        fineStatus={fineStatus}
+        fineTuningData={fineTuningData}
+        onStop={onClickStop}
+        onSystemLog={onClickSystemLog}
+      />
+    );
+  }
+
+  // ── recipe 없는 external = 단일 launch. 하우스 골격(FineTuningShell)으로 렌더.
+  //    (이 갈래는 이미 하우스 `box/left/right` 를 쓰고 있어 시각 델타가 가장 작다 — 설계 §8 Phase 2)
+
+  // 상단 버튼줄 — 하우스와 같은 자리(`SimpleNav.topButtonList`) · 같은 위계(설계 §3-D):
+  //   시스템 로그 = solid l skyblue / 실행 = solid l (기본 blue) / 중지 = solid l red.
+  // 게이트는 여기서 계산해 descriptor 로 넘긴다(external sse-status 의 commit_status
+  // 가 null 이라 하우스 TopButtonList 의 isCal* 게이트는 쓸 수 없다 — 설계 R12).
+  const topButtons = (
+    <SDSTopButtons
+      buttons={[
+        {
+          key: 'systemLog',
+          label: t('systemLog.label'),
+          colorType: 'skyblue',
+          onClick: onClickSystemLog,
+          disabled: !externalJobId || !fineTuningStatus,
+        },
+        isRunning
+          ? {
+              key: 'stop',
+              label: t('externalTraining.stop.label'),
+              colorType: 'red',
+              onClick: onClickStop,
+            }
+          : {
+              key: 'run',
+              label: externalJobId
+                ? t('externalTraining.model.restart.label')
+                : t('externalTraining.model.startTraining.label'),
+              onClick: onClickRun,
+              disabled: !manifestName,
+            },
+      ]}
     />
   );
 
-  const metadataPanel = (
-    <div className={lx('panel')}>
-      <div className={lx('panel-title')}>
-        {t('externalTraining.metadata.label')}
-      </div>
-      <ul className={lx('meta-list')}>
-        <Row label='Model' value={fineTuningData?.model_name || '-'} />
-        <Row label='Workspace' value={String(workspaceId ?? '')} />
-        <Row
-          label={t('externalTraining.model.manifest.label')}
-          value={`${manifestName}@${manifestVersion}`}
-        />
-        <Row label='Job ID' value={externalJobId || '-'} />
-        {wandb ? (
-          <li className={lx('meta-row')}>
-            <span className={lx('meta-label')}>
-              {t('externalTraining.wandb.label')}
-            </span>
-            <span className={lx('meta-value')}>
-              <a
-                className={lx('wandb-link')}
-                href={wandb.url}
-                target='_blank'
-                rel='noopener noreferrer'
-                title={t('externalTraining.wandb.viewRun.label')}
-              >
-                {wandb.host} ↗
-              </a>
-            </span>
-          </li>
-        ) : null}
-      </ul>
-    </div>
-  );
-
-  const namespacePanel = (
-    <div className={lx('panel')}>
-      <div className={lx('panel-title')}>
-        {t('externalTraining.start.namespace.label')}
-      </div>
-      <input
-        className={lx('text-input')}
-        type='text'
-        value={namespaceInput}
-        onChange={(e) => setNamespaceInput(e.target.value)}
-        disabled={isRunning}
-      />
-    </div>
-  );
-
   return (
-    <div id='info-tab' className={cx('info-tab')}>
-      <SimpleNav
-        navList={navList}
-        t={t}
-        {...filteredRest}
-        topButtonList={topButtonList}
-        titleName={fineTuningData?.model_name}
-        subTitle={`${manifestName}@${manifestVersion}`}
-      />
-      {recipeMode ? (
-        // SDS 레시피 = 상단 4-phase 박스 + 2컬럼(설정 | 모니터). 네임스페이스/메타데이터 없음.
-        <div className={lx('recipe-box')}>
-          <RecipePipeline
-            key={`${manifestName}@${manifestVersion}`}
-            phases={recipe.phases}
-            modelId={modelId}
-            activePhaseId={activePhaseId}
-            activePhaseStatus={fineTuningStatus}
-            donePhases={donePhases}
-            phaseCommitMap={phaseCommitMap}
-            onRunPhase={onRunPhase}
-            graphData={graphData}
-            progressData={progressData}
-            fineStatus={fineStatus}
-            onStop={onClickStop}
-            onSystemLog={onClickSystemLog}
+    <FineTuningShell
+      navList={navList}
+      filteredRest={filteredRest}
+      t={t}
+      titleName={fineTuningData?.model_name}
+      topButtons={topButtons}
+      dimLeft={isRunning}
+      leftSections={
+        <>
+          {modelSection}
+          {/* 좌측 2 — 고급 옵션(namespace + raw params). 하우스 `Advanced` 는 config.json
+              업로드에 하드바인딩돼 수용 불가 → 별도 패널(설계 §2-C). */}
+          <SDSRawParamsPanel
             t={t}
+            namespace={namespaceInput}
+            onChangeNamespace={setNamespaceInput}
+            params={paramsInput}
+            onChangeParams={setParamsInput}
+            disabled={isRunning}
           />
-        </div>
-      ) : (
-        // recipe 없는 external = 기존 단일 launch (좌: params / 우: 그래프).
-        <div className={cx('box')}>
-          <div className={cx('left', isRunning && 'disabled')}>
-            {metadataPanel}
-            {namespacePanel}
-            <div className={lx('panel')}>
-              <div className={lx('panel-title')}>
-                {t('externalTraining.start.params.label')}
-              </div>
-              <textarea
-                className={lx('params-textarea')}
-                value={paramsInput}
-                onChange={(e) => setParamsInput(e.target.value)}
-                disabled={isRunning}
-                spellCheck={false}
-              />
-              <div className={lx('hint')}>
-                {t('externalTraining.start.params.hint')}
-              </div>
-            </div>
-          </div>
-          <div className={cx('right')}>{monitoringSlot}</div>
-        </div>
-      )}
-    </div>
+        </>
+      }
+      // 우측 — 뷰가 직접 구독한 external SSE 결과를 `toMonitorProps` 로 정규화해 주입.
+      // 셸은 SSE 를 구독하지 않는다(설계 §5-B 불변식 S1·S3). internal VLM 도 같은
+      // 함수로 정규화해 우측 파리티를 코드로 보장한다(Phase 3).
+      right={
+        <FineTuningGraph
+          {...toMonitorProps({
+            fineStatus,
+            graphData,
+            progressData,
+            fineTuningData,
+          })}
+        />
+      }
+    />
   );
 });
-
-function Row({ label, value }) {
-  return (
-    <li className={lx('meta-row')}>
-      <span className={lx('meta-label')}>{label}</span>
-      <span className={lx('meta-value')}>{value}</span>
-    </li>
-  );
-}
 
 export default SDSExternalFineTuningView;

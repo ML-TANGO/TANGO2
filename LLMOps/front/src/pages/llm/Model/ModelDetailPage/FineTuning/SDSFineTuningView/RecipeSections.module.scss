@@ -1,0 +1,263 @@
+@import '@src/styles/color.scss';
+@import '@src/styles/focus.scss';
+
+.pipeline {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 4px 2px 10px;
+}
+
+.connector {
+  display: flex;
+  align-items: center;
+  color: #9ca3af;
+  font-size: 18px;
+  flex: 0 0 auto;
+  padding: 0 2px;
+}
+
+.card {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  border-top: 3px solid #d6dae0;
+  // 카드는 선택 버튼 — 버튼 기본 스타일 리셋.
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: box-shadow 0.12s, border-color 0.12s;
+
+  // 부모 .pipeline 이 overflow-x:auto — 바깥 링은 잘리므로 인셋.
+  @include focus-ring-inset;
+
+  &.st-running { border-top-color: $blue108; }
+  &.st-done { border-top-color: #22c55e; }
+  &.st-error { border-top-color: #ef4444; }
+  &.st-pending { border-top-color: #f59e0b; }
+  &.st-stop { border-top-color: #9ca3af; }
+
+  &:hover {
+    border-color: #b9c2cc;
+  }
+
+  &.selected {
+    border-color: $blue108;
+    box-shadow: 0 0 0 2px rgba(59, 171, 255, 0.25);
+  }
+
+  &.excluded {
+    opacity: 0.5;
+  }
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.phase-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #222;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// 단계 박스 번호(card-head 좌측). phase-label 이 flex:1 로 가운데, 배지는 우측.
+.step-num {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #eef2f7;
+  color: #4b5563;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+// 카드 하단 학습 대상 요약(예: "프로젝터 + 언어모델 LoRA").
+.step-target {
+  font-size: 11px;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+// ── 모델 구조 · 프로젝터 selector(항목8) — MLP-2 활성, 나머지 비활성(표시용). ──
+//
+// 좌측 컬럼 가용 폭 = `.left` 402px − `.left-top` padding 24×2 − 테두리 1×2 = **352px**.
+// 아래 두 grid 는 모두 이 폭을 기준으로 열 수를 정했다(칩 폭이 내용에 따라 달라져도
+// 셀이 고정이라 선택 상태가 배열을 흔들지 못한다).
+
+// 프로젝터 종류 5종 — 고정 2열.
+// flex-wrap 이면 칩 폭 합(≈348px)이 가용 폭(352px)에 4px 차로 붙어 있어, 선택 칩이
+// 조금만 넓어져도 줄바꿈 지점이 옮겨진다(4+1 ↔ 3+2). 2열 = (352−8)/2 = 172px/열,
+// 칩 내용폭 172−28(padding)−2(border) = 142px 로 최장 라벨 'Cross-Attention'
+// (13px, ≈102px)이 한 줄에 들어간다. 3열이면 내용폭 82px 로 부족해 두 줄로 접힌다.
+// 상한 172px = 352px 기준 열 폭 그대로. 하우스 미디어쿼리(<1024px)에서 `.left` 가
+// `max-width: none` 으로 풀려도 칩이 화면 절반까지 늘어나지 않게 상한을 둔다.
+.proj-type-selector {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 172px));
+  gap: 8px;
+}
+
+// 프로젝터 파라미터 값 칩 — 종류마다 항상 3개(1024/2048/4096, 4/8/16 heads,
+// 16/32/64 tokens)라 고정 3열. 전폭(352px)을 쓰므로 열당 112px, 내용폭 82px 로
+// 최장 '16 tokens'(≈64px)까지 한 줄에 들어간다.
+.proj-selector {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 112px));
+  gap: 8px;
+}
+
+.proj-btn {
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1px solid #d6dae0;
+  background: #fff;
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+
+  @include focus-ring;
+
+  // ⚠️ 선택 상태는 **박스 폭을 바꾸지 않는 속성만** 쓴다(배경·테두리색·글자색).
+  //    과거의 `font-weight: 600` 은 글자 폭을 늘려 칩 배열/줄바꿈을 흔들었다.
+  //    테두리 두께를 늘리는 것도 같은 이유로 금지 — 필요하면 inset box-shadow.
+  &.active {
+    background: $blue108;
+    border-color: $blue108;
+    color: #fff;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+// ── 프로젝터 타입별 파라미터 영역(시각화 전용) — 라벨 + 값 칩. ──
+//
+// 높이 고정: 파라미터 행은 종류에 따라 렌더되거나(MLP/Cross-Attention/Q-Former)
+// 아예 없어서(Linear) 아래 도식이 위로 튀었다. 가장 높은 변형 기준으로 자리를
+// 미리 잡아 둔다 — 53px = 라벨 line-box 16 + gap 8 + 칩 29(13px line-height +
+// padding 7×2 + border 1×2). 렌더 구조가 모든 종류에서 동일(라벨 1줄 + 칩 3개)해
+// 이 값이 곧 최대 높이다.
+.proj-params {
+  margin-top: 16px;
+  min-height: 53px;
+}
+
+// 라벨은 칩 **위**에 얹는다. 라벨을 옆에 두면 칩 가용 폭이 352−84−10 = 258px 로
+// 줄어 'NN tokens' 3칩(≈298px)이 칩 그리드 안에서 줄바꿈돼, 종류마다 1행/2행이
+// 갈리며 높이가 요동친다(유저 지적 #2). 위로 올리면 칩이 전폭을 쓴다.
+.proj-param-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.proj-param-label {
+  font-size: 12px;
+  // line-height 고정 = `.proj-params` min-height(53px) 산식의 전제.
+  line-height: 16px;
+  color: #6b7280;
+  font-family: SpoqaM;
+}
+
+// ── 모델 구조 도식 헤더(크게 보기 버튼 — 우측 정렬) ──
+// 위/아래 16px = 하우스 리듬(`FineTuning.module.scss` `.title` margin-bottom 16px,
+// `.flex-16` gap 16px, `.type-box .border` margin 16px 0). 과거 4px 은 너무 좁았다.
+.diagram-head {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+
+// ── '크게 보기' 모달(경량 로컬 오버레이) ──
+.diagram-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.diagram-modal {
+  background: #fff;
+  border-radius: 14px;
+  width: min(92vw, 1200px);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+
+.diagram-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #eceff3;
+}
+
+.diagram-modal-title {
+  font-family: SpoqaB;
+  font-size: 16px;
+  color: #1f2937;
+}
+
+.diagram-modal-close {
+  border: none;
+  background: transparent;
+  font-size: 18px;
+  line-height: 1;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+
+  @include focus-ring;
+
+  &:hover {
+    background: #f1f3f5;
+    color: #1f2937;
+  }
+}
+
+.diagram-modal-body {
+  padding: 20px;
+  overflow: auto;
+}
+
+// 이어서 학습(warm-start) 체크포인트 선택.
+.resume-row {
+  display: flex;
+  align-items: center;
+}
