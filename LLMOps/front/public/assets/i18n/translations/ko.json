@@ -291,7 +291,6 @@
   "goToModel.label": "모델로 이동",
   "Inference": "추론",
   "inference.empty.label": "활성 배포가 없습니다. 배포 탭에서 먼저 배포하세요.",
-  "inference.backToList": "목록으로",
   "inference.mode.realtime": "실시간 질문",
   "inference.mode.dataset": "데이터셋 일괄",
   "inference.detail.notFound": "배포 정보를 불러올 수 없습니다.",

@@ -133,10 +133,11 @@ const InferenceDetail = () => {
 
   return (
     <div className={cx('inference-detail')}>
+      {/* 뒤로 라벨 — 목적지(InferenceMenu) h1 과 같은 키 재사용 */}
       <DeployDetailHeader
         title={info?.name ?? ''}
         onBack={goBack}
-        backLabel={t('inference.backToList')}
+        backLabel={t('Inference')}
         right={
           <>
             <Badge

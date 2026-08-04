@@ -107,10 +107,6 @@ const InferenceMenu = () => {
     <div className={cx('inference-cont')}>
       <div className={cx('title-bar')}>
         <h1 className={cx('title')}>{t('Inference')}</h1>
-        <span className={cx('sub')}>
-          생성된 배포(단일·이중모델)로 추론을 수행합니다. 새 배포는 배포 탭에서
-          생성합니다.
-        </span>
       </div>
 
       {loading ? null : sessions.length === 0 ? (
