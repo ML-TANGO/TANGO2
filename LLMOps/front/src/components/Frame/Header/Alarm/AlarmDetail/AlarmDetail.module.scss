@@ -106,7 +106,7 @@
         .dot {
           width: 8px;
           height: 8px;
-          background-color: #2d76f8;
+          background-color: $primary-color;
           border-radius: 50%;
           margin-top: 8px;
           &.read {

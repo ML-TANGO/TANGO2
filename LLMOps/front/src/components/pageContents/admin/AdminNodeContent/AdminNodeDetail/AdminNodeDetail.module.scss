@@ -7,10 +7,10 @@
     .title {
       margin: 0;
       height: 31px;
-      font-family: SpoqaM;
+      // 24px 상세 제목 폰트·색 — 동일 패턴 다수(폰트 6/7, 색 4/7)와 통일
+      font-family: SpoqaR;
       font-size: 24px;
-      font-weight: 500;
-      color: $mono207;
+      color: $blue107;
     }
   }
   .horizon-box {

@@ -2014,6 +2014,7 @@
   "allUserTasks.label": "All User Tasks",
   "myTasks.label": "My Tasks",
   "allWorkspace.label": "All Workspaces",
+  "breadCrumb.currentWorkspace.label": "Current Workspace",
   "currentWorkspace.label": "Current Workspace",
   "taskInAnotherWorkspace.label": "Task in another workspace",
   "enterNew.label": "Enter New",

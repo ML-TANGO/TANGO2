@@ -1,3 +1,5 @@
+@import '@src/styles/color.scss';
+
 .wizard {
   max-width: 720px;
   margin: 0 auto;
@@ -27,12 +29,12 @@
     height: 22px;
     border-radius: 50%;
     background: #e5e5e5;
-    color: #fff;
+    color: $mono200;
     font-size: 12px;
   }
   &.active {
-    color: #2d76f8;
-    .num { background: #2d76f8; }
+    color: $blue104;
+    .num { background: $blue104; }
   }
   &.done .num { background: #0fa755; }
 }
@@ -44,7 +46,7 @@
 
 /* 카드 */
 .card {
-  background: #fff;
+  background: $mono200;
   border: 1px solid #ececec;
   border-radius: 12px;
   padding: 24px 28px;
@@ -57,7 +59,7 @@
 }
 .card-desc {
   font-size: 13px;
-  color: #747474;
+  color: $mono205;
   margin-bottom: 16px;
 }
 
@@ -66,13 +68,13 @@
   display: block;
   font-size: 12px;
   font-weight: 700;
-  color: #747474;
+  color: $mono205;
   margin: 14px 0 6px;
 }
 .field-input {
   width: 100%;
   height: 38px;
-  border: 1px solid #dbdbdb;
+  border: 1px solid $mono203;
   border-radius: 6px;
   padding: 0 10px;
   font-size: 13px;
@@ -81,7 +83,7 @@
 
   &:focus {
     outline: none;
-    border-color: #2d76f8;
+    border-color: $blue104;
   }
   &.invalid {
     border-color: #e23838;
@@ -110,7 +112,7 @@
   align-items: center;
   gap: 4px;
   background: #e6efff;
-  color: #2d76f8;
+  color: $blue104;
   padding: 3px 8px;
   border-radius: 12px;
   font-size: 11px;
@@ -132,7 +134,7 @@
 }
 .label-input {
   height: 32px;
-  border: 1px solid #dbdbdb;
+  border: 1px solid $mono203;
   border-radius: 6px;
   padding: 0 8px;
   font-size: 12px;
@@ -141,9 +143,9 @@
 }
 .label-btn {
   height: 32px;
-  border: 1px solid #2d76f8;
-  background: #fff;
-  color: #2d76f8;
+  border: 1px solid $blue104;
+  background: $mono200;
+  color: $blue104;
   border-radius: 6px;
   padding: 0 12px;
   font-size: 12px;
@@ -162,7 +164,7 @@
 
 /* API 안내 박스 */
 .api-box {
-  background: #f9fafb;
+  background: $mono201;
   border-radius: 8px;
   padding: 14px 16px;
   font-family: monospace;
@@ -171,14 +173,14 @@
   margin: 8px 0 16px;
 }
 .api-line {
-  color: #2d76f8;
+  color: $blue104;
   word-break: break-all;
-  &.sub { color: #747474; }
+  &.sub { color: $mono205; }
 }
 .api-hint {
   font-family: inherit;
   font-size: 11px;
-  color: #747474;
+  color: $mono205;
   margin-top: 8px;
 }
 
@@ -202,7 +204,7 @@
 }
 .token-value {
   flex: 1;
-  background: #fff;
+  background: $mono200;
   border: 1px solid #e0e0e0;
   border-radius: 6px;
   padding: 8px 10px;
@@ -212,6 +214,6 @@
 }
 .token-meta {
   font-size: 11px;
-  color: #747474;
+  color: $mono205;
   margin-top: 10px;
 }

@@ -1,3 +1,5 @@
+@import '@src/styles/color.scss';
+
 .dashboard-frame {
   width: 100%;
   border-radius: 16px;
@@ -9,7 +11,7 @@
     height: 50px;
     padding: 16px 24px;
     border-bottom: 1px solid #dee9ff;
-    color: #121619;
+    color: $mono207;
     font-family: SpoqaB;
     font-size: 18px;
     line-height: 18px;
