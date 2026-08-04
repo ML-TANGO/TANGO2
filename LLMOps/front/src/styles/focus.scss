@@ -1,0 +1,26 @@
+// 포커스 링 공용 mixin.
+//
+// ⚠️ 이 파일을 import 하는 SCSS Module 은 color.scss 를 먼저 import 해야 한다
+//    (`@import '@src/styles/color.scss'` — 리포 전역 관례). 여기서 color.scss 를
+//    재import 하지 않는 이유: color.scss 상단 배너 주석이 consumer 마다 중복
+//    출력되어 컴파일 결과에 불필요한 델타가 생긴다. 누락 시 컴파일 에러로 드러난다.
+// style.scss 의 전역 `*:focus { outline: none }` 가 모든 포커스 링을 지우므로,
+// 키보드로 도달 가능한 커스텀 컨트롤은 :focus-visible 로 링을 되살린다.
+// :focus 가 아니라 :focus-visible — 마우스 클릭에는 링이 뜨지 않아야 한다.
+
+// 기본형 — 요소 바깥으로 2px 띄운 링.
+@mixin focus-ring($color: $primary-color) {
+  &:focus-visible {
+    outline: 2px solid $color;
+    outline-offset: 2px;
+  }
+}
+
+// 인셋형 — overflow 컨테이너 안쪽 컨트롤용.
+// 바깥으로 뻗은 링이 잘리거나 스크롤바를 만드는 경우에만 쓴다.
+@mixin focus-ring-inset($color: $primary-color) {
+  &:focus-visible {
+    outline: 2px solid $color;
+    outline-offset: -2px;
+  }
+}

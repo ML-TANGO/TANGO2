@@ -1,4 +1,5 @@
 @import '@src/styles/color.scss';
+@import '@src/styles/focus.scss';
 
 .container {
   // padding: 32px 24px 0px 24px;
@@ -125,6 +126,7 @@
     color: $blue104;
     cursor: pointer;
     transition: border-color 0.15s, color 0.15s, background 0.15s;
+    @include focus-ring;
     &:hover:not(:disabled) { border-color: $blue102; background: $blue101; color: $mono200; }
     &:disabled { opacity: 0.45; cursor: default; }
   }
@@ -138,6 +140,7 @@
     color: $mono205;
     cursor: pointer;
     transition: border-color 0.15s, color 0.15s;
+    @include focus-ring;
     &:hover:not(:disabled) { border-color: $red502; color: $red502; }
     &:disabled { opacity: 0.45; cursor: default; }
   }

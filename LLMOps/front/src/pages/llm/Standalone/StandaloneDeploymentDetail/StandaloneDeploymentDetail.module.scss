@@ -1,4 +1,5 @@
 @import '@src/styles/color.scss';
+@import '@src/styles/focus.scss';
 
 /* PlaygroundDetail 과 동형 — 미스타일 래퍼(페이지 프레임이 여백 제공, 이중 padding 제거) */
 .playground-cont {
@@ -155,6 +156,8 @@
   cursor: pointer;
   text-align: center;
 
+  @include focus-ring;
+
   &.selected {
     border-color: $blue104;
     background: rgba($blue104, 0.08);
@@ -230,6 +233,8 @@
   font-family: SpoqaM;
   font-size: 12px;
   cursor: pointer;
+
+  @include focus-ring;
 }
 
 /* 정보 탭: 배포 프로젝트 설정 패널(단일 컬럼, 설정 폭) */

@@ -21,7 +21,8 @@
   box-sizing: border-box;
   cursor: pointer;
 
-  &:focus {
+  // 마우스 클릭에는 링이 뜨지 않도록 :focus-visible 사용.
+  &:focus-visible {
     outline: 1px solid $blue104;
     border-radius: 8px;
     outline-offset: 1px;
@@ -203,7 +204,8 @@
         height: 24px;
         border: none;
         background-color: initial;
-        &:focus {
+        // 마우스 클릭에는 링이 뜨지 않도록 :focus-visible 사용.
+        &:focus-visible {
           outline: 1px solid $blue104;
           border-radius: 8px;
           outline-offset: 1px;

@@ -206,7 +206,8 @@
   background-color: initial;
   cursor: pointer;
 
-  &:focus {
+  // 마우스 클릭에는 링이 뜨지 않도록 :focus-visible 사용(위 .engine-opt 와 동일 관례).
+  &:focus-visible {
     outline: 1px solid $blue104;
     border-radius: 8px;
     outline-offset: 1px;

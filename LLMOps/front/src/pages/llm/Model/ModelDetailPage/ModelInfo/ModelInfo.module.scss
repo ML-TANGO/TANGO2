@@ -1,4 +1,5 @@
 @import '@src/styles/color.scss';
+@import '@src/styles/focus.scss';
 
 .container {
   border: 1px solid $blue102;
@@ -65,6 +66,8 @@
           background 0.15s ease,
           border-color 0.15s ease,
           color 0.15s ease;
+
+        @include focus-ring;
 
         &:hover {
           border-color: $blue104;
