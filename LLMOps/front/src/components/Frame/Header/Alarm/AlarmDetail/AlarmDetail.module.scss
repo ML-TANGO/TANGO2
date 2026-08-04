@@ -33,6 +33,8 @@
       display: flex;
       gap: 16px;
       button {
+        // UA 기본 패딩이 남아 텍스트 버튼 정렬이 어긋난다.
+        padding: 0;
         border: none;
         background-color: inherit;
         font-size: 12px;
@@ -42,9 +44,14 @@
         &:active {
           font-weight: 700;
         }
+        // 전역 `*:focus { outline: none }` 이 링을 지우므로 :focus-visible 로 되살린다.
+        &:focus-visible {
+          outline: 2px solid $primary-color;
+          outline-offset: 2px;
+        }
       }
       .read-btn {
-        color: #2d76f8;
+        color: $primary-color;
       }
     }
   }

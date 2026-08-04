@@ -1,3 +1,5 @@
+@import '@src/styles/color.scss';
+
 .nodetable-cont {
   border-top: 1px solid #dbdbdb;
 }
@@ -19,11 +21,58 @@
   }
 }
 
+// 엣지 행의 설정 컬럼 액션(새로고침/삭제). 규칙이 없어 UA 순정 회색 버튼이 노출됐다.
+// padding/border/background 를 모두 명시하고 appearance 로 UA 크롬을 벗긴다.
+.edge-act {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid $mono203;
+  border-radius: 6px;
+  background: $mono200;
+  font-family: SpoqaM;
+  font-size: 12px;
+  color: $mono205;
+  appearance: none;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, opacity 0.15s;
+
+  &:hover:not(:disabled) {
+    border-color: $primary-color;
+    color: $primary-color;
+  }
+
+  // 전역 `*:focus { outline: none }` 이 링을 지우므로 :focus-visible 로 되살린다.
+  &:focus-visible {
+    outline: 2px solid $primary-color;
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  // 삭제는 파괴적 액션이라 error 토큰으로 구분한다.
+  &.danger {
+    border-color: rgba($error-color, 0.5);
+    color: $error-color;
+
+    &:hover:not(:disabled) {
+      border-color: $error-color;
+      background: $red501;
+    }
+
+    &:focus-visible {
+      outline-color: $error-color;
+    }
+  }
+}
+
 .flex-cont {
   display: flex;
 }
 
-/* ── SP-8 P4b: 커스텀 레이블 칩 컬럼 + 관리 모달 ── */
+/* ── SP-8 P4b: 커스텀 레이블 칩 컬럼 (관리 모달 규칙은 미참조라 삭제) ── */
 .label-cell {
   display: flex;
   flex-direction: column;
