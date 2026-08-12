@@ -1035,3 +1035,59 @@ CREATE TABLE IF NOT EXISTS `project_tool_port_history` (
     `created_datetime`      VARCHAR(50) DEFAULT CURRENT_TIMESTAMP(),
     PRIMARY KEY(`id`)
 );
+
+-- fb_external_container 매니페스트 레지스트리 (SP-Ext.3 / ADR 0003 v2 + SP-1 v2 §6).
+-- (name, version) 당 1 row. Hybrid 페어는 pair_id UUID 를 공유하고 단독 등록은 NULL 로 둔다.
+-- 조회처: db_pipeline.py, db_synthesis.py (같은 msa_jfb DB 라 직접 SELECT).
+-- 쓰기는 fb_external_container 의 MariaDBManifestRegistry.
+-- ⚠️ 없으면 BFF 가 DB 연결에 성공해 MariaDB 레지스트리로 승격된 뒤 모든 매니페스트
+--   쿼리가 실패한다 (in-memory 폴백은 연결 실패에만 걸린다 — main.py:89 참조).
+CREATE TABLE IF NOT EXISTS external_container_manifest (
+    id                INT AUTO_INCREMENT PRIMARY KEY,
+    name              VARCHAR(63)  NOT NULL,
+    version           VARCHAR(63)  NOT NULL,
+    api_version       VARCHAR(63)  NOT NULL DEFAULT 'tango.acryl.ai/v1',
+    job_type          VARCHAR(31)  NOT NULL,
+    execution_mode    VARCHAR(31)  NOT NULL,
+    image             VARCHAR(255) NOT NULL,
+    service_family    VARCHAR(63),
+    contract_version  VARCHAR(63),
+    pair_id           CHAR(36),
+    raw_yaml          TEXT         NOT NULL,
+    raw_json          JSON         NOT NULL,
+    created_at        TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    updated_at        TIMESTAMP    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_name_version (name, version),
+    INDEX idx_service_family (service_family),
+    INDEX idx_pair_id (pair_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- BFF JobTracker 상태 영속 (SP-Ext.3). BFF 재시작 시 in-flight partner job 을 복원한다.
+-- terminal 도달 시 DELETE 하지 않고 status 만 갱신해 tombstone 으로 남긴다 (재시작 후
+-- 조회가 404 대신 터미널 상태를 답해야 호출자가 폴링을 멈춘다). startup_recovery() 는
+-- non-terminal row 만 복원하고, 보존기간 지난 tombstone 은 prune_terminal() 이 정리한다.
+-- execution_mode=sync (infer 서빙) 은 persist 대상이 아니다 (lifecycle._db_persist 참조).
+-- model_id 는 jonathan_llm.model.id 를 application-level 로 참조한다 (cross-schema FK 회피).
+CREATE TABLE IF NOT EXISTS external_job_state (
+    job_id            VARCHAR(64)  NOT NULL,
+    model_id          INT(11)      DEFAULT NULL,
+    workspace_id      INT(11)      NOT NULL,
+    manifest_name     VARCHAR(128) NOT NULL,
+    manifest_version  VARCHAR(64)  NOT NULL,
+    manifest_json     LONGTEXT     NOT NULL,
+    namespace         VARCHAR(128) NOT NULL,
+    pod_name          VARCHAR(128) NOT NULL,
+    helm_release      VARCHAR(128) NOT NULL,
+    service_url       VARCHAR(256) NOT NULL,
+    timeout_seconds   INT(11)      NOT NULL,
+    params_json       LONGTEXT     NOT NULL,
+    partner_job_id    VARCHAR(128) DEFAULT NULL,
+    status            VARCHAR(32)  NOT NULL DEFAULT 'pending',
+    output_subdir     VARCHAR(256) DEFAULT NULL,
+    effective_gpu     INT(11)      NOT NULL DEFAULT 0,
+    started_at        DATETIME     NOT NULL,
+    updated_at        DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (job_id),
+    INDEX idx_status (status),
+    INDEX idx_workspace (workspace_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

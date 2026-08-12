@@ -177,7 +177,11 @@ def set_llm_db_database():
             # dummy create database
             try:
                 cur = conn.cursor()
-                sql = "CREATE DATABASE {} default character set utf8 collate utf8_general_ci".format(JF_LLM_DB_NAME)
+                # utf8mb4 (4-byte UTF-8, 이모지 지원). schema_llm.sql 선두의
+                # `CREATE DATABASE IF NOT EXISTS ... utf8mb4` 는 바로 위에서 DB 를 이미
+                # 만들어 놓기 때문에 no-op 이 된다 — 그래서 charset 은 반드시 여기서
+                # 지정해야 한다. utf8(3-byte) 로 두면 이모지 저장이 실패한다.
+                sql = "CREATE DATABASE {} default character set utf8mb4 collate utf8mb4_unicode_ci".format(JF_LLM_DB_NAME)
                 cur.execute(sql)
                 conn.commit()
             except pymysql.err.ProgrammingError as e:

@@ -348,3 +348,42 @@ CREATE TABLE IF NOT EXISTS `eval_expert_rating_history` (
     CONSTRAINT FOREIGN KEY (`source_model_id`) REFERENCES `jonathan_llm`.`model` (`id`) ON UPDATE CASCADE ON DELETE CASCADE,
     CONSTRAINT FOREIGN KEY (`job_str_id`) REFERENCES `jonathan_llm`.`eval_result` (`job_str_id`) ON UPDATE CASCADE ON DELETE CASCADE
 );
+
+-- 프롬프트 최적화(fewshot-prompt-optimizer) 결과 영속.
+-- apps/fb_utils/llm_db/schema.sql 미러 (fresh-install 정합 — 라이브 DB 에는
+-- apps/llm_playground/migrations/001_prompt_optimization.sql 로 수동 적용됨).
+-- playground FK 라 위 playground 정의 뒤에 와야 한다.
+CREATE TABLE IF NOT EXISTS `prompt_optimization` (
+    `id`              INT(11) NOT NULL AUTO_INCREMENT,
+    `workspace_id`    INT(11) NOT NULL,
+    -- 최적화 대상 배포(playground). 삭제되면 이력도 함께 정리한다.
+    `playground_id`   INT(11) NOT NULL,
+    -- 실행 시점 스냅샷(재현·표시용) — playground.model JSON 에서 파생.
+    `model_id`        INT(11) DEFAULT NULL,
+    `commit_id`       INT(11) DEFAULT NULL,
+    -- external_container 가 발급한 플랫폼 job id.
+    `job_id`          VARCHAR(64) DEFAULT NULL,
+    `status`          VARCHAR(20) NOT NULL DEFAULT 'pending',  -- pending|running|completed|failed
+    `metric`          VARCHAR(32) DEFAULT NULL,   -- 컨테이너가 실제로 사용한 metric
+    `model`           VARCHAR(255) DEFAULT NULL,  -- 컨테이너가 감지한 model id
+    -- ★ 핵심 산출물. 추론 주입에 쓰이는 텍스트.
+    `system_prompt`   TEXT,
+    `instruction`     TEXT,
+    `demos`           JSON,
+    `base_score`      DOUBLE DEFAULT NULL,
+    `final_score`     DOUBLE DEFAULT NULL,
+    -- 입력 예시(재현용).
+    `examples`        JSON,
+    -- 추론에 주입될 1건. playground 당 최대 1건 — 단일 활성 불변식은 애플리케이션에서
+    --   강제한다(활성 전환 시 같은 playground 의 기존 활성을 해제).
+    `is_active`       TINYINT(1) NOT NULL DEFAULT 0,
+    `create_datetime` DATETIME DEFAULT CURRENT_TIMESTAMP,
+    `finish_datetime` DATETIME DEFAULT NULL,
+    PRIMARY KEY(`id`),
+    KEY `idx_prompt_opt_playground` (`playground_id`, `is_active`),
+    KEY `idx_prompt_opt_workspace` (`workspace_id`),
+    KEY `idx_prompt_opt_job` (`job_id`),
+    CONSTRAINT `fk_prompt_opt_playground`
+        FOREIGN KEY (`playground_id`) REFERENCES `jonathan_llm`.`playground` (`id`)
+        ON UPDATE CASCADE ON DELETE CASCADE
+);
