@@ -35,6 +35,7 @@ const CardTemplate = ({
           updateTime,
           createTime,
           isAccess,
+          isPrivate,
           status,
           typeBadge,
           kind,
@@ -53,6 +54,8 @@ const CardTemplate = ({
             status={status}
             userList={cardInfo?.userList}
             isAccess={isAccess}
+            // 자물쇠 표식 전용(원본 access). 안 넘기는 화면은 Card 가 !isAccess 로 폴백.
+            isPrivate={isPrivate}
             isBookMark={cardInfo?.isBookMark}
             handleBookMark={handleBookMark}
             handleOnClickCard={handleOnClickCard}

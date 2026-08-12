@@ -32,6 +32,10 @@ const Card = ({
   status,
   isBookMark,
   isAccess,
+  // 자물쇠(비공개) 표식 전용 — 원본 access 기반. isAccess 는 소비처마다 의미가 달라
+  // (Model=계산된 접근가능 / Playground·Rag·Prompt=원시 access) 자물쇠 판정에 쓸 수 없다.
+  // 미전달 시 기존 동작(!isAccess)으로 폴백한다.
+  isPrivate,
   userList,
   handleBookMark,
   handleOnClickCard,
@@ -66,7 +70,7 @@ const Card = ({
       <div className={cx('top-cont')}>
         <div className={cx('owner-cont')}>
           <span className={cx('owner-txt')}>{constructor}</span>
-          {!isAccess && <img src={IconLock} alt='private' />}
+          {(isPrivate ?? !isAccess) && <img src={IconLock} alt='private' />}
           {/* 배포(D6) 카드만 statusBadge opt-in → Rag/Model 등 다른 소비자엔 미노출 */}
           {statusBadge && status && (
             <span

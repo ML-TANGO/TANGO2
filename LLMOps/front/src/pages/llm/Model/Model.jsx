@@ -85,6 +85,10 @@ function Model() {
             subTitle: v.description,
             isBookMark: v.bookmark,
             isAccess: v.is_access ? 1 : 0,
+            // 자물쇠 표식은 원본 access(0=비공개)로 판정한다. 위 isAccess 는 "내가
+            // 접근 가능한가"라 접근 가능한 비공개 모델에는 자물쇠가 뜨지 않았다.
+            // (회색처리·클릭차단·수정/삭제 가드는 계속 isAccess 를 쓴다 — 의미가 다름)
+            isPrivate: v.access === 0,
             status: v.status?.fine_tuning === 'running' ? 'active' : null,
             userList: v?.users,
             kind,
