@@ -104,6 +104,10 @@ async def get_playground_list(workspace_id, user_id):
                 "access" : item.get("access"),
                 "deploy_type" : item.get("deploy_type") or "cluster",
                 "owner" : db.get_user(user_id=item.get("create_user_id")).get("name"),
+                # 소유자 id. FE 는 owner 이름 문자열 대신 이걸로 소유자를 식별한다
+                # (이름 매칭은 동명이인·개명에 취약하고, 미매치 시 수정 모달이
+                #  undefined.name 접근으로 아예 열리지 않았다).
+                "create_user_id" : item.get("create_user_id"),
                 "status" : status.get("status") if status else TYPE.KUBE_POD_STATUS_STOP,
                 "bookmark" : 1 if item.get("id") in user_playground_bookmark_list else 0,
                 "users":  users,
@@ -171,6 +175,8 @@ async def get_playground_info(playground_id):
             "name" : item.get("name"),
             "description" : item.get("description"),
             "owner" : db.get_user(user_id=item.get("create_user_id")).get("name"),
+            # 목록 응답과 동일하게 소유자 id 를 함께 내려 FE 가 이름이 아닌 id 로 식별하게 한다.
+            "create_user_id" : item.get("create_user_id"),
             "access" : item.get("access"),
             "create_datetime" : item.get("create_datetime"),
             "update_datetime" : item.get("update_datetime"),

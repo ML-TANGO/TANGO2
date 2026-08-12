@@ -72,6 +72,8 @@ const getPlaygroundInfo = async (workspace_id, setDeployItems) => {
         qualifierBadgeKind: r.mode === 'dual' ? 'multimodal' : undefined,
         subTitle: r.description,
         constructor: r.owner,
+        // 소유자 id — 수정 모달이 owner 를 이름(constructor)이 아닌 id 로 식별하는 데 쓴다.
+        create_user_id: r.create_user_id,
         updateTime: r.update_datetime,
         createTime: r.create_datetime,
         isBookMark: r.bookmark,
