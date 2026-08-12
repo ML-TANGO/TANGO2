@@ -162,7 +162,10 @@ function Model() {
             userList: transformUserList,
             prevModelData,
             isAccess,
-            handleRefresh: async () => await getModels(),
+            // prop 이름은 EditModel 이 구조분해하는 `refresh` 와 반드시 같아야 한다.
+            // handleRefresh 로 넘기면 저장 성공 후 refresh() 가 TypeError 로 죽어
+            // 목록이 재조회되지 않고 "수정이 반영 안 됨"으로 보인다(ADD_MODEL 과 동일 규약).
+            refresh: async () => await getModels(),
           },
         }),
       );

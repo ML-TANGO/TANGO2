@@ -1039,6 +1039,15 @@ async def get_models(workspace_id : int, header_user_id : int) -> List[dict]:
                 or header_user_id in [user["user_id"] for user in private_users]
             ) else False,
             "users" : private_users,
+            # 공개(1)/비공개(0) 원본값. is_access 는 "내가 접근 가능한가"라는 파생 판정이라
+            # 모델 자체의 공개 설정과 의미가 다르다. 이 값을 안 내려주면 수정 모달이 프리필할
+            # 근거가 없어 is_access 로 대신 채우게 되고, 저장 시 비공개 모델이 공개로 덮인다.
+            "access" : model["access"],
+            # 소유자 id. FE 는 이걸로 owner 를 식별한다(이전엔 create_user_name 문자열 매칭이라
+            # 동명이인·개명에 취약했고, 매칭 실패 시 owner 가 undefined 로 빠졌다).
+            # users(user_model 멤버)에 소유자는 포함되지 않는다 — 소유자 권한은 멤버십이 아니라
+            # create_user_id 로 부여되므로(위 is_access 규칙) 별도 필드로 내려준다.
+            "create_user_id" : model["create_user_id"],
             "status" : {
                 "fine_tuning" : model["latest_fine_tuning_status"],
                 "commit" : model["commit_status"]
