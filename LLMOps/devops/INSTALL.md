@@ -87,6 +87,7 @@ cp ~/.kube/config GenAI_Platform/devops/fb_common_app/helm/file/kube/config
 11. **(Optional) GPU Operators** (`gaip_gpu_operators`) — NVIDIA GPU 노드가 있는 경우
 12. **Platform Apps** (`devops/run.sh`)
 13. **LLM Apps(선택)** (`devops/run_llm.sh`)
+14. **외부 컨테이너 manifest 등록** — 아래 [외부 컨테이너 manifest 등록](#외부-컨테이너-manifest-등록-필수) 참고. **자동화되어 있지 않으므로 반드시 수동 수행**합니다.
 
 ### 권장 설치 흐름 (`run_step1/2/3` 스크립트 사용)
 
@@ -255,14 +256,85 @@ cd GenAI_Platform/devops
 ./run.sh install -f ./values_<서버명>.yaml
 ```
 
-### 2) LLM Apps (llm_model, llm_playground)
+### 2) LLM Apps (llm_model, llm_playground, llm_evaluation)
 
-`devops/run_llm.sh`는 `llm_model/helm`, `llm_playground/helm`을 설치합니다.
+`devops/run_llm.sh`는 `llm_model/helm`, `llm_playground/helm`, `llm_evaluation/helm`을 설치합니다.
 
 ```bash
 cd GenAI_Platform/devops
 ./run_llm.sh install -f ./values_<서버명>.yaml
 ```
+
+## 외부 컨테이너 manifest 등록 (필수)
+
+**이 단계는 자동화되어 있지 않습니다.** `fb_external_container` 차트에는 seed Job도
+post-install hook도 없으므로, 앱 설치 후 manifest를 직접 등록해야 합니다.
+등록하지 않으면 아래 기능들이 "manifest not found"로 실패합니다.
+
+| manifest name | version | 원본 파일 | 이 manifest가 없으면 |
+|---|---|---|---|
+| `mock-convert` | `1.0.0` | `apps/convert/manifest.yaml` | 양자화·포팅(변환) |
+| `evaluate-selfmetric` | `1.0.0` | `apps/evaluate/manifest.yaml` | 자동평가(BLEU/ROUGE/perplexity) |
+| `evaluate-benchmark-mock` | `0.2.0` | `apps/evaluate_benchmark_mock/manifest.yaml` | 벤치마크 평가 |
+| `fewshot-prompt-optimizer` | `1.0.0` | `Data_Augmentation/fewshot_prompting/manifest.yaml` | 프롬프트 최적화 |
+| `eva-vlm-train` / `eva-vlm-infer` | `1.0.0` | `examples/external-container-manifests/` | SDS 도메인 VLM 학습·추론 |
+
+이름/버전 기본값은 `apps/fb_utils/settings.py`의 `*_MANIFEST_NAME` / `*_MANIFEST_VERSION`
+상수이며, 다른 버전을 쓰려면 해당 환경변수로 flip 합니다 (예: `SDS_MANIFEST_VERSION`).
+
+등록 방법 — BFF(`jfb-app-external-container`)에 직접 POST 합니다.
+등록 API는 Kong/`llm_model`로 프록시되지 않습니다 (`GET /api/external/manifests`는
+조회 전용) — 따라서 port-forward 또는 클러스터 내부에서 호출해야 합니다.
+
+요청 본문은 raw YAML이 아니라 **JSON envelope** `{"manifest_yaml": "<YAML 전문>"}` 입니다
+(`apps/fb_external_container/src/api/manifest_router.py`의 `ManifestEnvelope`).
+
+```bash
+# Service 포트는 80, 컨테이너 포트는 8000
+kubectl -n jonathan-system port-forward deploy/jfb-app-external-container 8000:8000 &
+
+# 단건 등록 (YAML 파일 → JSON envelope 변환은 python 으로)
+register() {
+  python3 -c 'import json,sys; print(json.dumps({"manifest_yaml": open(sys.argv[1]).read()}))' "$1" \
+  | curl -sS -X POST http://localhost:8000/api/v1/manifests \
+         -H 'Content-Type: application/json' --data-binary @- ; echo "  <- $1"
+}
+
+register apps/convert/manifest.yaml
+register apps/evaluate/manifest.yaml
+register apps/evaluate_benchmark_mock/manifest.yaml
+register Data_Augmentation/fewshot_prompting/manifest.yaml
+
+# 등록 확인
+curl -sS http://localhost:8000/api/v1/manifests
+```
+
+**hybrid 페어**(`eva-vlm-train` + `eva-vlm-infer`처럼 학습/추론이 짝인 경우)는 단건이 아니라
+`POST /api/v1/manifests/pair` 로 한 번에 등록해 같은 `pair_id`로 묶습니다. 본문은
+`{"manifests": [{"manifest_yaml": "..."}, {"manifest_yaml": "..."}]}` (정확히 2개).
+페어는 `service_family` · `contract_version` · image identity · (infer + workload) 형태가
+서로 일치해야 하며, 불일치 시 422로 거부됩니다 (SP-1 v2 §1.1).
+
+```bash
+python3 -c '
+import json,sys
+print(json.dumps({"manifests": [{"manifest_yaml": open(p).read()} for p in sys.argv[1:]]}))' \
+  examples/external-container-manifests/eva-vlm-train.yaml \
+  examples/external-container-manifests/eva-vlm-infer.yaml \
+| curl -sS -X POST http://localhost:8000/api/v1/manifests/pair \
+       -H 'Content-Type: application/json' --data-binary @-
+```
+
+> 같은 `(name, version)`을 다시 등록하면 409로 거부됩니다 — 버전을 올리거나 기존 항목을
+> 먼저 삭제하세요.
+
+> **DB 테이블**: manifest는 `msa_jfb.external_container_manifest`에 저장되며, 이 테이블은
+> `gaip_maraidb` init 스키마(5단계)에 포함되어 있으므로 별도 마이그레이션이 필요 없습니다.
+> 신규 설치에서는 `apps/*/migrations/*.sql`을 실행하지 않아도 됩니다 — 해당 DDL은 모두
+> `mariadb-init/file/schema.sql` · `schema_llm.sql`에 반영되어 있습니다.
+> (이미 운영 중인 클러스터에 한해, 개별 migration 파일을 수동 적용합니다.
+> ⚠️ 라이브 클러스터에서 `gaip_maraidb/run.sh init`을 재실행하면 `jonathan_llm`이
+> **DROP** 되므로 절대 재실행하지 마세요.)
 
 ## values.yaml 항목 정리(참고)
 
