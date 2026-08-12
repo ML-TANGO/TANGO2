@@ -139,6 +139,7 @@ global:
       model: jfb-system/model_app:dev
       prompt: jfb-system/prompt_app:dev
       evaluation: jfb-system/evaluation_app:dev
+      synthesis: jfb-system/synthesis_app:dev
       pipeline: jfb-system/pipeline_app:dev
       preprocessing: jfb-system/preprocessing_app:dev
       analyzing: jfb-system/analyzing_app:dev
@@ -163,6 +164,7 @@ global:
       model: llm_model
       prompt: llm_prompt
       evaluation: llm_evaluation
+      synthesis: fb_synthesis
       cost-management : fb_cost_management
       pipeline: fb_pipeline
       preprocessing: fb_preprocessing
@@ -191,6 +193,7 @@ global:
       rag: jfb-llm-rag
       prompt: jfb-llm-prompt
       evaluation: jfb-llm-evaluation
+      synthesis: jfb-app-synthesis
       cost-management : jfb-cost-management
       pipeline: jfb-app-pipeline
       preprocessing: jfb-app-preprocessing

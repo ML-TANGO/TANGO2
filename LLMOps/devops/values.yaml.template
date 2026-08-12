@@ -399,13 +399,19 @@ global:
       db: mariadb:10.11
       playground: acrylaaai/genai-platform-playground_app:tango_v2.0.1
       model: acrylaaai/genai-platform-model_app:tango_v2.0.1
+      evaluation: acrylaaai/genai-platform-evaluation_app:tango_v2.0.1
       pipeline: acrylaaai/genai-platform-pipeline_app:tango_v2.0.1
       preprocessing: acrylaaai/genai-platform-preprocessing_app:tango_v2.0.1
       analyzing: acrylaaai/genai-platform-analyzing_app:tango_v2.0.1
+      synthesis: acrylaaai/genai-platform-synthesis_app:tango_v2.0.1
       option: acrylaaai/genai-platform-option_app:tango_v2.0.1
       filebrowser: acrylaaai/genai-platform-filebrowser:0.1.0
       ingress_management: acrylaaai/genai-platform-ingress_management_app:tango_v2.0.1
       alert_management: acrylaaai/genai-platform-alert_management_app:tango_v2.0.1
+      # ⚠️ external_container 는 위 system.registry 를 앞에 붙이지 않고 이 값을 그대로
+      #   image 로 사용합니다 (devops/fb_external_container/helm/templates/deployment.yaml).
+      #   폐쇄망에서는 여기에 내부 레지스트리 주소를 직접 포함시켜야 합니다.
+      external_container: acrylaaai/genai-platform-external_container_app:tango_v2.0.1
       #
       # [미사용 서비스] - 수정 불필요, 빈 값으로 두세요
       marker_front:                               # 미사용 (마커 프론트엔드)
@@ -445,13 +451,16 @@ global:
       model: llm_model
       prompt: llm_prompt
       cost-management: fb_cost_management
+      evaluation: llm_evaluation
       pipeline: fb_pipeline
       preprocessing: fb_preprocessing
       collect: fb_collect
       analyzing: fb_analyzing
+      synthesis: fb_synthesis
       option: fb_option
       ingress_management: fb_ingress_management
       alert_management: fb_alert_management
+      external_container: fb_external_container
 
     # ========================================================================
     # Application Names (Helm Release Names)
@@ -483,14 +492,17 @@ global:
       model: jfb-llm-model
       rag: jfb-llm-rag
       prompt: jfb-llm-prompt
+      evaluation: jfb-llm-evaluation
       cost-management: jfb-cost-management
       pipeline: jfb-app-pipeline
       preprocessing: jfb-app-preprocessing
       collect: jfb-app-collect
       analyzing: jfb-app-analyzing
+      synthesis: jfb-app-synthesis
       option: jfb-app-option
       ingress_management: jfb-app-ingress-management
       alert_management: jfb-app-alert-management
+      external_container: jfb-app-external-container
 
     # ========================================================================
     # RDMA Settings (고성능 GPU 통신, 선택사항)
