@@ -1272,7 +1272,9 @@ function DatasetDetailPage({ trackingEvent }) {
 
       const preprocessingId = ensureRes.result?.preprocessing_id;
       if (!preprocessingId) {
-        toast.error(t('formatConvertFailed.message', '포맷 변환에 실패했습니다.'));
+        toast.error(
+          t('formatConvertFailed.message', '포맷 변환에 실패했습니다.'),
+        );
         return;
       }
 
@@ -2296,7 +2298,8 @@ function DatasetDetailPage({ trackingEvent }) {
    */
   const convertJobId = convertJob?.id;
   const convertProjectId = convertJob?.preprocessingId;
-  const convertSettled = !convertJob || convertJob.finished || convertJob.failed;
+  const convertSettled =
+    !convertJob || convertJob.finished || convertJob.failed;
 
   useEffect(() => {
     if (!convertJobId || !convertProjectId || convertSettled) return undefined;
