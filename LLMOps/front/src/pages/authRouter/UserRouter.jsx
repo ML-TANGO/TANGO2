@@ -367,9 +367,8 @@ const routeArr = [
     name: 'collect.label',
     path: '/user/workspace/:id/datasets/collect',
     group: datasetGroup,
-    // 메뉴 미노출 (라우트는 유지 — URL 직접 접근 가능). 그룹 라운딩 경계는
-    // 유일하게 남는 가시 하위인 전처리로 이동했다.
-    disabled: true,
+    // 데이터 그룹의 첫 가시 하위 — 라운딩 경계는 가시 항목에 붙어야 한다.
+    isFirstGroup: true,
     icon: IconDataCollect,
     activeIcon: IconDataCollectActive,
     platform: 'flightbase',
@@ -393,10 +392,6 @@ const routeArr = [
     exact: true,
     isGroup: true,
     group: datasetGroup,
-    // 수집·라벨링·분석을 미노출로 돌려 이 항목이 유일한 가시 하위가 됐다.
-    // 그룹 라운딩이 깨지지 않게 첫/마지막 경계를 여기로 모은다.
-    isFirstGroup: true,
-    isLastGroup: true,
     icon: IconPreProcess,
     activeIcon: IconPreProcessActive,
     platform: 'flightbase',
@@ -420,8 +415,8 @@ const routeArr = [
     exact: true,
     isGroup: true,
     group: datasetGroup,
-    // 메뉴 미노출 (라우트는 유지 — URL 직접 접근 가능). isLastGroup 은 전처리로 이동.
-    disabled: true,
+    // 데이터 그룹의 마지막 가시 하위 (뒤의 합성·상세는 모두 미노출).
+    isLastGroup: true,
     icon: IconAnalysis,
     activeIcon: IconAnalysisActive,
     platform: 'flightbase',
