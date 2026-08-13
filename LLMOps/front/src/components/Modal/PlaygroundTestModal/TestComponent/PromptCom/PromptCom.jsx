@@ -5,7 +5,11 @@ import { toast } from 'react-toastify';
 
 import { ButtonV2, InputText } from '@jonathan/ui-react';
 
-import { getPlayground, postPlaygroundTestChat } from '@src/apis/llm/playground';
+import {
+  getPlayground,
+  postPlaygroundTestChat,
+} from '@src/apis/llm/playground';
+import { SHOW_DUAL_DEPLOY } from '@src/featureFlags';
 import { STATUS_SUCCESS } from '@src/network';
 
 import flightBaseIcon from '/public/images/favicon/android-icon-36x36.png';
@@ -41,9 +45,7 @@ const PromptText = ({ type, message = '', handleScrollBottom, t }) => {
         >
           <div className={cx('img-cont')} />
           <div>
-            <span
-              style={{ fontSize: 11, color: '#2f6fed', fontWeight: 700 }}
-            >
+            <span style={{ fontSize: 11, color: '#2f6fed', fontWeight: 700 }}>
               ↳ {t('playground.dual.optimizedPrompt')}
             </span>
             <p className={cx('message-paragraph')} style={{ marginTop: 4 }}>
@@ -123,11 +125,13 @@ export default function PromptCom({ playgroundId }) {
       if (res.status === STATUS_SUCCESS) {
         const raw = Array.isArray(res.result)
           ? res.result
-          : res.result?.list ?? [];
+          : (res.result?.list ?? []);
         setGenOptions(
           raw
             .map((p) => ({ id: p.id, name: p.name }))
-            .filter((p) => p.id != null && String(p.id) !== String(playgroundId)),
+            .filter(
+              (p) => p.id != null && String(p.id) !== String(playgroundId),
+            ),
         );
       } else {
         genFetchedRef.current = false; // 실패 시 재시도 허용
@@ -187,48 +191,58 @@ export default function PromptCom({ playgroundId }) {
         })}
       </div>
 
-      {/* 이중모델 추론 컨트롤 — LLM1(프롬프트 생성기) 선택 */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          padding: '6px 4px',
-          fontSize: 13,
-        }}
-      >
-        <label
-          style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
+      {/* 이중모델 추론 컨트롤 — LLM1(프롬프트 생성기) 선택.
+          SHOW_DUAL_DEPLOY 로 가린다: 같은 목적(프롬프트 개선)을 추론 화면 상단의
+          프롬프트 최적화 토글이 대체하므로, 입력창에 두 갈래를 함께 두면 혼동된다.
+          state·전송 경로는 그대로라 플래그만 되돌리면 복구된다(공인시험 데모). */}
+      {SHOW_DUAL_DEPLOY && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '6px 4px',
+            fontSize: 13,
+          }}
         >
-          <input
-            type='checkbox'
-            checked={dualEnabled}
-            onChange={(e) => setDualEnabled(e.target.checked)}
-            disabled={isLoading}
-          />
-          {t('playground.dual.label')}
-        </label>
-        {dualEnabled && (
-          <select
-            value={promptGenId}
-            onChange={(e) => setPromptGenId(e.target.value)}
-            disabled={isLoading}
+          <label
             style={{
-              padding: '4px 8px',
-              border: '1px solid #d8d8d8',
-              borderRadius: 6,
-              fontSize: 13,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              cursor: 'pointer',
             }}
           >
-            <option value=''>{t('playground.dual.selectGenerator')}</option>
-            {genOptions.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        )}
-      </div>
+            <input
+              type='checkbox'
+              checked={dualEnabled}
+              onChange={(e) => setDualEnabled(e.target.checked)}
+              disabled={isLoading}
+            />
+            {t('playground.dual.label')}
+          </label>
+          {dualEnabled && (
+            <select
+              value={promptGenId}
+              onChange={(e) => setPromptGenId(e.target.value)}
+              disabled={isLoading}
+              style={{
+                padding: '4px 8px',
+                border: '1px solid #d8d8d8',
+                borderRadius: 6,
+                fontSize: 13,
+              }}
+            >
+              <option value=''>{t('playground.dual.selectGenerator')}</option>
+              {genOptions.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      )}
 
       <div className={cx('footer-cont')}>
         <div className={cx('input-cont')}>

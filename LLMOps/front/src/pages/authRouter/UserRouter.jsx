@@ -75,6 +75,7 @@ import PageTemplate from '@src/components/templates/PageTemplate';
 import { closeAllModal } from '@src/store/modules/modal';
 import usePrevScroll from '@src/hooks/usePrevScroll';
 import TrackingHOC from '@src/hoc/TrackingHOC';
+import { SHOW_DUAL_DEPLOY } from '@src/featureFlags';
 
 import useMoveToMarker from './useMoveToMarker';
 
@@ -306,7 +307,7 @@ const noneArr = [
   },
 ];
 
-const routeArr = [
+const routeArrAll = [
   ...noneArr,
   // ...llmRouteArr,
   // {
@@ -910,6 +911,7 @@ const routeArr = [
   },
   {
     name: 'DualDeploymentDetail',
+    dualOnly: true,
     path: '/user/workspace/:id/llmplayground/:pid/dual-deploy',
     exact: false,
     disabled: true,
@@ -921,6 +923,7 @@ const routeArr = [
   {
     // 기존 북마크/외부 링크 호환 별칭 — 정규 경로는 llmplayground 하위 deploy detail.
     name: 'DualDeploymentDetailAlias',
+    dualOnly: true,
     path: '/user/workspace/:id/dual-deploy/:pid',
     exact: false,
     disabled: true,
@@ -930,6 +933,13 @@ const routeArr = [
     render: (props) => <DualDeployDetail {...props} />,
   },
 ];
+
+// 이중모델 배포 상세는 SHOW_DUAL_DEPLOY 가 꺼져 있으면 라우트 테이블에서 아예 뺀다 —
+//   목록에서 감춰도 URL 을 직접 치면 열리기 때문. 배열에서 빠지면 매칭 자체가 되지 않아
+//   상위 라우터의 fallback 으로 떨어진다. 플래그를 되돌리면 두 경로가 그대로 살아난다.
+const routeArr = SHOW_DUAL_DEPLOY
+  ? routeArrAll
+  : routeArrAll.filter((route) => !route.dualOnly);
 
 const calSideNavList = (selectedPlatform) => {
   // 단일 플랫폼(flightbase): 미선택/null이면 flightbase 기본 → 첫 진입 빈 사이드바 방지

@@ -21,6 +21,7 @@ import {
   postPlayground,
 } from '@src/apis/llm/playground';
 import useOwnerList from '@src/hooks/useOwnerList';
+import { SHOW_DUAL_DEPLOY } from '@src/featureFlags';
 import { STATUS_SUCCESS } from '@src/network';
 import { errorToastMessage } from '@src/utils';
 
@@ -175,25 +176,27 @@ const NewDeploymentModal = ({ data, type }) => {
       footerMessage={footerMessage}
     >
       <div className={cx('form')}>
-        {/* 단일 / 이중 모드 선택 */}
-        <div className={cx('mode-tabs')}>
-          <button
-            type='button'
-            className={cx('mode-tab', mode === 'single' && 'active')}
-            aria-pressed={mode === 'single'}
-            onClick={() => setMode('single')}
-          >
-            단일 모델
-          </button>
-          <button
-            type='button'
-            className={cx('mode-tab', mode === 'dual' && 'active')}
-            aria-pressed={mode === 'dual'}
-            onClick={() => setMode('dual')}
-          >
-            이중 모델
-          </button>
-        </div>
+        {/* 단일 / 이중 모드 선택 — 이중을 감추면 선택지가 하나뿐이라 탭 줄 자체를 숨긴다. */}
+        {SHOW_DUAL_DEPLOY && (
+          <div className={cx('mode-tabs')}>
+            <button
+              type='button'
+              className={cx('mode-tab', mode === 'single' && 'active')}
+              aria-pressed={mode === 'single'}
+              onClick={() => setMode('single')}
+            >
+              단일 모델
+            </button>
+            <button
+              type='button'
+              className={cx('mode-tab', mode === 'dual' && 'active')}
+              aria-pressed={mode === 'dual'}
+              onClick={() => setMode('dual')}
+            >
+              이중 모델
+            </button>
+          </div>
+        )}
 
         <div className={cx('row')}>
           <InputBoxWithLabel
@@ -231,10 +234,7 @@ const NewDeploymentModal = ({ data, type }) => {
                 <button
                   key={tg.id}
                   type='button'
-                  className={cx(
-                    'target-card',
-                    target === tg.id && 'selected',
-                  )}
+                  className={cx('target-card', target === tg.id && 'selected')}
                   aria-pressed={target === tg.id}
                   onClick={() => setTarget(tg.id)}
                 >

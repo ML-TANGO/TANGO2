@@ -9,6 +9,7 @@ import EmptyBox from '@src/components/molecules/EmptyBox';
 import { getPlayground } from '@src/apis/llm/playground';
 import useIntervalCall from '@src/hooks/useIntervalCall';
 import { startPath } from '@src/store/modules/breadCrumb';
+import { SHOW_DUAL_DEPLOY } from '@src/featureFlags';
 import { STATUS_SUCCESS } from '@src/network';
 
 import { errorToastMessage } from '@src/utils';
@@ -45,7 +46,12 @@ const InferenceMenu = () => {
       //   종전엔 이중만 전 상태를 노출해 준비중을 추적했으나, 질의할 수 없는 세션이 목록을
       //   채우는 문제가 있어 구성/배포 추적은 배포 탭 소관으로 넘긴다.
       //   이중 부모의 status 는 집계값이라 LLM1·LLM2 가 모두 running 일 때만 running 이다.
-      const visible = list.filter((d) => d.status === 'running');
+      //   이중모델은 SHOW_DUAL_DEPLOY 로 목록에서 감춘다 — 추론 화면의 진입점이
+      //   여기라, 배포 생성만 막으면 기존 세션이 계속 노출된다(가림이 반쪽이 된다).
+      const visible = list.filter(
+        (d) =>
+          d.status === 'running' && (SHOW_DUAL_DEPLOY || d.mode !== 'dual'),
+      );
       // 카드 표시용으로만 변환(원본 불변) — 배포 목록의 매핑 규약과 동일한 필드 이름 사용.
       setSessions(
         visible.map((d) => {
@@ -67,9 +73,10 @@ const InferenceMenu = () => {
             status: d.status,
             // 이중은 항상 cluster 라 유형 칩이 중복 정보다. 상태+유형+이중 3칩이 카드 너비를
             //   넘겨 줄바꿈되므로 이중 행에서는 유형 칩을 생략하고 qualifier 만 남긴다.
-            //   단일은 종전대로 '단일 모델' 칩 하나를 유지한다.
-            typeBadge: isDual ? undefined : '단일 모델',
-            typeBadgeKind: isDual ? undefined : 'single',
+            //   ⚠️ 이중을 감춘 동안에는 모든 카드가 '단일 모델' 이라 칩의 정보량이 0 이다
+            //      → 플래그가 꺼져 있으면 유형 칩 자체를 달지 않는다.
+            typeBadge: SHOW_DUAL_DEPLOY && !isDual ? '단일 모델' : undefined,
+            typeBadgeKind: SHOW_DUAL_DEPLOY && !isDual ? 'single' : undefined,
             qualifierBadge: isDual ? '이중모델' : undefined,
             qualifierBadgeKind: isDual ? 'multimodal' : undefined,
           };
@@ -113,7 +120,7 @@ const InferenceMenu = () => {
         <EmptyBox
           isBox
           customStyle={{ height: '220px' }}
-          text='추론할 배포가 없습니다. 배포 탭에서 단일·이중모델 배포를 생성하세요.'
+          text='추론할 배포가 없습니다. 배포 탭에서 배포를 생성하세요.'
         />
       ) : (
         <CardList>
