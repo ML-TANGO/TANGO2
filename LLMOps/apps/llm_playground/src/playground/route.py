@@ -982,7 +982,8 @@ async def start_prompt_optimization(playground_id: int, body: dto.StartPromptOpt
         res = await svc.start_prompt_optimization(
             playground_id=playground_id, examples=body.examples,
             dataset_id=body.dataset_id, dataset_filename=body.dataset_filename,
-            sample_count=body.sample_count, metric=body.metric, rounds=body.rounds)
+            sample_count=body.sample_count, metric=body.metric, rounds=body.rounds,
+            proposer_playground_id=body.proposer_playground_id)
         return response(status=1, result=res)
     except Exception as e:
         traceback.print_exc()
@@ -1011,6 +1012,23 @@ async def get_prompt_optimization(playground_id: int, optimization_id: int):
     try:
         res = await svc.get_prompt_optimization(optimization_id=optimization_id,
                                                 playground_id=playground_id)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+
+@playgrounds.get("/{playground_id}/prompt-optimization/state",
+                 summary='프롬프트 최적화 - 추론 화면 토글 상태', tags=TAG_TEST)
+async def get_prompt_optimization_state(playground_id: int):
+    """추론 화면의 ON/OFF 토글 + few-shot 패널이 쓰는 단일 read-model.
+
+    목록/상세를 따로 부르지 않아도 되게 진행 상태·최신 실행·활성 산출물을 함께 준다.
+    특히 effective/stale_reason 은 목록만으로는 알 수 없다 — 활성이어도 배포 모델이
+    바뀌었으면 주입이 생략되므로, 그 경우 토글이 ON 인 채 아무 효과가 없다.
+    """
+    try:
+        res = await svc.get_prompt_optimization_state(playground_id=playground_id)
         return response(status=1, result=res)
     except Exception as e:
         traceback.print_exc()

@@ -31,6 +31,18 @@ class RunParams(BaseModel):
     llm_url: str | None = None
     # Model id. If omitted, auto-detected from ``{llm_url}/models``.
     model: str | None = None
+    # OpenAI-compatible base URL of a **text** LM used for the meta roles:
+    #   instruction proposal (MIPRO GroundedProposer), textgrad reflection and
+    #   synthetic example generation. Those roles must emit structured output
+    #   (e.g. a JSON ``proposed_instruction``), which a VLM task model such as
+    #   SDS cannot do — it answers the image instead and dspy dies with
+    #   AdapterParseError. Omit to reuse ``llm_url`` (previous behavior).
+    proposer_llm_url: str | None = None
+    # Model id for ``proposer_llm_url``. Auto-detected from its /models if absent.
+    proposer_model: str | None = None
+    # 대상 LM 이 dspy 의 구조화 출력 계약을 못 지킬 때(파인튜닝 VLM 등) True.
+    #   단일 출력 Predict + PassthroughChatAdapter 로 응답 원문을 그대로 채점한다.
+    raw_task_output: bool = False
     api_key: str = "EMPTY"
     # Metric for holdout scoring: "token_f1" (default) or "bert_score".
     metric: str = "token_f1"
@@ -62,9 +74,16 @@ class RunRequest(BaseModel):
     params: RunParams | None = None
 
     # Fallback flat fields (used only if ``params`` is absent).
+    # ⚠️ 이 목록은 RunParams 의 필드와 **짝**이다. 플랫폼(external_container)은
+    #    envelope 없이 flat 으로 POST 하므로(base.py:188 `json=config.params`),
+    #    여기 선언되지 않은 키는 pydantic 이 조용히 버리고 resolve() 가 기본값을
+    #    쓴다 — RunParams 에만 추가하면 그 파라미터는 영원히 도달하지 않는다.
     examples: list[ExampleIn] | None = None
     llm_url: str | None = None
     model: str | None = None
+    proposer_llm_url: str | None = None
+    proposer_model: str | None = None
+    raw_task_output: bool | None = None
     api_key: str | None = None
     metric: str | None = None
     vlm: bool | None = None

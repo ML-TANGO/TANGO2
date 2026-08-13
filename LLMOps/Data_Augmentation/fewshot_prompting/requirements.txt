@@ -18,4 +18,4 @@ openai>=2.0,<3.0
 #   (gpu:0, 원격 llm_url 호출만) 기본 metric 도 token_f1 이며, 폐쇄망에서는 BERTScore
 #   모델 다운로드가 실패해 어차피 token_f1 로 폴백한다(fewshot_task.py:99-103, graceful).
 #   bert_score 메트릭이 실제로 필요해지면 이 줄을 되살려 :1.0.0-bertscore 태그로 분리 빌드.
-# bert-score==0.3.13
+bert-score==0.3.13

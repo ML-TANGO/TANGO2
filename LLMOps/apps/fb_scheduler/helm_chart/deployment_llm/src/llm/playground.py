@@ -411,6 +411,11 @@ async def post_llm(request: Request):
     test_dataset_filename = data.get("test_dataset_filename")
     test_question = data.get("test_question")
     session_id = data.get("session_id") # history 관리
+    # 프롬프트 최적화 산출물(선택). 플랫폼이 활성 최적화를 실어 보내면 샘플마다 앞에 붙인다.
+    #   질문 1건은 플랫폼이 이미 조립해 test_question 으로 주지만, 데이터셋 일괄은
+    #   여기(래퍼)가 데이터셋을 직접 읽어 샘플을 만들므로 플랫폼에 조립 지점이 없다
+    #   → 그 조립을 여기서 한다. 없으면(None) 종전과 완전히 동일하게 동작한다.
+    system_prompt = data.get("system_prompt")
     try:
         # test input
         if test_type == "dataset":
@@ -424,7 +429,11 @@ async def post_llm(request: Request):
             _, db_id = await db.insert_playground_test(playground_id=settings.LLM_PLAYGROUND_ID, type=test_type)
             start_time = time.time()
             # test
-            output = await run_playground(test_input=_input, session_id=session_id, db_id=db_id)
+            #   조립 형식은 플랫폼 _apply_active_prompt_optimization 과 반드시 같아야 한다 —
+            #   컨테이너 산출물이 "Query: …\nResponse: …" 쌍으로 끝나므로 사용자 입력도
+            #   같은 형식으로 이어야 few-shot 패턴이 유지된다.
+            _prompt = f"{system_prompt}\n\nQuery: {_input}\nResponse:" if system_prompt else _input
+            output = await run_playground(test_input=_prompt, session_id=session_id, db_id=db_id)
             end_time = time.time()
             # result
             data = {

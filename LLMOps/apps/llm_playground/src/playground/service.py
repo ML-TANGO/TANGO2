@@ -2804,6 +2804,9 @@ async def batch_stream(playground_id, prompt_gen_playground_id=None, dataset_id=
         raise Exception("Error: no usable samples in dataset")
     gen_url = await _playground_test_url(prompt_gen_playground_id) if prompt_gen_playground_id else None
     ans_url = None if _ext_job_id else await _playground_test_url(playground_id)
+    # 활성 최적화 프롬프트 — 루프 밖에서 1회만 조회한다(샘플마다 DB 를 때리지 않게).
+    #   dual 은 LLM1 이 질의마다 프롬프트를 만들므로 주입 대상이 아니다.
+    _batch_opt = None if prompt_gen_playground_id else await _active_prompt_text(playground_id)
     rows, preds, refs, has_ref = [], [], [], False
     yield {"type": "start", "total": len(samples)}
     for idx, s in enumerate(samples):
@@ -2815,8 +2818,19 @@ async def batch_stream(playground_id, prompt_gen_playground_id=None, dataset_id=
             optimized = _dual_optimized_or_fallback(
                 await _infer_question(gen_url, meta, session_id, timeout=300), q)
         else:
-            # 단독 배포 — LLM1 단계가 없으므로 데이터셋 프롬프트를 그대로 추론에 사용.
-            optimized = q
+            # 단독 배포 — LLM1 단계가 없다. 대신 활성 최적화가 있으면 여기서 주입한다.
+            #   ⚠️ 데이터셋 배치 경로가 둘이다: /test(test_type=dataset)와 이 /batch/sse.
+            #      FE 는 단독 external(SDS)·이중을 전부 이 경로로 보내므로, 저쪽만
+            #      고치면 토글이 ON 인데 배치에는 반영되지 않는 상태가 된다.
+            #   조립 형식은 대상에 따라 다르다 — internal 은 Query:/Response: 규약,
+            #      SDS 는 custom_prompt 가 곧 질문이라 지시문을 앞에 잇기만 한다
+            #      (playground_test 의 external 분기와 같은 판단).
+            if not _batch_opt:
+                optimized = q
+            elif _ext_job_id:
+                optimized = f"{_batch_opt}\n\n{q}"
+            else:
+                optimized = f"{_batch_opt}\n\nQuery: {q}\nResponse:"
         if len(optimized) > _DUAL_PROMPT_MAX:
             optimized = optimized[:_DUAL_PROMPT_MAX]
         if _ext_job_id:
@@ -2938,20 +2952,26 @@ async def playground_test(playground_id, test_type, test_dataset_id, test_datase
         # 프롬프트 최적화 주입 — 활성 최적화가 있으면 질문 앞에 붙인다. 요청이 프롬프트를
         #   싣지 않는 서버 파생 방식(dual 의 prompt_gen 링크와 동일 posture)이라 추론 DTO·FE
         #   변경이 없다.
-        #   ⚠️ test_type=question 만 적용한다. dataset(일괄)은 아래 body 가 dataset_id/
-        #   filename 을 서빙 래퍼에 넘겨 래퍼가 데이터셋을 직접 읽어 샘플별로 추론하므로,
-        #   플랫폼이 각 샘플에 프롬프트를 조립할 여지가 없다(서빙 래퍼 계약 확장이 필요).
+        #   question(1건)은 플랫폼이 직접 조립한다. dataset(일괄)은 래퍼가 데이터셋을
+        #   직접 읽어 샘플을 만들어 플랫폼에 조립 지점이 없으므로, 원문(system_prompt)만
+        #   실어 보내고 **조립은 래퍼가** 한다(래퍼 계약 확장, 두 엔진 모두 동일 규약).
+        #   래퍼가 옛 버전이면 이 필드를 무시하므로 최적화만 빠지고 추론은 정상 동작한다.
         prompt_injected = False
+        batch_system_prompt = None
         if test_type == "question" and test_question:
             test_question, prompt_injected = await _apply_active_prompt_optimization(
                 playground_id, test_question)
+        elif test_type == "dataset":
+            batch_system_prompt = await _active_prompt_text(playground_id)
+            prompt_injected = bool(batch_system_prompt)
 
         # 테스트 실행
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(test_url, json={"test_type": test_type, "session_id": session_id,
                                                          "test_dataset_id": test_dataset_id, "test_dataset_filename": test_dataset_filename,
-                                                         "test_question": test_question}, timeout=1800)
+                                                         "test_question": test_question,
+                                                         "system_prompt": batch_system_prompt}, timeout=1800)
                 if response.status_code == 401:
                     raise Exception("Setting up the playground")
                 elif response.status_code == 402:
@@ -3242,8 +3262,21 @@ async def openai_chat_completions(playground_id, body):
     prompt = _messages_to_prompt((body or {}).get("messages"))
     # 최적화는 수백 회 호출된다 → playground 행을 1회만 읽어 두 헬퍼에 넘긴다.
     pg = await db.get_playground(playground_id=playground_id)
-    test_url = await _playground_internal_test_url(playground_id, pg)   # 미배포/미실행이면 예외
-    answer = await _infer_question(test_url, prompt, None, timeout=_SHIM_TIMEOUT)
+    _ext_job_id = _deployment_external_job_id(pg)
+    if _ext_job_id:
+        # 외부 SDS(VLM) 분기 — custom_prompt 가 곧 질문이고 image_base64 + ais_rows 가
+        #   필수다. 컨테이너는 텍스트만 보내오므로 예시 등록 때 받아 둔 미디어를
+        #   query 로 되찾아 붙인다(컨테이너·계약 무수정).
+        media = await _sds_media_for(playground_id, prompt)
+        if not media or not media.get("image_base64"):
+            raise Exception("SDS 최적화에 쓸 예시 이미지를 찾지 못했습니다 "
+                            "— 예시마다 이미지를 등록해 다시 실행하세요")
+        answer, _ = await _infer_sds_sample(_ext_job_id, prompt, {},
+                                            image_b64=media.get("image_base64"),
+                                            ais_rows=media.get("ais_rows"))
+    else:
+        test_url = await _playground_internal_test_url(playground_id, pg)  # 미배포/미실행이면 예외
+        answer = await _infer_question(test_url, prompt, None, timeout=_SHIM_TIMEOUT)
     name = await _playground_model_name(playground_id, pg)
     return {
         "id": f"chatcmpl-{uuid.uuid4().hex[:24]}",
@@ -3431,9 +3464,128 @@ def _normalize_examples(examples):
     return out
 
 
+# ── SDS(external) 최적화용 예시 미디어 ──────────────────────────────────────
+# 컨테이너(fewshot-prompt-optimizer)는 텍스트 {query,response} 만 다루지만 SDS(VLM)는
+# image_base64 + ais_rows(my_ship=1) 없이는 추론 자체가 불가하다. 그래서 예시의 미디어는
+# **컨테이너로 보내지 않고** 플랫폼이 들고 있다가, 컨테이너가 shim 으로 되돌아올 때
+# query 로 되찾아 붙인다. 컨테이너 무수정 + 계약 무변경으로 SDS 를 지원하는 유일한 지점.
+_SDS_MEDIA_CACHE = {}   # playground_id -> {"by_query": {query: media}, "default": media}
+# 이미지 1건 base64 상한(약 4MB 원본). examples JSON 컬럼과 위 캐시 양쪽에 실리므로
+#   여기서 막지 않으면 DB 행 비대화와 워커 메모리 증가가 함께 온다.
+_PROMPT_OPT_IMAGE_MAX = 6_000_000
+_PROMPT_OPT_AIS_ROWS_MAX = 200
+
+
+def _forget_sds_media(playground_id):
+    """최적화가 terminal 이 되면 캐시를 비운다.
+
+    캐시는 진행 중인 job 의 shim 호출을 위한 것이라 종료 후에는 쓸모가 없다.
+    비우지 않으면 SDS 최적화를 돌린 모든 playground 의 base64 가 프로세스 수명 내내
+    남는다(건당 최대 _PROMPT_OPT_IMAGE_MAX × 예시 수).
+    """
+    _SDS_MEDIA_CACHE.pop(playground_id, None)
+
+
+def _split_example_media(examples):
+    """예시에서 SDS 미디어를 분리한다.
+
+    반환: ``(컨테이너로 보낼 [{query,response}], {query: {image_base64, ais_rows}})``.
+    미디어가 하나도 없으면 두 번째는 빈 dict — 내부(vLLM) 경로와 동일하게 동작한다.
+    """
+    media = {}
+    for ex in (examples or [])[:_PROMPT_OPT_EXAMPLES_MAX]:
+        if not isinstance(ex, dict):
+            continue
+        q = str(ex.get("query") or ex.get("input") or "").strip()[:_PROMPT_OPT_FIELD_MAX]
+        img = ex.get("image_base64")
+        if not (q and img):
+            continue
+        # 크기 상한 — query/response 에는 _PROMPT_OPT_FIELD_MAX 가 걸려 있는데 정작
+        #   가장 큰 페이로드인 이미지에는 없었다. 이 값은 그대로 DB(examples JSON)에
+        #   영속되고 프로세스 캐시에도 올라가므로, 상한이 없으면 예시 10건만으로
+        #   공유 MariaDB 와 워커 메모리를 동시에 압박한다.
+        img = str(img)
+        if len(img) > _PROMPT_OPT_IMAGE_MAX:
+            raise Exception(
+                f"예시 이미지가 너무 큽니다(base64 {len(img)//1024}KB) — "
+                f"{_PROMPT_OPT_IMAGE_MAX//1024}KB 이하로 줄여 주세요")
+        ais = ex.get("ais_rows") or []
+        if not isinstance(ais, list) or len(ais) > _PROMPT_OPT_AIS_ROWS_MAX:
+            raise Exception(f"AIS 행은 최대 {_PROMPT_OPT_AIS_ROWS_MAX}건까지 허용됩니다")
+        # ⚠️ query 를 키로 쓴다 — 같은 질의를 가진 예시가 둘이면 뒤엣것이 앞엣것의
+        #    이미지를 덮어써 조용히 잘못된 이미지로 채점된다. 중복은 거부한다.
+        if q in media:
+            raise Exception("질의가 동일한 예시가 둘 이상입니다 — "
+                            "이미지를 질의로 되찾는 구조라 질의는 서로 달라야 합니다")
+        media[q] = {"image_base64": img, "ais_rows": ais}
+    return _normalize_examples(examples), media
+
+
+async def _sds_media_for(playground_id, prompt):
+    """shim 으로 들어온 프롬프트에 해당하는 예시 미디어를 찾는다.
+
+    컨테이너는 후보 시스템 프롬프트 + 예시 query 를 한 문자열로 보내오므로, 등록된
+    query 중 프롬프트에 포함된 것 가운데 **가장 긴 것**을 고른다(짧은 query 가 다른
+    query 의 부분문자열일 때 오매칭 방지). 못 찾으면 첫 예시의 미디어로 폴백한다 —
+    컨테이너가 합성한 질의(rounds>0)에는 대응하는 이미지가 없기 때문이고, 여기서
+    실패시키면 최적화 전체가 죽는다.
+    """
+    entry = _SDS_MEDIA_CACHE.get(playground_id)
+    if entry is None:
+        # 프로세스가 재시작했으면 캐시가 비어 있다 → 진행 중인 행의 examples 에서 복원.
+        entry = {"by_query": {}, "default": None}
+        try:
+            rows = await db.get_prompt_optimization_list(playground_id=playground_id) or []
+            pending = next((r for r in rows
+                            if r.get("status") not in _PROMPT_OPT_TERMINAL), None)
+            if pending:
+                full = await db.get_prompt_optimization(optimization_id=pending.get("id"))
+                saved = json.loads((full or {}).get("examples") or "[]") or []
+                _, media = _split_example_media(saved)
+                entry = {"by_query": media,
+                         "default": next(iter(media.values()), None)}
+        except Exception:
+            traceback.print_exc()
+        _SDS_MEDIA_CACHE[playground_id] = entry
+
+    by_query = entry.get("by_query") or {}
+    best = None
+    for q, media in by_query.items():
+        if q and q in prompt and (best is None or len(q) > len(best[0])):
+            best = (q, media)
+    return best[1] if best else entry.get("default")
+
+
+async def _resolve_proposer_llm_url(proposer_playground_id, pg):
+    """제안자(메타) LM 의 shim URL 을 만든다. 실패는 전부 같은 메시지로 접는다.
+
+    instruction 제안·reflection·합성예시 생성은 구조화 출력(JSON `proposed_instruction`)을
+    요구하는데 VLM(외부 SDS)은 그 계약을 못 지켜 dspy 가 AdapterParseError 로 죽는다
+    → 텍스트 배포를 따로 물린다.
+
+    **URL 이 아니라 id 를 받는 이유**: 클라이언트가 준 URL 을 그대로 컨테이너에 넘기면
+    SSRF 가 된다. 여기서 워크스페이스·유형·실행상태를 검증하고 서버가 직접 조립한다
+    (dual 의 prompt_gen_playground_id 와 동일 규약, 열거 오라클 회피로 메시지 통합).
+    """
+    pg1 = await db.get_playground(playground_id=proposer_playground_id)
+    if not pg1 or pg1.get("workspace_id") != pg.get("workspace_id"):
+        raise Exception("제안자(LLM) 배포를 찾을 수 없습니다")
+    if _deployment_external_job_id(pg1):
+        raise Exception("제안자는 내부 텍스트 배포여야 합니다 — 외부 컨테이너 배포는 지정할 수 없습니다")
+    try:
+        _st = (await get_playground_status(proposer_playground_id) or {}).get("status")
+    except Exception:
+        traceback.print_exc()
+        _st = None
+    if _st != TYPE.KUBE_POD_STATUS_RUNNING:
+        raise Exception("제안자 배포가 실행 중이 아닙니다 — 먼저 시작한 뒤 실행하세요")
+    return _shim_llm_url(proposer_playground_id)
+
+
 async def start_prompt_optimization(playground_id, examples=None, dataset_id=None,
                                     dataset_filename=None, sample_count=None,
-                                    metric="token_f1", rounds=0):
+                                    metric="token_f1", rounds=0,
+                                    proposer_playground_id=None):
     """최적화 실행 — external job 을 띄우고 prompt_optimization 행을 만든다.
 
     예시는 직접 입력(examples) 또는 데이터셋 추출(dataset_id) 중 하나.
@@ -3445,12 +3597,10 @@ async def start_prompt_optimization(playground_id, examples=None, dataset_id=Non
         raise Exception(f"playground {playground_id} not found")
     if not pg.get("deployment"):
         raise Exception("배포가 실행 중이 아닙니다 — 최적화는 배포된 모델을 호출합니다")
-    # ① external(협력기관 컨테이너) 배포 차단. shim 은 deployment-llm-playground-*
-    #    svc 를 부르는데 external 은 그 svc 가 없어 평가 호출이 전량 실패한다 —
-    #    deployment JSON 존재만 보면 external 도 통과하므로 명시적으로 막는다.
-    if _deployment_external_job_id(pg):
-        raise Exception("외부 컨테이너 배포는 프롬프트 최적화를 지원하지 않습니다 "
-                        "— 내부 서빙 배포에서만 실행할 수 있습니다")
+    # ① external(협력기관 컨테이너) 배포. 종전엔 전면 차단했는데, shim 이 external 분기를
+    #    갖게 되어(openai_chat_completions) SDS 도 최적화할 수 있다. 다만 SDS 는
+    #    image_base64 + ais_rows 없이는 추론이 불가하므로 예시마다 미디어를 요구한다.
+    external_job_id = _deployment_external_job_id(pg)
     # ② 실제 실행 여부 확인. deployment JSON 은 중지 후에도 보존되므로(stop_playground
     #    가 재배포용 설정을 남긴다) 존재만으로는 "실행 중"이 아니다. 확인하지 않으면
     #    job 만 뜨고 호출이 전부 실패해 GPU 와 시간만 소모한다.
@@ -3468,15 +3618,23 @@ async def start_prompt_optimization(playground_id, examples=None, dataset_id=Non
         raise Exception("이미 진행 중인 최적화가 있습니다 — 완료된 뒤에 다시 실행하세요")
     workspace_id = pg.get("workspace_id")
 
-    prepared = _normalize_examples(examples)
+    # 미디어(SDS 이미지·AIS)는 컨테이너로 보내지 않고 여기서 분리해 둔다.
+    prepared, example_media = _split_example_media(examples)
     if not prepared and dataset_id:
         n = max(2, min(int(sample_count or _PROMPT_OPT_EXAMPLES_MAX), _PROMPT_OPT_EXAMPLES_MAX))
         samples, _ = await _read_dataset_samples(dataset_id, dataset_filename, n,
                                                 workspace_id=workspace_id)
-        prepared = _normalize_examples(samples)
+        prepared, example_media = _split_example_media(samples)
     # 컨테이너 계약: 최소 2건(seed 1 + holdout 1). 미달이면 job 을 띄우지 않는다.
     if len(prepared) < 2:
         raise Exception("최적화에는 (질의, 응답) 예시가 최소 2건 필요합니다")
+    if external_job_id:
+        # SDS 는 이미지 없이는 호출 자체가 실패한다 → job 을 띄우기 전에 막는다.
+        #   (띄우고 나서 실패하면 원인이 컨테이너 로그 안쪽에 묻힌다)
+        missing = [ex["query"] for ex in prepared if ex["query"] not in example_media]
+        if missing:
+            raise Exception("외부 SDS 배포의 최적화는 예시마다 이미지가 필요합니다 "
+                            f"— {len(missing)}건에 이미지가 없습니다")
 
     _model_json = {}
     try:
@@ -3484,8 +3642,23 @@ async def start_prompt_optimization(playground_id, examples=None, dataset_id=Non
     except Exception:
         traceback.print_exc()
 
+    # 제안자(메타) LM. external(VLM) 대상은 필수 — 대상 모델이 instruction 을 제안할 수
+    #   없어 지정하지 않으면 컨테이너가 AdapterParseError 로 죽는다(실측: optimization 14).
+    proposer_url = None
+    if proposer_playground_id:
+        proposer_url = await _resolve_proposer_llm_url(proposer_playground_id, pg)
+    elif external_job_id:
+        raise Exception("외부 SDS 배포의 최적화에는 제안자(텍스트 LLM) 배포 지정이 필요합니다 "
+                        "— 대상 VLM 은 instruction 제안을 수행할 수 없습니다")
+
     params = {"llm_url": _shim_llm_url(playground_id), "examples": prepared,
               "metric": metric or "token_f1", "rounds": int(rounds or 0)}
+    if proposer_url:
+        params["proposer_llm_url"] = proposer_url
+    if external_job_id:
+        # 외부(SDS VLM)는 dspy 의 구조화 출력 계약(`[[ ## response ## ]]`)을 지키지 않고
+        #   산문만 낸다 → 단일 출력 Predict + 관대한 파서로 원문을 그대로 채점하게 한다.
+        params["raw_task_output"] = True
     body = {"manifest_name": settings.PROMPT_OPT_MANIFEST_NAME,
             "manifest_version": settings.PROMPT_OPT_MANIFEST_VERSION,
             "workspace_id": int(workspace_id), "params": params}
@@ -3498,11 +3671,18 @@ async def start_prompt_optimization(playground_id, examples=None, dataset_id=Non
     if not job_id:
         raise Exception("최적화 job 등록 응답에 job_id 가 없습니다")
 
+    # 미디어를 예시와 함께 영속한다 — 파드가 재시작해도 shim 이 이미지를 되찾아야
+    #   진행 중인 최적화가 이어진다(_sds_media_for 의 DB 폴백 경로).
+    persisted = [{**ex, **(example_media.get(ex["query"]) or {})} for ex in prepared]
+    if external_job_id:
+        _SDS_MEDIA_CACHE[playground_id] = {
+            "by_query": example_media,
+            "default": next(iter(example_media.values()), None)}
     ok, opt_id = await db.insert_prompt_optimization(
         workspace_id=workspace_id, playground_id=playground_id, job_id=job_id,
         model_id=_model_json.get("model_allm_id"),
         commit_id=_model_json.get("model_allm_commit_id"),
-        metric=params["metric"], examples=prepared, status="running")
+        metric=params["metric"], examples=persisted, status="running")
     if not ok:
         # job 은 이미 떴는데 이력 행이 없다 = 결과를 회수할 수도, 사용자가 취소할 수도
         # 없는 orphan 이다. 그대로 두면 대상 GPU 에 수백 회 추론을 던지며 끝까지 돈다
@@ -3575,6 +3755,10 @@ async def get_prompt_optimization(optimization_id, playground_id=None):
         await db.update_prompt_optimization_result(
             optimization_id=optimization_id, status=status, result=payload,
             finished=status in _PROMPT_OPT_TERMINAL, error_message=error_message)
+        # terminal 이면 SDS 미디어 캐시를 비운다 — 이 캐시는 진행 중 shim 호출용이라
+        #   종료 후엔 쓸모가 없고, 남겨두면 base64 가 워커 메모리에 무기한 누적된다.
+        if status in _PROMPT_OPT_TERMINAL and playground_id:
+            _forget_sds_media(playground_id)
         row = await db.get_prompt_optimization(optimization_id=optimization_id)
     return row
 
@@ -3648,6 +3832,91 @@ async def recover_prompt_optimizations():
         _spawn_prompt_optimization_poller(r.get("id"), r.get("playground_id"))
     if rows:
         print(f"[prompt-opt] 미완료 최적화 {len(rows)} 건 폴링 재개")
+
+
+async def get_prompt_optimization_state(playground_id):
+    """추론 화면 토글용 read-model — "지금 켜져 있나 / 실제로 먹고 있나"를 한 번에 답한다.
+
+    **왜 별도 엔드포인트인가**: FE 가 목록+상세를 둘 다 불러도 알 수 없는 상태가 하나
+    있다 — *활성인데 주입은 안 되는* 상태. 프롬프트는 특정 model/commit 을 상대로
+    탐색된 산출물이라 배포 모델을 바꾸면 _active_prompt_text 가 조용히 주입을 건너뛴다
+    (_prompt_matches_current_model). 목록에는 is_active=1 만 보이므로 토글은 ON 인데
+    추론에는 안 먹는다. 설정 화면에서는 각주였지만 추론 화면에서는 **토글이 곧 기능**
+    이라 그대로 두면 UI 가 거짓말을 한다 → effective/stale_reason 으로 드러낸다.
+    supported(외부 컨테이너 배포 여부)도 BE 의 실행 차단 규칙과 같은 판정을 써야
+    FE 가 규칙을 복제하지 않는다.
+
+    비종료 행 갱신은 list_prompt_optimizations 가 이미 하므로 그대로 재사용한다 —
+    패널 폴링이 이 호출 하나로 끝난다(목록·상세 분리 호출 불필요).
+
+    조회 실패는 화면을 막지 않는다 — 최적화는 부가 기능이므로 보수적 기본값으로 답한다.
+    """
+    pg = None
+    try:
+        pg = await db.get_playground(playground_id=playground_id)
+    except Exception:
+        traceback.print_exc()
+    # start_prompt_optimization 과 같은 판정 — 배포 JSON 이 있으면 내부·외부 모두 지원.
+    #   external(SDS)은 shim 이 이미지·AIS 를 붙여 호출하므로 예시에 미디어가 필요하다.
+    supported = bool(pg and pg.get("deployment"))
+    requires_media = bool(pg and _deployment_external_job_id(pg))
+
+    deployment_running = False
+    if supported:
+        try:
+            _status = (await get_playground_status(playground_id) or {}).get("status")
+            deployment_running = _status == TYPE.KUBE_POD_STATUS_RUNNING
+        except Exception:
+            traceback.print_exc()
+
+    # 조회 실패를 조용히 빈 목록으로 접지 않는다 — 스키마 드리프트(예: 002 미적용으로
+    #   error_message 컬럼 부재)면 "이력 없음"과 구분이 안 돼 원인이 화면에서 사라진다.
+    #   추론을 막지는 않되(부가 기능) 사유는 history_error 로 올려보낸다.
+    history_error = None
+    try:
+        rows = await list_prompt_optimizations(playground_id) or []
+    except Exception as e:
+        traceback.print_exc()
+        rows = []
+        history_error = str(e)[:300]
+    # 목록은 id DESC — rows[0] 이 최신 실행이다(패널의 진행 카드가 이걸 쓴다).
+    #   전체를 history 로 함께 내려 이력 표를 별도 호출 없이 그린다. _LIST_COLS 가
+    #   큰 텍스트(system_prompt/demos/examples)를 이미 제외하므로 페이로드는 작다.
+    running = any(r.get("status") not in _PROMPT_OPT_TERMINAL for r in rows)
+    latest_completed = next((r for r in rows if r.get("status") == "completed"), None)
+
+    active_row = None
+    try:
+        active_row = await db.get_active_prompt_optimization(playground_id=playground_id)
+    except Exception:
+        traceback.print_exc()
+
+    effective, stale_reason = False, None
+    if active_row:
+        effective = await _prompt_matches_current_model(playground_id, active_row, pg)
+        if not effective:
+            stale_reason = "model_changed"
+
+    return {
+        "supported": supported,
+        # true 면 예시마다 이미지(+AIS)를 받아야 한다 — SDS 는 텍스트만으로 추론 불가.
+        "requires_media": requires_media,
+        "deployment_running": deployment_running,
+        # 토글의 표시 상태 = 활성 행 존재 여부(적용됨). effective 는 "실제 주입 여부".
+        "enabled": bool(active_row),
+        "active_optimization_id": (active_row or {}).get("id"),
+        "active_system_prompt": (active_row or {}).get("system_prompt"),
+        "effective": effective,
+        "stale_reason": stale_reason,
+        "running": running,
+        # 이력 전체(최신순). 표에서 과거 산출물을 골라 적용할 수 있어야 한다 —
+        # 토글은 "최신 완료본" 만 적용하므로 그것만으로는 되돌릴 방법이 없다.
+        "history": rows,
+        # 목록 조회가 실패한 사유(정상이면 None). "이력 없음"과 "조회 실패"를 구분한다.
+        "history_error": history_error,
+        # 토글 ON 이 적용할 대상 — 가장 최근 완료본.
+        "latest_completed_id": (latest_completed or {}).get("id"),
+    }
 
 
 async def set_prompt_optimization_active(playground_id, optimization_id):

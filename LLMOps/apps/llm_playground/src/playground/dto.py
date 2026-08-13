@@ -367,6 +367,11 @@ class StartPromptOptimizationInput(BaseModel):
     rounds: Optional[int] = Field(
         default=0, ge=0, le=3,
         description="0=빠른 모드(합성 예시 증강 생략). 클수록 대상 모델 추론량·소요시간 증가")
+    proposer_playground_id: Optional[int] = Field(
+        default=None,
+        description=("instruction 제안·reflection·예시생성을 맡을 **텍스트** 배포의 playground id. "
+                     "VLM(외부 SDS) 대상 최적화는 그 모델이 구조화 출력을 못 내 필수. "
+                     "URL 이 아니라 id 를 받는다 — 서버가 shim URL 을 조립해 SSRF 를 막는다."))
 
 
 class SetActivePromptOptimizationInput(BaseModel):

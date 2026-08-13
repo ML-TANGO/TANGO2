@@ -165,6 +165,7 @@ def run_mipro(
     holdout: Sequence[Example],
     *,
     lm: Any,
+    prompt_lm: Any = None,
     instruction: str | None = None,
     auto: str = "light",
     max_demos: int = 4,
@@ -189,7 +190,12 @@ def run_mipro(
         optimizer = _MIPROv2RandomSubsets(
             metric=_wrap_metric(task),
             auto=auto,
-            prompt_model=lm,
+            # prompt_model 은 **과제를 푸는 LM 이 아니라** 새 instruction 을 제안하는
+            #   메타 LM 이다(GroundedProposer → proposed_instruction 필드를 JSON 으로
+            #   내놔야 한다). 대상이 VLM(SDS)이면 이 계약을 지킬 수 없어
+            #   AdapterParseError 로 죽으므로, 텍스트 LM 을 따로 물릴 수 있게 한다.
+            #   미지정이면 종전대로 과제 LM 을 그대로 쓴다.
+            prompt_model=prompt_lm or lm,
             task_model=lm,
             max_bootstrapped_demos=max_demos,
             max_labeled_demos=max_demos,

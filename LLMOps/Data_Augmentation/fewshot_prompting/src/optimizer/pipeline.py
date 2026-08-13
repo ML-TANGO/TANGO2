@@ -70,6 +70,9 @@ def run_optimization(
     generation_lm: Any,
     reflection_lm: Any,
     task_lm: Any,
+    # instruction 제안(MIPRO GroundedProposer)용 메타 LM. 과제 LM 이 VLM(SDS)이면
+    #   구조화 출력 계약을 못 지켜 죽으므로 텍스트 LM 을 따로 물린다. None 이면 과제 LM.
+    proposer_lm: Any = None,
     config: OptimizeConfig | None = None,
 ) -> OptimizeResult:
     """Run the pipeline and return the optimized program + instruction + demos."""
@@ -91,6 +94,7 @@ def run_optimization(
         seeds,
         holdout,
         lm=task_lm,
+        prompt_lm=proposer_lm,
         instruction=None,
         auto="light",  # the pre-pass always runs the fast schedule
         max_demos=max(1, int(len(seeds) * 4 / 5)),
@@ -148,6 +152,7 @@ def run_optimization(
             combined,
             holdout,
             lm=task_lm,
+            prompt_lm=proposer_lm,
             instruction=instruction,
             auto=config.mipro_auto,
             max_demos=max(1, len(pool)),

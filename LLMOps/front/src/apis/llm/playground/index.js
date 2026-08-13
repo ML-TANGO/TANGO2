@@ -713,6 +713,7 @@ export const postPromptOptimization = async ({
   sample_count,
   metric = 'token_f1',
   rounds = 0,
+  proposer_playground_id = null,
 }) => {
   const res = await callApi({
     url: `playgrounds/${playground_id}/prompt-optimization`,
@@ -724,7 +725,22 @@ export const postPromptOptimization = async ({
       sample_count,
       metric,
       rounds,
+      // ⚠️ body 를 키로 **열거**하는 구조라, 여기 빠진 파라미터는 호출부가 넘겨도
+      //    조용히 사라진다. VLM(SDS) 최적화는 이 값이 없으면 BE 가 거부하므로
+      //    누락 시 "UI 로는 실행 자체가 안 되는" 무증상 결함이 된다.
+      proposer_playground_id,
     },
+  });
+  return res;
+};
+
+// 추론 화면 토글 전용 read-model — 진행 상태·최신 실행·활성 산출물을 한 번에 준다.
+//   effective=false 는 "적용은 돼 있는데 배포 모델이 바뀌어 실제로는 주입되지 않는"
+//   상태다. 목록만으로는 알 수 없어(is_active=1 만 보임) 토글이 거짓말을 하게 된다.
+export const getPromptOptimizationState = async (playground_id) => {
+  const res = await callApi({
+    url: `playgrounds/${playground_id}/prompt-optimization/state`,
+    method: 'get',
   });
   return res;
 };

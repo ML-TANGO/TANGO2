@@ -308,6 +308,9 @@ async def post_llm(request: Request):
     test_dataset_filename = data.get("test_dataset_filename")
     test_question = data.get("test_question")
     session_id = data.get("session_id")
+    # 프롬프트 최적화 산출물(선택) — vLLM 래퍼(playground.py)와 동일 규약. 엔진이 달라도
+    #   플랫폼은 같은 요청을 보내므로 두 래퍼가 같은 조립을 해야 결과가 갈리지 않는다.
+    system_prompt = data.get("system_prompt")
     result = []
     try:
         if test_type == "dataset":
@@ -317,7 +320,8 @@ async def post_llm(request: Request):
         for _input in test_input:
             _, db_id = await db.insert_playground_test(playground_id=settings.LLM_PLAYGROUND_ID, type=test_type)
             start_time = time.time()
-            output = await run_playground(test_input=_input, session_id=session_id, db_id=db_id)
+            _prompt = f"{system_prompt}\n\nQuery: {_input}\nResponse:" if system_prompt else _input
+            output = await run_playground(test_input=_prompt, session_id=session_id, db_id=db_id)
             end_time = time.time()
             item = {"input": _input, "output": output, "time": end_time - start_time}
             result.append(item)

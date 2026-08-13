@@ -31,6 +31,7 @@ from collections.abc import Sequence
 from typing import Any
 
 import dspy
+from dspy.adapters.chat_adapter import ChatAdapter
 
 from src.optimizer.task import Example
 
@@ -119,6 +120,28 @@ _METRICS = {"token_f1": token_f1, "bert_score": _bert_f1}
 # --------------------------------------------------------------------- #
 
 
+class PassthroughChatAdapter(ChatAdapter):
+    """구조화 출력을 못 내는 LM(파인튜닝 VLM 등)을 위한 관대한 파서.
+
+    dspy 는 LM 이 `[[ ## response ## ]]` 같은 필드 마커를 지켜 준다고 전제하지만,
+    특정 과제로 파인튜닝된 모델(예: SDS 해상 VLM)은 그냥 산문을 낸다. 그러면
+    ChatAdapter/JSONAdapter 가 AdapterParseError 로 죽어 최적화 자체가 불가능하다.
+
+    표준 파싱을 **먼저** 시도하고, 실패했을 때 출력 필드가 하나뿐인 시그니처에 한해
+    응답 원문을 그 필드로 넘긴다. 필드가 여럿이면 어느 조각이 무엇인지 알 수 없으므로
+    그대로 올려보낸다(조용히 틀린 값을 만들지 않는다).
+    """
+
+    def parse(self, signature, completion):
+        try:
+            return super().parse(signature, completion)
+        except Exception:
+            outputs = list(signature.output_fields)
+            if len(outputs) != 1:
+                raise
+            return {outputs[0]: (completion or "").strip()}
+
+
 class FewShotTask:
     """A generic (query -> response) text task for the optimizer.
 
@@ -134,9 +157,13 @@ class FewShotTask:
         name: str = "fewshot",
         metric_name: str = "token_f1",
         supports_image: bool = False,
+        # 대상 LM 이 구조화 출력을 못 낼 때(파인튜닝 VLM). 단일 출력 시그니처 +
+        #   PassthroughChatAdapter 조합으로 응답 원문을 그대로 채점에 쓴다.
+        raw_output: bool = False,
     ) -> None:
         self.name = name
         self.supports_image = supports_image
+        self.raw_output = raw_output
         self._metric_fn = _METRICS.get(metric_name, token_f1)
         # Optimization is text-only; image (when present) is prepared but not a
         # generation/selection key — see module docstring.
@@ -145,7 +172,9 @@ class FewShotTask:
 
     def build_dspy_program(self, demos: Sequence[Example]) -> Any:
         signature = GenerateResponseVLM if self.supports_image else GenerateResponse
-        program = dspy.ChainOfThought(signature)
+        # ChainOfThought 는 outputs=[reasoning, response] 라 관대한 파서도 못 구한다
+        #   (원문을 어느 필드에 넣을지 알 수 없음) → raw 모드는 단일 출력 Predict.
+        program = dspy.Predict(signature) if self.raw_output else dspy.ChainOfThought(signature)
         dspy_demos = []
         for d in demos:
             fields = {"query": d.inputs.get("query", ""), "response": d.outputs.get("response", "")}

@@ -17,7 +17,7 @@ from typing import Any
 
 import dspy
 
-from src.fewshot_task import FewShotTask
+from src.fewshot_task import FewShotTask, PassthroughChatAdapter
 from src.optimizer import Example, OptimizeConfig, run_optimization
 from src.schemas import RunParams, RunResult
 
@@ -117,9 +117,27 @@ def optimize_system_prompt(
 
     print(f"[service] model={model} url={llm_url} examples={len(params.examples)} vlm={params.vlm}")
 
+    # 메타 LM 분리 — instruction 제안·reflection·예시 생성은 구조화 출력을 요구한다.
+    #   과제 LM 이 VLM(SDS)이면 그 계약을 못 지켜 AdapterParseError 로 죽으므로,
+    #   proposer_llm_url 이 오면 그쪽 텍스트 LM 에 메타 3역을 맡긴다.
+    #   미지정이면 종전과 동일하게 세 LM 모두 llm_url 을 쓴다.
+    meta_url = (params.proposer_llm_url or "").rstrip("/") or llm_url
+    if meta_url != llm_url:
+        meta_model = params.proposer_model or _detect_model(meta_url)
+        if not meta_model:
+            raise ValueError(
+                f"could not determine proposer model id; pass 'proposer_model' "
+                f"or ensure {meta_url}/models is reachable."
+            )
+    else:
+        meta_model = model
+    meta_model_id = f"openai/{meta_model}" if not meta_model.startswith("openai/") else meta_model
+    print(f"[service] meta(proposer/reflection/generation) model={meta_model} url={meta_url}")
+
     task_lm = dspy.LM(model=model_id, api_base=llm_url, api_key=api_key, temperature=0.0)
-    reflection_lm = dspy.LM(model=model_id, api_base=llm_url, api_key=api_key, temperature=0.7)
-    generation_lm = _OpenAIChatLM(model=model, base_url=llm_url, api_key=api_key, temperature=0.9)
+    proposer_lm = dspy.LM(model=meta_model_id, api_base=meta_url, api_key=api_key, temperature=0.0)
+    reflection_lm = dspy.LM(model=meta_model_id, api_base=meta_url, api_key=api_key, temperature=0.7)
+    generation_lm = _OpenAIChatLM(model=meta_model, base_url=meta_url, api_key=api_key, temperature=0.9)
 
     examples = [
         Example(
@@ -131,7 +149,14 @@ def optimize_system_prompt(
     seeds, holdout = _split(examples, params.holdout_fraction, params.seed)
     print(f"[service] split: {len(seeds)} seeds / {len(holdout)} holdout")
 
-    task = FewShotTask(metric_name=params.metric, supports_image=params.vlm)
+    # 대상이 구조화 출력을 못 내면 단일 출력 Predict + 관대한 파서를 함께 건다.
+    #   어댑터는 표준 파싱을 먼저 시도하므로 제안자(qwen)처럼 형식을 지키는 LM 에는
+    #   아무 영향이 없다 — 실패했을 때만 원문을 단일 출력 필드로 넘긴다.
+    if params.raw_task_output:
+        dspy.configure(adapter=PassthroughChatAdapter())
+        print('[service] raw_task_output=True — Predict + PassthroughChatAdapter')
+    task = FewShotTask(metric_name=params.metric, supports_image=params.vlm,
+                       raw_output=params.raw_task_output)
     config = OptimizeConfig(
         rounds=params.rounds,
         mipro_auto=params.mipro_auto,
@@ -151,6 +176,7 @@ def optimize_system_prompt(
         generation_lm=generation_lm,
         reflection_lm=reflection_lm,
         task_lm=task_lm,
+        proposer_lm=proposer_lm,
         config=config,
     )
     _progress(95)

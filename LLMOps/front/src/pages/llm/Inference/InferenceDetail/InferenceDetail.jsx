@@ -10,11 +10,13 @@ import Tab from '@src/components/molecules/Tab';
 import TestComponent from '@src/components/Modal/PlaygroundTestModal/TestComponent';
 import DualDirectInference from './DualDirectInference';
 import BatchInference from './BatchInference';
+import PromptOptimizationPanel from './PromptOptimizationPanel';
 import {
   getDetailPlayground,
   getPlaygroundStatusSync,
 } from '@src/apis/llm/playground';
 import useIntervalCall from '@src/hooks/useIntervalCall';
+import { SHOW_DUAL_DEPLOY } from '@src/featureFlags';
 import { startPath } from '@src/store/modules/breadCrumb';
 import { STATUS_SUCCESS } from '@src/network';
 
@@ -47,7 +49,7 @@ const InferenceDetail = () => {
   const match = useRouteMatch();
   const { id: workspaceId, did: playgroundId } = match.params;
 
-  const [info, setInfo] = useState(null); // { name, owner }
+  const [info, setInfo] = useState(null); // { name }
   const [trainingType, setTrainingType] = useState('');
   const [dual, setDual] = useState(null); // 이중 세션이면 { prompt_gen_model_name, inference_model_name, ... }
   const [loading, setLoading] = useState(true);
@@ -101,10 +103,7 @@ const InferenceDetail = () => {
     const { result, status, error, message } =
       await getDetailPlayground(playgroundId);
     if (status === STATUS_SUCCESS) {
-      setInfo({
-        name: result?.info?.name ?? '-',
-        owner: result?.info?.owner ?? '-',
-      });
+      setInfo({ name: result?.info?.name ?? '-' });
       setTrainingType(result?.model?.training_type ?? '');
       setDual(result?.dual ?? null);
       setLoading(false);
@@ -133,22 +132,23 @@ const InferenceDetail = () => {
 
   return (
     <div className={cx('inference-detail')}>
-      {/* 뒤로 라벨 — 목적지(InferenceMenu) h1 과 같은 키 재사용 */}
+      {/* 뒤로 라벨 — 목적지(InferenceMenu) h1 과 같은 키 재사용.
+          우측 슬롯에는 단일/이중 구분 배지만 남는다(소유자 표시 제거). 이중을 감춘
+          동안에는 모든 배포가 '단일 모델'이라 정보량이 0이라 플래그로 함께 가린다.
+          ⚠️ 빈 fragment 를 넘기면 DeployDetailHeader 가 truthy 로 보고 빈 div 를
+             그린다(`{right && <div…>}`) → 보여줄 게 없으면 null 을 넘긴다. */}
       <DeployDetailHeader
         title={info?.name ?? ''}
         onBack={goBack}
         backLabel={t('Inference')}
         right={
-          <>
+          SHOW_DUAL_DEPLOY ? (
             <Badge
               type={isDual ? 'blue' : 'gray'}
               label={isDual ? '이중 모델' : '단일 모델'}
               size='sm'
             />
-            {info?.owner && info.owner !== '-' && (
-              <span className={cx('owner')}>{info.owner}</span>
-            )}
-          </>
+          ) : null
         }
       />
 
@@ -170,40 +170,61 @@ const InferenceDetail = () => {
             />
           </div>
 
-          {/* 배포(파드) 상태 — 준비 전에는 추론 입력을 잠금(질의 실패 방지) */}
-          <div className={cx('status-card')}>
-            <span className={cx('status-item')}>
-              <span className={cx('status-label')}>배포 상태</span>
-              {statusBadge(sessionStatus)}
-            </span>
-            {isDual && (
-              <>
-                <span className={cx('status-item')}>
-                  <span className={cx('status-label')}>
-                    LLM1 · 프롬프트 생성
-                    {dual?.prompt_gen_model_name
-                      ? ` (${dual.prompt_gen_model_name})`
-                      : ''}
-                  </span>
-                  {statusBadge(childStatus)}
-                </span>
-                <span className={cx('status-item')}>
-                  <span className={cx('status-label')}>
-                    LLM2 · 추론
-                    {dual?.inference_model_name
-                      ? ` (${dual.inference_model_name})`
-                      : ''}
-                  </span>
-                  {statusBadge(parentStatus)}
-                </span>
-              </>
-            )}
-            {isLocked && (
-              <span className={cx('status-hint')}>
-                파드가 기동 중입니다. 준비되면 자동으로 추론이 활성화됩니다.
+          {/* 배포(파드) 상태 — **정상일 때는 감춘다.**
+              추론 목록이 status==='running' 만 노출하므로 정상 진입에서는 이 배지가
+              항상 'running' 이라 정보량이 0 이다. 다만 폴링은 계속 돌아서, 보고 있는
+              동안 파드가 죽거나(전이) 상태를 못 읽으면 그때만 카드가 나타난다 —
+              카드를 아예 지우면 그 순간 화면에 아무 단서도 남지 않는다.
+              firstPollDone 을 함께 보는 이유: 첫 폴링 전 sessionStatus 는 null 이라
+              조건만으로는 진입할 때마다 '확인 중' 카드가 한 번 깜빡인다. */}
+          {firstPollDone && sessionStatus !== 'running' && (
+            <div className={cx('status-card')}>
+              <span className={cx('status-item')}>
+                <span className={cx('status-label')}>배포 상태</span>
+                {statusBadge(sessionStatus)}
               </span>
-            )}
-          </div>
+              {isDual && (
+                <>
+                  <span className={cx('status-item')}>
+                    <span className={cx('status-label')}>
+                      LLM1 · 프롬프트 생성
+                      {dual?.prompt_gen_model_name
+                        ? ` (${dual.prompt_gen_model_name})`
+                        : ''}
+                    </span>
+                    {statusBadge(childStatus)}
+                  </span>
+                  <span className={cx('status-item')}>
+                    <span className={cx('status-label')}>
+                      LLM2 · 추론
+                      {dual?.inference_model_name
+                        ? ` (${dual.inference_model_name})`
+                        : ''}
+                    </span>
+                    {statusBadge(parentStatus)}
+                  </span>
+                </>
+              )}
+              {isLocked && (
+                <span className={cx('status-hint')}>
+                  파드가 기동 중입니다. 준비되면 자동으로 추론이 활성화됩니다.
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* 프롬프트 최적화 — 추론 입력 바로 위의 ON/OFF 토글 + few-shot 패널.
+              실시간·일괄 모두에 적용된다(일괄은 서빙 래퍼가 샘플마다 조립 —
+              래퍼 계약의 system_prompt).
+              이중(dual)에서만 감춘다: LLM1 이 질의마다 프롬프트를 생성하므로 고정
+              시스템 프롬프트와 역할이 충돌한다.
+              external(협력기관 컨테이너) 배포 제외는 패널이 BE state(supported)로
+              스스로 판단한다 — 차단 규칙을 FE 에 복제하지 않기 위해. */}
+          {!isDual && (
+            <div className={cx('prompt-opt-cont')}>
+              <PromptOptimizationPanel playgroundId={playgroundId} />
+            </div>
+          )}
 
           {/* 배치 패널은 결과 표가 다열이라 전폭(wide) — 실시간은 모달 유래 720px 유지. */}
           <div
