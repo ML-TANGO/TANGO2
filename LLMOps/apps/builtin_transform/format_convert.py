@@ -26,6 +26,15 @@ _OUTPUT_KEYS = ("output", "response", "answer", "completion", "label", "target",
 _TEXT_KEYS = ("text", "content", "sentence", "document", "body")
 _SUPPORTED_EXTS = (".csv", ".txt", ".parquet")
 _MAX_FIELD = 100000  # 단일 필드 길이 cap(이상치 방어)
+# 텍스트 입력 인코딩 후보(순차 시도). 국내 공공데이터·Excel 내보내기 CSV 는 대부분
+# CP949 라 UTF-8 고정이면 첫 바이트에서 UnicodeDecodeError 로 파일 전체가 스킵된다.
+# CP949 는 EUC-KR 상위호환이라 둘 다 커버.
+# ⚠️ UTF-8 을 먼저 두는 건 최선일 뿐 무해하지는 않다 — 현대 한글 11,172자 중 345자(3.1%)는
+# CP949 2바이트가 그대로 valid UTF-8 이라('짜'=b'\xc2\xa5' → '¥'), 그 대역 글자만으로 이뤄진
+# CP949 파일은 UTF-8 로 조용히 디코드돼 mojibake 가 된다. 폐쇄망이라 chardet 류 자동판별을
+# 쓸 수 없으므로 이 잔여 위험은 감수하되, 어떤 인코딩으로 읽었는지 항상 로그에 남긴다.
+_ENCODINGS = ("utf-8-sig", "cp949")
+_ENCODING_LABEL = "UTF-8 / CP949(EUC-KR)"
 
 
 def _pick(row, keys):
@@ -45,25 +54,43 @@ def _pick(row, keys):
     return None
 
 
+def _read_with_encoding(path, loader):
+    """loader(encoding) 을 _ENCODINGS 순서로 시도. 전부 실패하면 지원 인코딩을 알리며 ValueError."""
+    last_err = None
+    for enc in _ENCODINGS:
+        try:
+            result = loader(enc)
+        except UnicodeDecodeError as e:
+            last_err = e
+            continue
+        print(f"[format_convert] {os.path.basename(path)}: encoding={enc}", flush=True)
+        return result
+    raise ValueError(f"문자 인코딩을 인식할 수 없습니다(지원: {_ENCODING_LABEL}). "
+                     f"원본 오류: {last_err}")
+
+
 def _read_rows(path):
     """파일 → row(dict) 리스트. CSV/Parquet 는 표 행, TXT 는 줄당 {text:...}."""
     ext = os.path.splitext(path)[1].lower()
     if ext == ".csv":
         import pandas as pd
-        df = pd.read_csv(path, dtype=str, keep_default_na=False)
+        df = _read_with_encoding(
+            path,
+            lambda enc: pd.read_csv(path, dtype=str, keep_default_na=False, encoding=enc))
         return df.to_dict(orient="records")
     if ext == ".parquet":
         import pandas as pd
-        df = pd.read_parquet(path)
+        df = pd.read_parquet(path)  # 바이너리 포맷(문자열은 내부 UTF-8) — 인코딩 후보 불필요
         return df.astype(str).to_dict(orient="records")
     if ext == ".txt":
-        rows = []
-        with open(path, encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if line:
-                    rows.append({"text": line})
-        return rows
+        def _load(enc):
+            # 파일 객체를 직접 줄 반복(스트리밍). `f.read()` + `splitlines()` 는 ① 원문 전체와
+            # 줄 리스트를 동시에 들고 있어 피크 메모리가 배로 늘고 ② splitlines() 가
+            # \x0b·\x0c·\x1c~\x1e·\x85·U+2028/2029 에서도 줄을 쪼개 기존 레코드 경계를 바꾼다.
+            # 디코드 실패는 반복 도중 나므로 with 안에서 리스트로 소진해야 폴백이 걸린다.
+            with open(path, encoding=enc) as f:
+                return [{"text": s} for s in (line.strip() for line in f) if s]
+        return _read_with_encoding(path, _load)
     return []
 
 
