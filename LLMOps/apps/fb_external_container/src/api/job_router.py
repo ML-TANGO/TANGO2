@@ -190,6 +190,13 @@ async def get_job_status(
     """
     record = tracker.get(job_id)
     if record is None:
+        # in-memory 에 없으면 DB tombstone / 미복구 active row 로 폴백.
+        # 404 는 "이런 job 은 존재한 적 없다"에만 쓴다 — 끝난 job 에 404 를
+        # 주면 호출자가 "아직 모른다"로 오해해 폴링을 멈추지 않는다.
+        # (execution_mode=sync 는 애초에 persist 대상이 아니라 여전히 404 →
+        #  호출자 측에서 종료로 처리해야 한다. lifecycle._db_persist 참조.)
+        record = await tracker.get_persisted(job_id)
+    if record is None:
         raise NotFoundError(f"job {job_id} not found")
     # codex Med-1: 매 호출마다 partner /health probe 하면 partner_http 의
     # 300s timeout 때문에 느린/멈춘 partner 가 status 호출 자체를 stall 시킨다

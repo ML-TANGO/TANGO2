@@ -62,6 +62,30 @@ async def update_playground(playground_id, **kwargs):
         traceback.print_exc()
         return False
 
+async def clear_playground_external_job_id(playground_id, expected_job_id, deployment_json):
+    """deployment JSON 을 **현재 external_job_id 가 기대값일 때만** 교체(compare-and-swap).
+
+    호출자가 행을 다시 읽어 비교하더라도 그 read 와 write 사이에 재배포가 끼어들 수
+    있다(TOCTOU). 그 창에서 blind write 를 하면 방금 기록된 **새** job id 까지 지워
+    막 뜬 배포가 고아가 되고 UI 는 '중지'로 되돌아간다. 조건을 SQL 에 실어 그 창을 없앤다.
+
+    commit_query 가 rowcount 를 돌려주지 않아 "정말 지웠는지"는 알 수 없다 —
+    호출자는 이 반환값을 성공/실패가 아니라 "예외 없이 시도했다"로만 해석해야 한다.
+    """
+    try:
+        sql = """
+                UPDATE playground SET deployment=%s
+                WHERE id=%s
+                  AND JSON_UNQUOTE(JSON_EXTRACT(deployment, '$.external_job_id')) = %s
+                """
+        await commit_query(query=sql, params=(deployment_json, playground_id,
+                                              str(expected_job_id)))
+        return True
+    except:
+        traceback.print_exc()
+        return False
+
+
 async def delete_playground(id_list):
     if len(id_list) == 0:
         return True

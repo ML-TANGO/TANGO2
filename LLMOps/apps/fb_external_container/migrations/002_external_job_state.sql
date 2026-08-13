@@ -4,10 +4,14 @@
 --   mysql -h $DB_HOST -u $DB_USER -p $DB_NAME < 002_external_job_state.sql
 --
 -- Purpose: BFF (fb_external_container) restart 시 in-flight 한 partner
--- job 의 상태를 복원하기 위한 테이블. ``JobTracker`` 가 active record 만
--- INSERT 하고 terminal (completed / failed / cancelled) 도달 시 DELETE.
--- ``startup_recovery()`` 는 이 테이블의 모든 row 로 JobRecord 를 재구성
--- 하고 polling task 를 재시작한다.
+-- job 의 상태를 복원하기 위한 테이블. ``JobTracker`` 가 async job 을
+-- INSERT 하고 terminal (completed / failed / cancelled) 도달 시 **status 만
+-- 갱신해 tombstone 으로 남긴다** (DELETE 하지 않는다 — 재시작 후 조회가 404
+-- 대신 터미널 상태를 답해야 호출자가 폴링을 멈춘다). ``startup_recovery()``
+-- 는 non-terminal row 만 JobRecord 로 재구성해 polling task 를 재시작하고,
+-- 보존기간(7일) 지난 tombstone 은 ``prune_terminal()`` 이 정리한다.
+-- execution_mode=sync (infer 서빙) 은 persist 대상이 아니다 (lifecycle
+-- ``_db_persist`` 참조) — 재시작 후 추적 상실은 호출자 측에서 흡수한다.
 --
 -- ``model_id`` 는 ``jonathan_llm.model.id`` 를 application-level 으로
 -- reference 한다 (cross-schema FK 회피, 운영 안정성 우선).

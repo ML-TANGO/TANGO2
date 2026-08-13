@@ -817,6 +817,35 @@ async def update_playground_description(playground_id, description):
         traceback.print_exc()
         return False
 
+async def _clear_stale_external_job_id(playground_id, job_id):
+    """종료된 external job 을 가리키는 dangling external_job_id 제거(self-heal).
+
+    참조를 끊지 않으면 SSE /status 루프(1초 주기)가 매번 BFF GET /jobs/{id} 를
+    때려 404 를 무한히 재시도한다 — 폴링을 끝내는 방법은 참조 제거뿐이다.
+    쓰기 직전에 행을 다시 읽어 job_id 가 그대로일 때만 지운다: 그사이
+    start_playground 가 새 job 을 기록했을 수 있어 blind write 면 방금 뜬 배포를
+    지워버린다. deployment_run 등 나머지 배포 설정은 보존(stop_playground 동형).
+    """
+    try:
+        fresh = await db.get_playground(playground_id=playground_id)
+        deployment_raw = (fresh or {}).get("deployment")
+        if not deployment_raw:
+            return False
+        deployment = json.loads(deployment_raw) or {}
+        if deployment.get("external_job_id") != job_id:
+            return False    # 그새 재배포됨 — 새 job_id 를 지우지 않는다
+        deployment.pop("external_job_id", None)
+        # 위 재조회만으로는 부족하다: 이 read 와 write 사이에도 재배포가 끼어들 수
+        # 있어(TOCTOU) blind UPDATE 면 방금 기록된 새 job id 까지 지운다. 같은 조건을
+        # SQL WHERE 에 실어 그 창을 닫는다.
+        return bool(await db.clear_playground_external_job_id(
+            playground_id=playground_id, expected_job_id=job_id,
+            deployment_json=json.dumps(deployment)))
+    except Exception:
+        traceback.print_exc()
+        return False
+
+
 async def get_playground_status(playground_id, _skip_dual=False):
     result = {"status" : "stop", "init_deployment" : False}
     """
@@ -885,6 +914,9 @@ async def get_playground_status(playground_id, _skip_dual=False):
                 if str(_job_result.get("status") or "").lower() in (
                     "cancelled", "failed", "completed",
                 ):
+                    # 종료 확정 — 이 job 을 더 볼 이유가 없다. dangling id 를
+                    # 끊어 SSE 루프가 BFF 를 계속 두드리지 않게 한다.
+                    await _clear_stale_external_job_id(playground_id, external_job_id)
                     result["status"] = TYPE.KUBE_POD_STATUS_STOP
                     result["init_deployment"] = False
                     return result
@@ -895,8 +927,12 @@ async def get_playground_status(playground_id, _skip_dual=False):
                 else:
                     result["status"] = TYPE.KUBE_POD_STATUS_INSTALLING
             except ExternalInferError as e:
-                # BFF 가 404 (job 없음 / cancel 됨) → stop 으로 환원
+                # BFF 가 404 (job 없음 / cancel 됨 / BFF 재시작으로 sync infer
+                # 추적 휘발) → stop 으로 환원 + dangling id 제거로 폴링 종료.
+                # 404 만 종료다: 5xx·네트워크 오류는 일시장애일 수 있어 id 를
+                # 보존하고 installing 을 유지해야 재시도가 가능하다 (아래 else).
                 if getattr(e, "status_code", 0) == 404:
+                    await _clear_stale_external_job_id(playground_id, external_job_id)
                     result["status"] = TYPE.KUBE_POD_STATUS_STOP
                     result["init_deployment"] = False
                 else:
@@ -2060,9 +2096,20 @@ async def stop_playground(playground_id, _dual_cascaded=False):
                 try:
                     await cancel_infer_job(external_job_id)
                 except ExternalInferError as e:
-                    print(f"외부 플레이그라운드 중지 실패 (playground_id={playground_id}): {e}")
-                    traceback.print_exc()
-                    return False
+                    # 404 = BFF 가 그 job 을 모른다(이미 정리됨 / BFF 재시작으로
+                    # sync infer 추적 휘발). 중지 목적은 이미 달성됐으므로 성공으로
+                    # 취급하고 아래 dangling id 정리로 진행한다 — 예전엔 여기서
+                    # return False 라 사용자에게 "cancel returned 404" 가 노출되고
+                    # id 가 남아 상태 폴링이 영구 404 를 찍었다.
+                    # 5xx·네트워크는 일시장애일 수 있어 실패 유지(id 보존 → 재시도).
+                    if getattr(e, "status_code", 0) != 404:
+                        print(f"외부 플레이그라운드 중지 실패 (playground_id={playground_id}): {e}")
+                        traceback.print_exc()
+                        return False
+                    print(
+                        f"외부 job {external_job_id} 이 BFF 에 없음(404) — "
+                        f"이미 중지된 것으로 처리 (playground_id={playground_id})"
+                    )
                 # 중지된 job 을 계속 가리키는 dangling id 제거. 재배포는
                 # start_playground 가 model.training_type=='external' 로 다시
                 # 파생해 새 job_id 를 기록하므로 이 키가 없어도 된다.

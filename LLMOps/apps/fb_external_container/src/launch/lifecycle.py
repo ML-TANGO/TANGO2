@@ -8,8 +8,10 @@ JobTracker owns three things per running job:
    states release K8s resources.
 
 SP-Ext.3: a ``JobStateRepository`` can be wired in via ``__init__`` to
-persist active records (insert at start, update on transitions, delete at
-terminal). When ``repository`` is None the tracker falls back to in-memory
+persist active records (insert at start, update on transitions, finalize —
+status-only, row kept as tombstone — at terminal so a restart can still
+answer "this job ended like this" instead of 404). When ``repository`` is
+None, or for ``execution_mode=sync``, the tracker falls back to in-memory
 only (dev / mock mode). The in-memory ``self._jobs`` dict remains the
 authoritative runtime view; DB is a write-through mirror for recovery.
 """
@@ -364,6 +366,38 @@ class JobTracker:
     def get(self, job_id: str) -> Optional[JobRecord]:
         return self._jobs.get(job_id)
 
+    async def get_persisted(self, job_id: str) -> Optional[JobRecord]:
+        """DB row 로부터 read-only JobRecord 복원 (in-memory 에 없을 때).
+
+        용도는 **조회 응답 전용** — ``self._jobs`` 에 넣지도, polling task 를
+        만들지도 않는다 (그건 startup_recovery 의 역할). 두 경우에 쓰인다:
+        1. terminal tombstone → 호출자에게 "이렇게 끝났다"를 답해 폴링 종료.
+        2. 아직 복구되지 않은 active row (예: DB 가 늦게 올라와 recovery 가
+           나중에 도는 구간) → pending/running 을 답해 성급한 실패 확정 방지.
+        row 자체가 없으면 None → 라우터가 404 (= 존재한 적 없음).
+        """
+        if self.repository is None:
+            return None
+        try:
+            snap = await self.repository.get(job_id)
+        except Exception:
+            logger.exception(
+                "JobStateRepository.get failed for %s — treating as unknown",
+                job_id,
+            )
+            return None
+        if snap is None:
+            return None
+        try:
+            return self._snapshot_to_record(snap)
+        except Exception:
+            logger.exception(
+                "snapshot → JobRecord reconstruction failed for %s "
+                "(manifest_version=%s)",
+                snap.job_id, snap.manifest_version,
+            )
+            return None
+
     def all(self) -> list[JobRecord]:
         return list(self._jobs.values())
 
@@ -454,9 +488,10 @@ class JobTracker:
                 status=ExternalContainerStatus.FAILED,
                 error=ExternalJobError(code="E_SCHEDULER_LAUNCH", message=str(e)),
             )
-            # provisional row 정리 — helm release 도 못 만들어졌으니
-            # recovery 가 잡을 게 없다. row 만 지움.
-            await self._repo_delete(record)
+            # provisional row 를 terminal(failed) 로 확정 — helm release 는
+            # 못 만들어졌으니 recovery 대상에서 빠지고(list_active 가 걸러냄),
+            # 이 job_id 를 폴링하는 호출자는 404 대신 failed 를 본다.
+            await self._repo_finalize(record)
             return job_id
 
         record.poll_task = asyncio.create_task(self._poll_loop(job_id))
@@ -781,11 +816,10 @@ class JobTracker:
                 record.job_id, record.helm_release, e,
             )
 
-        # SP-Ext.3: terminal 도달 — row 삭제 (active 만 남기는 invariant).
-        # uninstall 결과와 무관하게 항상 시도. delete 실패는 log 만, helm
-        # release 가 이미 빠진 상태라 orphan row 는 다음 BFF startup 의
-        # recovery 에서 "K8s 에 release 없음" 으로 정리되도록 추후 설계.
-        await self._repo_delete(record)
+        # SP-Ext.3: terminal 도달 — row 는 tombstone 으로 남기고 status 만
+        # terminal 로 갱신한다 (list_active 가 걸러 recovery 대상 아님).
+        # uninstall 결과와 무관하게 항상 시도. 실패는 log 만.
+        await self._repo_finalize(record)
 
     # ── SP-Ext.3 repository helpers (best-effort, never raise) ──────────
 
@@ -801,6 +835,13 @@ class JobTracker:
         sync 는 in-memory 로만 추적한다 — BFF restart 후 추적 상실은 허용
         (infer pod 은 Kong 으로 독립 서빙되며, 중지는 명시 cancel / helm
         uninstall). async (train/batch) 만 persist + recovery 대상.
+
+        ⚠️ 이 제외를 풀려면 _poll_loop 의 deadline 도 같이 고쳐야 한다:
+        sync 의 timeout_seconds 는 추론 1회 hard timeout(eva-vlm-infer=300s)
+        이라 started_at 기준 elapsed 를 빼는 현행 계산으로 복구하면 remaining=0
+        → _wait_until_ready 가 즉시 FAILED + helm uninstall → **정상 서빙 중인
+        pod 을 죽인다**. 재시작 후 sync 추적 상실은 호출자 측(playground)이
+        404/terminal 을 종료로 처리해 흡수한다.
         """
         if self.repository is None:
             return False
@@ -866,15 +907,23 @@ class JobTracker:
                 record.job_id,
             )
 
-    async def _repo_delete(self, record: JobRecord) -> None:
+    async def _repo_finalize(self, record: JobRecord) -> None:
+        """Terminal 도달을 persist — row 를 지우지 않고 status 만 갱신.
+
+        row 를 지우면 재시작 후 그 job 조회가 404 가 되고, 호출자는 404 를
+        "아직 모른다"로 오해해 영구 재시도한다. tombstone 을 남겨 두면
+        get_persisted 가 터미널 상태를 답할 수 있어 폴링이 종료된다.
+        """
         if not self._db_persist(record):
             return
         try:
-            await self.repository.delete(record.job_id)
+            await self.repository.finalize(
+                record.job_id, record.result.status.value,
+            )
         except Exception:
             logger.exception(
-                "JobStateRepository.delete failed for %s — orphan row may "
-                "remain; next BFF startup should clean it up",
+                "JobStateRepository.finalize failed for %s — row may stay "
+                "non-terminal; next BFF startup would re-poll it",
                 record.job_id,
             )
 
@@ -894,6 +943,20 @@ class JobTracker:
         """
         if self.repository is None:
             return 0
+        # 보존기간 지난 terminal tombstone 정리 — tombstone 은 재시작 후에도
+        # 터미널 상태를 답하기 위한 것이라 무한 보존할 필요가 없다. 실패는
+        # 무해하므로(다음 startup 에서 재시도) 복구 진행을 막지 않는다.
+        try:
+            pruned = await self.repository.prune_terminal()
+            if pruned:
+                logger.info(
+                    "startup recovery: pruned %d expired terminal tombstone(s)",
+                    pruned,
+                )
+        except Exception:
+            logger.exception(
+                "JobStateRepository.prune_terminal failed — tombstones kept"
+            )
         try:
             snapshots = await self.repository.list_active()
         except Exception:
