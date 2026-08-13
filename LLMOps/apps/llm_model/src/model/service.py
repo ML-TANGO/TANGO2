@@ -3142,6 +3142,16 @@ async def get_model_fine_tuning(model_id : int) -> dict:
                 "id": md["id"], "dataset_name": md["dataset_name"],
                 "model_file_path": dpath, "data_exist": await check_file_exists(file_path=full),
             })
+        # 자원 섹션(InstanceSetting) 용 실측값 — 아래 하우스(single LLM) 경로와 동일한 3단계.
+        # MM 은 하우스와 같은 POST models/fine-tuning/run → running_fine_tuning →
+        # update_model_fine_tuning_instance 를 타므로 model 행에 instance_id/instance_count 가
+        # 영속돼 값이 실재한다(external 은 external_job_id 만 쓰므로 None 유지가 맞다).
+        # instance_id 미배정(학습 이력 없음) 이면 하우스와 동일하게 {} → FE 가드가 대시 표시.
+        instance_info = db_instance.get_instance(instance_id=model_info["instance_id"])
+        resource_info = await workspace_resource.get_workspace_instance_total_info(instance_id=model_info["instance_id"], workspace_id=model_info["workspace_id"], instance_allocate=model_info["instance_count"], resource_limit=[{
+            "cpu_limit" : instance_info["cpu_allocate"]*model_info["instance_count"],
+            "ram_limit" : instance_info["ram_allocate"]*model_info["instance_count"],
+        }]) if  model_info["instance_id"] else {}
         return {
             "model_id" : model_info["id"],
             "model_name" : model_info["name"],
@@ -3155,7 +3165,7 @@ async def get_model_fine_tuning(model_id : int) -> dict:
             "model_datasets" : mm_dataset_parse,
             "model_config_file_list" : [],
             "latest_commit_info" : None,
-            "resource_info" : None,
+            "resource_info" : resource_info,
             "fine_tuning_config" : None,
         }
 
