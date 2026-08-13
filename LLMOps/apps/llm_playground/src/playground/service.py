@@ -1,4 +1,4 @@
-import traceback, json, subprocess, os, asyncio, aiofiles, httpx, base64, re
+import traceback, json, subprocess, os, asyncio, aiofiles, httpx, base64, re, time, uuid
 from huggingface_hub import login, model_info, HfApi, hf_hub_download
 from pydantic import BaseModel
 from typing import Optional, List
@@ -2829,6 +2829,16 @@ async def playground_test(playground_id, test_type, test_dataset_id, test_datase
                 int(r.get("my_ship", 0)) == 1 for r in ais_rows if isinstance(r, dict)
             ):
                 raise Exception("external_payload.ais_rows must contain at least one row with my_ship=1")
+            # 프롬프트 최적화 주입(SDS) — SDS 는 custom_prompt 가 곧 질문이다:
+            #   model_manager.py `question = custom_prompt or PROMPT_MAP[output_type]`.
+            #   즉 컨테이너의 PROMPT_MAP 은 기본값일 뿐이라 컨테이너 수정 없이 대체된다.
+            #   internal 처럼 Query:/Response: 로 조립하지 않는다 — VLM 은 이미지+AIS 를 보고
+            #   이 텍스트를 지시문으로 받으므로 원문이 맞다(따라서 응답 트리밍도 불필요).
+            #   요청이 custom_prompt 를 명시했으면 그것을 존중하고 없을 때만 주입한다.
+            if not payload.get("custom_prompt"):
+                _opt_prompt = await _active_prompt_text(playground_id)
+                if _opt_prompt:
+                    payload = {**payload, "custom_prompt": _opt_prompt}
             try:
                 raw = await run_inference(external_job_id, params=payload)
             except ExternalInferError as e:
@@ -2853,6 +2863,17 @@ async def playground_test(playground_id, test_type, test_dataset_id, test_datase
         # workspace_id = deployment_info.get("workspace_id")
         # test_url = f"http://deployment-llm-playground-{playground_id}--service.{TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=workspace_id)}:18555"
 
+        # 프롬프트 최적화 주입 — 활성 최적화가 있으면 질문 앞에 붙인다. 요청이 프롬프트를
+        #   싣지 않는 서버 파생 방식(dual 의 prompt_gen 링크와 동일 posture)이라 추론 DTO·FE
+        #   변경이 없다.
+        #   ⚠️ test_type=question 만 적용한다. dataset(일괄)은 아래 body 가 dataset_id/
+        #   filename 을 서빙 래퍼에 넘겨 래퍼가 데이터셋을 직접 읽어 샘플별로 추론하므로,
+        #   플랫폼이 각 샘플에 프롬프트를 조립할 여지가 없다(서빙 래퍼 계약 확장이 필요).
+        prompt_injected = False
+        if test_type == "question" and test_question:
+            test_question, prompt_injected = await _apply_active_prompt_optimization(
+                playground_id, test_question)
+
         # 테스트 실행
         try:
             async with httpx.AsyncClient() as client:
@@ -2865,6 +2886,9 @@ async def playground_test(playground_id, test_type, test_dataset_id, test_datase
                     raise Exception("Playground Model Error")
                 elif response.status_code == 200:
                     result = response.json()
+                    # 최적화 프롬프트를 주입한 경우만 few-shot 연속 생성분을 잘라낸다.
+                    if prompt_injected:
+                        result = _trim_fewshot_continuation(result)
                 else:
                     raise Exception(str(response.json()))
         except Exception as e:
@@ -3019,8 +3043,552 @@ async def get_jonathan_accel():
             if stop_bg() == "success":
                 await asyncio.sleep(1)
                 start_bg()
-        
+
         return status
     except Exception as e:
         traceback.print_exc()
         return "error"
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# OpenAI 호환 shim (프롬프트 최적화 컨테이너용)
+# ────────────────────────────────────────────────────────────────────────────
+# fewshot-prompt-optimizer 컨테이너는 llm_url 뒤에 /models·/chat/completions 를
+# 붙여 호출하는 OpenAI 호환 클라이언트다(dspy.LM + openai SDK). 서빙 pod 은 vLLM 을
+# 라이브러리로 임베드해서(EngineCore 는 내부 IPC 포트만 LISTEN) 앞단에 nginx→플랫폼
+# 래퍼만 노출하므로 OpenAI HTTP API 가 존재하지 않는다. 그래서 이중모델 추론으로 이미
+# 검증된 경로(_playground_test_url + _infer_question)를 OpenAI 규격으로 감싸 노출한다
+# — 서빙 이미지의 내부 포트·path 에 비의존이므로 이미지가 바뀌어도 영향받지 않는다.
+#
+# authZ 는 플랫폼 posture 그대로(workspace_access_check 비활성) — 대상은 playground_id
+# 로만 특정한다. 외부 노출은 Kong 리콘사일러의 /api/* 잠금이 담당하고, 이 경로는 클러스터
+# 내부 s2s 호출(최적화 job)만 사용한다.
+_SHIM_TIMEOUT = 300   # 최적화는 짧은 생성을 수백 회 → hang 시 job 전체가 멈추는 것 방지
+
+
+def _deployment_external_job_id(pg):
+    """playground 행의 deployment JSON 에서 external_job_id 를 꺼낸다(없으면 None).
+
+    external(협력기관 컨테이너) 배포인지 판별하는 기존 신호 — get_playground_status·
+    stop_playground·_clear_stale_external_job_id 가 모두 이 키로 분기한다.
+    """
+    try:
+        return (json.loads(pg.get("deployment") or "{}") or {}).get("external_job_id")
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
+async def _playground_internal_test_url(playground_id, pg=None):
+    """서빙 pod 의 워크스페이스-내부 svc URL — 클러스터 내부(s2s) 추론 경로.
+
+    `_playground_test_url` 은 인그레스(EXTERNAL_HOST:32080 = Kong NodePort)를 경유하는
+    브라우저용 URL 이라 내부 호출에 부적합하다 — 실측 결과 Kong 경유 POST 는 405 를
+    돌려주고, 같은 요청을 서빙 svc:18555 로 직접 보내면 200 이다. 여기서는 `playground_test`
+    (service.py 의 `# TODO test url -> 내부 kubernetes dns로 변경`)에 주석으로 남아 있던
+    내부 규칙을 상수 기반으로 실현한다. 브라우저 경로는 인그레스가 맞으므로 그대로 둔다.
+    """
+    pg = pg or await db.get_playground(playground_id=playground_id)
+    if not pg:
+        raise Exception(f"playground {playground_id} not found")
+    if not pg.get("deployment"):
+        raise Exception(f"playground {playground_id} has no deployment (not running)")
+    # external(협력기관 컨테이너) 배포에는 이 URL 규칙이 성립하지 않는다 — 실제 pod 은
+    # ext-<manifest>-<hash> 이고 deployment-llm-playground-* svc 자체가 없다. 여기서
+    # 막지 않으면 shim 호출이 전량 연결 실패로 끝난다.
+    if _deployment_external_job_id(pg):
+        raise Exception(
+            f"playground {playground_id} is an external deployment — "
+            "the OpenAI shim only serves internal (vLLM/TGI 등) deployments")
+    ws = pg.get("workspace_id")
+    if not ws:
+        raise Exception(f"playground {playground_id} has no workspace")
+    ns = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=ws)
+    return (f"http://deployment-llm-playground-{playground_id}--service.{ns}"
+            f":{TYPE.DEPLOYMENT_NGINX_DEFAULT_PORT}/")
+
+
+async def _playground_model_name(playground_id, pg=None):
+    """playground 가 서빙하는 모델명 — OpenAI model id 로 노출한다."""
+    pg = pg or await db.get_playground(playground_id=playground_id)
+    if not pg:
+        raise Exception(f"playground {playground_id} not found")
+    try:
+        _mid = (json.loads(pg.get("model") or "{}") or {}).get("model_allm_id")
+        _row = await db.get_model(model_id=int(_mid)) if _mid else None
+        name = (_row or {}).get("name")
+    except Exception:
+        # 모델명은 식별용일 뿐(컨테이너는 data[0].id 를 model 로 되돌려주기만 한다) →
+        # 조회 실패가 추론 자체를 막지 않게 폴백.
+        traceback.print_exc()
+        name = None
+    return name or f"playground-{playground_id}"
+
+
+def _messages_to_prompt(messages):
+    """OpenAI messages → 단일 프롬프트 문자열.
+
+    서빙 래퍼는 role 분리를 받지 않고 test_question 문자열만 받는다(dual 의
+    _build_dual_meta 와 동일 관행) → 이어 붙인다. 컨테이너가 보내는 것은 실질적으로
+    system+user 2턴이라 라벨 없이 연결한다 — 라벨을 덧붙이면 최적화 대상 프롬프트가
+    오염된다. assistant 턴이 섞인 경우에만 role 을 보존해 대화 구조를 남긴다.
+    """
+    if not isinstance(messages, list) or not messages:
+        raise Exception("messages must be a non-empty list")
+    keep_role = any(isinstance(m, dict) and m.get("role") == "assistant" for m in messages)
+    parts = []
+    for m in messages:
+        if not isinstance(m, dict):
+            continue
+        content = m.get("content")
+        if not isinstance(content, str) or not content.strip():
+            continue
+        parts.append(f"{m.get('role')}: {content.strip()}" if keep_role else content.strip())
+    if not parts:
+        raise Exception("no textual content in messages")
+    return "\n\n".join(parts)
+
+
+async def openai_models(playground_id):
+    """OpenAI GET /v1/models 호환 — 이 playground 가 서빙하는 모델 1건.
+    컨테이너의 모델 자동감지는 응답의 data[0].id 만 사용한다."""
+    name = await _playground_model_name(playground_id)
+    return {"object": "list",
+            "data": [{"id": name, "object": "model",
+                      "created": int(time.time()), "owned_by": "tango"}]}
+
+
+async def openai_chat_completions(playground_id, body):
+    """OpenAI POST /v1/chat/completions 호환(비스트리밍).
+
+    body 의 model·temperature 등은 무시한다 — 대상 모델은 playground_id 로 확정되고
+    생성 파라미터는 배포 시점 설정을 따른다. stream=true 도 지원하지 않는다(컨테이너의
+    dspy.LM·openai 호출은 전부 비스트리밍).
+    session_id 는 넘기지 않는다 — 최적화는 수백 회 독립 호출이라 대화 히스토리가 누적되면
+    holdout 채점이 오염된다.
+    """
+    prompt = _messages_to_prompt((body or {}).get("messages"))
+    # 최적화는 수백 회 호출된다 → playground 행을 1회만 읽어 두 헬퍼에 넘긴다.
+    pg = await db.get_playground(playground_id=playground_id)
+    test_url = await _playground_internal_test_url(playground_id, pg)   # 미배포/미실행이면 예외
+    answer = await _infer_question(test_url, prompt, None, timeout=_SHIM_TIMEOUT)
+    name = await _playground_model_name(playground_id, pg)
+    return {
+        "id": f"chatcmpl-{uuid.uuid4().hex[:24]}",
+        "object": "chat.completion",
+        "created": int(time.time()),
+        "model": name,
+        "choices": [{"index": 0,
+                     "message": {"role": "assistant", "content": answer or ""},
+                     "finish_reason": "stop"}],
+        # 서빙 래퍼가 토큰 회계를 보고하지 않으므로 0 고정(컨테이너는 usage 를 쓰지 않는다).
+        "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+    }
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# 프롬프트 최적화 (fewshot-prompt-optimizer, external container)
+# ────────────────────────────────────────────────────────────────────────────
+# 배포된 모델에 대해 few-shot 예시로 시스템 프롬프트를 최적화한다. 컨테이너는 학습을
+# 하지 않고 llm_url(=위 shim)로 추론을 수백 회 던져 프롬프트만 탐색한다(2~10분).
+# 산출물(system_prompt)은 활성 지정 후 단일 배포 추론에 주입된다.
+#
+# ⚠️ 결과 영속이 필수 — 컨테이너는 완료 job 을 TTL 1h 후 폐기하고, 플랫폼
+#    external_container 도 terminal 시 helm release 를 teardown 하며 job tracker 가
+#    휘발한다. completed 를 본 순간 prompt_optimization 에 저장한다.
+_PROMPT_OPT_EXAMPLES_MAX = 10     # dual _DUAL_EXAMPLES_MAX 와 같은 관용구
+_PROMPT_OPT_FIELD_MAX = 2000      # 필드당 길이 cap(프롬프트 폭주 방지)
+_PROMPT_OPT_TERMINAL = ("completed", "failed", "cancelled")
+_PROMPT_OPT_POLL_INTERVAL = 15    # 최적화는 분 단위 — 초 단위 폴링은 BFF 만 두드린다
+# manifest capabilities.timeout_seconds(1800)의 2배. 컨테이너가 먼저 죽어 terminal 을
+# 돌려주는 것이 정상 경로이고, 이 값은 그마저 안 될 때 태스크가 영원히 남지 않게 하는 상한.
+_PROMPT_OPT_POLL_MAX_SECONDS = 3600
+
+
+# few-shot 형식(`Query:/Response:`)으로 주입하면 모델이 그 패턴을 이어받아 다음 예시를
+#   스스로 계속 생성한다. 실측된 두 형태:
+#     "A grape is purple.\n\nQuery: What color is an apple? ..."
+#     "Paris  \nUser Query: What is the capital city of Australia? ..."
+#   모델이 라벨을 변형하므로("User Query:") 고정 문자열로는 놓친다 → 정규식으로 잡는다.
+#   정석 해법은 stop sequence 지만 서빙 래퍼 계약은 test_question 문자열만 받아 stop 을
+#   실을 수 없다 → 주입한 경우에만 플랫폼이 후처리로 잘라낸다(주입 여부를 플래그로 구분).
+#   줄머리 라벨만 잡는다(MULTILINE). 마크다운/인용 접두(`### Query:`, `> Query:`)와
+#   출력 첫 줄의 라벨도 포함해야 놓치지 않는다 — `\n` 시작만 보면 둘 다 새어 나간다.
+_FEWSHOT_CONTINUATION_RE = re.compile(
+    r"^[ \t>#*\-]*(?:user[ \t]+)?(?:query|question)[ \t]*:",
+    re.IGNORECASE | re.MULTILINE)
+#   우리가 주입한 짝 라벨. 연속 생성이면 Query: 뒤에 반드시 이게 따라온다.
+_FEWSHOT_RESPONSE_RE = re.compile(
+    r"^[ \t>#*\-]*(?:response|answer)[ \t]*:",
+    re.IGNORECASE | re.MULTILINE)
+
+
+def _fewshot_cut_index(text):
+    """few-shot 연속 생성이 시작되는 위치. 자를 필요가 없으면 None.
+
+    **짝 라벨 확인이 핵심이다.** Query:/Question: 만 보고 자르면 정상 답변 안의 Q&A 본문
+    ("다음은 FAQ 입니다.\\nQuestion: 환불은 어떻게 하나요?")까지 잘라 사용자 답변을
+    파괴한다. 주입 형식이 `Query: …\\nResponse:` 쌍이므로, 라벨 뒤에 Response:/Answer:
+    가 이어질 때만 연속 생성으로 판정한다. 잘못 자르는 쪽(파괴적)보다 못 자르는
+    쪽(찌꺼기가 남음)이 낫다는 판단.
+
+    매치가 맨 앞(=답변 전체가 연속 생성)이면 자르지 않는다 — 빈 문자열을 돌려주는 것이
+    찌꺼기를 보여주는 것보다 나쁘다.
+    """
+    for m in _FEWSHOT_CONTINUATION_RE.finditer(text):
+        if m.start() == 0:
+            continue
+        if _FEWSHOT_RESPONSE_RE.search(text, m.end()):
+            return m.start()
+    return None
+
+
+def _trim_fewshot_continuation(rows):
+    """주입 응답에서 모델이 이어 만든 다음 예시를 제거하고 첫 답변만 남긴다."""
+    if not isinstance(rows, list):
+        return rows
+    trimmed = []
+    for row in rows:
+        if not isinstance(row, dict) or not isinstance(row.get("output"), str):
+            trimmed.append(row)
+            continue
+        text = row["output"]
+        cut = _fewshot_cut_index(text)
+        trimmed.append({**row, "output": (text[:cut] if cut is not None else text).strip()})
+    return trimmed
+
+
+async def _apply_active_prompt_optimization(playground_id, question):
+    """활성 최적화가 있으면 system_prompt + 질문을 조립한다. 없으면 원문 그대로.
+
+    반환: ``(프롬프트, 주입여부)``. 주입여부는 응답 후처리
+    (:func:`_trim_fewshot_continuation`) 적용 판단에 쓴다.
+
+    조립 형식이 결과를 좌우한다 — 컨테이너의 render_system_prompt 산출물이
+    instruction + "Here are some examples:" + `Query: …\\nResponse: …` 쌍으로 끝나므로,
+    사용자 질문도 같은 형식으로 이어야 모델이 패턴을 따른다. 형식 없이 이어 붙이면
+    few-shot 패턴이 깨져 최적화 효과만 사라진다(코드는 정상 동작하므로 조용한 퇴행).
+
+    조회 실패는 추론을 막지 않는다 — 최적화는 부가 기능이므로 원문으로 폴백한다.
+    """
+    system_prompt = await _active_prompt_text(playground_id)
+    if not system_prompt:
+        return question, False
+    return f"{system_prompt}\n\nQuery: {question}\nResponse:", True
+
+
+async def _prompt_matches_current_model(playground_id, row, pg=None):
+    """활성 프롬프트가 **지금 배포된 모델**을 상대로 탐색된 것인지.
+
+    프롬프트는 특정 모델/commit 의 응답 습관에 맞춰진 산출물이라, 같은 playground 라도
+    모델이나 commit 을 바꿔 재배포하면 더 이상 유효하지 않다(오히려 형식을 망가뜨린다).
+    실행 시 스냅샷해 둔 model_id/commit_id 와 현재 값을 대조해 어긋나면 주입을 건너뛴다.
+    행을 자동 비활성화하지는 않는다 — 모델을 되돌리면 다시 유효해지므로 사용자의
+    선택을 지운다.
+
+    판단이 불가능하면(조회 실패, 스냅샷 없는 옛 행) True 로 통과시킨다 — 부가 기능이
+    조회 실패 때문에 조용히 꺼지는 편이 더 나쁘다.
+    """
+    try:
+        pg = pg or await db.get_playground(playground_id=playground_id)
+        current = json.loads((pg or {}).get("model") or "{}") or {}
+    except Exception:
+        traceback.print_exc()
+        return True
+    for row_key, cur_key in (("model_id", "model_allm_id"),
+                             ("commit_id", "model_allm_commit_id")):
+        saved, now = row.get(row_key), current.get(cur_key)
+        if saved is None or now is None:
+            continue
+        try:
+            if int(saved) != int(now):
+                print(f"[prompt-opt] playground {playground_id}: 활성 프롬프트는 "
+                      f"{row_key}={saved} 로 탐색된 것이고 현재는 {now} → 주입 생략")
+                return False
+        except (TypeError, ValueError):
+            continue
+    return True
+
+
+async def _active_prompt_text(playground_id, pg=None):
+    """활성 최적화의 system_prompt 원문(없으면 None).
+
+    internal 은 이 텍스트를 질문과 조립하지만(_apply_active_prompt_optimization),
+    외부 SDS(VLM)는 custom_prompt 자체가 질문이므로 원문을 그대로 쓴다.
+    조회 실패는 추론을 막지 않는다 — 최적화는 부가 기능.
+    """
+    try:
+        row = await db.get_active_prompt_optimization(playground_id=playground_id)
+    except Exception:
+        traceback.print_exc()
+        return None
+    system_prompt = (row or {}).get("system_prompt")
+    if not system_prompt or not str(system_prompt).strip():
+        return None
+    if not await _prompt_matches_current_model(playground_id, row, pg):
+        return None
+    return str(system_prompt).strip()
+
+
+def _shim_llm_url(playground_id):
+    """최적화 컨테이너가 쓸 OpenAI 호환 base — 플랫폼 shim.
+
+    컨테이너가 이 뒤에 /models·/chat/completions 를 붙여 호출한다. 서빙 pod 은
+    OpenAI HTTP API 를 노출하지 않으므로 반드시 shim 을 경유해야 한다.
+    """
+    return (f"http://{settings.LLM_PLAYGROUND_DNS}:80"
+            f"/api/playgrounds/{int(playground_id)}/openai/v1")
+
+
+def _normalize_examples(examples):
+    """예시를 컨테이너 계약 {query, response} 로 정규화.
+
+    플랫폼 dual 은 {query, answer} 를 쓰고 컨테이너는 {query, response} 를 쓴다 →
+    여기서 흡수한다(컨테이너 무수정). 개수·길이 cap 도 여기서 적용 — 예시가 늘면
+    holdout 이 커지고 대상 모델 추론량이 선형 증가한다.
+    """
+    out = []
+    for ex in (examples or [])[:_PROMPT_OPT_EXAMPLES_MAX]:
+        if not isinstance(ex, dict):
+            continue
+        q = str(ex.get("query") or ex.get("input") or "").strip()[:_PROMPT_OPT_FIELD_MAX]
+        r = str(ex.get("response") or ex.get("answer") or ex.get("reference")
+                or "").strip()[:_PROMPT_OPT_FIELD_MAX]
+        if q and r:
+            out.append({"query": q, "response": r})
+    return out
+
+
+async def start_prompt_optimization(playground_id, examples=None, dataset_id=None,
+                                    dataset_filename=None, sample_count=None,
+                                    metric="token_f1", rounds=0):
+    """최적화 실행 — external job 을 띄우고 prompt_optimization 행을 만든다.
+
+    예시는 직접 입력(examples) 또는 데이터셋 추출(dataset_id) 중 하나.
+    데이터셋 경로는 dual 배치가 쓰는 _read_dataset_samples 를 재사용한다
+    (NFS 스트리밍 + 경로탈출/워크스페이스 가드 포함).
+    """
+    pg = await db.get_playground(playground_id=playground_id)
+    if not pg:
+        raise Exception(f"playground {playground_id} not found")
+    if not pg.get("deployment"):
+        raise Exception("배포가 실행 중이 아닙니다 — 최적화는 배포된 모델을 호출합니다")
+    # ① external(협력기관 컨테이너) 배포 차단. shim 은 deployment-llm-playground-*
+    #    svc 를 부르는데 external 은 그 svc 가 없어 평가 호출이 전량 실패한다 —
+    #    deployment JSON 존재만 보면 external 도 통과하므로 명시적으로 막는다.
+    if _deployment_external_job_id(pg):
+        raise Exception("외부 컨테이너 배포는 프롬프트 최적화를 지원하지 않습니다 "
+                        "— 내부 서빙 배포에서만 실행할 수 있습니다")
+    # ② 실제 실행 여부 확인. deployment JSON 은 중지 후에도 보존되므로(stop_playground
+    #    가 재배포용 설정을 남긴다) 존재만으로는 "실행 중"이 아니다. 확인하지 않으면
+    #    job 만 뜨고 호출이 전부 실패해 GPU 와 시간만 소모한다.
+    try:
+        _status = (await get_playground_status(playground_id) or {}).get("status")
+    except Exception:
+        traceback.print_exc()
+        _status = None
+    if _status != TYPE.KUBE_POD_STATUS_RUNNING:
+        raise Exception("배포가 실행 중이 아닙니다 — 배포를 시작한 뒤 최적화를 실행하세요")
+    # ③ 동시 실행 차단. 최적화 1건이 대상 모델에 수백 회 추론을 던지므로 중복 실행은
+    #    서빙 GPU 를 고갈시킨다. FE 버튼 비활성화만으로는 탭 2개·직접 호출을 못 막는다.
+    _existing = await db.get_prompt_optimization_list(playground_id=playground_id) or []
+    if any(r.get("status") not in _PROMPT_OPT_TERMINAL for r in _existing):
+        raise Exception("이미 진행 중인 최적화가 있습니다 — 완료된 뒤에 다시 실행하세요")
+    workspace_id = pg.get("workspace_id")
+
+    prepared = _normalize_examples(examples)
+    if not prepared and dataset_id:
+        n = max(2, min(int(sample_count or _PROMPT_OPT_EXAMPLES_MAX), _PROMPT_OPT_EXAMPLES_MAX))
+        samples, _ = await _read_dataset_samples(dataset_id, dataset_filename, n,
+                                                workspace_id=workspace_id)
+        prepared = _normalize_examples(samples)
+    # 컨테이너 계약: 최소 2건(seed 1 + holdout 1). 미달이면 job 을 띄우지 않는다.
+    if len(prepared) < 2:
+        raise Exception("최적화에는 (질의, 응답) 예시가 최소 2건 필요합니다")
+
+    _model_json = {}
+    try:
+        _model_json = json.loads(pg.get("model") or "{}") or {}
+    except Exception:
+        traceback.print_exc()
+
+    params = {"llm_url": _shim_llm_url(playground_id), "examples": prepared,
+              "metric": metric or "token_f1", "rounds": int(rounds or 0)}
+    body = {"manifest_name": settings.PROMPT_OPT_MANIFEST_NAME,
+            "manifest_version": settings.PROMPT_OPT_MANIFEST_VERSION,
+            "workspace_id": int(workspace_id), "params": params}
+    async with httpx.AsyncClient() as client:
+        r = await client.post(f"{settings.FB_EXTERNAL_CONTAINER_URL}/api/v1/jobs",
+                              json=body, timeout=120)
+    if r.status_code not in (200, 202):
+        raise Exception(f"최적화 job 등록 실패({r.status_code}): {r.text[:300]}")
+    job_id = (r.json() or {}).get("job_id")
+    if not job_id:
+        raise Exception("최적화 job 등록 응답에 job_id 가 없습니다")
+
+    ok, opt_id = await db.insert_prompt_optimization(
+        workspace_id=workspace_id, playground_id=playground_id, job_id=job_id,
+        model_id=_model_json.get("model_allm_id"),
+        commit_id=_model_json.get("model_allm_commit_id"),
+        metric=params["metric"], examples=prepared, status="running")
+    if not ok:
+        # job 은 이미 떴는데 이력 행이 없다 = 결과를 회수할 수도, 사용자가 취소할 수도
+        # 없는 orphan 이다. 그대로 두면 대상 GPU 에 수백 회 추론을 던지며 끝까지 돈다
+        # → 만들어 둔 job 을 되돌린 뒤에 실패를 알린다.
+        try:
+            await cancel_infer_job(job_id)
+        except Exception:
+            traceback.print_exc()
+        raise Exception(f"최적화 job({job_id}) 은 시작됐으나 이력 저장에 실패해 취소했습니다")
+    # 결과 영속을 사용자 폴링에 의존하지 않는다 — 화면을 닫거나 FE 가 폴링하지 않으면
+    # 컨테이너 TTL(1h) 과 함께 산출물이 영구 유실된다. terminal 까지 백그라운드로 따라간다.
+    _spawn_prompt_optimization_poller(opt_id, playground_id)
+    return {"optimization_id": opt_id, "job_id": job_id, "n_examples": len(prepared)}
+
+
+async def get_prompt_optimization(optimization_id, playground_id=None):
+    """상세 조회 — 비종료 상태면 external job 을 폴링해 갱신·영속한다(lazy).
+
+    별도 워커를 두지 않는다: 조회 시점에 당겨오면 충분하고, completed 를 본 순간
+    산출물을 DB 에 넣어 휘발을 막는다.
+
+    playground_id 를 주면 소속을 검증한다 — system_prompt 는 사용자 데이터라
+    id 만으로 타 배포 산출물을 읽지 못하게 한다. 존재하지 않는 id 와 타 배포의 id 를
+    같은 메시지로 응답해 열거 오라클을 만들지 않는다(set_active 와 동일 규약).
+    """
+    row = await db.get_prompt_optimization(optimization_id=optimization_id)
+    if not row or (playground_id is not None
+                   and int(row.get("playground_id") or 0) != int(playground_id)):
+        raise Exception("optimization not available")
+    if row.get("status") in _PROMPT_OPT_TERMINAL or not row.get("job_id"):
+        return row
+
+    try:
+        async with httpx.AsyncClient() as client:
+            r = await client.get(
+                f"{settings.FB_EXTERNAL_CONTAINER_URL}/api/v1/jobs/{row['job_id']}", timeout=30)
+        if r.status_code == 404:
+            # BFF 가 그 job 을 모른다 = 기록이 사라졌다(BFF 재시작으로 in-memory
+            # 휘발 등). 더 폴링해도 영원히 404 이므로 failed 로 확정해 폴링을
+            # 끝낸다 (_PROMPT_OPT_TERMINAL 진입 → 다음 조회는 BFF 를 안 부름).
+            # 404 만 종료다 — 아래 5xx/네트워크는 상태 유지 후 재시도.
+            await db.update_prompt_optimization_result(
+                optimization_id=optimization_id, status="failed", result=None,
+                finished=True,
+                error_message="job record not found (BFF lost it) — 결과를 회수할 수 없습니다")
+            return await db.get_prompt_optimization(optimization_id=optimization_id)
+        if r.status_code != 200:
+            return row      # 일시장애(5xx/네트워크)는 상태 유지(다음 폴링에서 재시도)
+        job = r.json() or {}
+    except Exception:
+        traceback.print_exc()
+        return row
+
+    res = job.get("result") or {}
+    status = res.get("status") or row.get("status")
+    payload = res.get("result") if isinstance(res.get("result"), dict) else None
+    # 실패 원인 — FewshotPromptAdapter._build_result 가 컨테이너의 top-level
+    # code/message 를 여기까지 복원해 준다. 저장하지 않으면 어댑터를 만든 이유가
+    # 사라지고 UI 에는 원인 없는 'failed' 만 남는다.
+    _err = res.get("error") if isinstance(res.get("error"), dict) else None
+    error_message = " ".join(
+        str(v) for v in (_err.get("code"), _err.get("message")) if v) if _err else None
+    # BFF 재시작 후 응답은 DB tombstone 기반이라 lifecycle status 만 있고 파트너
+    # 산출물은 없다. 산출물 없는 completed 를 그대로 확정하면 "완료인데 프롬프트가
+    # 빈" 행이 남아 활성 지정까지 가능해지므로, 유실된 사실대로 failed 로 닫는다.
+    if status == "completed" and not payload and not row.get("system_prompt"):
+        status = "failed"
+        error_message = error_message or "완료 보고에 산출물이 없습니다 (결과 유실)"
+    if status != row.get("status") or payload or error_message:
+        await db.update_prompt_optimization_result(
+            optimization_id=optimization_id, status=status, result=payload,
+            finished=status in _PROMPT_OPT_TERMINAL, error_message=error_message)
+        row = await db.get_prompt_optimization(optimization_id=optimization_id)
+    return row
+
+
+async def list_prompt_optimizations(playground_id):
+    """한 배포의 최적화 이력. 비종료 행은 조회 시 갱신해 목록이 굳지 않게 한다."""
+    rows = await db.get_prompt_optimization_list(playground_id=playground_id) or []
+    if any(r.get("status") not in _PROMPT_OPT_TERMINAL for r in rows):
+        for r in rows:
+            if r.get("status") not in _PROMPT_OPT_TERMINAL:
+                try:
+                    await get_prompt_optimization(r.get("id"), playground_id=playground_id)
+                except Exception:
+                    traceback.print_exc()
+        rows = await db.get_prompt_optimization_list(playground_id=playground_id) or []
+    return rows
+
+
+def _spawn_prompt_optimization_poller(optimization_id, playground_id):
+    """terminal 까지 따라가는 백그라운드 폴러를 띄운다(fire-and-forget)."""
+    if not optimization_id:
+        return
+    try:
+        asyncio.create_task(_poll_prompt_optimization(optimization_id, playground_id))
+    except RuntimeError:
+        # 실행 중인 이벤트 루프가 없는 컨텍스트 — 조용히 포기한다. 조회 시 갱신
+        # (get_prompt_optimization) 이 여전히 백업 경로로 남아 기능이 죽지는 않는다.
+        traceback.print_exc()
+
+
+async def _poll_prompt_optimization(optimization_id, playground_id):
+    """상태가 terminal 이 될 때까지 주기적으로 당겨와 저장한다.
+
+    **왜 필요한가**: 결과 영속은 "완료를 본 쪽이 저장한다" 구조인데, 그 주체가 사용자
+    조회뿐이면 화면을 닫는 순간 아무도 저장하지 않는다. 컨테이너는 TTL(1h) 후 job 을
+    폐기하고 플랫폼도 terminal 시 helm release 를 teardown 하므로, 그 사이 아무도
+    보지 않으면 system_prompt 는 영구 유실된다.
+
+    갱신·영속 로직은 get_prompt_optimization 이 이미 갖고 있으므로 그대로 재사용한다
+    (이원화하면 두 경로가 갈린다). 워커 프로세스가 여러 개면 폴러도 여러 개지만
+    같은 값을 쓰는 멱등 UPDATE 라 무해하다.
+    """
+    deadline = time.time() + _PROMPT_OPT_POLL_MAX_SECONDS
+    while time.time() < deadline:
+        await asyncio.sleep(_PROMPT_OPT_POLL_INTERVAL)
+        try:
+            row = await get_prompt_optimization(optimization_id,
+                                                playground_id=playground_id)
+        except Exception:
+            traceback.print_exc()
+            continue
+        if (row or {}).get("status") in _PROMPT_OPT_TERMINAL:
+            return
+    print(f"[prompt-opt] optimization {optimization_id}: 폴링 상한({_PROMPT_OPT_POLL_MAX_SECONDS}s) "
+          "도달 — 상태를 확정하지 못했습니다")
+
+
+async def recover_prompt_optimizations():
+    """기동 시 비종료 행의 폴링을 재개한다 (external_container startup_recovery 관행).
+
+    파드가 재시작하면 진행 중이던 폴러가 사라지고, 그 job 의 산출물은 아무도 저장하지
+    않는다. 기동 때 한 번 훑어 폴러를 다시 붙여 그 구멍을 막는다.
+    실패해도 절대 기동을 막지 않는다 — 부가 기능이다.
+    """
+    try:
+        rows = await db.get_pending_prompt_optimizations() or []
+    except Exception:
+        traceback.print_exc()
+        return
+    for r in rows:
+        _spawn_prompt_optimization_poller(r.get("id"), r.get("playground_id"))
+    if rows:
+        print(f"[prompt-opt] 미완료 최적화 {len(rows)} 건 폴링 재개")
+
+
+async def set_prompt_optimization_active(playground_id, optimization_id):
+    """활성 지정/해제. optimization_id=None 이면 해제(최적화 미적용으로 복귀)."""
+    if optimization_id is not None:
+        row = await db.get_prompt_optimization(optimization_id=optimization_id)
+        # 존재/타 playground 구분을 노출하지 않는다(id 열거 오라클) — dual 과 동일 규약.
+        if not row or int(row.get("playground_id") or 0) != int(playground_id):
+            raise Exception("optimization not available")
+        if row.get("status") != "completed":
+            raise Exception("완료된 최적화만 적용할 수 있습니다")
+    ok = await db.set_active_prompt_optimization(playground_id=playground_id,
+                                                 optimization_id=optimization_id)
+    if not ok:
+        raise Exception("활성 최적화 변경에 실패했습니다")
+    return {"playground_id": playground_id, "active_optimization_id": optimization_id}

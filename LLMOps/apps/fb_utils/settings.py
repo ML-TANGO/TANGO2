@@ -199,6 +199,11 @@ LLM_PLAYGROUND_DNS = os.getenv(
 CONVERT_MANIFEST_NAME = os.getenv('CONVERT_MANIFEST_NAME', 'mock-convert')
 CONVERT_MANIFEST_VERSION = os.getenv('CONVERT_MANIFEST_VERSION', '1.0.0')
 
+# 프롬프트 최적화(fewshot-prompt-optimizer, ETRI) 외부 컨테이너 manifest.
+#   convert 와 동일 관행 — 컨테이너 버전이 올라가도 env 만 바꾸면 코드 변경 없이 전환된다.
+PROMPT_OPT_MANIFEST_NAME = os.getenv('PROMPT_OPT_MANIFEST_NAME', 'fewshot-prompt-optimizer')
+PROMPT_OPT_MANIFEST_VERSION = os.getenv('PROMPT_OPT_MANIFEST_VERSION', '1.0.0')
+
 # evaluate(자동평가, SP-5) job 이 사용할 외부 컨테이너 manifest.
 # 기본=플랫폼 소유 evaluate-selfmetric(자체 메트릭). 고려대 평가 plugin(⑪) 도착 시
 # 동일 계약(job_type=evaluate, /model+/dataset 입력, /output/metrics.json)이라

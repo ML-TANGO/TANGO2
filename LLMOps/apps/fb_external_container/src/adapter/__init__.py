@@ -8,6 +8,7 @@ from typing import Type
 
 from .base import ExternalAdapter, GenericHTTPAdapter
 from .etri_vlm import ETRIAdapter
+from .fewshot_prompt import FewshotPromptAdapter
 
 # Static registry. Keys match manifest.metadata.name (DNS-1123 enforced by
 # the schema). Default fallback is GenericHTTPAdapter — covers partners that
@@ -15,6 +16,7 @@ from .etri_vlm import ETRIAdapter
 ADAPTER_REGISTRY: dict[str, Type[ExternalAdapter]] = {
     "eva-vlm-infer": ETRIAdapter,
     "eva-vlm-train": ETRIAdapter,
+    "fewshot-prompt-optimizer": FewshotPromptAdapter,
 }
 
 
@@ -27,6 +29,7 @@ __all__ = [
     "ADAPTER_REGISTRY",
     "ETRIAdapter",
     "ExternalAdapter",
+    "FewshotPromptAdapter",
     "GenericHTTPAdapter",
     "get_adapter_class",
 ]

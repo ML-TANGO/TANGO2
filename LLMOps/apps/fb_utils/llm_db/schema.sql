@@ -385,6 +385,9 @@ CREATE TABLE IF NOT EXISTS `prompt_optimization` (
     --   강제한다(활성 전환 시 같은 playground 의 기존 활성을 해제). MariaDB 에는
     --   "0 은 중복 허용, 1 은 유일" 을 그대로 표현하는 부분 UNIQUE 가 없다.
     `is_active`       TINYINT(1) NOT NULL DEFAULT 0,
+    -- 실패 원인. 어댑터가 컨테이너의 top-level code/message 를 복원해 주는데 저장하지
+    --   않으면 UI 에 원인 없는 'failed' 만 남는다(진단 불가).
+    `error_message`   VARCHAR(500) DEFAULT NULL,
     `create_datetime` DATETIME DEFAULT CURRENT_TIMESTAMP,
     `finish_datetime` DATETIME DEFAULT NULL,
     PRIMARY KEY(`id`),

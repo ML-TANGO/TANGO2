@@ -6,6 +6,7 @@ import PlaygroundHeader from '@src/components/pageContents/llm/PlaygroundContent
 import PlaygroundInfo from '@src/components/pageContents/llm/PlaygroundContent/PlaygroundInfo';
 import PlaygroundExternalApi from '@src/components/pageContents/llm/PlaygroundContent/PlaygroundExternalApi';
 import PlaygroundInstanceSettingInfo from '@src/components/pageContents/llm/PlaygroundContent/PlaygroundInstanceSettingInfo';
+import PlaygroundPromptOptimization from '@src/components/pageContents/llm/PlaygroundContent/PlaygroundPromptOptimization';
 import PlaygroundModel from '@src/components/pageContents/llm/PlaygroundContent/PlaygroundModel';
 import PlaygroundModelParameterSetting from '@src/components/pageContents/llm/PlaygroundContent/PlaygroundModelParameterSetting';
 import PlaygroundMonitoring from '@src/components/pageContents/llm/PlaygroundContent/PlaygroundMonitoring';
@@ -224,6 +225,8 @@ const PlaygroundDetail = () => {
           <PlaygroundInstanceSettingInfo />
           <PlaygroundExternalApi />
         </div>
+        {/* 프롬프트 최적화 — 완료본을 적용하면 직접 추론에 서버가 주입한다(일괄은 미적용). */}
+        <PlaygroundPromptOptimization playgroundId={playgroundId} />
         {/* <PlaygroundRag workspaceId={workspaceId} playgroundId={playgroundId} /> */}
         {/* <PlaygroundPrompt workspaceId={workspaceId} /> */}
       </div>

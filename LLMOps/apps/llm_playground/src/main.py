@@ -27,6 +27,19 @@ def initialize_app():
     )
     api.include_router(playgrounds)
     app.mount('/api', api)
+
+    @app.on_event("startup")
+    async def _resume_prompt_optimizations():
+        # 진행 중이던 프롬프트 최적화의 폴링을 재개한다. 파드가 재시작하면 폴러가
+        # 사라지고, 그 job 의 산출물은 컨테이너 TTL 과 함께 영구 유실된다
+        # (external_container 의 startup_recovery 와 같은 이유·같은 관행).
+        # 어떤 실패도 기동을 막지 않는다.
+        try:
+            from playground.service import recover_prompt_optimizations
+            await recover_prompt_optimizations()
+        except Exception:
+            traceback.print_exc()
+
     return app
 
 def set_llm_deployment_image():

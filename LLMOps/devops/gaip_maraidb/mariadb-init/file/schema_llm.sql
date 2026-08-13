@@ -377,6 +377,9 @@ CREATE TABLE IF NOT EXISTS `prompt_optimization` (
     -- 추론에 주입될 1건. playground 당 최대 1건 — 단일 활성 불변식은 애플리케이션에서
     --   강제한다(활성 전환 시 같은 playground 의 기존 활성을 해제).
     `is_active`       TINYINT(1) NOT NULL DEFAULT 0,
+    -- 실패 원인. 어댑터가 컨테이너의 top-level code/message 를 복원해 주는데 저장하지
+    --   않으면 UI 에 원인 없는 'failed' 만 남는다(진단 불가).
+    `error_message`   VARCHAR(500) DEFAULT NULL,
     `create_datetime` DATETIME DEFAULT CURRENT_TIMESTAMP,
     `finish_datetime` DATETIME DEFAULT NULL,
     PRIMARY KEY(`id`),

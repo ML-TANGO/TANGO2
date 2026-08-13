@@ -700,3 +700,64 @@ export const postPlaygroundStopAccel = async () => {
 
   return data;
 };
+
+// ── 프롬프트 최적화(fewshot-prompt-optimizer) ──────────────────────────────
+// few-shot 예시로 시스템 프롬프트를 최적화한다(external job, 수 분 소요).
+// 완료된 최적화를 활성(active)으로 지정하면 이후 직접 추론에 서버가 주입한다.
+
+export const postPromptOptimization = async ({
+  playground_id,
+  examples,
+  dataset_id,
+  dataset_filename,
+  sample_count,
+  metric = 'token_f1',
+  rounds = 0,
+}) => {
+  const res = await callApi({
+    url: `playgrounds/${playground_id}/prompt-optimization`,
+    method: 'post',
+    body: {
+      examples,
+      dataset_id,
+      dataset_filename,
+      sample_count,
+      metric,
+      rounds,
+    },
+  });
+  return res;
+};
+
+export const getPromptOptimizations = async (playground_id) => {
+  const res = await callApi({
+    url: `playgrounds/${playground_id}/prompt-optimizations`,
+    method: 'get',
+  });
+  return res;
+};
+
+// 상세는 playground 스코프 필수 — system_prompt 는 사용자 데이터라 id 단독 조회를 막는다.
+export const getPromptOptimization = async ({
+  playground_id,
+  optimization_id,
+}) => {
+  const res = await callApi({
+    url: `playgrounds/${playground_id}/prompt-optimizations/${optimization_id}`,
+    method: 'get',
+  });
+  return res;
+};
+
+// optimization_id: null 이면 활성 해제(최적화 미적용으로 복귀).
+export const putPromptOptimizationActive = async ({
+  playground_id,
+  optimization_id,
+}) => {
+  const res = await callApi({
+    url: `playgrounds/${playground_id}/prompt-optimization/active`,
+    method: 'put',
+    body: { optimization_id },
+  });
+  return res;
+};

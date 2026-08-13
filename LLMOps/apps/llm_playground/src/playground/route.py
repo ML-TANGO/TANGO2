@@ -935,3 +935,97 @@ async def delete_playground(id_list):
     except Exception as e:
         traceback.print_exc()
         return response(status=0, message=str(e), result=None)
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# OpenAI 호환 shim (프롬프트 최적화 컨테이너용)
+# ────────────────────────────────────────────────────────────────────────────
+# 여기만 response() envelope 를 쓰지 않고 OpenAI 규격을 그대로 반환한다 — 컨테이너의
+# openai SDK / dspy.LM 이 응답을 직접 파싱하므로 {status,result} 로 감싸면 깨진다.
+# (CustomResponse 는 content 를 그대로 직렬화하므로 dict 반환으로 충분)
+# 에러도 OpenAI 에러 형태로 돌려줘야 클라이언트가 메시지를 보존한다.
+
+@playgrounds.get("/{playground_id}/openai/v1/models",
+                 summary='OpenAI 호환 - 모델 목록(프롬프트 최적화 컨테이너용)', tags=TAG_TEST)
+async def openai_models(playground_id: int):
+    try:
+        return await svc.openai_models(playground_id)
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(status_code=404,
+                            content={"error": {"message": str(e), "type": "invalid_request_error"}})
+
+
+@playgrounds.post("/{playground_id}/openai/v1/chat/completions",
+                  summary='OpenAI 호환 - 추론(프롬프트 최적화 컨테이너용)', tags=TAG_TEST)
+async def openai_chat_completions(playground_id: int, body: dict = Body(...)):
+    """OpenAI 규격 body 를 dto 없이 그대로 받는다 — 클라이언트가 temperature·max_tokens 등
+    임의 필드를 실어 보내므로 엄격한 스키마는 422 를 유발한다(messages 검증은 서비스에서)."""
+    try:
+        return await svc.openai_chat_completions(playground_id, body)
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(status_code=502,
+                            content={"error": {"message": str(e), "type": "api_error"}})
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# 프롬프트 최적화 (fewshot-prompt-optimizer)
+# ────────────────────────────────────────────────────────────────────────────
+
+@playgrounds.post("/{playground_id}/prompt-optimization",
+                  summary='프롬프트 최적화 - 실행', tags=TAG_TEST)
+async def start_prompt_optimization(playground_id: int, body: dto.StartPromptOptimizationInput):
+    """few-shot 예시로 시스템 프롬프트를 최적화한다(external job, 수 분 소요).
+    예시는 examples 직접 입력 또는 dataset_id 추출 중 하나. 진행은 GET 으로 폴링."""
+    try:
+        res = await svc.start_prompt_optimization(
+            playground_id=playground_id, examples=body.examples,
+            dataset_id=body.dataset_id, dataset_filename=body.dataset_filename,
+            sample_count=body.sample_count, metric=body.metric, rounds=body.rounds)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+
+@playgrounds.get("/{playground_id}/prompt-optimizations",
+                 summary='프롬프트 최적화 - 이력 목록', tags=TAG_TEST)
+async def list_prompt_optimizations(playground_id: int):
+    try:
+        res = await svc.list_prompt_optimizations(playground_id=playground_id)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+
+@playgrounds.get("/{playground_id}/prompt-optimizations/{optimization_id}",
+                 summary='프롬프트 최적화 - 상세(산출물 포함)', tags=TAG_TEST)
+async def get_prompt_optimization(playground_id: int, optimization_id: int):
+    """비종료 상태면 external job 을 폴링해 갱신한 뒤 반환한다(completed 시 산출물 영속).
+
+    playground 스코프 필수 — system_prompt 는 사용자 데이터라 id 만으로 타 배포의
+    산출물을 읽을 수 있으면 안 된다(set_active 와 동일 규약: 불일치는 generic 에러).
+    """
+    try:
+        res = await svc.get_prompt_optimization(optimization_id=optimization_id,
+                                                playground_id=playground_id)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+
+@playgrounds.put("/{playground_id}/prompt-optimization/active",
+                 summary='프롬프트 최적화 - 추론 적용(활성) 지정/해제', tags=TAG_TEST)
+async def set_prompt_optimization_active(playground_id: int,
+                                        body: dto.SetActivePromptOptimizationInput):
+    """optimization_id=null 이면 해제(최적화 미적용으로 복귀). 단일 활성 불변식."""
+    try:
+        res = await svc.set_prompt_optimization_active(
+            playground_id=playground_id, optimization_id=body.optimization_id)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)

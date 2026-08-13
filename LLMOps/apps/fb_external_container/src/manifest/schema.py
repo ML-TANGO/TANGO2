@@ -21,7 +21,16 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 # ── Type aliases (closed sets per SP-1 v2 §6) ─────────────────────────────
 
-JobType = Literal["train", "evaluate", "preprocess", "convert", "infer", "generate"]
+# "optimize" — 모델이 아니라 **프롬프트**를 산출하는 컨테이너(fewshot-prompt-optimizer).
+#   generate 로 두면 안 된다: db_synthesis.list_generate_manifests / db_pipeline.
+#   get_generation_manifests 가 job_type='generate' 로 필터해 합성 모듈·파이프라인 생성
+#   노드 드롭다운을 채우므로, 데이터 생성기가 아닌 이 컨테이너가 그 목록에 섞여
+#   사용자가 고르면 입력 계약 불일치로 실패한다. 별도 값이면 두 목록에서 자동 제외되고,
+#   validator(train/evaluate→dataset, infer→base_model)와 lifecycle auto-commit
+#   (train/batch)의 어느 분기에도 걸리지 않아 의도와 정확히 맞는다.
+JobType = Literal[
+    "train", "evaluate", "preprocess", "convert", "infer", "generate", "optimize"
+]
 ExecutionMode = Literal["sync", "async", "batch"]
 WorkspaceScope = Literal["per-workspace", "shared"]
 AcceleratorT = Literal["nvidia", "hailo", "rocm"]

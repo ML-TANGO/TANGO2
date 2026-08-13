@@ -349,3 +349,26 @@ class DeploymentInfo(BaseModel):
     resources: DeploymentResources
     deployment_llm: Optional[DeploymentLlm] = None
     deployment_llm_db: Optional[DeploymentLlmDb] = None
+
+
+class StartPromptOptimizationInput(BaseModel):
+    """프롬프트 최적화 실행 — examples 직접 입력 또는 dataset_id 추출 중 하나."""
+    examples: Optional[List[Dict[str, Any]]] = Field(
+        default=None, max_length=10,
+        description="[{query, response|answer}] few-shot 예시. 최소 2건(seed 1 + holdout 1)")
+    dataset_id: Optional[int] = Field(
+        default=None, description="examples 미지정 시 데이터셋에서 예시를 추출한다")
+    dataset_filename: Optional[str] = Field(default=None, max_length=512)
+    sample_count: Optional[int] = Field(
+        default=None, ge=2, le=10, description="데이터셋 추출 샘플 수(기본 10)")
+    metric: Optional[str] = Field(
+        default="token_f1",
+        description="token_f1(기본) | bert_score. bert_score 는 폐쇄망에서 token_f1 로 폴백")
+    rounds: Optional[int] = Field(
+        default=0, ge=0, le=3,
+        description="0=빠른 모드(합성 예시 증강 생략). 클수록 대상 모델 추론량·소요시간 증가")
+
+
+class SetActivePromptOptimizationInput(BaseModel):
+    """추론에 주입할 최적화 지정. null 이면 해제(최적화 미적용으로 복귀)."""
+    optimization_id: Optional[int] = Field(default=None)
