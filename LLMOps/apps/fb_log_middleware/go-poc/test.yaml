@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
         - name: test
-          image: registry.jonathan.acryl.ai/jfb-system/fb_log_middleware:sena
+          image: registry.jonathan.acryl.ai/jfb-system/fb_log_middleware:tango
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
@@ -52,4 +52,3 @@ spec:
     - name: grpc
       port: 50051
       targetPort: 50051
-
