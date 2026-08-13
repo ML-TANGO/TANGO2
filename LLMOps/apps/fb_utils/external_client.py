@@ -18,6 +18,17 @@ logger = logging.getLogger(__name__)
 _http_client: Optional[httpx.AsyncClient] = None
 _lock: Optional[asyncio.Lock] = None
 
+# fb_external_container 의 manifest 스키마 `JobType` 닫힌집합 리터럴
+# (apps/fb_external_container/src/manifest/schema.py:
+#  Literal["train", "evaluate", "preprocess", "convert", "infer", "generate"]).
+# 별 서비스라 import 경계를 넘어 가져올 수 없어 값만 복제한다 — BFF 쪽 리터럴이
+# 바뀌면 여기도 같이 고쳐야 한다.
+# ⚠️ 호출부에서 문자열을 다시 하드코딩하지 말고 이 상수를 쓸 것. 과거
+# service.py 가 `job_type == "inference"` 로 비교해(스키마 값은 "infer")
+# paired infer manifest 전환이 영구 dead branch 였고, 그 결과 배포가 조용히
+# train manifest 로 pod 를 띄웠다.
+MANIFEST_JOB_TYPE_INFER = "infer"
+
 
 class ExternalInferError(RuntimeError):
     def __init__(self, status_code: int, message: str) -> None:
@@ -92,7 +103,8 @@ async def get_paired_manifest(
     """GET /api/v1/manifests/{name}/{version}/paired.
 
     codex Med-2: train manifest 의 pair_id 로 등록된 inference manifest 를
-    lookup. 404 면 paired 등록 안 됐다는 뜻 — None 반환 (호출자가 fallback).
+    lookup. 404 면 paired 등록이 안 됐다는 뜻 — None 반환. 호출자는 이걸
+    fallback 신호로 쓰면 안 된다(배포는 infer manifest 없이는 성립하지 않는다).
     """
     try:
         return await _get(f"/api/v1/manifests/{name}/{version}/paired")

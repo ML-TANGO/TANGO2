@@ -28,7 +28,7 @@ from utils.workspace_resource import get_workspace_instance_total_info
 from playground import dual_metrics
 from utils.external_client import (
     start_infer_job, cancel_infer_job, run_inference, get_job_status,
-    get_paired_manifest, ExternalInferError,
+    get_paired_manifest, ExternalInferError, MANIFEST_JOB_TYPE_INFER,
 )
 
 DUAL_SHELL_NAME_MAX_LENGTH = 20
@@ -1768,15 +1768,40 @@ async def start_playground(user_name, playground_id,
                 # train 이면 BFF 의 manifest registry 에서 paired infer 를
                 # lookup. 이전엔 ``-train``→``-infer`` + ``1.0.0-acryl-patched-v4``
                 # 가 hardcode 돼 있어 다른 partner / 다른 version 에선 404 났음.
-                if manifest_name and manifest_version:
-                    try:
-                        paired = await get_paired_manifest(manifest_name, manifest_version)
-                    except Exception:
-                        traceback.print_exc()
-                        paired = None
-                    if paired and paired.get("job_type") == "inference":
-                        manifest_name = paired["name"]
-                        manifest_version = paired["version"]
+                #
+                # ⚠️ 실패 시 train manifest 로 진행하면 안 된다. train 은
+                # execution_mode=async 라 chart 가 ingress 를 만들지 않고
+                # (lifecycle.py: ingress.enabled = mode=="sync"), adapter 가
+                # endpoints.run(=/train) 으로 POST 해 422 → cleanup → helm
+                # uninstall 로 끝난다. 화면엔 그냥 "중지"로 보여서 원인이
+                # 안 드러난다 — 그래서 여기서 명시적으로 실패시킨다.
+                if not (manifest_name and manifest_version):
+                    raise Exception(
+                        "외부 학습 모델에 컨테이너 manifest 정보가 없습니다 "
+                        "(external_manifest_name/version 미설정). 모델 등록을 확인하세요."
+                    )
+                try:
+                    paired = await get_paired_manifest(manifest_name, manifest_version)
+                except Exception as e:
+                    traceback.print_exc()
+                    raise Exception(
+                        f"추론 manifest 조회에 실패했습니다 "
+                        f"(manifest={manifest_name}@{manifest_version}): {e}"
+                    )
+                if not paired:
+                    raise Exception(
+                        f"추론 manifest 가 바인딩되지 않았습니다 "
+                        f"(manifest={manifest_name}@{manifest_version}). 외부 컨테이너 "
+                        f"레지스트리에 학습/추론 manifest 를 pair 로 등록해야 배포할 수 "
+                        f"있습니다."
+                    )
+                # /paired 는 "짝의 반대쪽"을 돌려준다. validator 의 허용 조합은
+                # 모두 {infer, train|evaluate|convert} 라 정확히 한 쪽만 infer 다.
+                # → 반대쪽이 infer 면 지금 들고 있는 게 workload 쪽이므로 전환하고,
+                #   반대쪽이 infer 가 아니면 들고 있는 게 이미 infer 쪽이라 유지.
+                if paired.get("job_type") == MANIFEST_JOB_TYPE_INFER:
+                    manifest_name = paired["name"]
+                    manifest_version = paired["version"]
                 workspace_id = playground_info.get("workspace_id")
                 gpu_count = playground_gpu_count or 1
 
