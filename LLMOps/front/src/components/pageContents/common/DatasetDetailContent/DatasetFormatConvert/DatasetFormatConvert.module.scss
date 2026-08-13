@@ -37,11 +37,27 @@
   .body {
     padding: 12px;
     .guide {
-      margin-bottom: 12px;
+      margin-bottom: 6px;
       font-size: 12px;
       line-height: 1.5;
       color: $mono206;
       white-space: normal;
+    }
+    // 안내 항목이 늘어도 팝업 전체 높이가 뷰포트 위로 넘치지 않도록 이 목록만 스크롤시킨다.
+    // (.body 에 overflow 를 걸면 아래 Selectbox 드롭다운이 잘린다.)
+    .requirements {
+      margin: 0 0 12px;
+      padding-left: 14px;
+      max-height: 140px;
+      overflow-y: auto;
+      list-style: disc;
+      font-size: 12px;
+      line-height: 1.5;
+      color: $mono205;
+      white-space: normal;
+      li + li {
+        margin-top: 2px;
+      }
     }
     .row {
       display: flex;

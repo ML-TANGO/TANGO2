@@ -82,6 +82,32 @@ function DatasetFormatConvert({
                   'CSV/TXT/Parquet 파일 1개를 JSON/JSONL 학습 포맷으로 변환합니다. 결과 파일은 원본과 같은 폴더에 생성됩니다.',
                 )}
               </p>
+              <ul className={cx('requirements')}>
+                <li>
+                  {t(
+                    'formatConvertReqEncoding.message',
+                    '텍스트 인코딩은 UTF-8 또는 CP949(EUC-KR)만 지원합니다.',
+                  )}
+                </li>
+                <li>
+                  {t(
+                    'formatConvertReqColumns.message',
+                    'CSV/Parquet은 지시·질문 컬럼(예: instruction, prompt, question) 또는 단일 텍스트 컬럼(예: text, content, sentence)이 반드시 있어야 합니다. 이런 컬럼이 없는 일반 통계·수치 표는 변환되지 않습니다.',
+                  )}
+                </li>
+                <li>
+                  {t(
+                    'formatConvertReqAnswer.message',
+                    '답변 컬럼(예: output, response, answer)은 선택이며, 단독으로는 변환되지 않습니다.',
+                  )}
+                </li>
+                <li>
+                  {t(
+                    'formatConvertReqTxt.message',
+                    'TXT는 컬럼 규약과 무관하게 한 줄이 한 건으로 변환됩니다.',
+                  )}
+                </li>
+              </ul>
               <div className={cx('row')}>
                 <label className={cx('label')}>
                   {t('formatConvertTargetFormat.label', '학습 포맷')}

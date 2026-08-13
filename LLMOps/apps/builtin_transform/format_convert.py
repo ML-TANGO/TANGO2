@@ -35,6 +35,9 @@ _MAX_FIELD = 100000  # 단일 필드 길이 cap(이상치 방어)
 # 쓸 수 없으므로 이 잔여 위험은 감수하되, 어떤 인코딩으로 읽었는지 항상 로그에 남긴다.
 _ENCODINGS = ("utf-8-sig", "cp949")
 _ENCODING_LABEL = "UTF-8 / CP949(EUC-KR)"
+# 0건 안내 로그 상한 — 컬럼명은 사용자 데이터라 개수·길이가 무제한이면 로그 폭주가 된다.
+_MAX_LOG_COLUMNS = 30
+_MAX_LOG_COLUMN_LEN = 60
 
 
 def _pick(row, keys):
@@ -161,9 +164,16 @@ def main():
 
     records = []
     skipped = 0
+    seen_columns = []  # 0건일 때 "무슨 컬럼이 들어왔는지" 안내용(첫 읽힌 행 기준)
+    seen_column_total = 0
     for fp in files:
         try:
             for row in _read_rows(fp):
+                if not seen_columns:
+                    keys = [str(k) for k in row.keys()]
+                    seen_column_total = len(keys)
+                    seen_columns = [k[:_MAX_LOG_COLUMN_LEN]
+                                    for k in keys[:_MAX_LOG_COLUMNS]]
                 rec = _to_record(row, args.target_format)
                 if rec is not None:
                     records.append(rec)
@@ -174,8 +184,18 @@ def main():
             skipped += 1
 
     if not records:
-        print(f"[format_convert] produced 0 records (skipped={skipped}). "
-              f"check target_format/columns.", flush=True)
+        print(f"[format_convert] produced 0 records (skipped={skipped}).", flush=True)
+        if seen_columns:
+            more = (f" (총 {seen_column_total}개 중 앞 {len(seen_columns)}개만 표시)"
+                    if seen_column_total > len(seen_columns) else "")
+            print(f"[format_convert] 입력 컬럼{more}: {seen_columns}", flush=True)
+            print("[format_convert] 변환하려면 다음 중 하나에 해당하는 컬럼이 필요합니다(대소문자 무시) — "
+                  f"지시/질문: {list(_PROMPT_KEYS)} · 답변: {list(_OUTPUT_KEYS)} · "
+                  f"단일 텍스트: {list(_TEXT_KEYS)}. "
+                  "학습용 컬럼이 없는 일반 통계·수치 표는 변환 대상이 아닙니다.", flush=True)
+        else:
+            print(f"[format_convert] 읽을 수 있는 행이 없습니다"
+                  f"(지원 인코딩: {_ENCODING_LABEL}).", flush=True)
         sys.exit(1)
 
     # 출력 = 원본 옆 파일(sidecar). service.py 가 dirname(dataset_data_path) 로 결과를
