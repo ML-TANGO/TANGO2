@@ -228,3 +228,6 @@ CLAUDE.md
 
 # NFS provisioner per-env values (_dev suffix 는 운영 IP 가 박혀 있어 추적 제외)
 /devops/gaip_nfs_provisioner/values-*_dev.yaml
+
+/libs/*
+/figma*
