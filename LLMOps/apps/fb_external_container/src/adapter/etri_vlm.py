@@ -42,6 +42,27 @@ class _ETRIRequestError(RuntimeError):
     """ETRI returned HTTP 200 but the body indicated failure (Tier 1 bug)."""
 
 
+def _raise_with_body(resp, url: str) -> None:
+    """4xx/5xx 를 본문과 함께 올린다.
+
+    ``resp.raise_for_status()`` 는 응답 본문을 버리는데, 파트너가 FastAPI 라
+    422 는 ``{"detail":[{"loc":[...],"msg":...}]}`` 로 **어느 필드가 왜 거부됐는지**
+    담아 보낸다. 그걸 버리면 로그만으로 원인 특정이 불가능해 학습을 다시
+    띄워가며 추측해야 한다. 본문을 로그에 남기고 예외 메시지에도 실어 보낸다.
+    성공 응답에는 아무 영향이 없다.
+    """
+    if not resp.is_error:
+        return
+    detail = (resp.text or "")[:2000]
+    logger.error(
+        "partner returned HTTP %s for %s — body: %s",
+        resp.status_code,
+        url,
+        detail,
+    )
+    raise _ETRIRequestError(f"HTTP {resp.status_code} from {url}: {detail}")
+
+
 class ETRIAdapter(GenericHTTPAdapter):
     """ETRI SDS-VLM eva-vlm-{infer,train} response normalization."""
 
@@ -115,7 +136,7 @@ class ETRIAdapter(GenericHTTPAdapter):
             "params": config.params or {},
         }
         resp = await self.client.post(url, json=envelope)
-        resp.raise_for_status()
+        _raise_with_body(resp, url)
         body = resp.json() if resp.content else {}
         etri_error = self._detect_etri_error(body)
         if etri_error is not None:
@@ -139,7 +160,7 @@ class ETRIAdapter(GenericHTTPAdapter):
             "params": params or {},
         }
         resp = await self.client.post(url, json=envelope)
-        resp.raise_for_status()
+        _raise_with_body(resp, url)
         body = resp.json() if resp.content else {}
         etri_error = self._detect_etri_error(body)
         if etri_error is not None:
@@ -164,7 +185,7 @@ class ETRIAdapter(GenericHTTPAdapter):
             )
         url = _join_url(self.service_url, path)
         resp = await self.client.post(url, json=dict(payload or {}))
-        resp.raise_for_status()
+        _raise_with_body(resp, url)
         body = resp.json() if resp.content else {}
         etri_error = self._detect_etri_error(body)
         if etri_error is not None:
