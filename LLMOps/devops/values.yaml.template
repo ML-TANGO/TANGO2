@@ -400,6 +400,7 @@ global:
       playground: acrylaaai/genai-platform-playground_app:tango_v2.0.1
       model: acrylaaai/genai-platform-model_app:tango_v2.0.1
       evaluation: acrylaaai/genai-platform-evaluation_app:tango_v2.0.1
+      data_pipeline: acrylaaai/genai-platform-data_pipeline_app:tango_v2.0.1
       pipeline: acrylaaai/genai-platform-pipeline_app:tango_v2.0.1
       preprocessing: acrylaaai/genai-platform-preprocessing_app:tango_v2.0.1
       analyzing: acrylaaai/genai-platform-analyzing_app:tango_v2.0.1
@@ -452,6 +453,7 @@ global:
       prompt: llm_prompt
       cost-management: fb_cost_management
       evaluation: llm_evaluation
+      data_pipeline: llm_data_pipeline
       pipeline: fb_pipeline
       preprocessing: fb_preprocessing
       collect: fb_collect
@@ -493,6 +495,7 @@ global:
       rag: jfb-llm-rag
       prompt: jfb-llm-prompt
       evaluation: jfb-llm-evaluation
+      data_pipeline: jfb-llm-data-pipeline
       cost-management: jfb-cost-management
       pipeline: jfb-app-pipeline
       preprocessing: jfb-app-preprocessing

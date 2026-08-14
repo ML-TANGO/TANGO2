@@ -72,6 +72,13 @@ CREATE TABLE IF NOT EXISTS `model` (
     `load_type`                 VARCHAR(32) DEFAULT NULL,
     `create_datetime`           DATETIME DEFAULT CURRENT_TIMESTAMP,
     `update_datetime`           DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    -- 아래 4개는 운영 DB 에 라이브 ALTER 로만 적용돼 있고 이 파일에 역반영이 안 돼 있었다
+    -- (이 플랫폼엔 마이그레이션 러너가 없다). 신규 설치 시 db_model.get_model/get_models 가
+    -- "Unknown column 'm.training_type'" 로 실패한다.
+    `training_type`             VARCHAR(16) NOT NULL DEFAULT 'internal',
+    `external_manifest_name`    VARCHAR(128) DEFAULT NULL,
+    `external_manifest_version` VARCHAR(32) DEFAULT NULL,
+    `external_job_id`           VARCHAR(128) DEFAULT NULL,
     PRIMARY KEY(`id`),
     CONSTRAINT FOREIGN KEY (`create_user_id`) REFERENCES `msa_jfb`.`user` (`id`) ON UPDATE CASCADE,
     CONSTRAINT FOREIGN KEY (`instance_id`) REFERENCES `msa_jfb`.`instance` (`id`) ON UPDATE CASCADE ON DELETE SET NULL,
@@ -390,3 +397,150 @@ CREATE TABLE IF NOT EXISTS `prompt_optimization` (
         FOREIGN KEY (`playground_id`) REFERENCES `jonathan_llm`.`playground` (`id`)
         ON UPDATE CASCADE ON DELETE CASCADE
 );
+
+
+-- ================================================================
+-- llm_data_pipeline — 학습 데이터 파이프라인 (apps/llm_data_pipeline/migrations/001 과 동일)
+-- ================================================================
+
+-- 데이터셋 — 파이프라인 하나가 곧 데이터셋 하나다.
+CREATE TABLE IF NOT EXISTS `llm_dp_dataset` (
+    `id`                INT(11) NOT NULL AUTO_INCREMENT,
+    `workspace_id`      INT(11) NOT NULL,
+    `name`              VARCHAR(128) NOT NULL,
+    `description`       VARCHAR(1000),
+    -- draft: 만들었지만 데이터 없음 / running: 파이프라인 도는 중
+    -- active: 릴리스된 버전 있음 / archived: 더 쓰지 않음
+    `state`             VARCHAR(16) NOT NULL DEFAULT 'draft',
+    -- generic(편집 가능) | sds_colreg(구성 고정)
+    `preset`            VARCHAR(32) NOT NULL DEFAULT 'generic',
+    `create_user`       VARCHAR(64),
+    -- 노드 간 연결(엣지). 노드 행이 아니라 그래프에 속하는 정보라 여기에 둔다.
+    -- [[출발 index, 도착 index], ...] · 비어 있으면 선형(0→1→2…)으로 본다.
+    `flow`              JSON,
+    `create_datetime`   DATETIME DEFAULT CURRENT_TIMESTAMP(),
+    `update_datetime`   DATETIME DEFAULT CURRENT_TIMESTAMP() ON UPDATE CURRENT_TIMESTAMP(),
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_dp_dataset_ws_name` (`workspace_id`, `name`),
+    KEY `ix_dp_dataset_ws` (`workspace_id`),
+    CONSTRAINT `fk_dp_dataset_ws` FOREIGN KEY (`workspace_id`)
+        REFERENCES `msa_jfb`.`workspace` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
+) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- 원본 데이터(이미지 · PDF · 문서 등). 실패한 것도 남긴다 — 왜 실패했는지가 정보다.
+CREATE TABLE IF NOT EXISTS `llm_dp_asset` (
+    `id`                INT(11) NOT NULL AUTO_INCREMENT,
+    `dataset_id`        INT(11) NOT NULL,
+    `name`              VARCHAR(255) NOT NULL,
+    `path`              VARCHAR(1024),
+    `kind`              VARCHAR(32),
+    `size_bytes`        BIGINT,
+    -- registered | duplicate | failed
+    `status`            VARCHAR(16) NOT NULL DEFAULT 'registered',
+    `fail_reason`       VARCHAR(255),
+    `create_datetime`   DATETIME DEFAULT CURRENT_TIMESTAMP(),
+    PRIMARY KEY (`id`),
+    KEY `ix_dp_asset_dataset` (`dataset_id`),
+    KEY `ix_dp_asset_status` (`dataset_id`, `status`),
+    CONSTRAINT `fk_dp_asset_dataset` FOREIGN KEY (`dataset_id`)
+        REFERENCES `llm_dp_dataset` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
+) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- 파이프라인 노드. node_index 가 순서이며, 저장은 항상 전체 교체다
+-- (한 노드만 고치면 나머지 인덱스가 어긋나므로).
+CREATE TABLE IF NOT EXISTS `llm_dp_node` (
+    `id`                INT(11) NOT NULL AUTO_INCREMENT,
+    `dataset_id`        INT(11) NOT NULL,
+    `preset`            VARCHAR(32) NOT NULL DEFAULT 'generic',
+    `node_index`        INT(11) NOT NULL,
+    -- data|prep|filter|synth|gate|src|join|calc|gen|out
+    `kind`              VARCHAR(16) NOT NULL,
+    `name`              VARCHAR(64) NOT NULL,
+    -- [[기능명, 파라미터표시값], ...]
+    `steps`             JSON,
+    `config`            JSON,
+    `create_datetime`   DATETIME DEFAULT CURRENT_TIMESTAMP(),
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_dp_node_order` (`dataset_id`, `node_index`),
+    CONSTRAINT `fk_dp_node_dataset` FOREIGN KEY (`dataset_id`)
+        REFERENCES `llm_dp_dataset` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
+) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- 생성된 학습 레코드(질문 · 답 + 심사 점수).
+CREATE TABLE IF NOT EXISTS `llm_dp_record` (
+    `id`                INT(11) NOT NULL AUTO_INCREMENT,
+    `dataset_id`        INT(11) NOT NULL,
+    -- 사람이 읽고 공유하는 키. 예: vdf-0009855
+    `record_key`        VARCHAR(64) NOT NULL,
+    `capability`        VARCHAR(32),
+    `split`             VARCHAR(16),
+    `question`          TEXT,
+    `answer`            TEXT,
+    -- {"align":0.61,"imgdep":0.88,"answer":0.44,"unique":0.71}
+    `scores`            JSON,
+    `judge_comment`     VARCHAR(2000),
+    `taxonomy`          VARCHAR(32),
+    -- pending | approved | edited | rejected
+    `review_state`      VARCHAR(16) NOT NULL DEFAULT 'pending',
+    `asset_ref`         VARCHAR(255),
+    -- 계보: 생성 모델 · 프롬프트 · 심사 모델 · 원본 데이터
+    `lineage`           JSON,
+    -- 4축 중 가장 낮은 점수. scores JSON 에서 매번 뽑으면 정렬이 인덱스를 못 타므로
+    -- 기록 시점에 계산해 둔다(레코드의 실질 품질 = 최저 축).
+    `worst_score`       DECIMAL(4,3),
+    `create_datetime`   DATETIME DEFAULT CURRENT_TIMESTAMP(),
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_dp_record_key` (`dataset_id`, `record_key`),
+    KEY `ix_dp_record_review` (`dataset_id`, `review_state`),
+    KEY `ix_dp_record_cap` (`dataset_id`, `capability`),
+    KEY `ix_dp_record_tax` (`dataset_id`, `taxonomy`),
+    KEY `ix_dp_record_worst` (`dataset_id`, `worst_score`),
+    CONSTRAINT `fk_dp_record_dataset` FOREIGN KEY (`dataset_id`)
+        REFERENCES `llm_dp_dataset` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
+) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- 사람 검수 이력. 레코드의 현재 상태와 별개로 판정 기록을 계속 쌓는다
+-- (같은 레코드를 다시 판정할 수 있고, 그 근거가 다음 생성 프롬프트를 고칠 재료다).
+CREATE TABLE IF NOT EXISTS `llm_dp_review` (
+    `id`                INT(11) NOT NULL AUTO_INCREMENT,
+    `record_id`         INT(11) NOT NULL,
+    -- approved | edited | rejected
+    `verdict`           VARCHAR(16) NOT NULL,
+    `taxonomy`          VARCHAR(32),
+    `edited_question`   TEXT,
+    `edited_answer`     TEXT,
+    `reviewer`          VARCHAR(64),
+    `create_datetime`   DATETIME DEFAULT CURRENT_TIMESTAMP(),
+    PRIMARY KEY (`id`),
+    KEY `ix_dp_review_record` (`record_id`),
+    CONSTRAINT `fk_dp_review_record` FOREIGN KEY (`record_id`)
+        REFERENCES `llm_dp_record` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
+) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- 데이터셋 버전(릴리스 스냅샷). 어떤 모델 · 프롬프트 · 임계값으로 만들었는지를
+-- 함께 남겨야 나중에 "그때는 왜 통과율이 낮았나"를 설명할 수 있다.
+CREATE TABLE IF NOT EXISTS `llm_dp_version` (
+    `id`                INT(11) NOT NULL AUTO_INCREMENT,
+    `dataset_id`        INT(11) NOT NULL,
+    `version`           VARCHAR(32) NOT NULL,
+    `record_count`      INT(11) DEFAULT 0,
+    `pass_rate`         INT(11) DEFAULT 0,
+    `human_reviewed`    INT(11) DEFAULT 0,
+    `gen_model`         VARCHAR(64),
+    `judge_model`       VARCHAR(64),
+    `prompt_name`       VARCHAR(64),
+    `thresholds`        JSON,
+    `mix`               JSON,
+    `split`             JSON,
+    `split_by`          VARCHAR(32),
+    `create_datetime`   DATETIME DEFAULT CURRENT_TIMESTAMP(),
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_dp_version` (`dataset_id`, `version`),
+    CONSTRAINT `fk_dp_version_dataset` FOREIGN KEY (`dataset_id`)
+        REFERENCES `llm_dp_dataset` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
+) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

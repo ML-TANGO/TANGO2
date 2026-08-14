@@ -68,12 +68,12 @@ SAVE_COMMAND="$CLI save -o REPLACE.tar $IMAGE"
 
 if [ "$BUILD_ALL" == "y" ]; then
 
-    dir=("dashboard" "dataset" "deployment" "external_container" "image" "monitoring" "notification" "resource" "scheduler" "ssh" "training" "user" "workspace" "evaluation")
+    dir=("dashboard" "dataset" "deployment" "external_container" "image" "monitoring" "notification" "resource" "scheduler" "ssh" "training" "user" "workspace" "evaluation" "data_pipeline")
     # dir=("model" "playground" "prompt" "rag")
     # 주: "evaluation" → llm_evaluation (아래 llm_$APP 분기). 외부컨테이너(evaluate/convert/
     #     evaluate_benchmark_mock)는 apps/evaluate 등과 동일하게 ad-hoc 빌드(이 배열 밖).
     for APP in "${dir[@]}"; do
-        if [[ "$APP" == "playground" || "$APP" == "model" || "$APP" == "rag"  || "$APP" == "prompt" || "$APP" == "evaluation" ]]; then
+        if [[ "$APP" == "playground" || "$APP" == "model" || "$APP" == "rag"  || "$APP" == "prompt" || "$APP" == "evaluation" || "$APP" == "data_pipeline" ]]; then
             echo cd $BASE_DIR/llm_$APP
             cd $BASE_DIR/llm_$APP
         else
@@ -100,7 +100,7 @@ elif [ "$BUILD_ALL" == "n" ]; then
 
     read -p "APP NAME? (ex. dashboard) " APP
 
-    if [[ "$APP" == "playground" || "$APP" == "model" || "$APP" == "rag"  || "$APP" == "prompt" || "$APP" == "evaluation" ]]; then
+    if [[ "$APP" == "playground" || "$APP" == "model" || "$APP" == "rag"  || "$APP" == "prompt" || "$APP" == "evaluation" || "$APP" == "data_pipeline" ]]; then
         echo cd $BASE_DIR/llm_$APP
         cd $BASE_DIR/llm_$APP
     else
