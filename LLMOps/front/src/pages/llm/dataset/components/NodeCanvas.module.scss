@@ -1,0 +1,446 @@
+@import '../styles/tokens';
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+// ── 툴바 ────────────────────────────────────────────────────────────────────
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 20px;
+  border-radius: $dp-r-card;
+  background: $dp-surface;
+  box-shadow: $dp-sh-card;
+}
+
+.toolbar-info {
+  @include dp-num;
+  @include dp-solid(11px);
+  color: $dp-ink-mute;
+}
+
+.toolbar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.zoom-btn {
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: $dp-r-ctl;
+  cursor: pointer;
+  background: $dp-surface;
+  box-shadow: $dp-ring;
+  color: $dp-ink-sub;
+  font-family: SpoqaM;
+  @include dp-solid(12px);
+
+  &:hover { background: $dp-line-soft; }
+}
+
+// ── 캔버스 ──────────────────────────────────────────────────────────────────
+// 점 격자는 노드를 옮길 때 이동량을 눈으로 가늠하게 해 준다.
+.canvas {
+  position: relative;
+  height: calc(100vh - 300px);
+  min-height: 620px;
+  overflow: auto;
+  border-radius: $dp-r-card;
+  background-color: $dp-surface;
+  background-image: radial-gradient(#dee9ff 1px, transparent 1px);
+  background-size: 24px 24px;
+  box-shadow: $dp-sh-card;
+}
+
+.plane {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: top left;
+}
+
+.edges {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+// ── 노드 ────────────────────────────────────────────────────────────────────
+.node {
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: $dp-r-ctl3;
+  cursor: pointer;
+  background: $dp-surface;
+  box-shadow: $dp-sh-node;
+  transition: box-shadow $dp-fast $dp-ease, background-color $dp-fast $dp-ease;
+}
+
+.node-drag {
+  cursor: grab;
+}
+
+.node-on {
+  background: $dp-primary-tint;
+  box-shadow: $dp-sh-node-on;
+}
+
+.node-head {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.node-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: SpoqaB;
+  @include dp-solid(14px);
+  color: $dp-ink;
+}
+
+.node-live {
+  flex-shrink: 0;
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: $dp-primary;
+  color: #fff;
+  @include dp-num;
+  @include dp-solid(10px);
+}
+
+// 상태 점 — 위험이면 halo(바깥 링)가 함께 붙어 멀리서도 눈에 띈다.
+.node-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.node-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.node-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  background: $dp-surface;
+  box-shadow: $dp-ring-soft;
+}
+
+.node-grip {
+  flex-shrink: 0;
+  cursor: grab;
+  @include dp-num;
+  @include dp-solid(11px);
+  color: $dp-ink-faint;
+}
+
+.node-step-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: SpoqaM;
+  @include dp-solid(12px);
+  color: $dp-ink;
+}
+
+.node-step-val {
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 52%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 4px 8px;
+  border-radius: 5px;
+  background: $dp-primary-pale;
+  color: $dp-primary-deep;
+  @include dp-num;
+  @include dp-solid(10px);
+}
+
+.node-count {
+  margin-top: auto;
+  @include dp-num;
+  @include dp-solid(18px);
+  font-weight: 700;
+}
+
+// ── 드로어 ──────────────────────────────────────────────────────────────────
+.dim {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 40;
+  background: rgba(29, 30, 60, 0.28);
+}
+
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  width: 400px;
+  background: $dp-surface;
+  box-shadow: $dp-sh-drawer;
+}
+
+.drawer-head {
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 24px;
+  border-bottom: 1px solid $dp-line-soft;
+}
+
+.drawer-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.drawer-title-box {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.drawer-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: SpoqaB;
+  @include dp-solid(18px);
+  color: $dp-ink;
+}
+
+.drawer-code {
+  letter-spacing: 0.08em;
+  color: $dp-ink-faint;
+}
+
+.drawer-close {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: $dp-r-ctl2;
+  cursor: pointer;
+  background: $dp-primary-bg;
+  color: $dp-ink-mute;
+  @include dp-num;
+  @include dp-solid(14px);
+
+  &:hover { background: $dp-line-soft; }
+}
+
+.drawer-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.drawer-warn-dot {
+  flex-shrink: 0;
+  width: 4px;
+  height: 4px;
+  margin-top: 7px;
+  border-radius: 50%;
+}
+
+.drawer-warn-text {
+  font-family: SpoqaM;
+  @include dp-prose(13px, 1.65);
+  color: $dp-ink-sub;
+}
+
+.drawer-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  gap: 18px;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.drawer-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.drawer-run {
+  @include dp-num;
+  @include dp-solid(11px);
+  color: $dp-ink-mute;
+}
+
+.drawer-io {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: $dp-r-ctl2;
+  background: $dp-primary-bg;
+}
+
+.drawer-io-val {
+  @include dp-num;
+  @include dp-solid(13px);
+  color: $dp-ink;
+}
+
+.drawer-desc {
+  font-family: SpoqaM;
+  @include dp-prose(14px);
+  color: $dp-ink-sub;
+}
+
+.drawer-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.drawer-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: $dp-r-ctl2;
+  background: $dp-primary-bg;
+}
+
+.drawer-stat-value {
+  @include dp-num;
+  @include dp-solid(18px);
+  font-weight: 700;
+  color: $dp-ink;
+}
+
+.drawer-stat-label {
+  font-family: SpoqaM;
+  @include dp-solid(12px);
+  color: $dp-ink-mute;
+}
+
+// 왼쪽 세로선으로 묶음을 표시한다 — 카드를 또 겹치면 깊이가 과해진다.
+.drawer-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-left: 16px;
+  border-left: 2px solid $dp-primary-pale;
+}
+
+.drawer-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: $dp-primary-bg;
+}
+
+.drawer-step-idx {
+  flex-shrink: 0;
+  @include dp-num;
+  @include dp-solid(11px);
+  font-weight: 700;
+  color: $dp-primary-soft;
+}
+
+.drawer-step-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: SpoqaM;
+  @include dp-solid(13px);
+  color: $dp-ink;
+}
+
+.drawer-step-val {
+  flex-shrink: 0;
+  padding: 6px 8px;
+  border-radius: 5px;
+  background: $dp-primary-pale;
+  color: $dp-primary-deep;
+  @include dp-num;
+  @include dp-solid(11px);
+}
+
+.drawer-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.drawer-link-dir {
+  @include dp-num;
+  @include dp-solid(11px);
+}
+
+.drawer-link-name {
+  font-family: SpoqaM;
+  @include dp-solid(13px);
+  color: $dp-ink;
+}
+
+.drawer-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid $dp-line-soft;
+}
+
+// 데이터 노드 마운트 편집기 — 드로어 안에서만 쓴다.
+.drawer-source {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: $dp-r-ctl2;
+  background: $dp-primary-bg;
+}

@@ -1,0 +1,251 @@
+@import '../styles/tokens';
+
+// ── 플레이스홀더 이미지 ─────────────────────────────────────────────────────
+.frame {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+// ── 슬라이더 (플랫폼에 대응물 없음) ─────────────────────────────────────────
+.slider {
+  width: 100%;
+  margin: 0;
+  box-sizing: border-box;
+  accent-color: $dp-primary;
+}
+
+// ── 진행 막대 ───────────────────────────────────────────────────────────────
+.bar {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 2px;
+  background: $dp-line-soft;
+}
+
+.bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  transition: width $dp-normal $dp-ease;
+}
+
+.bar-primary { background: $dp-primary; }
+.bar-red { background: $dp-fail-mid; }
+.bar-orange { background: $dp-warn; }
+.bar-green { background: $dp-pass; }
+
+// ── 게이트 리본 ─────────────────────────────────────────────────────────────
+// 4축을 한 줄에 붙여 놓는다. 셀 사이 1px 틈은 배경색이 비쳐 만든 구분선이다.
+.ribbon-wrap {
+  display: block;
+  overflow: hidden;
+  border-radius: $dp-r-ctl2;
+  box-shadow: $dp-ring-soft;
+}
+
+.ribbon {
+  display: flex;
+  gap: 1px;
+  background: $dp-primary-pale;
+}
+
+.ribbon-cell {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 10px 12px;
+}
+
+.ribbon-lg {
+  padding: 14px 16px 16px;
+
+  .ribbon-score { font-size: 19px; line-height: 19px; }
+}
+
+.ribbon-pass { background: $dp-surface; .ribbon-score, .ribbon-verdict { color: $dp-pass; } }
+.ribbon-warn { background: $dp-yellow-bg; .ribbon-score, .ribbon-verdict { color: $dp-warn-ink; } }
+.ribbon-fail { background: $dp-fail-bg; .ribbon-score, .ribbon-verdict { color: $dp-fail; } }
+
+.ribbon-score {
+  display: block;
+  @include dp-num;
+  @include dp-solid(17px);
+  font-weight: 700;
+}
+
+.ribbon-label {
+  display: block;
+  margin-top: 8px;
+  font-family: SpoqaM;
+  @include dp-solid(12px);
+  color: $dp-ink-mute;
+}
+
+.ribbon-bar {
+  position: relative;
+  display: block;
+  height: 5px;
+  margin-top: 12px;
+  border-radius: 2px;
+  background: $dp-line;
+}
+
+.ribbon-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 2px;
+}
+
+// 임계값 눈금 — 막대 위에 세로로 그어 "얼마나 아슬아슬한지"를 보이게 한다.
+.ribbon-tick {
+  position: absolute;
+  top: -3px;
+  width: 1px;
+  height: 11px;
+  background: $dp-ink;
+  opacity: 0.6;
+}
+
+.ribbon-verdict {
+  display: block;
+  margin-top: 10px;
+  font-family: SpoqaB;
+  @include dp-solid(11px);
+}
+
+// ── 깔때기 ──────────────────────────────────────────────────────────────────
+.funnel {
+  padding: 8px 24px 20px;
+}
+
+.funnel-row {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr) 90px 110px;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid $dp-line-soft;
+}
+
+.funnel-name {
+  font-family: SpoqaM;
+  @include dp-solid(14px);
+  color: $dp-ink;
+}
+
+.funnel-edge {
+  font-family: SpoqaB;
+  color: $dp-navy;
+}
+
+.funnel-track {
+  position: relative;
+  display: block;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: $dp-primary-bg;
+}
+
+.funnel-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 2px;
+}
+
+.funnel-value {
+  @include dp-num;
+  @include dp-solid(14px);
+  font-weight: 700;
+  text-align: right;
+  color: $dp-ink;
+}
+
+.funnel-del {
+  @include dp-num;
+  @include dp-solid(13px);
+  text-align: right;
+  color: $dp-ink-faint;
+}
+
+.funnel-del-on {
+  color: $dp-warn-ink;
+}
+
+.btn-block {
+  display: block;
+  width: 100%;
+
+  > button {
+    width: 100%;
+  }
+}
+
+// 인라인 세그먼트 토글 — ButtonV2 를 붙여 하나의 컨트롤처럼 보이게 한다.
+.segmented {
+  display: inline-flex;
+  gap: 4px;
+}
+
+// ── 상단 바 (배포·모델 상세와 같은 규약) ────────────────────────────────────
+// 값은 DeployDetailHeader / DeployDetailShell 에서 그대로 가져왔다. 숫자를 새로
+// 정하면 나란히 놓았을 때 한쪽만 어긋난다.
+.detail-back-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 30px;
+}
+
+.detail-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: initial;
+  cursor: pointer;
+  color: $mono208;
+  font-family: SpoqaB;
+  font-size: 16px;
+  line-height: 16px;
+  text-decoration: none;
+}
+
+.detail-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 38px;
+}
+
+.detail-title {
+  display: inline-block;
+  margin: initial;
+  color: $mono207;
+  font-family: SpoqaB;
+  font-size: 24px;
+  line-height: 100%;
+}
+
+.detail-right {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+
+.detail-meta {
+  font-family: SpoqaM;
+  font-size: 13px;
+  line-height: 18px;
+  color: $dp-ink-mute;
+}
+
+.tab-bar {
+  margin-bottom: 24px;
+}
