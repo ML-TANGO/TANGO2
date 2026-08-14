@@ -16,8 +16,6 @@ import IconPipeLineActive from '@src/static/images/nav/ic-pipeline-blue.svg';
 import IconPipeLine from '@src/static/images/nav/ic-pipeline-gray.svg';
 import IconNavPlaygroundActive from '@src/static/images/nav/00-ic-nav-playground-active.svg';
 import IconNavPlayground from '@src/static/images/nav/00-ic-nav-playground.svg';
-import IconDataCollectActive from '@src/static/images/nav/data-collect-active-icon.svg';
-import IconDataCollect from '@src/static/images/nav/data-collect-icon.svg';
 import IconSynthesisActive from '@src/static/images/nav/synthesis-active-icon.svg';
 import IconSynthesis from '@src/static/images/nav/synthesis-icon.svg';
 import IconHpsActive from '@src/static/images/nav/hps-active-blue.svg';
@@ -99,10 +97,6 @@ const Rag = lazy(() => import('../llm/Rag'));
 
 const SelectedPage = lazy(() => import('../SelectedPage'));
 
-const UserDatasetCollectDetailPage = lazy(
-  () => import('../UserDatasetCollectDetailPage'),
-);
-
 const Dashboard = lazy(() => import('@src/pages/llm/DashboardPage'));
 
 const cx = classNames.bind(style);
@@ -119,14 +113,6 @@ const UserPipeLineSetting = lazy(
 
 const UserPipeLineContent = lazy(
   () => import('@src/components/pageContents/user/UserPipeLineContent'),
-);
-
-const UserDatasetRedirectPage = lazy(
-  () => import('@src/pages/UserDatasetRedirectPage'),
-);
-
-const UserDataCollectMenuPage = lazy(
-  () => import('@src/pages/UserDataCollectMenuPage'),
 );
 
 const UserDatasetLabelingPage = lazy(
@@ -214,38 +200,42 @@ const ProjectDetail = lazy(
 const EvalCrossCompare = lazy(
   () => import('@src/pages/llm/Evaluation/EvalCrossCompare/EvalCrossCompare'),
 );
+// 학습 데이터 파이프라인 (llm_data_pipeline) — 업로드 → 전처리 → 필터 → 생성 →
+// VLM 심사 → 검수 → 분포 분석 → 구성·분할 → 버전. 기존 전처리·분석·합성 화면을 대체한다.
+const DatasetListPage = lazy(
+  () => import('@src/pages/llm/dataset/DatasetListPage'),
+);
+const DatasetPipelinePage = lazy(
+  () => import('@src/pages/llm/dataset/PipelinePage'),
+);
+const DatasetStageConfigPage = lazy(
+  () => import('@src/pages/llm/dataset/StageConfigPage'),
+);
+const DatasetGeneratePage = lazy(
+  () => import('@src/pages/llm/dataset/GeneratePage'),
+);
+const DatasetGatePage = lazy(() => import('@src/pages/llm/dataset/GatePage'));
+const DatasetSdsNodePage = lazy(
+  () => import('@src/pages/llm/dataset/SdsNodePage'),
+);
+const DatasetReviewPage = lazy(
+  () => import('@src/pages/llm/dataset/ReviewPage'),
+);
+const DatasetAnalysisPage = lazy(
+  () => import('@src/pages/llm/dataset/AnalysisPage'),
+);
+const DatasetComposePage = lazy(
+  () => import('@src/pages/llm/dataset/ComposePage'),
+);
+const DatasetHistoryPage = lazy(
+  () => import('@src/pages/llm/dataset/HistoryPage'),
+);
+const DatasetRecordPage = lazy(
+  () => import('@src/pages/llm/dataset/RecordPage'),
+);
 const UserServicePage = lazy(() => import('@src/pages/UserServicePage'));
 const UserTestPage = lazy(() => import('@src/pages/UserTestPage'));
 const NotFoundPage = lazy(() => import('@src/pages/NotFoundPage'));
-const UserDatasetPreprocessPage = lazy(
-  () => import('@src/pages/UserDatasetPreprocessPage'),
-);
-const UserDatasetPreprocessDetailPage = lazy(
-  () => import('@src/pages/UserDatasetPreprocessDetailPage'),
-);
-
-const UserDatasetAnalysisPage = lazy(
-  () => import('@src/pages/UserDatasetAnalysisPage'),
-);
-const UserSynthesisPage = lazy(() => import('@src/pages/UserSynthesisPage'));
-const UserSynthesisDetailPage = lazy(
-  () => import('@src/pages/UserSynthesisDetailPage'),
-);
-const UserSynthesisPromptOptimizePage = lazy(
-  () => import('@src/pages/UserSynthesisPromptOptimizePage'),
-);
-const UserSynthesisPromptListPage = lazy(
-  () => import('@src/pages/UserSynthesisPromptListPage'),
-);
-const UserSynthesisCanvasPage = lazy(
-  () => import('@src/pages/UserSynthesisCanvasPage'),
-);
-const UserSynthesisWizardPage = lazy(
-  () => import('@src/pages/UserSynthesisWizardPage'),
-);
-const UserDatasetAnalysisDetailPage = lazy(
-  () => import('@src/pages/UserDatasetAnalysisDetailPage'),
-);
 
 const IS_HIDE_TRAINING =
   import.meta.env.VITE_REACT_APP_IS_HIDE_TRAINING === 'true';
@@ -343,38 +333,20 @@ const routeArrAll = [
   // },
   {
     name: 'Data',
+    // 데이터셋 목록의 정본 경로. 예전에는 여기가 하위 탭으로 보내는 경유지였는데
+    // 하위를 전부 감춘 뒤로는 경유할 곳이 없어 목록을 직접 그린다 — 리다이렉트를
+    // 남겨 두면 클릭할 때마다 빈 화면을 한 번 거친다.
     path: '/user/workspace/:id/datasets',
     exact: true,
-    isGroup: true,
-    // 그룹 헤드는 하위 페이지에서 점등 유지하되, 별개 목적지인 드라이브(/datasets/management)에선 제외.
-    excludeChildren: ['management'],
     icon: IconLnbDatasetsGray,
     activeIcon: IconLnbDatasetsBlue,
     platform: 'flightbase',
-    render: (props) => <UserDatasetRedirectPage {...props} />,
+    render: (props) => <DatasetListPage {...props} />,
   },
-  {
-    name: 'collect.label',
-    path: '/user/workspace/:id/datasets/collect/:did/detail',
-    disabled: true,
-    exact: false,
-    group: datasetGroup,
-    icon: IconDataCollect,
-    activeIcon: IconDataCollectActive,
-    platform: 'flightbase',
-    render: (props) => <UserDatasetCollectDetailPage {...props} />,
-  },
-  {
-    name: 'collect.label',
-    path: '/user/workspace/:id/datasets/collect',
-    group: datasetGroup,
-    // 데이터 그룹의 첫 가시 하위 — 라운딩 경계는 가시 항목에 붙어야 한다.
-    isFirstGroup: true,
-    icon: IconDataCollect,
-    activeIcon: IconDataCollectActive,
-    platform: 'flightbase',
-    render: (props) => <UserDataCollectMenuPage {...props} />,
-  },
+  // 수집(/datasets/collect)은 메뉴에서 제거했다 — 데이터를 가져오는 입구가
+  // 수집과 파이프라인 업로드로 둘이라 어디로 들어가야 하는지가 매번 갈렸다.
+  // 파이프라인의 업로드 화면이 그 역할을 대신한다.
+  // (fb_collect 앱과 UserDataCollectMenuPage 는 보존 — 되돌리려면 라우트만 복원하면 된다.)
   {
     name: 'labeling.label',
     path: '/user/workspace/:id/datasets/labeling',
@@ -387,120 +359,148 @@ const routeArrAll = [
     platform: 'flightbase',
     render: (props) => <UserDatasetLabelingPage {...props} />,
   },
+  // ── 학습 데이터 파이프라인 ───────────────────────────────────────────────
+  // 기존 전처리(/datasets/process) · 분석(/datasets/analysis) · 합성(/datasets/synthesis)
+  // 화면을 대체한다. 세 흐름이 따로 떨어져 있어 "데이터를 어디까지 만들었는지"를 한
+  // 화면에서 볼 수 없었고, VLM 학습에 필요한 심사·검수 단계가 아예 없었다.
+  //
+  // 주의: GenAI 통합 파이프라인(/user/workspace/:id/pipeline)은 학습·양자화·배포 DAG 라
+  // 여기서 대체하지 않는다 — 그쪽을 지우면 파인튜닝이 함께 끊긴다.
+  //
+  // 라우트 순서는 깊은 경로가 먼저다(react-router v5 Switch 는 먼저 맞는 것을 쓴다).
   {
-    name: 'preprocess.label',
-    path: '/user/workspace/:id/datasets/process',
+    name: 'SDS 노드 상세',
+    path: '/user/workspace/:id/datasets/pipeline/:dsId/flow/node/:idx',
     exact: true,
-    isGroup: true,
+    disabled: true,
+    group: datasetGroup,
+    icon: IconPipeLine,
+    activeIcon: IconPipeLineActive,
+    platform: 'flightbase',
+    render: (props) => <DatasetSdsNodePage {...props} />,
+  },
+  {
+    name: '전처리',
+    path: '/user/workspace/:id/datasets/pipeline/:dsId/flow/preprocess',
+    exact: true,
+    disabled: true,
     group: datasetGroup,
     icon: IconPreProcess,
     activeIcon: IconPreProcessActive,
     platform: 'flightbase',
-    render: (props) => <UserDatasetPreprocessPage {...props} />,
+    render: (props) => <DatasetStageConfigPage stage='preprocess' {...props} />,
   },
   {
-    name: '전처리 디테일',
-    path: '/user/workspace/:id/datasets/process/:did/detail',
+    name: '필터',
+    path: '/user/workspace/:id/datasets/pipeline/:dsId/flow/filter',
     exact: true,
-    isGroup: true,
-    group: datasetGroup,
     disabled: true,
+    group: datasetGroup,
     icon: IconPreProcess,
     activeIcon: IconPreProcessActive,
     platform: 'flightbase',
-    render: (props) => <UserDatasetPreprocessDetailPage {...props} />,
+    render: (props) => <DatasetStageConfigPage stage='filter' {...props} />,
   },
   {
-    name: 'analyze.label',
-    path: '/user/workspace/:id/datasets/analysis',
+    name: '생성',
+    path: '/user/workspace/:id/datasets/pipeline/:dsId/flow/generate',
     exact: true,
-    isGroup: true,
+    disabled: true,
     group: datasetGroup,
-    // 데이터 그룹의 마지막 가시 하위 (뒤의 합성·상세는 모두 미노출).
-    isLastGroup: true,
+    icon: IconSynthesis,
+    activeIcon: IconSynthesisActive,
+    platform: 'flightbase',
+    render: (props) => <DatasetGeneratePage {...props} />,
+  },
+  {
+    name: 'VLM 심사',
+    path: '/user/workspace/:id/datasets/pipeline/:dsId/flow/gate',
+    exact: true,
+    disabled: true,
+    group: datasetGroup,
     icon: IconAnalysis,
     activeIcon: IconAnalysisActive,
     platform: 'flightbase',
-    render: (props) => <UserDatasetAnalysisPage {...props} />,
+    render: (props) => <DatasetGatePage {...props} />,
   },
   {
-    name: 'synthesis.label',
-    path: '/user/workspace/:id/datasets/synthesis',
+    name: '파이프라인',
+    path: '/user/workspace/:id/datasets/pipeline/:dsId/flow',
     exact: true,
-    group: datasetGroup,
-    // 메뉴 미노출 (라우트는 유지 — URL 직접 접근 가능)
     disabled: true,
-    icon: IconSynthesis,
-    activeIcon: IconSynthesisActive,
+    group: datasetGroup,
+    icon: IconPipeLine,
+    activeIcon: IconPipeLineActive,
     platform: 'flightbase',
-    render: (props) => <UserSynthesisPage {...props} />,
+    render: (props) => <DatasetPipelinePage {...props} />,
   },
   {
-    name: 'synthesis.label',
-    path: '/user/workspace/:id/datasets/synthesis/:sid/overview',
+    name: '데이터셋 이력',
+    path: '/user/workspace/:id/datasets/pipeline/:dsId/compose/history',
     exact: true,
     disabled: true,
     group: datasetGroup,
-    icon: IconSynthesis,
-    activeIcon: IconSynthesisActive,
+    icon: IconManagement,
+    activeIcon: IconManagementActive,
     platform: 'flightbase',
-    render: (props) => <UserSynthesisDetailPage {...props} />,
+    render: (props) => <DatasetHistoryPage {...props} />,
   },
   {
-    name: 'synthesis.label',
-    path: '/user/workspace/:id/datasets/synthesis/:sid/prompt-optimize',
+    name: '구성 · 분할',
+    path: '/user/workspace/:id/datasets/pipeline/:dsId/compose',
     exact: true,
     disabled: true,
     group: datasetGroup,
-    icon: IconSynthesis,
-    activeIcon: IconSynthesisActive,
+    icon: IconManagement,
+    activeIcon: IconManagementActive,
     platform: 'flightbase',
-    render: (props) => <UserSynthesisPromptOptimizePage {...props} />,
+    render: (props) => <DatasetComposePage {...props} />,
   },
   {
-    name: 'synthesis.label',
-    path: '/user/workspace/:id/datasets/synthesis/:sid/wizard',
+    name: '레코드 상세',
+    path: '/user/workspace/:id/datasets/pipeline/:dsId/record/:rid',
     exact: true,
     disabled: true,
     group: datasetGroup,
-    icon: IconSynthesis,
-    activeIcon: IconSynthesisActive,
+    icon: IconManagement,
+    activeIcon: IconManagementActive,
     platform: 'flightbase',
-    render: (props) => <UserSynthesisWizardPage {...props} />,
+    render: (props) => <DatasetRecordPage {...props} />,
   },
   {
-    name: 'synthesis.label',
-    path: '/user/workspace/:id/datasets/synthesis/:sid/prompt-list',
+    name: '검수',
+    path: '/user/workspace/:id/datasets/pipeline/:dsId/review',
     exact: true,
     disabled: true,
     group: datasetGroup,
-    icon: IconSynthesis,
-    activeIcon: IconSynthesisActive,
+    icon: IconManagement,
+    activeIcon: IconManagementActive,
     platform: 'flightbase',
-    render: (props) => <UserSynthesisPromptListPage {...props} />,
+    render: (props) => <DatasetReviewPage {...props} />,
   },
   {
-    name: 'synthesis.label',
-    path: '/user/workspace/:id/datasets/synthesis/:sid/canvas',
+    name: '분포 분석',
+    path: '/user/workspace/:id/datasets/pipeline/:dsId/analysis',
     exact: true,
     disabled: true,
     group: datasetGroup,
-    icon: IconSynthesis,
-    activeIcon: IconSynthesisActive,
-    platform: 'flightbase',
-    render: (props) => <UserSynthesisCanvasPage {...props} />,
-  },
-  {
-    name: 'Data Analysis Detail',
-    path: '/user/workspace/:id/datasets/analysis/:did/detail',
-    exact: true,
-    isGroup: true,
-    group: datasetGroup,
-    disabled: true,
     icon: IconAnalysis,
     activeIcon: IconAnalysisActive,
     platform: 'flightbase',
-    render: (props) => <UserDatasetAnalysisDetailPage {...props} />,
+    render: (props) => <DatasetAnalysisPage {...props} />,
+  },
+  {
+    name: '데이터 파이프라인',
+    // 메뉴 미노출 — 상위 '데이터'가 같은 목록을 보여주므로 하위에 또 두면 같은 곳으로
+    // 가는 항목이 둘이 된다. 라우트는 남겨 기존 링크·북마크가 깨지지 않게 한다.
+    path: '/user/workspace/:id/datasets/pipeline',
+    exact: true,
+    disabled: true,
+    group: datasetGroup,
+    icon: IconPipeLine,
+    activeIcon: IconPipeLineActive,
+    platform: 'flightbase',
+    render: (props) => <DatasetListPage {...props} />,
   },
   // {
   //   name: 'management.label',
