@@ -1,0 +1,32 @@
+# tango-dev(단일 브로커) 전용 오버라이드.
+#
+# 기본 values.yaml 의 extraConfig 는 "리플리케이션 설정 (3개 브로커)" 주석대로
+# 브로커 3대를 전제한다. dev 는 broker 1대라 그 값이면 __consumer_offsets 자동 생성이
+# 영구 실패한다(복제본 3개를 놓을 브로커가 없음) → 컨슈머 그룹 조정 불가 →
+# subscribe() 소비가 0건이 되고 스케줄러가 잡 메시지를 영영 못 읽는다.
+# (assign() 은 그룹을 안 쓰므로 정상 동작해서 "브로커는 멀쩡한데 안 읽히는" 형태로 보인다.)
+#
+# 적용:
+#   helm upgrade -n tango-dev-kafka kafka . --reuse-values -f values_dev_single.yaml
+#
+# extraConfig 는 문자열 전체가 치환되므로 기본값의 나머지 항목도 함께 옮겨 적는다.
+
+extraConfig: |
+  # 리플리케이션 설정 (단일 브로커 — 복제본을 놓을 곳이 1대뿐)
+  offsets.topic.replication.factor=1
+  transaction.state.log.replication.factor=1
+  transaction.state.log.min.isr=1
+  default.replication.factor=1
+  min.insync.replicas=1
+
+  # 파티션 설정
+  num.partitions=3
+  num.recovery.threads.per.data.dir=4
+  num.io.threads=8
+
+# 컨테이너 memory limit(resourcesPreset: small = 768Mi)보다 힙이 크면 JVM 이 -Xms 를
+# 잡는 순간 OOMKilled 된다(실제로 21회 재시작). 힙을 한도 안으로 낮춘다.
+broker:
+  heapOpts: -Xmx512m -Xms512m
+controller:
+  heapOpts: -Xmx512m -Xms512m

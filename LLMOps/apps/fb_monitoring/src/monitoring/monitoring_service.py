@@ -120,10 +120,19 @@ DATASET_FILEBROWSER_STATUS_READY="kube_pod_container_status_ready{{pod='{POD_NAM
 DATASET_FILEBROWSER_POD_LIST="kube_pod_labels{label_pod_type='filebrowser'}"
 REDIS_WORKSPACE_POD_LIST="kube_pod_labels{{label_workspace_id='{workspace_id}', label_work_func_type!=''}}"
 NAMESPACE_TOOL_LIST="kube_pod_labels{{label_work_func_type!='',namespace='{namespace}'}}"
-WORKSPACE_POD_RESOURCE_USAGE="kube_pod_labels{label_work_func_type=~'tool|training|deployment|generation'}"
+# 이 인스턴스가 소유한 네임스페이스만 — 시스템 네임스페이스와 워크스페이스 네임스페이스
+# ({sys}-{workspace_id}). Prometheus 는 클러스터 전역(kube-state-metrics)을 보므로 필터가
+# 없으면 같은 클러스터의 **다른 인스턴스** 파드까지 집계된다. 실제로 dev 가 서빙
+# (jonathan-system-2)의 파드를 자기 workspace 사용량으로 읽어 available=0 이 되고
+# 모든 잡이 영구 pending 에 걸렸다. `-[0-9]+` 로 한정해 tango-dev-kafka 같은 인프라
+# 네임스페이스는 제외한다.
+_NS_SELECTOR = "namespace=~'{ns}(-[0-9]+)?'".format(ns=settings.JF_SYSTEM_NAMESPACE)
+
+WORKSPACE_POD_RESOURCE_USAGE="kube_pod_labels{label_work_func_type=~'tool|training|deployment|generation'," + _NS_SELECTOR + "}"
 WORKSPACE_NETWORK_OUTBOUND_USAGE="container_network_transmit_bytes_total" # return value Byte/s
 WORKSPACE_NETWORK_INBOUND_USAGE="container_network_receive_bytes_total" # return value Byte/s
-WORKSPACE_POD_INFO_JOIN_LABELS="kube_pod_info * on(pod) group_left(label_workspace_id, label_pod_type, label_helm_name, label_instance_id) kube_pod_labels{label_work_func_type=~'tool|training|deployment|generation'}"
+WORKSPACE_POD_INFO_JOIN_LABELS=("kube_pod_info * on(pod) group_left(label_workspace_id, label_pod_type, label_helm_name, label_instance_id) "
+                                "kube_pod_labels{label_work_func_type=~'tool|training|deployment|generation'," + _NS_SELECTOR + "}")
 TRAINING_POD_LIST="kube_pod_labels{label_work_func_type='training'}"
 HPS_POD_LIST="kube_pod_labels{label_work_func_type='hps'}"
 TOOL_POD_DNS = "http://{SERVICE_NAME}.{NAMESPACE}.svc.cluster.local"
