@@ -1606,6 +1606,82 @@ async def ensure_format_convert_project(workspace_id : int, owner_id : int, head
         raise CustomError("Failed to prepare the format conversion project.")
     return created["id"]
 
+DATA_PIPELINE_PROJECT_PREFIX = "dp-pipeline"
+
+
+def data_pipeline_project_name(dp_dataset_id : int) -> str:
+    """파이프라인 하나가 쓰는 전처리 프로젝트 이름. UNIQUE(workspace_id, name) 로 멱등."""
+    return f"{DATA_PIPELINE_PROJECT_PREFIX}-{dp_dataset_id}"
+
+
+async def ensure_data_pipeline_project(workspace_id : int, dp_dataset_id : int,
+                                       owner_id : int, header_user_id : int) -> int:
+    """데이터 파이프라인 전용 built-in 프로젝트 find-or-create (멱등).
+
+    파이프라인 **하나당 프로젝트 하나**. 노드(전처리·필터·생성·심사·조립)는 이 프로젝트의
+    잡으로 돌고, 어느 노드인지는 잡의 run_code 가 구분한다 — 노드마다 프로젝트를 만들면
+    같은 파이프라인의 노드들이 서로 다른 instance 에 할당돼 쿼터를 노드 종류 수만큼 문다.
+    엔티티의 built_in_data_tf 는 대표값(DP_PREP)이고 실제 실행 스크립트는 잡이 정한다.
+
+    구조는 ensure_format_convert_project 와 동일(재사용 → 인스턴스 재할당 → 생성).
+    run_job 이 instance 할당을 요구하므로 instance_id 가 있는 것만 재사용 가능으로 본다.
+
+    Return: preprocessing_id
+    """
+    # 사용자를 못 찾으면 owner_id 가 NULL 인 프로젝트가 만들어지고, 그 사실은 한참 뒤
+    # 잡 생성 시점에 pydantic 검증 에러로만 드러난다. 여기서 먼저 끊는다.
+    if not owner_id:
+        raise CustomError("Unknown user — cannot create the data pipeline project.")
+
+    name = data_pipeline_project_name(dp_dataset_id)
+    existing = await db_prepro.get_preprocessing(workspace_id=workspace_id, preprocessing_name=name)
+
+    # 1) 인스턴스가 붙어 있으면 그대로 재사용.
+    if existing and existing.get("instance_id"):
+        return existing["id"]
+
+    instance = pick_min_cpu_instance(await db_prepro.get_workspace_instances(workspace_id=workspace_id))
+
+    # 2) 인스턴스만 빠진 경우(instance 삭제 → ON DELETE SET NULL) 재할당.
+    if existing:
+        users = await db_prepro.get_preprocessing_user_list(preprocessing_id=existing["id"])
+        await update_preprocessing(
+            preprocessing_id=existing["id"],
+            user_list=[u["id"] for u in (users or [])],
+            access=existing["access"],
+            description=existing.get("description") or "",
+            instance_id=instance["instance_id"],
+            instance_allocate=1,
+            owner_id=existing["owner_id"],
+            header_user_id=header_user_id,
+        )
+        return existing["id"]
+
+    # 3) 없으면 생성. 동시 호출은 UNIQUE KEY(workspace_id, name) 위반으로 한쪽만 성공하고
+    #    패자는 아래 재조회에서 승자의 id 를 그대로 돌려받는다(멱등).
+    try:
+        await create_preprocessing(
+            preprocessing_name=name,
+            preprocessing_type=TYPE.PREPROCESSING_TYPE_B,
+            workspace_id=workspace_id,
+            owner_id=owner_id,
+            access=1,
+            description=f"Auto-created for LLM/VLM data pipeline #{dp_dataset_id}.",
+            instance_id=instance["instance_id"],
+            instance_allocate=1,
+            user_list=[],
+            built_in_data_type=TYPE_BUILT_IN.PREPROCESSING_BUILT_IN_IMAGE_TYPE,
+            built_in_data_tf=TYPE_BUILT_IN.DP_PREP,
+        )
+    except Exception:
+        traceback.print_exc()
+
+    created = await db_prepro.get_preprocessing(workspace_id=workspace_id, preprocessing_name=name)
+    if not created or not created.get("instance_id"):
+        raise CustomError("Failed to prepare the data pipeline project.")
+    return created["id"]
+
+
 #=======================================================
 # UPDATE
 #=======================================================

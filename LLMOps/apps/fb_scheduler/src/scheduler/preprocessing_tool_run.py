@@ -12,6 +12,14 @@ from datetime import datetime
 import re, sys, subprocess, os
 
 
+# 데이터 파이프라인 노드 스크립트 접두어. /built_in/dp_prep.py 처럼 실행되며,
+# 이 접두어를 가진 잡만 /datasets(워크스페이스 data PVC 루트) RO 마운트를 받는다.
+DATA_PIPELINE_SCRIPT_PREFIX = "dp_"
+# 데이터 파이프라인 노드 빌트인 종류. TYPE_BUILT_IN 에 등록하는 것만으로는 부족하고
+# 여기 분기에 걸려야 실행 명령이 만들어진다(안 걸리면 command="" 로 파드만 뜨고 끝).
+DATA_PIPELINE_TFS = {TYPE_BUILT_IN.DP_PREP}
+
+
 def get_job_parameter(run_parameter, unified_memory):
     parameter = run_parameter
     if unified_memory == 1:
@@ -57,7 +65,13 @@ def create_preprocessing_job_pod(preprocessing_job_info : PreprocessingJobPodInf
             nodes_command += f" --set cluster[{index}].device.uuids={common.helm_set_value(node.device.uuids)}"
             nodes_command += f" --set cluster[{index}].device.ids={common.helm_set_value(node.device.ids)}"        
         namespace = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=preprocessing_job_info.labels.workspace_id)
+        # 데이터 파이프라인 노드(dp_*.py)만 소스 데이터셋이 여러 개일 수 있어 워크스페이스
+        # data PVC 루트를 /datasets 에 RO 로 추가 마운트한다. 기존 빌트인은 /dataset 단일
+        # 마운트만 쓰므로 기본 off — 스크립트 이름으로 가른다(불리언 하나를 run_job 3계층에
+        # 관통시키지 않기 위해. 판정을 바꾸려면 여기 한 곳만 보면 된다).
+        datasets_root = f"/{DATA_PIPELINE_SCRIPT_PREFIX}" in str(preprocessing_job_info.command or "")
         command=f"""helm install {common.shell_arg(preprocessing_job_info.labels.helm_name)} prepro_job/ \
+            --set datasetsRoot={str(bool(datasets_root)).lower()} \
             -n {common.shell_arg(namespace)} \
             --set system.namespace={settings.JF_SYSTEM_NAMESPACE} \
             --set namespace={common.shell_arg(namespace)} \
@@ -314,7 +328,15 @@ def create_preprocessing_job(pod_info: dict):
             run_code = PATH.JF_PREPROCESSING_BUILT_IN_CODE_PATH.format(RUN_CODE=TYPE_BUILT_IN.PREPROCESSING_TFS_SCRIPT[pod_info["built_in_data_tf"]])
             _, run_code_type = os.path.splitext(run_code)
             run_command = job_run_command(run_code_type=run_code_type[1:], run_code=run_code, parameter=parameter)
-            
+        elif pod_info["built_in_data_tf"] in DATA_PIPELINE_TFS:
+            # 데이터 파이프라인 노드(dp_*.py). 다른 빌트인과 달리 스케줄러가 입력 경로를
+            # 덧붙이지 않는다 — 노드 설정은 기능 목록·순서·파라미터가 중첩된 구조라
+            # BE 가 작업 데이터셋에 params.json 을 써 두고 --params_path 하나만 보낸다.
+            run_code = PATH.JF_PREPROCESSING_BUILT_IN_CODE_PATH.format(
+                RUN_CODE=TYPE_BUILT_IN.PREPROCESSING_TFS_SCRIPT[pod_info["built_in_data_tf"]])
+            _, run_code_type = os.path.splitext(run_code)
+            run_command = job_run_command(run_code_type=run_code_type[1:], run_code=run_code, parameter=parameter)
+
     # 생성되는 pod 개수
     labels.pod_count = len(nodes)
     training_pod_info = PreprocessingJobPodInfo(

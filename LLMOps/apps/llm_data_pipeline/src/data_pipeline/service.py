@@ -4,7 +4,13 @@ DB 접근은 utils.llm_db.db_data_pipeline 에 맡기고, 여기서는 화면이
 "판정"을 만든다 — 노드 경고, 유형별 판정, 통과율 범위, 학습 형식 검사 결과처럼
 사람이 다음에 뭘 해야 하는지 알려주는 값들.
 """
+import json
 import math
+import os
+import time
+import uuid
+
+import aiohttp
 
 from utils.llm_db import db_data_pipeline as db
 
@@ -317,6 +323,205 @@ def _stage_library(stage):
 async def _preset_of(dataset_id):
     """데이터셋의 프리셋. 심사 축·임계를 고르는 기준이라 축을 쓰는 곳은 전부 이걸 거친다."""
     return (await get_dataset(dataset_id)).get("preset") or PRESET_GENERIC
+
+
+# ── 노드 실행 ────────────────────────────────────────────────────────────────
+# 단계 → 잡이 실행할 빌트인 스크립트. 노드 종류를 잡의 run_code 가 구분한다
+# (프로젝트는 파이프라인당 하나라 엔티티의 built_in_data_tf 는 대표값일 뿐이다).
+STAGE_SCRIPT = {
+    "preprocess": "dp_prep.py",
+    "filter": "dp_filter.py",
+    "generate": "dp_generate.py",
+    "gate": "dp_judge.py",
+}
+
+# 작업 데이터셋 안의 경로. 미리보기는 표본만 돌리고 이력에 남기지 않는다.
+RUN_DIR = "_runs"
+PREVIEW_DIR = "_preview"
+
+_PREPRO_BASE = "http://{host}:{port}/api/preprocessing".format(
+    host=os.getenv("JFB_APP_PREPROCESSING_SVC_SERVICE_HOST", "jfb-app-preprocessing-svc"),
+    port=os.getenv("JFB_APP_PREPROCESSING_SVC_SERVICE_PORT", "80"))
+
+
+async def _prepro_post(path, body, jf_user):
+    """전처리 MSA 호출. 실패 사유를 그대로 올려 사용자가 원인을 본다."""
+    url = _PREPRO_BASE + path
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, json=body,
+                                headers={"Jf-User": jf_user or ""},
+                                timeout=aiohttp.ClientTimeout(total=120)) as resp:
+            text = await resp.text()
+            if resp.status != 200:
+                raise RuntimeError(f"preprocessing {path} HTTP {resp.status}: {text[:200]}")
+            data = json.loads(text)
+    if not data.get("status"):
+        raise RuntimeError(f"preprocessing {path}: {data.get('message')}")
+    return data.get("result") or {}
+
+
+def _new_run_id():
+    """run_id 는 매 실행 새로 발급한다 — 부분 재실행이 이전 산출물을 덮지 않게."""
+    return f"r{time.strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6]}"
+
+
+def _runnable_steps(stage, node):
+    """노드가 실제로 실행할 [기능명, 파라미터] 목록.
+
+    `llm_dp_node.steps` 는 캔버스에 보여줄 **표시값**(예: ["리사이즈", "1024px"])이라
+    그대로 넘기면 노드가 파라미터를 못 읽는다. 실제 값은 `config.enabled/params` 에 있다.
+    실행 순서는 라이브러리 정의 순서를 따른다(사용자가 순서를 바꾸는 UI 는 아직 없다).
+
+    config 가 비어 있으면(기본 노드 그대로) 표시값의 기능명만 살려 기본 파라미터로 돈다 —
+    설정을 한 번도 저장하지 않은 파이프라인도 의미 있게 실행되게.
+    """
+    library = _stage_library(stage)
+    if not library:
+        return []
+    cfg = node.get("config") or {}
+    enabled = cfg.get("enabled") or {}
+    saved = cfg.get("params") or {}
+    if not enabled:
+        shown = {s[0] if isinstance(s, (list, tuple)) else s for s in (node.get("steps") or [])}
+        enabled = {name: True for name in shown}
+
+    steps = []
+    for item in library:
+        key = item["key"]
+        if not enabled.get(key):
+            continue
+        pspec = item.get("param") or {}
+        pkey = pspec.get("key")
+        if pkey:
+            steps.append([key, {pkey: saved.get(pkey, pspec.get("default"))}])
+        else:
+            steps.append([key, {}])
+    return steps
+
+
+# 작업 데이터셋은 access=0(생성자만 수정)으로 만든다. 플랫폼의 데이터셋 삭제는 사용 중
+# 검사가 없으므로, 정책을 바꾸지 않고 오삭제 가능성을 줄일 수 있는 유일한 수단이다.
+WORK_DATASET_ACCESS = 0
+_DATASET_BASE = "http://{host}:{port}/api/datasets".format(
+    host=os.getenv("JFB_APP_DATASET_SVC_SERVICE_HOST", "jfb-app-dataset-svc"),
+    port=os.getenv("JFB_APP_DATASET_SVC_SERVICE_PORT", "80"))
+
+
+def _work_dataset_root(storage_name, workspace_name, access, dataset_name):
+    """BE 파드에서 본 작업 데이터셋 디렉터리(PATH.JF_DATA_DATASET_PATH 와 같은 규약)."""
+    return f"/jf-data/{storage_name}/data/{workspace_name}/{access}/{dataset_name}"
+
+
+async def _ensure_work_dataset(ds, jf_user):
+    """파이프라인이 소유한 빈 작업 데이터셋을 보장한다(최초 실행 시 생성).
+
+    파이프라인 생성 시점이 아니라 첫 실행 때 만드는 이유: 이미 만들어진 파이프라인도
+    그대로 동작하고, 실행하지 않는 파이프라인이 빈 데이터셋을 남기지 않는다.
+
+    소스 데이터셋에 쓰지 않고 별도 데이터셋에 쌓는다 — 합성(synthesis)은 입력 데이터셋
+    안의 output_subdir 에 쓰는데, 그러면 원본이 오염되고 남이 그 데이터셋을 지우면
+    산출물까지 함께 사라진다.
+    """
+    if ds.get("work_dataset_id") and ds.get("work_dataset_name"):
+        return ds["work_dataset_id"], ds["work_dataset_name"]
+
+    name = f"dp-{ds['id']}-{ds['name']}"[:120]
+    form = aiohttp.FormData()
+    form.add_field("workspace_id", str(ds["workspace_id"]))
+    form.add_field("dataset_name", name)
+    form.add_field("access", str(WORK_DATASET_ACCESS))
+    form.add_field("description", f"데이터 파이프라인 #{ds['id']} 산출물(중간 결과 · 릴리스)")
+    async with aiohttp.ClientSession() as session:
+        async with session.post(_DATASET_BASE, data=form,
+                                headers={"Jf-User": jf_user or ""},
+                                timeout=aiohttp.ClientTimeout(total=120)) as resp:
+            text = await resp.text()
+    # 이미 있으면(동시 실행 패자) 생성은 실패해도 아래 재조회로 id 를 얻는다.
+    # 데이터셋 생성은 result 로 새 id(정수)를 그대로 돌려준다 — dict 로 가정하면 터진다.
+    work_id = None
+    try:
+        data = json.loads(text)
+        if data.get("status"):
+            res = data.get("result")
+            work_id = res if isinstance(res, int) else (res or {}).get("id")
+    except ValueError:
+        pass
+    if not isinstance(work_id, int):
+        work_id = await db.find_platform_dataset_id(ds["workspace_id"], name)
+    if not work_id:
+        raise RuntimeError(f"작업 데이터셋을 만들지 못했습니다: {text[:200]}")
+
+    await db.set_work_dataset(ds["id"], work_id, name)
+    fresh = await get_dataset(ds["id"])
+    return fresh.get("work_dataset_id") or work_id, fresh.get("work_dataset_name") or name
+
+
+async def run_stage(dataset_id, stage, dry_run=False, sample_size=10, jf_user=None):
+    """노드 하나를 잡으로 띄운다.
+
+    설정을 params.json 으로 **작업 데이터셋 안에** 써 두고 잡에는 그 경로만 넘긴다.
+    노드 설정은 기능 목록·순서·파라미터가 중첩된 구조라 `--key value` 로 펼치면
+    helm --set 의 콤마·중괄호 이스케이프에 걸린다.
+    """
+    if stage not in STAGE_SCRIPT:
+        raise ValueError(f"실행할 수 없는 단계입니다: {stage}")
+
+    ds = await get_dataset(dataset_id)
+    workspace_id = ds["workspace_id"]
+    node = _find_stage_node(await db.get_flow(dataset_id) or [], stage)
+    if node is None:
+        raise NotFound(f"'{stage}' 단계에 해당하는 노드가 파이프라인에 없습니다")
+
+    # 파이프라인당 전처리 프로젝트 하나(멱등). 노드마다 만들면 같은 파이프라인의 노드가
+    # 서로 다른 instance 에 할당돼 쿼터를 노드 종류 수만큼 문다.
+    ensured = await _prepro_post("/data-pipeline/ensure",
+                                 {"workspace_id": workspace_id, "dp_dataset_id": dataset_id},
+                                 jf_user)
+    preprocessing_id = ensured["preprocessing_id"]
+
+    run_id = _new_run_id()
+    node_index = node.get("node_index", 0)
+    base = PREVIEW_DIR if dry_run else RUN_DIR
+    rel_dir = f"{base}/{run_id}/{node_index}"
+
+    work_id, work_name = await _ensure_work_dataset(ds, jf_user)
+    storage_name = await db.get_workspace_storage_name(workspace_id)
+    if not storage_name:
+        raise Conflict("워크스페이스에 data 스토리지가 없습니다")
+    work_root = _work_dataset_root(storage_name, ds["workspace_name"],
+                                   WORK_DATASET_ACCESS, work_name)
+
+    out_dir = os.path.join(work_root, rel_dir)
+    os.makedirs(out_dir, exist_ok=True)
+    params = {
+        "run_id": run_id,
+        "node_index": node_index,
+        "preset": ds.get("preset") or PRESET_GENERIC,
+        "sources": (node.get("config") or {}).get("sources") or [],
+        "steps": _runnable_steps(stage, node),
+        "dry_run": bool(dry_run),
+        "sample_size": int(sample_size),
+        # 잡 pod 기준 경로 — 작업 데이터셋은 /dataset 에 마운트된다.
+        "out_dir": f"/dataset/{rel_dir}",
+        "datasets_root": "/datasets",
+    }
+    with open(os.path.join(out_dir, "params.json"), "w", encoding="utf-8") as f:
+        json.dump(params, f, ensure_ascii=False, indent=2)
+
+    job = await _prepro_post("/jobs/pipeline/run", {
+        "preprocessing_id": preprocessing_id,
+        "job_name": f"dp-{dataset_id}-n{node_index}-{run_id}",
+        "run_code": STAGE_SCRIPT[stage],
+        "create_user_name": jf_user or "",
+        # 잡의 /dataset 마운트 = 작업 데이터셋. 소스는 /datasets(RO)로 따로 붙는다.
+        "dataset_id": work_id,
+        "built_in_param": {"params_path": f"/dataset/{rel_dir}/params.json"},
+    }, jf_user)
+
+    return {"dataset_id": dataset_id, "stage": stage, "run_id": run_id,
+            "node_index": node_index, "dry_run": bool(dry_run),
+            "out_dir": rel_dir, "work_dataset_id": work_id,
+            "preprocessing_id": preprocessing_id, "job": job}
 
 
 async def get_stage(dataset_id, stage):

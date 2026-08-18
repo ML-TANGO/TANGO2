@@ -155,6 +155,23 @@ async def get_stage(dataset_id: int, stage: str):
         return _fail(e)
 
 
+@data_pipelines.post("/datasets/{dataset_id}/stages/{stage}/run", summary="단계 실행", tags=TAG)
+async def run_stage(dataset_id: int, stage: str, body: dto.StageRunBody,
+                    jf_user: str = Header(default=None, alias="Jf-User")):
+    """노드 하나를 잡으로 띄운다.
+
+    dry_run 이면 표본만 돌려 `_preview/` 에 남기고 이력에 안 남긴다 — 사용자가 기능을
+    껐다 켜며 결과를 비교하는 경로다. 전량 실행은 `_runs/{run_id}/` 로 간다.
+    """
+    try:
+        dto.validate_stage(stage)
+        res = await svc.run_stage(dataset_id, stage, dry_run=body.dry_run,
+                                  sample_size=body.sample_size, jf_user=jf_user)
+        return response(status=1, result=res)
+    except Exception as e:
+        return _fail(e)
+
+
 @data_pipelines.put("/datasets/{dataset_id}/stages/preprocess", summary="전처리 설정 저장", tags=TAG)
 async def save_preprocess(dataset_id: int, body: dto.StageConfigBody):
     try:

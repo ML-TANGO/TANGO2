@@ -48,6 +48,14 @@ class FormatConvertEnsureModel(BaseModel):
     """데이터셋 상세 '포맷 변환' 전용 built-in 프로젝트 find-or-create 요청."""
     workspace_id: int = Field(description='workspace id')
 
+class DataPipelineEnsureModel(BaseModel):
+    """데이터 파이프라인 전용 built-in 프로젝트 find-or-create 요청.
+
+    파이프라인당 프로젝트 하나 — dp_dataset_id 가 그 파이프라인(llm_dp_dataset)을 가리킨다.
+    """
+    workspace_id: int = Field(description='workspace id')
+    dp_dataset_id: int = Field(description='llm_dp_dataset id (파이프라인)')
+
 class JOBCRUDModel(BaseModel):
     search_key: Optional[str] = Field(default=None, description='training JOB Search Key "name" or "user_name"... ')
     size: Optional[int] = Field(default=None, description='training JOB List Item Size')

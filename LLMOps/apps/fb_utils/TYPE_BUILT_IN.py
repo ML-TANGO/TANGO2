@@ -63,6 +63,9 @@ IMAGE_AUGMENT = "데이터셋 내 이미지 증강 (Image Augmentation in given 
 MARKER_ANALYSIS = "Marker 라벨링 json 데이터 csv 변환(Marker result json to csv)"
 FORMAT_CONVERT = "데이터 포맷 변환 (Format Conversion: CSV/TXT/Parquet → JSON/JSONL)"
 SDS_LLAVA_CONVERT = "SDS VLM 학습 데이터 변환 (SDS scenarios → LLaVA JSON)"
+# 데이터 파이프라인 노드. 다른 빌트인과 달리 사용자가 전처리 모달에서 직접 고르는 게 아니라
+# 파이프라인 캔버스의 노드가 실행 단위다 — 설정이 중첩 구조라 파라미터를 파일로 넘긴다.
+DP_PREP = "데이터 파이프라인 - 전처리 노드 (Data Pipeline: prep node)"
 TEXT_AUGMENT = "텍스트 증강 (Text Augmentation)"
 TEXT_CLEANING = "텍스트 정제 (Text Cleaning)"
 TOKENIZATION_EMBEDDING = "토큰화 및 임베딩 생성 (Tokenization & Embedding Generation)"
@@ -103,6 +106,10 @@ PREPROCESSING_TFS_PARAM = {
     # SDS → LLaVA JSON. sds_variant(en/ko/ko_compact/all), result_file_name(기본 sds_train).
     # 입력(--input_data)은 스케줄러가 sds 데이터셋 디렉토리로 주입. 컬럼 매핑 없음(도메인 고정 포맷).
     SDS_LLAVA_CONVERT : ["sds_variant", "result_file_name"],
+    # 노드 설정(기능 목록·순서·기능별 파라미터·소스 데이터셋)은 중첩 구조라 --key value 로
+    # 펼치면 helm --set 콤마·중괄호 이스케이프에 걸린다. BE 가 params.json 을 작업
+    # 데이터셋에 써 두고 그 경로만 넘긴다.
+    DP_PREP : ["params_path"],
     TEXT_AUGMENT: ["text_data", "augmentation_rules"],
     TEXT_CLEANING: ["text_data", "cleaning_rules"],
     TOKENIZATION_EMBEDDING: ["text_data", "tokenization_method"],
@@ -139,6 +146,7 @@ PREPROCESSING_TFS_SCRIPT = {
     MARKER_ANALYSIS : "preprocess_marker_json.py",
     FORMAT_CONVERT : "format_convert.py",
     SDS_LLAVA_CONVERT : "sds_llava_convert.py",
+    DP_PREP : "dp_prep.py",
     TEXT_AUGMENT: "text_augmentation.py",
     TEXT_CLEANING: "text_cleaning.py",
     TOKENIZATION_EMBEDDING: "tokenization_embedding.py",
