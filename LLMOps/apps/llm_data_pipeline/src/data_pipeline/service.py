@@ -650,5 +650,9 @@ async def create_version(dataset_id, version, mix, split, split_by):
         prompt_name=cfg.get("prompt_name"), thresholds=gate.get("thresholds"),
         mix={"weights": mix, "counts": resolved_mix},
         split={"ratio": split_ratio, "counts": resolved_split},
-        split_by=split_by)
+        split_by=split_by,
+        # 어느 실행에서 나온 레코드로 만든 버전인지 스냅샷한다. run 과 version 은
+        # 직교하므로(1 run → N version, N run → 1 version) 이걸 남기지 않으면
+        # 나중에 역산이 안 된다.
+        source_runs=await db.get_source_runs(dataset_id))
     return await list_versions(dataset_id)

@@ -27,6 +27,11 @@ CREATE TABLE IF NOT EXISTS `llm_dp_dataset` (
     -- 노드 간 연결(엣지). 노드 행이 아니라 그래프에 속하는 정보라 여기에 둔다.
     -- [[출발 index, 도착 index], ...] · 비어 있으면 선형(0→1→2…)으로 본다.
     `flow`              JSON,
+    -- 이 파이프라인이 소유한 작업 데이터셋(플랫폼 dataset). 노드 산출물(_runs/_preview)과
+    -- 릴리스가 여기 쌓인다. 소스 데이터셋은 RO 로만 읽고 절대 쓰지 않는다 — 원본 오염과
+    -- "남이 소스를 지우면 산출물도 같이 사라지는" 문제를 동시에 피한다.
+    `work_dataset_id`   INT(11),
+    `work_dataset_name` VARCHAR(128),
     `create_datetime`   DATETIME DEFAULT CURRENT_TIMESTAMP(),
     `update_datetime`   DATETIME DEFAULT CURRENT_TIMESTAMP() ON UPDATE CURRENT_TIMESTAMP(),
     PRIMARY KEY (`id`),
@@ -147,6 +152,10 @@ CREATE TABLE IF NOT EXISTS `llm_dp_version` (
     `mix`               JSON,
     `split`             JSON,
     `split_by`          VARCHAR(32),
+    -- 이 버전에 담긴 레코드들이 어느 실행에서 나왔는지. ["run-a1b2","run-c3d4"]
+    -- run 과 version 은 직교한다(1 run → N version, N run → 1 version). 이게 없으면
+    -- "이 버전이 어떻게 나왔나"에 답할 수 없다. 레코드 쪽은 lineage JSON 에 run_id 로 남는다.
+    `source_runs`       JSON,
     `create_datetime`   DATETIME DEFAULT CURRENT_TIMESTAMP(),
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_dp_version` (`dataset_id`, `version`),

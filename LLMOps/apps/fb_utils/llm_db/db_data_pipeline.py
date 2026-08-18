@@ -61,6 +61,7 @@ async def get_dataset(dataset_id):
     sql = """
         SELECT d.id, d.workspace_id, w.name AS workspace_name, d.name, d.description,
                d.state, d.preset, d.create_user, d.flow,
+               d.work_dataset_id, d.work_dataset_name,
                DATE_FORMAT(d.create_datetime, %s) AS create_datetime,
                DATE_FORMAT(d.update_datetime, %s) AS update_datetime
         FROM jonathan_llm.llm_dp_dataset d
@@ -462,13 +463,67 @@ async def list_versions(dataset_id):
     return rows
 
 
+async def find_platform_dataset_id(workspace_id, name):
+    """플랫폼 데이터셋(msa_jfb.datasets) id 를 이름으로 찾는다.
+
+    작업 데이터셋 생성이 동시 호출로 실패했을 때(이미 있음) 승자의 id 를 얻는 경로.
+    """
+    sql = "SELECT id FROM msa_jfb.datasets WHERE workspace_id = %s AND name = %s"
+    row = await select_query(sql, params=[workspace_id, name], fetch_type="one")
+    return (row or {}).get("id")
+
+
+async def get_workspace_storage_name(workspace_id):
+    """워크스페이스의 data 스토리지 이름. 데이터셋 실경로가 /jf-data/{이것}/data/... 다."""
+    sql = """
+        SELECT s.name
+        FROM msa_jfb.workspace w
+        JOIN msa_jfb.storage s ON s.id = w.data_storage_id
+        WHERE w.id = %s
+    """
+    row = await select_query(sql, params=[workspace_id], fetch_type="one")
+    return (row or {}).get("name")
+
+
+async def set_work_dataset(dataset_id, work_dataset_id, work_dataset_name):
+    """파이프라인이 소유한 작업 데이터셋을 기록한다(최초 1회).
+
+    이미 값이 있으면 덮지 않는다 — 동시 실행이 각자 데이터셋을 만들었더라도 먼저 쓴
+    쪽이 정본이고, 뒤늦은 쪽은 아래 재조회에서 그 값을 그대로 쓴다.
+    """
+    sql = """
+        UPDATE jonathan_llm.llm_dp_dataset
+        SET work_dataset_id = %s, work_dataset_name = %s
+        WHERE id = %s AND work_dataset_id IS NULL
+    """
+    return await commit_query(sql, params=[work_dataset_id, work_dataset_name, dataset_id])
+
+
+async def get_source_runs(dataset_id):
+    """이 데이터셋 레코드들이 나온 실행 id 목록(중복 제거).
+
+    레코드의 lineage JSON 에 run_id 로 남는다. 버전을 만들 때 이 목록을 스냅샷해
+    "이 버전이 어느 실행에서 나왔나"를 나중에 되짚을 수 있게 한다.
+    """
+    sql = """
+        SELECT DISTINCT JSON_UNQUOTE(JSON_EXTRACT(lineage, '$.run_id')) AS run_id
+        FROM jonathan_llm.llm_dp_record
+        WHERE dataset_id = %s
+          AND JSON_EXTRACT(lineage, '$.run_id') IS NOT NULL
+    """
+    rows = await select_query(sql, params=[dataset_id], fetch_type="all") or []
+    return sorted({r["run_id"] for r in rows if r.get("run_id")})
+
+
 async def create_version(dataset_id, version, record_count, pass_rate, human_reviewed,
-                         gen_model, judge_model, prompt_name, thresholds, mix, split, split_by):
+                         gen_model, judge_model, prompt_name, thresholds, mix, split,
+                         split_by, source_runs=None):
     sql = """
         INSERT INTO jonathan_llm.llm_dp_version
             (dataset_id, version, record_count, pass_rate, human_reviewed,
-             gen_model, judge_model, prompt_name, thresholds, mix, split, split_by)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+             gen_model, judge_model, prompt_name, thresholds, mix, split, split_by,
+             source_runs)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
     return await commit_query(sql, params=[
         dataset_id, version, record_count, pass_rate, human_reviewed,
@@ -477,6 +532,7 @@ async def create_version(dataset_id, version, record_count, pass_rate, human_rev
         json.dumps(mix or {}, ensure_ascii=False),
         json.dumps(split or {}, ensure_ascii=False),
         split_by,
+        json.dumps(source_runs or [], ensure_ascii=False),
     ])
 
 
