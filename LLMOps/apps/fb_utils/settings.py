@@ -10,6 +10,10 @@ PASSWORD_KEY = "$6$"
 ADMIN_NAME = "admin"
 ADMIN_TYPE = 0
 JF_SYSTEM_NAMESPACE = os.getenv('JF_SYSTEM_NAMESPACE', None)
+# 인스턴스 분리(서빙 jonathan-system / 개발 tango-dev)용 파생 기준값.
+# JF_SYSTEM_NAMESPACE 가 안 주입되는 경로(단독 스크립트·일부 잡)에서는 기존 리터럴로
+# 폴백하므로 기존 배포 동작은 바뀌지 않는다. namespace 를 끼우는 상수/기본값은 모두 이 값을 쓴다.
+SYSTEM_NAMESPACE = JF_SYSTEM_NAMESPACE or "jonathan-system"
 # [Maria DB Settings]
 JF_DB_HOST = os.getenv('JF_DB_HOST',None)
 JF_DB_PORT = int(os.getenv('JF_DB_PORT',0))
@@ -33,7 +37,9 @@ if SYSTEM_DOCKER_REGISTRY_URL:
     # built-in 전처리/pipeline 기본 실행 이미지. 기존 jfb/jbi_ubuntu(사내 레지스트리·pull불가)
     # 대신 docker.io/acrylaaai 게시 lean 베이스(python3+pandas/pyarrow/pillow/numpy). 소스=libs/fb_image/preprocessing.
     # FORMAT_CONVERT(데이터 포맷 변환) 포함 활성 빌트인 4종이 이 베이스에서 실행(스크립트는 NFS /built_in 마운트).
-    JF_DEFAULT_UBUNTU_22_IMAGE = SYSTEM_DOCKER_REGISTRY_URL + "acrylaaai/genai-platform-builtin-preprocess:tango_v2.1.0"
+    # v2.2.0: 데이터 파이프라인 노드용 imagehash(pHash 중복제거)·pymupdf(PDF 페이지화) 추가.
+    # 기존 4핀(pandas/pyarrow/pillow/numpy)은 그대로라 빌트인 4종에 영향 없음.
+    JF_DEFAULT_UBUNTU_22_IMAGE = SYSTEM_DOCKER_REGISTRY_URL + "acrylaaai/genai-platform-builtin-preprocess:tango_v2.2.0"
 DOCKER_REGISTRY_PROTOCOL = os.getenv('DOCKER_REGISTRY_PROTOCOL', "http://") # "http://" | "https://"
 SYSTEM_DOCKER_REGISTRY_PROTOCOL = os.getenv('SYSTEM_DOCKER_REGISTRY_PROTOCOL', "http://")
 IMAGE_NAMESPACE = f"{JF_SYSTEM_NAMESPACE}-image" if JF_SYSTEM_NAMESPACE else "default-image"
@@ -174,7 +180,18 @@ JF_KONG_PROXY_DNS = os.getenv('JF_KONG_PROXY_DNS', None)
 # [INGRESS MANAGEMENT]
 JF_INGRESS_MANAGEMENT_SVC_HOST = os.getenv('JFB_APP_INGRESS_MANAGEMENT_SVC_SERVICE_HOST', None)
 JF_INGRESS_MANAGEMENT_SVC_PORT = os.getenv('JFB_APP_INGRESS_MANAGEMENT_SVC_SERVICE_PORT', None)
-JF_INGRESS_MANAGEMENT_DNS = f"{JF_INGRESS_MANAGEMENT_SVC_HOST}:{JF_INGRESS_MANAGEMENT_SVC_PORT}"
+# 위 두 값은 kubelet 이 넣어주는 service-link env 로, "파드 생성 시점에 이미 존재하는
+# Service" 만 주입된다. run.sh 의 설치 순서상 user 차트가 ingress_management 보다 먼저
+# 설치되므로 신규 설치에서는 항상 미주입 → "http://None:None/api/ingress/auth" 로 로그인 실패.
+# env 가 있으면 기존 값을 그대로 쓰고, 없을 때만 클러스터 DNS 로 폴백한다
+# (LLM_PLAYGROUND_DNS 등 다른 상수와 같은 방식).
+if JF_INGRESS_MANAGEMENT_SVC_HOST and JF_INGRESS_MANAGEMENT_SVC_PORT:
+    JF_INGRESS_MANAGEMENT_DNS = f"{JF_INGRESS_MANAGEMENT_SVC_HOST}:{JF_INGRESS_MANAGEMENT_SVC_PORT}"
+else:
+    JF_INGRESS_MANAGEMENT_DNS = os.getenv(
+        'JF_INGRESS_MANAGEMENT_DNS',
+        f'jfb-app-ingress-management-svc.{SYSTEM_NAMESPACE}.svc.cluster.local',
+    )
 
 # [EXTERNAL CONTAINER]
 # fb_external_container service (SP-Ext.2) — domain BFFs route partner
@@ -182,14 +199,14 @@ JF_INGRESS_MANAGEMENT_DNS = f"{JF_INGRESS_MANAGEMENT_SVC_HOST}:{JF_INGRESS_MANAG
 # explicitly to override per environment.
 FB_EXTERNAL_CONTAINER_URL = os.getenv(
     'FB_EXTERNAL_CONTAINER_URL',
-    'http://fb-external-container.jonathan-system.svc.cluster.local:8000',
+    f'http://fb-external-container.{SYSTEM_NAMESPACE}.svc.cluster.local:8000',
 )
 
 # [LLM PLAYGROUND] — A4 실 모델출력 배선. 배포(running) 모델의 추론 test_url 해석을
 # playground s2s(get_test_options)에 위임하기 위한 ClusterIP DNS.
 LLM_PLAYGROUND_DNS = os.getenv(
     'LLM_PLAYGROUND_DNS',
-    'jfb-llm-playground-svc.jonathan-system.svc.cluster.local',
+    f'jfb-llm-playground-svc.{SYSTEM_NAMESPACE}.svc.cluster.local',
 )
 
 # convert(양자화·포팅, SP-4) job 이 사용할 외부 컨테이너 manifest.

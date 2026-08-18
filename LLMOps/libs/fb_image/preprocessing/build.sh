@@ -3,7 +3,7 @@
 #
 # 사전: docker.io(acrylaaai push 권한) 로그인 필요. 이 호스트는 docker 소켓이 root 소유라
 #       `sudo docker` 로 실행한다(root 에 acrylaaai 로그인 되어 있음).
-# 사용: ./build.sh [TAG]        (기본 TAG=tango_v2.1.0)
+# 사용: ./build.sh [TAG]        (기본 TAG=tango_v2.2.0)
 # context = 이 디렉토리(스크립트만 있으므로 repo 루트 불요; requirements.txt 만 COPY).
 #
 # 게시 후 정합: apps/fb_utils/settings.py 의 JF_DEFAULT_UBUNTU_22_IMAGE 태그를 맞추고
@@ -13,7 +13,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 REGISTRY="docker.io/acrylaaai"
 IMAGE="genai-platform-builtin-preprocess"
-TAG="${1:-tango_v2.1.0}"
+TAG="${1:-tango_v2.2.0}"
 FULL="$REGISTRY/$IMAGE:$TAG"
 
 echo "[build] $FULL (-f $SCRIPT_DIR/Dockerfile, context=$SCRIPT_DIR)"

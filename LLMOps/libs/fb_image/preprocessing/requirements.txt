@@ -6,3 +6,9 @@ pandas==2.2.2
 pyarrow==16.1.0
 pillow==10.3.0
 numpy==1.26.4
+
+# 데이터 파이프라인 노드(dp_prep / dp_filter / dp_generate / dp_judge / dp_assemble)용.
+# 노드는 스크립트라 이미지에 bake 되지 않지만 런타임 의존성은 여기에 있어야 한다.
+# 생성·심사 노드는 모델 서빙을 HTTP 로 호출하므로 torch 는 필요 없다(stdlib urllib).
+imagehash==4.3.2      # 중복 제거 pHash. scipy(DCT) + PyWavelets 를 전이로 끌어온다(~40MB)
+pymupdf==1.24.14      # PDF → 페이지 이미지 + 텍스트 추출(구조 추출 기능)

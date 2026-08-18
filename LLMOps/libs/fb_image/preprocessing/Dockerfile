@@ -13,6 +13,11 @@
 #   - MARKER_ANALYSIS  (preprocess_marker_json)                     : pandas
 #   - IMAGE_AUGMENT    (preprocessing_augment)                      : Pillow (+ numpy)
 #   - SDS_LLAVA_CONVERT(sds_llava_convert)                          : 표준 라이브러리
+#
+# 데이터 파이프라인 노드(dp_prep/dp_filter/dp_generate/dp_judge/dp_assemble)도 이 베이스에서
+# 실행된다. 노드마다 이미지를 만들지 않고 스크립트만 NFS 로 주입하므로, 노드가 늘어도
+# 이 이미지는 그대로다. 추가 의존성 = imagehash(pHash 중복제거) + pymupdf(PDF 페이지화).
+# 생성·심사 노드는 모델 서빙을 HTTP 로 부르므로 torch 는 여기 없다.
 FROM python:3.11-slim
 
 ENV PIP_NO_CACHE_DIR=1
