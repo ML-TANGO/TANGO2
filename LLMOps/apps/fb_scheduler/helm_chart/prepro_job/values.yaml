@@ -26,3 +26,7 @@ nexus: # 오프라인용
 dataset:
   access: 0
   name: ""
+# true 면 워크스페이스 data PVC 루트를 /datasets 에 RO 로 추가 마운트한다
+# (/datasets/{access}/{name}). 데이터 파이프라인 노드가 소스 데이터셋 여러 개를
+# 읽어야 해서 필요하다. 기존 빌트인은 /dataset 단일 마운트만 쓰므로 기본 false.
+datasetsRoot: false

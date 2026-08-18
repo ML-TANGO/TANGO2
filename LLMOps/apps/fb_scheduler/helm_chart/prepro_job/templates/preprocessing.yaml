@@ -107,6 +107,16 @@ spec:
       mountPath: /dataset
       subPath: {{ $.Values.dataset.access }}/{{ $.Values.dataset.name }}
     {{- end }}
+    {{- if $.Values.datasetsRoot }}
+    # 데이터 파이프라인 노드 전용 — 워크스페이스의 모든 데이터셋을 RO 로 한 번에 본다
+    # (/datasets/{access}/{name}). 파이프라인의 데이터 노드는 여러 개일 수 있고 서로 다른
+    # 데이터셋을 가리키므로 단일 subPath 마운트로는 부족하다. PVC 가 이미 워크스페이스
+    # 단위이고 읽기는 access 와 무관하게 워크스페이스 사용자에게 열려 있어(access_check)
+    # 새로 열리는 권한이 없다. 기본 off — 기존 빌트인 4종은 /dataset 그대로 쓴다.
+    - name: jf-data
+      mountPath: /datasets
+      readOnly: true
+    {{- end }}
     - name: jf-bin
       mountPath: /support
       subPath: support
