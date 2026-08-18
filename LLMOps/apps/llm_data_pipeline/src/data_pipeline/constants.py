@@ -27,6 +27,18 @@ GATE_AXES = (
 # 축별 기본 임계값. 이 미만이면 미달 → 재생성 대상.
 DEFAULT_THRESHOLDS = {"align": 0.75, "imgdep": 0.80, "answer": 0.80, "unique": 0.70}
 
+# SDS(해양 COLREG) 심사 4축 — 범용 4축과 이름도 임계도 겹치지 않는다.
+# 항해 조력은 "질문·답이 이미지와 맞는가"가 아니라 "상황 판단과 조치가 규칙에 맞는가"를
+# 본다. 축을 하나로 합쳐 두면 SDS 레코드가 범용 축으로 채점돼 전부 미평가로 떨어진다.
+SDS_GATE_AXES = (
+    {"key": "situation_accuracy", "label": "상황 서술 정확도", "short": "상황"},
+    {"key": "colreg_correctness", "label": "COLREG 판단 정확도", "short": "규칙"},
+    {"key": "image_grounding", "label": "이미지 근거성", "short": "근거"},
+    {"key": "actionability", "label": "조치 구체성", "short": "조치"},
+)
+SDS_THRESHOLDS = {"situation_accuracy": 0.75, "colreg_correctness": 0.80,
+                  "image_grounding": 0.70, "actionability": 0.75}
+
 # 임계값 조절 허용 범위 — 너무 낮추면 게이트가 무의미해지고, 너무 올리면 통과가 0 이 된다.
 THRESHOLD_MIN = 0.50
 THRESHOLD_MAX = 0.95
@@ -71,6 +83,26 @@ PRESET_META = {
     PRESET_GENERIC: {"label": "범용", "editable": True},
     PRESET_SDS_COLREG: {"label": "해양 COLREG", "editable": False},
 }
+
+# 프리셋 → 심사 축·임계. 축을 쓰는 곳은 전부 데이터셋의 preset 을 통해 이 맵을 거친다.
+PRESET_AXES = {
+    PRESET_GENERIC: GATE_AXES,
+    PRESET_SDS_COLREG: SDS_GATE_AXES,
+}
+PRESET_THRESHOLDS = {
+    PRESET_GENERIC: DEFAULT_THRESHOLDS,
+    PRESET_SDS_COLREG: SDS_THRESHOLDS,
+}
+
+
+def axes_for(preset):
+    """프리셋의 심사 축. 모르는 프리셋은 범용으로 — 축이 없으면 화면이 빈 표가 된다."""
+    return PRESET_AXES.get(preset or PRESET_GENERIC, GATE_AXES)
+
+
+def thresholds_for(preset):
+    """프리셋의 기본 임계값. 호출부가 수정하지 못하도록 사본을 준다."""
+    return dict(PRESET_THRESHOLDS.get(preset or PRESET_GENERIC, DEFAULT_THRESHOLDS))
 
 # ── 단계(stage) ─────────────────────────────────────────────────────────────
 STAGES = ("preprocess", "filter", "generate", "gate")

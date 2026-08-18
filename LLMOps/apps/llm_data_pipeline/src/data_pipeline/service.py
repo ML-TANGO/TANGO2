@@ -16,19 +16,19 @@ from data_pipeline.constants import (
     DEFAULT_PROMPT,
     DEFAULT_SPLIT,
     DEFAULT_SPLIT_BY,
-    DEFAULT_THRESHOLDS,
     DIRECTIONAL_STEPS,
     FILTER_LIBRARY,
-    GATE_AXES,
     GENERATION_MODELS,
     GENERATION_TEMPLATES,
     GEOMETRIC_STEPS,
     HARD_NEGATIVE_MAX_PCT,
     PASS_RATE_RANGE,
     PREPROCESS_LIBRARY,
+    PRESET_AXES,
     PRESET_GENERIC,
     PRESET_META,
     PRESET_SDS_COLREG,
+    PRESET_THRESHOLDS,
     PROMPT_CHIPS,
     SPLIT_BY,
     SPLITS,
@@ -37,6 +37,8 @@ from data_pipeline.constants import (
     THRESHOLD_MAX,
     THRESHOLD_MIN,
     TRAIN_FORMATS,
+    axes_for,
+    thresholds_for,
 )
 
 # 단계 → 그 단계를 담당하는 노드 kind. 생성은 프리셋마다 이름이 다르다
@@ -66,8 +68,10 @@ class Conflict(Exception):
 def get_meta():
     """화면이 쓰는 상수 묶음. FE 가 같은 값을 따로 하드코딩하지 않게 서버가 내려준다."""
     return {
-        "gate_axes": [dict(a) for a in GATE_AXES],
-        "default_thresholds": dict(DEFAULT_THRESHOLDS),
+        # 축은 프리셋마다 다르므로 프리셋별로 내려준다. 하나만 내려주면 FE 가 SDS
+        # 데이터셋에도 범용 축 라벨을 붙이게 된다.
+        "gate_axes": {p: [dict(a) for a in ax] for p, ax in PRESET_AXES.items()},
+        "default_thresholds": {p: dict(t) for p, t in PRESET_THRESHOLDS.items()},
         "threshold_range": [THRESHOLD_MIN, THRESHOLD_MAX],
         "default_max_regenerate": DEFAULT_MAX_REGENERATE,
         "pass_rate_range": list(PASS_RATE_RANGE),
@@ -310,9 +314,15 @@ def _stage_library(stage):
     return {"preprocess": PREPROCESS_LIBRARY, "filter": FILTER_LIBRARY}.get(stage, ())
 
 
+async def _preset_of(dataset_id):
+    """데이터셋의 프리셋. 심사 축·임계를 고르는 기준이라 축을 쓰는 곳은 전부 이걸 거친다."""
+    return (await get_dataset(dataset_id)).get("preset") or PRESET_GENERIC
+
+
 async def get_stage(dataset_id, stage):
     """단계 설정 + 그 단계에서 쓸 수 있는 기능 목록."""
-    await get_dataset(dataset_id)
+    ds = await get_dataset(dataset_id)
+    preset = ds.get("preset") or PRESET_GENERIC
     nodes = await db.get_flow(dataset_id) or []
     node = _find_stage_node(nodes, stage)
 
@@ -329,8 +339,8 @@ async def get_stage(dataset_id, stage):
         payload["prompt_chips"] = [dict(c) for c in PROMPT_CHIPS]
         payload["default_prompt"] = DEFAULT_PROMPT
     if stage == "gate":
-        payload["axes"] = [dict(a) for a in GATE_AXES]
-        payload["default_thresholds"] = dict(DEFAULT_THRESHOLDS)
+        payload["axes"] = [dict(a) for a in axes_for(preset)]
+        payload["default_thresholds"] = thresholds_for(preset)
         payload["threshold_range"] = [THRESHOLD_MIN, THRESHOLD_MAX]
     return payload
 
@@ -350,6 +360,17 @@ async def save_stage(dataset_id, stage, config):
     target = _find_stage_node(nodes, stage)
     if target is None:
         raise NotFound(f"'{stage}' 단계에 해당하는 노드가 파이프라인에 없습니다")
+
+    # 임계값 축 집합 검사 — dto 는 body 만 보고 프리셋을 몰라 여기서 한다.
+    # 축이 어긋난 채 저장되면 채점이 전부 미평가로 떨어져 통과율이 0 이 된다.
+    if stage == "gate" and isinstance(config.get("thresholds"), dict):
+        valid = set(thresholds_for(preset))
+        got = set(config["thresholds"])
+        if got != valid:
+            raise ValueError(
+                f"'{PRESET_META.get(preset, {}).get('label', preset)}' 프리셋의 심사 축과 다릅니다. "
+                f"필요: {sorted(valid)} / 받음: {sorted(got)}")
+
     target["config"] = config
 
     await db.replace_flow(dataset_id, preset, nodes)
@@ -378,7 +399,7 @@ def judge_model_pairing(generator_model, judge_model):
 
 # ── 검수 ────────────────────────────────────────────────────────────────────
 async def list_records(dataset_id, order, taxonomy, review_state, limit, offset):
-    await get_dataset(dataset_id)
+    preset = await _preset_of(dataset_id)
     records = await db.list_records(
         dataset_id, review_state=review_state, taxonomy=taxonomy,
         order=order, limit=limit, offset=offset) or []
@@ -387,8 +408,8 @@ async def list_records(dataset_id, order, taxonomy, review_state, limit, offset)
     total_tax = sum((t.get("count") or 0) for t in tax_rows) or 1
     return {
         "dataset_id": dataset_id,
-        "axes": [dict(a) for a in GATE_AXES],
-        "thresholds": dict(DEFAULT_THRESHOLDS),
+        "axes": [dict(a) for a in axes_for(preset)],
+        "thresholds": await get_effective_thresholds(dataset_id),
         "stats": {k: int(v or 0) for k, v in (stats or {}).items()},
         "taxonomy_distribution": [
             {"taxonomy": t["taxonomy"], "count": t["count"],
@@ -404,8 +425,10 @@ async def get_record(record_id):
     if not row:
         raise NotFound(f"record not found: {record_id}")
     row["reviews"] = await db.list_reviews(record_id) or []
-    row["axes"] = [dict(a) for a in GATE_AXES]
-    row["thresholds"] = dict(DEFAULT_THRESHOLDS)
+    # 축은 레코드가 속한 데이터셋의 프리셋을 따른다 — 레코드만 보고는 알 수 없다.
+    preset = await _preset_of(row["dataset_id"])
+    row["axes"] = [dict(a) for a in axes_for(preset)]
+    row["thresholds"] = await get_effective_thresholds(row["dataset_id"])
     return row
 
 
@@ -483,7 +506,9 @@ async def get_effective_thresholds(dataset_id):
     """
     cfg = (await get_stage(dataset_id, "gate")).get("config") or {}
     saved = cfg.get("thresholds") or {}
-    merged = dict(DEFAULT_THRESHOLDS)
+    # 기본값은 프리셋의 축 집합이다. 범용 기본값으로 시작하면 SDS 축이 하나도 없어
+    # 저장된 값이 전부 걸러지고(아래 `axis in merged`) 임계가 빈 dict 가 된다.
+    merged = thresholds_for(await _preset_of(dataset_id))
     for axis, value in saved.items():
         if axis in merged:
             try:
@@ -507,7 +532,7 @@ async def get_gate_summary(dataset_id, thresholds=None):
     top_axis = max(fails, key=fails.get) if fails else None
     return {
         "dataset_id": dataset_id,
-        "axes": [dict(a) for a in GATE_AXES],
+        "axes": [dict(a) for a in axes_for(await _preset_of(dataset_id))],
         "thresholds": th,
         "total": total,
         "pass_rate": pass_rate,

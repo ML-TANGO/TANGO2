@@ -11,7 +11,6 @@ from data_pipeline.constants import (
     ASSET_STATUSES,
     COORD_REMAP_STEP,
     DATASET_STATES,
-    GATE_AXES,
     GEOMETRIC_STEPS,
     PRESETS,
     REVIEW_VERDICTS,
@@ -23,8 +22,6 @@ from data_pipeline.constants import (
     THRESHOLD_MIN,
     TRAIN_FORMATS,
 )
-
-_AXIS_KEYS = tuple(a["key"] for a in GATE_AXES)
 
 
 class DatasetCreateBody(BaseModel):
@@ -123,7 +120,13 @@ class GenerateConfigBody(BaseModel):
 
 
 class GateConfigBody(BaseModel):
-    """VLM 심사 임계값 저장. 4축 전부 지정해야 하고 허용 범위를 벗어나면 거부한다."""
+    """VLM 심사 임계값 저장. 허용 범위를 벗어나면 거부한다.
+
+    **축 이름은 여기서 검증하지 않는다** — 어떤 축이 유효한지는 데이터셋의 프리셋에
+    달렸고(범용 4축 vs SDS 4축), body 만 보는 dto 는 프리셋을 알 수 없다. 축 집합
+    검사는 dataset_id 를 아는 service.save_stage 가 한다. 위 GenerateConfigBody 가
+    생성=심사 모델 검사를 서비스로 미룬 것과 같은 이유다.
+    """
 
     thresholds: Dict[str, float] = Field(..., description="축 key → 임계값(0~1)")
     max_regenerate: int = Field(default=3, ge=0, le=10, description="미달 레코드 재생성 최대 횟수")
@@ -131,12 +134,9 @@ class GateConfigBody(BaseModel):
     @field_validator("thresholds")
     @classmethod
     def _validate_thresholds(cls, v: Dict[str, float]) -> Dict[str, float]:
-        missing = [k for k in _AXIS_KEYS if k not in v]
-        if missing:
-            raise ValueError(f"missing threshold axes: {missing}")
+        if not v:
+            raise ValueError("thresholds 가 비어 있습니다")
         for k, val in v.items():
-            if k not in _AXIS_KEYS:
-                raise ValueError(f"unknown axis: {k}")
             if not (THRESHOLD_MIN <= float(val) <= THRESHOLD_MAX):
                 raise ValueError(f"threshold out of range [{THRESHOLD_MIN}, {THRESHOLD_MAX}]: {k}={val}")
         return v
