@@ -117,9 +117,6 @@ RESOURCE_QUOTA="kube_resourcequota{resource=~'limits.cpu|limits.memory'}"
 POD_RESOURCE_LIMIT="kube_pod_container_resource_limits{{pod='{POD_NAME}'}}"
 POD_RESOURCE_LIMIT_LIST="kube_pod_container_resource_limits"
 DATASET_FILEBROWSER_STATUS_READY="kube_pod_container_status_ready{{pod='{POD_NAME}'}}"
-DATASET_FILEBROWSER_POD_LIST="kube_pod_labels{label_pod_type='filebrowser'}"
-REDIS_WORKSPACE_POD_LIST="kube_pod_labels{{label_workspace_id='{workspace_id}', label_work_func_type!=''}}"
-NAMESPACE_TOOL_LIST="kube_pod_labels{{label_work_func_type!='',namespace='{namespace}'}}"
 # 이 인스턴스가 소유한 네임스페이스만 — 시스템 네임스페이스와 워크스페이스 네임스페이스
 # ({sys}-{workspace_id}). Prometheus 는 클러스터 전역(kube-state-metrics)을 보므로 필터가
 # 없으면 같은 클러스터의 **다른 인스턴스** 파드까지 집계된다. 실제로 dev 가 서빙
@@ -128,13 +125,17 @@ NAMESPACE_TOOL_LIST="kube_pod_labels{{label_work_func_type!='',namespace='{names
 # 네임스페이스는 제외한다.
 _NS_SELECTOR = "namespace=~'{ns}(-[0-9]+)?'".format(ns=settings.JF_SYSTEM_NAMESPACE)
 
+DATASET_FILEBROWSER_POD_LIST="kube_pod_labels{label_pod_type='filebrowser'," + _NS_SELECTOR + "}"
+REDIS_WORKSPACE_POD_LIST="kube_pod_labels{{label_workspace_id='{workspace_id}', label_work_func_type!=''," + _NS_SELECTOR + "}}"
+NAMESPACE_TOOL_LIST="kube_pod_labels{{label_work_func_type!='',namespace='{namespace}'}}"
+
 WORKSPACE_POD_RESOURCE_USAGE="kube_pod_labels{label_work_func_type=~'tool|training|deployment|generation'," + _NS_SELECTOR + "}"
 WORKSPACE_NETWORK_OUTBOUND_USAGE="container_network_transmit_bytes_total" # return value Byte/s
 WORKSPACE_NETWORK_INBOUND_USAGE="container_network_receive_bytes_total" # return value Byte/s
 WORKSPACE_POD_INFO_JOIN_LABELS=("kube_pod_info * on(pod) group_left(label_workspace_id, label_pod_type, label_helm_name, label_instance_id) "
                                 "kube_pod_labels{label_work_func_type=~'tool|training|deployment|generation'," + _NS_SELECTOR + "}")
-TRAINING_POD_LIST="kube_pod_labels{label_work_func_type='training'}"
-HPS_POD_LIST="kube_pod_labels{label_work_func_type='hps'}"
+TRAINING_POD_LIST="kube_pod_labels{label_work_func_type='training'," + _NS_SELECTOR + "}"
+HPS_POD_LIST="kube_pod_labels{label_work_func_type='hps'," + _NS_SELECTOR + "}"
 TOOL_POD_DNS = "http://{SERVICE_NAME}.{NAMESPACE}.svc.cluster.local"
 POD_STATUS="kube_pod_status_phase{{pod='{POD_NAME}'}}==1"
 POD_STATUS_REASON="kube_pod_status_reason{{pod='{POD_NAME}'}}==1"
@@ -150,7 +151,7 @@ STORAGE_REQUESTS_BYTE="kube_persistentvolumeclaim_resource_requests_storage_byte
 STORAGE_PERSISTENTVOLUME_LIST = "kube_persistentvolumeclaim_info{storageclass!=''}"
 STORAGE_PVC_INFO="kube_persistentvolumeclaim_labels{label_workspace_name!=''}"
 
-DEPLOYMENT_INFO="kube_pod_labels{label_deployment_id!=''}"
+DEPLOYMENT_INFO="kube_pod_labels{label_deployment_id!=''," + _NS_SELECTOR + "}"
 
 
 JUPYTER_PORT="8888"
@@ -190,7 +191,7 @@ CONTAINER_RESTART_TOTAL="kube_pod_container_status_restarts_total{{pod='{POD_NAM
 DEPLOYMENT_POD_RESOURCE_LIMIT_CPU = "kube_pod_container_resource_limits{{pod='{POD_NAME}', resource='cpu'}}"
 DEPLOYMENT_POD_RESOURCE_LIMIT_RAM = "kube_pod_container_resource_limits{{pod='{POD_NAME}', resource='memory'}}"
 
-MODEL_COMMIT_POD_STATUS="kube_pod_labels{label_model_commit_type!=''}"
+MODEL_COMMIT_POD_STATUS="kube_pod_labels{label_model_commit_type!=''," + _NS_SELECTOR + "}"
 
 
 """
@@ -1843,92 +1844,212 @@ def set_workspace_pod_status():
                     
                     workspace_pods = make_nested_dict()
                     for pod_info in workspace_pod_list:
-                        # TODO
-                        # DB sync 로직 추가 
+                        try:
+                            # TODO
+                            # DB sync 로직 추가 
 
-                        pod_info=pod_info['metric']
-                        workspace_id = pod_info["label_workspace_id"]
-                        instance_id = pod_info.get("label_instance_id",None)
-                        # workspace_instances[instance_id] += 1
-                        node_name = pod_info.get("label_node_name", None)
-                        gpu_ids = pod_info["label_device_ids"].split(".") if pod_info.get("label_device_ids", None) else []
-                        gpu_uuids = []
-                        for gpu_id in gpu_ids:
-                            if gpu_id:
-                                # print(gpu_id, file=sys.stderr)
-                                gpu_uuid = node_db.get_node_gpu(gpu_id=gpu_id)["gpu_uuid"]
-                                gpu_uuids.append(gpu_uuid)
+                            pod_info=pod_info['metric']
+                            workspace_id = pod_info["label_workspace_id"]
+                            instance_id = pod_info.get("label_instance_id",None)
+                            # workspace_instances[instance_id] += 1
+                            node_name = pod_info.get("label_node_name", None)
+                            gpu_ids = pod_info["label_device_ids"].split(".") if pod_info.get("label_device_ids", None) else []
+                            gpu_uuids = []
+                            for gpu_id in gpu_ids:
+                                if gpu_id:
+                                    # 이 인스턴스 DB 에 없는 gpu_id 는 건너뛴다. 첨자 접근하면
+                                    # None["gpu_uuid"] 로 죽고, 그 예외가 이 루프 전체를 끊어
+                                    # 뒤 파드들의 종료 기록(잡 end_datetime)까지 막는다 —
+                                    # 증상은 "잡이 끝나도 running 으로 남는다"로만 보인다.
+                                    gpu_row = node_db.get_node_gpu(gpu_id=gpu_id)
+                                    if not gpu_row:
+                                        logging.warning("unknown gpu_id %s (pod=%s) — skip",
+                                                        gpu_id, pod_info.get("pod"))
+                                        continue
+                                    gpu_uuids.append(gpu_row["gpu_uuid"])
                         
-                        pod_status = prom.custom_query(query=POD_STATUS.format(POD_NAME=pod_info['pod']))
+                            pod_status = prom.custom_query(query=POD_STATUS.format(POD_NAME=pod_info['pod']))
 
-                        tmp_pod_status_reason = prom.custom_query(query=POD_STATUS_REASON.format(POD_NAME=pod_info['pod']))
-                        pod_status_reason = tmp_pod_status_reason[0]['metric']["reason"] if tmp_pod_status_reason and tmp_pod_status_reason[0] is not None else None
+                            tmp_pod_status_reason = prom.custom_query(query=POD_STATUS_REASON.format(POD_NAME=pod_info['pod']))
+                            pod_status_reason = tmp_pod_status_reason[0]['metric']["reason"] if tmp_pod_status_reason and tmp_pod_status_reason[0] is not None else None
                         
-                        # print(pod_status)
-                        # POD_RESOURCE_LIMIT
-                        tmp_resources = prom.custom_query(query=POD_RESOURCE_LIMIT.format(POD_NAME=pod_info['pod']))
-                        pod_resource = update_resources_from_query(tmp_resources)
-                        # 현재 GPU 사용량은 label에서 별도 수집
-                        pod_resource["gpu"] = update_pod_gpu_usage_from_labels(pod_info)
+                            # print(pod_status)
+                            # POD_RESOURCE_LIMIT
+                            tmp_resources = prom.custom_query(query=POD_RESOURCE_LIMIT.format(POD_NAME=pod_info['pod']))
+                            pod_resource = update_resources_from_query(tmp_resources)
+                            # 현재 GPU 사용량은 label에서 별도 수집
+                            pod_resource["gpu"] = update_pod_gpu_usage_from_labels(pod_info)
 
-                        tmp_waiting = prom.custom_query(query=CONTAINER_STATUS_WAITING.format(POD_NAME=pod_info['pod']))
-                        pod_waiting = tmp_waiting[0]['metric']['reason'] if tmp_waiting and tmp_waiting[0] is not None else None
+                            tmp_waiting = prom.custom_query(query=CONTAINER_STATUS_WAITING.format(POD_NAME=pod_info['pod']))
+                            pod_waiting = tmp_waiting[0]['metric']['reason'] if tmp_waiting and tmp_waiting[0] is not None else None
 
-                        tmp_terminated = prom.custom_query(query=CONTAINER_STATUS_TERMINATED.format(POD_NAME=pod_info['pod']))
-                        pod_terminated = tmp_terminated[0]['metric']['reason'] if tmp_terminated and tmp_terminated[0] is not None else None
+                            tmp_terminated = prom.custom_query(query=CONTAINER_STATUS_TERMINATED.format(POD_NAME=pod_info['pod']))
+                            pod_terminated = tmp_terminated[0]['metric']['reason'] if tmp_terminated and tmp_terminated[0] is not None else None
 
-                        tmp_running = prom.custom_query(query=CONTAINER_STATUS_RUNNING.format(POD_NAME=pod_info['pod']))
-                        pod_running = True if tmp_running and tmp_running[0] is not None else False
+                            tmp_running = prom.custom_query(query=CONTAINER_STATUS_RUNNING.format(POD_NAME=pod_info['pod']))
+                            pod_running = True if tmp_running and tmp_running[0] is not None else False
 
-                        tmp_ready_true = prom.custom_query(query=CONTAINER_STATUS_READY_TRUE.format(POD_NAME=pod_info['pod']))
-                        pod_ready_true = True if tmp_ready_true and tmp_ready_true[0] is not None else False
+                            tmp_ready_true = prom.custom_query(query=CONTAINER_STATUS_READY_TRUE.format(POD_NAME=pod_info['pod']))
+                            pod_ready_true = True if tmp_ready_true and tmp_ready_true[0] is not None else False
 
-                        tmp_ready_false = prom.custom_query(query=CONTAINER_STATUS_READY_FALSE.format(POD_NAME=pod_info['pod']))
-                        pod_ready_false = True if tmp_ready_false and tmp_ready_false[0] is not None else False
+                            tmp_ready_false = prom.custom_query(query=CONTAINER_STATUS_READY_FALSE.format(POD_NAME=pod_info['pod']))
+                            pod_ready_false = True if tmp_ready_false and tmp_ready_false[0] is not None else False
                         
-                        tmp_restart_count = prom.custom_query(query=CONTAINER_RESTART_TOTAL.format(POD_NAME=pod_info['pod']))
-                        pod_container_restart_count = tmp_restart_count[0]['value'][1] if tmp_restart_count else 0
-                         # TODO label_work_func_type 가 없는 pod 존재 
-                        pod_info["label_work_func_type"] = pod_info.get("label_work_func_type", None) 
-                        status, reason, resolution = None, None, None
-                        if pod_ready_true:
-                            status = TYPE.KUBE_POD_STATUS_RUNNING
-                            if gpu_uuids:
-                                insert_gpu_usage(pod_info=pod_info, gpu_uuids=gpu_uuids, gpu_status=gpu_status)
+                            tmp_restart_count = prom.custom_query(query=CONTAINER_RESTART_TOTAL.format(POD_NAME=pod_info['pod']))
+                            pod_container_restart_count = tmp_restart_count[0]['value'][1] if tmp_restart_count else 0
+                             # TODO label_work_func_type 가 없는 pod 존재 
+                            pod_info["label_work_func_type"] = pod_info.get("label_work_func_type", None) 
+                            status, reason, resolution = None, None, None
+                            if pod_ready_true:
+                                status = TYPE.KUBE_POD_STATUS_RUNNING
+                                if gpu_uuids:
+                                    insert_gpu_usage(pod_info=pod_info, gpu_uuids=gpu_uuids, gpu_status=gpu_status)
                             
-                        elif pod_ready_false:
-                            if pod_waiting is not None:
+                            elif pod_ready_false:
+                                if pod_waiting is not None:
                                 
-                                if pod_waiting == "ContainerCreating":
-                                    status = TYPE.KUBE_POD_STATUS_INSTALLING
-                                    if gpu_uuids:
-                                        insert_gpu_usage(pod_info=pod_info, gpu_uuids=gpu_uuids, gpu_status=gpu_status)
-                                else:
-                                    status = TYPE.KUBE_POD_STATUS_ERROR
-                                    container_waiting_reason = {
-                                        'CrashLoopBackOff' : 'This error can be caused by a variery of issues',
-                                        'ErrImagePull' : 'Wrong image name, Check the image or tag exist',
-                                        'OutOfnvidia.com/gpu' : 'nvidia driver setting error',
-                                        'ImagePullBackOff' : 'Wrong image name, Check the image or tag exist',
-                                        'InvalidImageName' : 'Wrong image name, Check the image or tag exist',
-                                        'CreateContainerConfigError' : 'ConfigMap or Secret is missing. Identify the missing ConfigMap or Secret',
-                                        'CreateContainerError' : 'Container experienced an error when starting. Modify image specification to resolve it or Add a valid command to start the container',
-                                        'RunContainerError': "Run Container Error. Check  Driver, package version or status. ",
-                                        # 'others' : "This error can be caused by a variery of issues"
-                                        'others' : "Invalid image."
-                                    }
-                                    reason = pod_waiting
-                                    # print(pod_waiting, file=sys.stderr)
-                                    resolution = container_waiting_reason[pod_waiting] if pod_waiting in container_waiting_reason.keys() else container_waiting_reason["others"]
+                                    if pod_waiting == "ContainerCreating":
+                                        status = TYPE.KUBE_POD_STATUS_INSTALLING
+                                        if gpu_uuids:
+                                            insert_gpu_usage(pod_info=pod_info, gpu_uuids=gpu_uuids, gpu_status=gpu_status)
+                                    else:
+                                        status = TYPE.KUBE_POD_STATUS_ERROR
+                                        container_waiting_reason = {
+                                            'CrashLoopBackOff' : 'This error can be caused by a variery of issues',
+                                            'ErrImagePull' : 'Wrong image name, Check the image or tag exist',
+                                            'OutOfnvidia.com/gpu' : 'nvidia driver setting error',
+                                            'ImagePullBackOff' : 'Wrong image name, Check the image or tag exist',
+                                            'InvalidImageName' : 'Wrong image name, Check the image or tag exist',
+                                            'CreateContainerConfigError' : 'ConfigMap or Secret is missing. Identify the missing ConfigMap or Secret',
+                                            'CreateContainerError' : 'Container experienced an error when starting. Modify image specification to resolve it or Add a valid command to start the container',
+                                            'RunContainerError': "Run Container Error. Check  Driver, package version or status. ",
+                                            # 'others' : "This error can be caused by a variery of issues"
+                                            'others' : "Invalid image."
+                                        }
+                                        reason = pod_waiting
+                                        # print(pod_waiting, file=sys.stderr)
+                                        resolution = container_waiting_reason[pod_waiting] if pod_waiting in container_waiting_reason.keys() else container_waiting_reason["others"]
                                     
-                                    if pod_info["label_work_func_type"] in [TYPE.TRAINING_ITEM_C, TYPE.TRAINING_ITEM_A] and pod_info["label_pod_type"] == TYPE.PROJECT_TYPE:
+                                        if pod_info["label_work_func_type"] in [TYPE.TRAINING_ITEM_C, TYPE.TRAINING_ITEM_A] and pod_info["label_pod_type"] == TYPE.PROJECT_TYPE:
+                                            if pod_end_time:
+                                                parse_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(int(pod_end_time)))
+                                            else:
+                                                parse_time = time.strftime('%Y-%m-%d %H:%M:%S')
+                                            project_item_id = pod_info["label_project_item_id"]
+                                            project_item_type = pod_info["label_work_func_type"]
+                                            db_project.update_project_item_datetime(item_id=project_item_id, item_type=project_item_type, end_datetime=parse_time, end_status=status, error_reason=resolution)
+                                            delete_helm_resource(helm_name=pod_info["label_helm_name"], workspace_id=workspace_id)
+                                            try:
+                                                project_id = pod_info["label_project_id"]
+                                                project_info = db_project.get_project_new(project_id=project_id)
+                                                if project_item_type == TYPE.TRAINING_ITEM_A:
+                                                    project_item_info = db_project.get_training(training_id=project_item_id)
+                                                    start_datetime = project_item_info["start_datetime"]
+                                                    elapsed_time = calculate_elapsed_time(start_time=start_datetime, end_time=parse_time)
+
+                                                    pod_count = int(pod_info.get("label_pod_count", 1))
+                                                    training_name = pod_info["label_training_name"]
+                                                    workspace_name = pod_info["label_workspace_name"]
+                                                    project_name = pod_info["label_project_name"]
+                                                    total_gpu_count = len(gpu_uuids) * pod_count
+                                                    instance_id = int(pod_info.get("label_instance_id", 0))
+                                                    instance_info = instance_db.get_instance(instance_id=instance_id)
+                                                    instance_name = instance_info["instance_name"]
+                                                    gpu_name = instance_info.get("gpu_name", None)
+                                                    instance_type = "GPU" if gpu_name  else "CPU"
+                                                    gpu_allocate = instance_info.get("gpu_allocate", 0)
+                                                    cpu_allocate = instance_info.get("cpu_allocate", 0)
+                                                    ram_allocate = instance_info.get("ram_allocate", 0)
+                                                    total_used_cpu = project_info.get("job_cpu_limit", 0) * project_item_info["pod_count"]
+                                                    total_used_ram = project_info.get("job_ram_limit", 0) * project_item_info["pod_count"]
+                                                    allocation_info = {
+                                                                "workspace_name": workspace_name,
+                                                                "start_datetime": start_datetime,
+                                                                "item_name": training_name,
+                                                                "item_type": project_item_type,
+                                                                "project_name": project_name,
+                                                                "end_datetime": parse_time,
+                                                                "period": elapsed_time,
+                                                                "type": project_item_type,
+                                                                "type_detail": project_name,
+                                                                "total_gpu_count": total_gpu_count,
+                                                                "total_used_cpu": total_used_cpu,
+                                                                "total_used_ram": total_used_ram,
+                                                                "instance_info": {
+                                                                    "instance_name": instance_name,
+                                                                    "gpu_name": gpu_name,
+                                                                    "instance_type": instance_type,
+                                                                    "gpu_allocate": gpu_allocate,
+                                                                    "cpu_allocate": cpu_allocate,
+                                                                    "ram_allocate": ram_allocate
+                                                                }
+                                                            }
+                                                    log = {
+                                                            "log_type": "allocation",
+                                                            "allocation_info": json.dumps(allocation_info, separators=(',', ':'))
+                                                        }
+                                                    print("[JFB/USAGE]", json.dumps(log, separators=(',', ':')))
+                                            except Exception as e:
+                                                traceback.print_exc()
+                                                pass
+                                        elif pod_info["label_pod_type"] == TYPE.FINE_TUNING_TYPE and pod_info["label_work_func_type"] == TYPE.FINE_TUNING_TYPE:
+                                            model_id = pod_info["label_model_id"]
+                                            model_db.update_model_fine_tuning_status_sync(status=TYPE.KUBE_POD_STATUS_ERROR, model_id=model_id)
+                                            _ensure_fine_tuning_pod_deleted(
+                                                pod_name=pod_info["pod"],
+                                                helm_name=pod_info["label_helm_name"],
+                                                workspace_id=workspace_id,
+                                            )
+                                        elif pod_info["label_work_func_type"] in [TYPE.PREPROCESSING_ITEM_B, TYPE.PREPROCESSING_ITEM_A] and pod_info["label_pod_type"] == TYPE.PREPROCESSING_TYPE:
+                                            preprocessing_item_id = pod_info["label_preprocessing_item_id"]
+                                            preprocessing_item_type = pod_info["label_work_func_type"]
+                                            if preprocessing_item_type == TYPE.PREPROCESSING_ITEM_B:
+                                                prepro_db.update_preprocessing_job_datetime(preprocessing_job_id=preprocessing_item_id, end_datetime=parse_time, end_status=status, error_reason=reason)
+                                            elif preprocessing_item_type == TYPE.PREPROCESSING_ITEM_A: 
+                                                prepro_db.update_preprocessing_tool_datetime(preprocessing_tool_id=preprocessing_item_id, end_datetime=parse_time, error_reason=reason)
+                                            delete_helm_resource(helm_name=pod_info["label_helm_name"], workspace_id=workspace_id)
+                                        elif pod_info["label_pod_type"] == TYPE.COLLECT_TYPE:
+                                            # collect_id = pod_info["label_collect_id"]
+                                            kwargs={'end_datetime':datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+                                            try:
+                                                collect_db.update_collect(id=pod_info['label_collect_id'], **kwargs) # TODO 함수 없음
+                                            except:
+                                                pass
+                                            delete_helm_resource(workspace_id=workspace_id, helm_name=pod_info["label_helm_name"])
+                                    
+                                        
+                                elif pod_terminated is not None:
+                                    if pod_status[0]['metric']['phase'] != "Failed" and pod_terminated == "Completed":
+                                        status = TYPE.KUBE_POD_STATUS_DONE
+                                    else:
+                                        status = TYPE.KUBE_POD_STATUS_ERROR
+                                    if pod_info["label_work_func_type"] in [TYPE.TRAINING_ITEM_C, TYPE.TRAINING_ITEM_A, TYPE.TRAINING_ITEM_C] and pod_info["label_pod_type"] == TYPE.PROJECT_TYPE:
+                                        """
+                                        pod_terminated 종류 
+                                        OOMKilled: 컨테이너가 메모리 부족(OOM, Out Of Memory)으로 인해 종료된 경우.
+                                        Error: 컨테이너가 오류로 인해 종료된 경우.
+                                        Completed: 컨테이너가 정상적으로 작업을 완료하고 종료된 경우.
+                                        ContainerCannotRun: 컨테이너가 시작되지 못한 경우(예: 이미지 문제 또는 권한 문제).
+                                        DeadlineExceeded: 컨테이너가 정해진 시간 내에 완료되지 않아 종료된 경우.
+                                        Evicted: 컨테이너가 자원 부족 등으로 인해 노드에서 퇴출된 경우.
+                                        Terminated: 사용자의 명령이나 다른 이유로 인해 컨테이너가 종료된 경우.
+                                        CrashLoopBackOff: 컨테이너가 반복적으로 충돌하며 재시작되는 경우.
+                                        """
+                                        reason = pod_terminated
+                                        resolution = None
+                                        # project_id = pod_info["label_project_id"]
+                                        # workspace_id = pod_info["label_workspace_id"]
+                                        project_item_id = pod_info["label_project_item_id"]
+                                        project_item_type = pod_info["label_work_func_type"]
+                                        pod_end_time = prom.custom_query(query=POD_END_TIME.format(POD_NAME=pod_info["pod"]))[0]["value"][1]
                                         if pod_end_time:
                                             parse_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(int(pod_end_time)))
                                         else:
                                             parse_time = time.strftime('%Y-%m-%d %H:%M:%S')
-                                        project_item_id = pod_info["label_project_item_id"]
-                                        project_item_type = pod_info["label_work_func_type"]
-                                        db_project.update_project_item_datetime(item_id=project_item_id, item_type=project_item_type, end_datetime=parse_time, end_status=status, error_reason=resolution)
+                                        if pod_info["label_work_func_type"] in [TYPE.TRAINING_ITEM_B, TYPE.TRAINING_ITEM_A]:
+                                            db_project.update_project_item_datetime(item_id=project_item_id, item_type=project_item_type, end_datetime=parse_time, end_status=status, error_reason=reason)
+                                        elif pod_info["label_work_func_type"] == TYPE.TRAINING_ITEM_C:
+                                            db_project.update_project_hps_datetime(hps_id=project_item_id, end_datetime=parse_time, end_status=status, error_reason=reason)
                                         delete_helm_resource(helm_name=pod_info["label_helm_name"], workspace_id=workspace_id)
                                         try:
                                             project_id = pod_info["label_project_id"]
@@ -1963,7 +2084,7 @@ def set_workspace_pod_status():
                                                             "period": elapsed_time,
                                                             "type": project_item_type,
                                                             "type_detail": project_name,
-                                                            "total_gpu_count": total_gpu_count,
+                                                            "total_gpu_count": total_gpu_count, 
                                                             "total_used_cpu": total_used_cpu,
                                                             "total_used_ram": total_used_ram,
                                                             "instance_info": {
@@ -1983,201 +2104,67 @@ def set_workspace_pod_status():
                                         except Exception as e:
                                             traceback.print_exc()
                                             pass
-                                    elif pod_info["label_pod_type"] == TYPE.FINE_TUNING_TYPE and pod_info["label_work_func_type"] == TYPE.FINE_TUNING_TYPE:
-                                        model_id = pod_info["label_model_id"]
-                                        model_db.update_model_fine_tuning_status_sync(status=TYPE.KUBE_POD_STATUS_ERROR, model_id=model_id)
-                                        _ensure_fine_tuning_pod_deleted(
-                                            pod_name=pod_info["pod"],
-                                            helm_name=pod_info["label_helm_name"],
-                                            workspace_id=workspace_id,
-                                        )
                                     elif pod_info["label_work_func_type"] in [TYPE.PREPROCESSING_ITEM_B, TYPE.PREPROCESSING_ITEM_A] and pod_info["label_pod_type"] == TYPE.PREPROCESSING_TYPE:
                                         preprocessing_item_id = pod_info["label_preprocessing_item_id"]
                                         preprocessing_item_type = pod_info["label_work_func_type"]
+                                        # print(prom.custom_query(query=POD_END_TIME.format(POD_NAME=pod_info["pod"])))
+                                        # pod_end_time = prom.custom_query(query=POD_END_TIME.format(POD_NAME=pod_info["pod"]))[0]["value"][1]
+                                        parse_time = time.strftime('%Y-%m-%d %H:%M:%S')
+                                        # if pod_end_time:
+                                        #     parse_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(int(pod_end_time)))
+                                        # else:
+                                        #     parse_time = time.strftime('%Y-%m-%d %H:%M:%S')
                                         if preprocessing_item_type == TYPE.PREPROCESSING_ITEM_B:
                                             prepro_db.update_preprocessing_job_datetime(preprocessing_job_id=preprocessing_item_id, end_datetime=parse_time, end_status=status, error_reason=reason)
                                         elif preprocessing_item_type == TYPE.PREPROCESSING_ITEM_A: 
                                             prepro_db.update_preprocessing_tool_datetime(preprocessing_tool_id=preprocessing_item_id, end_datetime=parse_time, error_reason=reason)
                                         delete_helm_resource(helm_name=pod_info["label_helm_name"], workspace_id=workspace_id)
-                                    elif pod_info["label_pod_type"] == TYPE.COLLECT_TYPE:
-                                        # collect_id = pod_info["label_collect_id"]
-                                        kwargs={'end_datetime':datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-                                        try:
-                                            collect_db.update_collect(id=pod_info['label_collect_id'], **kwargs) # TODO 함수 없음
-                                        except:
-                                            pass
-                                        delete_helm_resource(workspace_id=workspace_id, helm_name=pod_info["label_helm_name"])
                                     
+                                    
+                                    elif pod_info["label_work_func_type"] == TYPE.FINE_TUNING_TYPE and pod_info["label_pod_type"] == TYPE.FINE_TUNING_TYPE:
+                                        model_id = pod_info["label_model_id"]
+                                        model_db.update_model_fine_tuning_status_sync(status=status, model_id=model_id)
+                                        _ensure_fine_tuning_pod_deleted(
+                                            pod_name=pod_info["pod"],
+                                            helm_name=pod_info["label_helm_name"],
+                                            workspace_id=workspace_id,
+                                        )
                                         
-                            elif pod_terminated is not None:
-                                if pod_status[0]['metric']['phase'] != "Failed" and pod_terminated == "Completed":
-                                    status = TYPE.KUBE_POD_STATUS_DONE
-                                else:
-                                    status = TYPE.KUBE_POD_STATUS_ERROR
-                                if pod_info["label_work_func_type"] in [TYPE.TRAINING_ITEM_C, TYPE.TRAINING_ITEM_A, TYPE.TRAINING_ITEM_C] and pod_info["label_pod_type"] == TYPE.PROJECT_TYPE:
-                                    """
-                                    pod_terminated 종류 
-                                    OOMKilled: 컨테이너가 메모리 부족(OOM, Out Of Memory)으로 인해 종료된 경우.
-                                    Error: 컨테이너가 오류로 인해 종료된 경우.
-                                    Completed: 컨테이너가 정상적으로 작업을 완료하고 종료된 경우.
-                                    ContainerCannotRun: 컨테이너가 시작되지 못한 경우(예: 이미지 문제 또는 권한 문제).
-                                    DeadlineExceeded: 컨테이너가 정해진 시간 내에 완료되지 않아 종료된 경우.
-                                    Evicted: 컨테이너가 자원 부족 등으로 인해 노드에서 퇴출된 경우.
-                                    Terminated: 사용자의 명령이나 다른 이유로 인해 컨테이너가 종료된 경우.
-                                    CrashLoopBackOff: 컨테이너가 반복적으로 충돌하며 재시작되는 경우.
-                                    """
-                                    reason = pod_terminated
-                                    resolution = None
-                                    # project_id = pod_info["label_project_id"]
-                                    # workspace_id = pod_info["label_workspace_id"]
-                                    project_item_id = pod_info["label_project_item_id"]
-                                    project_item_type = pod_info["label_work_func_type"]
-                                    pod_end_time = prom.custom_query(query=POD_END_TIME.format(POD_NAME=pod_info["pod"]))[0]["value"][1]
-                                    if pod_end_time:
-                                        parse_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(int(pod_end_time)))
-                                    else:
-                                        parse_time = time.strftime('%Y-%m-%d %H:%M:%S')
-                                    if pod_info["label_work_func_type"] in [TYPE.TRAINING_ITEM_B, TYPE.TRAINING_ITEM_A]:
-                                        db_project.update_project_item_datetime(item_id=project_item_id, item_type=project_item_type, end_datetime=parse_time, end_status=status, error_reason=reason)
-                                    elif pod_info["label_work_func_type"] == TYPE.TRAINING_ITEM_C:
-                                        db_project.update_project_hps_datetime(hps_id=project_item_id, end_datetime=parse_time, end_status=status, error_reason=reason)
-                                    delete_helm_resource(helm_name=pod_info["label_helm_name"], workspace_id=workspace_id)
-                                    try:
-                                        project_id = pod_info["label_project_id"]
-                                        project_info = db_project.get_project_new(project_id=project_id)
-                                        if project_item_type == TYPE.TRAINING_ITEM_A:
-                                            project_item_info = db_project.get_training(training_id=project_item_id)
-                                            start_datetime = project_item_info["start_datetime"]
-                                            elapsed_time = calculate_elapsed_time(start_time=start_datetime, end_time=parse_time)
-
-                                            pod_count = int(pod_info.get("label_pod_count", 1))
-                                            training_name = pod_info["label_training_name"]
-                                            workspace_name = pod_info["label_workspace_name"]
-                                            project_name = pod_info["label_project_name"]
-                                            total_gpu_count = len(gpu_uuids) * pod_count
-                                            instance_id = int(pod_info.get("label_instance_id", 0))
-                                            instance_info = instance_db.get_instance(instance_id=instance_id)
-                                            instance_name = instance_info["instance_name"]
-                                            gpu_name = instance_info.get("gpu_name", None)
-                                            instance_type = "GPU" if gpu_name  else "CPU"
-                                            gpu_allocate = instance_info.get("gpu_allocate", 0)
-                                            cpu_allocate = instance_info.get("cpu_allocate", 0)
-                                            ram_allocate = instance_info.get("ram_allocate", 0)
-                                            total_used_cpu = project_info.get("job_cpu_limit", 0) * project_item_info["pod_count"]
-                                            total_used_ram = project_info.get("job_ram_limit", 0) * project_item_info["pod_count"]
-                                            allocation_info = {
-                                                        "workspace_name": workspace_name,
-                                                        "start_datetime": start_datetime,
-                                                        "item_name": training_name,
-                                                        "item_type": project_item_type,
-                                                        "project_name": project_name,
-                                                        "end_datetime": parse_time,
-                                                        "period": elapsed_time,
-                                                        "type": project_item_type,
-                                                        "type_detail": project_name,
-                                                        "total_gpu_count": total_gpu_count, 
-                                                        "total_used_cpu": total_used_cpu,
-                                                        "total_used_ram": total_used_ram,
-                                                        "instance_info": {
-                                                            "instance_name": instance_name,
-                                                            "gpu_name": gpu_name,
-                                                            "instance_type": instance_type,
-                                                            "gpu_allocate": gpu_allocate,
-                                                            "cpu_allocate": cpu_allocate,
-                                                            "ram_allocate": ram_allocate
-                                                        }
-                                                    }
-                                            log = {
-                                                    "log_type": "allocation",
-                                                    "allocation_info": json.dumps(allocation_info, separators=(',', ':'))
-                                                }
-                                            print("[JFB/USAGE]", json.dumps(log, separators=(',', ':')))
-                                    except Exception as e:
-                                        traceback.print_exc()
-                                        pass
-                                elif pod_info["label_work_func_type"] in [TYPE.PREPROCESSING_ITEM_B, TYPE.PREPROCESSING_ITEM_A] and pod_info["label_pod_type"] == TYPE.PREPROCESSING_TYPE:
-                                    preprocessing_item_id = pod_info["label_preprocessing_item_id"]
-                                    preprocessing_item_type = pod_info["label_work_func_type"]
-                                    # print(prom.custom_query(query=POD_END_TIME.format(POD_NAME=pod_info["pod"])))
-                                    # pod_end_time = prom.custom_query(query=POD_END_TIME.format(POD_NAME=pod_info["pod"]))[0]["value"][1]
-                                    parse_time = time.strftime('%Y-%m-%d %H:%M:%S')
-                                    # if pod_end_time:
-                                    #     parse_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(int(pod_end_time)))
-                                    # else:
-                                    #     parse_time = time.strftime('%Y-%m-%d %H:%M:%S')
-                                    if preprocessing_item_type == TYPE.PREPROCESSING_ITEM_B:
-                                        prepro_db.update_preprocessing_job_datetime(preprocessing_job_id=preprocessing_item_id, end_datetime=parse_time, end_status=status, error_reason=reason)
-                                    elif preprocessing_item_type == TYPE.PREPROCESSING_ITEM_A: 
-                                        prepro_db.update_preprocessing_tool_datetime(preprocessing_tool_id=preprocessing_item_id, end_datetime=parse_time, error_reason=reason)
-                                    delete_helm_resource(helm_name=pod_info["label_helm_name"], workspace_id=workspace_id)
-                                    
-                                    
-                                elif pod_info["label_work_func_type"] == TYPE.FINE_TUNING_TYPE and pod_info["label_pod_type"] == TYPE.FINE_TUNING_TYPE:
-                                    model_id = pod_info["label_model_id"]
-                                    model_db.update_model_fine_tuning_status_sync(status=status, model_id=model_id)
-                                    _ensure_fine_tuning_pod_deleted(
-                                        pod_name=pod_info["pod"],
-                                        helm_name=pod_info["label_helm_name"],
-                                        workspace_id=workspace_id,
-                                    )
-                                        
-                                else: # TODO 사용자가 삭제하기 전까지 해당 pod에 대한 gpu 사용을 유지해야 하는가?
-                                    status = TYPE.KUBE_POD_STATUS_ERROR
-                                    reason = pod_terminated
-                                    resolution = "This error can be caused by a variery of issues"
+                                    else: # TODO 사용자가 삭제하기 전까지 해당 pod에 대한 gpu 사용을 유지해야 하는가?
+                                        status = TYPE.KUBE_POD_STATUS_ERROR
+                                        reason = pod_terminated
+                                        resolution = "This error can be caused by a variery of issues"
                                 
-                            elif pod_running is True:
-                                status = TYPE.KUBE_POD_STATUS_INSTALLING
-                                if gpu_uuids:
-                                    insert_gpu_usage(pod_info=pod_info, gpu_uuids=gpu_uuids, gpu_status=gpu_status)
-                        else:
-                            phase = pod_status[0]['metric']["phase"] if pod_status and pod_status[0] is not None else None
-                            if phase == 'Failed':
-                                status = "error"
-                                reason = pod_status_reason    
+                                elif pod_running is True:
+                                    status = TYPE.KUBE_POD_STATUS_INSTALLING
+                                    if gpu_uuids:
+                                        insert_gpu_usage(pod_info=pod_info, gpu_uuids=gpu_uuids, gpu_status=gpu_status)
+                            else:
+                                phase = pod_status[0]['metric']["phase"] if pod_status and pod_status[0] is not None else None
+                                if phase == 'Failed':
+                                    status = "error"
+                                    reason = pod_status_reason    
                         
                        
                         
-                        if pod_info["label_pod_type"] == TYPE.DEPLOYMENT_TYPE:
-                            if pod_info.get("label_pod_count",None):
-                                    if int(pod_info["label_pod_count"]) >1:
-                                        pod_resource = {
-                                            "gpu" : pod_resource["gpu"] * int(pod_info["label_pod_count"]),
-                                            "cpu" : pod_resource["cpu"] * int(pod_info["label_pod_count"]),
-                                            "ram" : pod_resource["ram"] * int(pod_info["label_pod_count"])
-                                        }
-                            workspace_pods[TYPE.DEPLOYMENT_TYPE][pod_info["label_deployment_id"]][pod_info["label_deployment_worker_id"]] = {
-                                    'status' : status,
-                                    'instance_id' : instance_id,
-                                    'reason' : reason,
-                                    'resolution' : resolution,
-                                    'restart_count' : pod_container_restart_count,
-                                    'phase' : pod_status[0]['metric']['phase'] if pod_status else "Unknown",
-                                    'resource' : pod_resource
-                                }
-                        elif pod_info["label_pod_type"] == TYPE.FINE_TUNING_TYPE and pod_info["label_work_func_type"] == TYPE.FINE_TUNING_TYPE:
-                            if pod_info.get("label_pod_count",None):
-                                if int(pod_info["label_pod_count"]) >1:
-                                    pod_resource = {
-                                        "gpu" : pod_resource["gpu"] * int(pod_info["label_pod_count"]),
-                                        "cpu" : pod_resource["cpu"] * int(pod_info["label_pod_count"]),
-                                        "ram" : pod_resource["ram"] * int(pod_info["label_pod_count"])
+                            if pod_info["label_pod_type"] == TYPE.DEPLOYMENT_TYPE:
+                                if pod_info.get("label_pod_count",None):
+                                        if int(pod_info["label_pod_count"]) >1:
+                                            pod_resource = {
+                                                "gpu" : pod_resource["gpu"] * int(pod_info["label_pod_count"]),
+                                                "cpu" : pod_resource["cpu"] * int(pod_info["label_pod_count"]),
+                                                "ram" : pod_resource["ram"] * int(pod_info["label_pod_count"])
+                                            }
+                                workspace_pods[TYPE.DEPLOYMENT_TYPE][pod_info["label_deployment_id"]][pod_info["label_deployment_worker_id"]] = {
+                                        'status' : status,
+                                        'instance_id' : instance_id,
+                                        'reason' : reason,
+                                        'resolution' : resolution,
+                                        'restart_count' : pod_container_restart_count,
+                                        'phase' : pod_status[0]['metric']['phase'] if pod_status else "Unknown",
+                                        'resource' : pod_resource
                                     }
-                                workspace_pods[TYPE.FINE_TUNING_TYPE][pod_info["label_model_id"]] ={
-                                    'status' : status if status else TYPE.KUBE_POD_STATUS_PENDING,
-                                    'reason' : reason,
-                                    'instance_id' : instance_id,
-                                    'resolution' : resolution,
-                                    'restart_count' : pod_container_restart_count,
-                                    'phase' : pod_status[0]['metric']['phase'] if pod_status else "Unknown",
-                                    'resource' : pod_resource
-                                }
-                        elif pod_info["label_pod_type"] == TYPE.PROJECT_TYPE:
-                            if pod_info["label_work_func_type"] in workspace_pods and \
-                                pod_info["label_project_item_id"] in workspace_pods[pod_info["label_work_func_type"]] and \
-                                workspace_pods[pod_info["label_work_func_type"]][pod_info["label_project_item_id"]]["status"] != TYPE.KUBE_POD_STATUS_RUNNING:
-                                pass # 분산학습 시 특정 node의 pod만 실행이 안될경우를 대비해 추가 
-                            else:
+                            elif pod_info["label_pod_type"] == TYPE.FINE_TUNING_TYPE and pod_info["label_work_func_type"] == TYPE.FINE_TUNING_TYPE:
                                 if pod_info.get("label_pod_count",None):
                                     if int(pod_info["label_pod_count"]) >1:
                                         pod_resource = {
@@ -2185,7 +2172,50 @@ def set_workspace_pod_status():
                                             "cpu" : pod_resource["cpu"] * int(pod_info["label_pod_count"]),
                                             "ram" : pod_resource["ram"] * int(pod_info["label_pod_count"])
                                         }
-                                    workspace_pods[TYPE.PROJECT_TYPE][pod_info["label_project_id"]][pod_info["label_work_func_type"]][pod_info["label_project_item_id"]] = {
+                                    workspace_pods[TYPE.FINE_TUNING_TYPE][pod_info["label_model_id"]] ={
+                                        'status' : status if status else TYPE.KUBE_POD_STATUS_PENDING,
+                                        'reason' : reason,
+                                        'instance_id' : instance_id,
+                                        'resolution' : resolution,
+                                        'restart_count' : pod_container_restart_count,
+                                        'phase' : pod_status[0]['metric']['phase'] if pod_status else "Unknown",
+                                        'resource' : pod_resource
+                                    }
+                            elif pod_info["label_pod_type"] == TYPE.PROJECT_TYPE:
+                                if pod_info["label_work_func_type"] in workspace_pods and \
+                                    pod_info["label_project_item_id"] in workspace_pods[pod_info["label_work_func_type"]] and \
+                                    workspace_pods[pod_info["label_work_func_type"]][pod_info["label_project_item_id"]]["status"] != TYPE.KUBE_POD_STATUS_RUNNING:
+                                    pass # 분산학습 시 특정 node의 pod만 실행이 안될경우를 대비해 추가 
+                                else:
+                                    if pod_info.get("label_pod_count",None):
+                                        if int(pod_info["label_pod_count"]) >1:
+                                            pod_resource = {
+                                                "gpu" : pod_resource["gpu"] * int(pod_info["label_pod_count"]),
+                                                "cpu" : pod_resource["cpu"] * int(pod_info["label_pod_count"]),
+                                                "ram" : pod_resource["ram"] * int(pod_info["label_pod_count"])
+                                            }
+                                        workspace_pods[TYPE.PROJECT_TYPE][pod_info["label_project_id"]][pod_info["label_work_func_type"]][pod_info["label_project_item_id"]] = {
+                                                'status' : status if status else TYPE.KUBE_POD_STATUS_PENDING,
+                                                'reason' : reason,
+                                                'instance_id' : instance_id,
+                                                'resolution' : resolution,
+                                                'restart_count' : pod_container_restart_count,
+                                                'phase' : pod_status[0]['metric']['phase'] if pod_status else "Unknown",
+                                                'resource' : pod_resource
+                                            }
+                            elif pod_info["label_pod_type"] == TYPE.PREPROCESSING_TYPE:
+                            
+                                if pod_info["label_work_func_type"] in workspace_pods and \
+                                    pod_info["label_preprocessing_item_id"] in workspace_pods[pod_info["label_work_func_type"]] and \
+                                    workspace_pods[pod_info["label_work_func_type"]][pod_info["label_preprocessing_item_id"]]["status"] != TYPE.KUBE_POD_STATUS_RUNNING:
+                                    pass
+                                else:
+                                    pod_resource = {
+                                        "gpu" : pod_resource.get("gpu", 0) * int(pod_info["label_pod_count"]),
+                                        "cpu" : pod_resource["cpu"] * int(pod_info["label_pod_count"]),
+                                        "ram" : pod_resource["ram"] * int(pod_info["label_pod_count"])
+                                    }
+                                    workspace_pods[TYPE.PREPROCESSING_TYPE][pod_info["label_preprocessing_id"]][pod_info["label_work_func_type"]][pod_info["label_preprocessing_item_id"]] = {
                                             'status' : status if status else TYPE.KUBE_POD_STATUS_PENDING,
                                             'reason' : reason,
                                             'instance_id' : instance_id,
@@ -2194,35 +2224,34 @@ def set_workspace_pod_status():
                                             'phase' : pod_status[0]['metric']['phase'] if pod_status else "Unknown",
                                             'resource' : pod_resource
                                         }
-                        elif pod_info["label_pod_type"] == TYPE.PREPROCESSING_TYPE:
+                            elif pod_info["label_pod_type"] == TYPE.COLLECT_TYPE:
                             
-                            if pod_info["label_work_func_type"] in workspace_pods and \
-                                pod_info["label_preprocessing_item_id"] in workspace_pods[pod_info["label_work_func_type"]] and \
-                                workspace_pods[pod_info["label_work_func_type"]][pod_info["label_preprocessing_item_id"]]["status"] != TYPE.KUBE_POD_STATUS_RUNNING:
-                                pass
-                            else:
-                                pod_resource = {
-                                    "gpu" : pod_resource.get("gpu", 0) * int(pod_info["label_pod_count"]),
-                                    "cpu" : pod_resource["cpu"] * int(pod_info["label_pod_count"]),
-                                    "ram" : pod_resource["ram"] * int(pod_info["label_pod_count"])
-                                }
-                                workspace_pods[TYPE.PREPROCESSING_TYPE][pod_info["label_preprocessing_id"]][pod_info["label_work_func_type"]][pod_info["label_preprocessing_item_id"]] = {
-                                        'status' : status if status else TYPE.KUBE_POD_STATUS_PENDING,
-                                        'reason' : reason,
-                                        'instance_id' : instance_id,
-                                        'resolution' : resolution,
-                                        'restart_count' : pod_container_restart_count,
-                                        'phase' : pod_status[0]['metric']['phase'] if pod_status else "Unknown",
-                                        'resource' : pod_resource
+                                    pod_resource = {
+                                        "gpu" : pod_resource.get("gpu", 0),
+                                        "cpu" : pod_resource["cpu"],
+                                        "ram" : pod_resource["ram"],
                                     }
-                        elif pod_info["label_pod_type"] == TYPE.COLLECT_TYPE:
-                            
+                                    workspace_pods[TYPE.COLLECT_TYPE][pod_info["label_collect_id"]] = {
+                                            'status' : status if status else TYPE.KUBE_POD_STATUS_PENDING,
+                                            'reason' : reason,
+                                            'instance_id' : instance_id,
+                                            'resolution' : resolution,
+                                            'restart_count' : pod_container_restart_count,
+                                            'phase' : pod_status[0]['metric']['phase'] if pod_status else "Unknown",
+                                            'resource' : pod_resource
+                                        }
+                            elif pod_info["label_pod_type"] == TYPE.GENERATION_TYPE:
+                                # 생성형 파이프라인 노드(external generate job) — 단일 pod,
+                                # 귀속 키 = label_job_id. 누락 시 pod 명으로 fallback —
+                                # bare 인덱싱은 KeyError 로 workspace_usage 틱 전체를 죽인다
+                                # (SP-Ext.4 회귀). insert_gpu_usage 와 동일하게 방어. WBS 1.1.
+                                generation_key = pod_info.get("label_job_id") or pod_info.get("pod", "")
                                 pod_resource = {
                                     "gpu" : pod_resource.get("gpu", 0),
-                                    "cpu" : pod_resource["cpu"],
-                                    "ram" : pod_resource["ram"],
+                                    "cpu" : pod_resource.get("cpu", 0),
+                                    "ram" : pod_resource.get("ram", 0),
                                 }
-                                workspace_pods[TYPE.COLLECT_TYPE][pod_info["label_collect_id"]] = {
+                                workspace_pods[TYPE.GENERATION_TYPE][generation_key] = {
                                         'status' : status if status else TYPE.KUBE_POD_STATUS_PENDING,
                                         'reason' : reason,
                                         'instance_id' : instance_id,
@@ -2231,26 +2260,12 @@ def set_workspace_pod_status():
                                         'phase' : pod_status[0]['metric']['phase'] if pod_status else "Unknown",
                                         'resource' : pod_resource
                                     }
-                        elif pod_info["label_pod_type"] == TYPE.GENERATION_TYPE:
-                            # 생성형 파이프라인 노드(external generate job) — 단일 pod,
-                            # 귀속 키 = label_job_id. 누락 시 pod 명으로 fallback —
-                            # bare 인덱싱은 KeyError 로 workspace_usage 틱 전체를 죽인다
-                            # (SP-Ext.4 회귀). insert_gpu_usage 와 동일하게 방어. WBS 1.1.
-                            generation_key = pod_info.get("label_job_id") or pod_info.get("pod", "")
-                            pod_resource = {
-                                "gpu" : pod_resource.get("gpu", 0),
-                                "cpu" : pod_resource.get("cpu", 0),
-                                "ram" : pod_resource.get("ram", 0),
-                            }
-                            workspace_pods[TYPE.GENERATION_TYPE][generation_key] = {
-                                    'status' : status if status else TYPE.KUBE_POD_STATUS_PENDING,
-                                    'reason' : reason,
-                                    'instance_id' : instance_id,
-                                    'resolution' : resolution,
-                                    'restart_count' : pod_container_restart_count,
-                                    'phase' : pod_status[0]['metric']['phase'] if pod_status else "Unknown",
-                                    'resource' : pod_resource
-                                }
+                        except Exception:
+                            # 파드 하나의 실패가 나머지 파드의 상태 동기화를 막지 않게 격리한다.
+                            # 이 루프 안에서 잡 종료(end_datetime)와 helm 정리가 일어나므로, 한 건이
+                            # 죽으면 뒤 파드의 잡이 영영 running 으로 남는다(유령 잡).
+                            traceback.print_exc()
+                            continue
                     redis_client.hset(redis_key.WORKSPACE_PODS_STATUS, workspace["id"], json.dumps(workspace_pods))
                     # redis_client.hset(redis_key.WORKSPACE_INSTANCE_USED, workspace["id"], json.dumps(workspace_instances))
                 redis_client.set(redis_key.GPU_INFO_RESOURCE, json.dumps(gpu_status))
