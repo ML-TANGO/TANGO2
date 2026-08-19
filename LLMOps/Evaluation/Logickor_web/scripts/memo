@@ -1,0 +1,6 @@
+scripts/auto.sh에 아래의 명령어들이 동작되도록 내용을 고쳐줘.
+
+  python train/train_lora.py   --config configs/train_gemma4_e4b_sft.yaml   --output-dir runs/gemma4_e4b_sft_high   --seed 42
+  python logickor_eval/generator.py   --model runs/gemma4_e4b_sft_high/merged   --gpu_devices 0   --model_len 4096
+  python logickor_eval/evaluator.py     -o generated/runs/gemma4_e4b_sft_high/merged     -j gemma -g 0 -ml 8192
+  python logickor_eval/score.py -p 'evaluated/*.jsonl'
