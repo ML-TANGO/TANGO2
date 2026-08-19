@@ -1,0 +1,30 @@
+services:
+  qwen3-mixatis:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: qwen3-mixatis:latest
+    environment:
+      # Qwen3-8B 는 공개(Apache-2.0)라 보통 토큰 불필요.
+      # gated 모델/사설 허브를 쓸 때만 HF_TOKEN 설정.
+      - HF_TOKEN=${HF_TOKEN:-}
+      - HF_HOME=/workspace/.hf_cache
+      # 전체 GPU 노출
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    volumes:
+      - ./out:/workspace/out               # 학습 결과/CSV 호스트로 영속화
+      - hf_cache:/workspace/.hf_cache       # 16GB 모델 캐시 재사용
+    # GPU 예약 (Docker Compose v2 / nvidia-container-toolkit 필요)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    # 기본 실행: 전체 실험. 디버그는 ["bash","run_experiment.sh","debug"] 로 변경.
+    command: ["bash", "run_experiment.sh", "full"]
+
+volumes:
+  hf_cache:
