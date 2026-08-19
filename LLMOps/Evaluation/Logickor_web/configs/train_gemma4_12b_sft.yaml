@@ -1,0 +1,42 @@
+model: google/gemma-4-12B-it
+data_path: data/logickor_sft_high_converted.jsonl
+max_seq_length: 4096
+
+lora:
+  r: 32
+  alpha: 64
+  dropout: 0.05
+  # Gemma4 is multimodal. Restrict LoRA to language_model so text-only SFT
+  # does not adapt matching projection names in vision/audio towers.
+  # Gemma4 12B has 48 text layers. All layers expose q/k/o and MLP modules;
+  # v_proj is absent on layers 5, 11, 17, 23, 29, 35, 41, and 47, so this
+  # regex safely matches only existing modules.
+  target_modules_regex: ".*language_model\\.layers\\.(([0-9]|[1-3][0-9]|4[0-7])\\.(self_attn\\.(q_proj|k_proj|v_proj|o_proj)|mlp\\.(gate_proj|up_proj|down_proj)))$"
+
+split:
+  train_ratio: 0.9
+
+training:
+  cuda_visible_devices: "3"
+  num_train_epochs: 300
+  learning_rate: 5.0e-5
+  lr_scheduler_type: cosine
+  warmup_ratio: 0.03
+  optim: adamw_torch
+  weight_decay: 0.0
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 16
+  gradient_checkpointing: true
+  logging_steps: 10
+  eval_steps: 20
+  save_checkpoints: false
+  save_steps: 0
+  save_total_limit: 0
+  bf16: true
+  fp16: false
+
+early_stopping:
+  enabled: false
+  patience: 3
+  threshold: 0.0
