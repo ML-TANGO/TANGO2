@@ -39,7 +39,7 @@ if SYSTEM_DOCKER_REGISTRY_URL:
     # FORMAT_CONVERT(데이터 포맷 변환) 포함 활성 빌트인 4종이 이 베이스에서 실행(스크립트는 NFS /built_in 마운트).
     # v2.2.0: 데이터 파이프라인 노드용 imagehash(pHash 중복제거)·pymupdf(PDF 페이지화) 추가.
     # 기존 4핀(pandas/pyarrow/pillow/numpy)은 그대로라 빌트인 4종에 영향 없음.
-    JF_DEFAULT_UBUNTU_22_IMAGE = SYSTEM_DOCKER_REGISTRY_URL + "acrylaaai/genai-platform-builtin-preprocess:tango_v2.2.0"
+    JF_DEFAULT_UBUNTU_22_IMAGE = SYSTEM_DOCKER_REGISTRY_URL + "acrylaaai/genai-platform-builtin-preprocess:tango_v2.4.0"
 DOCKER_REGISTRY_PROTOCOL = os.getenv('DOCKER_REGISTRY_PROTOCOL', "http://") # "http://" | "https://"
 SYSTEM_DOCKER_REGISTRY_PROTOCOL = os.getenv('SYSTEM_DOCKER_REGISTRY_PROTOCOL', "http://")
 IMAGE_NAMESPACE = f"{JF_SYSTEM_NAMESPACE}-image" if JF_SYSTEM_NAMESPACE else "default-image"

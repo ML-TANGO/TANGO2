@@ -12,3 +12,5 @@ numpy==1.26.4
 # 생성·심사 노드는 모델 서빙을 HTTP 로 호출하므로 torch 는 필요 없다(stdlib urllib).
 imagehash==4.3.2      # 중복 제거 pHash. scipy(DCT) + PyWavelets 를 전이로 끌어온다(~40MB)
 pymupdf==1.24.14      # PDF → 페이지 이미지 + 텍스트 추출(구조 추출 기능)
+av==13.1.0            # 항해 영상 → 프레임 디코딩(dp_sds_video). manylinux 휠에 ffmpeg
+                      # 공유 라이브러리가 들어 있어 이미지에 ffmpeg 를 따로 깔지 않아도 된다.
