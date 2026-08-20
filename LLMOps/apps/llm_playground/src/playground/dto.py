@@ -278,6 +278,15 @@ class PlaygroundTestInput(BaseModel):
             "image_base64, ais_rows 등 partner 전용 필드. None 이면 internal 분기."
         ),
     )
+    images: Optional[List[str]] = Field(
+        default=None,
+        description=(
+            "내부 VLM 배포에 넣을 이미지(base64 또는 data URI). 서빙 파드에는 데이터셋 "
+            "마운트가 없어 인라인으로 싣는다. 텍스트 전용 모델에 주면 400 으로 거부된다 — "
+            "이미지를 버리고 텍스트로 답하면 이미지를 본 결과로 오해되기 때문이다. "
+            "external_payload 와 별개(그쪽은 협력기관 컨테이너 전용 필드)."
+        ),
+    )
     prompt_gen_playground_id: Optional[int] = Field(
         default=None,
         description=(

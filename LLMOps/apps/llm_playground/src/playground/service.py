@@ -2949,7 +2949,7 @@ async def dual_batch_test(playground_id, prompt_gen_playground_id, dataset_id, f
             "metric_set": final.get("metric_set", [])}, None
 
 
-async def playground_test(playground_id, test_type, test_dataset_id, test_dataset_filename, test_question, session_id=None, network_load=0, external_payload: dict = None):
+async def playground_test(playground_id, test_type, test_dataset_id, test_dataset_filename, test_question, session_id=None, network_load=0, external_payload: dict = None, images: list = None):
     """
     network_load: 없음 0, 저 1, 중 2, 고3
     external_payload: external partner container 분기 시 /run body params (image_base64, ais_rows 등)
@@ -3037,14 +3037,27 @@ async def playground_test(playground_id, test_type, test_dataset_id, test_datase
         # 테스트 실행
         try:
             async with httpx.AsyncClient() as client:
-                response = await client.post(test_url, json={"test_type": test_type, "session_id": session_id,
-                                                         "test_dataset_id": test_dataset_id, "test_dataset_filename": test_dataset_filename,
-                                                         "test_question": test_question,
-                                                         "system_prompt": batch_system_prompt}, timeout=1800)
+                # images 는 VLM 배포에서만 의미가 있다. 비어 있으면 키를 아예 넣지 않아
+                # 옛 래퍼(이미지 미지원)와도 그대로 호환된다.
+                _body = {"test_type": test_type, "session_id": session_id,
+                         "test_dataset_id": test_dataset_id, "test_dataset_filename": test_dataset_filename,
+                         "test_question": test_question,
+                         "system_prompt": batch_system_prompt}
+                if images:
+                    _body["images"] = images
+                response = await client.post(test_url, json=_body, timeout=1800)
                 if response.status_code == 401:
                     raise Exception("Setting up the playground")
                 elif response.status_code == 402:
                     raise Exception("Playground Model Error")
+                elif response.status_code == 400:
+                    # 래퍼가 이미지 입력을 거부한 경우(형식 오류 · 텍스트 전용 모델).
+                    # 사유를 그대로 전해야 사용자가 무엇을 고칠지 안다.
+                    try:
+                        _detail = response.json().get("detail")
+                    except Exception:
+                        _detail = response.text[:200]
+                    raise Exception(_detail or "이미지 입력이 거부되었습니다")
                 elif response.status_code == 200:
                     result = response.json()
                     # 최적화 프롬프트를 주입한 경우만 few-shot 연속 생성분을 잘라낸다.

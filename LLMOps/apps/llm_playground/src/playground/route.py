@@ -727,7 +727,8 @@ async def post_test(body: dto.PlaygroundTestInput, request: Request):
                                         test_dataset_id=body.test_dataset_id, test_dataset_filename=body.test_dataset_filename,
                                         test_question=body.test_question, session_id=body.session_id,
                                         network_load=body.network_load,
-                                        external_payload=body.external_payload)
+                                        external_payload=body.external_payload,
+                                        images=body.images)
         return response(status=1, result=res, message=message)
     except Exception as e:
         traceback.print_exc()
