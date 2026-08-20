@@ -94,6 +94,11 @@
   value: {{ .Values.gpu_auto_cluster_case.server  | default "0" | quote }}
 - name: LLM_GPU_COUNT
   value: {{ .Values.gpu_auto_cluster_case.gpu_count  | default "0" | quote }}
+{{/* vLLM 이 확보할 GPU 메모리 비율. 이 값은 전체 용량 기준인데 vLLM 은 여유 메모리와
+     비교해 검사하므로, 다른 워크로드가 같은 GPU 를 쓰면 기본 0.90 으로는 기동이 거부된다.
+     서빙과 물리 노드를 공유하는 클러스터에서 낮춰 띄울 수 있도록 값으로 뺀다. */}}
+- name: LLM_GPU_MEMORY_UTILIZATION
+  value: {{ .Values.llm.gpu_memory_utilization | default "0.90" | quote }}
 - name: LLM_POD_INDEX
   value: {{ .index | default "0" | quote }}
 {{- end }}

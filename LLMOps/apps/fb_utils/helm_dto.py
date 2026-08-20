@@ -226,6 +226,7 @@ class BaseConfig(BaseModel):
                 "id": values.get("llm_id"),
                 "name": values.get("llm_name"),
                 "type": values.get("llm_type"),
+                "gpu_memory_utilization": settings.DEPLOYMENT_LLM_GPU_MEMORY_UTILIZATION,
                 # "gpu_count" : values.get("gpu_count"),
                 "model" : {
                     "type": values.get("model_type"),
@@ -418,6 +419,9 @@ class DictLlm(BaseModel):
     id: Optional[int] = None
     name: Optional[str] = None
     type: Optional[str] = None
+    # vLLM 이 확보할 GPU 메모리 비율. 서빙과 GPU 를 공유하는 노드에서 기본 0.90 이면
+    # 기동이 거부되므로(vLLM 은 여유 메모리와 비교) 클러스터별로 낮출 수 있어야 한다.
+    gpu_memory_utilization: Optional[float] = None
     model: Optional[DictModel] = None
     playground: Optional[DictPlayground] = None
     rag: Optional[DictRag] = None

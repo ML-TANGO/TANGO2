@@ -67,6 +67,10 @@ DEPLOYMENT_LLM_TRITON_IMAGE="acrylaaai/llm_deployment_triton:dev"
 # [멀티엔진 서빙 로드맵 Phase 3 / Tier B] TensorRT-LLM 서빙 이미지(FROM nvcr.io/nvidia/tritonserver:*-trtllm-python-py3). trtllm-serve OpenAI 호환 서버(PyTorch 백엔드 = HF 직접, AOT 컴파일 불요).
 DEPLOYMENT_LLM_TENSORRT_IMAGE="acrylaaai/llm_deployment_tensorrt:dev"
 # 서빙 엔진별 배포 이미지 맵. vLLM(GPU/CPU 폴백) + llama.cpp(GGUF 직접 / HF 온더플라이 변환) + TGI/Ollama/Triton/TensorRT(HF/safetensors).
+# vLLM 서빙이 확보할 GPU 메모리 비율(전체 용량 기준). vLLM 은 이 값을 **여유 메모리**와
+# 비교해 검사하므로, 서빙과 물리 노드를 공유해 GPU 가 부분 점유된 클러스터에서는 0.90 으로
+# 기동이 거부된다. 클러스터별로 env 로 낮춘다(기본은 종전과 같은 0.90).
+DEPLOYMENT_LLM_GPU_MEMORY_UTILIZATION = float(os.getenv("DEPLOYMENT_LLM_GPU_MEMORY_UTILIZATION") or 0.90)
 SERVING_ENGINE_IMAGE_MAP = {"vllm": DEPLOYMENT_LLM_IMAGE, "llama_cpp": DEPLOYMENT_LLM_LLAMACPP_IMAGE, "tgi": DEPLOYMENT_LLM_TGI_IMAGE, "ollama": DEPLOYMENT_LLM_OLLAMA_IMAGE, "triton": DEPLOYMENT_LLM_TRITON_IMAGE, "tensorrt": DEPLOYMENT_LLM_TENSORRT_IMAGE}
 # 지금 실제 지원하는 서빙 엔진(그 외 값은 서버측 거부).
 SUPPORTED_SERVING_SYSTEMS = ("vllm", "llama_cpp", "tgi", "ollama", "triton", "tensorrt")

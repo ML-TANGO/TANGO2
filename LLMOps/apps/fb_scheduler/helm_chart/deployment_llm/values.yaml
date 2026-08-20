@@ -56,6 +56,9 @@ llm:
   id:
   name: 
   gpu_count: 
+  # vLLM 이 확보할 GPU 메모리 비율(전체 용량 기준). 비우면 0.90(종전 기본값).
+  # 서빙과 GPU 를 공유하는 노드에서는 낮춰야 기동된다 — vLLM 은 여유 메모리와 비교해 검사한다.
+  gpu_memory_utilization:
   db:
     host:
     port:

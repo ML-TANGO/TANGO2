@@ -28,6 +28,12 @@ LLM_TOKENIZER = None
 LLM_MODEL = None  # CPU 모드용 transformers 모델
 USE_TRANSFORMERS_DIRECT = False  # CPU 모드 플래그
 
+# vLLM 이 확보할 GPU 메모리 비율. 기본값은 종전과 같은 0.90 이다.
+# 이 값은 **전체 용량 기준**인데 vLLM 은 **여유 메모리**와 비교해 검사하므로, 다른
+# 워크로드가 같은 GPU 를 조금이라도 쓰고 있으면 기동이 거부된다. 서빙과 물리 노드를
+# 공유하는 클러스터에서는 낮춰 띄울 수 있어야 한다.
+GPU_MEMORY_UTILIZATION = float(os.environ.get("LLM_GPU_MEMORY_UTILIZATION") or 0.90)
+
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 @asynccontextmanager
@@ -174,11 +180,22 @@ async def lifespan(app: FastAPI):
             print(f"max_model_len = {max_model_len}")
 
 
+            try:
+                _free, _total = torch.cuda.mem_get_info(device_id)
+                _need = GPU_MEMORY_UTILIZATION * _total
+                print(f"[gpu] free={_free/2**30:.1f}GiB / total={_total/2**30:.1f}GiB, "
+                      f"요구={_need/2**30:.1f}GiB (utilization={GPU_MEMORY_UTILIZATION})")
+                if _need > _free:
+                    print("[gpu] 경고: 요구량이 여유 메모리를 넘습니다 — 같은 GPU 를 쓰는 다른 "
+                          "워크로드가 있으면 LLM_GPU_MEMORY_UTILIZATION 을 낮춰야 기동됩니다")
+            except Exception:
+                pass
+
             engine_args = AsyncEngineArgs(
                 model=input_model,
                 # quantization="AWQ",
                 tensor_parallel_size=tensor_parallel_size, # 노드 당 gpu 수
-                gpu_memory_utilization=0.90, # gpu 메모리 사용량
+                gpu_memory_utilization=GPU_MEMORY_UTILIZATION, # gpu 메모리 사용량
                 trust_remote_code=True,
                 enable_prefix_caching=True,
                 dtype=gpu_dtype,
