@@ -236,6 +236,8 @@ CREATE TABLE IF NOT EXISTS `workspace_request` (
     `allocate_instance_list`    JSON,
     `type`                  VARCHAR(50),
     `workspace_id`          INT(11),
+    -- 운영 DB 에 라이브 ALTER 로만 적용돼 있던 컬럼(마이그레이션 러너 부재). 역반영.
+    `use_marker`            INT(11) NOT NULL DEFAULT 0,
     PRIMARY KEY(`id`),
     CONSTRAINT FOREIGN KEY (`manager_id`) REFERENCES `msa_jfb`.`user` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
 );
