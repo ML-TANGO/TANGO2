@@ -1,220 +1,306 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 
 import {
-  Btn, Checkbox, DataTable, Frame, Funnel, PageHeader, SectionHead, Segmented, Slider, dsBase, useDatasetNav,
-} from './components';
+  getFlow,
+  getStage,
+  runStage,
+  saveStageConfig,
+} from '@src/apis/llm/dataset';
+import { STATUS_SUCCESS } from '@src/network';
+import { errorToastMessage } from '@src/utils';
+
 import {
-  CONVERTED, FILTER_FUNNEL, FILTER_REASONS, FILTER_REMOVED, FILTER_STEPS,
-  PREPROCESS_FUNNEL, PREPROCESS_STEPS,
-} from './mock';
-import { SHOTS } from './lib/frames';
-import { fmt } from './lib/format';
+  Btn,
+  Checkbox,
+  PageHeader,
+  SectionHead,
+  Slider,
+  dsBase,
+  useDatasetNav,
+} from './components';
+import RunPanel from './components/RunPanel';
+import { findStageNode, upstreamRunOf } from './lib/stage';
 import common from './styles/common.module.scss';
 import style from './pages.module.scss';
 
 /**
  * 전처리 · 필터 공용 화면.
  *
- * 두 단계는 레이아웃이 같고 기능 목록과 결과 블록만 다르다. 화면을 둘로 나누면
- * 같은 코드를 두 벌 고치게 되므로 하나로 두고 stage 로 갈라 쓴다.
+ * 두 단계는 레이아웃이 같고 기능 목록과 결과만 다르다. 화면을 둘로 나누면 같은 코드를
+ * 두 벌 고치게 되므로 하나로 두고 stage 로 갈라 쓴다.
  *
- * 전처리는 아무것도 버리지 않고 필터만 버린다 — 그래서 필터에는 "무엇을 왜 버렸고
- * 어떻게 되살리는지"가 함께 붙는다.
+ * 기능 목록(무엇을 켤 수 있는지)과 파라미터 범위는 **서버가 정본**이다(`library`).
+ * FE 가 목록을 들고 있으면 노드 스크립트에 기능이 추가돼도 화면에 안 나타난다.
+ *
+ * 실행 결과는 파이프라인 드로어와 같은 것을 본다 — `RunPanel` 을 그대로 쓴다.
+ * 같은 화면을 두 벌 만들면 한쪽만 고쳐져 서로 다른 숫자를 보여주게 된다.
  */
 export default function StageConfigPage({ stage: stageProp }) {
   const { wsId, dsId } = useDatasetNav();
   const location = useLocation();
-  const stage = stageProp || (location.pathname.endsWith('/filter') ? 'filter' : 'preprocess');
+  const stage =
+    stageProp ||
+    (location.pathname.endsWith('/filter') ? 'filter' : 'preprocess');
   const isFilter = stage === 'filter';
 
-  const steps = isFilter ? FILTER_STEPS : PREPROCESS_STEPS;
-  const funnel = isFilter ? FILTER_FUNNEL : PREPROCESS_FUNNEL;
-
-  const [phase, setPhase] = useState('실행 후');
-  const [enabled, setEnabled] = useState({ 0: true, 1: true, 2: true });
+  const [library, setLibrary] = useState([]);
+  const [enabled, setEnabled] = useState({});
+  const [params, setParams] = useState({});
+  const [sources, setSources] = useState([]);
+  const [flow, setFlow] = useState(null);
   const [selected, setSelected] = useState(0);
-  const [reason, setReason] = useState(0);
-  const [restored, setRestored] = useState({});
-  const [params, setParams] = useState({
-    retry: 2, dpi: 200, longEdge: 1024, dupTh: 95, blur: 40, nsfw: 85,
-  });
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState('');
 
-  const cur = steps[selected];
-  const [paramLabel, paramKey, paramMin, paramMax, paramUnit] = cur.param;
-  const shownValue = paramUnit === 'ratio'
-    ? `0.${params[paramKey]}`
-    : `${params[paramKey]}${paramUnit ? ` ${paramUnit}` : ''}`;
+  const load = useCallback(async () => {
+    const [st, fl] = await Promise.all([getStage(dsId, stage), getFlow(dsId)]);
+    if (st.status !== STATUS_SUCCESS) {
+      setFailed(st.message || '단계 설정을 불러오지 못했습니다');
+      errorToastMessage(st.error, st.message);
+      return;
+    }
+    setFailed('');
+    const lib = st.result?.library || [];
+    const cfg = st.result?.config || {};
+    setLibrary(lib);
+    setSources(cfg.sources || []);
+    // 저장된 값이 없는 기능은 라이브러리 기본값으로 채운다. 빈 칸으로 두면 슬라이더가
+    // 0 에서 시작해 사용자가 만진 적 없는 값이 저장된다.
+    setEnabled(
+      Object.fromEntries(
+        lib.map((s) => [s.key, cfg.enabled?.[s.key] ?? false]),
+      ),
+    );
+    setParams(
+      Object.fromEntries(
+        lib
+          .filter((s) => s.param)
+          .map((s) => [
+            s.param.key,
+            cfg.params?.[s.param.key] ?? s.param.default,
+          ]),
+      ),
+    );
+    if (fl.status === STATUS_SUCCESS) setFlow(fl.result);
+  }, [dsId, stage]);
 
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const nodes = flow?.nodes || [];
+  const { node, index } = findStageNode(nodes, stage);
+  const running = node?.latest_run?.status === 'running';
+
+  const cur = library[selected] || null;
   const onCount = Object.values(enabled).filter(Boolean).length;
-  const restoredCount = Object.values(restored).filter(Boolean).length;
+
+  const persist = async () => {
+    const res = await saveStageConfig(dsId, stage, {
+      sources,
+      enabled,
+      params,
+    });
+    if (res.status !== STATUS_SUCCESS) {
+      errorToastMessage(res.error, res.message);
+      return false;
+    }
+    return true;
+  };
+
+  const save = async () => {
+    setBusy(true);
+    const ok = await persist();
+    setBusy(false);
+    if (ok) load();
+  };
+
+  /**
+   * 저장하고 바로 실행한다.
+   *
+   * 잡은 **저장된** 노드 설정을 읽어 params.json 을 만든다(run_stage → get_flow).
+   * 저장하지 않고 실행하면 방금 바꾼 슬라이더가 반영되지 않은 채 돌아, 사용자는
+   * "기능을 바꿨는데 결과가 같다"를 보게 된다 — 이 화면의 목적이 정확히 그 비교다.
+   */
+  const run = async (dryRun) => {
+    setBusy(true);
+    if (!(await persist())) {
+      setBusy(false);
+      return;
+    }
+    const res = await runStage(dsId, stage, {
+      dry_run: dryRun,
+      sample_size: 10,
+    });
+    setBusy(false);
+    if (res.status !== STATUS_SUCCESS) {
+      errorToastMessage(res.error, res.message);
+      return;
+    }
+    load();
+  };
+
+  /** 라이브러리 기본값으로 되돌린다(저장은 사용자가 누를 때). */
+  const reset = () => {
+    setParams(
+      Object.fromEntries(
+        library
+          .filter((s) => s.param)
+          .map((s) => [s.param.key, s.param.default]),
+      ),
+    );
+  };
+
+  if (failed) {
+    return (
+      <div className={style.page}>
+        <PageHeader
+          title={isFilter ? '필터' : '전처리'}
+          back={{ to: `${dsBase(wsId, dsId)}/flow`, label: '파이프라인' }}
+        />
+        <div className={common['card-pad']}>
+          <span className={common.prose}>{failed}</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={style.page}>
       <PageHeader
         title={isFilter ? '필터' : '전처리'}
         back={{ to: `${dsBase(wsId, dsId)}/flow`, label: '파이프라인' }}
-        actions={<Segmented options={['실행 전', '실행 후']} value={phase} onChange={setPhase} />}
       />
 
       <div className={style['stage-grid']}>
         {/* 좌: 기능 목록 + 선택한 기능의 파라미터 */}
         <div className={common['stack-lg']}>
           <div className={common.stack}>
-            <SectionHead aside={<span className={[common.num, common['cell-mute']].join(' ')}>{steps.length}개 중 {onCount}개 켜짐</span>}>
+            <SectionHead
+              aside={
+                <span className={[common.num, common['cell-mute']].join(' ')}>
+                  {library.length}개 중 {onCount}개 켜짐
+                </span>
+              }
+            >
               기능
             </SectionHead>
             <div className={common['card-clip']}>
-              {steps.map((s, i) => (
+              {library.map((s, i) => (
                 <div
-                  key={s.k}
-                  role="button"
+                  key={s.key}
+                  role='button'
                   tabIndex={0}
                   onClick={() => setSelected(i)}
                   onKeyDown={(e) => e.key === 'Enter' && setSelected(i)}
-                  className={[style['step-item'], selected === i ? style['step-item-on'] : ''].join(' ')}
+                  className={[
+                    style['step-item'],
+                    selected === i ? style['step-item-on'] : '',
+                  ].join(' ')}
                 >
                   <span className={style['step-head']}>
                     <Checkbox
-                      checked={!!enabled[i]}
-                      onChange={(v) => setEnabled({ ...enabled, [i]: v })}
-                      label={s.k}
+                      checked={!!enabled[s.key]}
+                      onChange={(v) => setEnabled({ ...enabled, [s.key]: v })}
+                      label={s.key}
                     />
-                    <span className={[style['step-tag'], isFilter ? style['step-tag-del'] : ''].join(' ')}>
-                      {isFilter ? (enabled[i] ? `−${s.del}` : '') : '변환'}
+                    <span
+                      className={[
+                        style['step-tag'],
+                        isFilter ? style['step-tag-del'] : '',
+                      ].join(' ')}
+                    >
+                      {isFilter ? (enabled[s.key] ? '제외' : '') : '변환'}
                     </span>
                   </span>
                   <span className={style['step-desc']}>{s.desc}</span>
                 </div>
               ))}
+              {library.length === 0 && (
+                <div className={style['step-desc']}>
+                  이 단계에 쓸 수 있는 기능이 없습니다.
+                </div>
+              )}
               <div className={style['step-actions']}>
-                <Btn size="md" fill="outline" tone="gray">기본값</Btn>
-                <Btn size="md" block onClick={() => setPhase('실행 후')}>실행</Btn>
+                <Btn
+                  size='md'
+                  fill='outline'
+                  tone='gray'
+                  onClick={reset}
+                  disabled={busy}
+                >
+                  기본값
+                </Btn>
+                <Btn
+                  size='md'
+                  fill='outline'
+                  tone='gray'
+                  onClick={save}
+                  disabled={busy}
+                >
+                  저장
+                </Btn>
+              </div>
+              <div className={style['step-actions']}>
+                {/* 표본만 돌려 이력에 남기지 않는다 — 껐다 켜며 비교하는 경로. */}
+                <Btn
+                  size='md'
+                  fill='outline'
+                  tone='gray'
+                  onClick={() => run(true)}
+                  disabled={busy || running}
+                >
+                  미리보기
+                </Btn>
+                <Btn
+                  size='md'
+                  block
+                  onClick={() => run(false)}
+                  disabled={busy || running}
+                >
+                  {running ? '실행중…' : '실행'}
+                </Btn>
               </div>
             </div>
           </div>
 
-          <div className={common.stack}>
-            <SectionHead>{cur.k} 설정</SectionHead>
-            <div className={[common['card-pad'], common.stack].join(' ')}>
-              <span>
-                <span className={style['param-head']}>
-                  <span className={common.label}>{paramLabel}</span>
-                  <span className={style['param-value']}>{shownValue}</span>
+          {cur?.param && (
+            <div className={common.stack}>
+              <SectionHead>{cur.key} 설정</SectionHead>
+              <div className={[common['card-pad'], common.stack].join(' ')}>
+                <span>
+                  <span className={style['param-head']}>
+                    <span className={common.label}>{cur.param.name}</span>
+                    <span className={style['param-value']}>
+                      {/* 서버가 unit 을 준다. ratio 는 0.95 처럼 소수로 읽는 값이다. */}
+                      {cur.param.unit === 'ratio'
+                        ? `0.${params[cur.param.key]}`
+                        : `${params[cur.param.key]}${cur.param.unit ? ` ${cur.param.unit}` : ''}`}
+                    </span>
+                  </span>
+                  <Slider
+                    min={cur.param.min}
+                    max={cur.param.max}
+                    value={params[cur.param.key]}
+                    onChange={(v) =>
+                      setParams({ ...params, [cur.param.key]: v })
+                    }
+                  />
                 </span>
-                <Slider
-                  min={paramMin}
-                  max={paramMax}
-                  value={params[paramKey]}
-                  onChange={(v) => setParams({ ...params, [paramKey]: v })}
-                />
-              </span>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* 우: 실행 전이면 입력, 실행 후면 결과 */}
+        {/* 우: 실행 결과 — 입력 / 통과 / 제외. 파이프라인 드로어와 같은 컴포넌트다. */}
         <div className={common['stack-lg']}>
-          {phase === '실행 전' ? (
-            <>
-              <SectionHead>입력</SectionHead>
-              <div className={[common.card, common['thumb-grid']].join(' ')}>
-                {[0, 1, 2, 3, 0, 1, 2, 3].map((k, i) => (
-                  // eslint-disable-next-line react/no-array-index-key
-                  <span key={i} className={common.thumb}>
-                    <Frame spec={SHOTS[k]} />
-                    <span className={common['thumb-cap']}>asset_{1001 + i}</span>
-                  </span>
-                ))}
-              </div>
-            </>
-          ) : (
-            <>
-              <SectionHead>처리 전후</SectionHead>
-              <Funnel rows={funnel} total={funnel[0].v} />
-
-              {!isFilter && (
-                <>
-                  <SectionHead>변환 결과</SectionHead>
-                  <DataTable
-                    cols={['데이터', '변환 전', '변환 후']}
-                    rows={CONVERTED}
-                  />
-                </>
-              )}
-
-              {isFilter && (
-                <>
-                  <SectionHead>제거 사유</SectionHead>
-                  <div className={common['card-clip']}>
-                    {FILTER_REASONS.map((r, i) => (
-                      <div
-                        key={r.k}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => setReason(i)}
-                        onKeyDown={(e) => e.key === 'Enter' && setReason(i)}
-                        className={[style['reason-row'], reason === i ? style['reason-row-on'] : ''].join(' ')}
-                      >
-                        <span className={common.cell}>{r.k}</span>
-                        <span className={common.prose}>{r.why}</span>
-                        <span className={[common['cell-num'], common.warn].join(' ')}>{r.n}</span>
-                        <span className={common.right}>
-                          <span className={common['cell-mute']} style={{ color: '#2d76f8' }}>
-                            {reason === i ? '검토 중' : '보기 →'}
-                          </span>
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <SectionHead
-                    aside={(
-                      <span className={[common.num, common['cell-mute']].join(' ')}>
-                        {FILTER_REMOVED[reason].length} / {FILTER_REASONS[reason].n}건
-                      </span>
-                    )}
-                  >
-                    제거된 항목 · {FILTER_REASONS[reason].k}
-                  </SectionHead>
-
-                  {/* 제거된 것은 버려지지 않는다 — 과하게 걸렀을 때 개별로 되살릴 수 있어야 한다. */}
-                  <div className={[common.card, common['thumb-grid']].join(' ')}>
-                    {FILTER_REMOVED[reason].map(([aid, shot, why]) => {
-                      const kept = !!restored[aid];
-                      return (
-                        <span key={aid} className={[style['removed-card'], kept ? style['removed-card-kept'] : ''].join(' ')}>
-                          <span className={[style['removed-shot'], kept ? style['removed-shot-kept'] : ''].join(' ')}>
-                            <Frame spec={SHOTS[shot]} />
-                            <span className={[style['removed-tag'], kept ? style['removed-tag-kept'] : ''].join(' ')}>
-                              {kept ? '복구됨' : '제거됨'}
-                            </span>
-                          </span>
-                          <span className={style['removed-meta']}>
-                            <span className={style['removed-id']}>{aid}</span>
-                            <span className={style['removed-why']}>{why}</span>
-                            <button
-                              type="button"
-                              onClick={() => setRestored({ ...restored, [aid]: !kept })}
-                              className={[style['removed-btn'], kept ? style['removed-btn-undo'] : ''].join(' ')}
-                            >
-                              {kept ? '다시 제거' : '복구'}
-                            </button>
-                          </span>
-                        </span>
-                      );
-                    })}
-                  </div>
-
-                  <div className={[common['card-pad'], common['row-between']].join(' ')}>
-                    <span className={common.prose}>
-                      출력 {fmt(funnel[funnel.length - 1].v)}건 · 복구 {restoredCount}건
-                    </span>
-                  </div>
-                </>
-              )}
-            </>
-          )}
+          <SectionHead>실행 결과</SectionHead>
+          <RunPanel
+            datasetId={dsId}
+            node={node}
+            upstreamRun={upstreamRunOf(nodes, flow?.flow, index)}
+          />
         </div>
       </div>
     </div>

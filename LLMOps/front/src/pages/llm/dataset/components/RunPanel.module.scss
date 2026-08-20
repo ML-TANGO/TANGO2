@@ -1,0 +1,208 @@
+@import '../styles/tokens';
+
+// 노드 드로어의 실행 결과 패널 — 입력 / 통과 / 제외 3열.
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.run-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.run-error {
+  @include dp-prose(12px);
+  color: $dp-fail;
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+// ── 3열 ────────────────────────────────────────────────────────────────────
+// 세 열을 나란히 두는 것이 이 패널의 목적이다(무엇이 들어와 무엇이 남고 무엇이
+// 빠졌는지를 동시에 본다). 드로어가 좁아지면 읽을 수 없으므로 그때만 접는다.
+.cols {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+
+  @media (max-width: 900px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.col {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: $dp-r-card;
+  background: $dp-surface;
+  box-shadow: $dp-ring;
+}
+
+.col-head {
+  @include dp-eyebrow;
+  color: $dp-navy;
+}
+
+.col-count {
+  @include dp-num;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  color: $dp-ink;
+
+  b {
+    font-size: 18px;
+  }
+}
+
+.col-file {
+  @include dp-solid(11px);
+  color: $dp-ink-faint;
+}
+
+.col-empty {
+  @include dp-prose(12px);
+  padding: 12px 0;
+  color: $dp-ink-mute;
+}
+
+// 요청이 실패한 열. '0건'과 같은 회색으로 그리면 두 상태가 구분되지 않는다.
+.col-fail {
+  @include dp-prose(12px);
+  padding: 12px 0;
+  color: $dp-fail;
+}
+
+.col-more,
+.col-note {
+  @include dp-prose(11px);
+  color: $dp-ink-faint;
+}
+
+// ── 썸네일 그리드 ──────────────────────────────────────────────────────────
+.grid {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+}
+
+.tile {
+  display: flex;
+  overflow: hidden;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.tile-img {
+  width: 100%;
+  height: 56px;
+  border-radius: $dp-r-ctl;
+  background: $dp-primary-bg;
+  object-fit: cover;
+}
+
+// 썸네일이 없는 자산 자리. 빈칸으로 두면 그리드가 어긋나 몇 건인지 세기 어렵다.
+.tile-blank {
+  @include dp-solid(10px);
+  display: flex;
+  height: 56px;
+  align-items: center;
+  justify-content: center;
+  border-radius: $dp-r-ctl;
+  background: $dp-primary-bg;
+  color: $dp-ink-faint;
+}
+
+.tile-name {
+  @include dp-num;
+  overflow: hidden;
+  color: $dp-ink-mute;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// ── 제외 사유 ──────────────────────────────────────────────────────────────
+.reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.reason-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 7px;
+  border-radius: $dp-r-ctl;
+  background: $dp-fail-bg;
+}
+
+.reason-name {
+  @include dp-solid(11px);
+  color: $dp-fail;
+}
+
+.reason-n {
+  @include dp-num;
+  color: $dp-fail;
+  font-size: 11px;
+}
+
+.drop-list {
+  display: flex;
+  max-height: 220px;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+}
+
+.drop-row {
+  display: grid;
+  align-items: center;
+  padding: 4px 0;
+  border-bottom: 1px solid $dp-line-soft;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+}
+
+.drop-name {
+  @include dp-num;
+  overflow: hidden;
+  color: $dp-ink-sub;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drop-reason {
+  @include dp-solid(11px);
+  overflow: hidden;
+  color: $dp-fail;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drop-stage {
+  @include dp-solid(10px);
+  color: $dp-ink-faint;
+}

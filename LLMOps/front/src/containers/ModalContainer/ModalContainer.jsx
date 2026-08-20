@@ -203,6 +203,10 @@ const DeploymentFormModalContainer = React.lazy(() =>
 const EvalProjectFormModalContainer = React.lazy(() =>
   import('./EvalProjectFormModalContainer'),
 );
+
+const DataPipelineDatasetModal = React.lazy(() =>
+  import('@src/components/Modal/DataPipelineDatasetModal'),
+);
 const DeployWorkerMemoModalContainer = React.lazy(() =>
   import('./DeployWorkerMemoModalContainer'),
 );
@@ -452,6 +456,13 @@ function ModalContainer() {
           )}
           {modalType === 'EDIT_DEPLOYMENT' && (
             <DeploymentFormModalContainer
+              data={modal[modalType]}
+              type={modalType}
+            />
+          )}
+          {/* 학습 데이터 파이프라인 데이터셋 생성 */}
+          {modalType === 'CREATE_DP_DATASET' && (
+            <DataPipelineDatasetModal
               data={modal[modalType]}
               type={modalType}
             />

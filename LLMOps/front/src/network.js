@@ -19,7 +19,7 @@ const cookies = new Cookies();
 
 const MODE = import.meta.env.VITE_REACT_APP_MODE;
 const API_HOST_ENV = import.meta.env.VITE_REACT_APP_API_HOST === 'local';
-const API_HOST = API_HOST_ENV
+export const API_HOST = API_HOST_ENV
   ? '/api/'
   : `${window.location.protocol}//${window.location.hostname}:${window.location.port}/api/`;
 const INTEGRATION_API_HOST = import.meta.env

@@ -130,6 +130,9 @@ const modalComponents = {
 
   // !! LLM !!
   NEW_DEPLOYMENT: () => import('@src/components/Modal/NewDeploymentModal'),
+  // 학습 데이터 파이프라인 데이터셋 — 위 CREATE_DATASET(드라이브 데이터셋)과 다른 도메인이다.
+  CREATE_DP_DATASET: () =>
+    import('@src/components/Modal/DataPipelineDatasetModal'),
   ADD_PLAYGROUND: () => import('@src/components/Modal/AddPlayground'),
   EDIT_PLAYGROUND: () => import('@src/components/Modal/EditPlaygroundModal'),
   ADD_MODEL: () => import('@src/components/Modal/AddModel'),

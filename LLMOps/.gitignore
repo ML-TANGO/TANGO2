@@ -20,6 +20,12 @@ parts/
 sdist/
 var/
 wheels/
+
+# 위 `lib/` 는 파이썬 패키징 산출물(build/lib 등)을 겨냥한 규칙이지만 경로가 안 박혀 있어
+# 깊이에 상관없이 이름이 `lib` 인 디렉터리를 전부 삼킨다. 데이터 파이프라인 화면의 소스가
+# 여기 걸려 커밋에서 통째로 빠져 있었다(format.js · frames.js) — 새로 클론하면 이 둘을
+# import 하는 화면 11개가 모듈을 못 찾아 빌드가 깨진다. 빌드 산출물이 아니라 소스다.
+!front/src/pages/llm/dataset/lib/
 share/python-wheels/
 *.egg-info/
 .installed.cfg

@@ -215,6 +215,12 @@
   box-shadow: $dp-sh-drawer;
 }
 
+// 실행 결과 3열이 붙으면 400px 로는 열마다 20여 자밖에 못 담아 비교가 안 된다.
+// 뷰포트가 좁으면 화면을 덮어쓰지 않도록 상한을 함께 둔다.
+.drawer-wide {
+  width: min(960px, 92vw);
+}
+
 .drawer-head {
   display: flex;
   flex-shrink: 0;

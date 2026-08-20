@@ -1,12 +1,28 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+
+import { getCoverage, listRecords, runThumbUrl } from '@src/apis/llm/dataset';
+import { STATUS_SUCCESS } from '@src/network';
+import { errorToastMessage } from '@src/utils';
 
 import {
-  Badge, Btn, DataTable, DatasetTabs, Frame, GateRibbon, PageHeader, ProgressBar,
-  SectionHead, listBase, useDatasetNav,
+  Badge,
+  Btn,
+  DataTable,
+  DatasetTabs,
+  PageHeader,
+  ProgressBar,
+  SectionHead,
+  listBase,
+  useDatasetName,
+  useDatasetNav,
 } from './components';
-import { COVERAGE, RECORDS, UMAP_GAPS, UMAP_LABEL, UMAP_POS } from './mock';
-import { SHOTS } from './lib/frames';
-import { AXES, CAP_COLOR, FLAG_TONE, THRESHOLDS, fmt } from './lib/format';
+import {
+  COVERAGE as SAMPLE_COVERAGE,
+  UMAP_GAPS,
+  UMAP_LABEL,
+  UMAP_POS,
+} from './mock';
+import { CAP_COLOR, FLAG_TONE, fmt } from './lib/format';
 import common from './styles/common.module.scss';
 import style from './pages.module.scss';
 
@@ -26,7 +42,7 @@ function scatter() {
   const gauss = () => (rnd() + rnd() + rnd() + rnd() - 2) / 1.4;
 
   const pts = [];
-  COVERAGE.forEach((c) => {
+  SAMPLE_COVERAGE.forEach((c) => {
     const p = UMAP_POS[c.k];
     for (let i = 0; i < Math.round(c.pct * 6); i += 1) {
       pts.push({ x: p[0] + gauss() * 26, y: p[1] + gauss() * 20, k: c.k });
@@ -42,59 +58,137 @@ const POINTS = scatter();
  *
  * 레코드 수와 원본 데이터 수를 나란히 보여준다. 둘을 함께 봐야 "데이터가 없어서"인지
  * "데이터는 있는데 생성이 안 돼서"인지가 갈리고, 조치가 업로드냐 생성이냐로 나뉜다.
+ * 판정(`flag`)은 서버가 두 수를 같이 보고 내린다 — FE 가 다시 판정하면 기준이 갈린다.
+ *
+ * ⚠️ 아래 **유사도 분포(UMAP)** 섹션만은 아직 예시 데이터다. 임베딩·투영을 계산하는
+ * BE 가 없어서(엔드포인트 자체가 없다) 화면에 그렇게 명시해 둔다 — 표시가 없으면
+ * 사용자가 이 그림을 자기 데이터의 분포로 읽는다.
  */
 export default function AnalysisPage() {
   const { wsId, dsId, go } = useDatasetNav();
-  const [selected, setSelected] = useState(4);
+  const dsName = useDatasetName(dsId);
 
-  const cap = COVERAGE[selected];
-  const rec = RECORDS.find((r) => r.cap === cap.k) || RECORDS[0];
+  const [cov, setCov] = useState(null);
+  const [records, setRecords] = useState([]);
+  const [selected, setSelected] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const [c, r] = await Promise.all([
+      getCoverage(dsId),
+      // 유형별 표본을 보여주려고 한 페이지만 받는다. 레코드를 유형으로 거르는
+      // 파라미터가 없어 화면에서 고른다 — 이 페이지에 없으면 표본이 안 잡힌다.
+      listRecords(dsId, { limit: 100 }),
+    ]);
+    setLoading(false);
+    if (c.status !== STATUS_SUCCESS) {
+      errorToastMessage(c.error, c.message);
+      return;
+    }
+    setCov(c.result);
+    if (r.status === STATUS_SUCCESS) setRecords(r.result?.records || []);
+  }, [dsId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const coverage = cov?.coverage || [];
+  const cap = coverage[selected] || null;
+  const rec = cap
+    ? records.find((r) => r.capability === cap.capability) || null
+    : null;
+  // 막대는 가장 큰 유형을 기준으로 채운다 — 고정 분모를 쓰면 전체가 작을 때 다 비어 보인다.
+  const maxPct = Math.max(1, ...coverage.map((c) => c.pct || 0));
 
   return (
     <div className={style.page}>
       <PageHeader
-        title={dsId}
+        title={dsName}
         back={{ to: listBase(wsId), label: '데이터셋 목록' }}
+        meta={
+          cov
+            ? `레코드 ${fmt(cov.total_records || 0)}건 · 원본 ${fmt(cov.dataset_assets || 0)}건`
+            : ''
+        }
       />
-      <DatasetTabs active="분포 분석" />
+      <DatasetTabs active='분포 분석' />
 
       <div className={common.stack}>
-        <SectionHead aside={<span className={common.prose}>데이터 수와 레코드 수를 함께 봐야 원인이 갈립니다</span>}>
+        <SectionHead
+          aside={
+            <span className={common.prose}>
+              데이터 수와 레코드 수를 함께 봐야 원인이 갈립니다
+            </span>
+          }
+        >
           데이터 유형
         </SectionHead>
 
         <DataTable
-          cols={['데이터 유형', '비율', '%', '레코드', '데이터', '판정', '조치']}
+          cols={[
+            '데이터 유형',
+            '비율',
+            '%',
+            '레코드',
+            '데이터',
+            '판정',
+            '조치',
+          ]}
+          loading={loading}
           onRowClick={setSelected}
-          rows={COVERAGE.map((c) => {
+          rows={coverage.map((c) => {
             const bad = c.flag !== '충분';
             return [
               {
                 node: (
-                  <span className={[common.num, bad ? common.danger : common['cell-mute']].join(' ')}>
-                    {c.k}
+                  <span
+                    className={[
+                      common.num,
+                      bad ? common.danger : common['cell-mute'],
+                    ].join(' ')}
+                  >
+                    {c.capability}
                   </span>
                 ),
               },
               {
                 node: (
                   <ProgressBar
-                    value={Math.min(100, Math.round((c.pct / 45) * 100))}
-                    tone={c.flag === '데이터 없음' ? 'red' : bad ? 'orange' : 'primary'}
+                    value={Math.min(
+                      100,
+                      Math.round(((c.pct || 0) / maxPct) * 100),
+                    )}
+                    tone={
+                      c.flag === '데이터 없음'
+                        ? 'red'
+                        : bad
+                          ? 'orange'
+                          : 'primary'
+                    }
                   />
                 ),
               },
-              `${c.pct}%`,
-              fmt(c.recs),
-              c.assets === null ? '—' : fmt(c.assets),
-              { node: <Badge tone={FLAG_TONE[c.flag]}>{c.flag}</Badge> },
+              `${c.pct ?? 0}%`,
+              fmt(c.record_count || 0),
+              c.asset_count === null || c.asset_count === undefined
+                ? '—'
+                : fmt(c.asset_count),
+              {
+                node: (
+                  <Badge tone={FLAG_TONE[c.flag] || 'gray'}>{c.flag}</Badge>
+                ),
+              },
               {
                 node: bad ? (
                   <Btn
-                    size="sm"
-                    fill="outline"
+                    size='sm'
+                    fill='outline'
                     tone={c.flag === '생성 부족' ? 'primary' : 'gray'}
-                    onClick={() => go(c.flag === '생성 부족' ? '/flow/generate' : '/upload')}
+                    onClick={() =>
+                      go(c.flag === '생성 부족' ? '/flow/generate' : '/upload')
+                    }
                   >
                     {c.flag === '생성 부족' ? '생성하기' : '데이터 추가'}
                   </Btn>
@@ -105,26 +199,67 @@ export default function AnalysisPage() {
             ];
           })}
         />
+        {!loading && coverage.length === 0 && (
+          <span className={common.prose}>
+            아직 유형을 판정할 레코드가 없습니다.
+          </span>
+        )}
       </div>
 
       <div className={style['analysis-grid']}>
         <div className={common.stack}>
-          <SectionHead aside={<span className={[common.num, common['cell-mute']].join(' ')}>SigLIP-so400m · UMAP</span>}>
+          <SectionHead
+            aside={
+              <span className={[common.num, common['cell-mute']].join(' ')}>
+                SigLIP-so400m · UMAP
+              </span>
+            }
+          >
             분포
           </SectionHead>
 
+          {/* 이 그림은 아직 이 데이터셋의 것이 아니다. 임베딩·투영 BE 가 생기기 전까지
+              예시로 둔다 — 말없이 두면 자기 데이터의 분포로 읽힌다. */}
+          <span className={[common.note, common['note-info']].join(' ')}>
+            <span className={common['note-title']}>예시 데이터</span>
+            <span className={common['note-body']}>
+              유사도 분포는 아직 서버에서 계산하지 않습니다. 아래 그림은 화면
+              구성을 보여주는 예시이며 이 데이터셋의 실제 분포가 아닙니다.
+            </span>
+          </span>
+
           <div className={[common.card, style.scatter].join(' ')}>
-            <svg viewBox="0 0 560 296" className={style['scatter-svg']} role="img" aria-label="유형별 유사도 분포">
+            <svg
+              viewBox='0 0 560 296'
+              className={style['scatter-svg']}
+              role='img'
+              aria-label='유형별 유사도 분포(예시)'
+            >
               {POINTS.map((p, i) => (
                 // eslint-disable-next-line react/no-array-index-key
-                <circle key={i} cx={p.x.toFixed(1)} cy={p.y.toFixed(1)} r="2.7" fill={CAP_COLOR[p.k]} opacity="0.7" />
+                <circle
+                  key={i}
+                  cx={p.x.toFixed(1)}
+                  cy={p.y.toFixed(1)}
+                  r='2.7'
+                  fill={CAP_COLOR[p.k]}
+                  opacity='0.7'
+                />
               ))}
 
               {Object.entries(UMAP_LABEL).map(([k, [x, y]]) => (
                 <text
-                  key={k} x={x} y={y} textAnchor="middle"
-                  fontFamily="SpoqaM, sans-serif" fontSize="11" fontWeight="500"
-                  fill={CAP_COLOR[k]} stroke="#ffffff" strokeWidth="4" style={{ paintOrder: 'stroke' }}
+                  key={k}
+                  x={x}
+                  y={y}
+                  textAnchor='middle'
+                  fontFamily='SpoqaM, sans-serif'
+                  fontSize='11'
+                  fontWeight='500'
+                  fill={CAP_COLOR[k]}
+                  stroke='#ffffff'
+                  strokeWidth='4'
+                  style={{ paintOrder: 'stroke' }}
                 >
                   {k}
                 </text>
@@ -132,34 +267,47 @@ export default function AnalysisPage() {
 
               {/* 빈 영역을 점선으로 표시한다 — 점이 없는 곳이 곧 못 만든 유형이다. */}
               {UMAP_GAPS.map((g) => {
-                const on = COVERAGE[selected].k === g.k;
                 const cx = g.x + g.w / 2;
                 const cy = g.y + g.h / 2;
-                const col = on ? '#164abe' : '#d91a0c';
                 return (
-                  <g
-                    key={g.k}
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => setSelected(COVERAGE.findIndex((c) => c.k === g.k))}
-                  >
+                  <g key={g.k}>
                     <rect
-                      x={g.x} y={g.y} width={g.w} height={g.h} rx="4"
-                      fill={on ? 'rgba(45,118,248,0.10)' : 'rgba(250,78,87,0.05)'}
-                      stroke={on ? '#2d76f8' : '#fa4e57'} strokeDasharray="4 3"
+                      x={g.x}
+                      y={g.y}
+                      width={g.w}
+                      height={g.h}
+                      rx='4'
+                      fill='rgba(250,78,87,0.05)'
+                      stroke='#fa4e57'
+                      strokeDasharray='4 3'
                     />
                     <text
-                      x={cx} y={cy - 2} textAnchor="middle"
-                      fontFamily="SpoqaM, sans-serif" fontSize="11" fontWeight="500"
-                      fill={col} stroke="#ffffff" strokeWidth="4" style={{ paintOrder: 'stroke' }}
+                      x={cx}
+                      y={cy - 2}
+                      textAnchor='middle'
+                      fontFamily='SpoqaM, sans-serif'
+                      fontSize='11'
+                      fontWeight='500'
+                      fill='#d91a0c'
+                      stroke='#ffffff'
+                      strokeWidth='4'
+                      style={{ paintOrder: 'stroke' }}
                     >
                       {g.lab}
                     </text>
                     <text
-                      x={cx} y={cy + 13} textAnchor="middle"
-                      fontFamily="SpoqaM, sans-serif" fontSize="10"
-                      fill={col} opacity="0.85" stroke="#ffffff" strokeWidth="4" style={{ paintOrder: 'stroke' }}
+                      x={cx}
+                      y={cy + 13}
+                      textAnchor='middle'
+                      fontFamily='SpoqaM, sans-serif'
+                      fontSize='10'
+                      fill='#d91a0c'
+                      opacity='0.85'
+                      stroke='#ffffff'
+                      strokeWidth='4'
+                      style={{ paintOrder: 'stroke' }}
                     >
-                      {on ? '선택됨' : g.sub}
+                      {g.sub}
                     </text>
                   </g>
                 );
@@ -171,22 +319,47 @@ export default function AnalysisPage() {
         <div className={common.stack}>
           <SectionHead>선택 상세</SectionHead>
           <div className={[common['card-pad'], common.stack].join(' ')}>
-            <span className={style['detail-shot']}>
-              <Frame spec={SHOTS[rec.shot]} ariaLabel={rec.id} />
-              <span className={style['detail-shot-id']}>{rec.id}</span>
-            </span>
-            <span className={style['qa-block']}>
-              <span className={common.eyebrow}>Q</span>
-              <span className={common.prose} style={{ color: '#121619' }}>{rec.q}</span>
-            </span>
-            <span className={style['qa-block']}>
-              <span className={common.eyebrow}>A</span>
-              <span className={common.prose}>{rec.a}</span>
-            </span>
-            <GateRibbon axes={AXES} scores={rec.s} thresholds={THRESHOLDS} />
-            <Btn size="md" block fill="outline" tone="gray" onClick={() => go(`/record/${rec.id}`)}>
-              상세 보기 →
-            </Btn>
+            {rec ? (
+              <>
+                {rec.lineage?.run_id && rec.asset_ref && (
+                  <span className={style['detail-shot']}>
+                    <img
+                      src={runThumbUrl(dsId, rec.lineage.run_id, rec.asset_ref)}
+                      alt={rec.record_key}
+                      style={{ width: '100%', borderRadius: 8 }}
+                    />
+                    <span className={style['detail-shot-id']}>
+                      {rec.record_key}
+                    </span>
+                  </span>
+                )}
+                <span className={style['qa-block']}>
+                  <span className={common.eyebrow}>Q</span>
+                  <span className={common.prose} style={{ color: '#121619' }}>
+                    {rec.question}
+                  </span>
+                </span>
+                <span className={style['qa-block']}>
+                  <span className={common.eyebrow}>A</span>
+                  <span className={common.prose}>{rec.answer}</span>
+                </span>
+                <Btn
+                  size='md'
+                  block
+                  fill='outline'
+                  tone='gray'
+                  onClick={() => go(`/record/${rec.record_key}`)}
+                >
+                  상세 보기 →
+                </Btn>
+              </>
+            ) : (
+              <span className={common.prose}>
+                {cap
+                  ? `'${cap.capability}' 유형의 표본이 최근 레코드에 없습니다.`
+                  : '유형을 선택하세요.'}
+              </span>
+            )}
           </div>
         </div>
       </div>

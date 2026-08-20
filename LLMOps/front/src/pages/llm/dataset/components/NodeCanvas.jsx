@@ -186,12 +186,16 @@ export default function NodeCanvas({
  * 노드 상세 드로어.
  * 캔버스는 한눈에 보는 곳이고, 문장으로 된 설명과 다음 조치는 여기서만 다룬다.
  */
-export function NodeDrawer({ node, onClose, onOpen, sourceEditor = null }) {
+export function NodeDrawer({
+  node, onClose, onOpen, sourceEditor = null, runPanel = null,
+}) {
   if (!node) return null;
   return (
     <>
       <div className={style.dim} onClick={onClose} role="presentation" />
-      <aside className={style.drawer}>
+      <aside
+        className={[style.drawer, runPanel ? style['drawer-wide'] : ''].join(' ')}
+      >
         <div className={style['drawer-head']}>
           <span className={style['drawer-title-row']}>
             <span className={style['drawer-title-box']}>
@@ -248,6 +252,8 @@ export function NodeDrawer({ node, onClose, onOpen, sourceEditor = null }) {
               ))}
             </span>
           )}
+
+          {runPanel}
 
           {node.links && node.links.length > 0 && (
             <span className={style['drawer-block']}>

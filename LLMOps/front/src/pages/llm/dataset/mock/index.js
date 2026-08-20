@@ -4,69 +4,7 @@
 // 하는 합성 데이터다. 화면 컴포넌트는 props 로만 받으므로 여기만 API 호출로 갈아 끼우면
 // 된다 — 화면 코드는 건드리지 않는다.
 
-// ── 데이터셋 ────────────────────────────────────────────────────────────────
-export const DATASETS = [
-  { id: 'general-vlm-sft-01', state: '활성', recs: 12480, imgTok: 19.4, pass: 82, unrev: 382, ver: 'v0.3.1', upd: '2026-07-28', assets: 2000 },
-  { id: 'doc-ocr-ko-02', state: '보관', recs: 4120, imgTok: 8.7, pass: 74, unrev: 0, ver: 'v0.2.0', upd: '2026-07-11', assets: 806 },
-  { id: 'chart-reasoning-03', state: '진행', recs: 1860, imgTok: 2.9, pass: 68, unrev: 210, ver: 'v0.1.2', upd: '2026-07-26', assets: 412 },
-  { id: 'counting-synth-04', state: '초안', recs: 0, imgTok: 0, pass: 0, unrev: 0, ver: '—', upd: '2026-07-29', assets: 0 },
-];
-
 export const STATE_TONE = { 활성: 'pass', 진행: 'warn', 보관: 'gray', 초안: 'gray' };
-
-// ── 파이프라인 데이터 소스 ──────────────────────────────────────────────────
-// 원본 적재는 기존 데이터셋(드라이브)이 하고, 파이프라인은 거기서 폴더를 골라
-// 마운트해 쓴다. 파이프라인이 원본을 따로 갖지 않으므로 같은 데이터를 두 벌
-// 관리하는 일이 없다.
-export const SOURCE_DATASETS = [
-  { v: 'ds-vlm-raw', n: 'vlm-raw-2026Q3' },
-  { v: 'ds-doc-scan', n: 'doc-scan-archive' },
-  { v: 'ds-marine', n: 'marine-voyage-log' },
-];
-
-export const SOURCE_FOLDERS = {
-  'ds-vlm-raw': [
-    { v: '/', n: '/ (전체)', files: 2000, size: '4.8 GB' },
-    { v: '/scans/2026-07', n: '/scans/2026-07', files: 1204, size: '2.9 GB' },
-    { v: '/charts/q2', n: '/charts/q2', files: 412, size: '640 MB' },
-    { v: '/docs', n: '/docs', files: 384, size: '1.2 GB' },
-  ],
-  'ds-doc-scan': [
-    { v: '/', n: '/ (전체)', files: 806, size: '2.1 GB' },
-    { v: '/2026', n: '/2026', files: 512, size: '1.4 GB' },
-  ],
-  'ds-marine': [
-    { v: '/', n: '/ (전체)', files: 312, size: '18.4 GB' },
-    { v: '/voyage-0311', n: '/voyage-0311', files: 112, size: '6.2 GB' },
-    { v: '/ais', n: '/ais', files: 200, size: '38 MB' },
-  ],
-};
-
-// 데이터 노드는 여러 개일 수 있다(해양 프리셋만 해도 영상 + AIS 둘). 그래서 마운트는
-// 파이프라인 하나에 하나가 아니라 **노드마다** 붙는다. 아래는 노드 index → 기본 마운트.
-export const DEFAULT_SOURCES = {
-  generic: { 0: { dataset: 'ds-vlm-raw', folder: '/scans/2026-07' } },
-  sds_colreg: {
-    0: { dataset: 'ds-marine', folder: '/voyage-0311' },
-    1: { dataset: 'ds-marine', folder: '/ais' },
-  },
-};
-
-/** 마운트 정보를 노드 안에 보여줄 [라벨, 값] 쌍으로 만든다. */
-export function sourceSteps(src) {
-  if (!src) return [];
-  const ds = SOURCE_DATASETS.find((d) => d.v === src.dataset);
-  return [
-    ['데이터셋', ds ? ds.n : src.dataset],
-    ['폴더', src.folder],
-  ];
-}
-
-/** 마운트된 폴더의 파일 수·용량. */
-export function sourceInfo(src) {
-  if (!src) return null;
-  return (SOURCE_FOLDERS[src.dataset] || []).find((f) => f.v === src.folder) || null;
-}
 
 // ── 레코드 · 검수 ───────────────────────────────────────────────────────────
 export const RECORDS = [

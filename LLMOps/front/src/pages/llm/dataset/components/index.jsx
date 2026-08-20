@@ -11,6 +11,7 @@ import {
   Textarea as JonathanTextarea,
 } from '@jonathan/ui-react';
 
+import { getDataset } from '@src/apis/llm/dataset';
 import BorderTable from '@src/components/molecules/BorderTable';
 // 탭은 ui-react 가 아니라 프로젝트 molecules 쪽이 정본이다.
 // (@jonathan/ui-react 의 Tab 은 category/renderComponent 를 받는 다른 물건이라
@@ -57,6 +58,42 @@ export function useDatasetNav() {
     goList: () => history.push(listBase(wsId)),
     goPath: (path) => history.push(path),
   };
+}
+
+// 데이터셋 이름 캐시. 화면을 옮길 때마다 같은 데이터셋을 다시 물어보지 않게 모듈
+// 수준에 둔다(이름은 한 세션 안에서 거의 바뀌지 않는다).
+const dsNameCache = new Map();
+
+/**
+ * 화면 제목에 쓸 데이터셋 이름.
+ *
+ * 제목에 id 를 그대로 박으면 사용자는 자기가 만든 이름이 아니라 '5' 를 본다.
+ * 이름을 아직 못 받았으면 id 로 대신한다 — 제목이 빈 채로 깜빡이는 것보다 낫다.
+ */
+export function useDatasetName(dsId) {
+  const key = dsId == null ? '' : String(dsId);
+  const [name, setName] = React.useState(() => dsNameCache.get(key) || '');
+
+  React.useEffect(() => {
+    if (!key) return undefined;
+    if (dsNameCache.has(key)) {
+      setName(dsNameCache.get(key));
+      return undefined;
+    }
+    let alive = true;
+    (async () => {
+      const res = await getDataset(key);
+      const found = res?.result?.name;
+      if (!found) return;
+      dsNameCache.set(key, found);
+      if (alive) setName(found);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [key]);
+
+  return name || key;
 }
 
 // ── 플레이스홀더 이미지 ─────────────────────────────────────────────────────

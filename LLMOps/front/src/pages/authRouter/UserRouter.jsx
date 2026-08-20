@@ -218,6 +218,9 @@ const DatasetGatePage = lazy(() => import('@src/pages/llm/dataset/GatePage'));
 const DatasetSdsNodePage = lazy(
   () => import('@src/pages/llm/dataset/SdsNodePage'),
 );
+const DatasetComparePage = lazy(
+  () => import('@src/pages/llm/dataset/ComparePage'),
+);
 const DatasetReviewPage = lazy(
   () => import('@src/pages/llm/dataset/ReviewPage'),
 );
@@ -378,6 +381,17 @@ const routeArrAll = [
     activeIcon: IconPipeLineActive,
     platform: 'flightbase',
     render: (props) => <DatasetSdsNodePage {...props} />,
+  },
+  {
+    name: '실행 비교',
+    path: '/user/workspace/:id/datasets/pipeline/:dsId/flow/compare',
+    exact: true,
+    disabled: true,
+    group: datasetGroup,
+    icon: IconPipeLine,
+    activeIcon: IconPipeLineActive,
+    platform: 'flightbase',
+    render: (props) => <DatasetComparePage {...props} />,
   },
   {
     name: '전처리',
