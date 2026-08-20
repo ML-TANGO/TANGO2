@@ -80,7 +80,7 @@ const FineTuningCommitModal = ({ data, type }) => {
     }));
   };
 
-  // get Submit Model
+  // get Submit TrainingPage
   const onSubmit = async () => {
     setLoading(true);
     const { id } = commitData.selectedModel; // commit id

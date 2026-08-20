@@ -1836,7 +1836,7 @@ class EditWorkerContainer extends PureComponent {
     this.setState({ variablesValues: newVariables });
   };
 
-  // 셀렉트 박스 이벤트 핸들러 (Workspace, Training Model)
+  // 셀렉트 박스 이벤트 핸들러 (Workspace, Training TrainingPage)
   selectInputHandler = async (name, value, deploymentId) => {
     const { type } = this.props;
     const { dockerImageOptions } = this.state;

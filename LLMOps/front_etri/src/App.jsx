@@ -24,6 +24,9 @@ import FBLoading from './components/organisms/FBLoading';
 import PopupContainer from './containers/PopupContainer';
 import DeferredComponent from './hooks/useDeferredComponent';
 import useWorkerClose from './hooks/useWorkerClose';
+import { Inspector } from 'react-dev-inspector';
+
+const isDev = import.meta.env.MODE === 'development';
 
 const LoadingForIntegrationLogin = lazy(() =>
   import('@src/components/atoms/loading/LoadingForIntegrationLogin'),
@@ -164,6 +167,7 @@ function App() {
 
   return (
     <ErrorBoundary>
+      {isDev && <Inspector keys={['control', 'shift', 'c']} />}
       <Router
         history={customHistory}
         basename={MODE === 'INTEGRATION' ? '/flightbase' : '/'}

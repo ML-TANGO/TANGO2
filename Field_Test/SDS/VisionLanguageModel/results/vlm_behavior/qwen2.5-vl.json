@@ -1,0 +1,810 @@
+{
+  "model": "qwen2.5-vl",
+  "repo": "Qwen/Qwen2.5-VL-7B-Instruct",
+  "n": 100,
+  "vessel_recall": 0.98,
+  "halluc_rate": 0.0,
+  "colreg_acc": 0.16,
+  "per_sample": [
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-0dL1k060Ox",
+      "gt_sit": "crossing",
+      "pred_sit": "head-on",
+      "raw_sit": "Head-on",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-0dLhkqLMw",
+      "gt_sit": "overtaking",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-0dzraEavMx",
+      "gt_sit": "crossing",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-0p0rtLzOH",
+      "gt_sit": "head-on",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-0pvAkDzMx",
+      "gt_sit": "overtaking",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-H-FMrdbSdY",
+      "gt_sit": "overtaking",
+      "pred_sit": "head-on",
+      "raw_sit": "Head-on",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-H-F_rRP2ZY",
+      "gt_sit": "head-on",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-H-LCr1yoZY",
+      "gt_sit": "crossing",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-H-i0H5CZb",
+      "gt_sit": "head-on",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-H-iCrVyEZV",
+      "gt_sit": "crossing",
+      "pred_sit": "head-on",
+      "raw_sit": "Head-on",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-H-q0xT_mP",
+      "gt_sit": "crossing",
+      "pred_sit": "head-on",
+      "raw_sit": "Head-on",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-HHF0HRj_mY",
+      "gt_sit": "head-on",
+      "pred_sit": "head-on",
+      "raw_sit": "Head-on",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-HHF0xWgSmY",
+      "gt_sit": "head-on",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-HHFC-EdY",
+      "gt_sit": "overtaking",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-HHFCrI7SdP",
+      "gt_sit": "head-on",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-HHFCrMjEmP",
+      "gt_sit": "overtaking",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-HHLCHmjMdP",
+      "gt_sit": "crossing",
+      "pred_sit": "head-on",
+      "raw_sit": "Head-on",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-HHi0xdoZV",
+      "gt_sit": "head-on",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-HHqC-Q5omb",
+      "gt_sit": "crossing",
+      "pred_sit": "head-on",
+      "raw_sit": "Head-on",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-HHqM-pCdb",
+      "gt_sit": "overtaking",
+      "pred_sit": "head-on",
+      "raw_sit": "Head-on",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-HHq_-Wy0eV",
+      "gt_sit": "overtaking",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-HHq_HNyMmY",
+      "gt_sit": "overtaking",
+      "pred_sit": "head-on",
+      "raw_sit": "Head-on",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-HrLC-wOCmP",
+      "gt_sit": "head-on",
+      "pred_sit": "head-on",
+      "raw_sit": "Head-on",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-Hri_r72eY",
+      "gt_sit": "head-on",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-HxL0Hzj_ZY",
+      "gt_sit": "head-on",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-Hxi0xXgCZY",
+      "gt_sit": "head-on",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-HxiC-rg2ZP",
+      "gt_sit": "head-on",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-Hxq0xjgSmb",
+      "gt_sit": "head-on",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-HxqCxMMdP",
+      "gt_sit": "crossing",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-LCLAkPzMx",
+      "gt_sit": "head-on",
+      "pred_sit": "head-on",
+      "raw_sit": "Head-on",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-LCzraxa0I7",
+      "gt_sit": "overtaking",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-LWLAaO6zB7",
+      "gt_sit": "crossing",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-LWLr6R6vBH",
+      "gt_sit": "head-on",
+      "pred_sit": "head-on",
+      "raw_sit": "Head-on",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-Ld01aGzOw",
+      "gt_sit": "overtaking",
+      "pred_sit": "head-on",
+      "raw_sit": "Head-on",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-Lp0rka0Ow",
+      "gt_sit": "overtaking",
+      "pred_sit": "head-on",
+      "raw_sit": "Head-on",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-r-FMxiySZb",
+      "gt_sit": "head-on",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-r-LMr6MdV",
+      "gt_sit": "crossing",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-r-i0-dCdP",
+      "gt_sit": "head-on",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-r-i0-kEmV",
+      "gt_sit": "overtaking",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-r-qMraEdY",
+      "gt_sit": "overtaking",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-r-q_-6jCZb",
+      "gt_sit": "head-on",
+      "pred_sit": "head-on",
+      "raw_sit": "Head-on",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-rHF0-MYoeV",
+      "gt_sit": "crossing",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-rHF0rCg_dY",
+      "gt_sit": "head-on",
+      "pred_sit": "head-on",
+      "raw_sit": "Head-on",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-rHiCrRMZY",
+      "gt_sit": "overtaking",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-rHqCxUhMmY",
+      "gt_sit": "head-on",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-rrFCxT7SdP",
+      "gt_sit": "head-on",
+      "pred_sit": "head-on",
+      "raw_sit": "Head-on",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-rrL0-ESeb",
+      "gt_sit": "head-on",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-rrL0xHSZV",
+      "gt_sit": "head-on",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-rriCrV0Zb",
+      "gt_sit": "overtaking",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-rrq0rXhEZV",
+      "gt_sit": "crossing",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-rrqCrpy2ZP",
+      "gt_sit": "crossing",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-rrq_-7VEmb",
+      "gt_sit": "head-on",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": false,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-rrq_ruhSeY",
+      "gt_sit": "head-on",
+      "pred_sit": "head-on",
+      "raw_sit": "Head-on",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-rxF0-tKSmY",
+      "gt_sit": "overtaking",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-rxFMrOhCeV",
+      "gt_sit": "overtaking",
+      "pred_sit": "head-on",
+      "raw_sit": "Head-on",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-rxF_xHVSmY",
+      "gt_sit": "head-on",
+      "pred_sit": "head-on",
+      "raw_sit": "Head-on",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-rxL0HiPEmY",
+      "gt_sit": "crossing",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-rxLMx2KomY",
+      "gt_sit": "head-on",
+      "pred_sit": "head-on",
+      "raw_sit": "Head-on",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-rxL_rqgCmY",
+      "gt_sit": "head-on",
+      "pred_sit": "head-on",
+      "raw_sit": "Head-on",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-rxiCxTh0db",
+      "gt_sit": "overtaking",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-rxi_xv2ZV",
+      "gt_sit": "overtaking",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-rxq0xF_eb",
+      "gt_sit": "overtaking",
+      "pred_sit": "head-on",
+      "raw_sit": "Head-on",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-rxqM-f2mb",
+      "gt_sit": "overtaking",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-vC0AaMzMx",
+      "gt_sit": "head-on",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-vCzr65vIx",
+      "gt_sit": "overtaking",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-vW016W6LBx",
+      "gt_sit": "overtaking",
+      "pred_sit": "head-on",
+      "raw_sit": "Head-on",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-vd01arvI7",
+      "gt_sit": "crossing",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-vdLA60Bx",
+      "gt_sit": "crossing",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-vpLhasvOH",
+      "gt_sit": "head-on",
+      "pred_sit": "head-on",
+      "raw_sit": "Head-on",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-vpz1aVvB7",
+      "gt_sit": "crossing",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-x-FCHX7SdP",
+      "gt_sit": "head-on",
+      "pred_sit": "head-on",
+      "raw_sit": "Head-on",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-x-L0rg0eV",
+      "gt_sit": "overtaking",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-x-LMHUYSmV",
+      "gt_sit": "crossing",
+      "pred_sit": "head-on",
+      "raw_sit": "Head-on",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-x-LMrwgodY",
+      "gt_sit": "crossing",
+      "pred_sit": "head-on",
+      "raw_sit": "Head-on",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-x-iCr17EdY",
+      "gt_sit": "head-on",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-x-iCxfjEmY",
+      "gt_sit": "crossing",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-x-q_HMZV",
+      "gt_sit": "crossing",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-xHL0rLEmb",
+      "gt_sit": "head-on",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": false,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-xHLC-KyomP",
+      "gt_sit": "crossing",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-xHLM-rh0db",
+      "gt_sit": "overtaking",
+      "pred_sit": "head-on",
+      "raw_sit": "Head-on",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-xHqCxgg_eP",
+      "gt_sit": "crossing",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-xrLM-P5EZY",
+      "gt_sit": "head-on",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-xrL_HbK_ZV",
+      "gt_sit": "crossing",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-xrq0HzbEmV",
+      "gt_sit": "overtaking",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-xrq0rboZV",
+      "gt_sit": "head-on",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-xrq_-kPoZV",
+      "gt_sit": "head-on",
+      "pred_sit": "head-on",
+      "raw_sit": "Head-on",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-xrq_HBhoZb",
+      "gt_sit": "crossing",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-xxFCxogMeY",
+      "gt_sit": "overtaking",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-xxL0HxMZb",
+      "gt_sit": "crossing",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-xxiCxM7oZb",
+      "gt_sit": "head-on",
+      "pred_sit": "head-on",
+      "raw_sit": "Head-on",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-xxiCxqOomb",
+      "gt_sit": "head-on",
+      "pred_sit": "head-on",
+      "raw_sit": "Head-on",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-xxi_-x50ZP",
+      "gt_sit": "overtaking",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-xxi_xoyEdV",
+      "gt_sit": "overtaking",
+      "pred_sit": "head-on",
+      "raw_sit": "Head-on",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-xxqMxOKEmP",
+      "gt_sit": "crossing",
+      "pred_sit": "head-on",
+      "raw_sit": "Head-on",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-zCzh6o0O7",
+      "gt_sit": "crossing",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-zW01axLOw",
+      "gt_sit": "head-on",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-zWL16t60Bw",
+      "gt_sit": "overtaking",
+      "pred_sit": "head-on",
+      "raw_sit": "Head-on",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-zWLh6_LI7",
+      "gt_sit": "overtaking",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-zWzAtqkLOH",
+      "gt_sit": "head-on",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-zdvAaKvBw",
+      "gt_sit": "head-on",
+      "pred_sit": "safe",
+      "raw_sit": "Safe",
+      "vessel_yes": true,
+      "gt_n": 1
+    }
+  ]
+}

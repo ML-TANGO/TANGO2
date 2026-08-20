@@ -165,7 +165,7 @@ const FineTuningSettingModal = ({ data, type }) => {
     setGpuSelectedOptions(result);
   };
 
-  // POST Submit Model
+  // POST Submit TrainingPage
   const postDatasetFiles = async () => {
     setIsLoading(true);
     const trueIndex = gpuSelectedOptions.findIndex(

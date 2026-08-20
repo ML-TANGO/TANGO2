@@ -64,7 +64,7 @@ function Rag() {
   };
   /**
    * API 호출 GET
-   * Model 목록 가져오기
+   * TrainingPage 목록 가져오기
    */
   const getRags = useCallback(async () => {
     const { status, result, message, error } = await getRag(workspaceId);

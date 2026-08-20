@@ -13,8 +13,8 @@ import { loadModalComponent } from '@src/modal';
 
 import IconPipeLineActive from '@src/static/images/icon/00-ic-basic-renew-blue.svg';
 import IconPipeLine from '@src/static/images/icon/00-ic-basic-renew.svg';
-import IconNavPlaygroundActive from '@src/static/images/nav/00-ic-nav-playground-active.svg';
-import IconNavPlayground from '@src/static/images/nav/00-ic-nav-playground.svg';
+import IconNavInferenceActive from '@src/static/images/nav/00-ic-nav-inference-active.svg';
+import IconNavInference from '@src/static/images/nav/00-ic-nav-inference.svg';
 import IconDataCollectActive from '@src/static/images/nav/data-collect-active-icon.svg';
 import IconDataCollect from '@src/static/images/nav/data-collect-icon.svg';
 import IconHpsActive from '@src/static/images/nav/hps-active-blue.svg';
@@ -78,8 +78,8 @@ import useMoveToMarker from './useMoveToMarker';
 import classNames from 'classnames/bind';
 import style from './UserRouter.module.scss';
 
-const Model = lazy(() => import('../llm/Model'));
-const ModelDetailPage = lazy(() => import('../llm/Model/ModelDetailPage'));
+const Model = lazy(() => import('../TrainingPage'));
+const ModelDetailPage = lazy(() => import('@src/pages/TrainingPage/ModelDetailPage'));
 const RagDetailPage = lazy(() => import('../llm/Rag/RagDetailPage'));
 
 const Rag = lazy(() => import('../llm/Rag'));
@@ -90,7 +90,7 @@ const UserDatasetCollectDetailPage = lazy(() =>
   import('../UserDatasetCollectDetailPage'),
 );
 
-const Dashboard = lazy(() => import('@src/pages/llm/DashboardPage'));
+const Dashboard = lazy(() => import('@src/pages/DashboardPage'));
 
 const cx = classNames.bind(style);
 
@@ -119,7 +119,7 @@ const UserDataCollectMenuPage = lazy(() =>
 );
 
 const ModelCommitListItem = lazy(() =>
-  import('@src/pages/llm/Model/ModelDetailPage/CommitList/ModelCommitListItem'),
+  import('@src/pages/TrainingPage/ModelDetailPage/CommitList/ModelCommitListItem'),
 );
 
 const PromptCommitPage = lazy(() =>
@@ -145,8 +145,8 @@ const PromptMenuPage = lazy(() =>
   import('@src/pages/llm/Prompt/PromptMenuPage/PromptMenuPage'),
 );
 
-const ReasoningPage = lazy(() => import('@src/pages/ReasoningPage'));
-const ReasoningDetailPage = lazy(() => import('@src/pages/ReasoningDetailPage'));
+const ReasoningPage = lazy(() => import('@src/pages/InferencePage'));
+const ReasoningDetailPage = lazy(() => import('@src/pages/InferenceDetailPage'));
 
 const LLMDatasetPage = lazy(() => import('@src/pages/llm/LLMDatasetPage'));
 
@@ -188,7 +188,7 @@ const UserServicePage = lazy(() => import('@src/pages/UserServicePage'));
 const SdsEvaluationPage = lazy(() => import('@src/pages/SdsEvaluationPage'));
 const BenchmarkEvaluationPage = lazy(() => import('@src/pages/BenchmarkEvaluationPage'));
 const LlmJudgeEvaluationPage = lazy(() => import('@src/pages/LlmJudgeEvaluationPage'));
-const UserTestPage = lazy(() => import('@src/pages/UserTestPage'));
+
 const NotFoundPage = lazy(() => import('@src/pages/NotFoundPage'));
 const UserDatasetPreprocessPage = lazy(() =>
   import('@src/pages/UserDatasetPreprocessPage'),
@@ -327,11 +327,11 @@ const llmRouteArr = [
     render: (props) => <ModelCommitListItem {...props} />,
   },
   {
-    name: '추론',
+    name: 'Inference',
     path: '/user/workspace/:id/inference',
     exact: true,
-    icon: IconNavPlayground,
-    activeIcon: IconNavPlaygroundActive,
+    icon: IconNavInference,
+    activeIcon: IconNavInferenceActive,
     platform: 'llm',
     render: (props) => <ReasoningPage {...props} />,
   },
@@ -340,8 +340,8 @@ const llmRouteArr = [
     path: '/user/workspace/:id/inference/:sid',
     exact: true,
     disabled: true,
-    icon: IconNavPlaygroundActive,
-    activeIcon: IconNavPlaygroundActive,
+    icon: IconNavInferenceActive,
+    activeIcon: IconNavInferenceActive,
     platform: 'llm',
     render: (props) => <ReasoningDetailPage {...props} />,
   },
@@ -697,16 +697,7 @@ const routeArr = [
   //   platform: 'flightbase',
   //   render: (props) => <UserServicePage {...props} />,
   // },
-  // {
-  //   name: 'Test',
-  //   path: '/user/workspace/:id/services/:sid/test',
-  //   exact: true,
-  //   disabled: true,
-  //   icon: IconLnbTestGray,
-  //   activeIcon: IconLnbTestBlue,
-  //   platform: 'flightbase',
-  //   render: (props) => <UserTestPage {...props} />,
-  // },
+
   {
     name: 'Training',
     path: '/user/workspace/:id/model',
@@ -738,11 +729,11 @@ const routeArr = [
     render: (props) => <ModelCommitListItem {...props} />,
   },
   {
-    name: '추론',
+    name: 'Inference',
     path: '/user/workspace/:id/inference',
     exact: true,
-    icon: IconNavPlayground,
-    activeIcon: IconNavPlaygroundActive,
+    icon: IconNavInference,
+    activeIcon: IconNavInferenceActive,
     platform: 'flightbase',
     render: (props) => <ReasoningPage {...props} />,
   },
@@ -751,8 +742,8 @@ const routeArr = [
     path: '/user/workspace/:id/inference/:sid',
     exact: true,
     disabled: true,
-    icon: IconNavPlaygroundActive,
-    activeIcon: IconNavPlaygroundActive,
+    icon: IconNavInferenceActive,
+    activeIcon: IconNavInferenceActive,
     platform: 'flightbase',
     render: (props) => <ReasoningDetailPage {...props} />,
   },
