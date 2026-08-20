@@ -553,3 +553,77 @@ CREATE TABLE IF NOT EXISTS `llm_dp_version` (
     CONSTRAINT `fk_dp_version_dataset` FOREIGN KEY (`dataset_id`)
         REFERENCES `llm_dp_dataset` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
 ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- 노드 실행 이력. 노드 잡은 산출물을 작업 데이터셋에 파일로만 남기므로, 화면이
+-- 진행 상태를 물어볼 데가 없고 다음 노드가 상류 산출물을 찾을 수도 없다. 이 테이블이
+-- 그 둘을 대신한다(실행 1건 = 노드 1개의 한 번 실행).
+-- 잡을 띄울 때 running 으로 넣고, 폴링 리콘사일러가 funnel.json 을 보고 done 으로
+-- 마감한다. 산출물이 없는데 잡이 끝나 있으면 failed 로 닫는다.
+CREATE TABLE IF NOT EXISTS `llm_dp_run` (
+    `id`                INT(11) NOT NULL AUTO_INCREMENT,
+    `dataset_id`        INT(11) NOT NULL,
+    -- r{YYYYMMDDHHMMSS}-{hex}. 실행마다 새로 발급돼 이전 산출물을 덮지 않는다.
+    `run_id`            VARCHAR(32) NOT NULL,
+    `node_index`        INT(11) NOT NULL,
+    -- preprocess | filter | generate | gate | sds_video | sds_ais | sds_join
+    `stage`             VARCHAR(24) NOT NULL,
+    -- 스케줄러가 띄운 잡 이름. preprocessing_job.name 과 같은 값이라, 산출물이
+    -- 없을 때 실패인지 아직 도는 중인지를 그쪽에서 확인하는 열쇠가 된다.
+    `job_name`          VARCHAR(128),
+    -- running | done | failed
+    `status`            VARCHAR(16) NOT NULL DEFAULT 'running',
+    -- 미리보기 실행은 표본만 돌린 결과라 다음 노드의 입력으로 쓰면 안 된다.
+    `dry_run`           TINYINT NOT NULL DEFAULT 0,
+    -- 작업 데이터셋 기준 상대경로(_runs/<run_id>/<node_index>).
+    `out_dir`           VARCHAR(255) NOT NULL,
+    `in_count`          INT(11),
+    `out_count`         INT(11),
+    `dropped_count`     INT(11),
+    -- 노드가 남긴 funnel.json 전체. 단계별 in/out/dropped 가 들어 있어 화면이
+    -- 노드 안에서 무엇이 얼마나 걸러졌는지를 그린다.
+    `funnel`            JSON,
+    `error_reason`      VARCHAR(1000),
+    `create_datetime`   DATETIME DEFAULT CURRENT_TIMESTAMP(),
+    `end_datetime`      DATETIME,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_dp_run` (`dataset_id`, `run_id`, `node_index`),
+    -- 리콘사일러가 매 주기 running 만 훑는다.
+    KEY `ix_dp_run_status` (`status`),
+    -- 상류 탐색: 그 노드의 가장 최근 done 실행 1건.
+    KEY `ix_dp_run_node` (`dataset_id`, `node_index`, `status`, `id`),
+    CONSTRAINT `fk_dp_run_dataset` FOREIGN KEY (`dataset_id`)
+        REFERENCES `llm_dp_dataset` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
+) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 파이프라인이 소유한 VLM 서빙(자동 배포·회수). 카탈로그의 모델 id 는 이름표일 뿐
+-- 실행 중인 서빙을 가리키지 않으므로, 무엇을 왜 띄웠는지를 여기에 적어 두고
+-- 리콘사일러가 유휴 상태를 보고 내린다. 소유 기록이 없으면 실패 시 GPU 가 영영 잠긴다.
+CREATE TABLE IF NOT EXISTS `llm_dp_serving` (
+    `id`                INT(11) NOT NULL AUTO_INCREMENT,
+    `dataset_id`        INT(11) NOT NULL,
+    -- generator | judge. 한 파이프라인은 역할당 하나만 쥔다(생성 모델 == 심사 모델은
+    -- 맹점이 겹쳐 게이트가 무의미해지므로 상위에서 이미 차단된다).
+    `role`              VARCHAR(16) NOT NULL,
+    -- constants.GENERATION_MODELS 의 id (qwen8b, intern3 …)
+    `model_id`          VARCHAR(32) NOT NULL,
+    -- 실제로 띄운 저장소 경로. 카탈로그가 바뀌어도 이 배포가 무엇이었는지 남는다.
+    `hf_id`             VARCHAR(255),
+    -- 플랫폼 playground. 배포·중지·상태 조회는 전부 이 id 로 기존 경로를 탄다.
+    `playground_id`     INT(11),
+    -- 추론 URL 조립용(배포의 api_path). 노드에는 완성된 URL 만 넘긴다.
+    `api_path`          VARCHAR(255),
+    -- pending | ready | failed | released
+    `status`            VARCHAR(16) NOT NULL DEFAULT 'pending',
+    `error_reason`      VARCHAR(1000),
+    `create_datetime`   DATETIME DEFAULT CURRENT_TIMESTAMP(),
+    -- 마지막으로 노드가 이 서빙을 쓴 시각. 유휴 판정 = 회수 시점의 근거.
+    `last_used_datetime` DATETIME,
+    `release_datetime`  DATETIME,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_dp_serving_role` (`dataset_id`, `role`),
+    -- 리콘사일러가 매 주기 살아 있는 것만 훑는다.
+    KEY `ix_dp_serving_status` (`status`),
+    CONSTRAINT `fk_dp_serving_dataset` FOREIGN KEY (`dataset_id`)
+        REFERENCES `llm_dp_dataset` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
+) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

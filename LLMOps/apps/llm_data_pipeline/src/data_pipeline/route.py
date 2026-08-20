@@ -4,7 +4,10 @@ Kong ingress 가 `/api/(data-pipelines)(.*)` 로 붙이므로 prefix 는 `/data-
 """
 import traceback
 
+import mimetypes
+
 from fastapi import APIRouter, Header, Query
+from fastapi.responses import FileResponse, JSONResponse
 
 from utils.resource import response
 
@@ -125,6 +128,32 @@ async def register_assets(dataset_id: int, body: dto.AssetRegisterBody):
 
 
 # ── 파이프라인 노드 ─────────────────────────────────────────────────────────
+@data_pipelines.get("/source-datasets", summary="소스로 고를 수 있는 데이터셋", tags=TAG)
+async def list_source_datasets(workspace_id: int,
+                               jf_user: str = Header(default=None, alias="Jf-User")):
+    """원본이 들어 있는 기존 데이터셋 목록. `path` 를 그대로 sources 에 넣으면 된다.
+
+    파이프라인이 산출물을 쌓는 작업 데이터셋은 빠진다 — 자기 출력을 자기 입력으로
+    고를 수 있으면 안 된다.
+    """
+    try:
+        return response(status=1,
+                        result=await svc.list_source_datasets(workspace_id, jf_user))
+    except Exception as e:
+        return _fail(e)
+
+
+@data_pipelines.get("/source-datasets/{dataset_id}/folders", summary="소스 데이터셋의 폴더", tags=TAG)
+async def list_source_folders(dataset_id: int, workspace_id: int,
+                              jf_user: str = Header(default=None, alias="Jf-User")):
+    """폴더까지 좁혀 읽을 수 있게. 첫 항목은 전체(루트)."""
+    try:
+        return response(status=1,
+                        result=await svc.list_source_folders(workspace_id, dataset_id, jf_user))
+    except Exception as e:
+        return _fail(e)
+
+
 @data_pipelines.get("/datasets/{dataset_id}/flow", summary="파이프라인 노드 체인", tags=TAG)
 async def get_flow(dataset_id: int):
     """노드마다 입력/출력 타입과 경고(좌표 깨짐·재심사 필요)가 함께 붙어 온다."""
@@ -141,6 +170,74 @@ async def replace_flow(dataset_id: int, body: dto.FlowUpdateBody):
         res = await svc.replace_flow(
             dataset_id, preset=body.preset, nodes=body.nodes, flow=body.flow)
         return response(status=1, result=res)
+    except Exception as e:
+        return _fail(e)
+
+
+# ── 실행 이력 ───────────────────────────────────────────────────────────────
+@data_pipelines.get("/datasets/{dataset_id}/runs", summary="노드 실행 이력", tags=TAG)
+async def list_runs(dataset_id: int,
+                    node_index: int = Query(default=None, description="특정 노드만"),
+                    limit: int = Query(default=50, ge=1, le=500)):
+    """최신순. 노드 잡은 비동기라 실행 직후에는 running 으로 보이고, 리콘사일러가
+    산출물을 확인하면 done/failed 로 바뀐다."""
+    try:
+        return response(status=1, result=await svc.list_runs(
+            dataset_id, node_index=node_index, limit=limit))
+    except Exception as e:
+        return _fail(e)
+
+
+# 주의: 이 경로는 아래 `/runs/{run_id}` 보다 **먼저** 선언해야 한다. 순서가 바뀌면
+# FastAPI 가 "compare" 를 run_id 로 받아 "실행을 찾을 수 없습니다: compare" 가 된다.
+@data_pipelines.get("/datasets/{dataset_id}/runs/compare", summary="두 실행 A/B 비교", tags=TAG)
+async def compare_runs(dataset_id: int,
+                       a: str = Query(description="기준 실행 run_id"),
+                       b: str = Query(description="비교 대상 run_id")):
+    """설정 차이 · 단계별 funnel 차이 · 카운트 증감. 같은 노드의 실행끼리만 비교한다."""
+    try:
+        return response(status=1, result=await svc.compare_runs(dataset_id, a, b))
+    except Exception as e:
+        return _fail(e)
+
+
+@data_pipelines.get("/datasets/{dataset_id}/runs/{run_id}", summary="실행 상세(+단계별 funnel)", tags=TAG)
+async def get_run(dataset_id: int, run_id: str):
+    """노드 안에서 단계별로 몇 건이 들어가 몇 건이 남았는지(funnel)까지 준다."""
+    try:
+        return response(status=1, result=await svc.get_run(dataset_id, run_id))
+    except Exception as e:
+        return _fail(e)
+
+
+@data_pipelines.get("/datasets/{dataset_id}/runs/{run_id}/preview",
+                    summary="산출물 미리보기(통과 · 제외)", tags=TAG)
+async def preview_run(dataset_id: int, run_id: str,
+                      kind: str = Query(default="passed", description="passed|dropped"),
+                      limit: int = Query(default=50, ge=1, le=200),
+                      offset: int = Query(default=0, ge=0)):
+    """노드 드로어의 '통과' · '제외' 열. '입력' 열은 상류 실행의 통과분이므로
+    같은 엔드포인트를 상류 run_id 로 한 번 더 부르면 된다."""
+    try:
+        return response(status=1, result=await svc.preview_run(
+            dataset_id, run_id, kind=kind, limit=limit, offset=offset))
+    except Exception as e:
+        return _fail(e)
+
+
+@data_pipelines.get("/datasets/{dataset_id}/runs/{run_id}/thumb/{asset_id}",
+                    summary="산출물 썸네일(image/jpeg)", tags=TAG)
+async def run_thumb(dataset_id: int, run_id: str, asset_id: str):
+    """썸네일 바이트. 봉투(JSON) 대신 이미지로 내려가야 <img src> 로 바로 걸린다.
+
+    노드는 앞부분 일부만 썸네일로 만든다(전량이면 용량이 터진다). 없는 자산은 404 이며,
+    미리보기 응답의 has_thumb 로 미리 걸러진다.
+    """
+    try:
+        path = await svc.run_thumb_path(dataset_id, run_id, asset_id)
+        return FileResponse(path, media_type="image/jpeg")
+    except svc.NotFound as e:
+        return JSONResponse(status_code=404, content={"status": 0, "message": str(e)})
     except Exception as e:
         return _fail(e)
 
@@ -172,6 +269,19 @@ async def run_stage(dataset_id: int, stage: str, body: dto.StageRunBody,
         return _fail(e)
 
 
+@data_pipelines.put("/datasets/{dataset_id}/stages/data", summary="데이터 소스(마운트) 저장", tags=TAG)
+async def save_data(dataset_id: int, body: dto.StageConfigBody):
+    """데이터 노드는 실행되지 않는다 — 원본을 어디서 읽을지(sources)만 담는다.
+
+    실제로 그 경로를 읽는 것은 전처리 노드이고, 실행 시점에 여기 값을 물려받는다.
+    이 저장이 없으면 화면에서 고른 소스가 사라지고, 노드는 /datasets 전체를 훑는다.
+    """
+    try:
+        return response(status=1, result=await svc.save_stage(dataset_id, "data", body.model_dump()))
+    except Exception as e:
+        return _fail(e)
+
+
 @data_pipelines.put("/datasets/{dataset_id}/stages/preprocess", summary="전처리 설정 저장", tags=TAG)
 async def save_preprocess(dataset_id: int, body: dto.StageConfigBody):
     try:
@@ -185,6 +295,36 @@ async def save_preprocess(dataset_id: int, body: dto.StageConfigBody):
 async def save_filter(dataset_id: int, body: dto.StageConfigBody):
     try:
         res = await svc.save_stage(dataset_id, "filter", body.model_dump())
+        return response(status=1, result=res)
+    except Exception as e:
+        return _fail(e)
+
+
+# 해양 COLREG 수집·조인 단계. 저장 바디는 전처리·필터와 같은 모양(소스 · 기능 on/off ·
+# 파라미터)이라 StageConfigBody 를 그대로 쓴다. 단계마다 경로를 따로 두는 것은 이 라우터의
+# 기존 방식(스테이지별 명시 엔드포인트)을 따른 것이다.
+@data_pipelines.put("/datasets/{dataset_id}/stages/sds_video", summary="항해 영상 수집 설정 저장", tags=TAG)
+async def save_sds_video(dataset_id: int, body: dto.StageConfigBody):
+    try:
+        res = await svc.save_stage(dataset_id, "sds_video", body.model_dump())
+        return response(status=1, result=res)
+    except Exception as e:
+        return _fail(e)
+
+
+@data_pipelines.put("/datasets/{dataset_id}/stages/sds_ais", summary="AIS 로그 수집 설정 저장", tags=TAG)
+async def save_sds_ais(dataset_id: int, body: dto.StageConfigBody):
+    try:
+        res = await svc.save_stage(dataset_id, "sds_ais", body.model_dump())
+        return response(status=1, result=res)
+    except Exception as e:
+        return _fail(e)
+
+
+@data_pipelines.put("/datasets/{dataset_id}/stages/sds_join", summary="조인 설정 저장", tags=TAG)
+async def save_sds_join(dataset_id: int, body: dto.StageConfigBody):
+    try:
+        res = await svc.save_stage(dataset_id, "sds_join", body.model_dump())
         return response(status=1, result=res)
     except Exception as e:
         return _fail(e)
@@ -249,6 +389,24 @@ async def get_record_by_key(dataset_id: int, record_key: str):
         return _fail(e)
 
 
+@data_pipelines.get("/datasets/{dataset_id}/records/{record_id}/image",
+                    summary="레코드 원본 이미지(image/*)", tags=TAG)
+async def record_image(dataset_id: int, record_id: int):
+    """검수 화면이 <img src> 로 바로 거는 원본 이미지.
+
+    썸네일(`/runs/{run_id}/thumb/{asset_id}`)과 다른 경로인 이유는 service 쪽 주석에
+    있다 — 요약하면 썸네일은 일부만 있고, 레코드의 asset_ref 는 경로라서 그 엔드포인트에
+    넣을 수 없다.
+    """
+    try:
+        path = await svc.record_image_path(dataset_id, record_id)
+        return FileResponse(path, media_type=mimetypes.guess_type(path)[0] or "image/jpeg")
+    except svc.NotFound as e:
+        return JSONResponse(status_code=404, content={"status": 0, "message": str(e)})
+    except Exception as e:
+        return _fail(e)
+
+
 @data_pipelines.get("/records/{record_id}", summary="레코드 상세(+판정 이력)", tags=TAG)
 async def get_record(record_id: int):
     try:
@@ -306,5 +464,41 @@ async def create_version(dataset_id: int, body: dto.VersionCreateBody):
             dataset_id, version=body.version, mix=body.mix,
             split=body.split, split_by=body.split_by)
         return response(status=1, result=res)
+    except Exception as e:
+        return _fail(e)
+
+
+# ── 생성·심사 서빙(자동 배포·회수) ──────────────────────────────────────────
+@data_pipelines.get("/datasets/{dataset_id}/servings", summary="이 파이프라인이 쥔 서빙 현황", tags=TAG)
+async def list_servings(dataset_id: int):
+    """역할별 배포 상태와 노드가 쓸 주소. GPU 를 무엇이 물고 있는지 여기서 확인한다."""
+    try:
+        return response(status=1, result=await svc.list_servings(dataset_id))
+    except Exception as e:
+        return _fail(e)
+
+
+@data_pipelines.post("/datasets/{dataset_id}/servings/{role}", summary="서빙 준비(자동 배포)", tags=TAG)
+async def start_serving(dataset_id: int, role: str,
+                        wait: bool = Query(default=False,
+                                           description="true 면 준비될 때까지 기다린다(s2s·점검용). "
+                                                        "기본은 시작만 하고 즉시 반환."),
+                        jf_user: str = Header(default=None, alias="jf-User")):
+    """단계 설정에서 고른 모델을 띄운다. 자원이 모자라면 **띄우기 전에** 사유와 함께 거절된다."""
+    try:
+        if wait:
+            return response(status=1, result=await svc.ensure_serving(dataset_id, role, jf_user))
+        return response(status=1, result=await svc.start_serving(dataset_id, role, jf_user))
+    except Exception as e:
+        return _fail(e)
+
+
+@data_pipelines.delete("/datasets/{dataset_id}/servings", summary="서빙 회수", tags=TAG)
+async def release_serving(dataset_id: int,
+                          role: str = Query(default=None, description="생략하면 전부"),
+                          jf_user: str = Header(default=None, alias="jf-User")):
+    """지금 내린다. 리콘사일러의 유휴 회수를 기다리지 않고 GPU 를 즉시 돌려받는 경로."""
+    try:
+        return response(status=1, result=await svc.release_serving(dataset_id, role, jf_user))
     except Exception as e:
         return _fail(e)

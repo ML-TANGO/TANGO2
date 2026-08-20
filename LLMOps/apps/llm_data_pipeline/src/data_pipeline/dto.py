@@ -95,6 +95,11 @@ class StageConfigBody(BaseModel):
     dict 로 받고 서비스가 해석한다.
     """
 
+    # 노드가 읽을 소스 경로(워크스페이스 data PVC 기준 상대경로, 예 "1/sds_raw").
+    # 이 필드가 없으면 Pydantic 이 클라이언트가 보낸 sources 를 조용히 버리고, 노드는
+    # /datasets 마운트 전체를 훑는다 — 워크스페이스에 데이터셋이 여럿이면 무관한 것까지
+    # 빨아들이면서도 화면상으로는 정상으로 보인다.
+    sources: List[str] = Field(default_factory=list, description="읽을 소스 경로 목록")
     enabled: Dict[str, bool] = Field(default_factory=dict, description="기능명 → 사용 여부")
     params: Dict = Field(default_factory=dict, description="기능 파라미터")
 

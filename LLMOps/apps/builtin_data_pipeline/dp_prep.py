@@ -58,11 +58,15 @@ def log(event, **kw):
 class Item:
     """파이프라인을 흐르는 자산 하나."""
 
-    __slots__ = ("asset_id", "src", "image", "text", "bbox", "geom_touched")
+    __slots__ = ("asset_id", "src", "image", "text", "bbox", "geom_touched", "meta")
 
-    def __init__(self, asset_id, src, image=None, text=None, bbox=None):
+    def __init__(self, asset_id, src, image=None, text=None, bbox=None, meta=None):
         self.asset_id = asset_id
         self.src = src              # 원본 경로(제외 시 화면이 이걸로 되짚는다)
+        # 상류 노드가 붙여 놓은 필드(해양이면 timestamp · frame_idx · scene_id).
+        # 이걸 버리면 조인이 프레임과 AIS 씬을 붙일 키를 잃는다 — 그때 조인은 실패가
+        # 아니라 **0건**으로 끝나서, 원인이 여기라는 사실이 어디에도 남지 않는다.
+        self.meta = meta or {}
         self.image = image
         self.text = text
         self.bbox = bbox            # [x, y, w, h] 또는 None
@@ -70,17 +74,57 @@ class Item:
 
 
 # ── 소스 수집 ────────────────────────────────────────────────────────────────
+def collect_upstream(src, limit=None):
+    """상류 노드가 남긴 자산 목록을 파일 경로로 돌려준다.
+
+    해양 프리셋의 전처리는 `/datasets` 의 원본이 아니라 **항해 영상 노드가 뽑은 프레임**을
+    받는다(목업 SDS_FLOW: 영상→전처리→필터→조인). 원본 이미지가 없는 항차에서 소스를
+    훑으면 아무것도 못 찾는다.
+    """
+    path = os.path.join(src, "assets.jsonl")
+    if not os.path.isfile(path):
+        raise RuntimeError(f"상류 노드 산출물이 없습니다: {path}")
+    rows = []
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            row = json.loads(line) or {}
+            rel = row.get("path")
+            if rel:
+                rows.append({"path": os.path.join(src, rel), "meta": row})
+    rows.sort(key=lambda r: r["path"])
+    if not rows:
+        raise RuntimeError(f"상류 산출물이 비어 있습니다: {path} — 앞 단계를 다시 실행하세요")
+    return rows[:limit] if limit else rows
+
+
 def collect_sources(datasets_root, sources, limit=None):
     """소스 데이터셋/폴더를 훑어 파일 목록을 만든다. 이미지와 PDF 만 본다.
 
     경로 순서를 정렬로 고정한다 — 같은 설정이면 같은 표본이 나와야 두 실행의 차이가
     '설정 차이'만 남는다(비교가 성립하는 조건).
     """
-    found = []
+    # 소스 표기는 두 가지를 다 받는다.
+    #   "1/sds_raw/raw/sample"          — /datasets 기준 상대경로. 하위 폴더까지 지정된다.
+    #   {"access":1,"name":"sds_raw"}   — 데이터셋 단위(초기 형태). folder 로 하위 지정.
+    # 화면과 다른 노드는 문자열을 쓰므로 그쪽이 정본이고, dict 는 기존 설정을 위한 호환이다.
+    if not sources:
+        # 여기서 조용히 빈 목록을 돌려주면 "성공, 0건" 이 되어 원인이 사라진다.
+        raise RuntimeError("읽을 소스가 지정되지 않았습니다 — 데이터 소스(데이터셋 · 폴더)를 "
+                           "먼저 고르세요 (params.sources 가 비어 있습니다)")
+    roots = []
     for s in sources:
+        if isinstance(s, str):
+            roots.append(os.path.join(datasets_root, s.lstrip("/")))
+            continue
         base = os.path.join(datasets_root, str(s["access"]), s["name"])
         sub = (s.get("folder") or "/").lstrip("/")
-        root = os.path.join(base, sub) if sub else base
+        roots.append(os.path.join(base, sub) if sub else base)
+
+    found = []
+    for root in roots:
         if not os.path.isdir(root):
             log("log", level="warn", message=f"소스 경로 없음: {root}")
             continue
@@ -183,7 +227,8 @@ def expand_pdf(item, p):
         for pno, page in enumerate(doc):
             pix = page.get_pixmap(dpi=dpi)
             img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
-            out.append(Item(f"{item.asset_id}-p{pno:03d}", item.src, img, page.get_text()))
+            out.append(Item(f"{item.asset_id}-p{pno:03d}", item.src, img,
+                            page.get_text(), meta=item.meta))
     return out
 
 
@@ -226,8 +271,16 @@ def run(params):
     os.makedirs(os.path.join(out_dir, "samples"), exist_ok=True)
 
     limit = sample_size if dry_run else None
-    files = collect_sources(datasets_root, params.get("sources") or [], limit=limit)
-    log("phase", name="collect", count=len(files), dry_run=dry_run)
+    upstream = (params.get("inputs") or {}).get("assets")
+    if upstream:
+        entries = collect_upstream(upstream, limit=limit)
+    else:
+        entries = [{"path": p, "meta": None}
+                   for p in collect_sources(datasets_root, params.get("sources") or [],
+                                            limit=limit)]
+    files = [e["path"] for e in entries]
+    log("phase", name="collect", count=len(files), dry_run=dry_run,
+        source="upstream" if upstream else "datasets")
 
     funnel = [{"stage": "수집", "in": len(files), "out": len(files), "dropped": {}, "kind": "source"}]
     drops = []
@@ -235,13 +288,16 @@ def run(params):
     # 파일 → Item. 여는 데 실패하면 그 자리에서 드롭(정제 기능 유무와 무관한 하드 실패).
     items = []
     open_err = 0
-    for i, path in enumerate(files):
-        asset_id = f"a{i:06d}"
+    for i, entry in enumerate(entries):
+        path, meta = entry["path"], entry.get("meta") or {}
+        # 상류가 붙인 asset_id 를 그대로 쓴다 — 새로 번호를 매기면 같은 프레임이 노드마다
+        # 다른 이름을 갖게 되어 제외 사유를 원본까지 되짚을 수 없다.
+        asset_id = meta.get("asset_id") or f"a{i:06d}"
         if os.path.splitext(path)[1].lower() in PDF_EXT:
-            items.append(Item(asset_id, path, None, None))   # 이미지는 구조 추출에서 채운다
+            items.append(Item(asset_id, path, None, None, meta=meta))
             continue
         try:
-            items.append(Item(asset_id, path, Image.open(path)))
+            items.append(Item(asset_id, path, Image.open(path), meta=meta))
         except Exception as e:  # noqa: BLE001
             drops.append({"asset_id": asset_id, "src": path, "stage": "적재",
                           "reason": f"open_error:{type(e).__name__}"})
@@ -338,7 +394,9 @@ def run(params):
                 th.save(os.path.join(out_dir, "samples", f"{it.asset_id}.jpg"), quality=80)
                 n_sample += 1
             w, h = it.image.size
-            row = {"asset_id": it.asset_id, "src": it.src, "path": rel, "w": w, "h": h}
+            # 상류 필드를 먼저 깔고 이 노드가 바꾼 것(경로·크기)으로 덮는다.
+            row = {**it.meta, "asset_id": it.asset_id, "src": it.src,
+                   "path": rel, "w": w, "h": h}
             if it.text:
                 row["text"] = it.text
             if it.bbox:

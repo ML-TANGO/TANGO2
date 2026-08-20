@@ -105,7 +105,15 @@ def thresholds_for(preset):
     return dict(PRESET_THRESHOLDS.get(preset or PRESET_GENERIC, DEFAULT_THRESHOLDS))
 
 # ── 단계(stage) ─────────────────────────────────────────────────────────────
-STAGES = ("preprocess", "filter", "generate", "gate")
+# 앞 4개는 모든 프리셋 공통, sds_* 셋은 해양 COLREG 전용 수집·조인 단계다.
+# 프리셋별로 보여줄 단계는 STAGES_BY_PRESET 이 정한다 — 범용 파이프라인에 항해 영상
+# 단계가 뜨면 사용자가 쓸 수 없는 단계를 계속 마주하게 된다.
+# 'data' 는 **설정만 있고 실행은 없는** 단계다 — 원본을 어디서 마운트할지(sources)를
+# 담을 자리가 필요해서 넣는다. 실행 목록(STAGES_BY_PRESET)에는 넣지 않는다:
+# 실행하려 하면 STAGE_SCRIPT 에 없어 "실행할 수 없는 단계" 로 끊긴다.
+STAGES = ("data", "preprocess", "filter", "generate", "gate",
+          "sds_video", "sds_ais", "sds_ais_clean", "sds_ais_scene",
+          "sds_join", "sds_colreg", "assemble")
 
 # 전처리 기능 라이브러리.
 PREPROCESS_LIBRARY = (
@@ -129,11 +137,78 @@ PREPROCESS_LIBRARY = (
 FILTER_LIBRARY = (
     {"key": "중복 제거", "desc": "파일 해시 + 비슷한 이미지(유사도)",
      "param": {"name": "비슷한 이미지 기준값", "key": "dupTh", "min": 80, "max": 99, "unit": "ratio", "default": 95}},
-    {"key": "저품질 이미지", "desc": "흐림 · 최소 해상도 · 노출 이상",
-     "param": {"name": "흐림 기준값", "key": "blur", "min": 10, "max": 90, "unit": "", "default": 40}},
+    # 흐림 · 최소 해상도 · 노출은 원래 '저품질 이미지' 한 스위치로 묶여 있었다. 그러면
+    # 저해상 컷만 켤 수가 없다 — 해양 프레임은 저텍스처라 선명도가 1.8~9.8(실측)인데
+    # 흐림 하한이 10 이어서, 해상도 컷을 켜려고 스위치를 올리면 전량 탈락했다.
+    # 목업도 셋을 각각 끄고 켠다(흐림 사용 안 함 · 노출 사용 안 함 · 저해상 512 미만).
+    {"key": "흐림", "desc": "라플라시안 분산이 기준 미만이면 제외 · 도메인마다 값이 크게 다르다",
+     "param": {"name": "선명도 하한", "key": "blur", "min": 1, "max": 90, "unit": "", "default": 40}},
+    {"key": "최소 해상도", "desc": "짧은 변이 기준보다 작으면 제외",
+     "param": {"name": "짧은 변 최소", "key": "minEdge", "min": 128, "max": 2048, "unit": "px", "default": 512}},
+    {"key": "노출 이상", "desc": "너무 밝거나 어두우면서 대비까지 없는 이미지만 제외",
+     "param": {"name": "대비 하한", "key": "expoStd", "min": 5, "max": 60, "unit": "", "default": 25}},
     {"key": "민감 콘텐츠", "desc": "유해 이미지 차단 · 개인정보 검출 후 가림",
      "param": {"name": "유해 이미지 기준값", "key": "nsfw", "min": 50, "max": 99, "unit": "ratio", "default": 85}},
 )
+
+# ── 해양 COLREG 수집·조인 기능 라이브러리 ────────────────────────────────────
+# key 는 캔버스에 그대로 뜨는 이름이자 노드 스크립트가 분기하는 값이다.
+# apps/builtin_data_pipeline/dp_sds_*.py 의 STEP_* 상수와 문자 단위로 같아야 한다.
+
+SDS_VIDEO_LIBRARY = (
+    {"key": "타임스탬프 프레임", "desc": "브리지 카메라 영상을 초당 N장으로 솎아 시각을 붙임",
+     "param": {"name": "초당 프레임 수", "key": "fps", "min": 0, "max": 30, "unit": "fps", "default": 1}},
+    {"key": "장면 수 제한", "desc": "앞에서부터 N장까지만 — 0 이면 전량",
+     "param": {"name": "최대 장면 수", "key": "scenes", "min": 0, "max": 5000, "unit": "장", "default": 0}},
+)
+
+# AIS 는 '정형화'와 '정제'가 한 노드 안에서 이어진다. 목업은 이를 전처리·AIS 와
+# 필터·AIS 두 노드로 나눠 그리지만, 중간 산출물이 CSV 한 벌뿐이라 잡을 쪼개면
+# NFS 왕복만 늘고 얻는 게 없다 — 기능은 그대로 두고 실행만 한 노드로 묶는다.
+# AIS 갈래는 세 노드로 나뉜다 — 적재 / 행 정제 / 씬 구조화.
+# 한 노드에 여섯 기능을 몰아 두면 임계값을 바꿔 한 단계만 다시 돌릴 수도, 단계별로
+# 몇 행이 빠졌는지 볼 수도 없다(영상 갈래는 이미 세 노드다 — 같은 규칙을 따른다).
+SDS_AIS_LIBRARY = (
+    {"key": "단위 정규화", "desc": "knot · degree 파싱 · 숫자가 아닌 행 제거", "param": {}},
+)
+
+SDS_AIS_CLEAN_LIBRARY = (
+    {"key": "무효 좌표", "desc": "위도·경도가 0 · 0 인 행 제거", "param": {}},
+    {"key": "범위 위반", "desc": "침로가 0~360° 밖이거나 속도가 음수인 행 제거", "param": {}},
+    {"key": "중복 행", "desc": "timestamp + ship_id 가 겹치는 행 제거", "param": {}},
+)
+
+SDS_AIS_SCENE_LIBRARY = (
+    {"key": "시간 정렬", "desc": "timestamp 오름차순 — 같은 시각 행이 흩어지면 묶음이 쪼개진다", "param": {}},
+    {"key": "씬 구조화", "desc": "같은 시각 행 묶음 → 자선 1척 + 주변선 N척", "param": {}},
+)
+
+SDS_COLREG_LIBRARY = (
+    {"key": "상대방위 · 침로차", "desc": "자선 기준 방위와 침로 차이 — 결정론 계산", "param": {}},
+    {"key": "조우 분류", "desc": "정면 · 횡단 · 추월 판정과 적용 조항(13 · 14 · 15 · 17)", "param": {}},
+    {"key": "근접 위험도", "desc": "최근접점(CPA)과 도달시간(TCPA)", "param": {}},
+)
+
+SDS_JOIN_LIBRARY = (
+    {"key": "프레임 × AIS", "desc": "프레임마다 시각이 가장 가까운 AIS 씬을 붙임", "param": {}},
+    {"key": "허용오차", "desc": "이 시간차를 넘으면 짝이 없는 것으로 본다",
+     "param": {"name": "허용 시간차", "key": "toleranceS", "min": 0, "max": 60, "unit": "초", "default": 1}},
+    {"key": "무매칭 처리", "desc": "허용오차를 넘은 프레임을 버림 — 끄면 그대로 통과", "param": {}},
+)
+
+# 프리셋이 쓰는 단계. FE 가 이 목록으로 단계 진입점을 그린다.
+STAGES_BY_PRESET = {
+    PRESET_GENERIC: ("preprocess", "filter", "generate", "gate", "assemble"),
+    PRESET_SDS_COLREG: ("sds_video", "sds_ais", "sds_ais_clean", "sds_ais_scene",
+                        "sds_join", "sds_colreg",
+                        "preprocess", "filter", "generate", "gate", "assemble"),
+}
+
+
+def stages_for(preset):
+    """프리셋이 실행할 수 있는 단계. 모르는 프리셋은 공통 4단계로 떨어뜨린다."""
+    return STAGES_BY_PRESET.get(preset or PRESET_GENERIC, STAGES_BY_PRESET[PRESET_GENERIC])
+
 
 # ── 기하 변형 규칙 (심사 점수 무효화) ────────────────────────────────────────
 # 레코드가 만들어진 뒤 이미지를 기하적으로 바꾸면 이미 매긴 심사 점수가 그 레코드를
@@ -148,11 +223,24 @@ COORD_REMAP_STEP = "영역 좌표 보정"
 
 # ── 생성 ────────────────────────────────────────────────────────────────────
 # 생성/심사에 쓸 수 있는 모델. family 가 같으면 맹점이 겹쳐 심사 독립성이 약해진다.
+# hf_id 는 파이프라인이 이 모델을 **자동 배포**할 때 쓰는 실제 저장소 경로다. 이게 없으면
+# 카탈로그가 이름표일 뿐이라 노드가 무엇을 띄워야 할지 알 수 없다.
+# min_vram_gb 는 bf16 가중치 + KV cache 여유의 대략치 — 배포 전에 자원이 되는지 보고
+# 안 되면 잡을 띄우기 전에 거절한다(띄운 뒤 OOM 으로 죽으면 원인이 안 보인다).
 GENERATION_MODELS = (
-    {"id": "qwen8b", "name": "Qwen3-VL-8B-Instruct", "license": "apache-2.0", "family": "qwen"},
-    {"id": "qwen4b", "name": "Qwen3-VL-4B-Instruct", "license": "apache-2.0", "family": "qwen"},
-    {"id": "intern3", "name": "InternVL3-8B", "license": "mit", "family": "internvl"},
-    {"id": "gemma3", "name": "Gemma 3 12B", "license": "Gemma Terms", "family": "gemma"},
+    {"id": "qwen8b", "name": "Qwen3-VL-8B-Instruct", "license": "apache-2.0", "family": "qwen",
+     "hf_id": "Qwen/Qwen3-VL-8B-Instruct", "min_vram_gb": 24},
+    {"id": "qwen4b", "name": "Qwen3-VL-4B-Instruct", "license": "apache-2.0", "family": "qwen",
+     "hf_id": "Qwen/Qwen3-VL-4B-Instruct", "min_vram_gb": 16},
+    {"id": "intern3", "name": "InternVL3-8B", "license": "mit", "family": "internvl",
+     "hf_id": "OpenGVLab/InternVL3-8B", "min_vram_gb": 24},
+    {"id": "gemma3", "name": "Gemma 3 12B", "license": "Gemma Terms", "family": "gemma",
+     "hf_id": "google/gemma-3-12b-it", "min_vram_gb": 32},
+    # 소형 검증용. 실 데이터 규모로 돌리기 전에 배선·계약을 확인하는 용도라 품질 기대치는 낮다.
+    {"id": "qwen2vl2b", "name": "Qwen2-VL-2B-Instruct", "license": "apache-2.0", "family": "qwen",
+     "hf_id": "Qwen/Qwen2-VL-2B-Instruct", "min_vram_gb": 8},
+    {"id": "intern2b", "name": "InternVL2-2B", "license": "mit", "family": "internvl",
+     "hf_id": "OpenGVLab/InternVL2-2B", "min_vram_gb": 8},
 )
 
 GENERATION_TEMPLATES = (

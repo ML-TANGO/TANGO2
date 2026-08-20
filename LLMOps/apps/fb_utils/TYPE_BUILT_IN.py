@@ -66,6 +66,25 @@ SDS_LLAVA_CONVERT = "SDS VLM 학습 데이터 변환 (SDS scenarios → LLaVA JS
 # 데이터 파이프라인 노드. 다른 빌트인과 달리 사용자가 전처리 모달에서 직접 고르는 게 아니라
 # 파이프라인 캔버스의 노드가 실행 단위다 — 설정이 중첩 구조라 파라미터를 파일로 넘긴다.
 DP_PREP = "데이터 파이프라인 - 전처리 노드 (Data Pipeline: prep node)"
+# 해양 COLREG 프리셋 전용 수집·조인 노드. 범용 전처리(DP_PREP)에 넣지 않고 따로 두는
+# 이유: 영상·AIS 는 이미지/PDF 와 입력 형태가 아예 다르고, 도메인 로직을 범용 노드에
+# 섞으면 다른 도메인을 붙일 때마다 그 노드가 계속 불어난다.
+DP_SDS_VIDEO = "데이터 파이프라인 - 항해 영상 수집 노드 (Data Pipeline: SDS video node)"
+DP_SDS_AIS = "데이터 파이프라인 - AIS 로그 수집 노드 (Data Pipeline: SDS AIS node)"
+# AIS 갈래도 영상 갈래처럼 단계마다 잡을 나눈다 — 노드가 독립 실행 단위가 아니면
+# 임계값만 바꿔 다시 돌리거나 단계별로 몇 건이 빠졌는지 볼 수 없다.
+DP_SDS_AIS_CLEAN = "데이터 파이프라인 - AIS 행 정제 노드 (Data Pipeline: SDS AIS clean node)"
+DP_SDS_AIS_SCENE = "데이터 파이프라인 - AIS 씬 구조화 노드 (Data Pipeline: SDS AIS scene node)"
+DP_SDS_JOIN = "데이터 파이프라인 - 프레임×AIS 조인 노드 (Data Pipeline: SDS join node)"
+DP_FILTER = "데이터 파이프라인 - 필터 노드 (Data Pipeline: filter node)"
+# COLREG 계산은 결정론 기하라 모델을 쓰지 않는다 — 생성 결과를 검증할 앵커이므로
+# 여기서 모델이 판단하면 모델의 답을 모델로 검증하는 꼴이 된다.
+DP_SDS_COLREG = "데이터 파이프라인 - COLREG 계산 노드 (Data Pipeline: SDS colreg node)"
+# 생성·심사는 VLM 서빙을 부른다. 배포·회수는 BE 가 하고 노드는 주소만 받는다
+# (잡이 배포하면 잡이 죽는 순간 배포가 고아가 되어 GPU 가 잠긴다).
+DP_GENERATE = "데이터 파이프라인 - 생성 노드 (Data Pipeline: generate node)"
+DP_JUDGE = "데이터 파이프라인 - VLM 심사 노드 (Data Pipeline: judge node)"
+DP_ASSEMBLE = "데이터 파이프라인 - 조립·내보내기 노드 (Data Pipeline: assemble node)"
 TEXT_AUGMENT = "텍스트 증강 (Text Augmentation)"
 TEXT_CLEANING = "텍스트 정제 (Text Cleaning)"
 TOKENIZATION_EMBEDDING = "토큰화 및 임베딩 생성 (Tokenization & Embedding Generation)"
@@ -110,6 +129,16 @@ PREPROCESSING_TFS_PARAM = {
     # 펼치면 helm --set 콤마·중괄호 이스케이프에 걸린다. BE 가 params.json 을 작업
     # 데이터셋에 써 두고 그 경로만 넘긴다.
     DP_PREP : ["params_path"],
+    DP_SDS_VIDEO : ["params_path"],
+    DP_SDS_AIS : ["params_path"],
+    DP_SDS_AIS_CLEAN : ["params_path"],
+    DP_SDS_AIS_SCENE : ["params_path"],
+    DP_SDS_JOIN : ["params_path"],
+    DP_FILTER : ["params_path"],
+    DP_SDS_COLREG : ["params_path"],
+    DP_GENERATE : ["params_path"],
+    DP_JUDGE : ["params_path"],
+    DP_ASSEMBLE : ["params_path"],
     TEXT_AUGMENT: ["text_data", "augmentation_rules"],
     TEXT_CLEANING: ["text_data", "cleaning_rules"],
     TOKENIZATION_EMBEDDING: ["text_data", "tokenization_method"],
@@ -147,6 +176,16 @@ PREPROCESSING_TFS_SCRIPT = {
     FORMAT_CONVERT : "format_convert.py",
     SDS_LLAVA_CONVERT : "sds_llava_convert.py",
     DP_PREP : "dp_prep.py",
+    DP_SDS_VIDEO : "dp_sds_video.py",
+    DP_SDS_AIS : "dp_sds_ais.py",
+    DP_SDS_AIS_CLEAN : "dp_sds_ais_clean.py",
+    DP_SDS_AIS_SCENE : "dp_sds_ais_scene.py",
+    DP_SDS_JOIN : "dp_sds_join.py",
+    DP_FILTER : "dp_filter.py",
+    DP_SDS_COLREG : "dp_colreg.py",
+    DP_GENERATE : "dp_generate.py",
+    DP_JUDGE : "dp_judge.py",
+    DP_ASSEMBLE : "dp_assemble.py",
     TEXT_AUGMENT: "text_augmentation.py",
     TEXT_CLEANING: "text_cleaning.py",
     TOKENIZATION_EMBEDDING: "tokenization_embedding.py",

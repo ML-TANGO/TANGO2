@@ -5,11 +5,13 @@
 돌리지 않고 외부 컨테이너에 위임하며, 여기서는 구성·판정·영속화를 맡는다.
 llm_evaluation / llm_model / llm_playground 와 동일한 FastAPI 팩토리 패턴.
 """
+import asyncio
 import logging
 
 import uvicorn
 from fastapi import FastAPI
 
+from data_pipeline import service
 from data_pipeline.route import data_pipelines
 from utils.resource import CustomResponse, CustomMiddleWare
 
@@ -34,6 +36,21 @@ def initialize_app():
             return "GET /data-pipelines/healthz" not in record.getMessage()
 
     logging.getLogger("uvicorn.access").addFilter(HealthCheckFilter())
+
+    # 노드 잡은 산출물을 파일로만 남기고 끝나므로, 끝났다는 사실이 우리에게 오지 않는다.
+    # 기동과 함께 리콘사일러를 띄워 running 실행을 주기적으로 마감한다.
+    # 태스크 핸들을 붙잡아 두는 이유: 지역 변수로 두면 GC 가 실행 중인 태스크를 거둬가
+    # 루프가 조용히 사라질 수 있다.
+    @app.on_event("startup")
+    async def _start_reconciler():
+        app.state.reconciler = asyncio.create_task(service.reconcile_loop())
+
+    @app.on_event("shutdown")
+    async def _stop_reconciler():
+        task = getattr(app.state, "reconciler", None)
+        if task:
+            task.cancel()
+
     return app
 
 

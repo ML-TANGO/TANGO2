@@ -17,7 +17,23 @@ import re, sys, subprocess, os
 DATA_PIPELINE_SCRIPT_PREFIX = "dp_"
 # 데이터 파이프라인 노드 빌트인 종류. TYPE_BUILT_IN 에 등록하는 것만으로는 부족하고
 # 여기 분기에 걸려야 실행 명령이 만들어진다(안 걸리면 command="" 로 파드만 뜨고 끝).
-DATA_PIPELINE_TFS = {TYPE_BUILT_IN.DP_PREP}
+DATA_PIPELINE_TFS = {
+    TYPE_BUILT_IN.DP_PREP,
+    TYPE_BUILT_IN.DP_SDS_VIDEO,
+    TYPE_BUILT_IN.DP_SDS_AIS,
+    TYPE_BUILT_IN.DP_SDS_AIS_CLEAN,
+    TYPE_BUILT_IN.DP_SDS_AIS_SCENE,
+    TYPE_BUILT_IN.DP_SDS_JOIN,
+    TYPE_BUILT_IN.DP_FILTER,
+    TYPE_BUILT_IN.DP_SDS_COLREG,
+    TYPE_BUILT_IN.DP_GENERATE,
+    TYPE_BUILT_IN.DP_JUDGE,
+    TYPE_BUILT_IN.DP_ASSEMBLE,
+}
+# 잡의 run_code 로 실행할 수 있는 노드 스크립트. 파이프라인은 노드가 늘어도 전처리
+# 프로젝트가 하나라, 무엇을 실행할지는 엔티티가 아니라 잡이 정한다. 등록된 것만
+# 허용해 /built_in 안의 임의 파일이 실행되지 않게 한다.
+DATA_PIPELINE_SCRIPTS = {TYPE_BUILT_IN.PREPROCESSING_TFS_SCRIPT[tf] for tf in DATA_PIPELINE_TFS}
 
 
 def get_job_parameter(run_parameter, unified_memory):
@@ -332,8 +348,16 @@ def create_preprocessing_job(pod_info: dict):
             # 데이터 파이프라인 노드(dp_*.py). 다른 빌트인과 달리 스케줄러가 입력 경로를
             # 덧붙이지 않는다 — 노드 설정은 기능 목록·순서·파라미터가 중첩된 구조라
             # BE 가 작업 데이터셋에 params.json 을 써 두고 --params_path 하나만 보낸다.
-            run_code = PATH.JF_PREPROCESSING_BUILT_IN_CODE_PATH.format(
-                RUN_CODE=TYPE_BUILT_IN.PREPROCESSING_TFS_SCRIPT[pod_info["built_in_data_tf"]])
+            #
+            # 실행할 스크립트는 **잡의 run_code** 로 정한다. 전처리 프로젝트는 파이프라인당
+            # 하나라 엔티티의 built_in_data_tf 는 대표값(DP_PREP)일 뿐이고, 그것으로 스크립트를
+            # 고르면 어느 노드를 눌러도 전처리 노드가 돌아 버린다.
+            # 다만 run_code 는 DB 를 거쳐 오므로 등록된 노드 스크립트로 한정한다 —
+            # 그대로 쓰면 /built_in 안의 임의 파일을 실행 경로로 삼을 수 있다.
+            script = os.path.basename(pod_info.get("run_code") or "")
+            if script not in DATA_PIPELINE_SCRIPTS:
+                script = TYPE_BUILT_IN.PREPROCESSING_TFS_SCRIPT[pod_info["built_in_data_tf"]]
+            run_code = PATH.JF_PREPROCESSING_BUILT_IN_CODE_PATH.format(RUN_CODE=script)
             _, run_code_type = os.path.splitext(run_code)
             run_command = job_run_command(run_code_type=run_code_type[1:], run_code=run_code, parameter=parameter)
 
