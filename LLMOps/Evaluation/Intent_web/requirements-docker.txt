@@ -1,0 +1,6 @@
+# torch 는 베이스 이미지(pytorch/pytorch)에 포함되어 있으므로 제외한다.
+transformers>=4.51.0
+peft>=0.11.0
+datasets>=2.18.0
+accelerate>=0.30.0
+bitsandbytes>=0.43.0

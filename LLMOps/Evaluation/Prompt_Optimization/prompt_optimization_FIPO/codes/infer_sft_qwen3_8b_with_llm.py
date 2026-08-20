@@ -64,7 +64,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 DEFAULT_ADAPTER_PATH = (
     "/scratch/x3397a11/minkyu/workspace/ETRI/promptopti/model/sft/checkpoint-5625"
 )
-DEFAULT_GENERATOR    = "meta-llama/Llama-2-7b-chat-hf"
+DEFAULT_GENERATOR    = "Q"
 DEFAULT_LOG_DIR      = (
     "/scratch/x3397a11/minkyu/workspace/ETRI/promptopti/FIPO_Project/inference"
 )
@@ -190,7 +190,6 @@ def load_optimizer(adapter_path: str, device: str):
     model = PeftModel.from_pretrained(base, adapter_path)
     model.eval()
     return tok, model
-
 
 def load_generator(model_name: str, device: str):
     print(f"\n[Generator 로드] {model_name}")

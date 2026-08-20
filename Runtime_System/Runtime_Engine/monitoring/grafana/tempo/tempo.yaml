@@ -1,0 +1,62 @@
+server:
+  grpc_server_max_recv_msg_size: 209715200
+  grpc_server_max_send_msg_size: 209715200
+  http_listen_port: 3200
+  log_level: info
+
+memberlist:
+  bind_port: 7946
+  join_members: []
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        http:
+          endpoint: 0.0.0.0:4318
+        grpc:
+          endpoint: 0.0.0.0:4317
+          max_recv_msg_size_mib: 200
+
+metrics_generator:
+  registry:
+    external_labels:
+      source: tempo
+  storage:
+    path: /var/tempo/generator/wal
+  traces_storage:
+    path: /var/tempo/generator/traces
+
+ingester:
+  trace_idle_period: 10s
+  max_block_bytes: 10485760
+  max_block_duration: 5m
+
+compactor:
+  compaction:
+    block_retention: 168h  # 7d
+
+storage:
+  trace:
+    backend: local
+    wal:
+      path: /var/tempo/wal
+    local:
+      path: /var/tempo/blocks
+
+query_frontend:
+  search:
+    concurrent_jobs: 16
+    max_duration: 168h
+
+querier:
+  max_concurrent_queries: 8
+  frontend_worker:
+    frontend_address: 127.0.0.1:9095
+    grpc_client_config:
+      max_send_msg_size: 209715200
+
+overrides:
+  defaults:
+    metrics_generator:
+      processors: ['local-blocks']

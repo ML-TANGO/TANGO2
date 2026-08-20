@@ -1,0 +1,51 @@
+model: google/gemma-4-12B-it
+load_in_4bit: true
+data_path: data/logickor_sft_high_converted.jsonl
+max_seq_length: 4096
+
+lora:
+  r: 32
+  alpha: 64
+  dropout: 0.0
+  require_language_model_only: true
+  use_gradient_checkpointing: true
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
+
+split:
+  train_ratio: 0.9
+
+training:
+  cuda_visible_devices: "3"
+  num_train_epochs: 4
+  learning_rate: 5.0e-5
+  lr_scheduler_type: cosine
+  warmup_ratio: 0.03
+  optim: adamw_torch
+  weight_decay: 0.0
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 16
+  gradient_checkpointing: true
+  logging_steps: 10
+  eval_steps: 20
+  save_checkpoints: false
+  save_steps: 0
+  save_total_limit: 0
+  bf16: true
+  fp16: false
+  # TRL does not support assistant_only_loss for Gemma4 vision-language wrappers.
+  assistant_only_loss: false
+  # TRL multiprocessing map can fail to pickle Gemma4/Unsloth config objects.
+  dataset_num_proc: null
+
+early_stopping:
+  enabled: false
+  patience: 3
+  threshold: 0.0

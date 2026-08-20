@@ -8,3 +8,7 @@ scrape_configs:
       - targets: ['192.168.51.196:8002']   # triton prometheus metrics server address
         labels:
           service: 'triton'
+
+  - job_name: 'otel-spanmetrics'
+    static_configs:
+      - targets: ['otel-collector:8889']

@@ -1,0 +1,11 @@
+{
+  "config_path": "configs/train_gemma4_e4b_sft.yaml",
+  "run_dir": "runs/gemma4_e4b_sft_high",
+  "seed": "42",
+  "gpu": "0",
+  "gen_model_len": "4096",
+  "judge_model": "gemma",
+  "judge_model_len": "8192",
+  "mode": "debug",
+  "train_fraction": "0.01"
+}

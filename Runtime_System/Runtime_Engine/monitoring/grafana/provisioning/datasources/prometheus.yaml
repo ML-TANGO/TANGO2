@@ -6,3 +6,21 @@ datasources:
     url: http://prometheus:9090
     isDefault: true
     editable: false
+
+  - name: Tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    jsonData:
+      httpMethod: GET
+      serviceMap:
+        datasourceUid: Prometheus
+      tracesToMetrics:
+        datasourceUid: Prometheus
+        tags:
+          - service.name
+          - triton.model_name
+          - triton.model_version
+          - triton.stage
+      nodeGraph:
+        enabled: true
