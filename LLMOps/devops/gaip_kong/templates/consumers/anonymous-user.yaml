@@ -2,7 +2,11 @@ apiVersion: configuration.konghq.com/v1
 kind: KongConsumer
 metadata:
   name: anonymous-user
-  namespace: jonathan-kong
+  # namespace 를 'jonathan-kong' 리터럴로 두면 다른 namespace 에 Kong 을 하나 더 설치할 때
+  # helm 이 서빙 release 소유의 KongConsumer 를 흡수하려다 실패한다(ownership metadata).
+  namespace: {{ template "kong.namespace" . }}
   annotations:
-    kubernetes.io/ingress.class: {{ template "kong.namespace" . }}
+    # ingress class 는 namespace 가 아니라 global.developer(= IngressClass 이름)다.
+    # 서빙은 ns 명과 class 명이 같아 우연히 동작했다.
+    kubernetes.io/ingress.class: {{ .Values.global.developer }}
 username: anonymous-user

@@ -121,7 +121,7 @@ async def start_infer_job(
     platform_model_id: int,
     params: dict[str, Any],
     gpu_count: int = 1,
-    namespace: str = "jonathan-system",
+    namespace: str = settings.SYSTEM_NAMESPACE,
     env_overrides: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Launch a partner pod via fb_external_container /api/v1/jobs.

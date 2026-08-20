@@ -8,7 +8,7 @@ metadata:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: jfb-analyzer-cluster-role
+  name: {{ .Values.global.jfb.namespace }}-jfb-analyzer-cluster-role
   annotations:
     rbac.authorization.kubernetes.io/autoupdate: "true"
   labels:
@@ -54,12 +54,12 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: jfb-analyzer-cluster-role-binding
+  name: {{ .Values.global.jfb.namespace }}-jfb-analyzer-cluster-role-binding
 subjects:
 - kind: ServiceAccount
   name:  jfb-analyzer-sa
   namespace: {{ .Values.global.jfb.namespace }}
 roleRef:
   kind: ClusterRole
-  name: jfb-analyzer-cluster-role
+  name: {{ .Values.global.jfb.namespace }}-jfb-analyzer-cluster-role
   apiGroup: rbac.authorization.k8s.io

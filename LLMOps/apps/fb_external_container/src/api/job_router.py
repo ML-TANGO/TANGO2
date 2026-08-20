@@ -9,10 +9,15 @@ from __future__ import annotations
 
 from typing import Any
 
+import os
 import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+# 서빙/개발 인스턴스 분리 — 요청에 namespace 가 없을 때 쓰는 이 인스턴스의 플랫폼 ns.
+# 리터럴이면 개발 인스턴스가 서빙 ns 로 잡을 띄운다. 미주입 시 기존 리터럴로 폴백.
+_PLATFORM_NAMESPACE = os.environ.get("JF_SYSTEM_NAMESPACE") or "jonathan-system"
 
 # output_subdir 는 /output/<여기>/ 단일 경로 세그먼트 + commit metadata 로 흐른다.
 # traversal 차단(첫 글자 영숫자 → leading-dot 거부, `/`·`\`·null 불허) + 길이 cap.
@@ -76,7 +81,7 @@ class StartJobRequest(BaseModel):
     workspace_id: int = Field(ge=1)
     # Defaults to the platform namespace; callers running multi-namespace
     # workloads override this per request.
-    namespace: str = Field(default="jonathan-system", min_length=1)
+    namespace: str = Field(default=_PLATFORM_NAMESPACE, min_length=1)
     params: dict[str, Any] = Field(default_factory=dict)
     # Optional resource override — frontend FINETUNING_SETTING 모달이 보낸
     # instance/gpu 선택값. None 이면 manifest.spec.resources default 가 그대로
@@ -293,7 +298,7 @@ class DeployRequest(BaseModel):
     manifest_name: str = Field(min_length=1)
     manifest_version: str = Field(min_length=1)
     workspace_id: int = Field(ge=1)
-    namespace: str = Field(default="jonathan-system", min_length=1)
+    namespace: str = Field(default=_PLATFORM_NAMESPACE, min_length=1)
     # infer pod 의 job_id (lifecycle.JobRecord 의 platform job_id). 없으면
     # tracker 에서 service_family 기준으로 paired infer job 자동 매칭 시도.
     infer_job_id: Optional[str] = None

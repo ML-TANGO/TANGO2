@@ -7,10 +7,15 @@ are documented inline.
 
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# 서빙/개발 인스턴스 분리 — 플랫폼 ns 는 jfb-settings 의 JF_SYSTEM_NAMESPACE 로 주입된다.
+# 미주입 환경에서는 기존 리터럴로 폴백하므로 기존 배포의 동작은 바뀌지 않는다.
+_PLATFORM_NAMESPACE = os.environ.get("JF_SYSTEM_NAMESPACE") or "jonathan-system"
 
 
 class Settings(BaseSettings):
@@ -27,7 +32,7 @@ class Settings(BaseSettings):
     # fb_scheduler s2s endpoint — launch / cleanup trigger. Override per env
     # via JF_FB_SCHEDULER_URL when the scheduler lives outside jonathan-system.
     fb_scheduler_url: str = Field(
-        default="http://jfb-app-scheduler-svc.jonathan-system.svc.cluster.local:80",
+        default=f"http://jfb-app-scheduler-svc.{_PLATFORM_NAMESPACE}.svc.cluster.local:80",
         alias="JF_FB_SCHEDULER_URL",
     )
 
@@ -35,7 +40,7 @@ class Settings(BaseSettings):
     # POST {llm_model_bff_url}/api/models/{model_id}/external-commit 호출.
     # Override per env via JF_LLM_MODEL_BFF_URL.
     llm_model_bff_url: str = Field(
-        default="http://jfb-llm-model-svc.jonathan-system.svc.cluster.local:80",
+        default=f"http://jfb-llm-model-svc.{_PLATFORM_NAMESPACE}.svc.cluster.local:80",
         alias="JF_LLM_MODEL_BFF_URL",
     )
 

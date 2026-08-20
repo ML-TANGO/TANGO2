@@ -19,12 +19,16 @@ OWNER_NAME = os.environ.get("OWNER_NAME")
 # SP-7 Jump — 빈 값이면 일반 실행(전체 리셋). 값(task_id)이면 해당 노드부터 단일패스 재실행.
 RERUN_FROM_TASK = os.environ.get("RERUN_FROM_TASK") or ""
 
-PROJECT_DNS = "jfb-app-training-svc.jonathan-system.svc.cluster.local"
-PREPROCESSING_DNS = "jfb-app-preprocessing-svc.jonathan-system.svc.cluster.local"
-DEPLOYMENT_DNS = "jfb-app-deployment-svc.jonathan-system.svc.cluster.local"
-EXTERNAL_CONTAINER_DNS = "jfb-app-external-container-svc.jonathan-system.svc.cluster.local"
+# 서빙/개발 인스턴스 분리 — 이 잡 파드는 envFrom jfb-settings 로 JF_SYSTEM_NAMESPACE 를
+# 이미 받는다(pod.yaml). 리터럴로 두면 개발 인스턴스의 파이프라인 잡이 서빙 서비스를 호출한다.
+SYSTEM_NAMESPACE = os.environ.get("JF_SYSTEM_NAMESPACE") or "jonathan-system"
+
+PROJECT_DNS = f"jfb-app-training-svc.{SYSTEM_NAMESPACE}.svc.cluster.local"
+PREPROCESSING_DNS = f"jfb-app-preprocessing-svc.{SYSTEM_NAMESPACE}.svc.cluster.local"
+DEPLOYMENT_DNS = f"jfb-app-deployment-svc.{SYSTEM_NAMESPACE}.svc.cluster.local"
+EXTERNAL_CONTAINER_DNS = f"jfb-app-external-container-svc.{SYSTEM_NAMESPACE}.svc.cluster.local"
 # GenAI 통합 파이프라인 신규 task_type(finetuning/quantize/llm_deploy)용.
-LLM_MODEL_DNS = "jfb-llm-model-svc.jonathan-system.svc.cluster.local"
-RESOURCE_DNS = "jfb-app-resource-svc.jonathan-system.svc.cluster.local"
+LLM_MODEL_DNS = f"jfb-llm-model-svc.{SYSTEM_NAMESPACE}.svc.cluster.local"
+RESOURCE_DNS = f"jfb-app-resource-svc.{SYSTEM_NAMESPACE}.svc.cluster.local"
 # llm_deploy(cluster) 노드 → Playground s2s 배포(spec #4).
-LLM_PLAYGROUND_DNS = "jfb-llm-playground-svc.jonathan-system.svc.cluster.local"
+LLM_PLAYGROUND_DNS = f"jfb-llm-playground-svc.{SYSTEM_NAMESPACE}.svc.cluster.local"

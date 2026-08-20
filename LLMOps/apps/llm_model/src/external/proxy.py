@@ -8,11 +8,16 @@ etc.) later only touches this file.
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 import httpx
 
 logger = logging.getLogger(__name__)
+
+# 서빙/개발 인스턴스 분리 — 플랫폼 ns 는 jfb-settings 의 JF_SYSTEM_NAMESPACE 로 주입된다.
+# 미주입 환경에서는 기존 리터럴로 폴백하므로 기존 배포의 동작은 바뀌지 않는다.
+_PLATFORM_NAMESPACE = os.environ.get("JF_SYSTEM_NAMESPACE") or "jonathan-system"
 
 
 class ExternalContainerError(RuntimeError):
@@ -87,7 +92,7 @@ class ExternalContainerClient:
         manifest_version: str,
         workspace_id: int,
         params: dict[str, Any],
-        namespace: str = "jonathan-system",
+        namespace: str = _PLATFORM_NAMESPACE,
         instance_id: int | None = None,
         instance_count: int | None = None,
         gpu_count: int | None = None,
@@ -149,7 +154,7 @@ class ExternalContainerClient:
         manifest_name: str,
         manifest_version: str,
         workspace_id: int,
-        namespace: str = "jonathan-system",
+        namespace: str = _PLATFORM_NAMESPACE,
         infer_job_id: str | None = None,
         payload: dict[str, Any] | None = None,
         timeout: float = 60.0,

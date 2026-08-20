@@ -53,7 +53,7 @@ class StartJobBody(BaseModel):
     manifest_name: str = Field(min_length=1)
     manifest_version: str = Field(min_length=1)
     workspace_id: int = Field(ge=1)
-    namespace: str = Field(default="jonathan-system", min_length=1)
+    namespace: str = Field(default=settings.SYSTEM_NAMESPACE, min_length=1)
     params: dict[str, Any] = Field(default_factory=dict)
     # Optional GPU/instance override — frontend FINETUNING_SETTING 모달이 제공.
     # 누락 시 manifest 의 spec.resources default 가 그대로 사용된다.
@@ -686,7 +686,7 @@ class DeployBody(BaseModel):
     manifest_name: str = Field(min_length=1)
     manifest_version: str = Field(min_length=1)
     workspace_id: int = Field(ge=1)
-    namespace: str = Field(default="jonathan-system", min_length=1)
+    namespace: str = Field(default=settings.SYSTEM_NAMESPACE, min_length=1)
     # infer pod 의 job_id (lifecycle 의 platform job_id). 없으면 service_family
     # 기준 자동 매칭. 둘 다 없으면 fb_external_container 가 404.
     infer_job_id: Optional[str] = None

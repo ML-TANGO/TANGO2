@@ -243,7 +243,10 @@ PROJECT_POD_SVC_NAME = "{POD_NAME}-{TOOL_TYPE}"
 PROJECT_POD_USER_INGRESS_NAME = "{SVC_NAME}-additional"
 
 # WORKSPACE
-WORKSPACE_NAMESPACE = "jonathan-system-{WORKSPACE_ID}"
+# 워크스페이스 ns 는 생성측(fb_workspace/service.py:410)이 f"{JF_SYSTEM_NAMESPACE}-{id}" 로 만든다.
+# 소비측 37곳이 리터럴 "jonathan-system-" 을 쓰면 개발 인스턴스가 서빙 인스턴스의
+# 워크스페이스 ns 를 조회·패치·삭제하게 되므로 생성측과 같은 기준값에서 파생시킨다.
+WORKSPACE_NAMESPACE = utils.settings.SYSTEM_NAMESPACE + "-{WORKSPACE_ID}"
 
 
 

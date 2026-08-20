@@ -6,9 +6,14 @@ llm_model.external.proxy 와 동일 계약(s2s) — 평가 오케스트레이션
 """
 from __future__ import annotations
 
+import os
 from typing import Any
 
 import httpx
+
+# 서빙/개발 인스턴스 분리 — 플랫폼 ns 는 jfb-settings 의 JF_SYSTEM_NAMESPACE 로 주입된다.
+# 미주입 환경에서는 기존 리터럴로 폴백하므로 기존 배포의 동작은 바뀌지 않는다.
+_PLATFORM_NAMESPACE = os.environ.get("JF_SYSTEM_NAMESPACE") or "jonathan-system"
 
 
 class ExternalContainerError(RuntimeError):
@@ -32,7 +37,7 @@ class ExternalContainerClient:
         manifest_version: str,
         workspace_id: int,
         params: dict[str, Any],
-        namespace: str = "jonathan-system",
+        namespace: str = _PLATFORM_NAMESPACE,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "manifest_name": manifest_name,

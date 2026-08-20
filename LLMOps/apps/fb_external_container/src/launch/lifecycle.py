@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -93,7 +94,10 @@ def _pop_reserved(params: dict[str, Any], key: str) -> dict[str, Any]:
     return {}
 
 
-_PLATFORM_DEFAULT_NAMESPACE = "jonathan-system"
+# 서빙/개발 인스턴스 분리 — jfb-settings 의 JF_SYSTEM_NAMESPACE 가 이 인스턴스의 플랫폼 ns.
+# 리터럴로 두면 개발 인스턴스가 서빙의 워크스페이스 ns(jonathan-system-{id})에 파트너
+# 파드를 띄우고 서빙 PVC 를 mount 하게 된다. 미주입 환경에서는 기존 리터럴로 폴백.
+_PLATFORM_DEFAULT_NAMESPACE = os.environ.get("JF_SYSTEM_NAMESPACE") or "jonathan-system"
 
 
 def _resolve_namespace(
