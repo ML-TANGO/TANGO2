@@ -25,6 +25,7 @@ from utils.crypt import front_cipher
 from utils import llm_deployment
 from utils.redis import get_redis_client_async
 from utils.workspace_resource import get_workspace_instance_total_info
+from utils.msa_db import db_dashboard
 from playground import dual_metrics
 from utils.external_client import (
     start_infer_job, cancel_infer_job, run_inference, get_job_status,
@@ -206,10 +207,61 @@ async def create_playground(workspace_id, name, description, access, user_name=N
         traceback.print_exc()
         return False
 
+async def _resolve_deploy_instance(workspace_id, min_vram_gb, model_gpu_count):
+    """호출자가 인스턴스 표를 몰라도 되게, 이 배포를 감당할 인스턴스를 서버가 고른다.
+
+    학습 데이터 파이프라인의 자동 배포는 "이 모델을 띄워라"만 알지 인스턴스 id 를 모른다.
+    거절은 **띄우기 전에** 해야 한다 — 배포가 올라간 뒤 OOM 으로 죽으면 사용자에게는
+    "실패"만 보이고 원인(VRAM 부족)이 남지 않는다.
+
+    고르는 기준:
+      1. GPU 인스턴스만 — CPU 인스턴스에 vLLM 을 올릴 수 없다.
+      2. `gpu_allocate x GPU 한 장 VRAM x 할당 장수` 가 min_vram_gb 이상.
+      3. 조건을 만족하는 것 중 **가장 작은 것** — 큰 인스턴스를 먼저 먹으면 뒤이어 올
+         큰 모델이 갈 곳을 잃는다(생성+심사 2개를 연달아 띄운다).
+      4. 그중 지금 여유가 있는 것.
+    """
+    rows = await db_dashboard.get_workspace_instance_capacity(workspace_id) or []
+    gpu_rows = [r for r in rows if r.get("instance_type") == TYPE.INSTANCE_TYPE_GPU]
+    if not gpu_rows:
+        raise Exception("워크스페이스에 GPU 인스턴스가 없습니다 — 관리자에게 할당을 요청하세요")
+
+    gpu_count = max(int(model_gpu_count or 1), 1)
+    scored = []
+    for r in gpu_rows:
+        per_gpu_gb = float(r.get("gpu_memory_mb") or 0) / 1024.0
+        # gpu_allocate 는 인스턴스 한 개당 장수. 여러 장을 요청하면 그만큼 합산된다.
+        total_gb = per_gpu_gb * float(r.get("gpu_allocate") or 0) * gpu_count
+        scored.append((total_gb, r))
+    scored.sort(key=lambda x: x[0])
+
+    need = float(min_vram_gb or 0)
+    fits = [(gb, r) for gb, r in scored if gb >= need] if need else scored
+    if not fits:
+        best_gb, best = scored[-1]
+        raise Exception(
+            f"이 모델은 VRAM {int(need)}GB 가 필요한데 워크스페이스에서 가장 큰 인스턴스가 "
+            f"{best.get('instance_name')} (GPU {gpu_count}장 합산 {best_gb:.0f}GB)입니다. "
+            f"더 작은 모델을 고르거나 GPU 할당을 늘리세요")
+
+    last_reason = None
+    for gb, r in fits:
+        info = await get_workspace_instance_total_info(
+            instance_id=r["id"], workspace_id=workspace_id,
+            instance_allocate=r.get("instance_allocate") or 0)
+        if info.get("gpu_available"):
+            return r["id"]
+        last_reason = f"{r.get('instance_name')} 는 지금 GPU 여유가 없습니다"
+    raise Exception(
+        (last_reason or "가용 인스턴스가 없습니다")
+        + " — 다른 배포가 끝나기를 기다리거나 실행 중인 배포를 정리하세요")
+
+
 async def pipeline_deploy(workspace_id, model_id, user_name, model_instance_id,
                           model_commit_id=None, name=None,
                           model_instance_count=1, model_gpu_count=1,
-                          prompt_system_message=None):
+                          prompt_system_message=None,
+                          model_huggingface_id=None, min_vram_gb=None):
     """파이프라인(통합 파이프라인 llm_deploy 노드)의 s2s 클러스터 배포(spec #4).
     create → 옵션(모델 바인딩 + deployment_run) → start 를 원자적으로 수행한다.
     배포 로직 자체는 기존 서비스 함수(update_playground_options / start_playground)를
@@ -220,16 +272,30 @@ async def pipeline_deploy(workspace_id, model_id, user_name, model_instance_id,
         raise Exception(f"deploy user not found: {user_name}")
     owner_id = user.get("id")
 
-    # commit 미지정 시 모델 latest_commit_id 로 해석 — internal helm 배포 경로
-    # (utils.llm_deployment)는 model_type=commit 에서 commit 을 무조건 deref 하므로
-    # None 이면 크래시. external 경로는 자체 폴백이 있으나 양쪽 안전하게 여기서 채운다.
-    if model_commit_id is None:
-        model_row = await db.get_model(model_id=model_id)
-        model_commit_id = (model_row or {}).get("latest_commit_id")
-    if model_commit_id is None:
-        raise Exception(f"model {model_id} has no commit to deploy")
+    # 배포 대상은 학습완료 모델(allm commit) 또는 huggingface 저장소 둘 중 하나.
+    # 라우터 DTO 가 택일을 강제하지만, 서비스 함수를 직접 부르는 경로도 막아 둔다.
+    is_hf = bool(model_huggingface_id)
+    if is_hf == bool(model_id):
+        raise Exception("model_id 와 model_huggingface_id 중 정확히 하나를 지정하세요")
 
-    deploy_name = name or f"pipeline-deploy-model{model_id}"
+    if not is_hf:
+        # commit 미지정 시 모델 latest_commit_id 로 해석 — internal helm 배포 경로
+        # (utils.llm_deployment)는 model_type=commit 에서 commit 을 무조건 deref 하므로
+        # None 이면 크래시. external 경로는 자체 폴백이 있으나 양쪽 안전하게 여기서 채운다.
+        if model_commit_id is None:
+            model_row = await db.get_model(model_id=model_id)
+            model_commit_id = (model_row or {}).get("latest_commit_id")
+        if model_commit_id is None:
+            raise Exception(f"model {model_id} has no commit to deploy")
+
+    # 인스턴스 미지정(자동 배포 호출자)이면 서버가 고른다. VRAM 이 모자라면 여기서 끊긴다
+    # — playground 를 만들기 전에 끊어야 정리할 찌꺼기가 남지 않는다.
+    if not model_instance_id:
+        model_instance_id = await _resolve_deploy_instance(
+            workspace_id, min_vram_gb, model_gpu_count)
+
+    deploy_name = name or (f"pipeline-deploy-hf-{model_huggingface_id.split('/')[-1]}"[:60]
+                           if is_hf else f"pipeline-deploy-model{model_id}")
     res, playground_id = await db.insert_playground(
         workspace_id=workspace_id, name=deploy_name,
         description="pipeline auto-deploy", create_user_id=owner_id, access=1)
@@ -244,8 +310,11 @@ async def pipeline_deploy(workspace_id, model_id, user_name, model_instance_id,
             playground_id=playground_id, is_rag=False,
             # 시스템 프롬프트가 주어지면 run_prompt=True 로 서빙이 chat template 에 반영(없으면 현행 False).
             is_prompt=bool(prompt_system_message), accelerator=False,
-            model_type="commit", model_huggingface_id=None, model_huggingface_token=None,
-            model_allm_id=str(model_id), model_allm_commit_id=str(model_commit_id),
+            model_type="huggingface" if is_hf else "commit",
+            model_huggingface_id=model_huggingface_id if is_hf else None,
+            model_huggingface_token=None,
+            model_allm_id=None if is_hf else str(model_id),
+            model_allm_commit_id=None if is_hf else str(model_commit_id),
             # 샘플링 파라미터 기본값 — None 이면 배포 파드가 0 으로 vLLM SamplingParams 에 넘겨
             # ValueError(repetition_penalty>0, top_p in (0,1]) 로 서빙 lifespan 크래시. 유효 기본값 고정.
             model_info=None, model_temperature=0.7, model_top_p=1.0, model_top_k=-1,

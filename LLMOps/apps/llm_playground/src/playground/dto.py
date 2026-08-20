@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import Optional, List, Dict, Any, Literal
 import datetime
 from utils.TYPE import DEPLOYMENT_TYPE
@@ -118,9 +118,20 @@ class PipelineDeployInput(BaseModel):
     """파이프라인(통합 파이프라인 llm_deploy 노드)의 s2s 클러스터 배포 요청(spec #4).
     create→옵션(모델 바인딩)→start 를 원자적으로 수행. FE 수동 배포와 동일 경로 재사용."""
     workspace_id: int
-    model_id: int = Field(description="배포할 학습완료 모델(allm) id")
+    model_id: Optional[int] = Field(default=None, description="배포할 학습완료 모델(allm) id. huggingface 배포면 생략")
+    model_huggingface_id: Optional[str] = Field(
+        default=None,
+        description="huggingface 저장소 경로(예: Qwen/Qwen2-VL-2B-Instruct). 학습 데이터 "
+                    "파이프라인이 생성·심사용 VLM 을 자동 배포할 때 쓴다. model_id 와 택일.")
     user_name: str = Field(description="배포 소유자(파이프라인 실행 사용자, OWNER_NAME)")
-    model_instance_id: int = Field(description="모델 자원 인스턴스 id")
+    model_instance_id: Optional[int] = Field(
+        default=None,
+        description="모델 자원 인스턴스 id. 생략하면 워크스페이스 인스턴스 중 min_vram_gb 를 "
+                    "충족하는 것을 서버가 고른다(호출자가 인스턴스 표를 몰라도 되게).")
+    min_vram_gb: Optional[int] = Field(
+        default=None,
+        description="이 모델이 요구하는 최소 VRAM(GB). 인스턴스 자동 선택과 사전 거절에 쓴다 — "
+                    "띄운 뒤 OOM 으로 죽으면 사용자에게 원인이 보이지 않는다.")
     model_commit_id: Optional[int] = Field(default=None, description="배포할 commit id(생략 시 미지정)")
     name: Optional[str] = Field(default=None, description="배포명(생략 시 자동)")
     model_instance_count: Optional[int] = Field(default=1, description="인스턴스 할당 개수")
@@ -132,6 +143,13 @@ class PipelineDeployInput(BaseModel):
 
     class Config:
         protected_namespaces = ()
+
+    @model_validator(mode="after")
+    def _check_model_target(self):
+        """배포 대상은 정확히 하나 — 둘 다 주면 어느 쪽을 띄웠는지 기록과 실물이 갈린다."""
+        if bool(self.model_id) == bool(self.model_huggingface_id):
+            raise ValueError("model_id 와 model_huggingface_id 중 정확히 하나를 지정하세요")
+        return self
 
 class CreateDualSessionInput(BaseModel):
     """이중모델 추론 세션 생성(WBS 추론 4.2) — 프롬프트생성 모델(LLM1) + 추론 모델(LLM2)을
