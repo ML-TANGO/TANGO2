@@ -1,14 +1,18 @@
 """
 demo/app.py — VisionLanguageModelV2 SDS 데모 웹 애플리케이션
 
-세 가지 데이터셋 포맷을 자동 감지하여 지원한다.
+네 가지 데이터셋 포맷을 자동 감지하여 지원한다.
 
   [구 포맷 — 20260227]  input_data.csv + input_image.png + output_*.txt 5종
   [신 포맷 — 20250922]  input.csv (소문자) + frame_N.png + output.csv
   [신 포맷 — 20251031]  input.csv (대소문자) + frame_N.png + output.csv
+  [평면 포맷 — 20260728] csv/ png/ describe_ko/ advice_ko/ 4개 디렉토리에
+                         동일 stem 파일이 병렬 배치 (샘플 10,000개)
+                         ※ bbox_* 컬럼은 이미지와 다른 카메라 기준이라 바운딩박스를
+                           그리지 않는다. FLAT_BBOX_NOTICE 참고.
 
 레이아웃:
-  [상단 좌] 이미지 / CSV 테이블     [상단 우] 데이터셋 탐색기 (+ 프레임 선택)
+  [상단 좌] 이미지 / CSV 테이블     [상단 우] 데이터셋 탐색기 (+ 프레임/인덱스 선택)
   ─────────────────────────────────────────────────────────────────────
   [중단 좌] 기대값 (출력유형 선택)   [중단 우] 모델 설정 + 출력유형
   ─────────────────────────────────────────────────────────────────────
@@ -21,6 +25,7 @@ demo/app.py — VisionLanguageModelV2 SDS 데모 웹 애플리케이션
 import gc
 import glob
 import os
+import random
 import re
 import sys
 import traceback
@@ -36,8 +41,9 @@ sys.path.insert(0, VLM_DIR)
 import gradio as gr
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-# 절대경로 대신 VLM_DIR 기준 상대경로로 산출
-DEFAULT_DATASET_PATH = os.path.normpath(os.path.join(VLM_DIR, "../dataset/20260227"))
+# 절대경로 대신 VLM_DIR 기준 상대경로로 산출.
+# 기본값을 평면 포맷으로 두면 시작 직후부터 인덱스 네비게이션이 표시된다.
+DEFAULT_DATASET_PATH = os.path.normpath(os.path.join(VLM_DIR, "../dataset/20260728"))
 CHECKPOINTS_ROOT     = os.path.join(VLM_DIR, "checkpoints")
 DEFAULT_VISION_MODEL = "openai/clip-vit-large-patch14-336"
 DEFAULT_LLM_MODEL    = "meta-llama/Llama-3.1-8B-Instruct"
@@ -55,6 +61,12 @@ OLD_OUTPUT_TYPES = [
 NEW_OUTPUT_TYPE  = "항해 상황인식"
 NEW_OUTPUT_TYPES = [NEW_OUTPUT_TYPE]
 
+# 평면 포맷 (20260728): 국문 2종 (describe_ko / advice_ko)
+FLAT_OUTPUT_TYPES = [
+    "한글 해상상황묘사",
+    "한글 항해조력메시지",
+]
+
 OUTPUT_TYPES = OLD_OUTPUT_TYPES  # UI 초기값 (구 포맷 기준)
 
 FILE_MAP = {
@@ -64,6 +76,30 @@ FILE_MAP = {
     "한글 항해조력메시지": "output_advice_kor.txt",
     "간결 항해조력메시지": "output_advice_compact.txt",
 }
+
+# 평면 포맷: 출력유형 → (디렉토리, 파일 접미사)
+FLAT_FILE_MAP = {
+    "한글 해상상황묘사":   ("describe_ko", ".describe_ko.txt"),
+    "한글 항해조력메시지": ("advice_ko",   ".advice_ko.txt"),
+}
+
+# 평면 포맷 판별에 필요한 최소 디렉토리
+FLAT_REQUIRED_DIRS = ("csv", "png")
+
+# 평면 포맷 샘플 드롭다운에 현재 인덱스 기준 앞뒤로 표시할 항목 수
+FLAT_WINDOW = 50
+
+# 평면 포맷(20260728)의 bbox_* 컬럼은 PNG와 다른 카메라 기준으로 생성되어 있다.
+# 타선 1척 샘플 250건을 픽셀에서 검출해 비교한 결과 IoU 는 전 건 0 이었고
+# 박스 중심 거리는 중앙값 442px 였다. AIS 상대방위로 핀홀 모델을 적합하면
+# bbox 는 광학중심 562px(폭 약 1124 기준)에 R²=1.000 으로 맞는 반면,
+# 이미지 속 실제 선박은 광학중심 962px(1920 폭 기준)에 맞는다.
+# 따라서 이 포맷에서는 바운딩박스를 그리지 않고 안내만 표시한다.
+FLAT_BBOX_NOTICE = (
+    "⚠️ 이 데이터셋의 `bbox_*` 좌표는 이미지와 다른 카메라 기준으로 생성되어 "
+    "1920×1080 이미지 위치와 일치하지 않습니다. 바운딩박스를 표시하지 않습니다. "
+    "AIS 표와 모델 프롬프트에는 원본 값을 그대로 사용합니다."
+)
 
 PROMPT_MAP = {
     "영문 해상상황묘사":
@@ -100,6 +136,8 @@ CSV_KO_COLUMNS = {
     "bbox_y":       "BBox_Y",
     "bbox_width":   "BBox_W",
     "bbox_height":  "BBox_H",
+    "cpa":          "CPA(NM)",
+    "tcpa":         "TCPA(s)",
 }
 
 # ── Global model state ────────────────────────────────────────────────────────
@@ -220,8 +258,61 @@ def _natural_sort_key(s: str):
     return [int(c) if c.isdigit() else c.lower() for c in re.split(r"(\d+)", s)]
 
 
-def _detect_fmt(sample_dir: str) -> str:
-    """'new' (input.csv + output.csv) 또는 'old' (input_data.csv) 반환."""
+def _is_flat_dataset(dataset_path: str) -> bool:
+    """평면 포맷(20260728) 여부. csv/ 와 png/ 디렉토리가 모두 있으면 True."""
+    root = dataset_path.strip()
+    return all(os.path.isdir(os.path.join(root, d)) for d in FLAT_REQUIRED_DIRS)
+
+
+# 평면 포맷 샘플 stem 목록 캐시 (10,000개 파일 목록을 이벤트마다 재조회하지 않기 위함)
+_FLAT_CACHE: dict = {}
+
+
+def _flat_samples(dataset_path: str, refresh: bool = False) -> list:
+    """평면 포맷 데이터셋의 샘플 stem 목록을 정렬하여 반환 (캐시)."""
+    key = os.path.realpath(dataset_path.strip())
+    if refresh or key not in _FLAT_CACHE:
+        csv_dir = os.path.join(key, "csv")
+        if os.path.isdir(csv_dir):
+            _FLAT_CACHE[key] = sorted(
+                os.path.splitext(f)[0]
+                for f in os.listdir(csv_dir)
+                if f.endswith(".csv")
+            )
+        else:
+            _FLAT_CACHE[key] = []
+    return _FLAT_CACHE[key]
+
+
+def _flat_index_of(dataset_path: str, sample_name: str):
+    """평면 포맷에서 샘플 stem의 인덱스를 반환. 없으면 None."""
+    samples = _flat_samples(dataset_path)
+    try:
+        return samples.index(sample_name)
+    except ValueError:
+        return None
+
+
+def _flat_dropdown_update(samples: list, index: int):
+    """현재 인덱스 주변 창(window)만 담은 샘플 드롭다운 업데이트를 생성."""
+    if not samples:
+        return gr.update(choices=[], value=None)
+    index = max(0, min(len(samples) - 1, index))
+    lo = max(0, index - FLAT_WINDOW)
+    hi = min(len(samples), index + FLAT_WINDOW + 1)
+    return gr.update(choices=samples[lo:hi], value=samples[index])
+
+
+def _detect_fmt(dataset_path: str, sample_name: str = "") -> str:
+    """포맷을 감지한다.
+
+    'flat' — 평면 포맷 (20260728): 데이터셋 루트에 csv/ png/ 디렉토리
+    'new'  — 샘플 디렉토리에 input.csv + output.csv
+    'old'  — 샘플 디렉토리에 input_data.csv
+    """
+    if _is_flat_dataset(dataset_path):
+        return "flat"
+    sample_dir = os.path.join(dataset_path.strip(), sample_name)
     if os.path.exists(os.path.join(sample_dir, "input.csv")):
         return "new"
     return "old"
@@ -244,8 +335,20 @@ def _load_csv_normalized(path: str) -> pd.DataFrame:
 
 
 def _format_ais_df(df: pd.DataFrame, lang: str) -> str:
-    """정규화된 DataFrame으로 AIS 텍스트 생성. ship_type 컬럼이 있으면 포함."""
+    """정규화된 DataFrame으로 AIS 텍스트 생성.
+
+    ship_type 컬럼이 있으면 포함한다. cpa/tcpa 컬럼(평면 포맷 20260728)이 있으면
+    타선 항목에 함께 포함한다.
+    """
     has_type = "ship_type" in df.columns
+    has_cpa  = "cpa" in df.columns and "tcpa" in df.columns
+
+    def _cpa_str(row, en: bool) -> str:
+        if not has_cpa:
+            return ""
+        if en:
+            return f" | CPA:{float(row['cpa']):.4f}NM TCPA:{float(row['tcpa']):.2f}s"
+        return f" | CPA:{float(row['cpa']):.4f}NM TCPA:{float(row['tcpa']):.2f}초"
 
     if lang == "en":
         lines = ["[Vessel AIS Information]"]
@@ -269,7 +372,7 @@ def _format_ais_df(df: pd.DataFrame, lang: str) -> str:
                 lines.append(
                     f"- Nearby vessel (ID:{sid}{stype}) | Lat:{lat} Lon:{lon} | "
                     f"Speed:{spd} Heading:{hdg} | Size:{lw} Draft:{draft} | "
-                    f"BoundingBox:[{bbox}]"
+                    f"BoundingBox:[{bbox}]{_cpa_str(row, True)}"
                 )
     else:
         lines = ["[선박 AIS 정보]"]
@@ -292,7 +395,8 @@ def _format_ais_df(df: pd.DataFrame, lang: str) -> str:
                         f"w={row['bbox_width']:.0f} h={row['bbox_height']:.0f}")
                 lines.append(
                     f"- 주변선박 (ID:{sid}{stype}) | 위도:{lat} 경도:{lon} | "
-                    f"속도:{spd} 방향:{hdg} | 선체:{lw} 흘수:{draft} | 바운딩박스:[{bbox}]"
+                    f"속도:{spd} 방향:{hdg} | 선체:{lw} 흘수:{draft} | "
+                    f"바운딩박스:[{bbox}]{_cpa_str(row, False)}"
                 )
     return "\n".join(lines)
 
@@ -300,22 +404,47 @@ def _format_ais_df(df: pd.DataFrame, lang: str) -> str:
 # ── Dataset helpers ───────────────────────────────────────────────────────────
 
 def scan_dataset(path: str):
-    """데이터셋 경로를 스캔하여 샘플 디렉토리 목록을 반환."""
-    path = path.strip()
-    if not os.path.isdir(path):
-        return gr.update(choices=[], value=None), f"❌ 경로를 찾을 수 없습니다: `{path}`"
+    """데이터셋 경로를 스캔하여 샘플 목록을 반환.
 
+    반환값 5개: (샘플 드롭다운, 상태 메시지, 인덱스 네비 표시여부, 인덱스 값, 전체 개수 라벨)
+    """
+    path = path.strip()
+    # 레이아웃 블록(Column)의 표시 여부는 gr.update() 가 아닌 컴포넌트 인스턴스로 갱신한다.
+    # Gradio 6 에서 gr.update(visible=...) 는 레이아웃 블록에 적용되지 않는다.
+    _hide_nav = (gr.Column(visible=False), 0, "")
+
+    if not os.path.isdir(path):
+        return (gr.update(choices=[], value=None),
+                f"❌ 경로를 찾을 수 없습니다: `{path}`", *_hide_nav)
+
+    # ── 평면 포맷 (20260728): csv/ 의 stem 목록이 곧 샘플 목록 ──────────────
+    if _is_flat_dataset(path):
+        samples = _flat_samples(path, refresh=True)
+        if not samples:
+            return (gr.update(choices=[], value=None),
+                    "⚠️ `csv/` 디렉토리에 샘플이 없습니다.", *_hide_nav)
+        return (
+            _flat_dropdown_update(samples, 0),
+            f"✅ **{len(samples):,}개** 샘플 발견 (평면 포맷)",
+            gr.Column(visible=True),
+            0,
+            f"총 {len(samples):,}개 · 인덱스 0 ~ {len(samples) - 1}",
+        )
+
+    # ── 디렉토리 포맷 (20250922 / 20251031 / 20260227) ─────────────────────
     samples = sorted(
         [d for d in os.listdir(path) if os.path.isdir(os.path.join(path, d))],
         key=_natural_sort_key,
     )
 
     if not samples:
-        return gr.update(choices=[], value=None), "⚠️ 샘플 디렉토리가 없습니다."
+        return (gr.update(choices=[], value=None),
+                "⚠️ 샘플 디렉토리가 없습니다.", *_hide_nav)
 
     return (
         gr.update(choices=samples, value=samples[0]),
         f"✅ **{len(samples)}개** 샘플 발견",
+        *_hide_nav,
     )
 
 
@@ -367,8 +496,27 @@ def load_sample(dataset_path: str, sample_name: str, frame: str = None):
     if not sample_name:
         return None, pd.DataFrame()
 
-    sample_dir = os.path.join(dataset_path.strip(), sample_name)
-    fmt = _detect_fmt(sample_dir)
+    root = dataset_path.strip()
+    fmt  = _detect_fmt(root, sample_name)
+
+    if fmt == "flat":
+        csv_path = os.path.join(root, "csv", f"{sample_name}.csv")
+        img_path = os.path.join(root, "png", f"{sample_name}.png")
+
+        df_raw = _load_csv_normalized(csv_path) if os.path.exists(csv_path) else None
+        image  = Image.open(img_path).convert("RGB") if os.path.exists(img_path) else None
+
+        # bbox_* 가 이미지 좌표계와 불일치하므로 박스를 그리지 않는다 (FLAT_BBOX_NOTICE).
+        if df_raw is not None:
+            df_display = df_raw.rename(columns=CSV_KO_COLUMNS)
+            if "자선여부" in df_display.columns:
+                df_display["자선여부"] = df_display["자선여부"].map({1: "✅ 자선", 0: "타선"})
+        else:
+            df_display = pd.DataFrame({"오류": [f"csv 없음: {sample_name}.csv"]})
+
+        return image, df_display
+
+    sample_dir = os.path.join(root, sample_name)
 
     if fmt == "new":
         if not frame:
@@ -430,8 +578,21 @@ def load_expected(
     if not sample_name or not output_type:
         return ""
 
-    sample_dir = os.path.join(dataset_path.strip(), sample_name)
-    fmt = _detect_fmt(sample_dir)
+    root = dataset_path.strip()
+    fmt  = _detect_fmt(root, sample_name)
+
+    if fmt == "flat":
+        entry = FLAT_FILE_MAP.get(output_type)
+        if entry is None:
+            return f"(지원하지 않는 출력 유형: {output_type})"
+        subdir, suffix = entry
+        path = os.path.join(root, subdir, f"{sample_name}{suffix}")
+        if not os.path.exists(path):
+            return f"(파일 없음: {subdir}/{sample_name}{suffix})"
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read().strip()
+
+    sample_dir = os.path.join(root, sample_name)
 
     if fmt == "new":
         if not frame:
@@ -459,8 +620,16 @@ def format_ais_text(
     dataset_path: str, sample_name: str, lang: str = "ko", frame: str = None
 ) -> str:
     """CSV를 자연어 형태로 포맷하여 모델 프롬프트에 포함할 텍스트 생성."""
-    sample_dir = os.path.join(dataset_path.strip(), sample_name)
-    fmt = _detect_fmt(sample_dir)
+    root = dataset_path.strip()
+    fmt  = _detect_fmt(root, sample_name)
+
+    if fmt == "flat":
+        csv_path = os.path.join(root, "csv", f"{sample_name}.csv")
+        if not os.path.exists(csv_path):
+            return ""
+        return _format_ais_df(_load_csv_normalized(csv_path), lang)
+
+    sample_dir = os.path.join(root, sample_name)
 
     if fmt == "new":
         if not frame:
@@ -600,8 +769,9 @@ def run_inference(
         history.append({"role": "assistant", "content": "⚠️ 샘플을 선택해주세요."})
         return history
 
-    sample_dir = os.path.join(dataset_path.strip(), sample_name)
-    fmt = _detect_fmt(sample_dir)
+    root       = dataset_path.strip()
+    fmt        = _detect_fmt(root, sample_name)
+    sample_dir = os.path.join(root, sample_name)
 
     lang     = "en" if "영문" in output_type else "ko"
     ais_text = format_ais_text(dataset_path, sample_name, lang=lang, frame=frame)
@@ -618,7 +788,9 @@ def run_inference(
     history.append({"role": "user", "content": user_msg})
 
     try:
-        if fmt == "new":
+        if fmt == "flat":
+            img_path = os.path.join(root, "png", f"{sample_name}.png")
+        elif fmt == "new":
             if not frame:
                 frames = _list_frames(sample_dir)
                 frame = frames[0] if frames else None
@@ -683,22 +855,43 @@ def run_inference(
 # ── UI event helpers ──────────────────────────────────────────────────────────
 
 def on_sample_change(dataset_path: str, sample_name: str, current_ot: str):
-    """샘플 선택 시 포맷 감지 → 프레임 드롭다운 / 출력유형 / 이미지 / 기대값 일괄 갱신."""
+    """샘플 선택 시 포맷 감지 → 프레임 드롭다운 / 출력유형 / 이미지 / 기대값 일괄 갱신.
+
+    반환값 9개: (이미지, CSV, 프레임DD, 출력유형Radio, 채팅유형Radio, 기대값,
+                 ot State, 인덱스, 이미지 안내문구)
+    """
     _default_ot = OLD_OUTPUT_TYPES[0]
     _empty = (
         None, pd.DataFrame(),
         gr.update(choices=[], value=None, visible=False),
         gr.update(choices=OLD_OUTPUT_TYPES, value=_default_ot),
         gr.update(choices=OLD_OUTPUT_TYPES, value=_default_ot),
-        "", _default_ot,
+        "", _default_ot, gr.update(), "",
     )
 
     if not sample_name:
         return _empty
 
     try:
-        sample_dir = os.path.join(dataset_path.strip(), sample_name)
-        fmt = _detect_fmt(sample_dir)
+        root = dataset_path.strip()
+        fmt  = _detect_fmt(root, sample_name)
+
+        if fmt == "flat":
+            ot  = current_ot if current_ot in FLAT_OUTPUT_TYPES else FLAT_OUTPUT_TYPES[0]
+            idx = _flat_index_of(root, sample_name)
+            img, df  = load_sample(dataset_path, sample_name)
+            expected = load_expected(dataset_path, sample_name, ot)
+            return (
+                img, df,
+                gr.update(choices=[], value=None, visible=False),
+                gr.update(choices=FLAT_OUTPUT_TYPES, value=ot),
+                gr.update(choices=FLAT_OUTPUT_TYPES, value=ot),
+                expected, ot,
+                gr.update() if idx is None else idx,
+                FLAT_BBOX_NOTICE,
+            )
+
+        sample_dir = os.path.join(root, sample_name)
 
         if fmt == "new":
             frames = _list_frames(sample_dir)
@@ -710,7 +903,7 @@ def on_sample_change(dataset_path: str, sample_name: str, current_ot: str):
                 gr.update(choices=frames, value=frame, visible=True),
                 gr.update(choices=NEW_OUTPUT_TYPES, value=NEW_OUTPUT_TYPE),
                 gr.update(choices=NEW_OUTPUT_TYPES, value=NEW_OUTPUT_TYPE),
-                expected, NEW_OUTPUT_TYPE,
+                expected, NEW_OUTPUT_TYPE, gr.update(), "",
             )
         else:
             ot = current_ot if current_ot in OLD_OUTPUT_TYPES else _default_ot
@@ -721,7 +914,7 @@ def on_sample_change(dataset_path: str, sample_name: str, current_ot: str):
                 gr.update(choices=[], value=None, visible=False),
                 gr.update(choices=OLD_OUTPUT_TYPES, value=ot),
                 gr.update(choices=OLD_OUTPUT_TYPES, value=ot),
-                expected, ot,
+                expected, ot, gr.update(), "",
             )
     except Exception as exc:
         err_df = pd.DataFrame({"오류": [str(exc)]})
@@ -730,7 +923,7 @@ def on_sample_change(dataset_path: str, sample_name: str, current_ot: str):
             gr.update(choices=[], value=None, visible=False),
             gr.update(choices=OLD_OUTPUT_TYPES, value=_default_ot),
             gr.update(choices=OLD_OUTPUT_TYPES, value=_default_ot),
-            f"❌ 샘플 로드 실패: {exc}", _default_ot,
+            f"❌ 샘플 로드 실패: {exc}", _default_ot, gr.update(), "",
         )
 
 
@@ -750,22 +943,94 @@ def on_output_type_change(dataset_path: str, sample_name: str, output_type: str,
     return output_type, prompt, expected
 
 
+def flat_goto(dataset_path: str, index):
+    """평면 포맷에서 인덱스로 이동. (인덱스 값, 샘플 드롭다운 업데이트) 반환.
+
+    드롭다운 값이 바뀌면 sample_list.change 가 발생하여 나머지 UI가 갱신된다.
+    """
+    samples = _flat_samples(dataset_path)
+    if not samples:
+        return gr.update(), gr.update()
+
+    try:
+        i = int(index)
+    except (TypeError, ValueError):
+        i = 0
+    i = max(0, min(len(samples) - 1, i))
+
+    return i, _flat_dropdown_update(samples, i)
+
+
+def flat_step(dataset_path: str, index, delta: int):
+    """현재 인덱스에서 delta 만큼 이동 (범위를 벗어나면 양끝에서 멈춘다)."""
+    try:
+        cur = int(index)
+    except (TypeError, ValueError):
+        cur = 0
+    return flat_goto(dataset_path, cur + delta)
+
+
+def flat_random(dataset_path: str):
+    """평면 포맷에서 임의의 샘플로 이동."""
+    samples = _flat_samples(dataset_path)
+    if not samples:
+        return gr.update(), gr.update()
+    return flat_goto(dataset_path, random.randrange(len(samples)))
+
+
+def _initial_visibility(dataset_path: str):
+    """앱 시작 시점의 (프레임 드롭다운, 인덱스 네비게이션) 표시 여부를 결정한다.
+
+    Gradio 6 에서는 demo.load 가 페이지 로드 직후 visible 을 갱신하면 그 이후의
+    첫 번째 visible 변경이 프런트엔드에 반영되지 않는다. 따라서 초기 표시 여부는
+    빌드 시점에 확정하고, 로드 핸들러는 visible 을 전송하지 않는다.
+    """
+    try:
+        path = dataset_path.strip()
+        if _is_flat_dataset(path):
+            return False, True
+        subs = sorted(
+            (d for d in os.listdir(path) if os.path.isdir(os.path.join(path, d))),
+            key=_natural_sort_key,
+        )
+        if subs and _detect_fmt(path, subs[0]) == "new":
+            return True, False
+    except OSError:
+        pass
+    return False, False
+
+
+def _strip_visible(update):
+    """업데이트 dict 에서 visible 키를 제거한다. (demo.load 전용)"""
+    if isinstance(update, dict) and "visible" in update:
+        return {k: v for k, v in update.items() if k != "visible"}
+    return update
+
+
 # ── Gradio UI ─────────────────────────────────────────────────────────────────
 
 CUSTOM_CSS = """
     .section-title { font-size: 1rem; font-weight: 600; margin-bottom: 4px; }
     .csv-table { font-size: 0.82rem; }
     #expected-box textarea { font-size: 0.85rem; line-height: 1.6; }
+    .idx-total p { font-size: 0.8rem; opacity: 0.75; margin: 2px 0 0 2px; }
+    .img-notice p { font-size: 0.82rem; line-height: 1.5; margin: 4px 2px 0 2px;
+                    color: #92400e; background: #fef3c7; border-left: 3px solid #f59e0b;
+                    padding: 6px 10px; border-radius: 4px; }
 """
 
 
 def build_ui():
+    # 초기 표시 여부는 빌드 시점에 확정한다 (_initial_visibility 참고).
+    init_frame_visible, init_nav_visible = _initial_visibility(DEFAULT_DATASET_PATH)
+
     with gr.Blocks(title="VLM SDS Demo") as demo:
 
         gr.Markdown("# 🚢 ETRI Vessel Agent (SDS-VLM)", elem_classes="section-title")
         gr.Markdown(
             "선박 자율항행 지원을 위한 추론 데모입니다.  \n"
-            "Aivenautics 데이터셋 지원 포맷: **20250922·20251031** (구 포맷 — 프레임 선택 가능) / **20260227** (신 포맷)"
+            "Aivenautics 데이터셋 지원 포맷: **20250922·20251031** (구 포맷 — 프레임 선택 가능) / "
+            "**20260227** (신 포맷) / **20260728** (평면 포맷 — 인덱스 이동)"
         )
 
         # ── 상단: 이미지/CSV + 탐색기 ──────────────────────────────────────────
@@ -775,6 +1040,8 @@ def build_ui():
             with gr.Column(scale=3):
                 gr.Markdown("### 📸 입력 이미지", elem_classes="section-title")
                 img_display = gr.Image(label="이미지", height=320)
+                # 값이 빈 문자열이면 아무것도 렌더링되지 않으므로 visible 토글이 불필요하다.
+                img_notice = gr.Markdown("", elem_classes="img-notice")
                 gr.Markdown("### 📊 AIS 데이터", elem_classes="section-title")
                 csv_display = gr.Dataframe(
                     label="AIS",
@@ -810,18 +1077,32 @@ def build_ui():
                 scan_btn    = gr.Button("📂 스캔", variant="secondary", size="sm")
                 scan_status = gr.Markdown("")
 
+                # 평면 포맷 전용 인덱스 네비게이션 (평면 포맷일 때만 표시)
+                with gr.Column(visible=init_nav_visible) as index_nav_col:
+                    idx_number = gr.Number(
+                        value=0,
+                        precision=0,
+                        minimum=0,
+                        label="인덱스",
+                    )
+                    with gr.Row():
+                        prev_btn = gr.Button("◀ 이전", size="sm", scale=1)
+                        next_btn = gr.Button("다음 ▶", size="sm", scale=1)
+                        rand_btn = gr.Button("🎲 랜덤", size="sm", scale=1)
+                    idx_total_md = gr.Markdown("", elem_classes="idx-total")
+
                 sample_list = gr.Dropdown(
                     choices=[],
                     value=None,
                     label="샘플 목록",
                 )
 
-                # 신 포맷 전용 프레임 선택 (평소 숨김)
+                # 프레임 포맷 전용 프레임 선택 (해당 포맷일 때만 표시)
                 frame_dd = gr.Dropdown(
                     choices=[],
                     value=None,
                     label="프레임 선택 (구 포맷)",
-                    visible=False,
+                    visible=init_frame_visible,
                 )
 
         gr.Markdown("---")
@@ -947,29 +1228,33 @@ def build_ui():
         current_ot_state = gr.State(OLD_OUTPUT_TYPES[0])
 
         _SAMPLE_OUTPUTS = [img_display, csv_display, frame_dd,
-                           output_type_radio, chat_type, expected_box, current_ot_state]
+                           output_type_radio, chat_type, expected_box, current_ot_state,
+                           idx_number, img_notice]
 
-        # 스캔 → 첫 샘플 자동 로드
-        def _scan_then_load(path, sample):
-            return on_sample_change(path, sample, None)
+        # 스캔 → 첫 샘플 자동 로드를 하나의 핸들러로 처리한다.
+        # scan 과 load 를 .then 으로 잇고 sample_list 를 입력으로 읽으면,
+        # choices 가 교체된 직후 이전 데이터셋의 값이 남아 Dropdown 검증 오류
+        # ("... is not in the list of choices") 가 발생할 수 있다.
+        # 첫 샘플 이름을 scan 결과에서 직접 꺼내 쓰면 이 경합이 사라진다.
+        def _scan_and_load(path):
+            dd, status, nav_col, _idx, total = scan_dataset(path)
+            first = dd.get("value") if isinstance(dd, dict) else None
+            return (dd, status, nav_col, total,
+                    *on_sample_change(path, first or "", None))
+
+        _SCAN_AND_LOAD_OUTPUTS = (
+            [sample_list, scan_status, index_nav_col, idx_total_md] + _SAMPLE_OUTPUTS
+        )
 
         scan_btn.click(
-            fn=scan_dataset,
+            fn=_scan_and_load,
             inputs=[path_input],
-            outputs=[sample_list, scan_status],
-        ).then(
-            fn=_scan_then_load,
-            inputs=[path_input, sample_list],
-            outputs=_SAMPLE_OUTPUTS,
+            outputs=_SCAN_AND_LOAD_OUTPUTS,
         )
         path_input.submit(
-            fn=scan_dataset,
+            fn=_scan_and_load,
             inputs=[path_input],
-            outputs=[sample_list, scan_status],
-        ).then(
-            fn=_scan_then_load,
-            inputs=[path_input, sample_list],
-            outputs=_SAMPLE_OUTPUTS,
+            outputs=_SCAN_AND_LOAD_OUTPUTS,
         )
 
         # 샘플 선택 → 포맷 감지 → 이미지/CSV/프레임DD/출력유형/기대값 일괄 갱신
@@ -978,6 +1263,30 @@ def build_ui():
             fn=on_sample_change,
             inputs=[path_input, sample_list, current_ot_state],
             outputs=_SAMPLE_OUTPUTS,
+        )
+
+        # 인덱스 네비게이션 (평면 포맷) → 샘플 드롭다운 값 변경 → sample_list.change 로 연쇄
+        # idx_number 는 .input() 만 사용한다. .change() 를 쓰면 on_sample_change 가
+        # idx_number 를 갱신할 때 되먹임 루프가 발생한다.
+        idx_number.input(
+            fn=flat_goto,
+            inputs=[path_input, idx_number],
+            outputs=[idx_number, sample_list],
+        )
+        prev_btn.click(
+            fn=lambda p, i: flat_step(p, i, -1),
+            inputs=[path_input, idx_number],
+            outputs=[idx_number, sample_list],
+        )
+        next_btn.click(
+            fn=lambda p, i: flat_step(p, i, +1),
+            inputs=[path_input, idx_number],
+            outputs=[idx_number, sample_list],
+        )
+        rand_btn.click(
+            fn=flat_random,
+            inputs=[path_input],
+            outputs=[idx_number, sample_list],
         )
 
         # 프레임 변경 (신 포맷) → 이미지 / CSV / 기대값 갱신
@@ -1092,21 +1401,21 @@ def build_ui():
         # 채팅 초기화
         clear_btn.click(fn=lambda: [], outputs=[chatbot])
 
-        # 앱 시작 시 자동 스캔 + 첫 샘플 로드
+        # ── 앱 시작 시 자동 스캔 + 첫 샘플 로드 ────────────────────────────────
+        # 로드 핸들러는 visible 을 전송하지 않는다 (_initial_visibility 주석 참고).
+
+        # 스캔과 첫 샘플 로드를 demo.load 하나로 처리한다. 핸들러를 둘로 나누면
+        # 같은 컴포넌트(특히 이미지)에 동시에 기록되어 갱신이 유실된다.
+        def _initial_load(dp):
+            dd, status, _col, _idx, total = scan_dataset(dp)
+            first = dd.get("value") if isinstance(dd, dict) else None
+            out = on_sample_change(dp, first or "", None)
+            return (dd, status, total, *out[:2], _strip_visible(out[2]), *out[3:])
+
         demo.load(
-            fn=scan_dataset,
+            fn=_initial_load,
             inputs=[path_input],
-            outputs=[sample_list, scan_status],
-        )
-        demo.load(
-            fn=lambda dp: (
-                on_sample_change(dp, scan_dataset(dp)[0]["value"] or "", OLD_OUTPUT_TYPES[0])
-                if scan_dataset(dp)[0].get("value") else
-                (None, pd.DataFrame(), gr.update(visible=False),
-                 gr.update(), gr.update(), "", OLD_OUTPUT_TYPES[0])
-            ),
-            inputs=[path_input],
-            outputs=_SAMPLE_OUTPUTS,
+            outputs=[sample_list, scan_status, idx_total_md] + _SAMPLE_OUTPUTS,
         )
 
     return demo
