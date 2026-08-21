@@ -37,6 +37,14 @@ LEARNING_RATE=1e-3
 NUM_EPOCHS=1
 MAX_SEQ_LEN=2048
 
+# ── Projector ─────────────────────────────────────────────────────────────────
+# linear | mlp2x_gelu | mlp3x_gelu | cross_attn | qformer
+PROJECTOR_TYPE="${PROJECTOR_TYPE:-mlp2x_gelu}"
+# Resampler settings — used only by cross_attn / qformer
+PROJECTOR_NUM_QUERY_TOKENS="${PROJECTOR_NUM_QUERY_TOKENS:-32}"
+PROJECTOR_NUM_HEADS="${PROJECTOR_NUM_HEADS:-8}"
+PROJECTOR_NUM_LAYERS="${PROJECTOR_NUM_LAYERS:-2}"
+
 # ── Launch ─────────────────────────────────────────────────────────────────────
 if [ "$NUM_GPUS" -gt 1 ]; then
     LAUNCHER="torchrun --nproc_per_node=$NUM_GPUS"
@@ -50,7 +58,10 @@ $LAUNCHER "$ROOT/train.py" \
     --train_type projector \
     --vision_model "$VISION_MODEL" \
     --llm_model    "$LLM_MODEL" \
-    --projector_type mlp2x_gelu \
+    --projector_type "$PROJECTOR_TYPE" \
+    --projector_num_query_tokens $PROJECTOR_NUM_QUERY_TOKENS \
+    --projector_num_heads        $PROJECTOR_NUM_HEADS \
+    --projector_num_layers       $PROJECTOR_NUM_LAYERS \
     --data_path  "$DATA_PATH" \
     --image_dir  "$IMAGE_DIR" \
     --output_dir "$OUTPUT_DIR" \

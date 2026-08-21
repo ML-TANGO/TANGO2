@@ -12,6 +12,7 @@ Usage:
   cd /home/ywlee/dev/ClaudeSDS/VisionLanguageModelV2
   /home/ywlee/miniconda3/envs/eva/bin/python load_test.py
   /home/ywlee/miniconda3/envs/eva/bin/python load_test.py --vision google/siglip-so400m-patch14-384
+  /home/ywlee/miniconda3/envs/eva/bin/python load_test.py --projector_type qformer
 """
 import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
@@ -19,6 +20,8 @@ sys.path.insert(0, os.path.dirname(__file__))
 import argparse
 import torch
 from PIL import Image
+
+from model import PROJECTOR_TYPES, PROJECTOR_MLP2
 
 # ── Parse arguments ───────────────────────────────────────────────────────────
 parser = argparse.ArgumentParser(description="VisionLanguageModel load test")
@@ -35,6 +38,22 @@ parser.add_argument("--generate", action="store_true",
                     help="Run text generation (slow; for end-to-end verification)")
 parser.add_argument("--test_image", default=None,
                     help="Path to a test image (optional; uses random tensor if not given)")
+parser.add_argument("--projector_type", default=PROJECTOR_MLP2,
+                    choices=list(PROJECTOR_TYPES),
+                    help="Vision projector architecture")
+# 아래 인수는 cross_attn / qformer 리샘플러에서만 사용된다.
+parser.add_argument("--projector_num_query_tokens", type=int, default=32,
+                    help="Image tokens the resampler emits (cross_attn / qformer)")
+parser.add_argument("--projector_num_heads",  type=int,   default=8,
+                    help="Attention heads per resampler block")
+parser.add_argument("--projector_num_layers", type=int,   default=2,
+                    help="Number of stacked resampler blocks")
+parser.add_argument("--projector_ffn_ratio",  type=float, default=4.0,
+                    help="Resampler FFN width as a multiple of the hidden size")
+parser.add_argument("--projector_dropout",    type=float, default=0.0,
+                    help="Dropout inside the resampler blocks")
+parser.add_argument("--projector_hidden_size", type=int,  default=None,
+                    help="Resampler working width (default: vision hidden_size)")
 args = parser.parse_args()
 
 DTYPE_MAP = {"bfloat16": torch.bfloat16, "float16": torch.float16, "float32": torch.float32}
@@ -46,6 +65,7 @@ print("  VisionLanguageModelV2 — Load & Architecture Test")
 print("=" * 65)
 print(f"  Vision encoder : {args.vision}")
 print(f"  LLM            : {args.llm}")
+print(f"  Projector      : {args.projector_type}")
 print(f"  Device         : {DEVICE}")
 print(f"  dtype          : {DTYPE}")
 print("=" * 65)
@@ -57,7 +77,13 @@ from model import VLMConfig, build_model
 config = VLMConfig(
     vision_model_name=args.vision,
     llm_model_name=args.llm,
-    projector_type="mlp2x_gelu",
+    projector_type=args.projector_type,
+    projector_num_query_tokens=args.projector_num_query_tokens,
+    projector_num_heads=args.projector_num_heads,
+    projector_num_layers=args.projector_num_layers,
+    projector_ffn_ratio=args.projector_ffn_ratio,
+    projector_dropout=args.projector_dropout,
+    projector_hidden_size=args.projector_hidden_size,
     vision_feature_layer=-2,
     vision_feature_select_strategy="patch",
     freeze_vision=True,
@@ -77,6 +103,7 @@ image_processor = model.vision_encoder.image_processor
 print(f"\n[Step 2/5] Tokenizer & processor ready")
 print(f"  Vocab size (with <image>): {len(tokenizer)}")
 print(f"  image_token_id           : {config.image_token_id}")
+print(f"  vision_num_patches       : {config.vision_num_patches}")
 print(f"  num_image_tokens         : {config.num_image_tokens}")
 
 
@@ -121,12 +148,13 @@ if img_tok_count != 1:
 print("\n[Step 4/5] Forward pass …")
 with torch.no_grad():
     # ── 4a. Vision encoder only ────────────────────────────────────────────
-    img_features = model.vision_encoder(pixel_values)    # (1, N, D_vision)
+    img_features = model.vision_encoder(pixel_values)    # (1, P_patches, D_vision)
     print(f"  vision_encoder output : {tuple(img_features.shape)}  "
           f"dtype={img_features.dtype}")
 
     # ── 4b. Projector only ─────────────────────────────────────────────────
-    proj_features = model.projector(img_features)         # (1, N, D_llm)
+    # 리샘플러 계열은 패치 수와 무관하게 쿼리 토큰 수만큼 내보낸다.
+    proj_features = model.projector(img_features)         # (1, N_tokens, D_llm)
     print(f"  projector output      : {tuple(proj_features.shape)}  "
           f"dtype={proj_features.dtype}")
 

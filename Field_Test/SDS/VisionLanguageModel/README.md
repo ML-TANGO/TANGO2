@@ -1,7 +1,7 @@
 # EVA: ETRI Vessel Agent (SDS-VLM)
 
 선박 자율항행 지원을 위한 Vision-Language Model (VLM) 구현입니다.  
-CLIP 비전 인코더와 Llama 3.1 / Qwen3 언어 모델을 MLP 프로젝터로 연결하는 LLaVA 구조이며,  
+CLIP 비전 인코더와 Llama 3.1 / Qwen3 언어 모델을 비전 프로젝터로 연결하는 LLaVA 구조이며,  
 SDS(Software-defined Ship) 해상 도메인 데이터셋에 특화된 학습 파이프라인을 제공합니다.
 
 ---
@@ -55,9 +55,80 @@ SDS(Software-defined Ship) 해상 도메인 데이터셋에 특화된 학습 파
 >* Vision Encoder로부터 출력된 고차원 이미지 특징 벡터 데이터입니다.
 
 
-> **Projector (`Multi Layer Perceptron`)**
->* **설명:** 이미지 임베딩을 언어 모델(LLM)이 단어처럼 인식할 수 있는 공간인 `Image Tokens`로 매핑해 주는 **MLP(다층 퍼셉트론)** 구조의 연결 다리입니다.
+> **Projector (`Vision Projector`)**
+>* **설명:** 이미지 임베딩을 언어 모델(LLM)이 단어처럼 인식할 수 있는 공간인 `Image Tokens`로 매핑해 주는 연결 다리입니다. 다층 퍼셉트론(Multi Layer Perceptron, MLP) 계열 외에 학습 가능한 쿼리를 사용하는 리샘플러 계열까지 5가지 구조를 선택할 수 있습니다. 자세한 내용은 [§1-2-1 프로젝터 구조 선택](#1-2-1-프로젝터-구조-선택)을 참조하세요.
 >* **상태:** ✏️ **Trainable (학습 가능)** — 시각 정보와 언어 정보 간의 도메인 정렬을 위해 이 영역의 가중치는 **Full Tuning** 방식으로 직접 학습됩니다.
+
+#### 1-2-1. 프로젝터 구조 선택
+
+`--projector_type` 인수로 5가지 프로젝터 구조 중 하나를 선택해 학습할 수 있습니다.
+
+| `--projector_type` | 구조 | 출력 이미지 토큰 수 |
+|---|---|---|
+| `linear` | `Linear` 1층 | 패치 수와 동일 |
+| `mlp2x_gelu` | `Linear → GELU → Linear` (기본값, LLaVA 1.5와 동일) | 패치 수와 동일 |
+| `mlp3x_gelu` | `Linear → GELU → Linear → GELU → Linear` | 패치 수와 동일 |
+| `cross_attn` | 학습 가능한 쿼리가 패치 시퀀스에 교차 어텐션(cross-attention)을 수행하는 리샘플러 (Flamingo 계열) | `--projector_num_query_tokens` |
+| `qformer` | `cross_attn` 블록에 쿼리 자기 어텐션(self-attention)을 추가한 구조 (BLIP-2 계열 Q-Former) | `--projector_num_query_tokens` |
+
+앞의 세 구조는 비전 인코더가 내보낸 패치를 각각 독립적으로 사상하므로 이미지 토큰 수가 패치 수와 같습니다. CLIP ViT-L/14-336 기준으로 576개, SigLIP SO400M/14-384 기준으로 729개입니다.
+
+뒤의 두 구조는 패치 수와 무관하게 고정된 개수의 쿼리 토큰을 내보냅니다. 기본값 32개를 사용하면 LLM에 삽입되는 이미지 토큰이 576개에서 32개로 줄어들어 시퀀스 길이와 어텐션 연산량이 감소합니다. 다만 패치 단위의 공간 격자가 보존되지 않습니다.
+
+> 리샘플러 계열은 컨텍스트에 별도의 위치 임베딩을 더하지 않습니다. ViT가 이미 자체 위치 임베딩을 적용했으므로 위치 정보는 각 특징 벡터 안에 들어 있고, BLIP-2도 같은 방식으로 원본 ViT 특징을 Q-Former에 넣습니다. 그 결과 리샘플러의 연산은 시퀀스 축의 순서 변경에 대해 불변입니다. 단일 이미지에서는 문제가 되지 않지만, 비디오 인코더와 함께 쓸 때는 성립하지 않습니다. `video-languagebind` 경로는 각 프레임을 동일한 이미지 ViT로 통과시킨 뒤 `(B, T*N, D)` 로 이어 붙이므로, 프레임 구분은 오직 시퀀스 인덱스에만 남아 있습니다. 앞의 세 구조는 그 인덱스를 LLM 시퀀스까지 그대로 전달하여 LLM의 위치 인코딩이 프레임 순서를 복원하지만, 리샘플러는 이를 버립니다. 따라서 `cross_attn` 과 `qformer` 는 현재 단일 이미지 전용이며, 다중 프레임 인코더와 함께 쓰면 학습은 진행되고 손실값도 정상처럼 보이지만 시간 정보는 전달되지 않습니다.
+
+`qformer`는 학습 가능한 쿼리에 자기 어텐션을 더한 구조라는 점에서 BLIP-2의 Q-Former와 같은 계열이지만, BLIP-2의 공개 가중치와 호환되지는 않습니다. BLIP-2의 Q-Former는 텍스트 분기를 공유하고 교차 어텐션을 12개 층에 격층으로 배치하기 때문입니다. 본 구현의 리샘플러는 모든 블록에서 교차 어텐션을 수행하며, 처음부터 학습하는 것을 전제로 합니다.
+
+리샘플러 계열에만 적용되는 하이퍼파라미터는 다음과 같습니다.
+
+| 인수 | 기본값 | 설명 |
+|---|---|---|
+| `--projector_num_query_tokens` | 32 | 학습 가능한 쿼리 토큰 개수. 출력 이미지 토큰 수와 같습니다. |
+| `--projector_num_heads` | 8 | 리샘플러 블록당 어텐션 헤드 수 |
+| `--projector_num_layers` | 2 | 리샘플러 블록 개수 |
+| `--projector_ffn_ratio` | 4.0 | 블록 내 피드포워드 폭 배율 |
+| `--projector_dropout` | 0.0 | 블록 내 드롭아웃 |
+| `--projector_hidden_size` | 비전 인코더 폭 | 리샘플러 내부 연산 폭. 생략하면 비전 인코더의 hidden size를 사용합니다. |
+
+`--projector_hidden_size`를 LLM 폭으로 올리는 것은 권장하지 않습니다. CLIP 1024와 Llama 4096 조합에서 내부 폭을 1024에서 4096으로 바꾸면 파라미터 수가 약 14배 증가합니다. `qformer` 기준으로 38.9 M에서 558.2 M이 되어 기본 프로젝터인 `mlp2x_gelu`(21.0 M)의 27배에 이릅니다. BLIP-2의 Q-Former도 LLM 폭이 아닌 768 차원에서 동작한 뒤 선형 변환으로 LLM 폭에 맞추며, 본 구현의 기본값도 같은 방식입니다.
+
+CLIP ViT-L/14-336(1024)과 Llama 3.1-8B(4096) 조합에서 측정한 프로젝터 파라미터 수는 다음과 같습니다. 리샘플러는 쿼리 32개, 헤드 8개, 블록 2개, 내부 폭 1024 기준입니다.
+
+| `--projector_type` | 출력 토큰 | 파라미터 수 |
+|---|---|---|
+| `linear` | 576 | 4.20 M |
+| `mlp2x_gelu` | 576 | 20.98 M |
+| `mlp3x_gelu` | 576 | 37.76 M |
+| `cross_attn` | 32 | 30.48 M |
+| `qformer` | 32 | 38.88 M |
+
+선택한 구조와 하이퍼파라미터는 학습 결과 디렉토리의 `vlm_config.json`에 기록됩니다. 추론 스크립트는 `projector.bin` 옆의 `vlm_config.json`을 읽어 동일한 구조를 자동으로 복원하므로, 추론 시 프로젝터 인수를 다시 지정할 필요가 없습니다.
+
+디스크에 있는 체크포인트가 여전히 적재되는지 확인하려면 다음을 실행합니다. 지정한 디렉토리를 재귀적으로 탐색하여 모든 `projector.bin`에 대해, 기록된 구조로 재구성한 프로젝터에 적재되는지와 나머지 4가지 구조에서는 거부되는지를 함께 확인합니다. `load_weights`, state dict 구성, 체크포인트 저장 방식을 변경한 뒤에 실행하십시오.
+
+```bash
+python scripts/verify_projector_checkpoints.py checkpoints/
+
+# SigLIP 등 다른 폭으로 학습한 체크포인트
+python scripts/verify_projector_checkpoints.py checkpoints/ \
+    --vision_hidden_size 1152 --llm_hidden_size 4096
+```
+
+외부 포맷 변환 지원 범위는 대상 포맷이 표현할 수 있는 계산에 따라 결정됩니다.
+
+| `--projector_type` | LLaVA HF | GGUF (clip.cpp) |
+|---|---|---|
+| `linear` | 변환 (출력 동치) | 불가 |
+| `mlp2x_gelu` | 변환 | 변환 |
+| `mlp3x_gelu` | 불가 | 불가 |
+| `cross_attn` | 불가 | 불가 |
+| `qformer` | 불가 | 불가 |
+
+LLaVA HF의 `LlavaMultiModalProjector`는 `linear_1 → 활성 함수 → linear_2` 구조이고 활성 함수를 설정할 수 있습니다. `mlp2x_gelu`는 그대로 대응되고, `linear`는 활성 함수를 항등 함수로 두고 `linear_2`를 항등 행렬로 채우면 출력이 원본과 동일해집니다. GGUF의 `mlp` 그래프는 첫 행렬곱 뒤에 GELU를 조건 없이 적용하고 행렬곱이 최대 2회이므로 `mlp2x_gelu`만 표현됩니다.
+
+`mlp3x_gelu`는 비선형이 2개 필요하지만 두 포맷 모두 1개만 지원합니다. 리샘플러 계열은 학습된 쿼리 토큰과 교차 어텐션을 담을 텐서가 없고, 이미지 토큰 수가 패치 수와 달라져 두 포맷의 토큰 계산 규칙과도 맞지 않습니다. 이는 대상 포맷의 성질이며 스크립트의 미구현이 아닙니다. 변환이 불가한 경우 스크립트는 사유와 근거 파일을 함께 출력하고 중단하며, 깨진 산출물을 남기지 않습니다.
+
+변환할 수 없는 구조는 이 리포지토리의 추론 경로(`demo/app.py`, `api/`, `test.py`, `test_sds.py`)로 서빙합니다. 이 경로들은 `projector.bin`과 `vlm_config.json`을 그대로 읽으므로 5가지 구조를 모두 지원합니다.
 
 ### 1-3. 융합 및 언어 모델부 (Multimodal Fusion & LLM)
 
@@ -418,7 +489,8 @@ python load_test.py  \
         --device \        # CPU, 또는 GPU
         --dtype \         # bfloat16, float16, float32
         --generate \      # 텍스트 응답 생성 유무, 인자 전달  없으면 테스트만
-        --test_image      # 테스트 이미지 경로
+        --test_image \    # 테스트 이미지 경로
+        --projector_type  # 프로젝터 구조 (§1-2-1, 기본 mlp2x_gelu)
 
 # 사용 예시
 python load_test.py  \
@@ -428,6 +500,9 @@ python load_test.py  \
         --dtype       bfloat16 \
         --test_image  ~/TANGO2/Field_Test/SDS/dataset/20250922/dataset1/frame_1.png \
         --generate
+
+# 프로젝터 구조를 바꿔 확인하는 예시 (이미지 토큰 576개 → 32개)
+python load_test.py --projector_type qformer --projector_num_query_tokens 32
 ```
 
 정상 출력 시 마지막 줄:
@@ -442,8 +517,8 @@ ALL CHECKS PASSED — Model architecture is functional
 
 ### Phase 1 — Projector 사전학습
 
-- 비전 인코더와 LLM 을 고정하고 MLP 프로젝터만 학습합니다.
-- `scripts/train_projector.sh` 파일의 변수를 본인 환경에 맞게 수정 후 실행합니다.
+- 비전 인코더와 LLM 을 고정하고 비전 프로젝터만 학습합니다.
+- `scripts/train_projector.sh` 파일의 변수를 본인 환경에 맞게 수정 후 실행합니다. 프로젝터 구조는 같은 파일의 `PROJECTOR_TYPE` 변수 또는 동일한 이름의 환경 변수로 지정하며, 선택 가능한 값은 [§1-2-1](#1-2-1-프로젝터-구조-선택)에 정리되어 있습니다.
 
 ```bash
 bash scripts/train_projector.sh
@@ -632,6 +707,18 @@ python train.py \
     --image_dir ~/TANGO2/Field_Test/SDS/dataset/20260227 \
     --output_dir checkpoints/clip_llama31_proj_lora_marine_sds_en \
     --num_epochs 10 --batch_size 1 --grad_accum 2
+
+# Phase 1 변형: Q-Former 프로젝터로 학습 (이미지 토큰 576개 → 32개)
+python train.py \
+    --train_type projector \
+    --projector_type qformer \
+    --projector_num_query_tokens 32 \
+    --projector_num_heads 8 \
+    --projector_num_layers 2 \
+    --data_path ~/LLaVA-CC3M-Pretrain-595K/chat.json \
+    --image_dir ~/LLaVA-CC3M-Pretrain-595K/images \
+    --output_dir checkpoints/clip_llama31_qformer \
+    --num_epochs 1 --batch_size 8 --grad_accum 4
 ```
 
 주요 `train.py` 인수:
@@ -639,11 +726,45 @@ python train.py \
 | 인수 | 설명                                |
 |------|-----------------------------------|
 | `--train_type` | `projector` / `lora` / `full`     |
+| `--projector_type` | `linear` / `mlp2x_gelu` / `mlp3x_gelu` / `cross_attn` / `qformer` ([§1-2-1](#1-2-1-프로젝터-구조-선택)) |
 | `--projector_path` | Phase 1 결과 projector.bin 경로       |
 | `--resume_lora_path` | 기존 LoRA 디렉토리 (이어받기, Phase 2/3/4용) |
 | `--lora_r` / `--lora_alpha` | LoRA rank / alpha (기본: 128 / 256) |
 | `--max_steps` | epoch 대신 step 수로 조기 종료            |
+| `--save_total_limit` | 보관할 `checkpoint-N` 개수 (생략 시 전부 보관) |
 | `--wandb_project` | W&B 프로젝트명 (생략 시 비활성화)             |
+
+#### 체크포인트 크기
+
+`VisionLanguageModelV2`는 `PreTrainedModel`이 아니므로, HF Trainer는 기본적으로 `state_dict` 전체를 `model.safetensors` 한 파일로 씁니다. 동결된 CLIP 3억과 LLM 80억이 매 체크포인트마다 따라 들어가 16.7 GB가 됩니다. 프로젝터만 학습하는 단계에서 실제로 달라진 것은 78 MB뿐입니다.
+
+동결된 부분은 사전학습 소스에서 다시 만들어지므로 저장하지 않습니다. `VLMTrainer._save`가 프로젝터 전체와 `requires_grad`인 파라미터만 남기며, 후자가 LoRA 어댑터와 full 파인튜닝의 LLM 가중치를 덮습니다. 실측값은 다음과 같습니다.
+
+| 단계 | `model.safetensors` | 체크포인트 디렉토리 |
+|---|---|---|
+| `projector` (변경 전) | 16.7 GB | 16.8 GB |
+| `projector` | 77.8 MB (730개 중 48개 텐서) | 314 MB |
+| `lora` (r=8) | 161.6 MB (1178개 중 496개) | — |
+
+resume 시 빠진 동결 파라미터는 `build_model`이 사전학습 소스에서 만든 값이 그대로 쓰입니다. 늘어난 `<image>` 임베딩 행도 샘플링이 아니라 기존 임베딩의 통계로 결정되므로 재현됩니다. 변경 전에 저장한 전체 크기 체크포인트도 그대로 이어서 학습할 수 있습니다.
+
+> DeepSpeed 실행에는 이 필터가 닿지 않는 파일이 하나 더 있습니다. `global_stepN/mp_rank_00_model_states.pt`는 DeepSpeed가 직접 쓰는 모듈 전체의 fp32 사본이며 8B 기준 33.4 GB입니다. `DeepSpeedEngine.save_checkpoint`에 `exclude_frozen_parameters=True`를 넘기면 77.8 MB로 줄어드는 것을 확인했으나, 그렇게 저장한 체크포인트는 되살릴 수 없습니다. `transformers`가 resume 시 `load_module_strict=not _is_peft_model(self.model)`로 호출하고 이 모델은 최상위가 `PeftModel`이 아니므로, 동결된 CLIP 키에서 `RuntimeError`로 거부됩니다. 따라서 이 부분은 줄이지 않았습니다. DeepSpeed 실행의 총 디스크 사용량은 `--save_total_limit`으로 제한하십시오. 예를 들어 `--save_total_limit 2`는 오래된 체크포인트를 지워 총량을 두 개분으로 묶습니다.
+
+> 프로젝터 구조를 바꾸면 `projector.bin`의 파라미터 구성도 달라집니다. Phase 1에서 학습한 프로젝터를 Phase 2 이후에서 이어받을 때는 두 단계의 `--projector_type` 및 리샘플러 하이퍼파라미터가 일치해야 합니다. 추론 스크립트와 달리 `train.py`는 체크포인트의 `vlm_config.json`을 자동으로 읽지 않으므로 인수를 직접 맞춰 주어야 합니다. 구성이 어긋난 경우 학습이 시작되지 않고 중단됩니다. 검출되는 경우는 다음과 같습니다.
+
+| 어긋난 항목 | 검출 방식 |
+|---|---|
+| `--projector_type` | 텐서 이름이 달라짐 |
+| `--projector_num_layers` | 블록 수만큼 텐서 이름이 달라짐 |
+| `--projector_num_query_tokens` | `proj.query` 의 형상이 달라짐 |
+| `--projector_hidden_size` | 여러 텐서의 형상이 달라짐 |
+| `--projector_num_heads` | `proj.arch_signature` 에 기록된 값이 달라짐 |
+
+`--projector_num_heads` 는 별도의 처리가 필요합니다. PyTorch의 `nn.MultiheadAttention` 은 헤드 수를 파라미터나 버퍼가 아닌 일반 정수로 보관하므로, 헤드 수를 바꾸어도 텐서 이름과 형상이 전혀 달라지지 않습니다. 따라서 헤드 수만 다른 체크포인트는 이름·형상 검사를 모두 통과합니다. 이를 막기 위해 리샘플러는 쿼리 토큰 수, 헤드 수, 블록 수, 내부 폭을 `proj.arch_signature` 버퍼에 기록하고 로드 시 값을 비교합니다.
+
+이어받을 값은 Phase 1 결과 디렉토리의 `vlm_config.json`에서 확인할 수 있습니다.
+
+> `train.py`는 `--output_dir`에 `checkpoint-N` 디렉토리가 남아 있으면 자동으로 그 지점부터 이어서 학습합니다. 이때 복원 대상에는 프로젝터 가중치도 포함되므로, 같은 `--output_dir`에 다른 `--projector_type`으로 실행하면 구조가 맞지 않습니다. 이 경우 학습을 시작하기 전에 체크포인트에 기록된 값과 요청한 값을 대조하여 중단하며, 어느 항목이 다른지 함께 출력합니다. 다른 구조로 새로 학습할 때는 `--output_dir`를 다른 경로로 지정하십시오.
 
 ---
 
@@ -886,7 +1007,8 @@ VisionLanguageModel/
 ├── model/
 │   ├── config.py              # VLMConfig 데이터클래스
 │   ├── vision_encoder.py      # CLIP 래퍼 (feature 추출, 이미지 프로세서)
-│   ├── projector.py           # MLP 프로젝터 (mlp2x_gelu)
+│   ├── projector.py           # 비전 프로젝터 5종 (linear / mlp2x / mlp3x / cross_attn / qformer)
+│   ├── checkpoint.py          # 체크포인트의 vlm_config.json 에서 프로젝터 설정 복원
 │   ├── vlm_v2.py              # VisionLanguageModelV2 메인 클래스, build_model()
 │   └── __init__.py
 │
@@ -903,6 +1025,7 @@ VisionLanguageModel/
 │   ├── prepare_sds_dataset.py     # SDS → LLaVA JSON 변환 (3가지 시나리오)
 │   ├── convert_to_llava_hf.py     # 체크포인트 → HuggingFace LLaVA 포맷 변환 (vLLM용)
 │   ├── convert_to_gguf.py         # 체크포인트 → GGUF 변환 (llama.cpp용)
+│   ├── verify_projector_checkpoints.py  # 디스크의 projector.bin 적재 가능성 점검
 │   ├── generate_tm.py             # SDS-VLM Technical Memorandum PDF 생성
 │   ├── train_projector.sh         # Phase 1: Projector 사전학습
 │   ├── train_lora.sh              # Phase 2: CC3M LoRA 파인튜닝
@@ -991,6 +1114,7 @@ python model_summary.py --wandb_project vlm-v2 # W&B 아티팩트 업로드
 
 - 학습 후 생성된 체크포인트(Projector, LoRA)와 베이스모델(CLIP, Llama/Qwen) 을 프로덕션 추론 엔진용으로 변환합니다.
 - `adapter_config.json` 이 없어도 변환 스크립트가 weight 형상으로 자동 재구성합니다.  
+- 변환 가능한 프로젝터 구조는 대상 포맷이 표현할 수 있는 계산에 따라 제한됩니다. LLaVA HF 는 `linear` 와 `mlp2x_gelu`, GGUF 는 `mlp2x_gelu` 만 변환됩니다. 지원 범위와 근거는 [§1-2-1](#1-2-1-프로젝터-구조-선택)에 정리되어 있습니다. 변환할 수 없는 구조는 스크립트가 사유를 출력하고 중단하며, 이 리포지토리의 추론 경로로 서빙합니다.  
 - LoRA rank=128, target_modules: `q_proj`, `k_proj`, `v_proj`, `o_proj`, `gate_proj`, `up_proj`, `down_proj`
 
 ### 13-1. vLLM 배포 (`convert_to_llava_hf.py`)

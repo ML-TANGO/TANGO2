@@ -15,11 +15,19 @@ class VisionEncoderWrapper(nn.Module):
     Wraps different vision encoders behind a unified interface.
 
     Output of forward():
-        (B, num_image_tokens, hidden_size)
+        (B, num_patches, hidden_size)
 
     For CLIP:   (B, 576, 1024)  - 336px / patch14, drops CLS
     For SigLIP: (B, 729, 1152)  - 384px / patch14, no CLS
     For Video-LanguageBind: (B, T*N, D) where T=frames
+
+    The `num_image_tokens` property below is this patch count, NOT the number of
+    tokens the LLM ends up seeing. Since projector_type became selectable those
+    two differ: a cross_attn or qformer projector emits a fixed
+    projector_num_query_tokens regardless of how many patches it was given. The
+    LLM-facing count lives in VLMConfig.num_image_tokens, which build_model sets
+    from projector.output_num_tokens(). Read this one only when you want patches,
+    for instance to reshape them back into a 2D grid.
     """
 
     def __init__(
@@ -85,6 +93,11 @@ class VisionEncoderWrapper(nn.Module):
 
     @property
     def num_image_tokens(self) -> int:
+        """
+        Patch tokens this encoder emits. See the class docstring: this is not
+        the number of tokens spliced into the LLM sequence unless the projector
+        happens to be one of the per-patch kinds.
+        """
         return self._num_image_tokens
 
     @property
@@ -102,7 +115,7 @@ class VisionEncoderWrapper(nn.Module):
         Args:
             pixel_values: (B, C, H, W)  [or (B, T, C, H, W) for video]
         Returns:
-            features: (B, num_image_tokens, hidden_size)
+            features: (B, num_patches, hidden_size)
         """
         if self.encoder_type == VISION_CLIP:
             return self._forward_clip(pixel_values)

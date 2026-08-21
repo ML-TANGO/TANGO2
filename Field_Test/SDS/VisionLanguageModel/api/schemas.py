@@ -49,6 +49,21 @@ TrainingPhase = Literal["projector", "lora", "lora_marine", "lora_sds"]
 TrainScenario = Literal["en", "ko", "ko_compact"]
 TrainStatus   = Literal["pending", "running", "completed", "failed", "stopped"]
 
+# model/config.py 의 PROJECTOR_TYPES 와 동일한 목록을 유지해야 한다.
+# 이 모듈은 학습 코드(EVA_VLM_ROOT) 가 sys.path 에 추가되기 전에 임포트되므로
+# model 패키지를 직접 참조할 수 없어 값을 그대로 옮겨 적는다.
+ProjectorType = Literal[
+    "linear",
+    "mlp2x_gelu",
+    "mlp3x_gelu",
+    "cross_attn",
+    "qformer",
+]
+
+# 패치 시퀀스를 고정 개수의 쿼리 토큰으로 압축하는 프로젝터.
+# model/config.py 의 RESAMPLER_PROJECTOR_TYPES 와 동일하게 유지한다.
+RESAMPLER_PROJECTOR_TYPES = ("cross_attn", "qformer")
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # /health
@@ -149,6 +164,28 @@ class TrainParams(BaseModel):
 
     # Phase 3 (lora_sds) 시나리오 선택
     sds_scenario: Optional[TrainScenario] = Field(None, description="SDS 시나리오 (Phase3 전용)")
+
+    # 프로젝터 구조 (미입력 시 train.py 기본값 mlp2x_gelu 사용).
+    # cross_attn / qformer 는 패치 시퀀스를 고정 개수의 쿼리 토큰으로 압축한다.
+    projector_type: ProjectorType = Field(
+        "mlp2x_gelu",
+        description=(
+            "비전 프로젝터 구조. "
+            "linear/mlp2x_gelu/mlp3x_gelu=패치당 1토큰 투사, "
+            "cross_attn/qformer=쿼리 리샘플러(고정 토큰 수)"
+        ),
+    )
+
+    # 리샘플러 하이퍼파라미터 — cross_attn / qformer 에서만 사용된다.
+    projector_num_query_tokens: int   = Field(32,  ge=1,   description="리샘플러가 생성할 쿼리 토큰 수")
+    projector_num_heads:        int   = Field(8,   ge=1,   description="리샘플러 블록의 어텐션 헤드 수")
+    projector_num_layers:       int   = Field(2,   ge=1,   description="리샘플러 블록 수")
+    projector_ffn_ratio:        float = Field(4.0, gt=0.0, description="리샘플러 FFN 폭 배율")
+    projector_dropout:          float = Field(0.0, ge=0.0, le=1.0, description="리샘플러 드롭아웃")
+    projector_hidden_size: Optional[int] = Field(
+        None, ge=1,
+        description="리샘플러 내부 폭 (미입력 시 비전 인코더 hidden_size 사용)",
+    )
 
     # 하이퍼파라미터 (미입력 시 각 Phase 기본값 사용)
     num_epochs:         Optional[int]   = None

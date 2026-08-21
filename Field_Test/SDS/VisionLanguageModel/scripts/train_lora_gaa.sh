@@ -17,13 +17,15 @@ DATA_PATH="/path/to/sds_gaa_train.json"   # JSON with "bboxes" field
 IMAGE_DIR="/path/to/images"
 PROJECTOR="/path/to/projector.bin"        # from Phase 1 pre-training
 OUTPUT_DIR="checkpoints/gaa_lora"
+# linear | mlp2x_gelu | mlp3x_gelu | cross_attn | qformer
+PROJECTOR_TYPE="mlp2x_gelu"
 
 torchrun \
     --nproc_per_node=2 \
     "$ROOT_DIR/gaa/train_gaa.py" \
     --vision_model "openai/clip-vit-large-patch14-336" \
     --llm_model    "/home/ywlee/Llama-3.1-8B-Instruct" \
-    --projector_type mlp2x_gelu \
+    --projector_type "$PROJECTOR_TYPE" \
     --train_type lora \
     --projector_path "$PROJECTOR" \
     --data_path  "$DATA_PATH" \

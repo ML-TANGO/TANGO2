@@ -25,7 +25,10 @@ import argparse
 import torch
 from PIL import Image
 
-from model import VLMConfig, build_model
+from model import (
+    VLMConfig, build_model, PROJECTOR_TYPES,
+    PROJECTOR_CONFIG_KEYS, load_projector_config, resolve_projector_settings,
+)
 
 
 # ── Argument parsing ──────────────────────────────────────────────────────────
@@ -35,7 +38,36 @@ def parse_args():
     # Model
     p.add_argument("--vision_model", default="openai/clip-vit-large-patch14-336")
     p.add_argument("--llm_model",    default="/home/ywlee/Llama-3.1-8B-Instruct")
-    p.add_argument("--projector_type", default="mlp2x_gelu")
+
+    # Projector.
+    # Every projector argument defaults to None so that "not passed" stays
+    # distinguishable from "passed the same value as the default". Unset
+    # arguments fall back to the checkpoint's vlm_config.json, then to the
+    # VLMConfig default.
+    p.add_argument("--projector_type", default=None, choices=list(PROJECTOR_TYPES),
+                   help="Projector architecture (default: mlp2x_gelu)")
+
+    # Projector (resampler options)
+    # These apply only to --projector_type cross_attn / qformer.
+    # The linear and mlp*_gelu projectors ignore them.
+    p.add_argument("--projector_num_query_tokens", type=int, default=None,
+                   help="Image tokens emitted by the resampler "
+                        "(cross_attn / qformer only, default: 32)")
+    p.add_argument("--projector_num_heads", type=int, default=None,
+                   help="Attention heads per resampler block "
+                        "(cross_attn / qformer only, default: 8)")
+    p.add_argument("--projector_num_layers", type=int, default=None,
+                   help="Number of stacked resampler blocks "
+                        "(cross_attn / qformer only, default: 2)")
+    p.add_argument("--projector_ffn_ratio", type=float, default=None,
+                   help="Resampler feed-forward width as a multiple of its "
+                        "hidden size (cross_attn / qformer only, default: 4.0)")
+    p.add_argument("--projector_dropout", type=float, default=None,
+                   help="Dropout inside the resampler blocks "
+                        "(cross_attn / qformer only, default: 0.0)")
+    p.add_argument("--projector_hidden_size", type=int, default=None,
+                   help="Resampler working width (cross_attn / qformer only, "
+                        "default: the vision encoder hidden size)")
 
     # Weights
     p.add_argument("--projector_path", required=True,
@@ -71,16 +103,31 @@ def main():
     dtype  = DTYPE_MAP[args.dtype]
     device = torch.device(args.device)
 
+    # ── Resolve projector settings ────────────────────────────────────────────
+    # Precedence: CLI flag > checkpoint vlm_config.json > VLMConfig default.
+    proj_settings, proj_sources = resolve_projector_settings(
+        {key: getattr(args, key) for key in PROJECTOR_CONFIG_KEYS},
+        load_projector_config(args.projector_path),
+    )
+    for key in PROJECTOR_CONFIG_KEYS:
+        print(f"[Inference] {key:<26} = {proj_settings[key]}  "
+              f"(from {proj_sources[key]})")
+
     # ── Build base model ──────────────────────────────────────────────────────
     config = VLMConfig(
         vision_model_name=args.vision_model,
         llm_model_name=args.llm_model,
-        projector_type=args.projector_type,
         vision_feature_layer=-2,
         vision_feature_select_strategy="patch",
         freeze_vision=True,
         freeze_llm=True,
+        **proj_settings,
     )
+
+    print(f"[Inference] Projector type : {config.projector_type}")
+    if config.is_resampler_projector:
+        print(f"[Inference] Query tokens   : {config.projector_num_query_tokens}")
+
     model = build_model(config, torch_dtype=dtype)
 
     # ── Load projector weights ─────────────────────────────────────────────────

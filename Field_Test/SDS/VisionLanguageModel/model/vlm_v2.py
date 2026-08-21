@@ -14,9 +14,9 @@ Supports:
 import torch
 import torch.nn as nn
 from dataclasses import dataclass
-from typing import Optional, Dict, Any
+from typing import Optional
 
-from .config import VLMConfig, LLM_LLAMA, LLM_QWEN
+from .config import VLMConfig, LLM_LLAMA, LLM_QWEN, VISION_LANGUAGEBIND
 from .vision_encoder import VisionEncoderWrapper
 from .projector import VisionProjector
 
@@ -40,6 +40,14 @@ class VisionLanguageModelV2(nn.Module):
 
     Returns a VLMOutput with .loss and .logits.
     """
+
+    # HF Trainer reads this whenever a checkpoint load reports missing keys, in
+    # _issue_warnings_after_load. Only a PreTrainedModel defines it, and this is
+    # a plain nn.Module, so without it the attribute lookup raises AttributeError
+    # and the traceback names _keys_to_ignore_on_save instead of saying anything
+    # about what actually failed to load. None means "no keys are expected to be
+    # absent", which sends HF down its ordinary warning path.
+    _keys_to_ignore_on_save = None
 
     def __init__(
         self,
@@ -80,10 +88,8 @@ class VisionLanguageModelV2(nn.Module):
         # Cast to vision encoder dtype to avoid precision mismatch
         pixel_values = pixel_values.to(dtype=self.vision_encoder.dtype)
         features = self.vision_encoder(pixel_values)   # (B, N, vision_D)
-        features = features.to(dtype=self.projector.proj[0].weight.dtype
-                               if hasattr(self.projector.proj, '__getitem__')
-                               else self.projector.proj.weight.dtype)
-        return self.projector(features)                # (B, N, llm_D)
+        features = features.to(dtype=self.projector.dtype)
+        return self.projector(features)                # (B, num_image_tokens, llm_D)
 
     # ── Multimodal fusion ────────────────────────────────────────────────────
 
@@ -136,6 +142,12 @@ class VisionLanguageModelV2(nn.Module):
             # Find <image> position
             img_positions = (ids_i == image_token_id).nonzero(as_tuple=True)[0]
 
+            # Bind up front. The no-image branch below only assigns lbl when
+            # labels were supplied, so without this the check after the branch
+            # would raise UnboundLocalError on the first imageless sample, or
+            # silently reuse the previous sample's labels.
+            lbl = None
+
             if len(img_positions) == 0:
                 # No image token — embed and pad out to new_L
                 embeds = embed_layer(ids_i).to(dtype=embed_dtype)  # (L, D)
@@ -148,6 +160,22 @@ class VisionLanguageModelV2(nn.Module):
                 if lbl_i is not None:
                     lbl = torch.cat([lbl_i,
                                      torch.full((N - 1,), -100, dtype=lbl_i.dtype, device=lbl_i.device)], dim=0)
+            elif len(img_positions) > 1:
+                # Only the first placeholder would be replaced and the rest
+                # would stay as literal token embeddings, so the extra images
+                # are silently dropped. Nothing in this repo emits more than
+                # one: data/dataset.py normalizes to one and all four
+                # generate() callers hardcode one. So this cannot fire today
+                # and exists to catch a genuine bug, most plausibly whoever
+                # adds multi-image or multi-frame packing, which a 32-token
+                # resampler makes practical for the first time.
+                raise ValueError(
+                    f"[VLM] Sample {i} has {len(img_positions)} '{self.config.image_token}' "
+                    "tokens. prepare_inputs_labels_for_multimodal replaces exactly one per "
+                    "sample; the others would be left as literal token embeddings and their "
+                    "images dropped. Multi-image inputs need explicit support here."
+                )
+
             else:
                 p = img_positions[0].item()  # position of <image> token
 
@@ -294,7 +322,6 @@ def build_model(
     Build VisionLanguageModelV2 from config.
     Loads pretrained vision encoder and LLM; initializes projector randomly.
     """
-    import os
     from transformers import AutoTokenizer
 
     print(f"[Builder] Vision encoder : {config.vision_model_name}")
@@ -310,9 +337,9 @@ def build_model(
         torch_dtype=torch_dtype,
     )
     config.vision_hidden_size = vision_encoder.hidden_size
-    config.num_image_tokens    = vision_encoder.num_image_tokens
+    config.vision_num_patches = vision_encoder.num_image_tokens
     print(f"[Builder] Vision hidden_size   : {config.vision_hidden_size}")
-    print(f"[Builder] Num image tokens     : {config.num_image_tokens}")
+    print(f"[Builder] Vision patches       : {config.vision_num_patches}")
 
     # ── LLM ───────────────────────────────────────────────────────────────────
     if config.llm_model_type == LLM_LLAMA:
@@ -355,7 +382,26 @@ def build_model(
         vision_hidden_size=config.vision_hidden_size,
         llm_hidden_size=config.llm_hidden_size,
         projector_type=config.projector_type,
+        **config.projector_kwargs(),
     ).to(dtype=torch_dtype)
+
+    config.num_image_tokens = projector.output_num_tokens(config.vision_num_patches)
+    print(f"[Builder] Num image tokens     : {config.num_image_tokens}")
+
+    # A resampler's forward is invariant to permutations of its input sequence,
+    # by design: no positional embedding is added to the context because the ViT
+    # already put position inside each feature vector. The LanguageBind path
+    # breaks that premise, running every frame through the same image ViT and
+    # concatenating, so frame identity lives only in the sequence index. The
+    # per-patch projectors carry that index into the LLM sequence; a resampler
+    # discards it. Warned rather than refused, because the combination is a
+    # legitimate thing to measure, and it is warned about here because nothing
+    # downstream can detect it: training runs and the loss looks ordinary.
+    if config.is_resampler_projector and config.vision_model_type == VISION_LANGUAGEBIND:
+        print(f"[Builder] 경고: projector_type={config.projector_type} 는 입력 시퀀스의 "
+              "순서에 불변이므로, 프레임을 이어 붙이는 video-languagebind 인코더와 "
+              "함께 쓰면 프레임 순서 정보가 전달되지 않습니다. 시간 정보가 필요하면 "
+              "linear/mlp2x_gelu/mlp3x_gelu 를 사용하십시오.")
 
     # ── Freeze ────────────────────────────────────────────────────────────────
     if config.freeze_vision:

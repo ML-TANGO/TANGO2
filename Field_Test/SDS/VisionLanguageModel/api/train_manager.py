@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Optional
 
-from schemas import TrainParams, TrainStatus
+from schemas import RESAMPLER_PROJECTOR_TYPES, TrainParams, TrainStatus
 
 
 # ── 작업 상태 레코드 ─────────────────────────────────────────────────────────
@@ -224,6 +224,20 @@ class TrainManager:
                 cmd += ["--max_steps",  str(params.max_steps)]
             if params.sds_scenario and params.phase == "lora_sds":
                 cmd += ["--sds_scenario", params.sds_scenario]
+
+            # 프로젝터 구조는 항상 명시한다. Phase 2a/3 에서 --projector_path 로
+            # 불러오는 가중치와 구조가 어긋나면 로드가 실패하기 때문이다.
+            cmd += ["--projector_type", params.projector_type]
+            if params.projector_type in RESAMPLER_PROJECTOR_TYPES:
+                cmd += [
+                    "--projector_num_query_tokens", str(params.projector_num_query_tokens),
+                    "--projector_num_heads",        str(params.projector_num_heads),
+                    "--projector_num_layers",       str(params.projector_num_layers),
+                    "--projector_ffn_ratio",        str(params.projector_ffn_ratio),
+                    "--projector_dropout",          str(params.projector_dropout),
+                ]
+                if params.projector_hidden_size:
+                    cmd += ["--projector_hidden_size", str(params.projector_hidden_size)]
 
         return cmd
 

@@ -198,6 +198,11 @@ async def start_training(body: TrainRequest):
     - `lora_marine` : Phase 2b — 해양 텍스트 계속학습 (이미지 없음)
     - `lora_sds`    : Phase 3 — SDS 도메인 특화 LoRA
 
+    projector_type 선택 (기본 `mlp2x_gelu`):
+    - `linear` / `mlp2x_gelu` / `mlp3x_gelu` : 패치당 1개 이미지 토큰을 투사
+    - `cross_attn` / `qformer`               : 패치 시퀀스를 `projector_num_query_tokens`
+      개의 쿼리 토큰으로 압축 (나머지 `projector_*` 필드는 이 두 구조에서만 사용)
+
     즉시 `job_id`를 반환(HTTP 202 Accepted)하며, 진행 상황은
     `GET /jobs/{job_id}` 또는 `GET /train/status?job_id=<id>`로 확인한다.
     """

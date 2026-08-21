@@ -281,7 +281,7 @@ def sec2(pdf):
         "[Vision Encoder]  CLIP ViT-L/14-336  ->  (B, 576, 1024)\n"
         "     |\n"
         "     v\n"
-        "[MLP Projector]   mlp2x_gelu         ->  (B, 576, 4096)\n"
+        "[Vision Projector]  mlp2x_gelu (기본)  ->  (B, 576, 4096)\n"
         "     |   576개 시각 토큰을 <image> 위치에 삽입\n"
         "     v\n"
         "[Language Model]  Llama 3.1-8B-Instruct  +  LoRA(r=128)\n"
@@ -329,19 +329,30 @@ def sec3(pdf):
         "feature_layer=-2 (기본값): 마지막 레이어 직전 레이어 사용 — LLaVA 논문 권고값",
     ])
 
-    pdf.h2("3.2  MLP 프로젝터 (VisionProjector)")
+    pdf.h2("3.2  비전 프로젝터 (VisionProjector)")
     pdf.body(
-        "비전 인코더의 출력 차원(예: 1024)을 LLM의 임베딩 차원(4096)으로 변환하는 "
-        "MLP이다. Xavier 균등 초기화를 적용하며, 사전학습된 가중치를 projector.bin으로 저장·복원한다."
+        "비전 인코더의 출력 차원(예: 1024)을 LLM의 임베딩 차원(4096)으로 변환한다. "
+        "projector_type 인수로 5가지 구조 중 하나를 선택해 학습할 수 있다. "
+        "Xavier 균등 초기화를 적용하며, 사전학습된 가중치를 projector.bin으로 저장·복원한다."
+    )
+    pdf.body(
+        "앞의 세 구조는 패치를 각각 독립적으로 사상하므로 이미지 토큰 수가 패치 수(576)와 같다. "
+        "뒤의 두 구조는 학습 가능한 쿼리가 패치 시퀀스에 교차 어텐션을 수행하는 리샘플러이며, "
+        "패치 수와 무관하게 projector_num_query_tokens 개의 이미지 토큰만 내보낸다. "
+        "쿼리 32개를 사용하면 LLM에 삽입되는 이미지 토큰이 576개에서 32개로 줄어든다. "
+        "아래 파라미터 수는 CLIP ViT-L/14-336(1024)과 Llama 3.1-8B(4096) 조합, "
+        "쿼리 32개, 헤드 8개, 블록 2개, 내부 폭 1024 기준이다."
     )
     pdf.table(
-        ["타입", "구조", "파라미터 수"],
+        ["타입", "구조", "출력 토큰", "파라미터 수"],
         [
-            ["linear",     "Linear(1024→4096)",                        "4.2M"],
-            ["mlp2x_gelu", "Linear→GELU→Linear  (기본값)",             "20.9M"],
-            ["mlp3x_gelu", "Linear→GELU→Linear→GELU→Linear",          "37.7M"],
+            ["linear",     "Linear(1024→4096)",                       "576", "4.2M"],
+            ["mlp2x_gelu", "Linear→GELU→Linear  (기본값)",            "576", "20.9M"],
+            ["mlp3x_gelu", "Linear→GELU→Linear→GELU→Linear",         "576", "37.7M"],
+            ["cross_attn", "학습 쿼리 + 교차 어텐션 리샘플러",           "32",  "30.5M"],
+            ["qformer",    "cross_attn + 쿼리 자기 어텐션 (Q-Former)", "32",  "38.9M"],
         ],
-        [40, 100, 40],
+        [32, 88, 26, 34],
     )
 
     pdf.h2("3.3  언어 모델 (Language Model)")
@@ -366,7 +377,10 @@ def sec3(pdf):
             ["vision_feature_layer",          "-2",                          "특징 추출 레이어 인덱스"],
             ["vision_feature_select_strategy","patch",                       "patch=CLS 제거, full=포함"],
             ["llm_model_name",                "Llama-3.1-8B-Instruct",      "LLM 경로"],
-            ["projector_type",                "mlp2x_gelu",                 "프로젝터 구조"],
+            ["projector_type",                "mlp2x_gelu",                 "프로젝터 구조 (5종)"],
+            ["projector_num_query_tokens",    "32",                          "리샘플러 쿼리 토큰 수"],
+            ["projector_num_heads",           "8",                           "리샘플러 어텐션 헤드 수"],
+            ["projector_num_layers",          "2",                           "리샘플러 블록 수"],
             ["freeze_vision",                 "True",                        "비전 인코더 동결 여부"],
             ["freeze_llm",                    "True",                        "LLM 동결 여부"],
             ["max_seq_len",                   "2048",                        "최대 시퀀스 길이"],
