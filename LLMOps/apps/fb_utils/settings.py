@@ -201,9 +201,14 @@ else:
 # fb_external_container service (SP-Ext.2) — domain BFFs route partner
 # container traffic here. Default points at the in-cluster ClusterIP; set
 # explicitly to override per environment.
+# ⚠️ 기본값은 실제 배포되는 Service 이름과 같아야 한다. 이전 기본값
+# 'fb-external-container...:8000' 은 어떤 환경에도 그런 Service 가 없어서(실 이름은
+# jfb-app-external-container-svc, port 80) env 오버라이드가 없는 인스턴스에서는 BFF 가
+# 외부 컨테이너 잡을 아예 띄울 수 없었다(NXDOMAIN). 다른 서비스 DNS 기본값
+# (LLM_PLAYGROUND_DNS = jfb-llm-playground-svc...)과 같은 규약으로 맞춘다.
 FB_EXTERNAL_CONTAINER_URL = os.getenv(
     'FB_EXTERNAL_CONTAINER_URL',
-    f'http://fb-external-container.{SYSTEM_NAMESPACE}.svc.cluster.local:8000',
+    f'http://jfb-app-external-container-svc.{SYSTEM_NAMESPACE}.svc.cluster.local',
 )
 
 # [LLM PLAYGROUND] — A4 실 모델출력 배선. 배포(running) 모델의 추론 test_url 해석을
