@@ -138,7 +138,9 @@ async def start_expert(body: dto.ExpertStartBody):
         res = await svc.start_expert(
             project_id=body.project_id,
             inference_playground_id=body.inference_playground_id,
-            inference_job_id=body.inference_job_id)
+            inference_job_id=body.inference_job_id,
+            run_name=body.run_name,
+            expert_prompt=body.expert_prompt)
         return response(status=1, result=res)
     except Exception as e:
         traceback.print_exc()

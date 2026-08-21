@@ -486,6 +486,42 @@ async def list_projects(workspace_id: int) -> dict:
     return {"workspace_id": workspace_id, "projects": out}
 
 
+async def _attach_expert_run_view(runs: list, rows: list) -> None:
+    """run 목록 표시 보강(in-place) — ① 세션 제목(run_name) ② 진행중 전문가 세션의 부분 집계.
+
+    비교표(build_eval_comparison)는 `_` 접두 내부키를 버리므로, 사람이 시간에 걸쳐 채점하는
+    전문가 세션은 전량 마감 전까지 목록에 점수가 하나도 안 보인다(완료 시에만 metrics 에
+    expert_avg_score 가 기록됨). 완료 세션은 그 값이 이미 있으므로, 여기서는 아직 완료되지
+    않은 전문가 세션만 채점 테이블에서 read-time 파생한다(GROUP BY 1회 — N+1 회피,
+    list_projects 의 count_run_statuses_by_projects 와 동형)."""
+    by_job = {r["job_str_id"]: r for r in rows if r.get("job_str_id")}
+    pending = []
+    for run in runs:
+        row = by_job.get(run.get("job_id"))
+        if row is None:
+            continue
+        name = _session_run_name(row)
+        if name:
+            run["run_name"] = name
+        if row.get("metric_set") == "expert" and row.get("status") != "completed":
+            pending.append(run)
+    if not pending:
+        return
+    agg = await db_model.aggregate_expert_ratings_by_jobs(
+        [run["job_id"] for run in pending])
+    by_agg = {a.get("job_str_id"): a for a in agg}
+    for run in pending:
+        samples = _session_metrics(by_job[run["job_id"]]).get("_samples")
+        a = by_agg.get(run["job_id"]) or {}
+        avg = a.get("avg_score")
+        run["expert_progress"] = {
+            "rated": int(a.get("rated") or 0),
+            "total": len(samples) if isinstance(samples, list) else 0,
+            # AVG() 는 Decimal 로 오므로 JSON 직렬화 가능한 float 로 정규화.
+            "avg_score": round(float(avg), 2) if avg is not None else None,
+        }
+
+
 async def get_project(project_id: int) -> dict:
     """프로젝트 단건(불변 헤더) + 자식 run 목록(프로젝트 내 비교표 shape). dataset_ids 는
     JSON → 리스트. runs 는 build_eval_comparison 재사용(run.id 키 best)."""
@@ -498,9 +534,12 @@ async def get_project(project_id: int) -> dict:
     #   runs 목록엔 포함(FE 가 생성 배너·최신 inference job 추적에 사용, 표시 필터는 FE 담당).
     score_rows = [r for r in rows if r.get("metric_set") != "inference"]
     derived_status = _derive_project_status([r.get("status") for r in score_rows])
+    comparison = db_model.build_eval_comparison(rows)
+    # 목록 표시 보강(제목·진행중 전문가 부분집계) — 비교표 shape 는 그대로 두고 additive.
+    await _attach_expert_run_view(comparison.get("runs") or [], rows)
     return {"project": {**project, "dataset_ids": _parse_dataset_ids(project.get("dataset_ids")),
                         "status": derived_status},
-            "runs": db_model.build_eval_comparison(rows)}
+            "runs": comparison}
 
 
 async def delete_project(project_id: int) -> dict:
@@ -1855,7 +1894,9 @@ async def _expert_session(model_id: int, job_id: str):
 
 async def start_expert(project_id: int,
                        inference_playground_id: Optional[int] = None,
-                       inference_job_id: Optional[str] = None) -> dict:
+                       inference_job_id: Optional[str] = None,
+                       run_name: Optional[str] = None,
+                       expert_prompt: Optional[str] = None) -> dict:
     """전문가 평가 세션 시작 — model/dataset 는 프로젝트에서 상속(불변, P3). 채점 샘플 생성
     + 세션 행. inference_job_id(러너 생성) 주면 그 샘플을, 없고 inference_playground_id 주면
     실 출력 추론, 둘 다 없으면 mock(A4). 생성 샘플은 metrics._samples 로 영속 → 재로드
@@ -1904,7 +1945,9 @@ async def start_expert(project_id: int,
         dataset_name_csv = f"{ds_names[0]} +{len(ds_names) - 1} more"[:255]
 
     # 시나리오 결속 고정 프롬프트(D3) — 샘플 shape(SDS=csv_rows)로 판별해 세션에 동결.
-    expert_prompt = _expert_prompt(samples)
+    # 생성 시 사용자가 지침을 직접 준 경우 그것을 우선 동결(표시 = 실제 채점 기준 일치).
+    expert_prompt = (expert_prompt or "").strip() or _expert_prompt(samples)
+    run_name = (run_name or "").strip() or None
     job_id = f"expert-{model_id}-{uuid.uuid4().hex[:16]}"
     await db_model.insert_eval_result(
         source_model_id=model_id, workspace_id=workspace_id, job_str_id=job_id,
@@ -1918,6 +1961,8 @@ async def start_expert(project_id: int,
         metrics_obj["_gen_system_prompt"] = gen_prompt
     if inference_playground_id:
         metrics_obj["_inference_playground_id"] = int(inference_playground_id)
+    if run_name:      # 세션 제목 동결(run 목록·채점 헤더 표시원)
+        metrics_obj["_run_name"] = run_name
     await db_model.set_eval_result_metrics(
         job_str_id=job_id, source_model_id=model_id,
         metrics_json=json.dumps(metrics_obj))
@@ -1933,7 +1978,8 @@ async def start_expert(project_id: int,
             "real_output": bool(inference_target) or bool(run_samples),
             "used_runner": bool(run_samples),
             "inference_enabled": bool(inference_playground_id),
-            "expert_prompt": expert_prompt, "gen_system_prompt": gen_prompt}
+            "expert_prompt": expert_prompt, "gen_system_prompt": gen_prompt,
+            "run_name": run_name}
 
 
 def _session_inference_enabled(row: dict) -> bool:
@@ -1961,6 +2007,35 @@ def _session_gen_prompt(row: dict) -> Optional[str]:
     return val if isinstance(val, str) and val else None
 
 
+# 세션 동결 키 — start 시 metrics 에 동결해 재개·완료 후에도 표시가 유지돼야 하는 값들.
+# 완료 시 submit_expert_rating 이 metrics 를 새로 쓰므로 그때 이월하지 않으면 소실된다.
+_SESSION_FROZEN_KEYS = ("_run_name", "_gen_system_prompt", "_inference_playground_id")
+
+
+def _session_metrics(row: dict) -> dict:
+    """세션 행의 metrics(JSON 문자열/딕트) → 딕트. 부재·파싱 실패는 빈 딕트."""
+    metrics = row.get("metrics") if isinstance(row, dict) else None
+    if isinstance(metrics, str):
+        try:
+            metrics = json.loads(metrics)
+        except (TypeError, json.JSONDecodeError):
+            metrics = None
+    return metrics if isinstance(metrics, dict) else {}
+
+
+def _session_run_name(row: dict) -> Optional[str]:
+    """세션 제목(_run_name) — 생성 시 사용자 입력을 동결한 값. eval_result 에 name 컬럼이 없어
+    metrics 에 싣는다(llm_db 마이그레이션 러너 없음 → DDL 회피). 없으면 None(목록=데이터셋명)."""
+    val = _session_metrics(row).get("_run_name")
+    return val if isinstance(val, str) and val else None
+
+
+def _session_frozen(row: dict) -> dict:
+    """완료 시 metrics 재기록에 이월할 동결값만 추출(_SESSION_FROZEN_KEYS)."""
+    m = _session_metrics(row)
+    return {k: m[k] for k in _SESSION_FROZEN_KEYS if m.get(k) is not None}
+
+
 async def get_expert_samples(model_id: int, job_id: str) -> dict:
     """세션 샘플 + 기존 채점 + 채점 이력(재개·감사추적용)."""
     row, samples = await _expert_session(model_id, job_id)
@@ -1972,7 +2047,8 @@ async def get_expert_samples(model_id: int, job_id: str) -> dict:
             "total": len(samples), "ratings": ratings, "history": history,
             "inference_enabled": _session_inference_enabled(row),
             "expert_prompt": _session_prompt(row, samples),
-            "gen_system_prompt": _session_gen_prompt(row)}
+            "gen_system_prompt": _session_gen_prompt(row),
+            "run_name": _session_run_name(row)}
 
 
 # 지연 단위 VLM 추론의 per-job 락 — 빠른 prev/next 네비로 동시 호출 시 _samples 재영속
@@ -2117,7 +2193,11 @@ async def submit_expert_rating(model_id: int, job_id: str, sample_idx: int,
             # expert_avg_score(1~5) = 신규 기본 metric(_flatten 자동 노출·방향 max). _distribution 은
             # _ 접두라 비교표 미노출. expert_pass_rate 는 backward-compat 병기. _samples/_expert_prompt
             # 보존 — 완료 후 get_expert_samples 가 표시 출력(최신 실출력 포함)·프롬프트 유지.
-            metrics = {"expert_avg_score": avg_score, "expert_pass_rate": pass_rate,
+            # 동결값(_run_name·_gen_system_prompt·_inference_playground_id)은 여기서
+            # metrics 를 새로 쓰기 때문에 이월하지 않으면 완료 시점에 소실된다(제목/생성
+            # 프롬프트 박스가 완료 후 재개에서 사라짐).
+            metrics = {**_session_frozen(fresh_row),
+                       "expert_avg_score": avg_score, "expert_pass_rate": pass_rate,
                        "_distribution": distribution, "_mode": "expert",
                        "_rated": rated, "_total": total, "_samples": fresh_samples,
                        "_expert_prompt": _session_prompt(fresh_row, fresh_samples)}

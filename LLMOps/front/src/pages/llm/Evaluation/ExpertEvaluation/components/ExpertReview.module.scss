@@ -27,6 +27,16 @@
   gap: 8px;
 }
 
+.ph-name {
+  max-width: 280px;
+  overflow: hidden;
+  color: $normal-text-color;
+  font-family: SpoqaB;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .ph-progress {
   color: $normal-text-color;
   font-family: SpoqaB;
@@ -109,6 +119,14 @@
   font-size: 13px;
 }
 
+/* 코멘트 의무 안내 — 낮은 점수인데 사유가 비었을 때 채점 블록 하단에 노출. */
+.comment-required {
+  color: $error-color;
+  font-family: SpoqaM;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 /* CSV 테이블 */
 .csv-wrap {
   margin: 4px 0 16px;
@@ -130,18 +148,78 @@
   margin-top: 16px;
 }
 
-/* 샘플 이미지 */
+/* 샘플 이미지 — 인라인은 카드 폭까지 채우고(기존 360x280 고정은 선박 장면 세부 판독 불가),
+   클릭하면 라이트박스로 뷰포트까지 확대한다. 원본은 서버가 리사이즈 없이 그대로 준다. */
+.img-button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  margin-bottom: 16px;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+  text-align: left;
+
+  &:focus-visible {
+    outline: 2px solid $primary-color;
+    outline-offset: 2px;
+  }
+}
+
 .img {
   display: block;
   width: auto;
-  max-width: 360px;
+  max-width: 100%;
   height: auto;
-  max-height: 280px;
-  margin-bottom: 16px;
+  max-height: 560px;
   border: 1px solid $mono203;
   border-radius: 4px;
   background-color: $mono201;
   object-fit: contain;
+}
+
+/* 확대 라이트박스 — 페이지 헤더/드롭다운(999~1000 대)보다 위. */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background-color: rgba(0, 0, 0, 0.82);
+  cursor: zoom-out;
+}
+
+.lightbox-img {
+  max-width: 100%;
+  max-height: 100%;
+  cursor: default;
+  object-fit: contain;
+}
+
+.lightbox-close {
+  position: absolute;
+  top: 16px;
+  right: 24px;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+
+  &:hover {
+    background-color: rgba(255, 255, 255, 0.26);
+  }
+
+  &:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+  }
 }
 
 .img-status {

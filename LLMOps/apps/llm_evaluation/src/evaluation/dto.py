@@ -169,6 +169,14 @@ class ExpertStartBody(BaseModel):
     inference_job_id: Optional[str] = Field(
         default=None, max_length=128, pattern=r"^[A-Za-z0-9_-]+$",
         description="러너 generate 런 job_id(주면 생성 샘플을 채점, 없으면 배포 추론/mock)")
+    # 세션 생성 시 사용자 입력(표시 전용·세션 동결). eval_result 에 name 컬럼이 없어 제목은
+    # metrics._run_name 으로 영속한다(llm_db 마이그레이션 러너 없음 → DDL 회피).
+    run_name: Optional[str] = Field(
+        default=None, max_length=100,
+        description="채점 세션 제목(표시 전용). 없으면 목록에서 데이터셋명으로 표시")
+    expert_prompt: Optional[str] = Field(
+        default=None, max_length=2000,
+        description="평가 지침(사람이 볼 채점 기준). 없으면 시나리오 기본 지침(SDS/일반)")
 
 
 class ExpertRatingBody(BaseModel):

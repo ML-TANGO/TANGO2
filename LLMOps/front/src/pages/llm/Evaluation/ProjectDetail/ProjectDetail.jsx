@@ -273,14 +273,17 @@ const ProjectDetail = () => {
     }
   };
 
-  // 배포 선택 확정 후 전문가 세션 시작. inferencePlaygroundId=null 이면 mock 출력(graceful).
-  const startExpertRun = async (inferencePlaygroundId) => {
+  // 생성 모달 확정 후 전문가 세션 시작. playgroundId=null 이면 mock 출력(graceful).
+  //   runName/expertPrompt 는 선택 입력 — 미전송 시 BE 가 기본값(목록=데이터셋명, 지침=시나리오
+  //   기본 지침)으로 폴백하므로 빈 값을 억지로 보내지 않는다.
+  const startExpertRun = async ({ playgroundId, runName, expertPrompt } = {}) => {
     setShowInferModal(false);
     if (starting) return;
     setStarting(true);
     const body = { project_id: Number(projectId) };
-    if (inferencePlaygroundId)
-      body.inference_playground_id = inferencePlaygroundId;
+    if (playgroundId) body.inference_playground_id = playgroundId;
+    if (runName) body.run_name = runName;
+    if (expertPrompt) body.expert_prompt = expertPrompt;
     // 생성 런이 있으면 그 샘플을 채점 대상으로(명시 opt-in). 없으면 배포/mock.
     if (latestInference?.job_id) body.inference_job_id = latestInference.job_id;
     const res = await startExpert(body);
@@ -724,14 +727,37 @@ const ProjectDetail = () => {
                         onClick={() => openRun(run)}
                       >
                         <div className={cx('run-main')}>
+                          {/* 제목이 있으면 그것이 1행 — 없으면 기존대로 데이터셋명. */}
                           <span className={cx('run-dataset')}>
-                            {run.dataset_name || '-'}
+                            {run.run_name || run.dataset_name || '-'}
                           </span>
+                          {run.run_name && run.dataset_name && (
+                            <span className={cx('run-config')}>
+                              {run.dataset_name}
+                            </span>
+                          )}
                           {summary && (
                             <span className={cx('run-config')}>{summary}</span>
                           )}
                         </div>
                         <div className={cx('run-side')}>
+                          {/* 전문가 세션은 완료 전까지 metrics 에 점수가 없다 — BE 가 실어준
+                              부분 집계로 진행 상황과 현재 평균을 목록에서 바로 보여준다. */}
+                          {run.expert_progress && (
+                            <span className={cx('run-metrics')}>
+                              {t('evaluation.expert.progress', {
+                                rated: run.expert_progress.rated ?? 0,
+                                total: run.expert_progress.total ?? 0,
+                              })}
+                              {run.expert_progress.avg_score != null
+                                ? ` · ${t(
+                                    'evaluation.expert.avgScore',
+                                  )} ${Number(
+                                    run.expert_progress.avg_score,
+                                  ).toFixed(2)}/5`
+                                : ''}
+                            </span>
+                          )}
                           {preview.length > 0 && (
                             <span className={cx('run-metrics')}>
                               {preview

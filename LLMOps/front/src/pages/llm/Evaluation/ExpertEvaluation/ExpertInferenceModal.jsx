@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Badge, Loading, Radio } from '@jonathan/ui-react';
+import { Badge, InputText, Loading, Radio, Textarea } from '@jonathan/ui-react';
 
 import NewStyleModalFrame from '@src/components/Modal/NewStyleModalFrame';
 import EmptyBox from '@src/components/molecules/EmptyBox';
+import InputBoxWithLabel from '@src/components/molecules/InputBoxWithLabel';
 
 import { getPlayground } from '@src/apis/llm/playground';
 import { STATUS_SUCCESS } from '@src/network';
@@ -21,15 +22,19 @@ const DEPLOYMENT_BADGE_TYPE = {
   running: 'green',
 };
 
-// 전문가 평가 시작 전 "추론에 사용할 배포" 선택 모달.
+// 전문가 평가 세션 생성 모달 — 제목·평가 지침·추론 배포를 한 화면에서 받는다.
 //   워크스페이스의 running 배포(playground)를 나열 → 선택 시 그 배포 모델로 지연 단위 VLM
 //   실추론(전문가가 여는 샘플만). 선택 안 함 → mock 출력으로 진행(graceful). running 없으면 mock 안내.
 //   (배포↔프로젝트 모델 매칭은 사용자 선택 신뢰 — 리스트 API 가 비-dual 모델 id 를 안 실어줌.)
+//   제목·지침은 둘 다 선택 입력이며 BE 가 세션 metrics 에 동결한다(미입력 시 제목=데이터셋명 표시,
+//   지침=시나리오 기본 지침). 지침은 채점 화면 상단 '평가 지침' 박스에 그대로 표시된다.
 const ExpertInferenceModal = ({ workspaceId, onConfirm, onClose }) => {
   const { t } = useTranslation();
 
   const [deployments, setDeployments] = useState(null); // null=로딩, []=없음
   const [selected, setSelected] = useState(null); // playground id | null(mock)
+  const [runName, setRunName] = useState('');
+  const [guideline, setGuideline] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -80,7 +85,13 @@ const ExpertInferenceModal = ({ workspaceId, onConfirm, onClose }) => {
   const loading = deployments === null;
   const submit = {
     text: 'evaluation.expert.inferStart',
-    func: () => onConfirm(selected),
+    // 빈 입력은 undefined 로 — BE 가 '미입력'으로 보고 기본 지침/데이터셋명 표시로 폴백한다.
+    func: () =>
+      onConfirm({
+        playgroundId: selected,
+        runName: runName.trim() || undefined,
+        expertPrompt: guideline.trim() || undefined,
+      }),
   };
   const cancel = {
     text: 'cancel.label',
@@ -106,6 +117,41 @@ const ExpertInferenceModal = ({ workspaceId, onConfirm, onClose }) => {
         customStyle={{ width: '664px' }}
       >
         <div className={cx('inference-content')}>
+          <InputBoxWithLabel
+            labelText={t('evaluation.expert.runName')}
+            labelSize='medium'
+            disableErrorMsg
+          >
+            <InputText
+              size='medium'
+              name='expert-run-name'
+              placeholder={t('evaluation.expert.runNamePlaceholder')}
+              value={runName}
+              onChange={(event) => setRunName(event.target.value)}
+              onClear={() => setRunName('')}
+              options={{ maxLength: 100 }}
+              disableLeftIcon
+              customStyle={{ fontSize: '14px', fontFamily: 'SpoqaM' }}
+            />
+          </InputBoxWithLabel>
+
+          <InputBoxWithLabel
+            labelText={t('evaluation.expert.guideline')}
+            labelSize='medium'
+            disableErrorMsg
+          >
+            <Textarea
+              size='large'
+              name='expert-guideline'
+              maxLength={2000}
+              options={{ id: 'expert-guideline', rows: 4 }}
+              placeholder={t('evaluation.expert.guidelinePlaceholder')}
+              value={guideline}
+              customStyle={{ width: '100%', minHeight: '112px' }}
+              onChange={(event) => setGuideline(event.target.value)}
+            />
+          </InputBoxWithLabel>
+
           <p className={cx('desc')}>{t('evaluation.expert.inferDesc')}</p>
 
           {loading ? (

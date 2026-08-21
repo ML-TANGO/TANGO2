@@ -1049,6 +1049,25 @@ async def list_expert_ratings(job_str_id : str, source_model_id : int = None) ->
     return res or []
 
 
+async def aggregate_expert_ratings_by_jobs(job_str_ids : list) -> list:
+    """세션(job_str_id)별 채점 수·평균 점수 집계(GROUP BY job_str_id). 프로젝트 상세 run 목록이
+    아직 '진행중'인 전문가 세션의 부분 평균을 read-time 으로 파생할 때, run 마다 채점을 조회하는
+    N+1 을 피하려고 한 번에 읽는다(count_run_statuses_by_projects 와 동형).
+    완료 세션은 eval_result.metrics 에 expert_avg_score 가 이미 마감돼 있어 이 경로가 불필요하다.
+    반환: [{job_str_id, rated, avg_score}, ...] (채점 0건 세션은 결과에 없음)."""
+    if not job_str_ids:
+        return []
+    placeholders = ",".join(["%s"] * len(job_str_ids))
+    sql = f"""
+        SELECT job_str_id, COUNT(*) AS rated, AVG(score) AS avg_score
+        FROM eval_expert_rating
+        WHERE job_str_id IN ({placeholders})
+        GROUP BY job_str_id
+    """
+    res = await select_query(sql, params=tuple(job_str_ids), fetch_type=FetchType.ALL)
+    return res or []
+
+
 async def insert_expert_rating_history(source_model_id : int, job_str_id : str,
                                        sample_idx : int, verdict : str,
                                        score : int = None, score_json : str = None,
