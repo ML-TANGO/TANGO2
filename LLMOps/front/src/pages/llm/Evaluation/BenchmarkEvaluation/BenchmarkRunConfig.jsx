@@ -13,12 +13,13 @@ import EmptyBox from '@src/components/molecules/EmptyBox';
 import GuideBox from '@src/components/molecules/GuideBox';
 import Tab from '@src/components/molecules/Tab';
 
-import { successToastMessage } from '@src/utils';
+import { errorToastMessage, successToastMessage } from '@src/utils';
 
 import {
   BENCHMARKS,
   BENCHMARK_CATEGORIES,
   BENCHMARK_MAP,
+  REAL_BENCHMARK_IDS,
   categoryCount,
   defaultMetricFor,
 } from './benchmarks';
@@ -59,6 +60,23 @@ const BenchmarkRunConfig = ({ running, onRun }) => {
       });
       return;
     }
+    // 채점기 혼재 차단 — 실채점 벤치마크(LogicKor 등)는 전용 컨테이너로 가고 한 런은
+    // 컨테이너 하나뿐이라, mock 벤치마크와 같은 런에 섞을 수 없다(BE service.run_benchmark
+    // 가 거부한다). 선택 단계에서 막지 않으면 사용자가 3단계까지 진행한 뒤 실행 시점에
+    // 영문 예외 메시지를 토스트로 보게 된다.
+    const isReal = (bid) => REAL_BENCHMARK_IDS.includes(bid);
+    const conflicting = selected.find((x) => isReal(x) !== isReal(id));
+    if (conflicting) {
+      const realOne = isReal(id) ? id : conflicting;
+      errorToastMessage(
+        null,
+        t('evaluation.bench.mixScorerBlocked', {
+          real: BENCHMARK_MAP[realOne]?.label || realOne,
+        }),
+      );
+      return;
+    }
+
     const metric = defaultMetricFor(id);
     setSelected((prev) => [...prev, id]);
     setMetricMap((m) => ({ ...m, [id]: metric }));

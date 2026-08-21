@@ -32,8 +32,11 @@ from utils.llm_db import db_model
 
 from external.proxy import ExternalContainerClient, ExternalContainerError
 from evaluation.constants import (
+    BENCHMARK_ALLOWED_METRICS,
     BENCHMARK_IDS,
     BENCHMARK_RECOMMENDED_METRIC,
+    DEFAULT_BENCHMARK_IDS,
+    REAL_BENCHMARK_MANIFEST_KEY,
     EVAL_DEPLOY_MAX_POLLS,
     EVAL_INFER_RUN_SECONDS,
     EVAL_TYPES,
@@ -103,8 +106,13 @@ async def run_benchmark(project_id: int,
             raise Exception("dataset access path is unsafe")
         datasets.append(d)
 
-    # 벤치마크→메트릭 매핑 정규화. 생략/빈값 → 전체 벤치마크·권장 메트릭. unknown id 는
-    # 무시(dto 에서 이미 422 검증하지만 방어), 벤치마크 중복은 첫 지정 유지.
+    # 벤치마크→메트릭 매핑 정규화. 생략/빈값 → 기본 집합(mock 채점 벤치마크)·권장 메트릭.
+    # 전체(BENCHMARK_IDS)로 폴백하지 않는 이유: 실채점 벤치마크는 각자 전용 컨테이너로
+    # 가야 하는데 한 런은 컨테이너 하나이므로 "전체 한 번에"가 성립하지 않는다.
+    # unknown id 는 무시(dto 에서 이미 422 검증하지만 방어), 벤치마크 중복은 첫 지정 유지.
+    # 벤치마크가 허용하지 않는 메트릭(예: logickor × cider = 계산 불가)은 버리지 않고
+    # 권장 메트릭으로 교정한다 — 런 자체를 실패시키는 것보다 낫고, FE 는 애초에 허용
+    # 목록만 보내므로 이 경로는 API 직접 호출 방어다.
     pairs = []
     seen = set()
     for item in (benchmarks or []):
@@ -112,12 +120,28 @@ async def run_benchmark(project_id: int,
         m = str((item or {}).get("metric", "")).strip()
         if b not in BENCHMARK_IDS or m not in METRIC_IDS or b in seen:
             continue
+        if m not in BENCHMARK_ALLOWED_METRICS.get(b, METRIC_IDS):
+            m = BENCHMARK_RECOMMENDED_METRIC[b]
         seen.add(b)
         pairs.append({"benchmark": b, "metric": m})
     if not pairs:
         pairs = [{"benchmark": b, "metric": BENCHMARK_RECOMMENDED_METRIC[b]}
-                 for b in BENCHMARK_IDS]
+                 for b in DEFAULT_BENCHMARK_IDS]
     pairs = pairs[:MAX_BENCHMARK_ITEMS]
+
+    # 채점 컨테이너 라우팅 — 벤치마크마다 필요한 런타임이 달라(LogicKor 는 심판 LLM +
+    # transformers 5.5.4 핀) 한 이미지가 전부 채점할 수 없다. 한 런 = 컨테이너 하나이므로
+    # 서로 다른 채점기의 벤치마크를 섞으면 조용히 일부만 채점된다(mock 은 모르는 id 를
+    # 필터링해 버리고 9개 해시 점수를 낸다) → 명시적으로 거부하고 나눠 돌리게 한다.
+    manifest_keys = {
+        REAL_BENCHMARK_MANIFEST_KEY.get(p["benchmark"], "BENCHMARK") for p in pairs}
+    if len(manifest_keys) > 1:
+        raise Exception(
+            "benchmarks with different scorers cannot run together: "
+            f"{sorted(p['benchmark'] for p in pairs)} — run them as separate runs")
+    manifest_key = manifest_keys.pop()
+    manifest_name = getattr(settings, f"{manifest_key}_MANIFEST_NAME")
+    manifest_version = getattr(settings, f"{manifest_key}_MANIFEST_VERSION")
     benchmark_set = [p["benchmark"] for p in pairs]
     metric_map = {p["benchmark"]: p["metric"] for p in pairs}
     # eval_result.metric_set(VARCHAR 255) = "benchmark:metric" CSV — 런 설정 요약 + 재개 소스
@@ -163,8 +187,8 @@ async def run_benchmark(project_id: int,
             client = ExternalContainerClient(
                 base_url=settings.FB_EXTERNAL_CONTAINER_URL, client=http)
             raw = await client.start_job(
-                manifest_name=settings.BENCHMARK_MANIFEST_NAME,
-                manifest_version=settings.BENCHMARK_MANIFEST_VERSION,
+                manifest_name=manifest_name,
+                manifest_version=manifest_version,
                 workspace_id=workspace_id, params=params)
     except ExternalContainerError as e:
         raise Exception(f"benchmark job launch failed ({e.status_code}): {e}") from e
@@ -193,8 +217,8 @@ async def run_benchmark(project_id: int,
         "model_id": model_id, "model_name": model_name, "workspace_id": workspace_id,
         "dataset_ids": dataset_ids, "datasets": ds_names,
         "benchmarks": pairs, "benchmark_set": benchmark_set, "metric_map": metric_map,
-        "manifest_name": settings.BENCHMARK_MANIFEST_NAME,
-        "manifest_version": settings.BENCHMARK_MANIFEST_VERSION,
+        "manifest_name": manifest_name,
+        "manifest_version": manifest_version,
         "job_id": job_id, "mode": "benchmark", "used_runner": used_runner,
     }
 

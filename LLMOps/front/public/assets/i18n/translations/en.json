@@ -72,7 +72,6 @@
   "signup.title1.label": "Thank you for being with Jonathan.",
   "signup.title2.label": "Enter all the information required for signup.",
   "signup.request.label": "Request registration",
-
   "remain.resource.label": "Remaining resources",
   "before.justMoment.label": "A moment ago",
   "before.minute.label": "{{minute}} Minutes ago",
@@ -141,7 +140,6 @@
   "playground.stopBtn.deploystop.message2": "Do you want to stop the deployment?",
   "playground.leavepopup.title": "Exit Deployment Settings",
   "playground.leavepopup.content": "Are you sure you want to exit the deployment settings\nYou cannot recover unsaved content.",
-
   "no.desc": "There is no written description.",
   "menu.label": "Menu",
   "summary.label": "Summary",
@@ -174,7 +172,6 @@
   "joblist.exit.message": "Releasing allocated resources.",
   "instance.allocate.error.message": "The instance quota has been exceeded.",
   "storage.allocate.error.message": "The storage quota has been exceeded.",
-
   "position.label": "Job titles",
   "position.signup.label": "Job titles",
   "affiliation": "Affiliation",
@@ -186,7 +183,6 @@
   "aggregation": "Aggregation",
   "broadcasting": "Broadcasting",
   "load.model.label": "Loading models",
-
   "reserved": "Reserved",
   "expired": "Expired",
   "error": "Error",
@@ -219,7 +215,6 @@
   "working": "Working",
   "installing": "Installing",
   "setting.reset.label": "Reset settings",
-
   "workspacePending": "Pending in a workspace",
   "stop": "Stop",
   "stop.label": "Stop",
@@ -878,7 +873,6 @@
   "workspaceDescSetting.label": "Workspace Description Setting",
   "workspaceDescription.label": "Workspace Description",
   "workspace.edit.popup.message": "Adding an instance will be applied automatically after approval by your system administrator.\n\nAre you sure you want to continue?",
-
   "dailyWorkspaceResourceUsage.label": "Daily Workspeches resource usage status",
   "period.label": "Period",
   "periodOf.label": "Period of",
@@ -899,7 +893,6 @@
   "allocationStatus.label": "Allocation Status",
   "currentlyAvailable.label": "Currently available",
   "currentlyAvailableGPU.label": "GPU Currently available",
-
   "currentAvailableCount": "Available",
   "immediatelyAvailable.label": "Immediately available",
   "cpuCores.label": "CPU Cores",
@@ -1203,7 +1196,6 @@
   "node.virtualSettingModal.confirm.contents": "When you save an instance, your instance settings in Workspace, Learning, and Deployment are reset.\nAre you sure you want to save your instance?",
   "node.virtualSettingModal.allClear": "Initialising an instance",
   "node.virtualSettingModal.clear.contents": "Initialising the instance will initialise the instance with its settings in Workspace, Learning, and Deployment.\nAre you sure you want to save the instance?",
-
   "basicInformation.title.label": "Basic Information",
   "basicInformationSettings.title.label": "Basic Information Settings",
   "basicSettings.title.label": "Basic Settings",
@@ -2852,7 +2844,6 @@
   "llm.dashboard.rag.stop.status": "You have stopped the fine-tuning operation.",
   "llm.dashboard.rag.done.status": "You're done fine-tuning.",
   "llm.dashboard.instance.message": "Hover your mouse over the bar graph to see detailed usage by project.",
-
   "llm.rag.Craetor.label": "Creator",
   "llm.huggingface.token.modal.title": "Hugging Face token authentication",
   "llm.deploy.modal.warn": "[Caution] GPUs assigned to a deployment cannot be utilized in other working environments.",
@@ -3167,5 +3158,12 @@
   "formatConvertInvalidFileName.message": "The result file name may only contain letters, digits, '.', '_' and '-'.",
   "formatConvertRunning.message": "Format conversion is running.",
   "formatConvertDone.message": "Format conversion finished. The result file was created in the same folder as the source.",
-  "formatConvertFailed.message": "Format conversion failed."
+  "formatConvertFailed.message": "Format conversion failed.",
+  "evaluation.bench.mixScorerBlocked": "{{real}} uses a dedicated scorer and cannot run together with other benchmarks. Please run it separately.",
+  "evaluation.bench.logickorTitle": "LogicKor scores by category",
+  "evaluation.bench.logickorMeta": "{{count}} questions · 1-{{max}} scale",
+  "evaluation.bench.turnSingle": "Turn 1",
+  "evaluation.bench.turnMulti": "Turn 2",
+  "evaluation.bench.turnOverall": "Overall",
+  "evaluation.bench.colCategory": "Category"
 }

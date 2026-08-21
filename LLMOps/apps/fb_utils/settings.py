@@ -244,6 +244,12 @@ EVALUATE_MANIFEST_VERSION = os.getenv('EVALUATE_MANIFEST_VERSION', '1.0.0')
 BENCHMARK_MANIFEST_NAME = os.getenv('BENCHMARK_MANIFEST_NAME', 'evaluate-benchmark-mock')
 BENCHMARK_MANIFEST_VERSION = os.getenv('BENCHMARK_MANIFEST_VERSION', '0.2.0')
 
+# LogicKor 실채점 컨테이너(apps/evaluate_logickor) — mock 과 달리 실제 심판 점수를 집계한다.
+# 벤치마크 'logickor' 를 고른 런만 이 manifest 로 라우팅된다(service.run_benchmark 의
+# REAL_BENCHMARK_MANIFEST_KEY). 한 런 = 컨테이너 하나라 mock 벤치마크와 섞어 돌릴 수 없다.
+LOGICKOR_MANIFEST_NAME = os.getenv('LOGICKOR_MANIFEST_NAME', 'evaluate-logickor')
+LOGICKOR_MANIFEST_VERSION = os.getenv('LOGICKOR_MANIFEST_VERSION', '0.1.0')
+
 # SDS 도메인(3.5) 모델 생성 시 자동 바인딩되는 외부 컨테이너 manifest 의 고정 버전.
 # 사용자는 모델 생성에서 domain=SDS 만 고르고 버전은 안 고른다 → create_model 이
 # 이 상수로 external_manifest_name/version 을 해석. 바인딩 버전은 **env 로 flip**

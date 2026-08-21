@@ -12,7 +12,7 @@ import { STATUS_SUCCESS } from '@src/network';
 import { errorToastMessage } from '@src/utils';
 
 import { BENCHMARK_LABEL } from './benchmarks';
-import { METRIC_LABEL, barWidth, fmt } from './benchmarkMetrics';
+import { METRIC_LABEL, barWidth, fmt, scaleMaxFor } from './benchmarkMetrics';
 
 import classNames from 'classnames/bind';
 import style from './BenchmarkEvaluation.module.scss';
@@ -108,6 +108,9 @@ const BenchmarkResultView = ({ modelId, jobId, status, onComplete }) => {
         label: BENCHMARK_LABEL[result.benchmark] || result.benchmark,
         metric: METRIC_LABEL[result.metric] || result.metric,
         score: result.score,
+        // 막대 폭 환산 척도 — 심판 점수(1~10)는 100 기준이 아니라 8.1 을 8% 로
+        // 그리면 안 된다. 미등록 메트릭은 100(기존 동작).
+        scaleMax: scaleMaxFor(result.metric),
       }));
     }
     const averages = results.averages || {};
@@ -119,7 +122,19 @@ const BenchmarkResultView = ({ modelId, jobId, status, onComplete }) => {
         ? METRIC_LABEL[metricMap[key]] || metricMap[key]
         : null,
       score: averages[key],
+      scaleMax: scaleMaxFor(metricMap[key]),
     }));
+  }, [results]);
+
+  // LogicKor 상세 — 영역(6) × 턴(2) 격자. 벤치마크 계약(results[])은 대표 스칼라 1개만
+  // 담으므로, 영역별 강약점은 채점기가 metrics JSON 의 'logickor' 키에 따로 실어 보낸다.
+  // 이 키가 없는 런(기존 9벤치마크·구 실행)은 이 섹션이 그냥 렌더되지 않는다.
+  const logickor = useMemo(() => {
+    const detail = results?.logickor;
+    if (!detail || !Array.isArray(detail.categories) || !detail.categories.length) {
+      return null;
+    }
+    return detail;
   }, [results]);
 
   const ranking = useMemo(
@@ -251,12 +266,81 @@ const BenchmarkResultView = ({ modelId, jobId, status, onComplete }) => {
                 <div className={cx('chart-bar-wrap')}>
                   <div
                     className={cx('chart-bar')}
-                    style={{ width: `${barWidth(row.score)}%` }}
+                    style={{ width: `${barWidth(row.score, row.scaleMax)}%` }}
                   />
                 </div>
                 <div className={cx('chart-value')}>{fmt(row.score)}</div>
               </div>
             ))}
+          </div>
+        </section>
+      )}
+
+      {/* LogicKor 상세 — 영역별 강약점이 이 벤치마크의 핵심 정보다(대표 스칼라 하나로는
+          "어디가 약한지"를 알 수 없다). 다른 벤치마크 런에는 이 키가 없어 렌더되지 않는다. */}
+      {logickor && (
+        <section className={cx('result-section')}>
+          <div className={cx('result-section-head')}>
+            <h3 className={cx('result-section-title')}>
+              {t('evaluation.bench.logickorTitle')}
+            </h3>
+            <Badge
+              label={t('evaluation.bench.logickorMeta', {
+                count: logickor.count,
+                max: fmt(logickor.scale_max || 10),
+              })}
+              type='gray'
+              size='sm'
+            />
+          </div>
+
+          <div className={cx('score-grid')}>
+            {[
+              [t('evaluation.bench.turnSingle'), logickor.single_turn],
+              [t('evaluation.bench.turnMulti'), logickor.multi_turn],
+              [t('evaluation.bench.turnOverall'), logickor.overall],
+            ].map(([label, score]) => (
+              <div key={label} className={cx('score-card')}>
+                <div className={cx('score-metric')}>{label}</div>
+                <div className={cx('score-value')}>{fmt(score)}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className={cx('result-table')}>
+            <BorderTable
+              columns={[
+                {
+                  name: t('evaluation.bench.colCategory'),
+                  selector: 'category',
+                  sortable: false,
+                  cell: (row) => (
+                    <span className={cx('table-label')}>{row.category}</span>
+                  ),
+                },
+                {
+                  name: t('evaluation.bench.turnSingle'),
+                  selector: 'single',
+                  sortable: false,
+                  cell: (row) => (
+                    <span className={cx('table-score')}>{fmt(row.single)}</span>
+                  ),
+                },
+                {
+                  name: t('evaluation.bench.turnMulti'),
+                  selector: 'multi',
+                  sortable: false,
+                  cell: (row) => (
+                    <span className={cx('table-score')}>{fmt(row.multi)}</span>
+                  ),
+                },
+              ]}
+              data={logickor.categories}
+              loading={false}
+              selectableRows={false}
+              hideSearchBox
+              hideButtons
+            />
           </div>
         </section>
       )}

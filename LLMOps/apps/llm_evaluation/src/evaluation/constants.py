@@ -1,22 +1,64 @@
 """llm_evaluation 공용 상수."""
 
-# 벤치마크 정본(9) — id = FE benchmarks.js + evaluate-benchmark-mock 컨테이너와 일치. 벤치마크
-# = 표준 평가 태스크(ARC·MMLU…). "벤치마크 선택 → 벤치마크별 메트릭" 2단계의 1단계 후보다.
-BENCHMARK_IDS = (
+# mock 채점 벤치마크(9) — evaluate-benchmark-mock 컨테이너가 해시 점수로 채점하는 집합.
+# ⚠️ 실채점이 아니다. 정식 채점기가 붙는 대로 이 집합에서 빠져 나간다.
+MOCK_BENCHMARK_IDS = (
     "arc", "kobest", "mmlu", "hellaswag", "winogrande",
     "gsm8k", "truthfulqa", "boolq", "humaneval",
 )
 
-# 메트릭 정본(8) — 벤치마크와 분리된 채점 방식. id = FE benchmarkMetrics.js + mock 일치.
+# 실채점 벤치마크 → 전용 채점 컨테이너. 벤치마크마다 필요한 런타임이 달라(LogicKor 는
+# 심판 LLM + transformers 5.5.4 핀) 한 컨테이너가 전부 채점할 수 없다. 한 런은 컨테이너
+# 하나로 가므로 서로 다른 채점기의 벤치마크를 한 런에 섞을 수 없다(service 가 거부).
+REAL_BENCHMARK_MANIFEST_KEY = {
+    "logickor": "LOGICKOR",
+}
+
+# 벤치마크 정본(10) — id = FE benchmarks.js + 채점 컨테이너와 일치. 벤치마크
+# = 표준 평가 태스크(ARC·MMLU…). "벤치마크 선택 → 벤치마크별 메트릭" 2단계의 1단계 후보다.
+BENCHMARK_IDS = MOCK_BENCHMARK_IDS + tuple(REAL_BENCHMARK_MANIFEST_KEY)
+
+# 요청에서 benchmarks 를 생략했을 때 채점할 기본 집합. 전체(BENCHMARK_IDS)가 아니라
+# mock 집합만 쓴다 — 실채점 벤치마크는 각자 다른 컨테이너로 가야 하므로 "전체 한 번에"가
+# 성립하지 않는다. 실채점 벤치마크는 사용자가 명시적으로 골라야 한다.
+DEFAULT_BENCHMARK_IDS = MOCK_BENCHMARK_IDS
+
+# 메트릭 정본(11) — 벤치마크와 분리된 채점 방식. id = FE benchmarkMetrics.js + 채점기 일치.
+# judge_* 3종은 LogicKor 전용 심판 점수(1~10). LogicKor 는 정답이 없어(references=null)
+# accuracy/f1 계열을 계산할 수 없고 심판 LLM 점수가 유일한 채점 축이다. 셋의 차이는
+# 대표 스칼라를 어느 축으로 잡느냐(전체/1턴/2턴)일 뿐이고 전체 결과는 항상 함께 산출된다.
 METRIC_IDS = (
     "accuracy", "f1", "acc_norm", "bleu", "rouge", "meteor", "cider", "spice",
+    "judge_overall", "judge_single", "judge_multi",
 )
 
-# 벤치마크별 권장 메트릭(생략 시 채택) — FE 기본 선택·mock 기본 채점과 공유(단일 소스).
+# 벤치마크별 권장 메트릭(생략 시 채택) — FE 기본 선택·채점기 기본값과 공유(단일 소스).
 BENCHMARK_RECOMMENDED_METRIC = {
     "arc": "accuracy", "kobest": "f1", "mmlu": "accuracy", "hellaswag": "acc_norm",
     "winogrande": "accuracy", "gsm8k": "accuracy", "truthfulqa": "accuracy",
     "boolq": "accuracy", "humaneval": "accuracy",
+    "logickor": "judge_overall",
+}
+
+# 벤치마크별 허용 메트릭 — FE benchmarks.js 의 벤치마크별 metrics 목록과 동일 집합.
+# 지금까지 이 제약은 FE 에만 있어서 API 를 직접 치면 'logickor × cider' 처럼 계산 자체가
+# 불가능한 조합이 통과했다(서버는 벤치마크·메트릭을 각각만 검사). 여기 두고 서버에서
+# 강제해 허용 밖 조합은 권장 메트릭으로 교정한다.
+# ⚠️ 이 표는 FE benchmarks.js 의 벤치마크별 metrics 와 **정확히 같은 집합**이어야 한다.
+# FE 가 제시하는데 여기 없으면, 사용자가 고른 메트릭이 아무 신호 없이 권장값으로 교정돼
+# "F1 을 골랐는데 accuracy 로 채점된" 상태가 된다(실제로 gsm8k·truthfulqa 에서 발생).
+# 둘 중 하나를 줄이려면 FE 와 함께 줄여야 한다.
+BENCHMARK_ALLOWED_METRICS = {
+    "arc": ("accuracy", "acc_norm", "f1"),
+    "kobest": ("f1", "accuracy", "acc_norm"),
+    "mmlu": ("accuracy", "acc_norm"),
+    "hellaswag": ("acc_norm", "accuracy"),
+    "winogrande": ("accuracy", "acc_norm"),
+    "gsm8k": ("accuracy", "f1"),
+    "truthfulqa": ("accuracy", "f1", "bleu", "rouge"),
+    "boolq": ("accuracy", "f1"),
+    "humaneval": ("accuracy",),
+    "logickor": ("judge_overall", "judge_single", "judge_multi"),
 }
 
 # 한 벤치마크 런이 다룰 벤치마크 상한 — metric_set 요약 컬럼(VARCHAR 255) 초과·과도 태스크 방지.

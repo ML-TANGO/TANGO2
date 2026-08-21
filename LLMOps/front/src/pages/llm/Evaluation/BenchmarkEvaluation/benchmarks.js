@@ -88,7 +88,25 @@ export const BENCHMARKS = [
     recommended: 'accuracy',
     metrics: ['accuracy'],
   },
+  // 실채점 벤치마크 — 위 9개(해시 mock)와 달리 실제 점수가 나온다.
+  // 42문항 × 6영역 × 2턴을 심판 LLM 이 1~10 점으로 채점. 정답(reference)이 없어
+  // accuracy/f1 계열은 계산 자체가 불가하고, 고를 수 있는 건 "어느 축을 대표값으로
+  // 쓸지"(전체/1턴/2턴)뿐이다. 영역별 점수는 항상 함께 산출돼 결과 상세에 표시된다.
+  {
+    id: 'logickor',
+    label: 'LogicKor',
+    desc: '한국어 추론·생성 — 6영역 × 2턴, 심판 LLM 1~10점',
+    category: 'reasoning',
+    recommended: 'judge_overall',
+    metrics: ['judge_overall', 'judge_single', 'judge_multi'],
+    real: true,
+  },
 ];
+
+// 실채점 벤치마크 id 집합 — mock(해시 점수)과 구분해 배지로 표시한다. BE
+// constants.REAL_BENCHMARK_MANIFEST_KEY 와 대응한다(서로 다른 채점 컨테이너로 라우팅되며,
+// 그래서 mock 벤치마크와 한 런에 섞어 실행할 수 없다).
+export const REAL_BENCHMARK_IDS = BENCHMARKS.filter((b) => b.real).map((b) => b.id);
 
 export const BENCHMARK_MAP = Object.fromEntries(
   BENCHMARKS.map((b) => [b.id, b]),

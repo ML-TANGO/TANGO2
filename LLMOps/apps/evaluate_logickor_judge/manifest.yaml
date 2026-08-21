@@ -1,0 +1,75 @@
+# evaluate-logickor-judge — LogicKor 심판 채점 + 집계(GPU).
+# evaluate-logickor(CPU, 집계 전용)의 상위 단계. 플랫폼은 LOGICKOR_MANIFEST_NAME env 로
+# 둘 중 하나를 고른다(코드 변경 없음). 집계 로직(scoring.py)은 두 이미지가 공유한다.
+apiVersion: tango.acryl.ai/v1
+kind: ExternalContainer
+
+metadata:
+  name: evaluate-logickor-judge
+  version: "0.1.2"
+  vendor: "Acryl (platform-owned)"
+  contact: "platform@acryl.ai"
+  description: |
+    LogicKor 심판 채점 + 집계. 미채점 생성물(generator 산출 jsonl)을 입력으로 심판 LLM을
+    vLLM 으로 로드해 문항×턴마다 1~10 점을 매기고(ETRI evaluator 프롬프트·파싱 그대로),
+    영역별 격자와 종합 점수까지 산출한다. 생성(generate) 단계는 미포함 — 대상 모델
+    가중치가 필요해 별 증분으로 둔다.
+
+spec:
+  image: "docker.io/acrylaaai/evaluate-logickor-judge:0.1.2"
+
+  # /hf-cache 는 읽기전용 마운트다. huggingface_hub 은 캐시 히트여도 refs/<rev> 를
+  # 갱신하려 해서 Errno 30 (Read-only file system) 으로 죽는다(2026-08-21 실측).
+  # 오프라인 모드면 ref 갱신·네트워크 조회를 건너뛰고 스냅샷을 그대로 쓴다 —
+  # 사전 캐시 전제(폐쇄망)와도 맞다. 이미지 재빌드 없이 manifest env 로 주입한다.
+  env:
+    HF_HUB_OFFLINE: "1"
+    TRANSFORMERS_OFFLINE: "1"
+
+  job_type: evaluate
+  execution_mode: async
+  port: 8000
+
+  resources:
+    cpu: "4"
+    memory: "32Gi"            # vLLM 가중치 로드 + KV 캐시 호스트측 버퍼
+    gpu: 1                    # 심판 모델 1개. 생성 단계가 붙으면 순차 로드라 여전히 1장.
+    # gpu > 0 이면 스키마가 gpu_memory 선언을 강제한다. 심판 모델(gemma-4-E4B, 16GB
+    # 가중치)을 vLLM 이 gpu_memory_utilization=0.8 로 올리므로 A100 80GB 한 장 기준
+    # 64Gi 를 잡는다(가중치 + KV 캐시). 더 작은 카드에 스케줄되면 vLLM 이 기동 실패한다.
+    gpu_memory: "64Gi"
+
+  inputs:
+    params:
+      required: false          # benchmarks / judge_model / judge_model_len / generated_subdir
+    dataset:
+      required: true           # 미채점 생성물 jsonl 이 담긴 데이터셋
+
+  outputs:
+    metrics: true              # /output/metrics.json
+    artifacts: true            # /output/evaluated/**.jsonl (심판 평가문 포함)
+
+  secrets:
+    required: []               # HF_TOKEN 은 공개 심판모델이면 불필요(params 로 전달 가능)
+
+  network:
+    # 심판 모델 가중치를 HF 에서 받는다. 사전 캐시된 환경이면 비워도 된다.
+    egress_whitelist:
+      - huggingface.co
+      - cdn-lfs.huggingface.co
+      - cdn-lfs-us-1.hf.co
+
+  endpoints:
+    info: "/info"
+    health: "/health"
+    live: "/live"
+    run: "/run"
+    jobs: "/jobs/{id}"
+    cancel: "/jobs/{id}/cancel"
+
+  capabilities:
+    estimated_startup_seconds: 240      # 이미지 pull 없음 + 가중치 로드
+    estimated_duration_seconds: 1800
+    timeout_seconds: 10800              # 파일당 42문항×2턴, 파일 수만큼 누적
+
+  workspace_scope: per-workspace

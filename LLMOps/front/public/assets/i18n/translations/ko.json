@@ -141,7 +141,6 @@
   "playground.stopBtn.deploystop.message2": "배포를 중지하시겠습니까?",
   "playground.leavepopup.title": "배포 설정 종료",
   "playground.leavepopup.content": "배포 설정을 종료하시겠습니까?\n저장하지 않은 내용은 복구할 수 없습니다.",
-
   "no.desc": "작성된 설명이 없습니다.",
   "menu.label": "메뉴",
   "summary.label": "요약",
@@ -174,7 +173,6 @@
   "joblist.exit.message": "할당된 자원을 해제 중입니다.",
   "instance.allocate.error.message": "인스턴스 할당량이 초과되었습니다.",
   "storage.allocate.error.message": "스토리지 할당량이 초과되었습니다.",
-
   "position.label": "직책",
   "position.signup.label": "직책 (OO연구원, 학생 등)",
   "affiliation": "소속",
@@ -219,7 +217,6 @@
   "working": "작동 중 ",
   "installing": "설치 중",
   "setting.reset.label": "설정 초기화",
-
   "workspacePending": "워크스페이스 내 팬딩",
   "stop": "중지",
   "stop.label": "중지",
@@ -1196,7 +1193,6 @@
   "node.virtualSettingModal.confirm.contents": "인스턴스를 저장하면, 워크스페이스, 학습, 배포에 설정되어 있는 인스턴스가 초기화됩니다.\n인스턴스를 저장하시는데 동의하십니까?",
   "node.virtualSettingModal.allClear": "인스턴스 초기화",
   "node.virtualSettingModal.clear.contents": "인스턴스를 초기화하면, 워크스페이스, 학습, 배포에 설정되어 있는 인스턴스가 초기화됩니다.\n인스턴스를 저장하시는데 동의하십니까?",
-
   "basicInformation.title.label": "기본 정보",
   "basicInformationSettings.title.label": "기본 정보 설정",
   "basicSettings.title.label": "기본 설정",
@@ -2147,7 +2143,6 @@
   "storageName.empty.message": "스토리지 이름을 입력하세요.",
   "storageWorkspaceGeneration.tooltip.message": "불가능 선택 시 해당 스토리지에 워크스페이스를 새로 추가할 수 없습니다.",
   "storageCapacity.label": "스토리지 용량",
-
   "storageMinCapacity.label": "최소 할당 용량",
   "storageMaxCapacity.label": "최대 할당 용량",
   "storageCapacityValid.message": "워크스페이스에 한번 할당한 용량은 줄일 수 없습니다.",
@@ -2854,7 +2849,6 @@
   "llm.dashboard.rag.stop.status": "파인튜닝 작업을 중지 했습니다.",
   "llm.dashboard.rag.done.status": "파인튜닝이 끝났습니다.",
   "llm.dashboard.instance.message": "마우스 커서를 막대그래프로 이동하시면, 프로젝트 별 상세 사용량을 확인하실 수 있습니다.",
-
   "llm.rag.Craetor.label": "등록자",
   "llm.huggingface.token.modal.title": "Hugging Face 토큰 인증",
   "llm.deploy.modal.warn": "[주의] 배포에 할당된 GPU는 다른 작업 환경에서 활용 불가합니다.",
@@ -3172,5 +3166,12 @@
   "formatConvertInvalidFileName.message": "결과 파일 이름은 영문·숫자·'.'·'_'·'-' 만 사용할 수 있습니다.",
   "formatConvertRunning.message": "포맷 변환을 실행하는 중입니다.",
   "formatConvertDone.message": "포맷 변환이 완료되었습니다. 결과 파일이 원본과 같은 폴더에 생성되었습니다.",
-  "formatConvertFailed.message": "포맷 변환에 실패했습니다."
+  "formatConvertFailed.message": "포맷 변환에 실패했습니다.",
+  "evaluation.bench.mixScorerBlocked": "{{real}} 는 전용 채점기를 쓰므로 다른 벤치마크와 같이 실행할 수 없습니다. 따로 실행해 주세요.",
+  "evaluation.bench.logickorTitle": "LogicKor 영역별 점수",
+  "evaluation.bench.logickorMeta": "{{count}}문항 · 1~{{max}}점",
+  "evaluation.bench.turnSingle": "1턴",
+  "evaluation.bench.turnMulti": "2턴",
+  "evaluation.bench.turnOverall": "종합",
+  "evaluation.bench.colCategory": "영역"
 }
