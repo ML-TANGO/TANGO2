@@ -927,7 +927,13 @@ async def _resolve_train_log_path(job_id: str, detail: Optional[dict]) -> Option
 
     Source priority — graph fallback 과 동일 path 패턴:
       1) tracker active → jobs/<job_id>/output/<subdir>/train.log
+      1.5) 학습이 아닌 잡(평가·변환 등) → jobs/<job_id>/output/run.log
       2) tracker cleanup 후 → models/<external>/commit_models/<commit>/train.log
+
+    1.5 가 필요한 이유: train.log 는 파인튜닝 컨테이너의 산출물이다. 평가 컨테이너
+    (evaluate-intent 등)는 학습 로그가 아니라 실행 로그를 남기므로 파일명이 다르고,
+    output_subdir 도 쓰지 않는다. 파드 stdout 을 읽지 않는 이유는 잡이 끝나면 파드가
+    사라져 로그를 다시 볼 수 없기 때문이다 — NFS 파일이라야 사후에도 열린다.
     """
     import os
     from utils.llm_db import db_model as _dbm
@@ -950,6 +956,26 @@ async def _resolve_train_log_path(job_id: str, detail: Optional[dict]) -> Option
                         return p
             except Exception:
                 logger.exception("system-log: ws lookup (active) failed")
+
+        # 1.5. 학습이 아닌 외부 잡의 실행 로그. output_subdir 이 없는 경우가 대부분이라
+        #      위 분기와 조건을 공유하지 않는다(subdir 이 있으면 그 아래도 본다).
+        if workspace_id:
+            try:
+                ws = await _dbm.get_workspace_model(workspace_id=int(workspace_id))
+                if ws:
+                    main_root = PATH.JF_MAIN_STORAGE_PATH.format(
+                        STORAGE_NAME=ws["main_storage_name"], WORKSPACE_NAME=ws["name"],
+                    )
+                    candidates = [("jobs", job_id, "output", "run.log")]
+                    if output_subdir:
+                        candidates.insert(
+                            0, ("jobs", job_id, "output", output_subdir, "run.log"))
+                    for parts in candidates:
+                        p = _contained_path(main_root, *parts)
+                        if p and os.path.exists(p):
+                            return p
+            except Exception:
+                logger.exception("system-log: run.log lookup failed")
 
     # 2. commit_models fallback
     try:
@@ -982,10 +1008,11 @@ async def _resolve_train_log_path(job_id: str, detail: Optional[dict]) -> Option
 async def get_external_system_log(job_id: str) -> dict[str, Any]:
     """Drop-in replacement for /api/models/fine-tuning/system-log?model_id=.
 
-    NFS 의 train.log 직접 read — graph fallback 과 동일한 path 패턴.
-    학습 중 (tracker active) 면 jobs/.../train.log, 학습 종료 후엔
-    commit_models/.../train.log fallback. partner pod 의 /train/log endpoint
-    제공 안 해도 NFS mount 통해 동기 동작.
+    NFS 의 로그 파일 직접 read — graph fallback 과 동일한 path 패턴.
+    학습 잡은 jobs/.../train.log → commit_models/.../train.log 순으로,
+    학습이 아닌 잡(평가·변환 등)은 jobs/<job_id>/output/run.log 를 읽는다.
+    partner pod 가 로그 endpoint 를 제공하지 않아도 NFS mount 로 동기 동작하고,
+    파드가 사라진 뒤에도 조회된다(파드 stdout 을 읽지 않는 이유).
 
     Modal 의 폴링 (1초 간격) 에 매번 마지막 200 줄 응답.
     """
@@ -1013,10 +1040,13 @@ async def get_external_system_log(job_id: str) -> dict[str, Any]:
                 content = f.read().decode("utf-8", errors="replace")
             lines = content.splitlines()[-200:]
             tail = "\n".join(lines)
+            # ⚠️ 소스 **경로**는 싣지 않는다. 이 문자열은 로그 모달에 그대로 렌더되는데,
+            #    NFS 실경로는 내부 스토리지/워크스페이스 명명과 잡 디렉터리 구조를 그대로
+            #    공개한다(정찰 정보). 플랫폼 규약도 체크포인트를 이름으로만 노출한다.
+            #    내부 대응 경로(models/fine-tuning/system-log)도 경로를 싣지 않는다.
             header = (
                 f"[platform] external job {job_id}  "
                 f"size={size} bytes  showing last {len(lines)} lines\n"
-                f"           source={log_path}\n"
                 f"{'-' * 80}\n"
             )
             return _envelope(status=1, result=header + tail)
@@ -1027,7 +1057,7 @@ async def get_external_system_log(job_id: str) -> dict[str, Any]:
                 result=f"[platform] failed to read {log_path} — see server logs",
             )
 
-    # train.log 없음 — placeholder 응답
+    # 읽을 로그 파일이 없음 — placeholder 응답
     result = (detail or {}).get("result") or {}
     raw_status = result.get("status") or ("unknown" if detail is None else "pending")
     scalars = _extract_etri_scalars(detail or {})
@@ -1037,10 +1067,81 @@ async def get_external_system_log(job_id: str) -> dict[str, Any]:
         f"  status        : {raw_status}\n"
         f"  output_dir    : {output_dir}\n"
         f"\n"
-        f"[platform] train.log 파일을 NFS 에서 찾지 못했습니다. 학습이 시작 직후\n"
-        f"           이거나 commit 으로 옮겨진 직후일 수 있습니다.\n"
+        f"[platform] 이 잡의 로그 파일을 NFS 에서 찾지 못했습니다.\n"
+        f"           찾는 위치는 jobs/{job_id}/output/ 아래의 run.log(실행 로그) 와\n"
+        f"           train.log(학습 로그) 입니다.\n"
+        f"\n"
+        f"           흔한 원인:\n"
+        f"           - 잡이 방금 시작해 아직 첫 줄을 쓰지 않았다(잠시 후 다시 조회).\n"
+        f"           - 로그를 남기지 않는 구버전 컨테이너로 실행된 잡이다.\n"
+        f"             (evaluate-intent 는 0.2.1, evaluate-logickor-judge 는 0.2.1\n"
+        f"              부터 run.log 를 남긴다 — 그 이전 런은 다시 볼 로그가 없다.)\n"
+        f"           - 학습 잡이라면 산출물이 commit 으로 옮겨진 직후일 수 있다.\n"
     )
     err = result.get("error")
     if isinstance(err, dict) and err.get("message"):
         placeholder += f"\n[platform] last partner error: {err.get('message')}\n"
     return _envelope(status=1, result=placeholder)
+
+
+# 다운로드 상한. 조회(200줄 tail)와 달리 전문을 내려주되, 수백 MB 로그가 그대로
+# 메모리에 올라오는 것은 막는다. 넘치면 뒤쪽(최근)을 남긴다 — 실패 진단에 필요한 건
+# 대개 마지막 부분이라 앞을 버리는 편이 낫다.
+_LOG_DOWNLOAD_MAX_BYTES = 20 * 1024 * 1024
+
+
+@external.get("/jobs/{job_id}/system-log/download")
+async def download_external_system_log(job_id: str):
+    """실행 로그 전문 다운로드 — 내부용 /models/fine-tuning/system-log/download 의 external 판.
+
+    조회 endpoint 는 모달 폴링용이라 마지막 200 줄만 준다. 실패를 파고들 때는 전문이
+    필요하므로 같은 파일을 통째로 내려준다. 응답 생성은 내부용과 **같은 헬퍼**를 써서
+    프런트가 두 경로를 다르게 다루지 않아도 되게 한다.
+
+    로그 파일이 없으면 404 — 프런트는 HTTP status 로 성공을 판정하므로, 여기서
+    envelope 200 을 돌려주면 안내 문구가 .log 파일로 저장돼 버린다.
+    """
+    import os
+
+    from utils import common
+
+    client = await _get_client()
+    detail: Optional[dict]
+    try:
+        detail = await client.get_job(job_id)
+    except ExternalContainerError as exc:
+        if exc.status_code == 404:
+            detail = None
+        else:
+            raise _translate_error(exc) from exc
+
+    log_path = await _resolve_train_log_path(job_id, detail)
+    if not log_path:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"no log file for external job {job_id}",
+        )
+
+    try:
+        with open(log_path, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            size = f.tell()
+            read_size = min(size, _LOG_DOWNLOAD_MAX_BYTES)
+            f.seek(size - read_size)
+            content = f.read().decode("utf-8", errors="replace")
+    except OSError:
+        logger.exception("system-log download: read failed for %s", log_path)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="failed to read log file",
+        )
+
+    # 조회 배너와 같은 이유로 소스 경로는 제외한다(다운로드 파일에 남으면 더 오래 돈다).
+    header = (
+        f"[platform] external job {job_id}\n"
+        f"           size={size} bytes"
+        + (f" (truncated to last {read_size} bytes)" if read_size < size else "")
+        + "\n" + "-" * 80 + "\n"
+    )
+    return await common.text_response_generator_async(
+        data_str=header + content, filename=f"[EXTERNAL]{job_id}.log")

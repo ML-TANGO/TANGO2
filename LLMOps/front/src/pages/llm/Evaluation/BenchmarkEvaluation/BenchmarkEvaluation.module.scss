@@ -326,8 +326,24 @@
   display: flex;
   flex-direction: column;
   max-width: 1040px;
-  margin-top: 8px;
+  // 완료 상태 배지를 뺀 뒤 첫 섹션 제목이 프로젝트 정보 카드에 붙어버려, 배지가 차지하던
+  // 한 줄만큼(8px + 약 24px) 위 여백을 준다.
+  margin-top: 32px;
   gap: 24px;
+}
+
+// 결과 헤더 — 상태 배지(진행중·실패)와 '실행 로그' 버튼을 한 줄에 놓는다.
+// 완료 상태에서는 배지를 감추므로(중복 표시) 버튼만 오른쪽에 남기는 .end 변형을 둔다.
+.result-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+
+  &.end {
+    justify-content: flex-end;
+  }
 }
 
 .result-status {

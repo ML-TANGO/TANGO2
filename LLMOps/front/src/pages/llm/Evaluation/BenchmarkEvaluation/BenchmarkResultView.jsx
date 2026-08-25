@@ -1,26 +1,52 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useDispatch } from 'react-redux';
 
-import { Badge, Loading } from '@jonathan/ui-react';
+import { Badge, ButtonV2, Loading } from '@jonathan/ui-react';
 
 import BorderTable from '@src/components/molecules/BorderTable';
 import EmptyBox from '@src/components/molecules/EmptyBox';
 
 import { getEvalResult } from '@src/apis/llm/evaluation';
+import { loadModalComponent } from '@src/modal';
 import { STATUS_SUCCESS } from '@src/network';
+import { openModal } from '@src/store/modules/modal';
 
 import { errorToastMessage } from '@src/utils';
 
 import { BENCHMARK_LABEL } from './benchmarks';
 import { METRIC_LABEL, barWidth, fmt, scaleMaxFor } from './benchmarkMetrics';
+import LogicKorRadar from './LogicKorRadar';
+import { diffText, diffTone, fmt2, judgeVerdict } from './logickorResult';
 
 import classNames from 'classnames/bind';
 import style from './BenchmarkEvaluation.module.scss';
 
 const cx = classNames.bind(style);
 
-const POLL_MS = 3000;
-const POLL_MAX = 40; // 약 2분(컨테이너 기동 여유)
+// MixATIS 지표는 0~1 비율이다. 소스 모듈 웹 콘솔(Intent_web/web_app.py 의 fmt)이
+// `(x*100).toFixed(2) + '%'` 로 쓰므로 같은 규칙을 쓴다 — 같은 채점 결과를 두 화면에서
+// 다르게 읽는 일이 없어야 한다.
+const pct = (v) => {
+  const n = Number(v);
+  if (v == null || !Number.isFinite(n)) return '-';
+  return `${(n * 100).toFixed(2)}%`;
+};
+
+// 폴링 예산은 "시도 횟수"가 아니라 "경과 시간"으로 잡는다. 벤치마크 런은 채점기에 따라
+// 소요가 두 자릿수 배 차이 난다 — mock 은 10초(evaluate_benchmark_mock)인데 LogicKor
+// 실채점은 기동에만 240초, 생성+심판까지 3600초다(evaluate_logickor_judge manifest
+// capabilities). 40회×3초=120초 고정 예산은 LogicKor 런이 기동을 마치기도 전에 끊겨서
+// 성공한 런조차 화면에서는 늘 '대기 시간 초과'로 보였다.
+// 간격은 초반 촘촘 → 후반 성글게(backoff) 둔다. mock 의 응답성은 그대로 두면서 장시간
+// 런의 요청 수만 줄인다(4시간 완주 시 약 500회).
+const POLL_DEADLINE_MS = 4 * 60 * 60 * 1000; // 컨테이너 timeout_seconds(14400) 와 정렬
+
+const pollIntervalMs = (elapsedMs) => {
+  if (elapsedMs < 60 * 1000) return 3000; // 첫 1분 — mock 완주·기동 실패를 즉시 반영
+  if (elapsedMs < 5 * 60 * 1000) return 10 * 1000; // ~5분 — 실채점 컨테이너 기동 구간
+  return 30 * 1000; // 이후 — 생성·심판 구간(수십 분)
+};
 
 // 결과 상태를 조나단 Badge type으로 매핑한다(프로젝트 상세와 동일 색상 체계).
 const STATUS_BADGE_TYPE = {
@@ -43,6 +69,13 @@ const STATUS_LABEL_KEY = {
 // 벤치마크, 메트릭, 점수 구조의 랭킹/차트/표를 표시한다.
 // 완료(ready) 시 onComplete로 상위 갱신을 트리거하며 기존 폴링 가드를 유지한다.
 const BenchmarkResultView = ({ modelId, jobId, status, onComplete }) => {
+  const dispatch = useDispatch();
+
+  // 실행 로그 — 소스 콘솔에도 지표 카드 바로 아래 '실행 로그' 패널이 있다. 플랫폼에는
+  // 이미 외부잡 로그 모달이 있으므로(external 모드) 새로 만들지 않고 그대로 연다.
+  useEffect(() => {
+    loadModalComponent('FINETUNING_SYSTEM_LOG');
+  }, []);
   const { t } = useTranslation();
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -390,6 +423,32 @@ const BenchmarkResultView = ({ modelId, jobId, status, onComplete }) => {
       : status || 'running';
   const statusLabel = t(STATUS_LABEL_KEY[resultStatus] || resultStatus);
 
+  // 진행 중에도 열려야 한다 — 20 분짜리 런(학습 10 분 + 평가 8 분)에서 "멈춘 건지
+  // 도는 건지"를 볼 수단이 이것뿐이다. 그래서 results 가 아니라 jobId 만 있으면 세운다.
+  const openRunLog = useCallback(() => {
+    if (!jobId) return;
+    dispatch(
+      openModal({
+        modalType: 'FINETUNING_SYSTEM_LOG',
+        modalData: {
+          jobId,
+          manifestName: results?._meta?.name || t('evaluation.bench.runLog'),
+          mode: 'external',
+        },
+      }),
+    );
+  }, [dispatch, jobId, results, t]);
+
+  const runLogButton = jobId ? (
+    <ButtonV2
+      type='outline'
+      colorType='gray'
+      size='s'
+      label={t('evaluation.bench.runLog')}
+      onClick={openRunLog}
+    />
+  ) : null;
+
   const statusBadge = (
     <div className={cx('result-status')}>
       <Badge
@@ -403,7 +462,10 @@ const BenchmarkResultView = ({ modelId, jobId, status, onComplete }) => {
   if (failed) {
     return (
       <div className={cx('benchmark-result')}>
-        {statusBadge}
+        <div className={cx('result-head')}>
+          {statusBadge}
+          {runLogButton}
+        </div>
         <EmptyBox
           text='evaluation.failed'
           isBox
@@ -416,7 +478,10 @@ const BenchmarkResultView = ({ modelId, jobId, status, onComplete }) => {
   if (loading && !results) {
     return (
       <div className={cx('benchmark-result')}>
-        {statusBadge}
+        <div className={cx('result-head')}>
+          {statusBadge}
+          {runLogButton}
+        </div>
         <div className={cx('result-loading')}>
           <Loading />
           <span>{t('evaluation.running')}</span>
@@ -427,7 +492,10 @@ const BenchmarkResultView = ({ modelId, jobId, status, onComplete }) => {
   if (!results || rows.length === 0) {
     return (
       <div className={cx('benchmark-result')}>
-        {statusBadge}
+        <div className={cx('result-head')}>
+          {statusBadge}
+          {runLogButton}
+        </div>
         <EmptyBox
           text='evaluation.poll.timeout'
           isBox
@@ -439,9 +507,16 @@ const BenchmarkResultView = ({ modelId, jobId, status, onComplete }) => {
 
   return (
     <div className={cx('benchmark-result')}>
-      {statusBadge}
-
-      {ranking.length > 0 && (
+      {/* 완료 상태 배지는 두지 않는다 — 프로젝트 헤더와 실행 목록 행이 이미 상태를
+          보여줘서 같은 '완료' 가 세 번 찍혔다. 실패·진행중·빈 결과 분기에서는 그
+          배지가 유일한 상태 신호라 그대로 남긴다(위 early return 들). */}
+      {runLogButton && (
+        <div className={cx('result-head', 'end')}>{runLogButton}</div>
+      )}
+      {/* 랭킹·차트·결과표는 여러 벤치마크를 한 런에서 돌릴 때(mock 9종) 의미가 있다.
+          LogicKor 런은 벤치마크가 하나뿐이라 세 섹션이 같은 값 8.19 를 세 번 반복하게
+          되므로 감춘다 — 대표 스칼라는 아래 '종합' 카드가 들고 있다. */}
+      {!hasDetailPanel && ranking.length > 0 && (
         <section className={cx('result-section')}>
           <div className={cx('result-section-head')}>
             <h3 className={cx('result-section-title')}>

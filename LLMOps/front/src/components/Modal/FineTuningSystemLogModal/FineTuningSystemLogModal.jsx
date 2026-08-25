@@ -32,19 +32,23 @@ const FineTuningSystemLogModal = ({ data, type }) => {
   const isFirstFetch = useRef(true);
   const isPendingRef = useRef(false);
   const [log, setLog] = useState('');
+  // 실제 로그 여부 — BFF 가 실 파일을 읽었을 때만 'showing last N lines' 헤더를 붙인다.
+  // 로그가 없어 안내 문구만 온 경우(구버전 컨테이너 런 등)는 내려받을 파일이 없으므로
+  // 다운로드를 막는다. 조회 갱신 로직도 같은 신호로 placeholder 를 판별한다.
+  const hasRealLog =
+    !isExternal || (typeof log === 'string' && log.includes('showing last'));
   const [loading, setLoading] = useState(true);
   const footerMessage = '';
 
   const { t } = useTranslation();
 
   const onClickDownload = async () => {
-    if (isExternal) {
-      // v1.0.0 BFF doesn't expose a download endpoint; the button is disabled,
-      // so this branch is defensive only.
-      return;
-    }
+    // 조회는 모달 폴링용이라 마지막 200 줄만 받는다. 다운로드는 전문을 받아야 하므로
+    // 별도 endpoint 를 탄다 — external 도 내부와 같은 응답 헬퍼를 쓰므로 처리가 같다.
     const { data, status } = await network.callApiWithPromise({
-      url: `models/fine-tuning/system-log/download?model_id=${modelId}`,
+      url: isExternal
+        ? `external/jobs/${jobId}/system-log/download`
+        : `models/fine-tuning/system-log/download?model_id=${modelId}`,
       method: 'GET',
     });
 
@@ -52,7 +56,9 @@ const FineTuningSystemLogModal = ({ data, type }) => {
       const url = window.URL.createObjectURL(new Blob([data]));
       const link = document.createElement('a');
       link.href = url;
-      link.download = `[Finetuning]No.${modelId}.log`;
+      link.download = isExternal
+        ? `[External]${jobId}.log`
+        : `[Finetuning]No.${modelId}.log`;
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
@@ -173,7 +179,7 @@ const FineTuningSystemLogModal = ({ data, type }) => {
             size='l'
             colorType='skyblue'
             label={t('logDownload.label')}
-            disabled={isExternal || loading || !log || log.length === 0}
+            disabled={loading || !log || log.length === 0 || !hasRealLog}
             onClick={onClickDownload}
           />
         </div>
