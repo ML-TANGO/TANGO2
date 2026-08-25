@@ -1,0 +1,3 @@
+# 실험 산출물 — auto2.sh 가 컨테이너의 /workspace/out 을 여기로 마운트한다.
+# (LoRA 어댑터 + 평가 CSV. 컨테이너가 root 로 쓰므로 소유자가 root 일 수 있다.)
+out/

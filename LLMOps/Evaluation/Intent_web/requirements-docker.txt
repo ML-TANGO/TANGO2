@@ -1,5 +1,8 @@
 # torch 는 베이스 이미지(pytorch/pytorch)에 포함되어 있으므로 제외한다.
-transformers>=4.51.0
+# 상한 필수: transformers 5.x 는 TrainingArguments 에서 warmup_ratio 를 제거해
+# train_qwen3_mixatis.py 가 TypeError 로 죽는다(5.15.1 에서 확인).
+# 4.51 하한은 Dockerfile 주석대로 bitsandbytes 4bit 로더 때문에 필요하다.
+transformers>=4.51.0,<5
 peft>=0.11.0
 datasets>=2.18.0
 accelerate>=0.30.0
