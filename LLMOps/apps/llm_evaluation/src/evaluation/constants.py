@@ -12,7 +12,16 @@ MOCK_BENCHMARK_IDS = (
 # 하나로 가므로 서로 다른 채점기의 벤치마크를 한 런에 섞을 수 없다(service 가 거부).
 REAL_BENCHMARK_MANIFEST_KEY = {
     "logickor": "LOGICKOR",
+    # MixATIS 다중의도·슬롯. LogicKor 와 달리 심판 LLM 이 없고 정답(BIO 태그 + 의도 라벨)이
+    # 데이터에 있어 지표가 결정론적이다 — 같은 체크포인트면 항상 같은 값이 나온다.
+    "mixatis": "MIXATIS",
 }
+
+# 체크포인트가 **필수**인 채점기. LogicKor 는 체크포인트 없이 데이터셋의 기존 생성물을
+# 채점하는 경로가 있어 optional 이지만, MixATIS 채점기는 평가할 가중치가 없으면 기동
+# 직후 거부한다(evaluate_intent/app.py `_resolve_checkpoint`). BenchmarkRunBody 의
+# commit_id 는 전 벤치마크 공통이라 optional 일 수밖에 없어, 필수 여부를 여기서 좁힌다.
+CHECKPOINT_REQUIRED_MANIFEST_KEYS = ("MIXATIS",)
 
 # 벤치마크 정본(10) — id = FE benchmarks.js + 채점 컨테이너와 일치. 벤치마크
 # = 표준 평가 태스크(ARC·MMLU…). "벤치마크 선택 → 벤치마크별 메트릭" 2단계의 1단계 후보다.
@@ -30,6 +39,10 @@ DEFAULT_BENCHMARK_IDS = MOCK_BENCHMARK_IDS
 METRIC_IDS = (
     "accuracy", "f1", "acc_norm", "bleu", "rouge", "meteor", "cider", "spice",
     "judge_overall", "judge_single", "judge_multi",
+    # mixatis 전용 4종. 의도·슬롯이 서로 다른 단위(발화 / 항목 / 쌍)로 채점돼 기존
+    # accuracy·f1 로는 어느 축인지 구분이 안 된다. 넷은 항상 함께 산출되고 metric 은
+    # results[].score 에 실릴 대표 축만 고른다(judge_* 3종과 같은 규약).
+    "intent_acc", "intent_f1", "slot_f1", "joint_acc",
 )
 
 # 벤치마크별 권장 메트릭(생략 시 채택) — FE 기본 선택·채점기 기본값과 공유(단일 소스).
@@ -38,6 +51,8 @@ BENCHMARK_RECOMMENDED_METRIC = {
     "winogrande": "accuracy", "gsm8k": "accuracy", "truthfulqa": "accuracy",
     "boolq": "accuracy", "humaneval": "accuracy",
     "logickor": "judge_overall",
+    # Joint = 의도집합 AND 슬롯집합 완전일치. 태스크의 최종 난이도 지표라 대표축으로 둔다.
+    "mixatis": "joint_acc",
 }
 
 # 벤치마크별 허용 메트릭 — FE benchmarks.js 의 벤치마크별 metrics 목록과 동일 집합.
@@ -59,10 +74,68 @@ BENCHMARK_ALLOWED_METRICS = {
     "boolq": ("accuracy", "f1"),
     "humaneval": ("accuracy",),
     "logickor": ("judge_overall", "judge_single", "judge_multi"),
+    "mixatis": ("joint_acc", "intent_acc", "intent_f1", "slot_f1"),
 }
 
 # 한 벤치마크 런이 다룰 벤치마크 상한 — metric_set 요약 컬럼(VARCHAR 255) 초과·과도 태스크 방지.
 MAX_BENCHMARK_ITEMS = 20
+
+# ── 실채점 컨테이너 실행 옵션(LogicKor) ──────────────────────────────────────
+# 컨테이너가 실제로 읽는 파라미터만 노출한다(evaluate_logickor_judge app.py 의 params.get).
+# ⚠️ seed 는 의도적으로 없다 — 생성(generate.py temperature=0)·심판(judge.py temperature=0.0)
+#    둘 다 greedy 디코딩이라 시드가 바꿀 난수가 존재하지 않는다. 노브를 만들면 아무 것도
+#    하지 않는 컨트롤이 된다. 런 간 변동을 보려면 컨테이너 샘플링부터 바꿔야 한다.
+# ⚠️ hf_token 도 컨테이너가 받지만 시크릿이라 이 경로로 넘기지 않는다(secrets 계약 별도).
+# ⚠️ use_latest_checkpoint 는 commit_id(체크포인트 선택)와 같은 것을 두 가지 방법으로
+#    지정하게 만들어 노출하지 않는다.
+
+# 프롬프트 전략 — ETRI 원본 templates.PROMPT_STRATEGY 키와 같은 집합이어야 한다.
+LOGICKOR_STRATEGIES = ("default", "1-shot", "cot-1-shot")
+
+# 컨텍스트 길이 — vLLM max_model_len 으로 그대로 들어간다. 너무 작으면 프롬프트가 잘리고
+# 카드 메모리를 넘기면 컨테이너 기동 자체가 실패하므로 양쪽을 다 막는다.
+LOGICKOR_MODEL_LEN_MIN = 512
+LOGICKOR_MODEL_LEN_MAX = 32768
+
+# 심판 1회 출력 상한(토큰). 너무 낮으면 평가문이 잘려 점수 파싱이 실패한다(metrics.judge
+# 의 unscored 로 드러난다).
+LOGICKOR_JUDGE_MAX_OUTPUT_MIN = 64
+LOGICKOR_JUDGE_MAX_OUTPUT_MAX = 8192
+
+# 심판 모델 화이트리스트 — 플랫폼이 고를 수 있는 심판의 정본. FE 는 이 표를
+# /evaluations/benchmark/judge-models 로 받아 그리기만 한다(하드코딩 금지).
+#
+# 자유 입력을 받지 않는 이유: 채점 컨테이너는 HF_HUB_OFFLINE=1 로 뜨고 /hf-cache 는
+# 읽기전용이다. 캐시에 없는 모델은 이름이 아무리 정확해도 GPU 를 잡고 수 분 뒤 기동
+# 단계에서 죽는다. 고를 수 있는 것만 보여주는 게 유일하게 정직한 화면이다.
+# allowlist 라서 경로 주입(절대경로·'..') 방어도 정규식이 아니라 멤버십으로 끝난다.
+#
+# 컨테이너에 넘기는 값은 id 가 아니라 **hf_id** 다 — judge.resolve_judge_model 이 모르는
+# 값을 그대로 통과시키므로 컨테이너의 JUDGE_MODEL_PRESETS 에 없어도 로드된다. 덕분에
+# 심판을 늘릴 때 이미지를 다시 빌드할 필요가 없다(캐시 적재 + 이 표에 한 줄).
+#
+# ⚠️ 여기 한 줄 늘리기 전에 반드시 캐시에 적재할 것. 그 순서를 강제하려고
+#    Evaluation/serve/fetch_judge_models.py 가 **이 표를 읽어** 내려받는다.
+# ⚠️ size_gb 는 대략적인 가중치 크기다. 채점 컨테이너 예산은 gpu_memory 64Gi(A100 80GB
+#    한 장, gpu_memory_utilization 0.8)라 KV 캐시까지 감안하면 14B(~28GB)가 상한선이다.
+#    32B bf16(~64GB)은 가중치만으로 예산을 다 먹으므로 넣지 않는다.
+LOGICKOR_JUDGE_MODELS = (
+    {"id": "gemma", "hf_id": "google/gemma-4-E4B-it",
+     "label": "Gemma 4 E4B Instruct", "size_gb": 15},
+    {"id": "qwen3-14b", "hf_id": "Qwen/Qwen3-14B",
+     "label": "Qwen3 14B", "size_gb": 28},
+    {"id": "qwen2.5-14b", "hf_id": "Qwen/Qwen2.5-14B-Instruct",
+     "label": "Qwen2.5 14B Instruct", "size_gb": 28},
+    {"id": "exaone3.5-7.8b", "hf_id": "LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct",
+     "label": "EXAONE 3.5 7.8B Instruct", "size_gb": 16},
+)
+
+# 컨테이너 기본 심판(judge.DEFAULT_JUDGE_MODEL)과 같아야 한다 — FE 가 초기 선택으로 쓴다.
+LOGICKOR_DEFAULT_JUDGE_ID = "gemma"
+
+LOGICKOR_JUDGE_MODEL_IDS = tuple(m["id"] for m in LOGICKOR_JUDGE_MODELS)
+LOGICKOR_JUDGE_HF_ID = {m["id"]: m["hf_id"] for m in LOGICKOR_JUDGE_MODELS}
+
 
 # 한 벤치마크 런이 다룰 데이터셋 상한 — dataset_name CSV 가 eval_result.dataset_name
 # VARCHAR(255) 를 넘지 않도록(+ 과도한 멀티마운트 방지).

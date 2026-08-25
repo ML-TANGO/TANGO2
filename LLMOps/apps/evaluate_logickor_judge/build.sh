@@ -10,15 +10,16 @@ set -euo pipefail
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LLMOPS_ROOT="$(cd "${APP_DIR}/../.." && pwd)"
-TAG="${TAG:-docker.io/acrylaaai/evaluate-logickor-judge:0.1.0}"
+TAG="${TAG:-docker.io/acrylaaai/evaluate-logickor-judge:0.2.3}"
 STAGE="${STAGE:-${TMPDIR:-/tmp}/logickor-judge-build}"
 OUT="${OUT:-${TMPDIR:-/tmp}/evaluate-logickor-judge.tar}"
 
 mkdir -p "${STAGE}"
-cp "${APP_DIR}"/{Dockerfile,app.py,judge.py,requirements-wrapper.txt} "${STAGE}/"
-cp "${LLMOPS_ROOT}/apps/evaluate_logickor/scoring.py"                  "${STAGE}/"
-cp "${LLMOPS_ROOT}/Evaluation/Logickor_web/logickor_eval/templates.py" "${STAGE}/"
-cp "${LLMOPS_ROOT}/Evaluation/Logickor/requirements/etri-infer.txt"    "${STAGE}/"
+cp "${APP_DIR}"/{Dockerfile,app.py,generate.py,judge.py,requirements-wrapper.txt} "${STAGE}/"
+cp "${LLMOPS_ROOT}/apps/evaluate_logickor/scoring.py"                     "${STAGE}/"
+cp "${LLMOPS_ROOT}/Evaluation/Logickor_web/logickor_eval/templates.py"    "${STAGE}/"
+cp "${LLMOPS_ROOT}/Evaluation/Logickor/logickor_eval/questions.jsonl"     "${STAGE}/"
+cp "${LLMOPS_ROOT}/Evaluation/Logickor/requirements/etri-infer.txt"       "${STAGE}/"
 echo "빌드 컨텍스트: ${STAGE} ($(du -sh "${STAGE}" | cut -f1))"
 
 # buildkitd 가 없으면 임시로 띄운다(이 호스트에는 root 용 소켓이 상시 없다).

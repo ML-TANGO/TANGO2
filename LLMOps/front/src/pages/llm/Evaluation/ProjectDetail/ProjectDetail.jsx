@@ -319,16 +319,28 @@ const ProjectDetail = () => {
   };
 
   // benchmarks = [{ benchmark, metric }] — 벤치마크별 메트릭 매핑(BenchmarkRunConfig 위저드).
-  const handleBenchmarkRun = async (benchmarks) => {
+  // commitId = 실채점 벤치마크용 체크포인트(선택). 주면 채점 컨테이너가 그 커밋 가중치로
+  //   답변 생성부터 수행한다(BE 가 커밋 이름으로 환산해 params.checkpoint_name 으로 전달).
+  //   runOptions = 실채점 컨테이너 실행 옵션(컨텍스트 길이·전략·심판 모델). 미지정 필드는
+  //   애초에 빠져 있어 컨테이너 기본값이 그대로 쓰인다.
+  const handleBenchmarkRun = async (benchmarks, commitId, runOptions) => {
     if (starting) return;
     setStarting(true);
+    // 체크포인트와 러너 생성물은 "무엇을 채점하나"를 서로 다르게 지정하므로 한 요청에
+    //   둘 다 실으면 안 된다 — 채점 컨테이너는 checkpoint_name 이 있으면 생성 모드로 가면서
+    //   넘겨받은 samples 를 조용히 버린다(evaluate_logickor_judge app.py _resolve_checkpoint).
+    //   사용자가 직접 고른 체크포인트가 명시 의사이고 러너 런 첨부는 프로젝트에 그런 런이
+    //   있어서 자동으로 붙는 기본값이므로, 체크포인트를 고르면 그쪽만 보낸다.
     const res = await runBenchmark({
       project_id: Number(projectId),
       benchmarks,
-      // 생성 런이 있으면 그 output 을 스코어러에 넘겨 채점(생성·채점 분리). 없으면 컨테이너 자체 생성.
-      ...(latestInference?.job_id
-        ? { inference_job_id: latestInference.job_id }
-        : {}),
+      ...(runOptions || {}),
+      ...(commitId
+        ? { commit_id: commitId }
+        : // 생성 런이 있으면 그 output 을 스코어러에 넘겨 채점(생성·채점 분리). 없으면 컨테이너 자체 생성.
+          latestInference?.job_id
+          ? { inference_job_id: latestInference.job_id }
+          : {}),
     });
     setStarting(false);
     if (res.status !== STATUS_SUCCESS || !res.result?.job_id) {
@@ -377,6 +389,37 @@ const ProjectDetail = () => {
       criteria: [],
     });
     history.push(`${runsPath}/${run.job_id}`);
+  };
+
+  // 런 1건 중지 — 지금까지는 진행 중 런을 멈추는 유일한 방법이 '삭제'였다. LogicKor 실채점은
+  //   GPU 1장을 최대 1시간 잡으므로, 기록은 남기고 자원만 회수하는 경로가 따로 필요하다.
+  //   markEvalStatus('cancelled') 는 DB 마킹 + 컨테이너 cancel 전달까지 BE 가 처리한다.
+  const handleStopRun = (run, e) => {
+    e.stopPropagation();
+    if (!run?.job_id) return;
+    dispatch(
+      openConfirm({
+        title: 'evaluation.run.stop.title',
+        content: 'evaluation.run.stop.message',
+        testid: 'eval-run-stop-modal',
+        submit: {
+          text: 'evaluation.run.stop.confirm',
+          func: async () => {
+            const res = await markEvalStatus(
+              project.model_id,
+              run.job_id,
+              'cancelled',
+            );
+            if (res.status !== STATUS_SUCCESS) {
+              errorToastMessage(res.error, res.message);
+              return;
+            }
+            await fetchProject();
+          },
+        },
+        cancel: { text: 'cancel.label' },
+      }),
+    );
   };
 
   // 런 1건 삭제(진행중/완료 모두). 프로젝트 삭제와 동일하게 네이티브 확인 모달(openConfirm) 재사용.
@@ -632,6 +675,7 @@ const ProjectDetail = () => {
             {project.eval_type === 'benchmark' && (
               <BenchmarkRunConfig
                 running={starting}
+                modelId={project.model_id}
                 onRun={handleBenchmarkRun}
               />
             )}
@@ -758,6 +802,18 @@ const ProjectDetail = () => {
                               ? t('evaluation.project.detail.resume')
                               : t('evaluation.project.detail.open')}
                           </span>
+                          {/* 진행 중일 때만. expert 는 컨테이너가 없어 중지 대상이 아니다
+                              (사람이 시간에 걸쳐 채점하는 세션이라 정당히 오래 running). */}
+                          {run.status === 'running' &&
+                            project.eval_type !== 'expert' && (
+                              <ButtonV2
+                                type='clear'
+                                colorType='blue'
+                                size='s'
+                                label={t('evaluation.run.stop.action')}
+                                onClick={(event) => handleStopRun(run, event)}
+                              />
+                            )}
                           <ButtonV2
                             type='clear'
                             colorType='red'

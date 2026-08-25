@@ -86,6 +86,42 @@ export const METRICS = [
     common: ['LogicKor'],
     scaleMax: 10,
   },
+  // MixATIS 4종. 넷 다 0~1 비율이라 scaleMax:1 이 필요하다 — 공용 기본값은 0~100
+  // 척도여서, 안 주면 0.4855 를 0.49% 막대로 그린다(소스 콘솔은 x100 해 % 로 쓴다).
+  // Joint 가 유독 낮은 건 결함이 아니라 정의다 — 의도집합과 슬롯집합을 **동시에**
+  // 완전일치시켜야 1점이라, 슬롯이 5개면 5개 전부 값·이름이 맞아야 한다.
+  {
+    id: 'joint_acc',
+    scaleMax: 1,
+    label: 'Joint 정확도',
+    desc: '의도·슬롯 모두 완전일치한 발화 비율',
+    formula: '의도집합 == 정답 AND 슬롯쌍집합 == 정답 인 발화 / 전체 발화',
+    common: ['MixATIS'],
+  },
+  {
+    id: 'intent_acc',
+    scaleMax: 1,
+    label: '의도 정확도',
+    desc: '의도 집합이 정확히 일치한 발화 비율',
+    formula: '정렬한 의도집합이 정답과 같은 발화 / 전체 발화',
+    common: ['MixATIS'],
+  },
+  {
+    id: 'intent_f1',
+    scaleMax: 1,
+    label: '의도 F1',
+    desc: '의도 항목 단위 micro F1 — 부분 정답 인정',
+    formula: '의도 항목 기준 micro precision·recall 의 조화평균',
+    common: ['MixATIS'],
+  },
+  {
+    id: 'slot_f1',
+    scaleMax: 1,
+    label: '슬롯 F1',
+    desc: '(값, 슬롯명) 쌍 단위 micro F1 — 둘 다 맞아야 정답',
+    formula: '슬롯 쌍 기준 micro precision·recall 의 조화평균',
+    common: ['MixATIS'],
+  },
 ];
 
 export const METRIC_MAP = Object.fromEntries(METRICS.map((m) => [m.id, m]));

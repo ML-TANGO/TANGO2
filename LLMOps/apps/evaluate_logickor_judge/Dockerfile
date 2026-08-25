@@ -50,8 +50,12 @@ ENV HOME=/tmp \
 
 # templates.py = ETRI 원본 심판 프롬프트(복제본을 레포에 두지 않는다)
 # scoring.py   = evaluate-logickor 와 공유하는 집계 로직(점수 정의 단일화)
+# questions.jsonl = LogicKor 42문항. 벤치마크 정의 자체이므로 데이터셋 업로드 대상이
+#                   아니라 이미지에 baked 한다(런마다 같은 문항이어야 점수가 비교된다).
 COPY templates.py /srv/templates.py
 COPY scoring.py /srv/scoring.py
+COPY questions.jsonl /srv/questions.jsonl
+COPY generate.py /srv/generate.py
 COPY judge.py /srv/judge.py
 COPY app.py /srv/app.py
 

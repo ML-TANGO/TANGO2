@@ -77,9 +77,21 @@ async def run_benchmark(body: dto.BenchmarkRunBody):
         # 검증된 pair 모델 → 서비스는 순수 dict 로 받는다(dto 의존 분리, 기존 패턴).
         pairs = ([{"benchmark": p.benchmark, "metric": p.metric}
                   for p in body.benchmarks] if body.benchmarks else None)
+        # 실채점 컨테이너 실행 옵션 — dto 가 이미 타입·범위·문자셋을 강제했다. 미지정
+        # 필드는 빼서 넘긴다(컨테이너 기본값을 그대로 쓰게 하고, 우리가 기본값을 두 곳에
+        # 복제하지 않는다).
+        run_options = {k: v for k, v in (
+            ("generate_model_len", body.generate_model_len),
+            ("strategy", body.strategy),
+            ("judge_model", body.judge_model),
+            ("judge_model_len", body.judge_model_len),
+            ("judge_max_output_tokens", body.judge_max_output_tokens),
+        ) if v is not None}
         res = await svc.run_benchmark(
             project_id=body.project_id, benchmarks=pairs,
-            inference_job_id=body.inference_job_id)
+            inference_job_id=body.inference_job_id,
+            commit_id=body.commit_id,
+            run_options=run_options or None)
         return response(status=1, result=res)
     except Exception as e:
         traceback.print_exc()
@@ -98,6 +110,18 @@ async def run_eval_inference(body: dto.EvalInferenceRunBody,
             inference_playground_id=body.inference_playground_id,
             instance_id=body.instance_id, instance_count=body.instance_count,
             gpu_count=body.gpu_count, commit_id=body.commit_id, user_name=jf_user)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+
+@evaluations.get("/benchmark/judge-models", summary="LogicKor 심판 후보 목록", tags=TAG)
+async def list_benchmark_judge_models():
+    # ⚠️ 이 라우트는 아래 "/{model_id}/results" 류보다 **먼저** 등록돼야 한다. 뒤에 두면
+    #    'benchmark' 가 {model_id} 로 잡혀 int 파싱 422 가 난다(FastAPI 는 등록 순서로 매칭).
+    try:
+        res = await svc.list_benchmark_judge_models()
         return response(status=1, result=res)
     except Exception as e:
         traceback.print_exc()

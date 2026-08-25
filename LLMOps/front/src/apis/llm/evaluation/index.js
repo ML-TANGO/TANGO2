@@ -51,6 +51,13 @@ export const compareProjectRuns = async (projectId) => {
 // ── run 생성 (P2+: 프로젝트 상속) ─────────────────────────────────────
 // 벤치마크 런 생성. body: { project_id, benchmarks?: [{ benchmark, metric }] } — 벤치마크→메트릭
 //   매핑(생략 시 전체 벤치마크·권장 메트릭). model/dataset 은 프로젝트에서 상속.
+// LogicKor 심판 후보 목록. → { models: [{id,label,hf_id,size_gb}], default }.
+//   FE 는 이 응답만 렌더한다 — 목록을 프론트에 복제하면 서버 화이트리스트와 드리프트하고,
+//   캐시에 없는 심판이 화면에 뜨는 순간 "GPU 잡고 몇 분 뒤 실패"가 되살아난다.
+export const getBenchmarkJudgeModels = async () => {
+  return await callApi({ url: 'evaluations/benchmark/judge-models', method: 'get' });
+};
+
 export const runBenchmark = async (body) => {
   return await callApi({ url: 'evaluations/benchmark', method: 'post', body });
 };

@@ -101,12 +101,34 @@ export const BENCHMARKS = [
     metrics: ['judge_overall', 'judge_single', 'judge_multi'],
     real: true,
   },
+  // 발화의 의도(다중)와 슬롯(값+이름)을 동시에 맞히는 태스크. LogicKor 와 달리 정답이
+  // 데이터에 있어(BIO 태그 + 의도 라벨) 심판 없이 결정론적으로 채점된다.
+  // 네 지표는 재는 단위가 서로 다르다 — 발화 / 의도 항목 / 슬롯 쌍 / 발화(둘 다).
+  {
+    id: 'mixatis',
+    label: 'MixATIS',
+    desc: '다중의도·슬롯 — 828 발화, 정답 대조 채점(심판 없음)',
+    category: 'reasoning',
+    recommended: 'joint_acc',
+    metrics: ['joint_acc', 'intent_acc', 'intent_f1', 'slot_f1'],
+    real: true,
+    // LogicKor 는 체크포인트 없이 데이터셋의 기존 생성물을 채점하는 경로가 있지만,
+    // MixATIS 채점기는 평가할 가중치가 없으면 기동 직후 거부한다. BE 도
+    // constants.CHECKPOINT_REQUIRED_MANIFEST_KEYS 로 파드를 띄우기 전에 막는다.
+    requiresCheckpoint: true,
+  },
 ];
 
 // 실채점 벤치마크 id 집합 — mock(해시 점수)과 구분해 배지로 표시한다. BE
 // constants.REAL_BENCHMARK_MANIFEST_KEY 와 대응한다(서로 다른 채점 컨테이너로 라우팅되며,
 // 그래서 mock 벤치마크와 한 런에 섞어 실행할 수 없다).
 export const REAL_BENCHMARK_IDS = BENCHMARKS.filter((b) => b.real).map((b) => b.id);
+
+// 체크포인트 없이는 채점기가 기동 직후 거부하는 벤치마크. 실행 전에 화면에서 걸러
+// 값비싼 GPU 파드가 떴다가 죽는 것을 막는다(BE 도 같은 경계를 강제한다).
+export const CHECKPOINT_REQUIRED_BENCHMARK_IDS = BENCHMARKS.filter(
+  (b) => b.requiresCheckpoint,
+).map((b) => b.id);
 
 export const BENCHMARK_MAP = Object.fromEntries(
   BENCHMARKS.map((b) => [b.id, b]),

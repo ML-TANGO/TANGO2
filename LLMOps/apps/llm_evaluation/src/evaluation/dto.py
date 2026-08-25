@@ -8,6 +8,12 @@ from evaluation.constants import (
     EVAL_TYPES,
     EXPERT_SCORE_MAX,
     EXPERT_SCORE_MIN,
+    LOGICKOR_JUDGE_MAX_OUTPUT_MAX,
+    LOGICKOR_JUDGE_MAX_OUTPUT_MIN,
+    LOGICKOR_JUDGE_MODEL_IDS,
+    LOGICKOR_MODEL_LEN_MAX,
+    LOGICKOR_MODEL_LEN_MIN,
+    LOGICKOR_STRATEGIES,
     MAX_BENCHMARK_DATASETS,
     MAX_BENCHMARK_ITEMS,
     METRIC_IDS,
@@ -93,6 +99,44 @@ class BenchmarkRunBody(BaseModel):
     inference_job_id: Optional[str] = Field(
         default=None, max_length=128, pattern=r"^[A-Za-z0-9_-]+$",
         description="러너 generate 런 job_id(주면 생성 output 을 채점, 없으면 컨테이너 자체 생성)")
+    # 체크포인트 선택(LogicKor 등 실채점 컨테이너) — 주면 스코어러가 그 커밋 가중치로
+    # 생성부터 수행한다. 같은 모델의 체크포인트 간 비교가 이 필드의 존재 이유다.
+    # 미지정이면 컨테이너 규약대로 동작(LogicKor 는 데이터셋의 미채점 생성물을 채점).
+    commit_id: Optional[int] = Field(
+        default=None, ge=1, description="생성에 쓸 커밋 체크포인트 id(선택)")
+    # ── 실채점 컨테이너 실행 옵션(전부 선택 — 미지정이면 컨테이너 기본값) ──────────
+    # 자유형식 dict passthrough 로 두지 않는 이유: 이 값들은 그대로 vLLM 기동 인자와
+    # 모델 식별자가 되므로, 어떤 키가 컨테이너에 도달할 수 있는지를 서버가 알고 있어야
+    # 한다. 필드로 열거해 Pydantic 이 타입·범위·문자셋까지 강제한다.
+    generate_model_len: Optional[int] = Field(
+        default=None, ge=LOGICKOR_MODEL_LEN_MIN, le=LOGICKOR_MODEL_LEN_MAX,
+        description="생성 컨텍스트 길이(미지정 시 컨테이너 기본 4096)")
+    strategy: Optional[str] = Field(
+        default=None, description=f"프롬프트 전략 {list(LOGICKOR_STRATEGIES)}")
+    judge_model: Optional[str] = Field(
+        default=None,
+        description=f"심판 모델 id — 화이트리스트 {list(LOGICKOR_JUDGE_MODEL_IDS)}")
+    judge_model_len: Optional[int] = Field(
+        default=None, ge=LOGICKOR_MODEL_LEN_MIN, le=LOGICKOR_MODEL_LEN_MAX,
+        description="심판 컨텍스트 길이(미지정 시 컨테이너 기본 8192)")
+    judge_max_output_tokens: Optional[int] = Field(
+        default=None, ge=LOGICKOR_JUDGE_MAX_OUTPUT_MIN, le=LOGICKOR_JUDGE_MAX_OUTPUT_MAX,
+        description="심판 1회 출력 상한 토큰(미지정 시 컨테이너 기본 1024)")
+
+    @field_validator("judge_model")
+    @classmethod
+    def _validate_judge_model(cls, v):
+        # 자유 입력 금지 — 캐시에 없는 모델은 컨테이너가 GPU 를 잡고서야 죽는다.
+        if v is not None and v not in LOGICKOR_JUDGE_MODEL_IDS:
+            raise ValueError(f"unknown judge_model: {v}")
+        return v
+
+    @field_validator("strategy")
+    @classmethod
+    def _validate_strategy(cls, v):
+        if v is not None and v not in LOGICKOR_STRATEGIES:
+            raise ValueError(f"unknown strategy: {v}")
+        return v
 
     @field_validator("benchmarks")
     @classmethod

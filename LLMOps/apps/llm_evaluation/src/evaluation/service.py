@@ -57,6 +57,14 @@ from evaluation.constants import (
     EXPERT_SCORE_MAX,
     EXPERT_SCORE_MIN,
     EXPERT_VERDICT_PASS_THRESHOLD,
+    LOGICKOR_JUDGE_MAX_OUTPUT_MAX,
+    LOGICKOR_JUDGE_MAX_OUTPUT_MIN,
+    LOGICKOR_DEFAULT_JUDGE_ID,
+    LOGICKOR_JUDGE_HF_ID,
+    LOGICKOR_JUDGE_MODELS,
+    LOGICKOR_MODEL_LEN_MAX,
+    LOGICKOR_MODEL_LEN_MIN,
+    LOGICKOR_STRATEGIES,
     JUDGE_CRITERIA,
     JUDGE_DEFAULT_MODEL,
     JUDGE_PROVIDER_HOSTS,
@@ -66,6 +74,9 @@ from evaluation.constants import (
     MAX_JUDGE_SAMPLES,
     SDS_GEN_SYSTEM_PROMPT,
     SDS_SAMPLE_DIR_GLOB,
+    CHECKPOINT_REQUIRED_MANIFEST_KEYS,
+    MAX_RECONCILE_PER_VIEW,
+    RECONCILE_TIMEOUT_SECONDS,
     STALE_RUNNING_MAX_HOURS,
 )
 
@@ -76,12 +87,16 @@ _JOB_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 
 async def run_benchmark(project_id: int,
                         benchmarks: Optional[List[dict]] = None,
-                        inference_job_id: Optional[str] = None) -> dict:
+                        inference_job_id: Optional[str] = None,
+                        commit_id: Optional[int] = None,
+                        run_options: Optional[dict] = None) -> dict:
     """벤치마크 평가 런 — 프로젝트에서 model/dataset(잠금) 상속 → evaluate 컨테이너 런치.
     model_id·dataset_ids 는 프로젝트에서 주입(요청 바디 미수취 → 불변 강제, P3). 유형별
     설정 = benchmarks(벤치마크→메트릭 매핑). 생략 시 전체 벤치마크를 권장 메트릭으로 채점.
     inference_job_id(러너 생성) 주면 그 생성 output 을 스코어러에 넘겨 채점(생성·채점 분리,
-    D2-b). run 생성 시 프로젝트를 'running' 으로 전이."""
+    D2-b). commit_id 주면 그 커밋 **이름**을 스코어러에 넘겨 컨테이너가 자기 GPU 로 생성부터
+    수행한다(LogicKor). run_options 는 실채점 컨테이너 실행 옵션(컨텍스트 길이·전략·심판
+    모델). run 생성 시 프로젝트를 'running' 으로 전이."""
     project, dataset_ids = await _load_project_for_run(project_id, "benchmark")
     model_id = int(project["model_id"])
     model_info = await db_model.get_model(model_id=model_id)
@@ -105,6 +120,26 @@ async def run_benchmark(project_id: int,
         if ".." in str(d.get("access") or ""):
             raise Exception("dataset access path is unsafe")
         datasets.append(d)
+
+    # 체크포인트 선택 → 컨테이너에 넘길 것은 **커밋 이름 한 조각**이다(경로가 아니다).
+    # 차트가 models/<base_model>/commit_models 를 /models/checkpoints 로 RO 마운트하므로
+    # 컨테이너가 이름을 그 루트에 붙여 해석한다. 경로를 넘기면 params 로 마운트 밖을
+    # 열 수 있고, NFS 실경로가 API 응답·로그로 새어나간다.
+    checkpoint_name = None
+    if commit_id is not None:
+        commit = await db_model.get_commit_model(commit_id=int(commit_id))
+        if not commit:
+            raise Exception(f"commit {commit_id} not found")
+        # 다른 모델의 커밋을 주면 마운트에 그 이름이 없어 컨테이너가 수 분 뒤에 죽는다 —
+        # 여기서 막아 즉시 사유를 준다.
+        if int(commit.get("model_id") or 0) != model_id:
+            raise Exception(
+                f"commit {commit_id} belongs to model {commit.get('model_id')}, "
+                f"not project model {model_id}")
+        checkpoint_name = str(commit.get("name") or "").strip()
+        if not checkpoint_name or not _SAFE_SEGMENT_RE.match(checkpoint_name):
+            raise Exception(
+                f"commit {commit_id} name has unsafe characters for container mount")
 
     # 벤치마크→메트릭 매핑 정규화. 생략/빈값 → 기본 집합(mock 채점 벤치마크)·권장 메트릭.
     # 전체(BENCHMARK_IDS)로 폴백하지 않는 이유: 실채점 벤치마크는 각자 전용 컨테이너로
@@ -144,6 +179,13 @@ async def run_benchmark(project_id: int,
     manifest_version = getattr(settings, f"{manifest_key}_MANIFEST_VERSION")
     benchmark_set = [p["benchmark"] for p in pairs]
     metric_map = {p["benchmark"]: p["metric"] for p in pairs}
+    # 체크포인트 없이는 채점기가 기동 직후 거부하는 벤치마크가 있다. 그대로 두면 GPU 파드가
+    # 떴다가 학습·생성 전에 죽어 시간과 자원만 쓰고 사유도 불친절하다 — 위 '다른 모델의
+    # 커밋' 검증과 같은 취지로 파드를 띄우기 전에 막아 즉시 사유를 준다.
+    if manifest_key in CHECKPOINT_REQUIRED_MANIFEST_KEYS and not checkpoint_name:
+        raise Exception(
+            f"benchmark {', '.join(benchmark_set)} requires a commit checkpoint — "
+            "select one in the run settings (commit_id)")
     # eval_result.metric_set(VARCHAR 255) = "benchmark:metric" CSV — 런 설정 요약 + 재개 소스
     # (기존 flat metric CSV 대체). 전체 결과(점수)는 metrics JSON 에 별도 영속.
     metric_csv = ",".join(f"{p['benchmark']}:{p['metric']}" for p in pairs)[:255]
@@ -165,6 +207,47 @@ async def run_benchmark(project_id: int,
         "benchmark_set": benchmark_set,
         "metric_map": metric_map,
     }
+    if checkpoint_name:
+        params["checkpoint_name"] = checkpoint_name
+
+    # 실행 옵션은 **LogicKor 채점기 전용**이다 — 전략·심판 모델·심판 컨텍스트는 그 컨테이너의
+    # 계약이고, 다른 실채점 벤치마크(MixATIS 는 심판 LLM 자체가 없다)에는 대응물이 없다.
+    # 그래서 '실채점이면'이 아니라 'LOGICKOR 이면'으로 좁힌다. 위에서 채점기 혼재는 이미
+    # 거부됐으므로 이 런의 manifest_key 는 하나로 확정돼 있다.
+    # dto 가 이미 검증하지만 서비스를 직접 호출하는 경로(테스트·내부 호출)를 위해 알려진
+    # 키만 통과시키고 타입을 다시 좁힌다 — checkpoint_name 재검증과 같은 취지의 방어다.
+    if run_options and manifest_key == "LOGICKOR":
+        for key, low, high in (
+            ("generate_model_len", LOGICKOR_MODEL_LEN_MIN, LOGICKOR_MODEL_LEN_MAX),
+            ("judge_model_len", LOGICKOR_MODEL_LEN_MIN, LOGICKOR_MODEL_LEN_MAX),
+            ("judge_max_output_tokens",
+             LOGICKOR_JUDGE_MAX_OUTPUT_MIN, LOGICKOR_JUDGE_MAX_OUTPUT_MAX),
+        ):
+            raw = run_options.get(key)
+            if raw is None:
+                continue
+            try:
+                val = int(raw)
+            except (TypeError, ValueError):
+                raise Exception(f"{key} must be an integer")
+            if not low <= val <= high:
+                raise Exception(f"{key} must be between {low} and {high}")
+            params[key] = val
+        strategy = run_options.get("strategy")
+        if strategy is not None:
+            if strategy not in LOGICKOR_STRATEGIES:
+                raise Exception(f"unknown strategy: {strategy}")
+            params["strategy"] = strategy
+        judge_model = run_options.get("judge_model")
+        if judge_model is not None:
+            # 화이트리스트 id 만 받는다 — 자유 입력이면 캐시에 없는 모델이 통과해
+            # 컨테이너가 GPU 를 잡은 뒤에야 죽는다(HF_HUB_OFFLINE=1, /hf-cache RO).
+            if judge_model not in LOGICKOR_JUDGE_HF_ID:
+                raise Exception(f"unknown judge_model: {judge_model}")
+            # 컨테이너에는 id 가 아니라 HF repo id 를 넘긴다 — resolve_judge_model 이
+            # 모르는 값을 그대로 통과시키므로, 컨테이너 프리셋 표에 없는 심판도 로드된다
+            # (심판 추가에 이미지 재빌드가 필요 없는 이유).
+            params["judge_model"] = LOGICKOR_JUDGE_HF_ID[judge_model]
 
     # 생성·채점 분리(D2-b, P2-b3) — 러너 inference 런이 있으면 그 생성 output 을 스코어러에
     # 넘긴다(generate→score seam): 스코어러가 pre-generated 샘플을 채점(자체 재추론 회피).
@@ -220,6 +303,9 @@ async def run_benchmark(project_id: int,
         "manifest_name": manifest_name,
         "manifest_version": manifest_version,
         "job_id": job_id, "mode": "benchmark", "used_runner": used_runner,
+        # 어느 체크포인트로 돌렸는지는 런 결과(metrics.checkpoint)에도 컨테이너가 새기지만,
+        # 런 생성 응답에서도 바로 확인 가능하게 돌려준다(FE 확인 배너).
+        "checkpoint": checkpoint_name,
     }
 
 
@@ -614,6 +700,18 @@ async def list_judges() -> dict:
         "local": {"id": "local", "label": "Local LLM", "needs_url": True},
         "criteria": list(JUDGE_CRITERIA),
         "mock": _judge_mock_enabled(),
+    }
+
+
+async def list_benchmark_judge_models() -> dict:
+    """LogicKor 심판 후보 — FE 는 이 목록만 렌더한다(하드코딩 금지).
+
+    자유 입력을 주지 않는 이유는 constants.LOGICKOR_JUDGE_MODELS 주석 참조.
+    hf_id 는 참고 표시용이며, 런 생성 시 넘기는 값은 id 다(서버가 hf_id 로 환산).
+    """
+    return {
+        "models": [dict(m) for m in LOGICKOR_JUDGE_MODELS],
+        "default": LOGICKOR_DEFAULT_JUDGE_ID,
     }
 
 

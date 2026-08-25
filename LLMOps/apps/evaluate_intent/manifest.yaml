@@ -1,0 +1,115 @@
+# evaluate-intent — MixATIS 다중의도·슬롯 평가(GPU).
+# ETRI Evaluation/Intent_web 의 평가 단계를 옮긴 것이다. 원본은 웹 콘솔이 docker run 으로
+# 컨테이너를 띄웠는데 클러스터는 containerd 라 도커 소켓이 없다 — 그 겹을 걷어내고
+# 이미지를 K8s Job 으로 직접 돌린다. 계약 전문: ../../examples/hello-plugin/external-container-spec.md
+apiVersion: tango.acryl.ai/v1
+kind: ExternalContainer
+
+metadata:
+  name: evaluate-intent
+  version: "0.2.3"
+  vendor: "Acryl (platform-owned)"
+  contact: "platform@acryl.ai"
+  description: |
+    MixATIS(UGEN 생성QA) 다중의도·슬롯 학습+평가. checkpoint_name 으로 지목한 커밋
+    체크포인트 위에 MixATIS train split 으로 LoRA 를 짧게 학습(기본 on)한 뒤, test 828
+    발화마다 의도 QA·슬롯 QA 두 번 생성하고 생성 문자열을 집합으로 파싱해
+    Intent Acc / Intent micro-F1 / Slot micro-F1 / Overall(Joint) Acc 네 지표를 낸다.
+
+    학습이 기본 on 인 이유: UGEN 은 정답을 고정 형식("값 is one 슬롯명")으로 생성해야
+    채점되는 벤치마크라, 형식을 배우지 않은 모델은 내용을 알아도 0 점이 된다. Qwen3-8B
+    실측으로 zero-shot 은 형식 준수 0/828 · joint_acc 0.0, 같은 가중치에 1500 발화 1 에폭을
+    태우면 joint_acc 0.4855 (intent acc 0.902 / slot F1 0.858). ETRI README 의
+    95.89%/98.10% 도 학습 후 수치이고 원본 웹데모도 학습→평가 두 단계를 함께 돈다.
+    따라서 점수는 "체크포인트 단독"이 아니라 "체크포인트 + 이 레시피"의 값이며, 레시피는
+    metrics.json 의 `train` 절에 새긴다. train: false 로 부르면 0.1.0 과 같은 zero-shot
+    경로다(형식 미학습 진단용).
+
+    지표 정의·프롬프트·학습 semantics 는 ETRI 원본 모듈을 그대로 import 해서 쓴다(재구현 없음).
+    심판 LLM 이 없어 채점은 **결정론적**이다 — 같은 체크포인트·같은 시드면 같은 값이 나온다.
+
+spec:
+  image: "docker.io/acrylaaai/evaluate-intent:0.2.3"
+
+  # 모델 가중치는 차트가 RO 마운트하는 /models/checkpoints 에서 읽고, MixATIS 문항은
+  # 이미지에 baked 다. 런타임에 HF 를 칠 일이 없으므로 오프라인을 명시해 둔다 —
+  # 캐시 미스 시 조용히 네트워크로 나가는 대신 즉시 실패하는 편이 진단이 쉽다.
+  env:
+    HF_HUB_OFFLINE: "1"
+    TRANSFORMERS_OFFLINE: "1"
+
+  job_type: evaluate
+  execution_mode: async
+  port: 8000
+
+  resources:
+    cpu: "4"
+    memory: "32Gi"
+    gpu: 1
+    # gpu > 0 이면 스키마가 gpu_memory 선언을 강제한다. 8B 급을 bf16 로 올리므로
+    # 가중치 ~16GB + 배치 16 생성 캐시. A100 80GB 한 장 기준 넉넉히 잡는다.
+    # use_4bit=true 로 부르면 더 작게 들어가지만 선언은 기본 경로(bf16)를 기준으로 둔다.
+    gpu_memory: "48Gi"
+
+  inputs:
+    params:
+      required: false
+      # checkpoint_name       : 평가할 커밋 이름(단일 세그먼트). 컨테이너가
+      #                         /models/checkpoints/<name> 으로 해석한다(경로를 받지 않는다).
+      # use_latest_checkpoint : checkpoint_name 없이 /model(latest_checkpoint) 사용.
+      # benchmarks            : [{benchmark: mixatis, metric: joint_acc|intent_acc|intent_f1|slot_f1}]
+      # limit                 : 앞 N 발화만(디버그). 분모가 달라지므로 full 값과 비교 금지.
+      # batch_size            : 생성 배치(기본 16 — 원본 run_experiment.sh 기본값).
+      # max_new_tokens        : 생성 상한(기본 128 — 원본 동일).
+      # use_4bit              : QLoRA 4bit 로 로드(기본 false=bf16). 학습·평가 양쪽에 적용.
+      # split                 : 평가 split(기본 test).
+      # ── 학습 단계(0.2.0) ────────────────────────────────────────────────────
+      # train                 : 평가 전 LoRA 학습 수행(**기본 true**). false = zero-shot.
+      # train_examples        : 학습 SFT 예제 수(기본 3000 = 발화 1500 x 2문항).
+      #                         0 이면 train split 전체(26324). 발화 단위로 시드 셔플 후 절단.
+      # train_epochs          : 에폭(기본 1.0). 3000 예제 1 에폭 = 188 스텝 / A100 630 초 실측.
+      # train_batch_size      : per-device 배치(기본 8).
+      # train_grad_accum      : 누적(기본 2). 8x2=16 은 ETRI 원본 유효배치와 동일.
+      # train_seed            : 부분집합 셔플 + 학습 시드(기본 42). 재현의 전제.
+      # keep_adapter          : 학습 LoRA 를 /output/adapter 로 남긴다(기본 false).
+      #                         174MB 가 잡 산출물로 NFS 에 쌓이므로 필요할 때만 켠다.
+    dataset:
+      # ⚠️ job_type=evaluate 는 스키마가 required=true 를 강제한다(false 로 두면 등록이
+      #   422 로 거부된다 — evaluate-logickor-judge 에서 실측). 이 채점기는 문항이
+      #   이미지에 baked 라 데이터셋을 읽지 않지만, run_benchmark 가 프로젝트 데이터셋을
+      #   항상 넘기므로 계약상 문제는 없다.
+      required: true
+
+  outputs:
+    metrics: true              # /output/metrics.json (+ `train` 절 = 학습 레시피)
+    artifacts: true            # /output/mixatis_eval.csv (발화별 gold/pred + 모델 원문)
+                               #   keep_adapter=true 면 /output/adapter (LoRA, 174MB)
+                               # /output/run.log — stdout/stderr 실행 로그(0.2.1).
+                               #   플랫폼 로그 뷰어가 파드가 아니라 NFS 를 읽으므로
+                               #   잡 종료 후에도 남아야 한다.
+                               #   원문을 남기는 이유: 슬롯 형식("값 is one 슬롯명")을 어기면
+                               #   파싱이 조용히 빈 예측을 만들어 F1 만 떨어진다. 사후 진단
+                               #   수단이 이 CSV 뿐이다.
+
+  secrets:
+    required: []               # 로컬 체크포인트만 읽는다 — HF 토큰 불필요.
+
+  network:
+    egress_whitelist: []       # 오프라인. 가중치는 마운트, 문항은 baked.
+
+  endpoints:
+    info: "/info"
+    health: "/health"
+    live: "/live"
+    run: "/run"
+    jobs: "/jobs/{id}"
+    cancel: "/jobs/{id}/cancel"
+
+  capabilities:
+    estimated_startup_seconds: 120
+    # 828 발화 × 2 생성 = 1656 회. vLLM 이 아니라 transformers generate(greedy) 라
+    # 배치 16 기준 A100 한 장에서 20~40분.
+    estimated_duration_seconds: 2700
+    timeout_seconds: 10800
+
+  workspace_scope: per-workspace

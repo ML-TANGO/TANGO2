@@ -454,6 +454,180 @@
   text-align: right;
 }
 
+/* ── LogicKor 상세 ─────────────────────────────────────────────────────────────
+   소스 모듈 웹 콘솔(Evaluation/Logickor_web/web)의 결과 패널 구성을 플랫폼 디자인
+   토큰으로 옮긴 것. 구성(스코어카드 3장 → 영역 막대 + 레이더 → 차이·평가 표)은 소스와
+   같고, 색·간격은 플랫폼 팔레트를 쓴다. 레이더 SVG 쪽 리터럴 색은 logickorResult.js
+   의 TURN_COLOR/RADAR_INK 에 있으므로 아래 .cat-fill-* 과 함께 고쳐야 한다. */
+
+.score-card {
+  &.accent {
+    border-color: $primary-color;
+    background-color: $blue100;
+  }
+}
+
+.score-unit {
+  color: $placeholder-text-color;
+  font-size: 10px;
+}
+
+.turn-single {
+  color: $primary-color;
+}
+
+.turn-multi {
+  color: $lime604;
+}
+
+/* 표 셀은 .table-score 가 이미 색($primary-color)을 들고 있어 단일 클래스끼리는 정의
+   순서로 승자가 갈린다(2턴이 파랑으로 나오던 원인). 두 클래스로 특이도를 올려 확정한다. */
+.table-score {
+  &.turn-single {
+    color: $primary-color;
+  }
+
+  &.turn-multi {
+    color: $lime604;
+  }
+}
+
+.logickor-charts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 12px;
+}
+
+.chart-subtitle {
+  margin: 0;
+  color: $sub-text-color;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.cat-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cat-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.cat-name {
+  color: $normal-text-color;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.cat-track {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cat-tag {
+  width: 12px;
+  flex-shrink: 0;
+  color: $sub-text-color;
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.cat-rail {
+  overflow: hidden;
+  height: 12px;
+  flex: 1;
+  border-radius: 4px;
+  background-color: $mono202;
+}
+
+.cat-fill {
+  min-width: 3px;
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+
+  &.single {
+    background-color: $primary-color;
+  }
+
+  &.multi {
+    background-color: $lime604;
+  }
+}
+
+.cat-value {
+  width: 38px;
+  flex-shrink: 0;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  text-align: right;
+}
+
+.radar-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.radar-legend {
+  display: flex;
+  gap: 14px;
+}
+
+.radar-legend-item {
+  display: flex;
+  align-items: center;
+  color: $sub-text-color;
+  font-size: 11px;
+  gap: 5px;
+}
+
+.radar-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+
+  &.single {
+    background-color: $primary-color;
+  }
+
+  &.multi {
+    background-color: $lime604;
+  }
+}
+
+.diff-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+
+  &.pos {
+    color: $lime604;
+  }
+
+  &.neg {
+    color: $error-color;
+  }
+
+  &.zero {
+    color: $sub-text-color;
+  }
+}
+
+.total-label {
+  color: $normal-text-color;
+  font-family: SpoqaB;
+  font-weight: 700;
+}
+
 .result-table {
   overflow: hidden;
   border-radius: 8px;
@@ -472,6 +646,10 @@
 
 @media (max-width: 1080px) {
   .wizard-body {
+    grid-template-columns: 1fr;
+  }
+
+  .logickor-charts {
     grid-template-columns: 1fr;
   }
 
@@ -506,4 +684,98 @@
   .chart-label {
     width: 72px;
   }
+}
+
+/* ── 체크포인트 선택(3단계 확인) ────────────────────────────────────────────────
+   실채점 벤치마크에서만 뜨는 런 단위 옵션. 확인 목록(.confirm-list)과 같은 카드 톤을
+   쓰되, 읽기 전용 요약이 아니라 입력이라는 걸 보이게 라벨과 컨트롤을 한 줄에 놓는다. */
+
+.checkpoint-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid $disable-color;
+  border-radius: 8px;
+  background-color: $mono200;
+}
+
+.checkpoint-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.checkpoint-title {
+  color: $normal-text-color;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* ── 실행 근거(LogicKor 결과) ──────────────────────────────────────────────────
+   "어느 체크포인트·어느 심판에서 나온 점수인가". 점수 카드 위에 한 줄로 깔아 두어
+   숫자보다 먼저 눈에 걸리지 않으면서 항상 같이 읽히게 한다. 조용한 누락(파싱 실패·
+   형식 불량·빈 생성)은 .warn 으로 세워 평균이 깎인 양을 놓치지 않게 한다. */
+
+.provenance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.provenance-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border: 1px solid $disable-color;
+  border-radius: 6px;
+  background-color: $mono200;
+
+  &.warn {
+    border-color: $error-color;
+  }
+}
+
+.provenance-label {
+  color: $sub-text-color;
+  font-size: 11px;
+}
+
+.provenance-value {
+  color: $normal-text-color;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+
+  .warn & {
+    color: $error-color;
+  }
+}
+
+/* 실행 옵션 칸 — 체크포인트 박스(.checkpoint-box) 안에 들어간다. 칸 수가 그룹마다 달라서
+   (생성 2칸 / 심판 3칸) 고정 컬럼 대신 최소폭 기준으로 접히게 둔다. */
+
+.opt-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.opt-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.opt-label {
+  color: $sub-text-color;
+  font-size: 12px;
+  font-weight: 700;
 }
