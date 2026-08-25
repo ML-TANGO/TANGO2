@@ -252,3 +252,12 @@ PROJECT_STATUS_COMPLETED = "completed"
 # 사람이 시간에 걸쳐 채점하는 expert(metric_set='expert') 세션은 정당히 오래 running
 # 이므로 스윕에서 제외한다.
 STALE_RUNNING_MAX_HOURS = 6
+
+# 한 화면 조회에서 컨테이너에 되물을 running 런 수 상한. 목록 렌더가 외부 호출 수에
+# 비례해 느려지는 것을 막는다(running 런은 통상 0~1건이라 실제로 걸릴 일은 드물다).
+MAX_RECONCILE_PER_VIEW = 8
+
+# reconcile 조회 1건의 타임아웃. 이 값 x MAX_RECONCILE_PER_VIEW 가 목록 조회에 실릴 수
+# 있는 최대 대기이므로 짧게 잡는다. 되묻기는 best-effort 라 놓쳐도 다음 폴링이 잡는다 —
+# 반면 여기서 오래 붙들면 게이트웨이 타임아웃을 넘겨 목록 자체가 안 뜬다.
+RECONCILE_TIMEOUT_SECONDS = 5.0

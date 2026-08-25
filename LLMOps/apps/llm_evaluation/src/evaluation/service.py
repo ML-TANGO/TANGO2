@@ -329,6 +329,96 @@ async def _eval_output_dir(model_id: int, job_id: str) -> str:
     return output_dir
 
 
+# 컨테이너가 보고하는 종료 상태 → eval_result 상태. 여기 없는 값(running/pending/
+# completed…)은 아직 진행 중이거나 정상 마감 경로라 손대지 않는다.
+_TERMINAL_JOB_STATUS = {
+    "failed": "failed",
+    "error": "failed",
+    "cancelled": "cancelled",
+    "canceled": "cancelled",
+}
+
+
+async def _reconcile_running_eval(model_id: int, job_id: str) -> str:
+    """DB 가 running 인 런에 대해 컨테이너 잡이 이미 끝났는지 확인해 상태를 맞춘다.
+
+    왜 필요한가. 벤치마크 완료는 **lazy** 다 — `metrics.json` 이 생겨야 completed 로
+    마감된다. 그래서 파드가 중간에 죽어 helm 이 uninstall 되면 metrics.json 이 영영
+    생기지 않고, DB 는 running 에 고착돼 화면이 '진행중'을 계속 보여준다(사용자가 중지
+    버튼을 눌러야만 풀렸다). 나이 기반 스윕(fail_stale_eval_results)은 6시간 경과 +
+    모델 이력 화면 진입이라는 두 조건이 겹쳐야 돌아서 이 창을 막지 못한다.
+
+    ⚠️ **조회 실패(404 포함)는 절대 실패 근거로 쓰지 않는다.** fb_external_container 는
+    기동 시 in-memory 레지스트리로 즉시 서빙하고 DB 를 백그라운드로 재시도하는데,
+    재시도가 끝내 실패하면 재시작 전까지 그대로 남는다(main.py 의
+    "staying on in-memory registry"). 그 구간에는 **GPU 에서 정상적으로 도는 잡도 404**
+    가 된다. 404 를 실패로 확정하면 그 런은 되돌릴 수 없다 — update_eval_result_status
+    와 complete_eval_result 가 둘 다 `WHERE status='running'` 가드라, 나중에
+    metrics.json 이 생겨도 completed 로 갈 수 없고 FE 는 이미 폴링을 멈춘 뒤다.
+    트래커 스스로도 `404 는 "이런 job 은 존재한 적 없다"에만 쓴다`(job_router)고 규정하고,
+    get_persisted 는 "성급한 실패 확정 방지"를 위해 미복구 active row 를 running 으로
+    답한다. 그 설계를 거스르지 않는다 — 진짜 고아는 6시간 스윕이 걷어간다.
+
+    전부 best-effort: 무엇이 실패하든 running 을 돌려주어 폴링을 깨뜨리지 않는다.
+    반환값은 화면에 그대로 실릴 상태 문자열이다.
+    """
+    if not job_id or not _JOB_ID_RE.match(job_id):
+        return "running"
+    try:
+        async with httpx.AsyncClient(timeout=RECONCILE_TIMEOUT_SECONDS) as http:
+            client = ExternalContainerClient(
+                base_url=settings.FB_EXTERNAL_CONTAINER_URL, client=http)
+            detail = await client.get_job(job_id)
+    except ExternalContainerError:
+        # 404(트래커가 모름) 포함. 위 주석 참조 — 조회 실패는 실패의 증거가 아니다.
+        return "running"
+    except Exception:
+        traceback.print_exc()
+        return "running"
+
+    # 응답 해석은 try 밖에서 하되 방어적으로 — 파트너가 result 를 dict 가 아닌 형태로
+    # 주면 .get() 이 터진다. 여기서 예외가 새면 폴링 한 사이클이 API 오류로 끝난다.
+    result = (detail or {}).get("result")
+    if not isinstance(result, dict):
+        return "running"
+    raw = str(result.get("status") or "").lower()
+    mapped = _TERMINAL_JOB_STATUS.get(raw)
+    if not mapped:
+        return "running"
+
+    err = result.get("error")
+    reason = err.get("message") if isinstance(err, dict) else None
+    reason = reason or f"external job reported {raw}"
+    try:
+        await db_model.update_eval_result_status(
+            job_str_id=job_id, status=mapped, source_model_id=model_id)
+    except Exception:
+        traceback.print_exc()
+        return "running"
+    print(f"[eval] run {job_id} reconciled running -> {mapped}: {reason}", flush=True)
+    return mapped
+
+
+def _strip_internal_paths(metrics: dict) -> None:
+    """채점기가 metrics.json 에 새긴 컨테이너 내부 경로를 응답/영속 전에 지운다(in-place).
+
+    플랫폼 규약은 체크포인트를 **이름으로만** 노출하는 것이다 — 경로를 받지 않는 것도
+    같은 이유다(params 로 마운트 밖을 열지 못하게). 그런데 채점기는 진단 편의로
+    `checkpoint.path` 를 함께 실어 보내고, 이 값이 그대로 API 응답과 DB 에 남으면
+    화면에 안 그린다는 FE 관례만으로는 막히지 않는다(devtools 로 그대로 보인다).
+    서버 경계에서 지워 규약을 코드로 강제한다. `name` 은 어느 체크포인트로 낸 점수인지
+    말해주는 값이라 남긴다.
+    """
+    if not isinstance(metrics, dict):
+        return
+    ckpt = metrics.get("checkpoint")
+    if isinstance(ckpt, dict):
+        ckpt.pop("path", None)
+    train = metrics.get("train")
+    if isinstance(train, dict):
+        train.pop("adapter_dir", None)
+
+
 async def get_eval_result(model_id: int, job_id: str) -> dict:
     """평가 job metrics.json 읽기 + 완료 시 eval_result lazy 마감(idempotent)."""
     output_dir = await _eval_output_dir(model_id, job_id)
@@ -344,7 +434,11 @@ async def get_eval_result(model_id: int, job_id: str) -> dict:
                 job_str_id=job_id, source_model_id=model_id)
             db_status = (row or {}).get("status") or "running"
         except Exception:
-            db_status = "running"
+            row, db_status = None, "running"
+        # running 이면 컨테이너에 되물어 '죽은 잡'을 즉시 표면화한다. FE 는 이미
+        # status==failed/cancelled 를 받으면 폴링을 멈추므로, 신호만 만들어 주면 된다.
+        if db_status == "running":
+            db_status = await _reconcile_running_eval(model_id, job_id)
         return {"job_id": job_id, "metrics": None, "ready": False, "status": db_status}
     try:
         if os.path.getsize(metrics_path) > 1 * 1024 * 1024:
@@ -356,6 +450,7 @@ async def get_eval_result(model_id: int, job_id: str) -> dict:
             metrics = json.load(f)
     except (OSError, json.JSONDecodeError):
         return {"job_id": job_id, "metrics": None, "ready": False}
+    _strip_internal_paths(metrics)
     try:
         await db_model.complete_eval_result(
             job_str_id=job_id, metrics_json=json.dumps(metrics), source_model_id=model_id)
@@ -603,6 +698,25 @@ async def get_project(project_id: int) -> dict:
     if not project:
         raise Exception(f"eval project {project_id} not found")
     rows = await db_model.list_eval_results_by_project(eval_project_id=project_id)
+    # running 으로 남은 런은 조회 시점에 컨테이너에 되물어 정리한다. 목록/헤더는 DB 상태를
+    # 그대로 보여주므로, 결과 뷰를 열지 않으면 죽은 런이 '진행중'으로 계속 남는다.
+    # 상한(MAX_RECONCILE_PER_VIEW)을 두는 이유는 목록 렌더가 외부 호출 수에 비례해
+    # 느려지지 않게 하려는 것. best-effort — 실패해도 목록 조회는 그대로 진행한다.
+    targets = [r for r in rows
+               if r.get("status") == "running" and r.get("metric_set") != "inference"
+               ][:MAX_RECONCILE_PER_VIEW]
+    if targets:
+        # 순차로 돌면 목록 렌더가 (호출수 x 타임아웃) 만큼 지연돼 게이트웨이 타임아웃을
+        # 넘길 수 있다. 서로 독립된 조회라 동시에 던지고 한 번만 기다린다 —
+        # 최대 대기가 호출 수와 무관하게 RECONCILE_TIMEOUT_SECONDS 로 고정된다.
+        settled = await asyncio.gather(
+            *(_reconcile_running_eval(model_id=int(r["source_model_id"]),
+                                      job_id=str(r["job_str_id"]))
+              for r in targets),
+            return_exceptions=True)
+        for r, new_status in zip(targets, settled):
+            if isinstance(new_status, str) and new_status != "running":
+                r["status"] = new_status
     # 표시 상태는 자식 run 상태에서 파생(§5) — 단 러너 inference '생성' 런(metric_set='inference')은
     #   채점이 아니므로 상태 파생에서 제외(생성만 한 프로젝트가 completed 로 오분류 방지, 리뷰 HIGH).
     #   runs 목록엔 포함(FE 가 생성 배너·최신 inference job 추적에 사용, 표시 필터는 FE 담당).
