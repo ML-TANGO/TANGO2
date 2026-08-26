@@ -803,6 +803,17 @@ tango2-sds-vlm-eva
 │   ├── README.md
 │   ├── tokenizer_config.json
 │   └── tokenizer.json
+├── clip_llama31_proj_lora_marine_sds_ko_9k
+│   ├── adapter_config.json
+│   ├── adapter_model.safetensors
+│   ├── all_results.json
+│   ├── chat_template.jinja
+│   ├── eval_results.json
+│   ├── projector.bin
+│   ├── README.md
+│   ├── tokenizer_config.json
+│   ├── tokenizer.json
+│   └── vlm_config.json
 ├── clip_llama31_proj_lora_marine_sds_lora_en
 │   ├── adapter_config.json
 │   ├── adapter_model.safetensors
@@ -835,7 +846,48 @@ tango2-sds-vlm-eva
 │   ├── tokenizer_config.json
 │   ├── tokenizer.json
 │   └── vlm_config.json
+├── clip_qwen3_proj_lora_marine
+│   ├── adapter_config.json
+│   ├── adapter_model.safetensors
+│   ├── chat_template.jinja
+│   ├── projector.bin
+│   ├── README.md
+│   ├── tokenizer_config.json
+│   ├── tokenizer.json
+│   └── vlm_config.json
+├── clip_qwen3_proj_lora_marine_sds_ko_9k
+│   ├── adapter_config.json
+│   ├── adapter_model.safetensors
+│   ├── all_results.json
+│   ├── chat_template.jinja
+│   ├── eval_results.json
+│   ├── projector.bin
+│   ├── README.md
+│   ├── tokenizer_config.json
+│   ├── tokenizer.json
+│   └── vlm_config.json
 └── README.md
+```
+
+이름 끝의 `_9k` 는 20260728 데이터셋의 한글 시나리오 9,000건으로 학습했다는 뜻입니다. 접미사가 없는 `_sds_lora_ko` / `_sds_lora_en` 은 그보다 앞선 20260227 데이터셋으로 학습된 별개의 체크포인트이므로 혼동하지 마십시오.
+
+| 디렉토리 | 언어 모델 | 이어받은 체크포인트 | 학습 데이터 | 최종 검증 손실 |
+|----------|-----------|---------------------|-------------|----------------|
+| `clip_qwen3_proj_lora_marine` | Qwen3-8B | `clip_qwen3_proj_lora` | LLaMarine-SFT 54,657건, 1 epoch (855 step) | 측정 안 함 |
+| `clip_qwen3_proj_lora_marine_sds_ko_9k` | Qwen3-8B | `clip_qwen3_proj_lora_marine` | SDS 20260728 한글 9,000건, 3 epoch (846 step) | 0.1903 |
+| `clip_llama31_proj_lora_marine_sds_ko_9k` | Llama-3.1-8B-Instruct | `clip_llama31_proj_lora_marine` | SDS 20260728 한글 9,000건, 3 epoch (846 step) | 0.2260 |
+
+세 체크포인트 모두 비전 인코더는 `openai/clip-vit-large-patch14-336` 이고 프로젝터는 `mlp2x_gelu` 입니다. LoRA 는 `r=128`, `lora_alpha=256`, 대상 모듈은 `q_proj`, `k_proj`, `v_proj`, `o_proj`, `gate_proj`, `up_proj`, `down_proj` 입니다.
+
+검증 손실은 학습에 쓰지 않은 20260728 한글 1,000건에 대한 다음 토큰 예측 손실이며 `eval_results.json` 에 함께 담겨 있습니다. 두 조합의 값은 서로 다른 토크나이저가 만든 서로 다른 토큰 열에 대한 교차 엔트로피이므로 같은 척도로 비교할 수 없습니다. 또한 이 값은 참조 문장의 토큰 분포와의 거리만 나타내며 생성 품질, 묘사의 사실 정확도, COLREG 조항 인용의 타당성을 나타내지 않습니다.
+
+학습셋과 검증셋은 다음과 같이 재현할 수 있습니다.
+
+```bash
+python scripts/prepare_sds_dataset.py \
+    --dataset_dir ../dataset/20260728 \
+    --valid_ratio 0.1 \
+    --seed 42
 ```
 
 ### 8-1. 단일 이미지 추론 (`test.py`)
