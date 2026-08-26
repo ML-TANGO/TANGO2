@@ -95,10 +95,13 @@ FLAT_WINDOW = 50
 # bbox 는 광학중심 562px(폭 약 1124 기준)에 R²=1.000 으로 맞는 반면,
 # 이미지 속 실제 선박은 광학중심 962px(1920 폭 기준)에 맞는다.
 # 따라서 이 포맷에서는 바운딩박스를 그리지 않고 안내만 표시한다.
+# 같은 이유로 모델 프롬프트의 AIS 텍스트에서도 바운딩박스를 뺀다. 이 포맷으로
+# 학습한 체크포인트가 bbox 없는 입력으로 학습되므로 추론 입력도 같아야 한다.
+# AIS 표에는 원본 값을 그대로 보여준다.
 FLAT_BBOX_NOTICE = (
     "⚠️ 이 데이터셋의 `bbox_*` 좌표는 이미지와 다른 카메라 기준으로 생성되어 "
-    "1920×1080 이미지 위치와 일치하지 않습니다. 바운딩박스를 표시하지 않습니다. "
-    "AIS 표와 모델 프롬프트에는 원본 값을 그대로 사용합니다."
+    "1920×1080 이미지 위치와 일치하지 않습니다. 바운딩박스를 표시하지 않고, "
+    "모델 프롬프트에서도 제외합니다. AIS 표에는 원본 값을 그대로 표시합니다."
 )
 
 PROMPT_MAP = {
@@ -334,11 +337,18 @@ def _load_csv_normalized(path: str) -> pd.DataFrame:
     return df
 
 
-def _format_ais_df(df: pd.DataFrame, lang: str) -> str:
+def _format_ais_df(df: pd.DataFrame, lang: str, include_bbox: bool = True) -> str:
     """정규화된 DataFrame으로 AIS 텍스트 생성.
 
     ship_type 컬럼이 있으면 포함한다. cpa/tcpa 컬럼(평면 포맷 20260728)이 있으면
     타선 항목에 함께 포함한다.
+
+    include_bbox=False 이면 타선 항목에서 바운딩박스를 뺀다. 평면 포맷은 bbox_*
+    좌표가 이미지와 맞지 않으므로(FLAT_BBOX_NOTICE) 이 경로를 쓴다.
+
+    이 문자열은 모델 입력이 되므로 scripts/prepare_sds_dataset.py 의
+    format_ais() 와 같아야 한다. 한쪽만 고치면 학습 프롬프트와 추론 프롬프트가
+    갈라진다.
     """
     has_type = "ship_type" in df.columns
     has_cpa  = "cpa" in df.columns and "tcpa" in df.columns
@@ -349,6 +359,14 @@ def _format_ais_df(df: pd.DataFrame, lang: str) -> str:
         if en:
             return f" | CPA:{float(row['cpa']):.4f}NM TCPA:{float(row['tcpa']):.2f}s"
         return f" | CPA:{float(row['cpa']):.4f}NM TCPA:{float(row['tcpa']):.2f}초"
+
+    def _bbox_str(row, en: bool) -> str:
+        if not include_bbox:
+            return ""
+        bbox = (f"x={row['bbox_x']:.0f} y={row['bbox_y']:.0f} "
+                f"w={row['bbox_width']:.0f} h={row['bbox_height']:.0f}")
+        label = "BoundingBox" if en else "바운딩박스"
+        return f" | {label}:[{bbox}]"
 
     if lang == "en":
         lines = ["[Vessel AIS Information]"]
@@ -367,12 +385,10 @@ def _format_ais_df(df: pd.DataFrame, lang: str) -> str:
                     f"Speed:{spd} Heading:{hdg} | Size:{lw} Draft:{draft}"
                 )
             else:
-                bbox = (f"x={row['bbox_x']:.0f} y={row['bbox_y']:.0f} "
-                        f"w={row['bbox_width']:.0f} h={row['bbox_height']:.0f}")
                 lines.append(
                     f"- Nearby vessel (ID:{sid}{stype}) | Lat:{lat} Lon:{lon} | "
-                    f"Speed:{spd} Heading:{hdg} | Size:{lw} Draft:{draft} | "
-                    f"BoundingBox:[{bbox}]{_cpa_str(row, True)}"
+                    f"Speed:{spd} Heading:{hdg} | Size:{lw} Draft:{draft}"
+                    f"{_bbox_str(row, True)}{_cpa_str(row, True)}"
                 )
     else:
         lines = ["[선박 AIS 정보]"]
@@ -391,12 +407,10 @@ def _format_ais_df(df: pd.DataFrame, lang: str) -> str:
                     f"속도:{spd} 방향:{hdg} | 선체:{lw} 흘수:{draft}"
                 )
             else:
-                bbox = (f"x={row['bbox_x']:.0f} y={row['bbox_y']:.0f} "
-                        f"w={row['bbox_width']:.0f} h={row['bbox_height']:.0f}")
                 lines.append(
                     f"- 주변선박 (ID:{sid}{stype}) | 위도:{lat} 경도:{lon} | "
-                    f"속도:{spd} 방향:{hdg} | 선체:{lw} 흘수:{draft} | "
-                    f"바운딩박스:[{bbox}]{_cpa_str(row, False)}"
+                    f"속도:{spd} 방향:{hdg} | 선체:{lw} 흘수:{draft}"
+                    f"{_bbox_str(row, False)}{_cpa_str(row, False)}"
                 )
     return "\n".join(lines)
 
@@ -627,7 +641,11 @@ def format_ais_text(
         csv_path = os.path.join(root, "csv", f"{sample_name}.csv")
         if not os.path.exists(csv_path):
             return ""
-        return _format_ais_df(_load_csv_normalized(csv_path), lang)
+        # 평면 포맷은 bbox 를 프롬프트에 넣지 않는다. 이 데이터셋으로 학습한
+        # 체크포인트가 bbox 없는 입력으로 학습되므로 추론도 같아야 한다.
+        return _format_ais_df(
+            _load_csv_normalized(csv_path), lang, include_bbox=False
+        )
 
     sample_dir = os.path.join(root, sample_name)
 
