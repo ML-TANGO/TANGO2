@@ -90,6 +90,15 @@ def parse_args():
     p.add_argument("--data_path",  required=True,  help="chat.json path")
     p.add_argument("--image_dir",  required=True,  help="Image folder")
     p.add_argument("--max_seq_len", type=int, default=2048)
+    p.add_argument("--valid_data_path", default=None,
+                   help="검증셋 JSON 경로. 주면 --eval_steps 마다 eval_loss 를 "
+                        "기록한다. 생략하면 검증을 하지 않는다")
+    p.add_argument("--valid_image_dir", default=None,
+                   help="검증셋 이미지 폴더. 생략하면 --image_dir 를 쓴다")
+    p.add_argument("--eval_steps", type=int, default=None,
+                   help="검증 주기(step). 생략하면 --save_steps 를 쓴다")
+    p.add_argument("--eval_batch_size", type=int, default=None,
+                   help="검증 per-device 배치. 생략하면 --batch_size 를 쓴다")
 
     # Training
     p.add_argument("--output_dir", default="checkpoints/run")
@@ -198,6 +207,28 @@ class VLMTrainer(Trainer):
         outputs = model(**inputs)
         loss = outputs.loss
         return (loss, outputs) if return_outputs else loss
+
+    # ── 검증 스텝 ────────────────────────────────────────────────────────────
+    def prediction_step(self, model, inputs, prediction_loss_only,
+                        ignore_keys=None):
+        """
+        검증 손실만 계산한다.
+
+        기본 구현을 쓸 수 없다. VLMOutput 은 ModelOutput 이 아니라 평면
+        dataclass 이므로 isinstance(outputs, dict) 가 거짓이 되고, 그러면
+        transformers 가 logits = outputs[1:] 로 넘어가 첨자 접근에서
+        TypeError 로 죽는다. 그 줄은 prediction_loss_only 검사보다 먼저
+        실행되므로 인수만으로는 피할 수 없다.
+
+        로짓을 모으지 않는 것은 우회가 아니라 필요한 동작이다. 어휘 15만 개와
+        시퀀스 2048 의 로짓은 샘플당 수백 MB 이고, 검증에는 손실만 쓴다.
+        """
+        inputs = self._prepare_inputs(inputs)
+
+        with torch.no_grad(), self.compute_loss_context_manager():
+            loss = self.compute_loss(model, inputs)
+
+        return (loss.detach().mean(), None, None)
 
     # ── 체크포인트에 담을 텐서 선별 ──────────────────────────────────────────
     # VisionLanguageModelV2 는 PreTrainedModel 이 아니므로 HF 의 Trainer._save 가
@@ -622,6 +653,18 @@ def main():
         max_seq_len=args.max_seq_len,
     )
 
+    # 검증셋은 --valid_data_path 를 줄 때만 만든다. 없으면 eval_dataset=None 이
+    # 되어 Trainer 가 검증 단계를 아예 돌리지 않는다.
+    eval_dataset = None
+    if args.valid_data_path:
+        eval_dataset = LLaVADataset(
+            data_path=args.valid_data_path,
+            image_dir=args.valid_image_dir or args.image_dir,
+            tokenizer=tokenizer,
+            image_processor=image_processor,
+            max_seq_len=args.max_seq_len,
+        )
+
     collator = DataCollatorForVLM(pad_token_id=tokenizer.pad_token_id)
 
     # ── Training arguments ─────────────────────────────────────────────────────
@@ -640,7 +683,15 @@ def main():
 
         # Batch / accumulation
         per_device_train_batch_size=args.batch_size,
+        per_device_eval_batch_size=args.eval_batch_size or args.batch_size,
         gradient_accumulation_steps=args.grad_accum,
+
+        # 검증 (--valid_data_path 를 줄 때만)
+        eval_strategy=("steps" if args.valid_data_path else "no"),
+        eval_steps=(args.eval_steps or args.save_steps) if args.valid_data_path else None,
+        # 손실만 쓴다. prediction_step 이 로짓을 반환하지 않으므로 이 값이 거짓이면
+        # Trainer 가 None 을 모으려 하며, 모을 이유도 없다.
+        prediction_loss_only=True,
 
         # Epochs / steps
         num_train_epochs=args.num_epochs,
@@ -682,6 +733,7 @@ def main():
         model=model,
         args=training_args,
         train_dataset=dataset,
+        eval_dataset=eval_dataset,
         data_collator=collator,
         train_type=args.train_type,
         callbacks=callbacks,
@@ -691,6 +743,14 @@ def main():
         print(f"[Train] Resuming from checkpoint: {last_ckpt}")
 
     trainer.train(resume_from_checkpoint=last_ckpt)
+
+    # ── 학습 종료 시점의 검증 손실 ────────────────────────────────────────────
+    # 마지막 eval_steps 와 학습 종료 step 이 일치하지 않으면 최종 가중치의
+    # 검증 손실이 어디에도 기록되지 않는다.
+    if eval_dataset is not None:
+        metrics = trainer.evaluate()
+        trainer.log_metrics("eval", metrics)
+        trainer.save_metrics("eval", metrics)
 
     # ── Final save ────────────────────────────────────────────────────────────
     if _is_main_process():
