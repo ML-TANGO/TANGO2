@@ -43,6 +43,12 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
+
+  // 제목 블록이 줄어들 수 있게 한다. flex item 의 기본 min-width 는 auto 라 긴 설명문이
+  // 그대로 최소폭이 되고, 그만큼 오른쪽 필터가 눌려 필터 안에서 줄바꿈이 났다.
+  > div:first-child {
+    min-width: 0;
+  }
 }
 
 .panel-title {
@@ -62,10 +68,19 @@
 
 .filters {
   display: flex;
-  flex-wrap: wrap;
+  // 카테고리 필터와 검색은 한 쌍이라 쪼개지지 않게 한다 — 폭이 모자라면 둘이 갈라서는
+  // 대신 .panel-head 의 wrap 이 쌍째로 다음 줄로 내린다.
+  flex: none;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
+
+  // 좁은 화면에서는 가로 넘침을 막는 쪽이 낫다.
+  @media (max-width: 560px) {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
 }
 
 .benchmark-grid {
@@ -795,3 +810,113 @@
   font-size: 12px;
   font-weight: 700;
 }
+
+// ── 벤치마크 종류 선택(표준 / 과제별) ────────────────────────────────────────
+// 한 런에 채점기는 하나뿐이라 이 둘은 섞일 수 없다. 라디오로 세워 만들 수 없는 조합을
+// 화면에서 없앤다 — 선택 단계에서 막지 않으면 실행 시점에 서버 예외로 되돌아온다.
+.kind-picker {
+  margin-bottom: 20px;
+}
+
+.kind-title {
+  margin: 0 0 2px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+
+.kind-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.kind-item,
+.task-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: start;
+  width: 100%;
+  padding: 15px 16px;
+  border: 1px solid $disable-color;
+  border-radius: 10px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+
+  &:hover {
+    border-color: $primary-color;
+  }
+
+  &.on {
+    border-color: $primary-color;
+    box-shadow: inset 0 0 0 1px $primary-color;
+  }
+}
+
+.kind-radio,
+.task-radio {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  border: 1.5px solid $sub-text-color;
+  border-radius: 50%;
+
+  .kind-item.on &,
+  .task-item.on & {
+    border-color: $primary-color;
+    border-width: 2px;
+  }
+
+  .kind-item.on &::after,
+  .task-item.on &::after {
+    content: '';
+    position: absolute;
+    inset: 3px;
+    border-radius: 50%;
+    background: $primary-color;
+  }
+}
+
+.kind-name,
+.task-name {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.kind-desc,
+.task-meta {
+  display: block;
+  margin-top: 4px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: $sub-text-color;
+}
+
+// ── 과제별 벤치마크 ──────────────────────────────────────────────────────────
+.task-picker {
+  margin-top: 4px;
+}
+
+
+.task-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+
+

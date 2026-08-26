@@ -124,6 +124,15 @@ export const BENCHMARKS = [
 // 그래서 mock 벤치마크와 한 런에 섞어 실행할 수 없다).
 export const REAL_BENCHMARK_IDS = BENCHMARKS.filter((b) => b.real).map((b) => b.id);
 
+// 사용자에게 보이는 축 — 표준(공개 벤치마크 여러 개를 표준 지표로 한 번에) vs
+// 과제별(특정 과제를 그 과제의 방식으로, 한 번에 하나씩).
+// 내부의 real/mock 과 경계는 같지만 이름을 나눈 이유는, 사용자가 "채점기가 몇 개인지"를
+// 알아야 고를 수 있는 화면은 잘못 만들어진 화면이기 때문이다. real 은 배선용 내부 용어로
+// 남기고, 화면에는 무엇을 재는지로만 말한다.
+export const BENCHMARK_KIND = { STANDARD: 'standard', TASK: 'task' };
+
+export const TASK_BENCHMARK_IDS = REAL_BENCHMARK_IDS;
+
 // 체크포인트 없이는 채점기가 기동 직후 거부하는 벤치마크. 실행 전에 화면에서 걸러
 // 값비싼 GPU 파드가 떴다가 죽는 것을 막는다(BE 도 같은 경계를 강제한다).
 export const CHECKPOINT_REQUIRED_BENCHMARK_IDS = BENCHMARKS.filter(
@@ -143,10 +152,14 @@ export const CATEGORY_LABEL = Object.fromEntries(
 );
 
 // 카테고리별 벤치마크 수(사이드바 카운트). 'all' = 전체.
+// 카테고리 필터는 **표준 그리드에만** 걸린다(과제별은 전용 라디오로 고른다). 그래서
+// 세는 대상도 표준으로 좁힌다 — 전체를 세면 그리드에 없는 과제별 벤치마크까지 잡혀
+// '전체 (11)' 인데 9개만 보이고, 둘 다 category:'reasoning' 이라 '추론 (3)' 인데
+// 1개만 보이는 어긋남이 생긴다.
 export const categoryCount = (categoryId) =>
-  categoryId === 'all'
-    ? BENCHMARKS.length
-    : BENCHMARKS.filter((b) => b.category === categoryId).length;
+  BENCHMARKS.filter(
+    (b) => !b.real && (categoryId === 'all' || b.category === categoryId),
+  ).length;
 
 // 벤치마크의 기본(권장) 메트릭. metrics 후보에 recommended 가 없으면 첫 후보로 폴백.
 export const defaultMetricFor = (benchmarkId) => {

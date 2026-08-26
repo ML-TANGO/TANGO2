@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -21,10 +21,12 @@ import { errorToastMessage, successToastMessage } from '@src/utils';
 import {
   BENCHMARKS,
   BENCHMARK_CATEGORIES,
+  BENCHMARK_KIND,
   BENCHMARK_LABEL,
   BENCHMARK_MAP,
   CHECKPOINT_REQUIRED_BENCHMARK_IDS,
   REAL_BENCHMARK_IDS,
+  TASK_BENCHMARK_IDS,
   categoryCount,
   defaultMetricFor,
 } from './benchmarks';
@@ -58,14 +60,21 @@ const STEPS = [
 // 쓴다(커밋 id 는 숫자라 충돌하지 않는다).
 const CHECKPOINT_NONE = '';
 
+// 설명 패널의 기본 대상 메트릭. 선택이 비었을 때 되돌아갈 값이라 상수로 둔다.
+const DEFAULT_FOCUS_METRIC = 'accuracy';
+
 const BenchmarkRunConfig = ({ running, modelId, onRun }) => {
   const { t } = useTranslation();
   const [step, setStep] = useState(1);
+  // 사용자가 먼저 고르는 축 — 표준(여러 개 동시) / 과제별(하나씩). 한 런에 채점기는
+  // 하나뿐이라 이 둘은 섞일 수 없다. 종류를 먼저 세우면 만들 수 없는 조합이 화면에서
+  // 사라져, 선택 후 실행 시점에 서버 예외로 되돌아오던 경로가 없어진다.
+  const [kind, setKind] = useState(BENCHMARK_KIND.STANDARD);
   const [selected, setSelected] = useState([]); // 벤치마크 id(선택 순서)
   const [metricMap, setMetricMap] = useState({}); // { benchmarkId: metricId }
   const [category, setCategory] = useState('all');
   const [query, setQuery] = useState('');
-  const [focusMetric, setFocusMetric] = useState('accuracy'); // 설명 패널 대상
+  const [focusMetric, setFocusMetric] = useState(DEFAULT_FOCUS_METRIC); // 설명 패널 대상
   const [commits, setCommits] = useState([]); // 실채점 벤치마크용 커밋 체크포인트 후보
   const [commitId, setCommitId] = useState(CHECKPOINT_NONE);
   // 실행 옵션 — 숫자·문자 칸은 빈 문자열이 "미지정"이고, 그때 컨테이너 기본값이 쓰인다.
@@ -89,23 +98,8 @@ const BenchmarkRunConfig = ({ running, modelId, onRun }) => {
       });
       return;
     }
-    // 채점기 혼재 차단 — 실채점 벤치마크(LogicKor 등)는 전용 컨테이너로 가고 한 런은
-    // 컨테이너 하나뿐이라, mock 벤치마크와 같은 런에 섞을 수 없다(BE service.run_benchmark
-    // 가 거부한다). 선택 단계에서 막지 않으면 사용자가 3단계까지 진행한 뒤 실행 시점에
-    // 영문 예외 메시지를 토스트로 보게 된다.
-    const isReal = (bid) => REAL_BENCHMARK_IDS.includes(bid);
-    const conflicting = selected.find((x) => isReal(x) !== isReal(id));
-    if (conflicting) {
-      const realOne = isReal(id) ? id : conflicting;
-      errorToastMessage(
-        null,
-        t('evaluation.bench.mixScorerBlocked', {
-          real: BENCHMARK_MAP[realOne]?.label || realOne,
-        }),
-      );
-      return;
-    }
-
+    // 혼재 차단 분기는 두지 않는다 — 이 그리드에는 표준 벤치마크만 있고, 과제별은
+    // 별도 라디오로 하나만 고르게 되어 있어 섞이는 조합 자체가 만들어지지 않는다.
     const metric = defaultMetricFor(id);
     setSelected((prev) => [...prev, id]);
     setMetricMap((m) => ({ ...m, [id]: metric }));
@@ -129,10 +123,56 @@ const BenchmarkRunConfig = ({ running, modelId, onRun }) => {
     setStep(1);
   };
 
+  // 표준 그리드는 표준 벤치마크만 담는다. 과제별은 아래 전용 라디오로 고른다.
+  const selectTask = (id) => {
+    const metric = defaultMetricFor(id);
+    setSelected([id]);
+    setMetricMap({ [id]: metric });
+    setFocusMetric(metric);
+  };
+
+  // 종류를 바꾸면 선택을 비운다 — 표준과 과제별은 한 런에 섞일 수 없으므로 이전 선택을
+  // 들고 넘어가면 만들 수 없는 조합이 된다. 과제별로 넘어갈 때는 첫 과제를 미리 골라
+  // 빈 화면을 보여주지 않는다(어차피 하나는 골라야 한다).
+  // 라디오 그룹 키보드 조작 — 방향키로 옵션을 옮기고 Home/End 로 양끝. WAI-ARIA
+  // radiogroup 패턴이고, 같은 화면군의 StarRating 이 쓰는 방식과 같다(디자인시스템
+  // Radio 는 라벨 텍스트만 렌더해 이 카드형 옵션에는 맞지 않는다).
+  const kindGroupRef = useRef(null);
+  const taskGroupRef = useRef(null);
+
+  const moveRadio = (groupRef, values, current, onPick) => (e) => {
+    const at = values.indexOf(current);
+    let next = null;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown')
+      next = values[(at + 1) % values.length];
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp')
+      next = values[(at - 1 + values.length) % values.length];
+    else if (e.key === 'Home') next = values[0];
+    else if (e.key === 'End') next = values[values.length - 1];
+    if (next == null) return;
+    e.preventDefault();
+    onPick(next);
+    groupRef.current?.querySelector(`[data-value="${next}"]`)?.focus();
+  };
+
+  const switchKind = (nextKind) => {
+    if (nextKind === kind) return;
+    setKind(nextKind);
+    if (nextKind === BENCHMARK_KIND.TASK) {
+      selectTask(TASK_BENCHMARK_IDS[0]);
+    } else {
+      setSelected([]);
+      setMetricMap({});
+      setFocusMetric(DEFAULT_FOCUS_METRIC);
+    }
+  };
+
+  // 과제별은 라디오다 — 이전 선택을 지우고 하나만 남긴다.
   const filtered = useMemo(
     () =>
       BENCHMARKS.filter(
         (b) =>
+          !b.real &&
           (category === 'all' || b.category === category) &&
           (query.trim() === '' ||
             b.label.toLowerCase().includes(query.trim().toLowerCase()) ||
@@ -350,6 +390,7 @@ const BenchmarkRunConfig = ({ running, modelId, onRun }) => {
                     {t('evaluation.bench.selectBenchDesc')}
                   </p>
                 </div>
+                {kind === BENCHMARK_KIND.STANDARD && (
                 <div className={cx('filters')}>
                   <Selectbox
                     list={categoryOptions}
@@ -373,8 +414,51 @@ const BenchmarkRunConfig = ({ running, modelId, onRun }) => {
                     customStyle={{ width: '220px' }}
                   />
                 </div>
+                )}
+              </div>
+              <div className={cx('kind-picker')}>
+                <p className={cx('kind-title')}>{t('evaluation.bench.kindTitle')}</p>
+                <div
+                  ref={kindGroupRef}
+                  className={cx('kind-list')}
+                  role='radiogroup'
+                  aria-label={t('evaluation.bench.kindTitle')}
+                  onKeyDown={moveRadio(
+                    kindGroupRef,
+                    [BENCHMARK_KIND.STANDARD, BENCHMARK_KIND.TASK],
+                    kind,
+                    switchKind,
+                  )}
+                >
+                  {[
+                    [BENCHMARK_KIND.STANDARD, 'kindStandard', 'kindStandardDesc'],
+                    [BENCHMARK_KIND.TASK, 'kindTask', 'kindTaskDesc'],
+                  ].map(([value, nameKey, descKey]) => (
+                    <button
+                      key={value}
+                      type='button'
+                      role='radio'
+                      aria-checked={kind === value}
+                      data-value={value}
+                      tabIndex={kind === value ? 0 : -1}
+                      className={cx('kind-item', kind === value && 'on')}
+                      onClick={() => switchKind(value)}
+                    >
+                      <span className={cx('kind-radio')} aria-hidden='true' />
+                      <span>
+                        <span className={cx('kind-name')}>
+                          {t(`evaluation.bench.${nameKey}`)}
+                        </span>
+                        <span className={cx('kind-desc')}>
+                          {t(`evaluation.bench.${descKey}`)}
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
 
+              {kind === BENCHMARK_KIND.STANDARD && (
               <div className={cx('benchmark-grid')}>
                 {filtered.map((benchmark) => {
                   const checked = selected.includes(benchmark.id);
@@ -420,6 +504,46 @@ const BenchmarkRunConfig = ({ running, modelId, onRun }) => {
                   </div>
                 )}
               </div>
+              )}
+
+                {kind === BENCHMARK_KIND.TASK && (
+                  <div className={cx('task-picker')}>
+                    <div
+                      ref={taskGroupRef}
+                      className={cx('task-list')}
+                      role='radiogroup'
+                      aria-label={t('evaluation.bench.kindTask')}
+                      onKeyDown={moveRadio(taskGroupRef, TASK_BENCHMARK_IDS, selected[0], selectTask)}
+                    >
+                      {TASK_BENCHMARK_IDS.map((id) => {
+                        const on = selected.includes(id);
+                        return (
+                          <button
+                            key={id}
+                            type='button'
+                            role='radio'
+                            aria-checked={on}
+                            data-value={id}
+                            tabIndex={on ? 0 : -1}
+                            className={cx('task-item', on && 'on')}
+                            onClick={() => selectTask(id)}
+                          >
+                            <span className={cx('task-radio')} aria-hidden='true' />
+                            <span>
+                              <span className={cx('task-name')}>
+                                {BENCHMARK_LABEL[id] || id}
+                              </span>
+                              <span className={cx('task-meta')}>
+                                {t(`evaluation.bench.taskDesc.${id}`)}
+                              </span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                  </div>
+                )}
 
               <div className={cx('guide')}>
                 <GuideBox
