@@ -1,4 +1,5 @@
-"""llm_evaluation 라우터 (P1b — benchmark). 플랫폼 envelope response() 준수."""
+"""llm_evaluation 라우터 (벤치마크 — reference/judge, 전문가, 추론 러너).
+플랫폼 envelope response() 준수."""
 import traceback
 
 from fastapi import APIRouter, Header
@@ -17,11 +18,12 @@ TAG = ["EVALUATION"]
 @evaluations.post("/projects", summary="평가 프로젝트 생성(대기)", tags=TAG)
 async def create_project(body: dto.EvalProjectCreateBody,
                          jf_user: str = Header(default=None, alias="jf-User")):
-    """모델·데이터셋·유형·이름 잠금(P3), status='created'(run 0개, P5). creator=jf-User 헤더."""
+    """유형·이름·워크스페이스만 고정(2026-08-24 — 모델·데이터셋은 런이 고른다),
+    status='created'(run 0개, P5). creator=jf-User 헤더."""
     try:
         res = await svc.create_project(
-            name=body.name, model_id=body.model_id, dataset_ids=body.dataset_ids,
-            eval_type=body.eval_type, creator=jf_user)
+            name=body.name, eval_type=body.eval_type,
+            workspace_id=body.workspace_id, creator=jf_user)
         return response(status=1, result=res)
     except Exception as e:
         traceback.print_exc()
@@ -71,12 +73,17 @@ async def delete_project(project_id: int):
         return response(status=0, message=str(e), result=None)
 
 
-@evaluations.post("/benchmark", summary="benchmark 평가 런 생성", tags=TAG)
+@evaluations.post("/benchmark", summary="벤치마크 평가 런 생성(reference/judge 공용)", tags=TAG)
 async def run_benchmark(body: dto.BenchmarkRunBody):
+    """정답 대조(reference)와 LLM 심사(judge) 두 프로젝트 유형이 이 엔드포인트를 공유한다
+    — 런치 경로가 같고 다른 것은 채점 주체뿐이다. 고른 벤치마크가 프로젝트 유형과 같은
+    축인지는 service 가 대조해 거절한다."""
     try:
-        # 검증된 pair 모델 → 서비스는 순수 dict 로 받는다(dto 의존 분리, 기존 패턴).
-        pairs = ([{"benchmark": p.benchmark, "metric": p.metric}
-                  for p in body.benchmarks] if body.benchmarks else None)
+        # 검증된 모델 → 서비스는 순수 문자열 목록으로 받는다(dto 의존 분리, 기존 패턴).
+        # 요청은 두 shape("logickor" / {"benchmark": "logickor"})를 다 보낼 수 있고,
+        # 옛 요청의 metric 키는 여기서 흡수돼 서비스에 도달하지 않는다.
+        benchmarks = ([b if isinstance(b, str) else b.benchmark
+                       for b in body.benchmarks] if body.benchmarks else None)
         # 실채점 컨테이너 실행 옵션 — dto 가 이미 타입·범위·문자셋을 강제했다. 미지정
         # 필드는 빼서 넘긴다(컨테이너 기본값을 그대로 쓰게 하고, 우리가 기본값을 두 곳에
         # 복제하지 않는다).
@@ -88,9 +95,11 @@ async def run_benchmark(body: dto.BenchmarkRunBody):
             ("judge_max_output_tokens", body.judge_max_output_tokens),
         ) if v is not None}
         res = await svc.run_benchmark(
-            project_id=body.project_id, benchmarks=pairs,
-            inference_job_id=body.inference_job_id,
-            commit_id=body.commit_id,
+            project_id=body.project_id,
+            model_id=body.model_id, dataset_ids=body.dataset_ids,
+            benchmarks=benchmarks,
+            inference_playground_id=body.inference_playground_id,
+            judge_playground_id=body.judge_playground_id,
             run_options=run_options or None)
         return response(status=1, result=res)
     except Exception as e:
@@ -103,10 +112,14 @@ async def run_eval_inference(body: dto.EvalInferenceRunBody,
                              jf_user: str = Header(default=None, alias="jf-User")):
     """평가가 대상 모델 인스턴스를 확보(running 배포 재사용 or 전용 할당)해 데이터셋 전량 batch
     추론 → _samples + _gen_system_prompt 영속(채점은 후속). 즉시 job_id 반환. 전용 할당 시
-    jf-User(트리거 유저)를 배포 소유자로 사용(없으면 project.creator). ⚠️ P1 WIP(P2 선결 지적 有)."""
+    jf-User(트리거 유저)를 배포 소유자로 사용(없으면 project.creator).
+    ⚠️ P1 WIP(잔여 지적 有) — 단, '배포 소유권 검증'은 2026-08-27 해소됐다: 재사용 경로
+    (inference_playground_id)의 배포가 런의 워크스페이스 것인지 service 가 대조·거절한다."""
     try:
         res = await svc.run_eval_inference(
-            project_id=body.project_id, system_prompt=body.system_prompt,
+            project_id=body.project_id,
+            model_id=body.model_id, dataset_ids=body.dataset_ids,
+            system_prompt=body.system_prompt,
             inference_playground_id=body.inference_playground_id,
             instance_id=body.instance_id, instance_count=body.instance_count,
             gpu_count=body.gpu_count, commit_id=body.commit_id, user_name=jf_user)
@@ -128,39 +141,12 @@ async def list_benchmark_judge_models():
         return response(status=0, message=str(e), result=None)
 
 
-@evaluations.get("/judges", summary="가용 심판(상용+로컬) 목록", tags=TAG)
-async def list_judges():
-    try:
-        res = await svc.list_judges()
-        return response(status=1, result=res)
-    except Exception as e:
-        traceback.print_exc()
-        return response(status=0, message=str(e), result=None)
-
-
-@evaluations.post("/judge", summary="LLM-as-a-Judge 런 생성", tags=TAG)
-async def run_judge(body: dto.JudgeRunBody):
-    try:
-        res = await svc.run_judge(
-            project_id=body.project_id,
-            provider=body.provider, criteria=body.criteria,
-            judge_model=body.judge_model, api_key=body.api_key,
-            base_url=body.base_url, custom_prompt=body.custom_prompt,
-            inference_playground_id=body.inference_playground_id,
-            inference_job_id=body.inference_job_id,
-        )
-        return response(status=1, result=res)
-    except Exception as e:
-        # ⚠️ str(e) 에 api_key 가 들어가지 않도록 service 에서 키를 메시지에 넣지 않음.
-        traceback.print_exc()
-        return response(status=0, message=str(e), result=None)
-
-
 @evaluations.post("/expert", summary="전문가 평가 세션 시작", tags=TAG)
 async def start_expert(body: dto.ExpertStartBody):
     try:
         res = await svc.start_expert(
             project_id=body.project_id,
+            model_id=body.model_id, dataset_ids=body.dataset_ids,
             inference_playground_id=body.inference_playground_id,
             inference_job_id=body.inference_job_id)
         return response(status=1, result=res)
@@ -188,6 +174,36 @@ async def compare_models(model_ids: str = ""):
         return response(status=0, message=str(e), result=None)
 
 
+@evaluations.get("/runs", summary="비교 후보 런 목록(워크스페이스)", tags=TAG)
+async def list_comparable_runs(workspace_id: int):
+    """런 단위 비교 피커의 후보 목록. 채점 런만(생성 런 제외) 최신순 + 런 출처 4필드."""
+    try:
+        res = await svc.list_comparable_runs(workspace_id=workspace_id)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+
+@evaluations.get("/compare-runs", summary="런 단위 비교(선택 런 간 best-per-metric)", tags=TAG)
+async def compare_runs(workspace_id: int, run_ids: str = ""):
+    """run_ids=1,2,3 (콤마구분) — /compare 의 model_ids 와 같은 파싱 규칙.
+    ⚠️ workspace_id 는 필수 쿼리 파라미터다(런 id 를 직접 받는 경로의 authZ 경계).
+    데이터셋이 섞였는지는 막지 않고 dataset_consistent 로 실어 보낸다(화면이 경고)."""
+    try:
+        ids = []
+        for tok in run_ids.split(","):
+            tok = tok.strip()
+            if tok:
+                ids.append(int(tok))    # 비정수 토큰 → ValueError → 422 대신 envelope 0
+        res = await svc.compare_runs(workspace_id=workspace_id, run_ids=ids)
+        return response(status=1, result=res)
+    except ValueError as e:
+        return response(status=0, message=str(e), result=None)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
 @evaluations.get("/{model_id}/results", summary="평가 이력(비교표)", tags=TAG)
 async def list_eval_results(model_id: int):
     try:
@@ -202,16 +218,6 @@ async def list_eval_results(model_id: int):
 async def get_eval_result(model_id: int, job_id: str):
     try:
         res = await svc.get_eval_result(model_id=model_id, job_id=job_id)
-        return response(status=1, result=res)
-    except Exception as e:
-        traceback.print_exc()
-        return response(status=0, message=str(e), result=None)
-
-
-@evaluations.get("/{model_id}/{job_id}/judge-result", summary="judge 런 결과(poll)", tags=TAG)
-async def get_judge_result(model_id: int, job_id: str):
-    try:
-        res = await svc.get_judge_result(model_id=model_id, job_id=job_id)
         return response(status=1, result=res)
     except Exception as e:
         traceback.print_exc()

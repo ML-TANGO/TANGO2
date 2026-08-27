@@ -279,20 +279,30 @@ CREATE TABLE IF NOT EXISTS `quantize_lineage` (
 );
 
 -- 평가 프로젝트 관리 (2026-07-07). apps/fb_utils/llm_db/schema.sql 미러
--- (라이브 DB 에는 수동 적용됨). 관리 단위 = 프로젝트(모델·데이터셋·유형·이름 잠금),
+-- (라이브 DB 에는 수동 적용됨). 관리 단위 = 프로젝트(유형·이름),
 -- 1:N 으로 eval_result(run)를 묶는다.
+-- 2026-08-24: 모델·데이터셋 잠금 해제 — 런이 고른다(model_id 는 옛 프로젝트 보존용 NULL 허용).
+--   라이브 DB 는 apps/llm_evaluation/migrations/002_eval_project_model_nullable.sql 로 적용.
+-- 2026-08-27: eval_type 3분할 — 'reference'(정답 대조) | 'judge'(LLM 심사) | 'expert'
+--   (전문가). 구 'benchmark' 를 채점 주체 기준으로 쪼갠 것이며 컬럼 타입은 그대로다.
+--   ⚠️ 데이터 마이그레이션 없음 — 기존 런/프로젝트는 전부 지우고 새로 뽑는다.
+--   ⚠️ model_id 의 FK 는 **ON DELETE SET NULL** 이다(2026-08-27 리뷰 HIGH). 잠금이
+--   박혀 있던 시절에는 프로젝트=한 모델이라 CASCADE 가 맞았지만, 이제 한 프로젝트에
+--   여러 모델의 런이 쌓인다 — CASCADE 로 두면 원래 모델을 지울 때 다른 모델의 런까지
+--   프로젝트째 사라진다. 신규 프로젝트는 어차피 NULL 로 시작하므로 SET NULL 이 그
+--   상태로 수렴하는 것이고, 라이브 DB 는 migrations/003 이 같은 규칙으로 바꾼다.
 CREATE TABLE IF NOT EXISTS `eval_project` (
     `id`                INT(11) NOT NULL AUTO_INCREMENT,
     `workspace_id`      INT(11) NOT NULL,
     `name`              VARCHAR(255) NOT NULL,
-    `model_id`          INT(11) NOT NULL,
+    `model_id`          INT(11),
     `dataset_ids`       JSON,
     `eval_type`         VARCHAR(20) NOT NULL,
     `status`            VARCHAR(20) DEFAULT 'created',
     `creator`           VARCHAR(128),
     `create_datetime`   DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY(`id`),
-    CONSTRAINT FOREIGN KEY (`model_id`) REFERENCES `jonathan_llm`.`model` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
+    CONSTRAINT FOREIGN KEY (`model_id`) REFERENCES `jonathan_llm`.`model` (`id`) ON UPDATE CASCADE ON DELETE SET NULL
 );
 
 -- SP-5 자동평가 결과 (v0.4 3.8). apps/fb_utils/llm_db/schema.sql 미러.

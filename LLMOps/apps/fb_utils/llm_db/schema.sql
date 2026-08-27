@@ -102,22 +102,36 @@ CREATE TABLE IF NOT EXISTS `quantize_lineage` (
     CONSTRAINT FOREIGN KEY (`source_model_id`) REFERENCES `jonathan_llm`.`model` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
 );
 
--- 평가 프로젝트 관리 (2026-07-07). 관리 단위 = 프로젝트(모델·데이터셋·유형·이름 잠금).
+-- 평가 프로젝트 관리 (2026-07-07). 관리 단위 = 프로젝트(유형·이름).
 -- 1:N 으로 eval_result(run)를 묶는다(eval_result.eval_project_id FK). model 뒤·eval_result
 -- 앞에 정의(인라인 FK 순서: model → eval_project → eval_result). 삭제 캐스케이드:
 -- project → result → expert rating/history 전 체인.
+-- 2026-08-24: 모델·데이터셋 잠금 해제 — 무엇을 평가하는지는 **런**이 고른다
+-- (eval_result.source_model_id/dataset_id 가 런 단위 정본). 그래서 workspace_id 는
+-- 더 이상 모델에서 파생되지 않고 생성 요청이 직접 준다. model_id/dataset_ids 는
+-- 잠금이 박혀 있던 옛 프로젝트의 값을 보존하려고 남긴 컬럼이며 신규 생성은 NULL 이다.
+-- 2026-08-27: eval_type 3분할 — 'reference'(정답 대조) | 'judge'(LLM 심사) | 'expert'
+--   (전문가). 구 'benchmark' 안에 채점 주체가 다른 둘(정답이 데이터에 있는 결정론적 채점
+--   과 심판 LLM 채점)이 섞여 있어 결과 화면에서 구분이 불가능했다. 정본은 llm_evaluation
+--   constants.EVAL_TYPES 이고, 컬럼은 VARCHAR(20) 그대로라 스키마 변경이 없다.
+--   ⚠️ 데이터 마이그레이션은 만들지 않았다 — 기존 런/프로젝트는 전부 지우고 새로 뽑는다.
+--   ⚠️ model_id 의 FK 는 **ON DELETE SET NULL** 이다(2026-08-27 리뷰 HIGH). 잠금이
+--   박혀 있던 시절에는 프로젝트=한 모델이라 CASCADE 가 맞았지만, 이제 한 프로젝트에
+--   여러 모델의 런이 쌓인다 — CASCADE 로 두면 원래 모델을 지울 때 다른 모델의 런까지
+--   프로젝트째 사라진다. 신규 프로젝트는 어차피 NULL 로 시작하므로 SET NULL 이 그
+--   상태로 수렴하는 것이고, 라이브 DB 는 migrations/003 이 같은 규칙으로 바꾼다.
 CREATE TABLE IF NOT EXISTS `eval_project` (
     `id`                INT(11) NOT NULL AUTO_INCREMENT,
     `workspace_id`      INT(11) NOT NULL,
     `name`              VARCHAR(255) NOT NULL,
-    `model_id`          INT(11) NOT NULL,
+    `model_id`          INT(11),
     `dataset_ids`       JSON,
     `eval_type`         VARCHAR(20) NOT NULL,
     `status`            VARCHAR(20) DEFAULT 'created',
     `creator`           VARCHAR(128),
     `create_datetime`   DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY(`id`),
-    CONSTRAINT FOREIGN KEY (`model_id`) REFERENCES `jonathan_llm`.`model` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
+    CONSTRAINT FOREIGN KEY (`model_id`) REFERENCES `jonathan_llm`.`model` (`id`) ON UPDATE CASCADE ON DELETE SET NULL
 );
 
 -- SP-5 자동평가 결과 (v0.4 3.8). model 테이블을 건드리지 않고 평가 이력을

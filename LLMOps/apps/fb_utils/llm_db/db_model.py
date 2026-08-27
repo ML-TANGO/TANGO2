@@ -759,9 +759,12 @@ async def list_eval_results(source_model_id : int) -> list:
 
 async def list_eval_results_by_project(eval_project_id : int) -> list:
     """프로젝트에 속한 평가 런(run) 목록(최신순) — 프로젝트 내 run 비교표용. list_eval_results
-    와 동일 shape, 필터만 eval_project_id. job_str_id IN 목록 대신 FK 필터라 IDOR 회피."""
+    와 동일 shape, 필터만 eval_project_id. job_str_id IN 목록 대신 FK 필터라 IDOR 회피.
+    ⚠️ eval_project_id 를 SELECT 에 포함한다 — 필터로 이미 확정된 값이라 중복처럼 보이지만,
+    프로젝트 상세가 공용 비교표 빌더(_build_run_comparison → _label_runs)를 재사용하고
+    그 빌더가 원본 행에서 이 컬럼을 되읽기 때문이다(빠지면 소속이 null 로 라벨된다)."""
     sql = """
-        SELECT id, source_model_id, workspace_id, job_str_id, dataset_id,
+        SELECT id, source_model_id, workspace_id, eval_project_id, job_str_id, dataset_id,
                dataset_name, metric_set, metrics, status,
                DATE_FORMAT(create_datetime, %s) AS create_datetime
         FROM eval_result
@@ -772,6 +775,55 @@ async def list_eval_results_by_project(eval_project_id : int) -> list:
                              fetch_type=FetchType.ALL)
     return res or []
 
+
+async def list_eval_results_by_workspace(workspace_id : int) -> list:
+    """워크스페이스의 채점 런 목록(최신순) — 런 단위 비교 피커의 후보 소스. list_eval_results
+    와 동일 shape, 필터만 workspace_id. 러너 inference '생성' 런(metric_set='inference')은
+    채점이 아니라 비교 대상이 될 수 없으므로 제외한다(count_run_statuses_by_projects 가
+    상태 집계에서 빼는 것과 같은 이유·같은 조건).
+    ⚠️ eval_project_id 를 SELECT 에 더한 건 list_eval_results 와의 유일한 차이 — 호출부가
+    런이 속한 프로젝트명을 목록조회 한 번으로 매핑하려면(행마다 조회 X) 이 컬럼이 필요하다."""
+    sql = """
+        SELECT id, source_model_id, workspace_id, eval_project_id, job_str_id, dataset_id,
+               dataset_name, metric_set, metrics, status,
+               DATE_FORMAT(create_datetime, %s) AS create_datetime
+        FROM eval_result
+        WHERE workspace_id = %s
+          AND (metric_set IS NULL OR metric_set <> 'inference')
+        ORDER BY id DESC
+    """
+    res = await select_query(sql, params=(TYPE.TIME_DATE_FORMAT_SQL, workspace_id),
+                             fetch_type=FetchType.ALL)
+    return res or []
+
+
+async def list_eval_results_by_ids(result_ids : list, workspace_id : int) -> list:
+    """id 목록으로 런을 읽는다(런 단위 비교의 선택 런 조회). list_eval_results_by_workspace
+    와 동일 shape, 필터만 id IN (...) AND workspace_id.
+
+    ⚠️ workspace_id 는 편의 인자가 아니라 **필수**다. 호출부가 사용자에게서 런 id 를 그대로
+    받는 경로라, 임의 id 를 찍어 남의 평가 결과를 읽는 직접적인 통로가 된다. 서비스 계층의
+    사후 필터링은 한 번만 빠뜨려도 뚫리므로 쿼리 자체에 조건을 박는다 — 워크스페이스 밖
+    id 는 애초에 행이 돌아오지 않는다(존재/미존재를 구분해 알려주지도 않는 조용한 누락).
+    IN 절은 count_run_statuses_by_projects 와 동일하게 %s 자리표시자만 조립하고 값은 전부
+    바인딩한다(문자열 보간 X). 빈 목록이면 조회하지 않는다."""
+    if not result_ids:
+        return []
+    placeholders = ",".join(["%s"] * len(result_ids))
+    sql = f"""
+        SELECT id, source_model_id, workspace_id, eval_project_id, job_str_id, dataset_id,
+               dataset_name, metric_set, metrics, status,
+               DATE_FORMAT(create_datetime, %s) AS create_datetime
+        FROM eval_result
+        WHERE id IN ({placeholders})
+          AND workspace_id = %s
+        ORDER BY id DESC
+    """
+    res = await select_query(sql,
+                             params=(TYPE.TIME_DATE_FORMAT_SQL,
+                                     *tuple(result_ids), workspace_id),
+                             fetch_type=FetchType.ALL)
+    return res or []
 
 async def count_run_statuses_by_projects(project_ids : list) -> list:
     """프로젝트별 run 상태 집계(GROUP BY eval_project_id, status). list_projects 가 표시
@@ -888,6 +940,68 @@ def _flatten_eval_metrics(metrics) -> dict:
             and not isinstance(v, bool)}
 
 
+def _eval_run_source(metrics) -> tuple:
+    """런 출처(어느 체크포인트/배포가 이 점수를 냈나)를 metrics 원본에서 판정
+    → (checkpoint, mode, frozen_model, frozen_deployment).
+
+    체크포인트 런은 metrics.checkpoint.name, 생성을 배포에 위임한 런은 metrics.generate.mode
+    == 'remote'. 둘 다 아니면 전부 None.
+
+    위임 런의 배포 이름·서빙 모델명은 **완료 시점에 굳혀 둔** `_platform_source` 에서 읽는다
+    (llm_evaluation `_freeze_run_source` 가 새긴다). 그 값이 있으면 배포 행을 다시 조회할
+    필요가 없고, **배포를 지운 뒤에도 라벨이 남는다** — 표시할 때마다 조회하던 옛 방식은
+    배포 삭제와 함께 출처가 사라졌다. 없으면(굳히기 이전에 끝난 옛 런) None 을 돌려주고
+    서비스 계층이 live 조회로 폴백한다.
+    ⚠️ metrics.generate.model 은 'playground-<id>' shim 식별자라 모델명이 아니다 — 쓰지 않는다.
+    비정상/누락 metrics 에도 예외를 던지지 않는다(읽기 전용 표 — 한 행이 목록을 죽이면 안 됨)."""
+    if not isinstance(metrics, dict):
+        return None, None, None, None
+    checkpoint = metrics.get("checkpoint")
+    if isinstance(checkpoint, dict) and checkpoint.get("name"):
+        return str(checkpoint["name"]), "checkpoint", None, None
+    generate = metrics.get("generate")
+    if isinstance(generate, dict) and generate.get("mode") == "remote":
+        frozen = metrics.get("_platform_source")
+        frozen = frozen if isinstance(frozen, dict) else {}
+        model = frozen.get("model")
+        deployment = frozen.get("deployment")
+        return (None, "deployment",
+                str(model) if model else None,
+                str(deployment) if deployment else None)
+    return None, None, None, None
+
+
+def _eval_run_judge(metrics) -> tuple:
+    """심사(judge) 런의 심판 출처를 metrics 원본에서 판정 → (judge_model, judge_deployment).
+
+    LogicKor 채점기가 남기는 metrics.judge{mode, model, endpoint} 를 읽는다. `_eval_run_source`
+    와 **같은 규약**이다 — 배포 행 조회가 필요한 값은 완료 시점에 굳혀 둔 `_platform_judge`
+    에서만 읽고(llm_evaluation `_freeze_run_source` 가 새긴다) 여기서 배포를 다시 조회하지
+    않는다. 그래서 심판 배포를 내린 뒤에도 라벨이 남는다.
+
+    mode 에 따라 이름의 출처가 다르다:
+      vllm   — 컨테이너가 심판 가중치를 직접 로드. metrics.judge.model 이 우리가 넘긴 HF
+               repo id('google/gemma-4-E4B-it') 라 사람이 읽는 이름 그대로 쓴다.
+      remote — 이미 떠 있는 배포에 위임. 이때 metrics.judge.model 은 배포가 자기 이름으로
+               보고한 shim 식별자('playground-<id>')라 **모델명이 아니다**(generate.model 과
+               같은 함정) → 굳혀 둔 값만 쓰고, 없으면 None 이 맞다(화면은 '-' 를 그린다).
+    심판이 없는 런(정답 대조·self-metric)은 judge 섹션 자체가 없어 (None, None).
+    비정상/누락 metrics 에도 예외를 던지지 않는다(읽기 전용 표 — 한 행이 목록을 죽이면 안 됨)."""
+    if not isinstance(metrics, dict):
+        return None, None
+    judge = metrics.get("judge")
+    if not isinstance(judge, dict):
+        return None, None
+    if judge.get("mode") == "remote":
+        frozen = metrics.get("_platform_judge")
+        frozen = frozen if isinstance(frozen, dict) else {}
+        model, deployment = frozen.get("model"), frozen.get("deployment")
+        return (str(model) if model else None,
+                str(deployment) if deployment else None)
+    model = judge.get("model")
+    return (str(model) if model else None), None
+
+
 def build_eval_comparison(rows: list) -> dict:
     """eval_result rows → 비교표 shape ``{metric_keys, best, runs}`` (§14.12).
 
@@ -905,6 +1019,8 @@ def build_eval_comparison(rows: list) -> dict:
             except (TypeError, json.JSONDecodeError):
                 metrics = None
         clean = _flatten_eval_metrics(metrics)
+        checkpoint, source_mode, frozen_model, frozen_deployment = _eval_run_source(metrics)
+        judge_model, judge_deployment = _eval_run_judge(metrics)
         metric_keys.update(clean.keys())
         runs.append({
             "id": r["id"], "job_id": r.get("job_str_id"), "dataset_id": r.get("dataset_id"),
@@ -913,6 +1029,27 @@ def build_eval_comparison(rows: list) -> dict:
             # 교차모델 비교(④)용 라벨. 단일모델 호출은 한 모델이라 무시되는 잉여 필드.
             # model_name 은 eval_result 에 없어 호출자가 row 에 주입할 때만 채워진다.
             "model_id": r.get("source_model_id"), "model_name": r.get("model_name"),
+            # 런 출처 — 점수만으로는 목록에서 런을 구분할 수 없어 "무엇이 이 점수를 냈나"를 함께
+            # 싣는다. source_deployment 는 배포 행 조회가 필요해 여기선 항상 None(원본 metrics
+            # 만 보는 순수 빌더) — 서비스 계층이 endpoint 의 배포 id 로 채운다.
+            "checkpoint": checkpoint, "source_mode": source_mode,
+            # 위임 런은 **여기서 모델명을 추측하지 않는다**. 이 컬럼의 존재 이유가
+            # "프로젝트 모델과 실제 생성 모델이 다를 수 있다"를 드러내는 것인데,
+            # 배포 조회가 실패했을 때 프로젝트 모델명을 남기면 Qwen 이 만든 답에
+            # 'src' 라고 적히는, 정확히 반대되는 라벨이 된다. 모르면 None 이 맞다
+            # (화면은 '-' 를 그린다). 완료 시점에 굳혀 둔 값이 있으면 그것을 쓰고,
+            # 없는 옛 런만 서비스 계층이 배포 행을 읽어 채운다.
+            "source_model": (frozen_model if source_mode == "deployment"
+                             else r.get("model_name")),
+            "source_deployment": frozen_deployment,
+            # 심판 출처 — source_deployment 와 대칭인 additive 필드(2026-08-27). LLM 심사
+            # 런은 "누가 채점했나"가 점수의 일부라 목록에서 보여야 하는데, metrics.judge 는
+            # nested JSON 이라 평탄화된 표에서 쓸 수 없었다. 화면은
+            # `judge_deployment ?? judge_model` 로 '심판' 컬럼을 그린다 — 원격 위임이면
+            # 배포 이름, 컨테이너 안 vLLM 이면 심판 가중치 이름. 심판이 없는 런(정답 대조·
+            # self-metric)은 둘 다 None 이고 '-' 가 정상이다.
+            "judge_model": judge_model,
+            "judge_deployment": judge_deployment,
             "metrics": clean,
         })
     best = {}
@@ -931,11 +1068,15 @@ def build_eval_comparison(rows: list) -> dict:
 # (eval_result.eval_project_id FK). 삭제 시 FK ON DELETE CASCADE 로 자식 run
 # (+expert rating/history) 전 체인이 함께 정리된다.
 
-async def create_eval_project(workspace_id : int, name : str, model_id : int,
-                              dataset_ids_json : str, eval_type : str,
+async def create_eval_project(workspace_id : int, name : str, eval_type : str,
+                              model_id : int = None,
+                              dataset_ids_json : str = None,
                               creator : str = None) -> int:
-    """평가 프로젝트 생성(status='created', run 0개). dataset_ids 는 JSON 문자열로 저장
-    (불변 — 이후 run 이 상속). 생성된 project id 반환."""
+    """평가 프로젝트 생성(status='created', run 0개). 생성된 project id 반환.
+
+    2026-08-24: model_id/dataset_ids 는 선택이다 — 프로젝트가 모델·데이터셋을 잠그던
+    계약이 끝나고 무엇을 평가하는지는 run(eval_result.source_model_id/dataset_id)이
+    정한다. 두 컬럼은 잠금 시절 프로젝트의 값을 보존하려고 남아 있고 신규 생성은 NULL."""
     # 'created' 리터럴 유지 — 대응 상수 PROJECT_STATUS_CREATED 는 앱 레이어
     # (llm_evaluation.evaluation.constants)에 있어, 공유 lib 인 fb_utils 가 특정 앱을
     # import 하면 레이어 역의존이 된다. 리터럴로 두는 게 계층 규율상 옳다.

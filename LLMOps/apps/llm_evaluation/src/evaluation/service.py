@@ -13,7 +13,6 @@ import asyncio
 import base64
 import csv
 import glob
-import hashlib
 import io
 import ipaddress
 import json
@@ -23,19 +22,22 @@ import socket
 import traceback
 import uuid
 from typing import List, Optional
-from urllib.parse import quote, urlparse
+from urllib.parse import urlparse
 
 import httpx
 
 from utils import PATH, settings
-from utils.llm_db import db_model
+from utils.llm_db import db_model, db_playground
 
 from external.proxy import ExternalContainerClient, ExternalContainerError
 from evaluation.constants import (
-    BENCHMARK_ALLOWED_METRICS,
+    BENCHMARK_EVAL_TYPE,
+    BENCHMARK_EVAL_TYPES,
     BENCHMARK_IDS,
     BENCHMARK_RECOMMENDED_METRIC,
     DEFAULT_BENCHMARK_IDS,
+    JUDGE_BENCHMARK_IDS,
+    REFERENCE_BENCHMARK_IDS,
     REAL_BENCHMARK_MANIFEST_KEY,
     EVAL_DEPLOY_MAX_POLLS,
     EVAL_INFER_RUN_SECONDS,
@@ -43,7 +45,6 @@ from evaluation.constants import (
     MAX_BENCHMARK_DATASETS,
     MAX_BENCHMARK_ITEMS,
     MAX_EVAL_SAMPLES,
-    METRIC_IDS,
     PROJECT_STATUS_COMPLETED,
     PROJECT_STATUS_CREATED,
     PROJECT_STATUS_RUNNING,
@@ -65,16 +66,11 @@ from evaluation.constants import (
     LOGICKOR_MODEL_LEN_MAX,
     LOGICKOR_MODEL_LEN_MIN,
     LOGICKOR_STRATEGIES,
-    JUDGE_CRITERIA,
-    JUDGE_DEFAULT_MODEL,
-    JUDGE_PROVIDER_HOSTS,
     MAX_COMPARE_MODELS,
+    MAX_COMPARE_RUNS,
     MAX_EXPERT_SAMPLES,
-    MAX_JUDGE_RUN_SECONDS,
-    MAX_JUDGE_SAMPLES,
     SDS_GEN_SYSTEM_PROMPT,
     SDS_SAMPLE_DIR_GLOB,
-    CHECKPOINT_REQUIRED_MANIFEST_KEYS,
     MAX_RECONCILE_PER_VIEW,
     RECONCILE_TIMEOUT_SECONDS,
     STALE_RUNNING_MAX_HOURS,
@@ -85,25 +81,66 @@ _SAFE_SEGMENT_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 _JOB_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 
 
-async def run_benchmark(project_id: int,
-                        benchmarks: Optional[List[dict]] = None,
-                        inference_job_id: Optional[str] = None,
-                        commit_id: Optional[int] = None,
+async def run_benchmark(project_id: int, model_id: int, dataset_ids: List[int],
+                        benchmarks: Optional[List] = None,
+                        inference_playground_id: Optional[int] = None,
+                        judge_playground_id: Optional[int] = None,
                         run_options: Optional[dict] = None) -> dict:
-    """벤치마크 평가 런 — 프로젝트에서 model/dataset(잠금) 상속 → evaluate 컨테이너 런치.
-    model_id·dataset_ids 는 프로젝트에서 주입(요청 바디 미수취 → 불변 강제, P3). 유형별
-    설정 = benchmarks(벤치마크→메트릭 매핑). 생략 시 전체 벤치마크를 권장 메트릭으로 채점.
-    inference_job_id(러너 생성) 주면 그 생성 output 을 스코어러에 넘겨 채점(생성·채점 분리,
-    D2-b). commit_id 주면 그 커밋 **이름**을 스코어러에 넘겨 컨테이너가 자기 GPU 로 생성부터
-    수행한다(LogicKor). run_options 는 실채점 컨테이너 실행 옵션(컨텍스트 길이·전략·심판
-    모델). run 생성 시 프로젝트를 'running' 으로 전이."""
-    project, dataset_ids = await _load_project_for_run(project_id, "benchmark")
-    model_id = int(project["model_id"])
-    model_info = await db_model.get_model(model_id=model_id)
-    if not model_info:
-        raise Exception(f"model {model_id} not found")
+    """벤치마크 평가 런 — 이 런이 고른 model/dataset 으로 evaluate 컨테이너 런치.
+    model_id·dataset_ids 는 **요청이 준다**(2026-08-24 — 프로젝트 잠금 해제). 둘 다
+    프로젝트의 워크스페이스에 속하는지 여기서 검증한다(생성 시점에서 옮겨온 검증).
+    benchmarks = 채점할 벤치마크 id 목록(생략 시 기본 집합). **메트릭은 요청이 고르지
+    않는다** — 채점기가 한 벤치마크의 지표를 늘 함께 계산하므로 고를 것은 대표 스칼라
+    축뿐이고, 그건 BENCHMARK_RECOMMENDED_METRIC 으로 서버가 고정한다.
+
+    생성(누가 답을 만드는가)은 **하나뿐이다**: inference_playground_id — 실행 중인 배포에
+    위임한다(필수). 2026-08-27 이전에는 세 갈래였는데, 평가 유형마다 출력 획득 정책이
+    달라 "이 점수를 무엇이 냈나"가 화면마다 다르게 읽혔다 → 배포로 통일했다.
+
+    ⚠️ inference_playground_id 는 params.generate_base_url(배포의 OpenAI shim base)로
+    컨테이너에 넘어가고 **생성은 컨테이너 안에서 그 배포를 호출해 일어난다**. 예전에는 이
+    서비스가 인라인으로 미리 생성해 params.samples 로 넘겼는데, 어느 채점기도 그 키를
+    읽지 않아 생성이 두 번(BE 가 배포로 한 번, 컨테이너가 체크포인트로 또 한 번) 일어나
+    GPU 절약이 0 이었다. 게다가 벤치마크 프롬프트 조립은 컨테이너 소유다 — LogicKor 은
+    42문항 × 2턴이고 2턴 질문이 1턴 답변에 의존하며 채팅 템플릿·토큰 예산 절삭이 전부
+    generate.py 안에 있고, MixATIS 의 UGEN 프롬프트 형식도 컨테이너 것이다. 그 조립을
+    BE 의 단일턴 루프(_generate_samples)로 재현할 수 없다 → 위임으로 바꿨다. 인라인
+    생성이 사라지면서 240초 예산과 Kong 60초 타임아웃 경쟁도 함께 사라졌다.
+
+    ⚠️ 없어진 두 경로. **commit_id(체크포인트)** 는 컨테이너가 그 가중치를 자기 GPU 에
+    올려 생성하는 별도 정책이었고, **inference_job_id(러너 생성물)** 는 params.samples 를
+    실어 보내지만 evaluate_* 어느 컨테이너도 그 키를 읽지 않는 죽은 계약이었다(grep 실측)
+    — 준 사람은 재사용됐다고 믿는데 컨테이너는 자기 경로로 다시 생성했다. 둘을 남긴 채
+    배포를 필수로 만들면 오히려 더 나빠진다: 러너 job_id 를 함께 주면 옛 분기가 먼저 걸려
+    generate_base_url 이 실리지 않고, 체크포인트도 없으니 채점기가 생성할 대상을 잃는다.
+    ⚠️ 컨테이너 계약은 그대로다 — 매니페스트/이미지는 여전히 checkpoint_name·samples 를
+    받는다. 우리가 보내지 않을 뿐이라 되돌리기는 이 함수의 분기 복원으로 끝난다.
+    (judge/expert 의 inference_job_id 는 채점이 이 서비스 안에서 일어나 실제로 동작한다.)
+
+    judge_playground_id 를 주면 LogicKor 심판을 컨테이너 안 vLLM 대신 이미 떠 있는 배포에
+    위임한다(params.judge_base_url). run_options 는 실채점 컨테이너 실행 옵션(컨텍스트
+    길이·전략·심판 모델). run 생성 시 프로젝트를 'running' 으로 전이.
+
+    ⚠️ 이 함수는 **reference(정답 대조)와 judge(LLM 심사) 두 프로젝트 유형이 공유한다**
+    (2026-08-27 유형 3분할). 런치 경로가 같고 다른 것은 "누가 점수를 매기는가"뿐이라
+    함수를 나누지 않았다 — 대신 프로젝트 유형만으로는 무엇을 채점하는지가 정해지지
+    않으므로, 고른 벤치마크의 축(BENCHMARK_EVAL_TYPE)이 프로젝트 유형과 같은지 아래에서
+    대조한다. 대조하지 않으면 정답 대조 프로젝트에 심판 점수가 섞여 들어가는데, 결과
+    화면에서는 둘 다 그냥 숫자라 사후에 구분할 방법이 없다."""
+    # 출력은 **실행 중인 배포에서** 가져온다 — 벤치마크의 유일한 생성 경로다. 파드를
+    # 띄우기 전에(그리고 DB 를 두드리기 전에) 사유와 함께 막는다.
+    if not inference_playground_id:
+        raise Exception(
+            "벤치마크 출력은 실행 중인 배포에서 가져옵니다 — 평가할 모델을 서빙하는 "
+            "배포를 먼저 시작한 뒤 지정하세요(inference_playground_id)")
+    # 벤치마크 런을 시작할 수 있는 유형은 둘(reference/judge)이다. 어느 쪽인지는 아래에서
+    # 벤치마크 목록과 대조해 좁힌다 — 여기서는 expert 프로젝트의 진입만 막는다.
+    project = await _load_project_for_run(project_id, BENCHMARK_EVAL_TYPES)
+    project_type = str(project.get("eval_type") or "")
+    model_id = int(model_id)
+    dataset_ids = _run_dataset_ids(dataset_ids)
+    model_info, workspace_id = await _resolve_run_model(project, model_id)
     model_name = model_info["name"]
-    workspace_id = int(model_info["workspace_id"])
     if not _SAFE_SEGMENT_RE.match(model_name):
         raise Exception("model name has unsafe characters for container mount")
 
@@ -121,48 +158,66 @@ async def run_benchmark(project_id: int,
             raise Exception("dataset access path is unsafe")
         datasets.append(d)
 
-    # 체크포인트 선택 → 컨테이너에 넘길 것은 **커밋 이름 한 조각**이다(경로가 아니다).
-    # 차트가 models/<base_model>/commit_models 를 /models/checkpoints 로 RO 마운트하므로
-    # 컨테이너가 이름을 그 루트에 붙여 해석한다. 경로를 넘기면 params 로 마운트 밖을
-    # 열 수 있고, NFS 실경로가 API 응답·로그로 새어나간다.
-    checkpoint_name = None
-    if commit_id is not None:
-        commit = await db_model.get_commit_model(commit_id=int(commit_id))
-        if not commit:
-            raise Exception(f"commit {commit_id} not found")
-        # 다른 모델의 커밋을 주면 마운트에 그 이름이 없어 컨테이너가 수 분 뒤에 죽는다 —
-        # 여기서 막아 즉시 사유를 준다.
-        if int(commit.get("model_id") or 0) != model_id:
-            raise Exception(
-                f"commit {commit_id} belongs to model {commit.get('model_id')}, "
-                f"not project model {model_id}")
-        checkpoint_name = str(commit.get("name") or "").strip()
-        if not checkpoint_name or not _SAFE_SEGMENT_RE.match(checkpoint_name):
-            raise Exception(
-                f"commit {commit_id} name has unsafe characters for container mount")
-
-    # 벤치마크→메트릭 매핑 정규화. 생략/빈값 → 기본 집합(mock 채점 벤치마크)·권장 메트릭.
+    # 벤치마크 정규화. 생략/빈값 → 기본 집합(mock 채점 벤치마크).
     # 전체(BENCHMARK_IDS)로 폴백하지 않는 이유: 실채점 벤치마크는 각자 전용 컨테이너로
     # 가야 하는데 한 런은 컨테이너 하나이므로 "전체 한 번에"가 성립하지 않는다.
     # unknown id 는 무시(dto 에서 이미 422 검증하지만 방어), 벤치마크 중복은 첫 지정 유지.
-    # 벤치마크가 허용하지 않는 메트릭(예: logickor × cider = 계산 불가)은 버리지 않고
-    # 권장 메트릭으로 교정한다 — 런 자체를 실패시키는 것보다 낫고, FE 는 애초에 허용
-    # 목록만 보내므로 이 경로는 API 직접 호출 방어다.
+    #
+    # 메트릭은 요청에서 받지 않는다. 채점기는 한 벤치마크의 지표를 언제나 한꺼번에
+    # 계산하므로(evaluate_intent scoring.aggregate, LogicKor 심판 점수 전체/1턴/2턴)
+    # 고를 수 있었던 것은 결과 화면의 대표 스칼라 축뿐이었고, 그 선택은 "고른 메트릭으로
+    # 채점된다"는 오해만 만들었다 → 권장 축으로 고정한다. 컨테이너에 넘기는 계약
+    # (benchmarks/metric_map)과 결과 shape 은 그대로다.
     pairs = []
     seen = set()
     for item in (benchmarks or []):
-        b = str((item or {}).get("benchmark", "")).strip()
-        m = str((item or {}).get("metric", "")).strip()
-        if b not in BENCHMARK_IDS or m not in METRIC_IDS or b in seen:
+        # 서비스 직접 호출자(테스트·내부)가 옛 dict shape 를 넘겨도 받는다 — metric 키가
+        # 실려 있어도 읽지 않는다.
+        b = (item if isinstance(item, str)
+             else str((item or {}).get("benchmark", "")))
+        b = str(b).strip()
+        if b not in BENCHMARK_IDS or b in seen:
             continue
-        if m not in BENCHMARK_ALLOWED_METRICS.get(b, METRIC_IDS):
-            m = BENCHMARK_RECOMMENDED_METRIC[b]
         seen.add(b)
-        pairs.append({"benchmark": b, "metric": m})
+        pairs.append({"benchmark": b, "metric": BENCHMARK_RECOMMENDED_METRIC[b]})
     if not pairs:
+        # 기본 집합(DEFAULT_BENCHMARK_IDS)은 전부 reference 축이다. judge 프로젝트가
+        # 벤치마크를 생략했을 때 이걸 그대로 채우면 사용자가 고른 적 없는 축을 채점하고
+        # 그 점수가 judge 프로젝트의 이력으로 남는다 → 명시를 요구한다.
+        if project_type != "reference":
+            raise Exception(
+                f"{project_type} 프로젝트는 채점할 벤치마크를 명시해야 합니다 — "
+                f"기본 집합은 정답 대조(reference) 벤치마크뿐입니다"
+                f"(지정 가능: {', '.join(JUDGE_BENCHMARK_IDS)})")
         pairs = [{"benchmark": b, "metric": BENCHMARK_RECOMMENDED_METRIC[b]}
                  for b in DEFAULT_BENCHMARK_IDS]
-    pairs = pairs[:MAX_BENCHMARK_ITEMS]
+    # 상한은 **자르지 않고 거절한다**. 순서가 중요하다 — 예전에는 여기서 조용히 잘랐고
+    # 그 절단이 아래 유형 게이트보다 **먼저**였다: 상한을 넘겨 잘려나간 벤치마크는
+    # (1) 사용자가 명시적으로 골랐는데 아무 신호 없이 사라지고(축이 새는 게 아니라 조용한
+    # 누락이다), (2) 잘린 것이 프로젝트 유형과 다른 축이었다면 거절됐어야 할 요청이 통과한다.
+    # 오늘은 벤치마크가 11종뿐(BENCHMARK_IDS)이라 20 에 닿지 않지만, 벤치마크를 추가하는
+    # 쪽에서 이 순서를 다시 볼 일이 없도록 절단 자체를 없앤다.
+    # 이 가드에 실제로 닿는 것은 **서비스 직접 호출자(테스트·내부)** 뿐이다 — 공개 라우트는
+    # dto(BenchmarkRunBody.benchmarks 의 max_length=MAX_BENCHMARK_ITEMS)가 이미 422 로 막는다.
+    if len(pairs) > MAX_BENCHMARK_ITEMS:
+        raise Exception(
+            f"한 런에 채점할 수 있는 벤치마크는 최대 {MAX_BENCHMARK_ITEMS}개입니다"
+            f"(요청 {len(pairs)}개) — 나눠서 실행하세요")
+
+    # 유형 게이트(벤치마크 축) — 채점기 혼재 거부(아래)와 같은 취지지만 막는 것이 다르다.
+    # 저쪽은 "한 런에 두 컨테이너를 못 쓴다"는 실행 제약이고, 이쪽은 "이 프로젝트가 무엇을
+    # 재는 곳인가"라는 의미의 경계다 — reference 와 judge 는 같은 컨테이너로 갈 수도 있지만
+    # (둘 다 real 채점기) 점수의 의미가 다르므로 한 프로젝트에 섞이면 안 된다.
+    wrong = [p["benchmark"] for p in pairs
+             if BENCHMARK_EVAL_TYPE.get(p["benchmark"]) != project_type]
+    if wrong:
+        allowed = (JUDGE_BENCHMARK_IDS if project_type == "judge"
+                   else REFERENCE_BENCHMARK_IDS)
+        detail = ", ".join(
+            f"{b}={BENCHMARK_EVAL_TYPE.get(b) or 'unknown'}" for b in wrong)
+        raise Exception(
+            f"{project_type} 프로젝트에는 {project_type} 유형 벤치마크만 채점할 수 "
+            f"있습니다 — {detail} (지정 가능: {', '.join(allowed)})")
 
     # 채점 컨테이너 라우팅 — 벤치마크마다 필요한 런타임이 달라(LogicKor 는 심판 LLM +
     # transformers 5.5.4 핀) 한 이미지가 전부 채점할 수 없다. 한 런 = 컨테이너 하나이므로
@@ -179,13 +234,12 @@ async def run_benchmark(project_id: int,
     manifest_version = getattr(settings, f"{manifest_key}_MANIFEST_VERSION")
     benchmark_set = [p["benchmark"] for p in pairs]
     metric_map = {p["benchmark"]: p["metric"] for p in pairs}
-    # 체크포인트 없이는 채점기가 기동 직후 거부하는 벤치마크가 있다. 그대로 두면 GPU 파드가
-    # 떴다가 학습·생성 전에 죽어 시간과 자원만 쓰고 사유도 불친절하다 — 위 '다른 모델의
-    # 커밋' 검증과 같은 취지로 파드를 띄우기 전에 막아 즉시 사유를 준다.
-    if manifest_key in CHECKPOINT_REQUIRED_MANIFEST_KEYS and not checkpoint_name:
-        raise Exception(
-            f"benchmark {', '.join(benchmark_set)} requires a commit checkpoint — "
-            "select one in the run settings (commit_id)")
+    # ⚠️ 체크포인트가 **필수**인 채점기(MIXATIS)의 가드는 여기서 사라졌다 — 생성이 언제나
+    # 배포 위임이면 컨테이너는 마운트할 체크포인트가 필요 없다(evaluate_intent 0.2.4 /
+    # evaluate-logickor-judge 0.2.5 부터 `generate_base_url` 이 있으면 _resolve_checkpoint
+    # 를 우회한다). ⚠️ 그 이전 이미지 태그로 되돌리면 이 런들이 파드를 띄운 뒤 죽는다 →
+    # settings 의 MANIFEST_VERSION 을 되돌릴 때는 체크포인트 경로도 함께 복원해야 한다.
+
     # eval_result.metric_set(VARCHAR 255) = "benchmark:metric" CSV — 런 설정 요약 + 재개 소스
     # (기존 flat metric CSV 대체). 전체 결과(점수)는 metrics JSON 에 별도 영속.
     metric_csv = ",".join(f"{p['benchmark']}:{p['metric']}" for p in pairs)[:255]
@@ -207,15 +261,13 @@ async def run_benchmark(project_id: int,
         "benchmark_set": benchmark_set,
         "metric_map": metric_map,
     }
-    if checkpoint_name:
-        params["checkpoint_name"] = checkpoint_name
 
     # 실행 옵션은 **LogicKor 채점기 전용**이다 — 전략·심판 모델·심판 컨텍스트는 그 컨테이너의
     # 계약이고, 다른 실채점 벤치마크(MixATIS 는 심판 LLM 자체가 없다)에는 대응물이 없다.
     # 그래서 '실채점이면'이 아니라 'LOGICKOR 이면'으로 좁힌다. 위에서 채점기 혼재는 이미
     # 거부됐으므로 이 런의 manifest_key 는 하나로 확정돼 있다.
     # dto 가 이미 검증하지만 서비스를 직접 호출하는 경로(테스트·내부 호출)를 위해 알려진
-    # 키만 통과시키고 타입을 다시 좁힌다 — checkpoint_name 재검증과 같은 취지의 방어다.
+    # 키만 통과시키고 타입을 다시 좁힌다 — 모델·데이터셋 이름 재검증과 같은 취지의 방어다.
     if run_options and manifest_key == "LOGICKOR":
         for key, low, high in (
             ("generate_model_len", LOGICKOR_MODEL_LEN_MIN, LOGICKOR_MODEL_LEN_MAX),
@@ -249,21 +301,57 @@ async def run_benchmark(project_id: int,
             # (심판 추가에 이미지 재빌드가 필요 없는 이유).
             params["judge_model"] = LOGICKOR_JUDGE_HF_ID[judge_model]
 
-    # 생성·채점 분리(D2-b, P2-b3) — 러너 inference 런이 있으면 그 생성 output 을 스코어러에
-    # 넘긴다(generate→score seam): 스코어러가 pre-generated 샘플을 채점(자체 재추론 회피).
-    # ⚠️ 현행 mock 0.2.0 은 이 필드를 무시하고 hash 점수를 낸다 — 실 per-benchmark 채점(제공
-    # 샘플 기반)은 고려대 plugin 계약(후속). FE 미노출 서버전용(_) 키는 제외해 넘긴다(NFS 경로
-    # 등 누출 방지). 벤치마크 실채점은 태스크별 정답키 구조가 필요하므로 free-text seam 은 잠정.
-    used_runner = False
-    if inference_job_id:
-        run_samples, _gen = await _load_run_samples(model_id, project_id, inference_job_id)
-        if run_samples:
-            params["samples"] = [
-                {"input": s.get("input", ""), "output": s.get("output", ""),
-                 "reference": s.get("reference", ""), "dataset": s.get("dataset", "")}
-                for s in run_samples]
-            params["generate_mode"] = "provided"
-            used_runner = True
+    # ── 원격 심판(D) — 심판을 컨테이너 안 vLLM 이 아니라 떠 있는 배포에 위임 ────────
+    # 컨테이너에 넘기는 것은 사용자가 준 URL 이 아니라 **배포 id 로 서버가 조립한 URL** 이다
+    # (URL 수취는 그대로 SSRF 가 된다 — llm_playground _resolve_proposer_llm_url 과 같은 규약).
+    judge_remote = None
+    if judge_playground_id:
+        # 심판 개념이 있는 채점기는 LogicKor 뿐이다(MixATIS 는 정답이 데이터에 있어 심판이
+        # 없다). 조용히 무시하면 "심판을 골랐는데 안 쓰인" 런이 되므로 명시적으로 거부한다.
+        if manifest_key != "LOGICKOR":
+            raise Exception(
+                "judge_playground_id 는 LogicKor 채점기 전용입니다 — "
+                f"{', '.join(benchmark_set)} 에는 심판 단계가 없습니다")
+        # judge_model 은 "컨테이너가 이 가중치를 올려라", judge_playground_id 는 "이미 떠
+        # 있는 저 배포에 물어봐라" 로 서로 배타적인 지시다. 한쪽을 조용히 버리면 사용자가
+        # 고르지 않은 심판이 매긴 점수가 나온다 → 채점기 혼재 거부와 같은 취지로 거절한다.
+        if params.get("judge_model"):
+            raise Exception(
+                "judge_playground_id 와 judge_model 은 함께 지정할 수 없습니다 — "
+                "원격 심판을 쓰면 컨테이너는 심판 가중치를 올리지 않습니다")
+        judge_remote = await _resolve_remote_judge(
+            judge_playground_id, model_id=model_id, workspace_id=workspace_id,
+            exclude_playground_id=inference_playground_id)
+        # 넘기는 것은 base URL 하나뿐이다. 채점기는 이 값의 존재만으로 원격 모드를 판정하고
+        # metrics.judge{mode,endpoint,note} 에 스스로 새긴다(0.2.4 실측) — "원격 심판을
+        # 썼다"를 별도 파라미터로 또 보내면 같은 사실이 두 곳에서 어긋날 수 있다.
+        # 결정성(배포 temperature)은 컨테이너가 알 수 없는 값이라 이 서비스가 경고 로그와
+        # 런 생성 응답(judge_remote)으로 남긴다.
+        params["judge_base_url"] = judge_remote["base_url"]
+
+    # ── 빌린 배포에 생성 위임 — 벤치마크의 유일한 생성 경로 ─────────────────────
+    # 넘기는 것은 배포 id 로 **서버가 조립한** OpenAI shim base 하나뿐이고(URL 수취는
+    # 그대로 SSRF 다 — 원격 심판과 같은 규약), 생성은 컨테이너 안에서 그 배포를 호출해
+    # 일어난다. 그래서 이 핸들러는 아무것도 붙들고 있지 않는다 — 옛 인라인 생성이
+    # Kong 60s 와 경쟁하던 문제가 구조적으로 사라졌다.
+    # 왜 BE 가 대신 생성하지 않는가: 프롬프트 조립이 컨테이너 소유다(LogicKor 2턴 의존·
+    # 채팅 템플릿·토큰 예산, MixATIS UGEN 형식). 함수 docstring 참고.
+    generate_remote = await _resolve_remote_generator(
+        inference_playground_id, model_id=model_id, workspace_id=workspace_id)
+    params["generate_base_url"] = generate_remote["base_url"]
+
+    # ── 완전 위임이면 GPU 를 요청하지 않는다 ────────────────────────────────────
+    # 매니페스트의 resources.gpu 는 런타임 파라미터를 모른 채 **최악**(로컬 생성 + 로컬
+    # 심판)을 선언한다 — 그건 옳고 그대로 둔다. 그 선언을 좁힐 수 있는 유일한 지점이
+    # 실제 파라미터를 아는 이 호출부다. 컨테이너가 로컬에 아무 모델도 올리지 않는
+    # 조합에서만 0 을 넘긴다:
+    #   LogicKor : 생성·심판이 **둘 다** 원격이어야 한다 — 하나라도 로컬이면 vLLM 이 뜬다.
+    #   MixATIS  : 심판 단계 자체가 없으므로 생성만 원격이면 된다(그 경로는 학습도 건너뛴다).
+    # 판정이 틀리면 GPU 없이 뜬 파드가 vLLM 초기화에서 죽으므로 보수적으로 본다 —
+    # 확신이 없으면 None 을 넘겨 매니페스트 기본값을 그대로 쓴다.
+    # 부수 효과가 아니라 목적 중 하나다: 위임 런이 쓰지도 않을 GPU 를 예약하던 것을 없앤다.
+    fully_delegated = judge_remote is not None if manifest_key == "LOGICKOR" else True
+    gpu_count = 0 if fully_delegated else None
 
     try:
         async with httpx.AsyncClient(timeout=60.0) as http:
@@ -272,7 +360,8 @@ async def run_benchmark(project_id: int,
             raw = await client.start_job(
                 manifest_name=manifest_name,
                 manifest_version=manifest_version,
-                workspace_id=workspace_id, params=params)
+                workspace_id=workspace_id, params=params,
+                gpu_count=gpu_count)
     except ExternalContainerError as e:
         raise Exception(f"benchmark job launch failed ({e.status_code}): {e}") from e
 
@@ -302,10 +391,20 @@ async def run_benchmark(project_id: int,
         "benchmarks": pairs, "benchmark_set": benchmark_set, "metric_map": metric_map,
         "manifest_name": manifest_name,
         "manifest_version": manifest_version,
-        "job_id": job_id, "mode": "benchmark", "used_runner": used_runner,
-        # 어느 체크포인트로 돌렸는지는 런 결과(metrics.checkpoint)에도 컨테이너가 새기지만,
-        # 런 생성 응답에서도 바로 확인 가능하게 돌려준다(FE 확인 배너).
-        "checkpoint": checkpoint_name,
+        "job_id": job_id, "mode": "benchmark",
+        # 생성 경로는 이제 하나뿐이라 언제나 배포다. 키는 남긴다 — FE 배너·운영 추적이
+        # 이 값을 읽고, 없어지면 undefined 접근이 된다(아래 generated 와 같은 이유).
+        "used_deployment": True,
+        "inference_playground_id": inference_playground_id,
+        # 인라인 생성이 사라져 **항상 None** 이다(생성은 컨테이너 안에서 일어나므로 건수·
+        # 빈 출력은 런 결과 metrics.generate 에 컨테이너가 새긴다). 키 자체는 남긴다 —
+        # 소비하는 화면이 있고, 없어지면 undefined 접근이 된다.
+        "generated": None,
+        # 위임한 배포 정보(배포 id·이름·temperature·결정성). judge_remote 와 같은 규약이다.
+        "generate_remote": generate_remote,
+        # 원격 심판 정보(배포 id·이름·temperature·결정성). metrics.json 은 컨테이너가
+        # 통째로 쓰므로 배포 생성 파라미터를 플랫폼이 남길 수 있는 자리는 여기와 서버 로그뿐.
+        "judge_remote": judge_remote,
     }
 
 
@@ -451,6 +550,8 @@ async def get_eval_result(model_id: int, job_id: str) -> dict:
     except (OSError, json.JSONDecodeError):
         return {"job_id": job_id, "metrics": None, "ready": False}
     _strip_internal_paths(metrics)
+    # 위임 런의 출처를 **여기서 한 번** 굳힌다(아래 함수 주석 참고). 실패해도 마감은 진행한다.
+    await _freeze_run_source(metrics, model_id=model_id, job_id=job_id)
     try:
         await db_model.complete_eval_result(
             job_str_id=job_id, metrics_json=json.dumps(metrics), source_model_id=model_id)
@@ -523,6 +624,200 @@ async def delete_eval_run(model_id: int, job_id: str) -> dict:
     return {"job_id": job_id, "deleted": True}
 
 
+# 배포 위임 런의 shim endpoint → 배포(playground) id. metrics.generate.endpoint 는 컨테이너가
+# 받은 generate_base_url 그대로(= _playground_shim_base_url 이 조립한 값)라 그 경로 규칙의 역이다.
+# metrics.judge.endpoint(원격 심판)도 같은 조립기를 거치므로 같은 정규식이 그대로 맞는다.
+_GENERATE_PLAYGROUND_RE = re.compile(r"/api/playgrounds/(\d+)/openai/v1")
+# 배포 조회 동시 실행 상한(커넥션 풀이 없어 호출마다 새 커넥션이 열린다).
+_DEPLOYMENT_LOOKUP_CONCURRENCY = 8
+
+
+def _playground_json_field(value) -> Optional[str]:
+    """playground.model JSON 값 정규화 — FE 가 빈 값을 문자열 'null' 로 넣는 필드가 있어
+    (실측: model_allm_id='null') 없음과 같이 취급한다. 숫자로 저장된 id 도 문자열로 돌려준다."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text if text and text.lower() not in ("null", "none") else None
+
+
+async def _deployment_source(playground_id: int) -> Optional[dict]:
+    """배포 1건 → 표시용 {name, model}. model 은 그 배포가 서빙하는 사람이 읽는 모델명 —
+    playground.model JSON 에서 고른다: HF 직접 배포는 model_huggingface_id('Qwen/Qwen3-8B'),
+    플랫폼 커밋 배포는 커밋 → 모델명(llm_playground 상세 조회와 같은 해석).
+    실패/미상은 None — 호출자가 빌더 값을 그대로 둔다.
+
+    workspace_id 를 함께 돌려주는 이유: 이 조회의 입력(배포 id)은 **외부 컨테이너가
+    metrics.generate.endpoint 에 써 넣은 문자열**에서 나오므로 플랫폼이 검증한 값이 아니다.
+    호출자가 런의 워크스페이스와 대조해 남의 배포 이름이 새어나가지 않게 막는다."""
+    try:
+        row = await db_playground.get_playground(int(playground_id))
+        if not row:
+            return None
+        model = row.get("model")
+        if isinstance(model, str):
+            try:
+                model = json.loads(model)
+            except (TypeError, json.JSONDecodeError):
+                model = None
+        model = model if isinstance(model, dict) else {}
+        served = _playground_json_field(model.get("model_huggingface_id"))
+        if not served:
+            commit_id = _playground_json_field(model.get("model_allm_commit_id"))
+            if commit_id and commit_id.isdigit():
+                commit = await db_model.get_commit_model(commit_id=int(commit_id))
+                served = _playground_json_field((commit or {}).get("model_name"))
+        return {"name": row.get("name"), "model": served,
+                "workspace_id": row.get("workspace_id")}
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
+async def _frozen_deployment(section, run_ws) -> Optional[dict]:
+    """metrics 의 한 섹션(generate | judge)이 가리키는 배포 → 표시용 {deployment, model}.
+
+    생성 위임과 원격 심판은 **같은 shim URL 규칙**을 쓰므로(_playground_shim_base_url)
+    해석도 하나로 둔다. 특히 워크스페이스 대조를 여기 한 곳에만 두려는 것이 목적이다 —
+    두 벌로 복제하면 한쪽만 고쳐지는 순간 그쪽이 그대로 구멍이 된다.
+
+    ⚠️ 배포 id 의 출처는 **컨테이너가 endpoint 에 써 넣은 문자열**이라 플랫폼이 검증한
+    값이 아니다. 런의 워크스페이스와 같을 때만 돌려준다 — 대조 없이 조회하면 조작된
+    endpoint 로 남의 배포 이름을 훑는 열거 오라클이 된다(_attach_run_sources 와 같은 규칙).
+    믿을 수 없으면 **비운다**: 틀린 라벨보다 '-' 가 낫다.
+    원격 위임이 아니거나(mode != 'remote') 해석 실패면 None — 호출자가 아무것도 새기지 않는다."""
+    if not isinstance(section, dict) or section.get("mode") != "remote":
+        return None
+    endpoint = section.get("endpoint")
+    found = (_GENERATE_PLAYGROUND_RE.search(endpoint)
+             if isinstance(endpoint, str) else None)
+    if not found or run_ws is None:
+        return None
+    source = await _deployment_source(int(found.group(1)))
+    if not source:
+        return None
+    try:
+        if int(source.get("workspace_id")) != int(run_ws):
+            return None
+    except (TypeError, ValueError):
+        return None
+    return {k: v for k, v in (("deployment", source.get("name")),
+                              ("model", source.get("model"))) if v} or None
+
+
+async def _freeze_run_source(metrics: dict, model_id: int, job_id: str) -> None:
+    """위임 런의 출처 라벨을 metrics 에 **한 번** 새긴다(완료 마감 직전).
+    생성 배포 → `_platform_source`, 원격 심판 배포 → `_platform_judge`.
+
+    왜 굳히나 — 표시할 때마다 배포 행을 조회하던 옛 방식은 세 가지가 걸렸다:
+      1) **배포를 지우면 라벨이 사라진다**(사용자 신고). 점수는 남는데 누가 냈는지가 없어진다.
+      2) 목록 렌더마다 배포 테이블을 팬아웃 조회한다(커넥션 풀이 없어 비용이 그대로 붙는다).
+      3) 워크스페이스 검증을 매번 다시 해야 한다.
+    완료 시점에 한 번 해석해 박아 두면 셋 다 사라진다. 키를 `_` 로 시작시키는 이유는
+    `_flatten_eval_metrics` 가 `_` 접두를 지표에서 걸러내기 때문 — 지표 목록을 오염시키지 않는다.
+    심판 라벨(`_platform_judge`)도 같은 이유로 같은 자리에서 같은 규약으로 새긴다:
+    LLM 심사 런의 '심판 배포' 컬럼이 심판 배포를 내린 뒤 사라지면 안 된다.
+
+    ⚠️ 심판은 **표시 시점 폴백을 두지 않는다**. `_attach_run_sources` 의 live 조회는
+    굳히기 기능이 생기기 전에 끝난 옛 생성 런을 위한 것이고, 심판 라벨에는 그런 과거가
+    없다(이 기능과 함께 태어난다) → 폴백을 만들면 없앨 이유가 없는 표시 시점 조회를
+    새로 들이는 셈이다. 굳히기에 실패한 런은 '-' 로 남는 것이 맞다.
+
+    전부 best-effort — 여기서 실패해도 마감(complete_eval_result)은 그대로 진행한다."""
+    try:
+        if not isinstance(metrics, dict):
+            return
+        generate, judge = metrics.get("generate"), metrics.get("judge")
+        # 어느 쪽도 원격 위임이 아니면 DB 를 두드릴 이유가 없다(정답 대조 런은 심판 섹션
+        # 자체가 없고, 컨테이너 안 vLLM 심판은 배포가 아니라 굳힐 배포 id 가 없다).
+        if not any(isinstance(sec, dict) and sec.get("mode") == "remote"
+                   for sec in (generate, judge)):
+            return
+        row = await db_model.get_eval_result_by_job(
+            job_str_id=job_id, source_model_id=model_id)
+        run_ws = (row or {}).get("workspace_id")
+        frozen_source = await _frozen_deployment(generate, run_ws)
+        if frozen_source:
+            metrics["_platform_source"] = frozen_source
+        frozen_judge = await _frozen_deployment(judge, run_ws)
+        if frozen_judge:
+            metrics["_platform_judge"] = frozen_judge
+    except Exception:
+        traceback.print_exc()
+
+
+async def _attach_run_sources(comparison: dict, rows: list) -> dict:
+    """비교표 runs 중 **배포 위임** 런에 배포 이름·서빙 모델명을 채운다(빌더가 못 채우는 부분).
+
+    공용 빌더(build_eval_comparison)는 원본 metrics 만 보므로 source_mode 까지만 판정한다 —
+    metrics.generate.model 은 'playground-<id>' shim 식별자라 모델명이 아니고, 사람이 읽는
+    이름은 배포 행에만 있다. 여기서 endpoint 의 배포 id 로 그 행을 읽어 채운다.
+    같은 배포가 여러 런에 나오므로 **고유 id 만 한 번씩**(N+1 방지), 서로 독립이라 동시에
+    조회한다. 전부 best-effort: 배포가 지워졌거나 조회가 실패하면 그 행은 빌더 값 그대로 두고
+    목록 조회는 진행한다(읽기 전용 비교표가 배포 조회 하나로 죽으면 안 된다)."""
+    # 완료 시점에 굳혀진 런(_platform_source)은 빌더가 이미 채워 왔으므로 조회 대상이 아니다 —
+    # 굳히기 이전에 끝난 옛 런만 live 조회로 폴백한다. 새 런이 쌓일수록 조회는 0 으로 수렴한다.
+    targets = [run for run in (comparison.get("runs") or [])
+               if run.get("source_mode") == "deployment"
+               and not (run.get("source_deployment") or run.get("source_model"))]
+    if not targets:
+        return comparison
+    # run.id → 배포 id. 빌더가 원본 metrics 를 버리므로 endpoint 는 rows 에서 다시 읽는다.
+    # ws_by_run 은 그 런이 속한 워크스페이스 — 아래에서 배포의 워크스페이스와 대조한다.
+    by_run: dict = {}
+    ws_by_run: dict = {}
+    for row in rows:
+        metrics = row.get("metrics")
+        if isinstance(metrics, str):
+            try:
+                metrics = json.loads(metrics)
+            except (TypeError, json.JSONDecodeError):
+                continue
+        if not isinstance(metrics, dict):
+            continue
+        generate = metrics.get("generate")
+        endpoint = generate.get("endpoint") if isinstance(generate, dict) else None
+        found = (_GENERATE_PLAYGROUND_RE.search(endpoint)
+                 if isinstance(endpoint, str) else None)
+        if found:
+            by_run[row.get("id")] = int(found.group(1))
+            ws_by_run[row.get("id")] = row.get("workspace_id")
+    playground_ids = sorted(set(by_run.values()))
+    if not playground_ids:
+        return comparison
+    # select_query 는 호출마다 새 커넥션을 연다(풀 없음) — 배포 id 가 늘어난 만큼 커넥션이
+    # 동시에 열리지 않도록 상한을 둔다. 값은 llm_playground 의 running 배포 조회와 같은 8.
+    sem = asyncio.Semaphore(_DEPLOYMENT_LOOKUP_CONCURRENCY)
+
+    async def _guarded(pid):
+        async with sem:
+            return await _deployment_source(pid)
+
+    resolved = dict(zip(playground_ids, await asyncio.gather(
+        *(_guarded(pid) for pid in playground_ids))))
+    for run in targets:
+        run_id = run.get("id")
+        source = resolved.get(by_run.get(run_id))
+        if not source:
+            continue
+        # ⚠️ 배포 id 의 출처는 **컨테이너가 쓴 metrics.generate.endpoint** 다. 런 생성 때는
+        # _resolve_remote_generator 가 워크스페이스를 대조해 남의 배포를 '없음'으로 접지만
+        # (열거 오라클 차단), 표시 경로에는 그 검증이 없어 조작된 endpoint 로 임의 배포의
+        # 이름·모델명을 훑을 수 있었다. 런의 워크스페이스와 같을 때만 채워 그 구멍을 막는다.
+        run_ws, dep_ws = ws_by_run.get(run_id), source.get("workspace_id")
+        try:
+            same_ws = run_ws is not None and int(dep_ws) == int(run_ws)
+        except (TypeError, ValueError):
+            same_ws = False
+        if not same_ws:
+            continue
+        if source.get("name"):
+            run["source_deployment"] = source["name"]
+        if source.get("model"):
+            run["source_model"] = source["model"]
+    return comparison
+
+
 async def compare_models(model_ids: List[int]) -> dict:
     """교차모델 비교 경량 뷰(④, §14.12). 여러 모델의 평가 이력을 한 표에 합쳐
     메트릭별 best 를 **전역**(모델 무관) 으로 산출. 공용 빌더(build_eval_comparison)를
@@ -567,18 +862,120 @@ async def compare_models(model_ids: List[int]) -> dict:
             continue
         models.append({"id": item["id"], "name": item["name"]})
         all_rows.extend(item["rows"])
-    return {"models": models, **db_model.build_eval_comparison(all_rows)}
+    comparison = await _attach_run_sources(
+        db_model.build_eval_comparison(all_rows), all_rows)
+    return {"models": models, **comparison}
+
+
+# ── 런 단위 비교 (모델 축 → 런 축, P1) ──────────────────────────────────────────
+# compare_models 는 모델을 받아 **모델별 최고 런**을 자동으로 뽑아 비교한다. 그래서 "모델 A의
+# ckpt3 vs 모델 B의 ckpt1" 처럼 런을 지목할 수 없다. 아래 두 함수가 축을 런으로 바꾼다 —
+# 피커 후보(list_comparable_runs)와 선택 런 비교(compare_runs).
+# authZ: 이 축은 사용자에게서 **런 id 를 직접** 받으므로 compare_models 의 posture 를 물려받지
+# 않는다. workspace_id 를 필수로 받아 DB 계층(list_eval_results_by_ids)의 쿼리에서 함께
+# 필터한다 — 여기 서비스에서 사후에 거르지 않는다.
+
+def _label_runs(comparison: dict, rows: list, projects_by_id: dict) -> dict:
+    """비교표 runs 에 소속 프로젝트(id·이름)를 덧댄다. 공용 빌더는 eval_result 의 컬럼 중
+    비교표 shape 에 정의된 것만 통과시키므로 eval_project_id 는 원본 rows 에서 되읽는다.
+    프로젝트가 지워졌거나 프로젝트 없이 만들어진 옛 런은 이름 None(화면이 '-' 를 그린다)."""
+    project_by_run = {r.get("id"): r.get("eval_project_id") for r in rows}
+    for run in (comparison.get("runs") or []):
+        project_id = project_by_run.get(run.get("id"))
+        run["eval_project_id"] = project_id
+        run["project_name"] = projects_by_id.get(project_id)
+    return comparison
+
+
+async def _build_run_comparison(rows: list, workspace_id: int) -> dict:
+    """rows → 비교표. compare_models 와 **같은 조립 순서**(모델명 주입 → 공용 빌더 →
+    배포 출처 보강)를 따르되, 라벨 소스가 모델 축이 아니라 워크스페이스 축이다.
+    모델명·프로젝트명은 각각 목록조회 **한 번**으로 매핑한다 — 런 목록은 한 워크스페이스의
+    전 런이라 행마다 조회하면 그대로 N+1 이 된다. 두 조회는 서로 독립이라 동시에 던진다."""
+    models, projects = await asyncio.gather(
+        db_model.get_models(workspace_id=workspace_id),
+        db_model.list_eval_projects(workspace_id=workspace_id))
+    names_by_model = {int(m["id"]): m.get("name")
+                      for m in (models or []) if m.get("id") is not None}
+    names_by_project = {int(p["id"]): p.get("name")
+                        for p in (projects or []) if p.get("id") is not None}
+    # 공용 빌더가 run.model_name 으로 패스스루하도록 행에 라벨 주입(불변 — 새 dict).
+    labeled = []
+    for r in rows:
+        model_id = r.get("source_model_id")
+        try:
+            model_name = names_by_model.get(int(model_id))
+        except (TypeError, ValueError):
+            model_name = None
+        labeled.append({**r, "model_name": model_name})
+    comparison = await _attach_run_sources(
+        db_model.build_eval_comparison(labeled), rows)
+    return _label_runs(comparison, rows, names_by_project)
+
+
+async def list_comparable_runs(workspace_id: int) -> dict:
+    """비교 후보 런 목록(피커 소스). 워크스페이스의 채점 런 전부를 최신순으로, 점수와 함께
+    "무엇이 이 점수를 냈나"(checkpoint/source_mode/source_model/source_deployment)를 실어
+    돌려준다 — 같은 모델의 런이 여러 개일 때 점수만으로는 런을 고를 수 없기 때문이다.
+    출처 4필드는 공용 빌더 + _attach_run_sources 재사용(로직 복제 X)."""
+    rows = await db_model.list_eval_results_by_workspace(workspace_id=workspace_id)
+    comparison = await _build_run_comparison(rows, workspace_id=workspace_id)
+    return {"workspace_id": workspace_id, "runs": comparison.get("runs") or []}
+
+
+async def compare_runs(workspace_id: int, run_ids: List[int]) -> dict:
+    """선택한 런들만 모은 비교표. shape 은 compare_models(/compare)와 호환 — metric_keys /
+    best / runs 는 그대로이고 best 만 **선택된 런 사이**에서 산출된다.
+
+    datasets/dataset_consistent 가 이 축에서 새로 필요해진 부분이다. 지금까지 비교 가능성은
+    "프로젝트가 데이터셋을 잠근다"가 보장했는데(같은 프로젝트 내 런은 같은 데이터셋), 비교가
+    프로젝트를 가로지르면 그 보장이 사라진다. 서로 다른 데이터셋에서 나온 점수를 한 표에서
+    비교하면 무의미하지만 **여기서 막지는 않는다** — 어느 데이터셋들이 섞였는지 사실만 싣고
+    경고는 화면이 한다(읽기 전용 비교표가 사용자의 탐색을 차단하지 않는 기존 태도와 같다).
+
+    알 수 없는/워크스페이스 밖 run_id 는 조용히 빠진다(부분 성공) — 존재/미존재를 구분해
+    알려주면 그 자체가 열거 오라클이 된다."""
+    # 중복 제거(순서 보존) + 상한. 0개면 빈 비교표.
+    seen: set = set()
+    ordered: List[int] = []
+    for rid in run_ids:
+        if rid not in seen:
+            seen.add(rid)
+            ordered.append(rid)
+    if len(ordered) > MAX_COMPARE_RUNS:
+        raise ValueError(f"too many runs to compare (max {MAX_COMPARE_RUNS})")
+
+    # ⚠️ workspace_id 를 DB 계층에 그대로 넘긴다 — 필터는 쿼리 안에 있다(여기서 거르지 않음).
+    rows = await db_model.list_eval_results_by_ids(
+        result_ids=ordered, workspace_id=workspace_id)
+    comparison = await _build_run_comparison(rows, workspace_id=workspace_id)
+    # 선택 런들이 걸친 데이터셋(중복 제거, 최신 런 순). dataset_id 가 없는 옛 런은 이름만으로
+    # 구분되지 않으므로 집계에서 뺀다 — 없는 값을 '1종'으로 세면 판정이 거짓 안전이 된다.
+    datasets: list = []
+    seen_datasets: set = set()
+    for r in rows:
+        dataset_id = r.get("dataset_id")
+        if dataset_id is None or dataset_id in seen_datasets:
+            continue
+        seen_datasets.add(dataset_id)
+        datasets.append({"dataset_id": dataset_id, "dataset_name": r.get("dataset_name")})
+    return {**comparison, "datasets": datasets,
+            "dataset_consistent": len(datasets) <= 1}
 
 
 # ── 평가 프로젝트 관리 (2026-07-07) ──────────────────────────────────────────
-# 관리 단위 = 프로젝트(모델·데이터셋·유형·이름 잠금, P3). 생성=대기(created·run 0개, P5),
-# run-start(benchmark/judge/expert)는 프로젝트에서 잠긴 model/dataset 를 주입해 불변 강제.
+# 관리 단위 = 프로젝트(유형·이름·워크스페이스). 생성=대기(created·run 0개, P5).
+# 2026-08-24: 모델·데이터셋 잠금 해제 — run-start(benchmark/judge/expert/inference)가
+# model_id/dataset_ids 를 **요청에서 받아** 쓴다. 프로젝트가 강제하는 것은 유형 게이트와
+# 워크스페이스 경계 두 가지뿐이다(eval_result 가 이미 런 단위로 source_model_id/dataset_id
+# 를 갖고 있어 신규 컬럼 없이 성립한다).
 # authZ: 워크스페이스 ownership 미검증(IDOR) — 플랫폼 posture 일괄(SP-13), 기존 eval
 # 엔드포인트와 동일하게 단일앱 분기 패치 안 함.
 
 def _parse_dataset_ids(raw) -> List[int]:
     """eval_project.dataset_ids(JSON 컬럼)를 int 리스트로 정규화. 드라이버가 문자열/리스트
-    어느 쪽으로 주든 방어(비정수 토큰은 조용히 스킵)."""
+    어느 쪽으로 주든 방어(비정수 토큰은 조용히 스킵). 신규 프로젝트는 NULL → [] 이고,
+    값이 남아 있는 것은 잠금 시절(P3)에 만들어진 옛 프로젝트뿐이다."""
     if isinstance(raw, str):
         try:
             raw = json.loads(raw)
@@ -608,57 +1005,88 @@ def _derive_project_status(statuses) -> str:
     return PROJECT_STATUS_COMPLETED
 
 
-async def _load_project_for_run(project_id: int, eval_type: Optional[str] = None):
-    """run-start 공통 — 프로젝트 로드 + 잠긴 dataset_ids 반환. eval_type 지정 시 프로젝트
-    유형과 다른 run 생성 거부(benchmark 프로젝트에 judge run 등 교차유형 차단). eval_type=None
-    이면 게이트 생략(추론 러너 generate 는 type-agnostic — 유형 무관 output 생성)."""
+async def _load_project_for_run(project_id: int, eval_type=None):
+    """run-start 공통 — 프로젝트 로드 + 유형 게이트. eval_type 지정 시 프로젝트 유형과 다른
+    run 생성 거부(expert 프로젝트에 벤치마크 run 등 교차유형 차단). eval_type=None 이면
+    게이트 생략(추론 러너 generate 는 type-agnostic — 유형 무관 output 생성).
+
+    eval_type 은 단일 유형 문자열 또는 **허용 유형 집합**이다. 벤치마크 런은 reference 와
+    judge 가 한 함수를 공유하므로(run_benchmark) 여기서는 둘 다 통과시키고, 어느 쪽인지는
+    호출부가 고른 벤치마크와 대조해 좁힌다 — 이 함수는 벤치마크 목록을 모른다.
+
+    ⚠️ 2026-08-24 부터 **데이터셋을 프로젝트에서 꺼내지 않는다** — 모델·데이터셋은 런이
+    고르고(_resolve_run_model/_run_dataset_ids) 프로젝트는 유형·이름·워크스페이스만 고정한다."""
     project = await db_model.get_eval_project(project_id=project_id)
     if not project:
         raise Exception(f"eval project {project_id} not found")
-    if eval_type is not None and project.get("eval_type") != eval_type:
-        raise Exception(
-            f"project eval_type is {project.get('eval_type')!r}, not {eval_type!r}")
-    dataset_ids = _parse_dataset_ids(project.get("dataset_ids"))
+    if eval_type is not None:
+        accepted = (eval_type,) if isinstance(eval_type, str) else tuple(eval_type)
+        if project.get("eval_type") not in accepted:
+            want = " | ".join(repr(t) for t in accepted)
+            raise Exception(
+                f"project eval_type is {project.get('eval_type')!r}, not {want}")
+    return project
+
+
+async def _resolve_run_model(project: dict, model_id: int):
+    """런이 고른 모델 해석 + 워크스페이스 경계 검증 → (model_info, workspace_id).
+
+    프로젝트가 모델에 잠겨 있던 동안에는 workspace_id 를 모델에서 파생했기 때문에 이
+    경계가 자동으로 성립했다. 이제 프로젝트가 워크스페이스를 소유하고 모델은 런이
+    고르므로, 여기서 막지 않으면 다른 워크스페이스 모델의 점수가 이 프로젝트의
+    eval_result 로 기록된다(생성 시점에 있던 검증을 런 시작으로 옮긴 것)."""
+    workspace_id = int(project["workspace_id"])
+    model_info = await db_model.get_model(model_id=model_id)
+    if not model_info:
+        raise Exception(f"model {model_id} not found")
+    if int(model_info["workspace_id"]) != workspace_id:
+        raise Exception("model and eval project belong to different workspaces")
+    return model_info, workspace_id
+
+
+def _run_dataset_ids(dataset_ids: List[int]) -> List[int]:
+    """런이 고른 데이터셋 정규화 — 중복 제거(순서 보존) + 상한. 프로젝트 생성이 잠금 전에
+    하던 정규화를 런 시작으로 옮긴 것이다. 존재·워크스페이스 경계 검증은 각 런 경로의
+    기존 데이터셋 루프가 그대로 수행한다(그 루프가 이름·access 안전성까지 함께 본다)."""
     if not dataset_ids:
-        raise Exception("eval project has no dataset_ids")
-    return project, dataset_ids
+        raise ValueError("at least one dataset required")
+    seen: set = set()
+    out: List[int] = []
+    for did in dataset_ids:
+        did = int(did)
+        if did in seen:
+            continue
+        seen.add(did)
+        out.append(did)
+    if len(out) > MAX_BENCHMARK_DATASETS:
+        raise ValueError(f"too many datasets (max {MAX_BENCHMARK_DATASETS})")
+    return out
 
 
-async def create_project(name: str, model_id: int, dataset_ids: List[int],
-                         eval_type: str, creator: Optional[str] = None) -> dict:
-    """평가 프로젝트 생성(대기 상태 created, run 0개, P5). 모델의 워크스페이스를 상속하고
-    데이터셋(들)이 모두 그 워크스페이스에 속하는지 검증(잠금 전 1회 — run 마다 재검증도 유지).
-    이후 model/dataset/type/name 불변(P3). creator 는 라우트가 jf-User 헤더로 주입."""
+async def create_project(name: str, eval_type: str, workspace_id: int,
+                         creator: Optional[str] = None) -> dict:
+    """평가 프로젝트 생성(대기 상태 created, run 0개, P5) — **유형·이름만** 고정한다.
+
+    2026-08-24: 모델·데이터셋 잠금 해제. 무엇을 평가하는지는 런이 고르고(eval_result 가
+    이미 런 단위로 source_model_id/dataset_id 를 갖는다), 프로젝트는 그 런들을 묶는
+    관리 단위 + 워크스페이스 경계다. 모델이 빠지면서 워크스페이스를 파생할 원천이
+    사라졌으므로 요청이 직접 준다 — 존재 여부는 여기서 검증한다(없는 워크스페이스로
+    만들면 그 프로젝트에서는 어떤 모델도 경계 검증을 통과하지 못한다).
+    creator 는 라우트가 jf-User 헤더로 주입."""
     if eval_type not in EVAL_TYPES:
         raise ValueError(f"unknown eval_type: {eval_type}")
     if not name or not name.strip():
         raise ValueError("project name required")
     if len(name) > 255:
         raise ValueError("project name too long")
-    if not dataset_ids:
-        raise ValueError("at least one dataset required")
-    if len(dataset_ids) > MAX_BENCHMARK_DATASETS:
-        raise ValueError(f"too many datasets (max {MAX_BENCHMARK_DATASETS})")
-    model_info = await db_model.get_model(model_id=model_id)
-    if not model_info:
-        raise Exception(f"model {model_id} not found")
-    workspace_id = int(model_info["workspace_id"])
-    # 중복 제거(순서 보존) + 워크스페이스 경계 검증(잠금 전 1회).
-    seen: set = set()
-    locked: List[int] = []
-    for did in dataset_ids:
-        if did in seen:
-            continue
-        seen.add(did)
-        d = await db_model.get_dataset_model(dataset_id=did)
-        if not d:
-            raise Exception(f"dataset {did} not found")
-        if int(d["workspace_id"]) != workspace_id:
-            raise Exception("dataset and model belong to different workspaces")
-        locked.append(did)
+    workspace = await db_model.get_workspace_model(workspace_id=workspace_id)
+    if not workspace:
+        raise Exception(f"workspace {workspace_id} not found")
+    # model_id/dataset_ids 는 신규 프로젝트에서 NULL 이다 — 잠금이 박혀 있던 옛
+    # 프로젝트의 값을 보존하려고 컬럼만 남겼다(_parse_dataset_ids 가 NULL → [] 로 정규화).
     project_id = await db_model.create_eval_project(
-        workspace_id=workspace_id, name=name.strip(), model_id=model_id,
-        dataset_ids_json=json.dumps(locked), eval_type=eval_type, creator=creator)
+        workspace_id=workspace_id, name=name.strip(),
+        eval_type=eval_type, creator=creator)
     if not project_id:
         raise Exception("eval project create failed")
     # Galera service load-balances separate INSERT/SELECT connections. Give a
@@ -692,8 +1120,9 @@ async def list_projects(workspace_id: int) -> dict:
 
 
 async def get_project(project_id: int) -> dict:
-    """프로젝트 단건(불변 헤더) + 자식 run 목록(프로젝트 내 비교표 shape). dataset_ids 는
-    JSON → 리스트. runs 는 build_eval_comparison 재사용(run.id 키 best)."""
+    """프로젝트 단건(헤더) + 자식 run 목록(프로젝트 내 비교표 shape). dataset_ids 는
+    JSON → 리스트(신규 프로젝트는 []). runs 는 _build_run_comparison 재사용(run.id 키 best).
+    ⚠️ 응답의 project.model_id 는 **NULL 일 수 있다** — 잠금 시절 프로젝트만 값이 남는다."""
     project = await db_model.get_eval_project(project_id=project_id)
     if not project:
         raise Exception(f"eval project {project_id} not found")
@@ -722,9 +1151,17 @@ async def get_project(project_id: int) -> dict:
     #   runs 목록엔 포함(FE 가 생성 배너·최신 inference job 추적에 사용, 표시 필터는 FE 담당).
     score_rows = [r for r in rows if r.get("metric_set") != "inference"]
     derived_status = _derive_project_status([r.get("status") for r in score_rows])
+    # 런 행에 모델명 라벨 주입 — eval_result 엔 model_name 이 없다. 예전엔 프로젝트가
+    # model_id 에 잠겨 있어 조회 한 번으로 전 행이 같은 값이었지만, 이제 런마다 모델이
+    # 다를 수 있으므로 **런의 source_model_id 별로** 이름을 붙여야 한다. 워크스페이스
+    # 모델 목록 조회 한 번으로 id→이름 맵을 만드는 _build_run_comparison 을 그대로
+    # 재사용한다(행마다 조회하면 그대로 N+1). 비교표에 eval_project_id/project_name 이
+    # 함께 실리는 것은 additive 이며, 이 뷰에서는 전 행이 이 프로젝트다.
+    comparison = await _build_run_comparison(
+        rows, workspace_id=int(project["workspace_id"]))
     return {"project": {**project, "dataset_ids": _parse_dataset_ids(project.get("dataset_ids")),
                         "status": derived_status},
-            "runs": db_model.build_eval_comparison(rows)}
+            "runs": comparison}
 
 
 async def delete_project(project_id: int) -> dict:
@@ -738,36 +1175,44 @@ async def delete_project(project_id: int) -> dict:
 
 
 async def compare_project_runs(project_id: int) -> dict:
-    """프로젝트 내 run 비교(same model+dataset = apples-to-apples). run 단위 비교표
-    (build_eval_comparison 재사용 — best 를 run.id 에 키)."""
+    """프로젝트 내 run 비교. run 단위 비교표(build_eval_comparison 재사용 — best 를
+    run.id 에 키). 2026-08-24 부터 프로젝트가 model/dataset 을 잠그지 않으므로 같은
+    프로젝트의 런들이 서로 다른 모델·데이터셋일 수 있다 — 무엇으로 낸 점수인지는 각 run
+    행(source_model_id/dataset_name)에 실려 있고, 비교 가능성 경고는 화면이 한다
+    (compare_runs 가 워크스페이스 축에서 이미 택한 태도와 같다)."""
     project = await db_model.get_eval_project(project_id=project_id)
     if not project:
         raise Exception(f"eval project {project_id} not found")
     rows = await db_model.list_eval_results_by_project(eval_project_id=project_id)
-    return {"project_id": project_id, **db_model.build_eval_comparison(rows)}
+    # get_project 와 **같은 조립 순서**를 쓴다(모델명 주입 → 공용 빌더 → 출처 보강).
+    # 공용 빌더를 직접 부르면 eval_result 에 없는 model_name 이 비고 _attach_run_sources
+    # 도 건너뛴다 — 그러면 같은 런이 실행 목록에서는 모델·배포가 보이는데 이 비교 탭에서만
+    # '-' 로 뜬다(2026-08-27 리뷰 HIGH). 형제 넷(get_project·compare_models·compare_runs·
+    # list_comparable_runs)이 전부 이 순서를 따르므로 여기만 예외를 두지 않는다.
+    comparison = await _build_run_comparison(
+        rows, workspace_id=int(project["workspace_id"]))
+    return {"project_id": project_id, **comparison}
 
 
-# ── LLM-as-a-Judge (P2) ──────────────────────────────────────────────────────
-# 직접호출 오케스트레이션(컨테이너 X) — API 키가 transient·영속/로그 금지라 컨테이너 params/
-# pod env 로 넘기면 누출됨 → BE 백그라운드 태스크가 in-memory 로만 키 사용. 결과(per-criterion
-# 점수)는 eval_result.metrics 에 직접 기록(NFS 미경유). 벤치마크 metrics 와 충돌 방지로
-# 'judge_' 접두. JUDGE_MOCK=true(기본) 면 실 provider 호출 없이 결정적 mock 점수(키 불필요).
-
-_judge_tasks = set()  # fire-and-forget 태스크 GC 방지용 강참조
-
-
-def _judge_mock_enabled() -> bool:
-    val = getattr(settings, "JUDGE_MOCK", None)
-    if val is None:
-        val = os.environ.get("JUDGE_MOCK", "true")
-    return str(val).strip().lower() in ("1", "true", "yes", "on")
+# ── 외부 LLM endpoint SSRF 가드 — 지금은 **호출자가 없다**(휴면 자산) ──────────
+# 2026-08-27: 자유 샘플 + 기준 4종 LLM-as-a-Judge(직접호출 오케스트레이션, 상용 API 키
+# transient)는 제품에서 없앴다. 'judge' 유형은 이제 표준 심사 벤치마크(LogicKor)를 뜻하고
+# 그 심판은 플랫폼 안(채점 컨테이너 또는 우리가 조립한 배포 URL)에서 돈다.
+#
+# 아래 가드를 남기는 이유는 constants.JUDGE_PROVIDER_HOSTS 를 남기는 이유와 같다 —
+# 그쪽이 "상용 호스트는 우리가 고정한다"는 allowlist 라면 이쪽은 "사용자가 URL 을 주는
+# 유일한 경우"의 방어 본체다. 예정된 '외부 API 배포' 작업이 같은 입력(사용자 endpoint)을
+# 다시 받으므로 그때 이 함수를 배포 표면으로 옮긴다. 지금 지우면 DNS rebinding TOCTOU·
+# 멀티레코드 우회·link-local 차단을 처음부터 다시 짜게 된다.
+# ⚠️ apps/evaluate_intent/remote.py 와 apps/evaluate_logickor_judge/app.py 의 주석이
+#    이 함수를 규약의 정본으로 지목하고 있다(컨테이너 쪽 가드가 이걸 베꼈다).
 
 
 def _validate_local_url(base_url: Optional[str]) -> tuple:
-    """Local LLM endpoint SSRF 가드. 반환: (연결용 검증 IP, Host 헤더값).
+    """외부 LLM endpoint SSRF 가드. 반환: (연결용 검증 IP, Host 헤더값).
 
-    DNS rebinding TOCTOU 차단: 여기서 resolve 한 IP 를 _judge_local 이 그대로 connect 에
-    사용(httpx 재resolve 회피). 모든 resolve 결과를 검사(라운드로빈/멀티레코드 우회 방지).
+    DNS rebinding TOCTOU 차단: 여기서 resolve 한 IP 를 호출부가 그대로 connect 에
+    사용한다(httpx 재resolve 회피). 모든 resolve 결과를 검사(라운드로빈/멀티레코드 우회 방지).
     metadata(link-local 169.254/fe80)·multicast·unspecified 차단. loopback/private 는
     local LLM 특성상 허용(차단 시 기능 불가) — is_reserved 는 IPv6 loopback(::1)까지 잡아
     127.0.0.1 과 비일관이라 사용 안 함. (운영 egress 정책으로 추가 제한 권장.)"""
@@ -800,21 +1245,6 @@ def _validate_local_url(base_url: Optional[str]) -> tuple:
         raise Exception("base_url host not resolvable")
     host_header = f"{host}:{p.port}" if p.port else host
     return safe_ip, host_header
-
-
-async def list_judges() -> dict:
-    """가용 심판 — 상용 3종(키=사용자입력) + Local(URL=사용자입력) + 기준 목록.
-    실제 키/URL 은 런 실행 시점에만 전달(플랫폼 Secret/env 보관 X)."""
-    commercial = [
-        {"id": pid, "label": label, "model": JUDGE_DEFAULT_MODEL[pid], "needs_key": True}
-        for pid, label in (("chatgpt", "ChatGPT"), ("claude", "Claude"), ("gemini", "Gemini"))
-    ]
-    return {
-        "commercial": commercial,
-        "local": {"id": "local", "label": "Local LLM", "needs_url": True},
-        "criteria": list(JUDGE_CRITERIA),
-        "mock": _judge_mock_enabled(),
-    }
 
 
 async def list_benchmark_judge_models() -> dict:
@@ -1172,7 +1602,14 @@ async def _read_dataset_samples(dataset_ids: List[int], limit: int) -> list:
 
 async def _resolve_inference_target(playground_id: Optional[int]) -> Optional[dict]:
     """배포 모델의 추론 대상을 playground s2s(get_test_options) 한 번으로 해석한다.
-    단일은 기존 direct URL, 저장 링크가 있는 이중은 /playgrounds/test 합성 경로를 반환한다."""
+    단일은 기존 direct URL, 저장 링크가 있는 이중은 /playgrounds/test 합성 경로를 반환한다.
+
+    ⚠️ **소유권을 검증하지 않는다** — 받은 playground_id 를 그대로 믿고 부른다. 워크스페이스
+    경계는 호출자가 먼저 대조한다: 지금 두 호출자(run_eval_inference 의 러너 태스크·
+    start_expert)가 전부 _playground_in_workspace 로 대조한 id 만 넘긴다(러너의 전용 할당
+    경로는 자기가 만든 배포다). 여기서 검증하지 않는 이유: 이 함수는 workspace_id 를 모르고,
+    실패를 None 으로 접는 계약이라(호출자가 사유를 정한다) 경계 위반이 '대상 없음'으로
+    조용히 섞인다 — 새 호출자를 붙이면 그쪽에서 먼저 대조해야 한다."""
     if not playground_id:
         return None
     try:
@@ -1206,6 +1643,60 @@ async def _resolve_inference_target(playground_id: Optional[int]) -> Optional[di
     return None
 
 
+async def _playground_detail(playground_id: int) -> Optional[dict]:
+    """GET /playgrounds/{id} 상세 s2s — envelope 를 벗겨 result 만 돌려준다.
+    실패/비정상 envelope → None(호출자가 사유를 정한다)."""
+    url = (f"http://{settings.LLM_PLAYGROUND_DNS}"
+           f"/api/playgrounds/{int(playground_id)}")
+    async with httpx.AsyncClient(timeout=10.0) as http:
+        r = await http.get(url)
+    if r.status_code != 200:
+        return None
+    data = r.json()
+    if not isinstance(data, dict) or data.get("status") != 1:
+        return None
+    result = data.get("result")
+    return result if isinstance(result, dict) else None
+
+
+async def _playground_in_workspace(label: str, playground_id: int,
+                                   workspace_id: int) -> dict:
+    """배포가 이 런의 워크스페이스 것인지 대조하고 상세(detail)를 돌려준다 — 배포 id 를
+    요청에서 받는 **네 경로**(생성 위임·원격 심판·추론 러너·전문가 세션)가 공유하는 단일
+    규칙이다.
+
+    한 벌로 뽑은 이유: 같은 규칙이 복제돼 있으면 한쪽만 고쳐지는 순간 그쪽이 구멍이 된다.
+    실제로 이 검증은 생성·심판 두 곳에만 있었고 러너·전문가 경로는 열려 있었다(2026-08-27).
+
+    실패는 셋 다 **거절**이다 — 못 믿으면 조용한 통과가 아니라 거절이다:
+      - 조회 자체 실패 → 사유를 붙여 올린다('없음'으로 접으면 원인이 사라진다)
+      - 상세 없음 / 워크스페이스 불일치 → **같은 문구**로 접는다(열거 오라클 방지)
+      - workspace_id 를 못 읽으면 or 0 으로 떨어져 불일치가 된다(fail-closed)
+    label 은 메시지 접두사("inference"/"judge")로만 쓴다 — 화면이 envelope 의 message 를
+    그대로 세우므로 기존 문구를 바꾸지 않는다. detail 을 돌려주는 것은 호출자가 이어서
+    보는 값(서빙 모델·temperature)을 위해 왕복을 한 번으로 끝내기 위함이다."""
+    pid = int(playground_id)
+    try:
+        detail = await _playground_detail(pid)
+    except Exception as e:
+        raise Exception(f"{label} playground {pid} 조회 실패: {e}") from e
+    if not detail:
+        raise Exception(f"{label} playground {pid} 를 찾을 수 없습니다")
+    if int(((detail.get("info") or {}).get("workspace_id")) or 0) != int(workspace_id):
+        raise Exception(f"{label} playground {pid} 를 찾을 수 없습니다")
+    return detail
+
+
+async def _playground_status(playground_id: int) -> Optional[str]:
+    """배포 집계 상태 1건 s2s(status-sync). 조회 자체가 실패하면 예외를 올린다 —
+    호출자가 '못 물어봤다'와 'running 이 아니다'를 구분해야 하기 때문이다."""
+    url = (f"http://{settings.LLM_PLAYGROUND_DNS}"
+           f"/api/playgrounds/status-sync/{int(playground_id)}")
+    async with httpx.AsyncClient(timeout=10.0) as http:
+        r = await http.get(url)
+    return (r.json().get("result") or {}).get("status")
+
+
 async def _resolve_deploy_system_prompt(playground_id: Optional[int]) -> Optional[str]:
     """바인드된 배포(playground)의 생성 시스템 프롬프트(prompt.system_message)를 s2s 로 해석.
     러너를 안 쓴 현행 배포-바인드 경로(전문가 SDS 등)에서 헤더 고정 박스에 '실제 생성에 쓰인
@@ -1214,19 +1705,191 @@ async def _resolve_deploy_system_prompt(playground_id: Optional[int]) -> Optiona
     if not playground_id:
         return None
     try:
-        url = (f"http://{settings.LLM_PLAYGROUND_DNS}"
-               f"/api/playgrounds/{int(playground_id)}")
-        async with httpx.AsyncClient(timeout=10.0) as http:
-            r = await http.get(url)
-        if r.status_code != 200 or r.json().get("status") != 1:
-            return None
-        prompt = (r.json().get("result") or {}).get("prompt") or {}
+        detail = await _playground_detail(int(playground_id))
+        prompt = (detail or {}).get("prompt") or {}
         msg = prompt.get("system_message")
         if isinstance(msg, str) and msg.strip():
             return msg.strip()[:_MAX_FIELD_LEN]
     except Exception:
         traceback.print_exc()
     return None
+
+
+def _playground_shim_base_url(playground_id: int) -> str:
+    """컨테이너가 호출할 OpenAI 호환 base — llm_playground 의 플랫폼 shim.
+
+    원격 심판(judge_base_url)과 원격 생성(generate_base_url)이 **같은 규칙**을 쓴다 —
+    가리키는 대상이 같은 shim 이므로 URL 조립을 두 곳에 두지 않는다.
+
+    ⚠️ **규칙 중복이다.** 정본은 llm_playground service.`_shim_llm_url` 이고 이 문자열은
+    그 복제다. s2s 로 받아오지 않은 이유: 그러려면 "이 배포의 shim base 를 알려달라"는
+    라우트를 llm_playground 에 새로 내야 하는데, 그 응답은 이 서비스가 이미 갖고 있는
+    값(LLM_PLAYGROUND_DNS)과 고정 경로의 결합일 뿐이라 왕복 한 번을 더 사는 값이 없다.
+    같은 이유로 이 서비스는 /api/playgrounds/test·status-sync 경로도 직접 조립한다.
+    깨질 수 있는 지점이므로 shim 경로가 바뀌면 이 함수도 함께 고쳐야 한다.
+    """
+    return (f"http://{settings.LLM_PLAYGROUND_DNS}:80"
+            f"/api/playgrounds/{int(playground_id)}/openai/v1")
+
+
+async def _resolve_remote_generator(inference_playground_id: int, model_id: int,
+                                    workspace_id: int) -> dict:
+    """생성을 위임할 배포를 검증하고 컨테이너에 넘길 OpenAI 호환 base 를 조립한다.
+
+    _resolve_remote_judge 와 같은 검증을 쓰되 모델 판정의 **방향이 반대**다:
+      - 심판은 평가 대상과 같은 모델이면 거부한다(self-preference).
+      - 생성은 평가 대상 **그 모델이어야** 하고, 다르면 거부한다. 이 프로젝트는
+        model_id 에 잠겨 있고 결과는 그 모델의 eval_result 로 영속되므로, 다른 모델의
+        배포로 생성하면 **B 의 점수가 A 의 점수로 기록된다**(런 산출물만 봐서는 추적
+        불가). 로컬 경로가 `commit.model_id != model_id` 를 거부하는 것과 같은 이유다.
+    대상 배포가 심판 배포와 같은지는 여기서 안 본다 — 그 배타 검증은 심판 쪽
+    (`_resolve_remote_judge(exclude_playground_id=...)`)이 이미 한다.
+    실행 중이 아니면 여기서 막는다: 컨테이너가 뜬 뒤 전량 연결 실패로 죽는 것보다
+    파드를 띄우기 전에 사유를 주는 게 낫다(원격 심판과 같은 취지).
+    """
+    pid = int(inference_playground_id)
+    # 워크스페이스 경계(조회 실패·없음·타 워크스페이스 거절)는 공유 규칙 한 곳에 있다.
+    detail = await _playground_in_workspace("inference", pid, workspace_id)
+
+    # 배포가 서빙하는 모델이 프로젝트 모델과 같은지 — 위 docstring 의 핵심 검증이다.
+    served_model_id = (detail.get("model") or {}).get("model_allm_id")
+    model_verified = False
+    if served_model_id is not None:
+        try:
+            model_verified = int(served_model_id) == int(model_id)
+        except (TypeError, ValueError):
+            model_verified = False
+        if not model_verified:
+            raise Exception(
+                f"inference playground {pid} 는 평가 대상과 다른 모델을 서빙합니다 — "
+                "그 배포로 생성하면 다른 모델의 점수가 이 프로젝트 모델의 점수로 "
+                "기록됩니다. 평가 대상 모델의 배포를 고르세요")
+    else:
+        # 모델 식별자를 못 읽었다 = 같은지 다른지 **확인하지 못했다**. 거절하지 않는 이유:
+        # 배포 행의 model JSON 이 비어 있는 조합이 있고, 거절로 두면 정상 배포까지 막힌다.
+        # 대신 확인 실패를 로그와 런 생성 응답(model_verified=False)에 남겨 추적 가능하게 한다.
+        print(f"[eval] WARN generation playground {pid}: 서빙 모델 식별자를 읽지 못해 "
+              f"평가 대상(model_id={model_id})과 같은 모델인지 확인하지 못했습니다 — "
+              f"런 결과의 출처를 배포 설정으로 직접 확인하세요.", flush=True)
+
+    try:
+        status = await _playground_status(pid)
+    except Exception as e:
+        raise Exception(f"inference playground {pid} 상태 조회 실패: {e}") from e
+    if status != "running":
+        raise Exception(
+            f"inference playground {pid} 가 실행 중이 아닙니다(status={status}) — "
+            "먼저 배포를 시작한 뒤 실행하세요")
+
+    # ⚠️ 결정성 — 벤치마크 생성은 greedy(temperature 0)여야 같은 체크포인트에 같은 점수가
+    # 나온다. 그런데 shim(openai_chat_completions)은 요청 body 의 temperature·max_tokens 를
+    # **무시**하고 배포 시점 설정을 따른다. 즉 컨테이너가 temperature=0 을 보내도 배포가
+    # 0.7 이면 0.7 로 생성된다. 우리가 할 수 있는 것은 배포 설정을 읽어 알리는 것까지다.
+    # 거절하지 않는 이유는 원격 심판과 같다 — 플랫폼 기본 배포가 0.7 이라 거절로 두면
+    # 기능이 사실상 못 쓰이게 된다.
+    temperature = (detail.get("model_parameter") or {}).get("temperature")
+    try:
+        deterministic = temperature is not None and float(temperature) == 0.0
+    except (TypeError, ValueError):
+        deterministic = False
+    if not deterministic:
+        print(f"[eval] WARN generation playground {pid}: temperature={temperature!r} "
+              f"(≠0) — 벤치마크 점수가 런마다 달라질 수 있습니다. 배포의 생성 파라미터를 "
+              f"temperature=0 으로 저장한 뒤 재배포하면 재현됩니다.", flush=True)
+    # ⚠️ 이 경로에서는 chat template 도 배포 쪽 서빙 엔진이 정한다(임베드 vLLM 은 아무도
+    # 안 붙이고 llama.cpp/TGI 는 엔진이 붙인다). 컨테이너가 템플릿을 적용하면 후자에서
+    # 이중 적용이 되므로 적용하지 않는다 → 컨테이너의 로컬 생성 경로 점수와 직접 비교할 수
+    # 없다. 이 사실은 컨테이너가 metrics.generate.note 에 새긴다.
+    return {
+        "playground_id": pid,
+        "name": (detail.get("info") or {}).get("name"),
+        "base_url": _playground_shim_base_url(pid),
+        "temperature": temperature,
+        "deterministic": deterministic,
+        # 배포가 프로젝트 모델을 서빙함을 **확인했는지**. False = 식별자를 못 읽어
+        # 확인하지 못한 것이지, 다르다는 뜻이 아니다(다르면 위에서 이미 거부했다).
+        "model_verified": model_verified,
+    }
+
+
+async def _resolve_remote_judge(judge_playground_id: int, model_id: int,
+                                workspace_id: int,
+                                exclude_playground_id: Optional[int] = None) -> dict:
+    """심판 배포를 검증하고 컨테이너에 넘길 OpenAI 호환 base 를 조립한다.
+
+    검증 순서는 '거절이 싼 것부터'가 아니라 '오해를 부르는 것부터'다:
+      1) 대상 배포와 동일 — 자기 답을 자기가 채점(self-preference)
+      2) 워크스페이스 밖 — 남의 배포를 심판으로 끌어오는 경로 차단
+      3) 평가 대상과 같은 모델 — 배포가 달라도 self-preference 는 그대로다
+      4) 실행 중이 아님 — 컨테이너가 GPU 를 잡고서야 연결 실패로 죽는 것을 앞당겨 막는다
+    """
+    pid = int(judge_playground_id)
+    if exclude_playground_id and int(exclude_playground_id) == pid:
+        raise Exception(
+            "심판 배포가 생성에 쓰는 배포와 같습니다 — 자기 답을 자기가 채점하면 "
+            "점수가 self-preference 로 부풀어 비교가 무의미해집니다")
+
+    # 2) 워크스페이스 밖 — 조회 실패·없음·타 워크스페이스 거절은 공유 규칙 한 곳에 있다.
+    detail = await _playground_in_workspace("judge", pid, workspace_id)
+
+    # 3) 평가 대상과 같은 모델인가. 식별자를 못 읽거나(HF 직접 배포 등 model JSON 이 빈
+    #    조합) 비교할 수 없으면 **확인하지 못한 것**이지 다르다는 뜻이 아니다 — 조용히
+    #    넘기면 self-preference 로 부푼 점수가 검증된 점수와 구분되지 않는다.
+    #    거절하지 않는 이유는 _resolve_remote_generator 와 같다(정상 배포까지 막힌다).
+    #    대신 사실을 로그와 런 생성 응답(distinct_model_verified=False)에 남긴다.
+    judge_model_id = (detail.get("model") or {}).get("model_allm_id")
+    same_model = None                      # None = 비교 불가(확인 못 함)
+    if judge_model_id is not None:
+        try:
+            same_model = int(judge_model_id) == int(model_id)
+        except (TypeError, ValueError):
+            same_model = None
+        if same_model:
+            raise Exception(
+                "심판 배포가 평가 대상과 같은 모델입니다 — 다른 모델의 배포를 고르세요")
+    # 생성 쪽 model_verified 와 뜻이 반대라(그쪽은 '같은 모델임을 확인') 이름을 달리 둔다.
+    distinct_model_verified = same_model is False
+    if not distinct_model_verified:
+        print(f"[eval] WARN judge playground {pid}: 서빙 모델 식별자를 읽지 못해"
+              f"(model_allm_id={judge_model_id!r}) 평가 대상(model_id={model_id})과 "
+              f"다른 모델인지 확인하지 못했습니다 — 자기 답을 자기가 채점하는 "
+              f"self-preference 일 수 있으니 심판 배포 설정을 직접 확인하세요.", flush=True)
+
+    try:
+        status = await _playground_status(pid)
+    except Exception as e:
+        raise Exception(f"judge playground {pid} 상태 조회 실패: {e}") from e
+    if status != "running":
+        raise Exception(
+            f"judge playground {pid} 가 실행 중이 아닙니다(status={status}) — "
+            "먼저 배포를 시작한 뒤 실행하세요")
+
+    # ⚠️ 결정성 — LogicKor 심판은 greedy(temperature 0)여야 같은 답에 같은 점수가 나온다.
+    # 그런데 shim(openai_chat_completions)은 요청 body 의 temperature·max_tokens 를 **무시**
+    # 하고 배포 시점 설정을 따른다. 즉 채점기가 temperature=0 을 보내도 배포가 0.7 이면
+    # 0.7 로 채점된다. 우리가 할 수 있는 것은 배포 설정을 읽어 알리는 것까지다.
+    # 거절하지 않는 이유: 플랫폼 기본 배포가 temperature 0.7 이라(pipeline_deploy) 거절로
+    # 두면 기능이 사실상 못 쓰이게 된다. 대신 사실을 응답과 로그에 남긴다.
+    temperature = (detail.get("model_parameter") or {}).get("temperature")
+    try:
+        deterministic = temperature is not None and float(temperature) == 0.0
+    except (TypeError, ValueError):
+        deterministic = False
+    if not deterministic:
+        print(f"[eval] WARN remote judge playground {pid}: temperature={temperature!r} "
+              f"(≠0) — LogicKor 점수가 런마다 달라질 수 있습니다. 심판 배포의 생성 "
+              f"파라미터를 temperature=0 으로 저장한 뒤 재배포하면 재현됩니다.", flush=True)
+    return {
+        "playground_id": pid,
+        "name": (detail.get("info") or {}).get("name"),
+        "base_url": _playground_shim_base_url(pid),
+        "temperature": temperature,
+        "deterministic": deterministic,
+        # 심판이 평가 대상과 **다른** 모델임을 확인했는지. False = 식별자를 못 읽어
+        # 확인하지 못한 것이지, 같다는 뜻이 아니다(같으면 위에서 이미 거부했다).
+        # 생성 쪽 generate_remote.model_verified 와 뜻이 반대이므로 키 이름이 다르다.
+        "distinct_model_verified": distinct_model_verified,
+    }
 
 
 async def _infer_output(inference_target, prompt: str, session_id: str) -> Optional[str]:
@@ -1294,7 +1957,12 @@ async def _load_run_samples(model_id: int, project_id: int,
     을 오버라이드하지 않도록 benchmark 와 통일(리뷰 HIGH). 프로젝트 바인딩(list_eval_results_by_project
     필터)으로 타 프로젝트 런 유입 차단(같은 model 이라도 — 리뷰 MEDIUM). 완료된
     metric_set=='inference' 만. 서버전용 _image_abs 등 보존(expert VLM 표시용).
-    반환 (samples|None, gen_system_prompt|None). gen_system_prompt=P3 헤더 고정 박스 표시원."""
+    반환 (samples|None, gen_system_prompt|None). gen_system_prompt=P3 헤더 고정 박스 표시원.
+
+    ⚠️ 2026-08-24 부터 model 바인딩도 함께 본다. 프로젝트가 모델을 잠그던 동안에는
+    "같은 프로젝트 = 같은 모델"이라 프로젝트 필터만으로 충분했지만, 이제 한 프로젝트에
+    서로 다른 모델의 생성 런이 공존한다 — 모델 A 가 만든 output 을 모델 B 의 채점에
+    붙이면 A 의 답이 B 의 점수로 기록된다."""
     if not inference_job_id:
         return None, None
     try:
@@ -1305,7 +1973,8 @@ async def _load_run_samples(model_id: int, project_id: int,
         return None, None
     for r in rows:
         if (not r or r.get("job_str_id") != inference_job_id
-                or r.get("metric_set") != "inference" or r.get("status") != "completed"):
+                or r.get("metric_set") != "inference" or r.get("status") != "completed"
+                or int(r.get("source_model_id") or 0) != int(model_id)):
             continue
         m = r.get("metrics")
         if isinstance(m, str):
@@ -1322,276 +1991,36 @@ async def _load_run_samples(model_id: int, project_id: int,
     return None, None
 
 
-async def _build_judge_samples(model_id: int, model_name: str, dataset_ids: List[int],
-                               ds_names: List[str], inference_target,
-                               run_samples: Optional[list] = None) -> list:
-    """채점 대상 샘플(A4) — 실 데이터셋(input/reference) + 배포모델 추론 output.
-    run_samples(러너 생성 output, P2-b2) 주면 그것을 그대로 채점(재추론 회피). 없으면
-    데이터셋 읽기 + 배포 추론, 못 읽으면 합성 input, 추론 URL 없으면 mock output 폴백."""
-    # 단일 데이터셋 강제(2026-07-19)에 맞춰 샘플 수를 데이터셋 수와 분리 — 단일에서
-    # 최대 MAX_JUDGE_SAMPLES 추출. 구 `len(ds_names)*5` 스케일링은 다중 전제였고
-    # 단일에선 5 로 고정됐음. 다중 복원 시 dataset-수 스케일링 재도입.
-    base = ds_names[0] if ds_names else "dataset"
-    # P2-b2 — 러너 생성 샘플 우선(재추론 회피). output 공백(image-only/실패)이면 placeholder.
-    if run_samples:
-        out = []
-        for i, s in enumerate(run_samples[:MAX_JUDGE_SAMPLES]):
-            out.append({"id": f"{model_name}-{s.get('dataset', base)}-{i}",
-                        "input": s.get("input", ""),
-                        "output": (s.get("output") or "").strip() or f"[{model_name}] response {i}",
-                        "reference": s.get("reference", "")})
-        return out
-    n = MAX_JUDGE_SAMPLES
-    rows = await _read_dataset_samples(dataset_ids, n)
-    if not rows:    # 실 데이터셋 못 읽음 → 합성 input 폴백(기존 스캐폴딩 동등)
-        rows = [{"input": f"[{base}] sample {i} prompt", "reference": "",
-                 "dataset": base} for i in range(n)]
-    samples = []
-    for i, row in enumerate(rows):
+async def _generate_samples(inference_target, dataset_ids: List[int], limit: int,
+                            tag: str, concurrency: int = 1) -> list:
+    """데이터셋 문항을 배포에 던져 per-sample output 을 만든다 — 평가의 **유일한 생성 루프**.
+
+    호출자는 러너(POST /evaluations/inference, generate phase 백그라운드) 하나다.
+    벤치마크도 이 함수를 공유했었지만(인라인 생성) 지금은 배포에 위임하므로 쓰지 않는다 —
+    벤치마크 프롬프트 조립은 컨테이너 소유이고 이 루프는 "문항 하나 → 출력 하나"의
+    단일턴이라 LogicKor 2턴·MixATIS UGEN 형식을 재현할 수 없다(run_benchmark docstring).
+    concurrency 인자는 그 시절의 잔재다 — 러너는 예산 3600s 라 종전대로 순차(1)를 쓴다.
+    이미지/CSV 등 서버전용 필드는 그대로 실어 보낸다 — score phase(전문가 VLM)가
+    _samples 를 소비할 때 렌더/추론 컨텍스트가 유지돼야 한다.
+    """
+    rows = await _read_dataset_samples(dataset_ids, limit)
+    sem = asyncio.Semaphore(max(int(concurrency or 1), 1))
+
+    async def _one(i: int, row: dict) -> dict:
         out = None
-        if inference_target and row["input"]:    # image-only(빈 input)는 텍스트 추론 스킵
-            out = await _infer_output(
-                inference_target, row["input"], f"judge-{model_id}-{i}")
-        if not out:
-            out = f"[{model_name}] response {i}"    # 추론 불가 → mock output
-        samples.append({"id": f"{model_name}-{row.get('dataset', base)}-{i}",
-                        "input": row["input"], "output": out,
-                        "reference": row.get("reference", "")})
-    return samples
+        if row.get("input"):    # 텍스트 input 만 — image-only(VLM) 전량 batch 는 P4
+            async with sem:
+                out = await _infer_output(inference_target, row["input"], f"{tag}-{i}")
+        sample = {
+            "idx": i, "input": row.get("input", ""), "output": out or "",
+            "reference": row.get("reference", ""), "dataset": row.get("dataset", "")}
+        for k in ("image", "image_url", "image_served", "_image_abs", "_image_dir",
+                  "csv_rows", "csv_text"):
+            if k in row:
+                sample[k] = row[k]
+        return sample
 
-
-def _build_judge_prompt(criteria: List[str], custom_prompt: Optional[str], sample: dict) -> str:
-    crit_lines = "\n".join(f"- {c}" for c in criteria)
-    base = custom_prompt or "주어진 입력에 대한 모델 출력을 아래 기준으로 1~5점 평가하세요."
-    return (
-        f"{base}\n\n[입력]\n{sample.get('input', '')}\n\n[모델 출력]\n{sample.get('output', '')}\n\n"
-        f"[기준]\n{crit_lines}\n\n"
-        "각 기준에 대해 1~5 정수 점수를 JSON 으로만 응답하세요. "
-        '예: {"accuracy": 4, "relevance": 5}. 기준 키만 포함.'
-    )
-
-
-def _parse_judge_scores(text: str, criteria: List[str]) -> dict:
-    """심판 응답(JSON)에서 기준별 1~5 점수 → 0~100. 범위(1~5) 밖 값(예: {"accuracy":999})은
-    무음 만점 변환을 막기 위해 스킵(클램프 X)."""
-    m = re.search(r"\{.*\}", text or "", re.DOTALL)
-    if not m:
-        raise ValueError("judge response has no JSON object")
-    data = json.loads(m.group(0))
-    out = {}
-    for c in criteria:
-        if c in data:
-            try:
-                raw = float(data[c])
-            except (TypeError, ValueError):
-                continue
-            if 1.0 <= raw <= 5.0:
-                out[c] = round(raw * 20.0, 2)
-    return out
-
-
-def _judge_mock(provider: str, criteria: List[str], sample: dict) -> dict:
-    """결정적 mock 점수(55~95) — 키/네트워크 불필요. (provider, criterion, sample) 시드."""
-    out = {}
-    for c in criteria:
-        h = int(hashlib.sha256(f"{provider}:{c}:{sample['id']}".encode()).hexdigest(), 16)
-        out[c] = round(55.0 + (h % 4001) / 100.0, 2)
-    return out
-
-
-async def _judge_openai(api_key, model, criteria, custom_prompt, sample) -> dict:
-    prompt = _build_judge_prompt(criteria, custom_prompt, sample)
-    async with httpx.AsyncClient(timeout=60.0) as http:
-        r = await http.post(
-            f"https://{JUDGE_PROVIDER_HOSTS['chatgpt']}/v1/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}"},
-            json={"model": model or JUDGE_DEFAULT_MODEL["chatgpt"],
-                  "messages": [{"role": "user", "content": prompt}], "temperature": 0})
-        r.raise_for_status()
-        text = r.json()["choices"][0]["message"]["content"]
-    return _parse_judge_scores(text, criteria)
-
-
-async def _judge_anthropic(api_key, model, criteria, custom_prompt, sample) -> dict:
-    prompt = _build_judge_prompt(criteria, custom_prompt, sample)
-    async with httpx.AsyncClient(timeout=60.0) as http:
-        r = await http.post(
-            f"https://{JUDGE_PROVIDER_HOSTS['claude']}/v1/messages",
-            headers={"x-api-key": api_key, "anthropic-version": "2023-06-01"},
-            json={"model": model or JUDGE_DEFAULT_MODEL["claude"], "max_tokens": 512,
-                  "messages": [{"role": "user", "content": prompt}]})
-        r.raise_for_status()
-        text = "".join(b.get("text", "") for b in r.json().get("content", []))
-    return _parse_judge_scores(text, criteria)
-
-
-async def _judge_gemini(api_key, model, criteria, custom_prompt, sample) -> dict:
-    prompt = _build_judge_prompt(criteria, custom_prompt, sample)
-    # dto 패턴(영숫자/._-)으로 이미 경로조작 차단 + URL 보간 방어로 segment 인코딩(이중방어).
-    mdl = quote(model or JUDGE_DEFAULT_MODEL["gemini"], safe="")
-    async with httpx.AsyncClient(timeout=60.0) as http:
-        # 키는 헤더로만(x-goog-api-key) — URL 쿼리에 넣으면 httpx 예외/액세스로그의 URL 에
-        # 키가 노출됨. 다른 어댑터(Authorization/x-api-key)와 동일하게 헤더 전달.
-        r = await http.post(
-            f"https://{JUDGE_PROVIDER_HOSTS['gemini']}/v1beta/models/{mdl}:generateContent",
-            headers={"x-goog-api-key": api_key},
-            json={"contents": [{"parts": [{"text": prompt}]}]})
-        r.raise_for_status()
-        text = r.json()["candidates"][0]["content"]["parts"][0]["text"]
-    return _parse_judge_scores(text, criteria)
-
-
-async def _judge_local(base_url, model, criteria, custom_prompt, sample) -> dict:
-    # 매 호출 resolve+검증 후 그 IP 로 직접 connect(TOCTOU 차단). https+hostname 은 cert
-    # 불일치로 fail-closed(내부 local LLM 은 보통 http). IPv6 는 대괄호.
-    safe_ip, host_header = _validate_local_url(base_url)
-    p = urlparse(base_url)
-    ip_host = f"[{safe_ip}]" if ":" in safe_ip else safe_ip
-    port_seg = f":{p.port}" if p.port else ""
-    path = (p.path or "").rstrip("/") + "/chat/completions"  # OpenAI 호환 가정
-    url = f"{p.scheme}://{ip_host}{port_seg}{path}"
-    prompt = _build_judge_prompt(criteria, custom_prompt, sample)
-    async with httpx.AsyncClient(timeout=60.0) as http:
-        r = await http.post(url, headers={"Host": host_header}, json={
-            "model": model or "local",
-            "messages": [{"role": "user", "content": prompt}], "temperature": 0})
-        r.raise_for_status()
-        text = r.json()["choices"][0]["message"]["content"]
-    return _parse_judge_scores(text, criteria)
-
-
-async def _judge_score(provider, judge_model, api_key, base_url,
-                       criteria, custom_prompt, sample) -> dict:
-    if _judge_mock_enabled():
-        return _judge_mock(provider, criteria, sample)
-    if provider == "local":
-        return await _judge_local(base_url, judge_model, criteria, custom_prompt, sample)
-    if provider == "chatgpt":
-        return await _judge_openai(api_key, judge_model, criteria, custom_prompt, sample)
-    if provider == "claude":
-        return await _judge_anthropic(api_key, judge_model, criteria, custom_prompt, sample)
-    if provider == "gemini":
-        return await _judge_gemini(api_key, judge_model, criteria, custom_prompt, sample)
-    raise Exception(f"unsupported provider: {provider}")
-
-
-async def _run_judge_task(model_id, job_id, model_name, dataset_ids, ds_names, provider,
-                          judge_model, api_key, base_url, criteria, custom_prompt,
-                          inference_target=None, run_samples=None) -> None:
-    """백그라운드 judge 루프 — 샘플별 심판 호출 → 기준별 평균(0~100) → eval_result 마감.
-    ⚠️ api_key 는 이 함수 인자로만 존재(in-memory). 절대 로그/DB 기록 금지.
-    전역 wall-clock 상한(MAX_JUDGE_RUN_SECONDS) 초과(hung provider 등) 시 failed 처리.
-    run_samples(러너 생성, P2-b2) 있으면 그것을, 없고 inference_target 있으면 대상 모델 실 추론,
-    둘 다 없으면 mock(A4)."""
-    try:
-        async def _score_all():
-            samples = await _build_judge_samples(
-                model_id, model_name, dataset_ids, ds_names, inference_target, run_samples)
-            agg = {c: [] for c in criteria}
-            for s in samples:
-                scores = await _judge_score(provider, judge_model, api_key, base_url,
-                                            criteria, custom_prompt, s)
-                for c in criteria:
-                    if c in scores:
-                        agg[c].append(scores[c])
-            return samples, agg
-
-        samples, agg = await asyncio.wait_for(
-            _score_all(), timeout=MAX_JUDGE_RUN_SECONDS)
-        metrics = {}
-        for c in criteria:
-            if agg[c]:
-                metrics[f"judge_{c}"] = round(sum(agg[c]) / len(agg[c]), 2)
-        if not metrics:
-            raise Exception("judge produced no scores")
-        # 내부 메타(_접두 → 비교표 metric_keys 에서 제외).
-        metrics["_mode"] = "judge"
-        metrics["_provider"] = provider
-        metrics["_samples"] = len(samples)
-        await db_model.complete_eval_result(
-            job_str_id=job_id, metrics_json=json.dumps(metrics), source_model_id=model_id)
-    except Exception:
-        # 트레이스백에 api_key 노출 없음 — 키는 헤더로만 전달, 예외 메시지는 URL/상태뿐.
-        traceback.print_exc()
-        try:
-            await db_model.update_eval_result_status(
-                job_str_id=job_id, status="failed", source_model_id=model_id)
-        except Exception:
-            traceback.print_exc()
-
-
-async def run_judge(project_id: int, provider: str,
-                    criteria: List[str], judge_model: Optional[str] = None,
-                    api_key: Optional[str] = None, base_url: Optional[str] = None,
-                    custom_prompt: Optional[str] = None,
-                    inference_playground_id: Optional[int] = None,
-                    inference_job_id: Optional[str] = None) -> dict:
-    """LLM-as-a-Judge 런 생성(직접호출 비동기). model/dataset 는 프로젝트에서 상속(불변, P3),
-    유형별 설정(provider/criteria/judge_model/api_key/base_url/custom_prompt)만 body.
-    키/URL = transient. 즉시 job_id 반환 후 백그라운드 채점 → eval_result.metrics(judge_*)
-    마감. FE 는 get_judge_result 폴링. inference_playground_id(배포 모델) 주면 대상 모델 실
-    출력으로 채점, 없으면 mock(A4)."""
-    project, dataset_ids = await _load_project_for_run(project_id, "judge")
-    model_id = int(project["model_id"])
-    model_info = await db_model.get_model(model_id=model_id)
-    if not model_info:
-        raise Exception(f"model {model_id} not found")
-    model_name = model_info["name"]
-    workspace_id = int(model_info["workspace_id"])
-
-    ds_names = []
-    for did in dataset_ids:
-        d = await db_model.get_dataset_model(dataset_id=did)
-        if not d:
-            raise Exception(f"dataset {did} not found")
-        if int(d["workspace_id"]) != workspace_id:
-            raise Exception("dataset and model belong to different workspaces")
-        ds_names.append(str(d["name"]))
-
-    crit = [c for c in criteria if c in JUDGE_CRITERIA] or list(JUDGE_CRITERIA)
-
-    if provider == "local":
-        _validate_local_url(base_url)
-    elif provider in JUDGE_PROVIDER_HOSTS:
-        if not _judge_mock_enabled() and not (api_key and api_key.strip()):
-            raise Exception("API key required for commercial judge")
-    else:
-        raise Exception(f"unsupported provider: {provider}")
-
-    dataset_name_csv = ",".join(ds_names)
-    if len(dataset_name_csv) > 255:
-        dataset_name_csv = f"{ds_names[0]} +{len(ds_names) - 1} more"[:255]
-
-    # P2-b2 — 러너 생성 샘플 우선(재추론 회피). 있으면 배포 대상 해석을 스킵한다.
-    # 없으면 단일 direct URL/이중 BFF target을 해석(실패·미지정 → None → mock output 폴백).
-    run_samples, _gen = await _load_run_samples(model_id, project_id, inference_job_id)
-    inference_target = (
-        None
-        if run_samples
-        else await _resolve_inference_target(inference_playground_id)
-    )
-
-    job_id = f"judge-{model_id}-{uuid.uuid4().hex[:16]}"
-    await db_model.insert_eval_result(
-        source_model_id=model_id, workspace_id=workspace_id, job_str_id=job_id,
-        dataset_id=dataset_ids[0], dataset_name=dataset_name_csv,
-        metric_set=f"judge:{provider}", eval_project_id=project_id)
-    try:
-        await db_model.update_eval_project_status(project_id, PROJECT_STATUS_RUNNING)
-    except Exception:
-        traceback.print_exc()
-
-    task = asyncio.create_task(_run_judge_task(
-        model_id, job_id, model_name, dataset_ids, ds_names, provider, judge_model,
-        api_key, base_url, crit, custom_prompt, inference_target, run_samples))
-    _judge_tasks.add(task)
-    task.add_done_callback(_judge_tasks.discard)
-
-    return {"project_id": project_id, "model_id": model_id, "job_id": job_id,
-            "provider": provider, "mode": "judge", "criteria": crit,
-            "datasets": ds_names, "mock": _judge_mock_enabled(),
-            "real_output": bool(inference_target) or bool(run_samples),
-            "used_runner": bool(run_samples)}
+    return list(await asyncio.gather(*(_one(i, r) for i, r in enumerate(rows))))
 
 
 # ── 평가 추론 러너 (generate phase, P1) ──────────────────────────────────────
@@ -1648,14 +2077,10 @@ async def _deploy_transient_playground(model_id, workspace_id, user_name, instan
 async def _wait_playground_ready(playground_id: int) -> bool:
     """status-sync 폴링 — running 까지(pipeline._wait_for_playground_deploy 동형, ~10분 상한).
     running=True, error/failed 또는 상한 초과/연속 unreachable=False."""
-    url = (f"http://{settings.LLM_PLAYGROUND_DNS}"
-           f"/api/playgrounds/status-sync/{int(playground_id)}")
     fails = 0
     for _ in range(EVAL_DEPLOY_MAX_POLLS):
         try:
-            async with httpx.AsyncClient(timeout=10.0) as http:
-                r = await http.get(url)
-            status = (r.json().get("result") or {}).get("status")
+            status = await _playground_status(playground_id)
             fails = 0
             if status == "running":
                 return True
@@ -1688,26 +2113,27 @@ async def _teardown_playground(playground_id: int) -> None:
         traceback.print_exc()
 
 
-async def run_eval_inference(project_id: int, system_prompt: Optional[str] = None,
+async def run_eval_inference(project_id: int, model_id: int, dataset_ids: List[int],
+                             system_prompt: Optional[str] = None,
                              inference_playground_id: Optional[int] = None,
                              instance_id=None, instance_count: int = 1,
                              gpu_count: int = 1, commit_id=None,
                              user_name: Optional[str] = None) -> dict:
-    """평가 추론 러너(generate phase) — 프로젝트 상속 모델/데이터셋으로 인스턴스를 확보해
+    """평가 추론 러너(generate phase) — 이 런이 고른 모델/데이터셋으로 인스턴스를 확보해
     데이터셋 전량(≤MAX_EVAL_SAMPLES) batch 추론 → _samples + _gen_system_prompt 를
     eval_result.metrics 에 영속. 하이브리드 인스턴스: inference_playground_id 주면 running
     배포 재사용, 아니면 instance_id 로 전용 할당(완료/실패 시 delete_playground 회수).
     즉시 job_id 반환 후 백그라운드 생성(judge 런과 동형 비동기).
-    ⚠️ P1 WIP — review 지적(wall-clock cap/배포 소유권 검증/teardown 견고화/idempotency/
-    system_prompt 실사용/실패→completed/gpu_count=0/eval_type gate/instance_id ge=1)은 P2 선결."""
+    ⚠️ P1 WIP — review 지적(wall-clock cap/teardown 견고화/idempotency/system_prompt 실사용/
+    실패→completed/gpu_count=0/eval_type gate/instance_id ge=1)은 P2 선결.
+    ⚠️ '배포 소유권 검증'은 목록에서 빠졌다 — 2026-08-27 해소(재사용 경로의 워크스페이스
+    대조, 아래). 전용 할당 경로는 그대로다(배포를 이 함수가 만드니 소유권이 자명하다)."""
     # run-start 공통 로더 재사용(중복 방지). generate 는 type-agnostic 이라 eval_type gate 생략.
-    project, dataset_ids = await _load_project_for_run(project_id, None)
-    model_id = int(project["model_id"])
-    model_info = await db_model.get_model(model_id=model_id)
-    if not model_info:
-        raise Exception(f"model {model_id} not found")
+    project = await _load_project_for_run(project_id, None)
+    model_id = int(model_id)
+    dataset_ids = _run_dataset_ids(dataset_ids)
+    model_info, workspace_id = await _resolve_run_model(project, model_id)
     model_name = model_info["name"]
-    workspace_id = int(model_info["workspace_id"])
 
     ds_names = []
     for did in dataset_ids:
@@ -1728,6 +2154,16 @@ async def run_eval_inference(project_id: int, system_prompt: Optional[str] = Non
         raise Exception("inference_playground_id or instance_id required")
     if allocate and not deploy_user:
         raise Exception("deploy user_name required for transient allocation")
+
+    # 빌린 배포(재사용 경로)는 **이 런의 워크스페이스 것**이어야 한다 — 규칙은 배포 id 를
+    # 받는 네 경로가 공유하는 _playground_in_workspace 한 곳에 있다. 왜 필요한가: 이 id 는
+    # 요청이 준 raw 값이고 _resolve_inference_target 은 그것을 그대로 믿고 s2s 를 부른다.
+    # 대조하지 않으면 남의 워크스페이스 배포로 생성이 일어나고, 그 출력은 이 프로젝트의
+    # eval_result(_samples)로 영속돼 사후에 출처를 구분할 수 없다.
+    # 전용 할당 경로(allocate)는 건드리지 않는다: 배포를 이 함수가 만든다.
+    if inference_playground_id:
+        await _playground_in_workspace(
+            "inference", inference_playground_id, workspace_id)
 
     sysprompt = (system_prompt or "").strip()[:_MAX_FIELD_LEN] or None
     job_id = f"infer-{model_id}-{uuid.uuid4().hex[:16]}"
@@ -1788,24 +2224,10 @@ async def _run_eval_inference_task(model_id, workspace_id, job_id, model_name, d
         inference_target = await _resolve_inference_target(playground_id)
         if not inference_target:
             raise Exception("no inference target (deployment not running?)")
-        rows = await _read_dataset_samples(dataset_ids, MAX_EVAL_SAMPLES)
-        samples = []
-        for i, row in enumerate(rows):
-            out = None
-            if row.get("input"):    # 텍스트 input 만 — image-only(VLM) 전량 batch 는 P4
-                out = await _infer_output(
-                    inference_target, row["input"], f"infer-{model_id}-{i}")
-            sample = {
-                "idx": i, "input": row.get("input", ""), "output": out or "",
-                "reference": row.get("reference", ""), "dataset": row.get("dataset", "")}
-            # 이미지/CSV 필드 보존 — score phase(expert VLM)가 _samples 소비 시 렌더/추론
-            # 컨텍스트가 유지되도록(_image_abs 등 서버전용 키 포함; get_judge_result 가 _samples
-            # 를 통째 strip 하고 expert 경로는 _public_sample 로 걸러 누출 없음).
-            for k in ("image", "image_url", "image_served", "_image_abs", "_image_dir",
-                      "csv_rows", "csv_text"):
-                if k in row:
-                    sample[k] = row[k]
-            samples.append(sample)
+        # 생성 루프(_generate_samples)의 유일한 호출자다. 러너는
+        # 백그라운드라 종전대로 순차(concurrency 기본 1) — 배포에 걸리는 부하를 바꾸지 않는다.
+        samples = await _generate_samples(
+            inference_target, dataset_ids, MAX_EVAL_SAMPLES, f"infer-{model_id}")
         # 데이터셋을 못 읽었거나(0 샘플) 전량 추론 실패(모든 output 공백)면 completed 로 위장하지
         #   않고 실패 처리 — rows=[] 인 dataset-read 실패도 failed(리뷰 CRITICAL: 성공 위장 방지).
         if not samples:
@@ -1829,29 +2251,6 @@ async def _run_eval_inference_task(model_id, workspace_id, job_id, model_name, d
     finally:
         if state["pid"]:
             await _teardown_playground(state["pid"])
-
-
-async def get_judge_result(model_id: int, job_id: str) -> dict:
-    """judge 런 결과 폴링 — eval_result row 직접 조회(컨테이너/NFS 미경유)."""
-    if not job_id or not _JOB_ID_RE.match(job_id):
-        raise ValueError(f"invalid job_id: {job_id!r}")
-    row = await db_model.get_eval_result_by_job(job_str_id=job_id, source_model_id=model_id)
-    if not row:
-        return {"job_id": job_id, "metrics": None, "ready": False, "status": "pending"}
-    status = row.get("status")
-    metrics = row.get("metrics")
-    if isinstance(metrics, str):
-        try:
-            metrics = json.loads(metrics)
-        except (TypeError, json.JSONDecodeError):
-            metrics = None
-    # 내부키 제거 — judge-result 가 metric_set 게이트 없이 raw metrics 를 반환하므로, expert
-    # job_id 로 호출되면 metrics._samples 의 서버 전용 _image_abs(NFS 절대경로)가 누출될 수
-    # 있다. _ 접두 top-level 키(_samples/_mode/_rated/_total)는 FE 가 안 쓰므로 제거.
-    if isinstance(metrics, dict):
-        metrics = {k: v for k, v in metrics.items() if not str(k).startswith("_")}
-    return {"job_id": job_id, "metrics": metrics,
-            "ready": status == "completed", "status": status}
 
 
 # ── 전문가 평가 (P3) ──────────────────────────────────────────────────────────
@@ -2089,20 +2488,34 @@ async def _expert_session(model_id: int, job_id: str):
     return row, samples
 
 
-async def start_expert(project_id: int,
+async def start_expert(project_id: int, model_id: int, dataset_ids: List[int],
                        inference_playground_id: Optional[int] = None,
                        inference_job_id: Optional[str] = None) -> dict:
-    """전문가 평가 세션 시작 — model/dataset 는 프로젝트에서 상속(불변, P3). 채점 샘플 생성
-    + 세션 행. inference_job_id(러너 생성) 주면 그 샘플을, 없고 inference_playground_id 주면
-    실 출력 추론, 둘 다 없으면 mock(A4). 생성 샘플은 metrics._samples 로 영속 → 재로드
-    안정(실 추론 비결정성/배포 종료에도 표시 고정)."""
-    project, dataset_ids = await _load_project_for_run(project_id, "expert")
-    model_id = int(project["model_id"])
-    model_info = await db_model.get_model(model_id=model_id)
-    if not model_info:
-        raise Exception(f"model {model_id} not found")
+    """전문가 평가 세션 시작 — model/dataset 는 **이 세션이 고른다**(2026-08-24 —
+    프로젝트 워크스페이스 경계 검증은 유지). 빌린 배포(inference_playground_id)도 같은
+    경계로 대조한다(2026-08-27). 채점 샘플 생성 + 세션 행.
+    inference_job_id(러너 생성) 주면 그 샘플을, 없고 inference_playground_id 주면
+    실 출력 추론. 생성 샘플은 metrics._samples 로 영속 → 재로드 안정(실 추론 비결정성/
+    배포 종료에도 표시 고정).
+
+    출력원 **둘 중 하나는 필수**다 — "둘 다 없으면 mock" 폴백은 없앴다(2026-08-27).
+    사람이 별점을 매기는 화면이라 합성 문자열을 채점하면 그 점수가 곧바로 모델 평가로
+    남는다(judge/benchmark 와 같은 규칙).
+    ⚠️ **샘플 단위** mock 은 그대로다 — image-only(VLM) 샘플은 텍스트 추론을 건너뛰고
+    mock 출력을 baseline 으로 두었다가 infer_expert_sample(지연 단위 VLM)이 승격한다.
+    그래서 여기서는 배포가 텍스트 추론 대상으로 해석되는지까지는 요구하지 않는다 —
+    SDS 배포 바인딩이 그 경로다."""
+    # 출력원이 아예 없으면 사람이 채점할 실 출력이 없다 — 세션 행을 만들기 전에 거절한다.
+    if not inference_playground_id and not inference_job_id:
+        raise Exception(
+            "채점할 출력이 필요합니다 — 평가할 모델을 서빙하는 배포를 먼저 시작해 "
+            "지정하거나(inference_playground_id), 완료된 생성 런을 지정하세요"
+            "(inference_job_id)")
+    project = await _load_project_for_run(project_id, "expert")
+    model_id = int(model_id)
+    dataset_ids = _run_dataset_ids(dataset_ids)
+    model_info, workspace_id = await _resolve_run_model(project, model_id)
     model_name = model_info["name"]
-    workspace_id = int(model_info["workspace_id"])
 
     ds_names = []
     for did in dataset_ids:
@@ -2117,9 +2530,26 @@ async def start_expert(project_id: int,
             raise Exception("dataset name has unsafe characters")
         ds_names.append(ds_name)
 
+    # 빌린 배포는 **이 세션의 워크스페이스 것**이어야 한다 — run_eval_inference 와 같은
+    # 규칙·같은 문구(_playground_in_workspace)이고, 대조하는 workspace_id 의 출처도 같다
+    # (_resolve_run_model 이 프로젝트에서 얻어 모델까지 이미 대조한 값).
+    # ⚠️ inference_job_id 로 러너 샘플이 잡혀 이 세션이 배포를 부르지 않게 되더라도 **먼저**
+    # 대조한다 — 이 id 는 metrics._inference_playground_id 로 영속돼 나중에
+    # infer_expert_sample(지연 VLM 추론)이 그대로 호출하므로, 여기서 막지 않으면 경계가
+    # 뒤로 새기만 한다.
+    if inference_playground_id:
+        await _playground_in_workspace(
+            "inference", inference_playground_id, workspace_id)
+
     # P2-b2 — 러너 생성 샘플 우선(재추론 회피). 있으면 배포 대상 해석 스킵.
     run_samples, gen_prompt = await _load_run_samples(
         model_id, project_id, inference_job_id)
+    # 러너 런만 지정했는데 그 샘플을 못 찾으면(미완료·타 프로젝트·타 모델) 배포 폴백도 없어
+    # 전량 mock 이 된다 — 진입 게이트를 통과한 요청이 옛 폴백으로 되돌아가지 않게 막는다.
+    if inference_job_id and not run_samples and not inference_playground_id:
+        raise Exception(
+            "지정한 생성 런(inference_job_id)의 샘플을 찾지 못했습니다 — 이 프로젝트·이 "
+            "모델의 완료된 생성 런이어야 합니다")
     inference_target = (
         None
         if run_samples
