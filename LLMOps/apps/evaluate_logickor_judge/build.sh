@@ -10,7 +10,7 @@ set -euo pipefail
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LLMOPS_ROOT="$(cd "${APP_DIR}/../.." && pwd)"
-TAG="${TAG:-docker.io/acrylaaai/evaluate-logickor-judge:0.2.3}"
+TAG="${TAG:-docker.io/acrylaaai/evaluate-logickor-judge:0.2.5}"
 STAGE="${STAGE:-${TMPDIR:-/tmp}/logickor-judge-build}"
 OUT="${OUT:-${TMPDIR:-/tmp}/evaluate-logickor-judge.tar}"
 

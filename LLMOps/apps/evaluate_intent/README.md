@@ -18,6 +18,21 @@ MixATIS 다중의도·슬롯 **실채점** 컨테이너. ETRI `Evaluation/Intent
 0.1.0 과 같은 zero-shot 경로이며, 형식 미학습을 진단할 때 쓴다.
 체크포인트는 **필수**다(`checkpoint_name` 없으면 기동 직후 거부) — BE 도
 `CHECKPOINT_REQUIRED_MANIFEST_KEYS` 로 파드를 띄우기 전에 막는다.
+
+**예외 — 배포 위임(0.2.4~).** `generate_base_url` 을 주면 모델을 이 잡이 올리지 않고
+이미 떠 있는 배포(플랫폼 OpenAI shim)에 생성을 요청한다. 그러면 체크포인트 마운트가
+필요 없어 위 필수 요구가 풀린다(BE 도 `inference_playground_id` 가 있으면 가드를 건너뛴다).
+⚠️ 그 경로에서는 **학습 단계를 돌리지 않는다** — 학습 산출 LoRA 는 로컬 모델 로드에
+`adapter_dir` 로 얹는 것이고 원격 배포에 붙일 통로가 없다. 돌리면 GPU 를 쓰고 나온 어댑터를
+아무도 안 쓰는데 `metrics.train` 이 "학습했다"고 거짓을 말한다. 즉 위임 경로의 점수는
+**배포된 모델 그대로**의 값이며, UGEN 형식을 배우지 않은 모델을 배포해 두면 위 표대로 전
+지표가 0 에 가깝게 나온다. 형식 학습이 필요하면 학습된 커밋을 먼저 배포한 뒤 그 배포를
+가리켜라.
+⚠️ chat template 도 이 컨테이너가 적용하지 않는다 — tokenizer 가 없고, 적용 주체가 배포의
+서빙 엔진마다 다르다(임베드 vLLM=미적용 / llama.cpp·TGI·TensorRT=엔진 적용). 여기서 붙이면
+후자에서 이중 적용이 된다. 같은 이유로 원본 `generate_batch` 의 `enable_thinking=False` 가
+사라지므로(사고 블록은 걷어내지만) thinking 은 배포 쪽에서 꺼야 한다. 생성 파라미터도 shim 이
+무시하고 배포 설정을 따른다 → **로컬 경로 점수와 직접 비교하지 마라**.
 | 웹 콘솔 + `docker run` | **뺌** | 클러스터는 containerd 라 도커 소켓이 없다. 이미지를 K8s Job 으로 직접 돌린다 |
 | stdout 정규식 파싱 | **뺌** | `/output/metrics.json` 으로 대체 |
 
@@ -67,6 +82,7 @@ Intent F1 98.10 / Slot F1 90.77 인데 Joint 는 67.03 이다.
 |---|---|---|
 | `checkpoint_name` | — | 평가할 커밋 이름(필수에 준함) |
 | `use_latest_checkpoint` | false | `checkpoint_name` 대신 `/model` 사용 |
+| `generate_base_url` | — | 원격 생성 위임 — OpenAI 호환 base. 주면 체크포인트 불필요 + **학습 스킵**(위 경고 참고). SSRF 가드: http/https·자격증명 금지·link-local 거부 |
 | `benchmarks` | — | `[{benchmark: mixatis, metric: ...}]` — 대표 스칼라 축 |
 | `limit` | 0(전체) | 앞 N 발화만(디버그). **분모가 달라지므로 full 값과 비교 금지** |
 | `batch_size` | 16 | 생성 배치 (원본 `run_experiment.sh` 기본값) |
@@ -77,7 +93,9 @@ Intent F1 98.10 / Slot F1 90.77 인데 Joint 는 67.03 이다.
 ## 출력
 
 - `/output/metrics.json` — 벤치마크 계약(`results`/`averages`/`benchmark_set`/`metric_map`)
-  + `mixatis` 하위에 네 지표 격자 + `evaluate`(발화수·빈 예측 수 등) + `checkpoint`
+  + `mixatis` 하위에 네 지표 격자 + `evaluate`(발화수·빈 예측 수·`mode`/`endpoint`/
+  `generate_errors`) + `checkpoint`(로컬 경로) 또는 `generate`(위임 경로: `endpoint`·`model`·
+  `errors`·`note`)
 - `/output/mixatis_eval.csv` — 발화별 `gold/pred` 와 **모델 원문**(`intent_raw`/`slot_raw`)
 
 CSV 에 원문을 남기는 이유: 슬롯 형식(`값 is one 슬롯명`)을 어기면 파싱이 조용히 빈 예측을

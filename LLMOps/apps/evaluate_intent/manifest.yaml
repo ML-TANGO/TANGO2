@@ -7,7 +7,7 @@ kind: ExternalContainer
 
 metadata:
   name: evaluate-intent
-  version: "0.2.3"
+  version: "0.2.4"
   vendor: "Acryl (platform-owned)"
   contact: "platform@acryl.ai"
   description: |
@@ -25,11 +25,16 @@ metadata:
     metrics.json 의 `train` 절에 새긴다. train: false 로 부르면 0.1.0 과 같은 zero-shot
     경로다(형식 미학습 진단용).
 
+    0.2.4: generate_base_url 을 주면 모델을 올리지 않고 이미 떠 있는 배포에 생성을 위임한다
+    (체크포인트 불필요, GPU 점유 0). 그 경로에서는 학습 단계를 돌리지 않는다 — LoRA 를 원격
+    배포에 얹을 방법이 없기 때문이다(점수는 배포된 모델 그대로의 값).
+
     지표 정의·프롬프트·학습 semantics 는 ETRI 원본 모듈을 그대로 import 해서 쓴다(재구현 없음).
-    심판 LLM 이 없어 채점은 **결정론적**이다 — 같은 체크포인트·같은 시드면 같은 값이 나온다.
+    심판 LLM 이 없어 채점은 **결정론적**이다 — 같은 체크포인트·같은 시드면 같은 값이 나온다
+    (단, 원격 위임 경로는 생성 파라미터를 배포가 정하므로 그 결정성이 배포 설정에 매인다).
 
 spec:
-  image: "docker.io/acrylaaai/evaluate-intent:0.2.3"
+  image: "docker.io/acrylaaai/evaluate-intent:0.2.4"
 
   # 모델 가중치는 차트가 RO 마운트하는 /models/checkpoints 에서 읽고, MixATIS 문항은
   # 이미지에 baked 다. 런타임에 HF 를 칠 일이 없으므로 오프라인을 명시해 둔다 —
@@ -45,7 +50,11 @@ spec:
   resources:
     cpu: "4"
     memory: "32Gi"
-    gpu: 1
+    gpu: 1                    # generate_base_url 로 생성을 배포에 위임하면 이 잡의 실사용
+                              #   GPU 는 0 이지만(HTTP 호출만, 학습 단계도 건너뛴다) 값은
+                              #   1로 둔다 — 매니페스트는 런타임 파라미터를 모른 채
+                              #   최악(로컬 학습 + 로컬 생성)을 보장해야 한다.
+                              #   evaluate_logickor_judge/manifest.yaml 과 같은 취지다.
     # gpu > 0 이면 스키마가 gpu_memory 선언을 강제한다. 8B 급을 bf16 로 올리므로
     # 가중치 ~16GB + 배치 16 생성 캐시. A100 80GB 한 장 기준 넉넉히 잡는다.
     # use_4bit=true 로 부르면 더 작게 들어가지만 선언은 기본 경로(bf16)를 기준으로 둔다.
@@ -57,6 +66,26 @@ spec:
       # checkpoint_name       : 평가할 커밋 이름(단일 세그먼트). 컨테이너가
       #                         /models/checkpoints/<name> 으로 해석한다(경로를 받지 않는다).
       # use_latest_checkpoint : checkpoint_name 없이 /model(latest_checkpoint) 사용.
+      # generate_base_url     : 원격 생성 — OpenAI 호환 base URL(예: 플랫폼 배포 shim
+      #                         http://<llm-playground>/api/playgrounds/<id>/openai/v1).
+      #                         주면 모델을 이 잡이 올리지 않고 **이미 떠 있는 배포**에
+      #                         발화당 2회(의도·슬롯) 생성을 요청한다 → 체크포인트가 필요
+      #                         없다(checkpoint_name 없이도 실행된다).
+      #                         ⚠️ **학습 단계를 건너뛴다.** 학습 산출 LoRA 는 로컬 모델
+      #                         로드에 얹는 것이고 원격 배포에 붙일 통로가 없다 → 점수는
+      #                         "배포된 모델 그대로"의 값이며, UGEN 형식을 배우지 않은
+      #                         모델을 배포해 두면 전 지표가 0 에 가깝게 나온다. 형식 학습이
+      #                         필요하면 학습된 커밋을 배포한 뒤 그 배포를 가리켜라.
+      #                         ⚠️ chat template 은 이 컨테이너가 적용하지 않는다 —
+      #                         tokenizer 가 없고, 적용 주체가 배포의 서빙 엔진마다 달라
+      #                         (임베드 vLLM=미적용 / llama.cpp·TGI=엔진 적용) 여기서 붙이면
+      #                         후자에서 이중 적용이 된다. 같은 이유로 원본 generate_batch 의
+      #                         enable_thinking=False 가 사라진다(사고 블록은 걷어낸다).
+      #                         ⚠️ 생성 파라미터도 shim 이 무시하고 배포 설정을 따르므로
+      #                         이 경로는 결정론적이지 않을 수 있다. 로컬 경로 점수와 직접
+      #                         비교 금지 — metrics.generate 와 evaluate.mode 에 새긴다.
+      #                         SSRF 가드: http/https 만, 경로 '..'·자격증명 금지,
+      #                         link-local/multicast 로 resolve 되면 거부.
       # benchmarks            : [{benchmark: mixatis, metric: joint_acc|intent_acc|intent_f1|slot_f1}]
       # limit                 : 앞 N 발화만(디버그). 분모가 달라지므로 full 값과 비교 금지.
       # batch_size            : 생성 배치(기본 16 — 원본 run_experiment.sh 기본값).
@@ -65,6 +94,7 @@ spec:
       # split                 : 평가 split(기본 test).
       # ── 학습 단계(0.2.0) ────────────────────────────────────────────────────
       # train                 : 평가 전 LoRA 학습 수행(**기본 true**). false = zero-shot.
+      #                         generate_base_url 을 주면 이 값과 무관하게 건너뛴다(위 참고).
       # train_examples        : 학습 SFT 예제 수(기본 3000 = 발화 1500 x 2문항).
       #                         0 이면 train split 전체(26324). 발화 단위로 시드 셔플 후 절단.
       # train_epochs          : 에폭(기본 1.0). 3000 예제 1 에폭 = 188 스텝 / A100 630 초 실측.

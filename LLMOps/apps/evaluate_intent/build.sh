@@ -9,13 +9,13 @@ set -euo pipefail
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LLMOPS_ROOT="$(cd "${APP_DIR}/../.." && pwd)"
-TAG="${TAG:-docker.io/acrylaaai/evaluate-intent:0.2.3}"
+TAG="${TAG:-docker.io/acrylaaai/evaluate-intent:0.2.4}"
 STAGE="${STAGE:-${TMPDIR:-/tmp}/intent-build}"
 OUT="${OUT:-${TMPDIR:-/tmp}/evaluate-intent.tar}"
 
 rm -rf "${STAGE}"
 mkdir -p "${STAGE}"
-cp "${APP_DIR}"/{Dockerfile,app.py,evaluate.py,train.py,scoring.py,requirements.txt,requirements-wrapper.txt} "${STAGE}/"
+cp "${APP_DIR}"/{Dockerfile,app.py,evaluate.py,train.py,scoring.py,remote.py,requirements.txt,requirements-wrapper.txt} "${STAGE}/"
 cp "${LLMOPS_ROOT}/Evaluation/Intent_web/ugen_data.py"              "${STAGE}/"
 cp "${LLMOPS_ROOT}/Evaluation/Intent_web/evaluate_qwen3_mixatis.py" "${STAGE}/"
 cp "${LLMOPS_ROOT}/Evaluation/Intent_web/train_qwen3_mixatis.py"    "${STAGE}/"

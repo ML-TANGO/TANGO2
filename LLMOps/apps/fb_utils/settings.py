@@ -256,14 +256,14 @@ BENCHMARK_MANIFEST_VERSION = os.getenv('BENCHMARK_MANIFEST_VERSION', '0.2.0')
 #   LOGICKOR_MANIFEST_NAME=evaluate-logickor  LOGICKOR_MANIFEST_VERSION=0.1.0
 # 두 이미지는 같은 집계 로직(apps/evaluate_logickor/scoring.py)을 공유해 출력 계약이 같다.
 LOGICKOR_MANIFEST_NAME = os.getenv('LOGICKOR_MANIFEST_NAME', 'evaluate-logickor-judge')
-LOGICKOR_MANIFEST_VERSION = os.getenv('LOGICKOR_MANIFEST_VERSION', '0.2.3')
+LOGICKOR_MANIFEST_VERSION = os.getenv('LOGICKOR_MANIFEST_VERSION', '0.2.5')
 
 # MixATIS 다중의도·슬롯 채점 컨테이너(apps/evaluate_intent). 벤치마크 'mixatis' 를 고른
 # 런만 이 manifest 로 라우팅된다(service.run_benchmark 의 REAL_BENCHMARK_MANIFEST_KEY).
 # LogicKor 와 달리 심판 LLM 이 없어 결정론적이다 — 재실행하면 같은 값이 나오므로
 # 이식본과 원본의 숫자를 직접 대조해 검증할 수 있다.
 MIXATIS_MANIFEST_NAME = os.getenv('MIXATIS_MANIFEST_NAME', 'evaluate-intent')
-MIXATIS_MANIFEST_VERSION = os.getenv('MIXATIS_MANIFEST_VERSION', '0.2.3')
+MIXATIS_MANIFEST_VERSION = os.getenv('MIXATIS_MANIFEST_VERSION', '0.2.4')
 
 # SDS 도메인(3.5) 모델 생성 시 자동 바인딩되는 외부 컨테이너 manifest 의 고정 버전.
 # 사용자는 모델 생성에서 domain=SDS 만 고르고 버전은 안 고른다 → create_model 이

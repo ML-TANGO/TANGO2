@@ -43,6 +43,8 @@ COPY train_qwen3_mixatis.py /srv/train_qwen3_mixatis.py
 COPY data /srv/data
 
 COPY scoring.py /srv/scoring.py
+# 원격 생성(배포 위임) 클라이언트. httpx 만 쓰므로 requirements 추가 없음.
+COPY remote.py /srv/remote.py
 COPY evaluate.py /srv/evaluate.py
 COPY train.py /srv/train.py
 COPY app.py /srv/app.py

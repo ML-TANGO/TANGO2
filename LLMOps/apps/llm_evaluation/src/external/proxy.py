@@ -38,6 +38,7 @@ class ExternalContainerClient:
         workspace_id: int,
         params: dict[str, Any],
         namespace: str = _PLATFORM_NAMESPACE,
+        gpu_count: int | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "manifest_name": manifest_name,
@@ -46,6 +47,12 @@ class ExternalContainerClient:
             "namespace": namespace,
             "params": params,
         }
+        # 자원 오버라이드. **키를 빼는 것과 0 을 넣는 것은 다르다** — 수신측
+        # (fb_external_container lifecycle)이 `gpu_count is not None` 으로 판정해
+        # 없으면 manifest.spec.resources.gpu 를 그대로 쓰고, 0 이면 GPU 를 요청하지
+        # 않는다. 그래서 여기서도 falsy 가 아니라 None 으로 걸러야 0 이 살아남는다.
+        if gpu_count is not None:
+            payload["gpu_count"] = int(gpu_count)
         return await self._post("/api/v1/jobs", json=payload, expected_status=202)
 
     async def get_job(self, job_id: str) -> dict[str, Any]:

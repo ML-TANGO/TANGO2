@@ -16,8 +16,19 @@ joint_acc 0.0 이었다(같은 가중치에 1500 발화 1 에폭을 태우자 0.
 어떤 레시피였는지는 metrics.json 의 `train` 절에 새긴다. `train: false` 로 부르면
 0.1.0 과 완전히 같은 zero-shot 경로다(형식 미학습을 진단할 때 쓴다).
 
+0.2.4 부터 생성을 **이미 떠 있는 배포**에 위임할 수 있다(`generate_base_url`). 그러면
+가중치를 이 잡에 마운트하지 않으므로 체크포인트가 필요 없고 GPU 점유가 0 이 된다.
+⚠️ 이 경로에서는 **학습 단계를 돌리지 않는다**. 학습은 로컬 체크포인트 위에 LoRA 를 얹어
+`adapter_dir` 로 로컬 모델 로드에 넘기는 것이고, 배포에는 그 어댑터를 붙일 방법이 없다 —
+돌리면 GPU 를 쓰고 나온 어댑터를 아무도 안 쓰는 데다 metrics.train 이 "학습했다"고
+거짓을 말한다. 즉 위임 경로의 점수는 **배포된 모델 그대로의 점수**이며, UGEN 형식을
+배우지 않은 모델을 배포해 두면 전 지표가 0 에 가깝게 나온다(위 실측과 같은 이유).
+형식 학습이 필요하면 학습된 커밋을 배포한 뒤 그 배포를 가리키거나, 위임 없이 이 잡이
+체크포인트를 받아 학습+평가를 함께 도는 종전 경로를 쓰면 된다.
+
 LogicKor 채점기와의 차이 — 이쪽은 심판 LLM 이 없다. 정답(BIO 태그 + 의도 라벨)이
 데이터에 있어 지표가 결정론적이고, 같은 체크포인트면 몇 번을 돌려도 같은 값이 나온다.
+(단, 위임 경로는 생성 파라미터를 배포가 정하므로 그 결정성이 배포 설정에 매인다.)
 """
 from __future__ import annotations
 
@@ -46,7 +57,7 @@ JF_TOTAL_GPU      = os.environ.get("JF_TOTAL_GPU", "1")
 JF_PORT           = int(os.environ.get("JF_PORT", "8000"))
 
 NAME = "evaluate-intent"
-VERSION = "0.2.3"
+VERSION = "0.2.4"
 
 # 평가: 828 발화 × 2 생성(의도·슬롯) = 1656 회. transformers generate(greedy) 라 vLLM
 # 대비 느리다 — 배치 16 기준 A100 한 장에서 20~40 분.
@@ -183,7 +194,12 @@ def _resolve_metric(params: dict) -> str:
 
 
 def _resolve_checkpoint(params: dict) -> str:
-    """params → 평가할 체크포인트 디렉토리. evaluate-logickor-judge 와 같은 규약."""
+    """params → 평가할 체크포인트 디렉토리. evaluate-logickor-judge 와 같은 규약.
+
+    생성을 배포에 위임하는 경우(generate_base_url)에는 **호출되지 않는다** — 마운트할
+    가중치가 없고, 여기서 이름을 해석해 두면 평가에 쓰이지 않은 체크포인트가
+    metrics.checkpoint 에 새겨진다(_run_job 주석 참고).
+    """
     name = str(params.get("checkpoint_name") or "").strip()
     if name:
         if "/" in name or "\\" in name or name in (".", ".."):
@@ -194,7 +210,8 @@ def _resolve_checkpoint(params: dict) -> str:
     else:
         raise ValueError(
             "checkpoint_name 이 필요하다 — 이 벤치마크는 평가할 모델 가중치가 있어야 한다 "
-            "(BE 가 commit_id 를 커밋 이름으로 풀어 넘긴다)")
+            "(BE 가 commit_id 를 커밋 이름으로 풀어 넘긴다). 이미 떠 있는 배포로 평가하려면 "
+            "generate_base_url 을 주어라")
 
     real = os.path.realpath(path)
     if not any(real == os.path.realpath(root)
@@ -255,7 +272,13 @@ async def info():
         "stage": "train+evaluate",
         "trains": True,
         "train_default": True,
+        # 생성을 이미 떠 있는 배포에 위임할 수 있다(GPU 0). 그 경로에서는 학습을 돌리지
+        # 않는다 — 배포에 LoRA 어댑터를 붙일 방법이 없다(_run_job 주석 참고).
+        "remote_generate": True,
         # 심판 LLM 이 없다는 사실 자체가 이 채점기의 성질이라 알린다(재현성 보장).
+        # ⚠️ 채점(집계)은 언제나 결정론적이지만, generate_base_url 로 생성을 위임하면
+        # 생성 파라미터를 배포가 정하므로 그 런의 재현성은 배포 설정에 매인다. /info 는
+        # 런타임 파라미터를 모르므로 여기서는 채점기의 성질만 알린다.
         "deterministic": True,
         **CAPABILITIES,
     }
@@ -315,9 +338,24 @@ async def _run_job(job_id: str, params: dict) -> None:
     j = _jobs[job_id]
     try:
         import evaluate  # torch/transformers 임포트가 무거워 잡 시작 시점에.
+        import remote
 
         metric = _resolve_metric(params)
-        checkpoint = _resolve_checkpoint(params)
+        # 생성 위임 — 있으면 체크포인트를 아예 해석하지 않는다. 둘 다 오면 원격이 이긴다
+        # (evaluate-logickor-judge 와 같은 배타 규약): 배포가 어떤 가중치를 올려 뒀는지
+        # 컨테이너는 알 수 없으므로, checkpoint_name 을 받아 metrics.checkpoint 에 새기면
+        # "그 커밋을 평가했다"는 거짓이 된다 — 체크포인트 간 비교가 바로 그 필드에 기대므로
+        # 조용히 두면 비교표가 오염된다.
+        generate_base_url = remote.validate_base_url(params.get("generate_base_url"))
+        checkpoint = ("" if generate_base_url
+                      else _resolve_checkpoint(params))
+        if generate_base_url and (params.get("checkpoint_name")
+                                  or params.get("use_latest_checkpoint")):
+            _emit("log", level="warn", job_id=job_id, endpoint=generate_base_url.url,
+                  message="generate_base_url 이 지정되어 checkpoint_name/"
+                          "use_latest_checkpoint 를 무시한다 — 평가 대상은 배포가 확정하며 "
+                          "metrics.checkpoint 를 쓰지 않는다(대신 metrics.generate)",
+                  checkpoint_name=str(params.get("checkpoint_name") or "") or None)
         # limit 은 디버그용 — 분모가 달라지므로 full 값과 나란히 비교하면 안 된다.
         limit = int(params.get("limit") or 0)
         batch_size = int(params.get("batch_size") or evaluate.DEFAULT_BATCH_SIZE)
@@ -335,8 +373,23 @@ async def _run_job(job_id: str, params: dict) -> None:
         # 끄는 경로를 남기는 이유: 0.0 이 나왔을 때 "형식을 몰라서"인지 "이식이 깨져서"인지
         # 가르는 진단 수단이 zero-shot 런이기 때문이다.
         train_enabled = params.get("train", True) is not False
+        if generate_base_url and train_enabled:
+            # 위임 경로에서는 학습이 의미를 잃는다 — 학습 산출 LoRA 는 `adapter_dir` 로
+            # **로컬** 모델 로드에 얹는 것이고, 원격 배포에 붙일 통로가 없다. 그대로 돌리면
+            # GPU 를 쓰고 나온 어댑터를 아무도 안 쓰는데 metrics.train 은 "학습했다"고
+            # 말하게 된다 → 조용히 끄지 않고 사유를 남기며 끈다.
+            _emit("log", level="warn", job_id=job_id, endpoint=generate_base_url.url,
+                  message="generate_base_url 이 지정되어 학습 단계를 건너뛴다 — 학습 LoRA 는 "
+                          "원격 배포에 얹을 수 없다. 점수는 '배포된 모델 그대로'의 값이며 "
+                          "UGEN 형식을 배우지 않은 모델이면 전 지표가 0 에 가깝게 나온다 "
+                          "(학습이 필요하면 학습된 커밋을 배포하거나 체크포인트를 넘겨라)")
+            train_enabled = False
         adapter_dir = ""
         train_info = {"trained": False}
+        if generate_base_url:
+            train_info["skipped_reason"] = (
+                "생성을 배포에 위임(generate_base_url) — 학습 LoRA 를 원격 배포에 얹을 수 "
+                "없어 학습 단계를 돌리지 않는다. 점수는 배포된 모델 그대로의 값이다")
         if train_enabled:
             import train as trainer  # peft/Trainer 임포트가 무거워 이 시점에.
 
@@ -364,7 +417,7 @@ async def _run_job(job_id: str, params: dict) -> None:
         out = await asyncio.to_thread(
             evaluate.run_evaluate, checkpoint, JF_OUTPUT_PATH, _gpu_devices(),
             split, limit, batch_size, max_new_tokens, use_4bit,
-            evaluate.DATA_DIR, eval_progress, adapter_dir)
+            evaluate.DATA_DIR, eval_progress, adapter_dir, generate_base_url)
 
         if j["cancel"]:
             raise asyncio.CancelledError
@@ -379,7 +432,19 @@ async def _run_job(job_id: str, params: dict) -> None:
         # 어떤 레시피로 낸 점수인지 — 0.2.0 부터 점수는 "체크포인트 + 이 학습"의 값이다.
         metrics["train"] = train_info
         # 어느 체크포인트로 낸 점수인지가 체크포인트 간 비교의 전제라 런에 새긴다.
-        metrics["checkpoint"] = {"name": os.path.basename(checkpoint), "path": checkpoint}
+        # 위임 경로는 체크포인트가 없으므로 대신 어느 배포로 냈는지를 남긴다.
+        if checkpoint:
+            metrics["checkpoint"] = {"name": os.path.basename(checkpoint),
+                                     "path": checkpoint}
+        if generate_base_url:
+            metrics["generate"] = {
+                "mode": "remote", "endpoint": generate_base_url.url,
+                "model": out["stats"].get("model"),
+                "errors": out["stats"].get("generate_errors", 0),
+                "note": ("원격 생성 위임 · chat template 과 생성 파라미터는 배포 설정을 "
+                         "따르고 학습 단계는 건너뛴다 — 이 컨테이너는 프롬프트와 채점만 "
+                         "소유한다. 로컬 경로 점수와 직접 비교하지 마라"),
+            }
         metrics["_meta"] = {"name": NAME, "version": VERSION, "item_id": JF_ITEM_ID}
 
         os.makedirs(JF_OUTPUT_PATH, exist_ok=True)
@@ -392,7 +457,8 @@ async def _run_job(job_id: str, params: dict) -> None:
         _emit("log", level="info", message="mixatis evaluate finished", job_id=job_id,
               joint_acc=agg["joint_acc"], intent_f1=agg["intent"]["f1"],
               slot_f1=agg["slot"]["f1"], count=agg["count"],
-              checkpoint=os.path.basename(checkpoint),
+              checkpoint=os.path.basename(checkpoint) if checkpoint else None,
+              generate_mode=out["stats"].get("mode"),
               trained=bool(train_info.get("trained")))
     except asyncio.CancelledError:
         j["status"] = "cancelled"

@@ -11,25 +11,40 @@ evaluate-logickor(CPU, 집계 전용)와의 관계
     두 경로의 점수 정의가 갈라지지 않는다.
   - 플랫폼은 LOGICKOR_MANIFEST_NAME env 로 어느 쪽을 쓸지 고른다(코드 변경 없음).
 
-생성(generate) 단계
+생성(generate) 단계 — 세 경로
   - `checkpoint_name` 을 주면 그 체크포인트로 42문항 × 2턴을 먼저 생성한 뒤 채점한다
     (`generate → judge → score` 한 런). 가중치는 차트가 이미 RO 마운트해 둔
     /models/checkpoints/<commit_name> 에서 읽는다 — 컨테이너가 받는 것은 경로가 아니라
     커밋 이름뿐이다.
+  - `generate_base_url` 을 주면 **이미 떠 있는 배포**에 생성을 위임하고 대상 모델을
+    올리지 않는다. 체크포인트 마운트가 필요 없어지고 생성 단계의 GPU 점유가 사라진다.
+    ⚠️ chat template 과 생성 파라미터를 배포가 정하므로 로컬 경로 점수와 직접 비교할 수
+    없다(generate.py `_generate_remote` 주석에 계약·한계 전부). 둘 다 오면 원격이 이긴다.
   - 대상 모델과 심판 모델은 **순차로** 올린다(생성 → GPU 해제 → 심판). 동시에 올리면
     카드가 2장 필요해지고 manifest 의 gpu:1 전제가 깨진다.
-  - `checkpoint_name` 이 없으면 종전대로 데이터셋의 미채점 생성물을 채점한다(하위호환).
+  - 둘 다 없으면 종전대로 데이터셋의 미채점 생성물을 채점한다(하위호환).
+
+심판(judge) 단계 — 두 경로
+  - 기본: 심판 모델 가중치를 이 잡이 vLLM 으로 직접 올린다(종전 그대로).
+  - `judge_base_url` 을 주면 **이미 떠 있는 배포**(플랫폼의 OpenAI 호환 shim)에 채점을
+    요청하고 vLLM 로드를 건너뛴다. 심판 가중치 로드(수 분)와 GPU 점유가 사라지지만,
+    ⚠️ shim 이 temperature·max_tokens 를 무시하므로 **생성 파라미터가 배포 시점 설정을
+    따른다** — 점수 재현성이 심판 배포 설정에 매인다(judge.py 상단 주석 참고).
+    심판 배포가 없는 환경도 있으므로 vLLM 경로는 유지된다.
 """
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import json
 import os
+import socket
 import sys
 import threading
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 from fastapi import Body, FastAPI
 from fastapi.responses import JSONResponse
@@ -48,7 +63,7 @@ JF_TOTAL_GPU      = os.environ.get("JF_TOTAL_GPU", "1")
 JF_PORT           = int(os.environ.get("JF_PORT", "8000"))
 
 NAME = "evaluate-logickor-judge"
-VERSION = "0.2.3"
+VERSION = "0.2.5"
 
 # 모델 로드가 (생성 1회 + 심판 1회) 수 분씩, 생성·채점이 각각 42문항×2턴이라 mock/집계기와
 # 시간 규모가 다르다. 생성 단계가 붙어 0.1.x 대비 소요가 대략 2배다.
@@ -200,6 +215,96 @@ def _resolve_input_root(params: dict) -> str:
     return root
 
 
+def _resolve_remote_base_url(params: dict, key: str):
+    """원격 엔드포인트(OpenAI 호환 base) 검증. 미지정이면 None(= 종전 로컬 vLLM 경로).
+    반환은 judge.RemoteEndpoint — 표시용 원본 URL + **연결용으로 고정한 IP** + Host 헤더다.
+
+    두 키가 같은 규칙을 쓴다 — `judge_base_url`(심판 위임)과 `generate_base_url`
+    (생성 위임). 가리키는 곳은 둘 다 플랫폼 배포의 OpenAI shim
+    (`http://<llm-playground>/api/playgrounds/<id>/openai/v1`)이다 — 서빙 pod 자체는
+    OpenAI HTTP API 를 노출하지 않는다. 이 값을 주면 해당 단계의 모델을 GPU 에 새로
+    올리지 않고 이미 떠 있는 배포에 요청한다.
+
+    params 로 받은 URL 을 검증 없이 열면 SSRF 다. llm_evaluation 의 `_validate_local_url`
+    (evaluation/service.py) 과 같은 목적·수준으로 막는다:
+      - scheme 은 http/https 만
+      - 경로에 '..' 금지, userinfo(자격증명) 금지
+      - **모든** resolve 결과를 검사한다(라운드로빈/멀티레코드로 한 건만 통과시키는 우회
+        차단). link-local(169.254.169.254 등 메타데이터)·multicast·unspecified 면 거부.
+      - 검증한 IP 를 **연결에 고정**한다. 호스트명만 돌려주면 httpx 가 연결 시점에 다시
+        resolve 해서, 검사한 주소와 실제로 붙는 주소가 달라지는 DNS rebinding TOCTOU
+        창이 열린다. `_judge_local`(service.py) 이 (safe_ip, host_header) 로 붙는 것과
+        같은 방식이다.
+    loopback/private 는 허용한다 — 대상이 클러스터 내부 svc 라 막으면 기능 자체가 성립하지
+    않는다(is_reserved 는 IPv6 loopback(::1)까지 잡아 127.0.0.1 과 비일관이라 쓰지 않는다).
+
+    IP 고정은 잡 시작 시 1회다. 대상은 Service DNS 이름 → ClusterIP 이고 ClusterIP 는
+    Service 수명 동안 고정이라(파드가 재스케줄돼도 바뀌지 않는다) 잡이 도는 내내 유효하다.
+    """
+    # judge 는 이 시점에 이미 로드돼 있다(_run_job 이 잡 시작 시 import 한다). vLLM 런타임
+    # env 를 앱 기동이 아니라 잡 시작에 세팅한다는 그쪽 결정을 깨지 않으려 여기서 늦게 받는다.
+    from judge import RemoteEndpoint
+
+    raw = str(params.get(key) or "").strip()
+    if not raw:
+        return None
+    parsed = urlparse(raw)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(f"{key} must be http or https")
+    if not parsed.hostname:
+        raise ValueError(f"{key} has no host")
+    if parsed.username or parsed.password:
+        raise ValueError(f"{key} must not carry credentials")
+    if ".." in (parsed.path or ""):
+        raise ValueError(f"{key} path must not contain '..'")
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    try:
+        infos = socket.getaddrinfo(parsed.hostname, port)
+    except OSError as exc:
+        # 여기서 실패하면 84건을 쏘아 전량 실패하는 대신 바로 멈춘다(사유가 명확하다).
+        raise ValueError(f"{key} host not resolvable: {parsed.hostname}") from exc
+    safe_ip = None
+    for info in infos:
+        try:
+            ip = ipaddress.ip_address(info[4][0])
+        except ValueError:
+            continue
+        if ip.is_link_local or ip.is_multicast or ip.is_unspecified:
+            raise ValueError(f"{key} resolves to a disallowed address")
+        if safe_ip is None:
+            safe_ip = info[4][0]
+    if safe_ip is None:
+        raise ValueError(f"{key} host not resolvable: {parsed.hostname}")
+    port_seg = f":{parsed.port}" if parsed.port else ""
+    path = (parsed.path or "").rstrip("/")
+    # query/fragment 는 base URL 에 의미가 없어 버린다(종전에도 'base?x=1' + '/models' 는
+    # 깨진 URL 이 됐다). IPv6 는 대괄호로 감싼다 — 안 그러면 포트 구분자와 섞인다.
+    connect_url = f"{parsed.scheme}://{_bracket(safe_ip)}{port_seg}{path}"
+    host_header = f"{_bracket(parsed.hostname)}{port_seg}"
+    return RemoteEndpoint(url=raw.rstrip("/"), connect_url=connect_url,
+                          host_header=host_header,
+                          # https 면 IP 로 붙되 TLS SNI·인증서 검증은 원래 이름으로 한다.
+                          sni=parsed.hostname if parsed.scheme == "https" else None)
+
+
+def _bracket(host: str) -> str:
+    """IPv6 리터럴은 대괄호로 감싼다(URL 의 포트 구분자와 섞이지 않게)."""
+    return f"[{host}]" if ":" in host else host
+
+
+def _resolve_judge_base_url(params: dict):
+    """원격 심판 엔드포인트(judge.RemoteEndpoint). 없으면 None(= 심판 가중치를 직접 올린다)."""
+    return _resolve_remote_base_url(params, "judge_base_url")
+
+
+def _resolve_generate_base_url(params: dict):
+    """원격 생성 엔드포인트(judge.RemoteEndpoint). 없으면 None(= 체크포인트를 직접 올린다).
+
+    이 값이 있으면 체크포인트 마운트가 아예 필요 없다 — 배포가 이미 그 가중치를 올려 뒀다.
+    """
+    return _resolve_remote_base_url(params, "generate_base_url")
+
+
 def _resolve_checkpoint(params: dict) -> Optional[str]:
     """params → 생성에 쓸 체크포인트 디렉토리. 미지정이면 None(= 채점 전용 모드).
 
@@ -272,9 +377,12 @@ async def info():
         "metrics": list(scoring.SUPPORTED_METRICS),
         "recommended_metric": {scoring.BENCHMARK_ID: scoring.DEFAULT_METRIC},
         "mock": False,
-        # checkpoint_name 을 주면 generate 부터, 없으면 judge 부터 — 런타임 파라미터로
-        # 갈리므로 두 경우를 다 알린다.
+        # checkpoint_name 또는 generate_base_url 을 주면 generate 부터, 없으면 judge
+        # 부터 — 런타임 파라미터로 갈리므로 두 경우를 다 알린다.
         "stage": "generate+judge+score",
+        # 생성·심판 둘 다 이미 떠 있는 배포에 위임할 수 있다(GPU 0 으로도 완주 가능).
+        "remote_generate": True,
+        "remote_judge": True,
         "strategies": ["default"],
         **CAPABILITIES,
     }
@@ -342,10 +450,44 @@ async def _run_job(job_id: str, params: dict) -> None:
         judge_model = str(params.get("judge_model") or judge.DEFAULT_JUDGE_MODEL).strip()
         model_len = int(params.get("judge_model_len") or 8192)
         max_out = int(params.get("judge_max_output_tokens") or 1024)
+        # 원격 심판이 있으면 그쪽이 이긴다 — judge_model(HF repo id)은 "심판 가중치를 이
+        # GPU 에 올려라" 는 지시이고 judge_base_url 은 "이미 떠 있는 배포에 물어봐라" 라서
+        # 둘은 배타적이다. 원격이 지정된 이상 어떤 모델인지는 엔드포인트가 확정하므로
+        # (GET /models 의 data[0].id) judge_model 을 따르는 척하면 결과가 거짓이 된다.
+        judge_base_url = _resolve_judge_base_url(params)
+        if judge_base_url and str(params.get("judge_model") or "").strip():
+            _emit("log", level="warn", job_id=job_id,
+                  message="judge_base_url 이 지정되어 judge_model 을 무시한다 "
+                          "(심판 모델은 엔드포인트가 확정한다)",
+                  judge_model=str(params.get("judge_model")).strip())
+        if judge_base_url:
+            # 재현성 경고 — shim 은 temperature·max_tokens 를 무시하고 배포 시점 설정을
+            # 따른다. 심판 배포가 temperature 0 이 아니면 같은 입력에 다른 점수가 나온다.
+            _emit("log", level="warn", job_id=job_id, endpoint=judge_base_url.url,
+                  message="원격 심판 사용 — 생성 파라미터(temperature/max_tokens)는 "
+                          "요청이 아니라 **배포 시점 설정**을 따른다. 점수 재현이 필요하면 "
+                          "심판 배포를 temperature 0 으로 띄워라")
         # HF 토큰은 params 로 받되 로그·산출물에 절대 싣지 않는다.
         hf_token = params.get("hf_token") or os.environ.get("HF_TOKEN") or None
 
-        checkpoint = _resolve_checkpoint(params)
+        # 생성 위임 — 있으면 체크포인트를 올리지 않는다. 둘 다 오면 원격이 이긴다
+        # (judge_base_url vs judge_model 과 같은 배타 규약): 배포가 이미 어떤 가중치를
+        # 올려 뒀는지 컨테이너는 알 수 없으므로, 체크포인트를 따르는 척하면 결과가 거짓이 된다.
+        generate_base_url = _resolve_generate_base_url(params)
+        checkpoint = _resolve_checkpoint(params) if not generate_base_url else None
+        if generate_base_url and (params.get("checkpoint_name")
+                                  or params.get("use_latest_checkpoint")):
+            _emit("log", level="warn", job_id=job_id, endpoint=generate_base_url.url,
+                  message="generate_base_url 이 지정되어 checkpoint_name/"
+                          "use_latest_checkpoint 를 무시한다 "
+                          "(생성 대상은 배포가 확정한다)")
+        if generate_base_url:
+            _emit("log", level="warn", job_id=job_id, endpoint=generate_base_url.url,
+                  message="원격 생성 사용 — chat template 과 생성 파라미터"
+                          "(temperature/max_tokens)는 이 컨테이너가 아니라 **배포**가 "
+                          "정한다. enable_thinking=False 를 걸 수 없으므로 thinking "
+                          "모델은 배포 쪽에서 꺼야 한다(사고 블록은 걷어내지만 그 답변은 "
+                          "빈 출력이 된다)")
 
         def progress(p: float, msg: str) -> None:
             if j["cancel"]:
@@ -356,15 +498,15 @@ async def _run_job(job_id: str, params: dict) -> None:
         # ── 1) 생성 (checkpoint_name 을 준 경우만) ──
         # 대상 모델을 올려 42문항 × 2턴을 만들고 GPU 를 비운다. 심판 로드가 그 뒤에 온다.
         gen_stats = None
-        if checkpoint:
+        if checkpoint or generate_base_url:
             import generate  # vLLM 로드가 무거워 이 시점에.
 
             gen_model_len = int(params.get("generate_model_len") or 4096)
             strategy = str(params.get("strategy") or generate.DEFAULT_STRATEGY).strip()
             gen_stats = await asyncio.to_thread(
-                generate.run_generate, checkpoint, generated_dir, _gpu_devices(),
+                generate.run_generate, checkpoint or "", generated_dir, _gpu_devices(),
                 gen_model_len, strategy, generate.QUESTIONS_PATH,
-                _scaled(0.0, 0.5, progress))
+                _scaled(0.0, 0.5, progress), generate_base_url)
             in_root = generated_dir
             if j["cancel"]:
                 raise asyncio.CancelledError
@@ -378,7 +520,7 @@ async def _run_job(job_id: str, params: dict) -> None:
         stats = await asyncio.to_thread(
             judge.run_judge, in_root, evaluated_dir, judge_model,
             _gpu_devices(), model_len, max_out, hf_token,
-            _scaled(0.5, 0.95, progress))
+            _scaled(0.5, 0.95, progress), judge_base_url=judge_base_url)
 
         if j["cancel"]:
             raise asyncio.CancelledError
@@ -398,7 +540,19 @@ async def _run_job(job_id: str, params: dict) -> None:
             "unscored": stats["unscored"],
             # 형식 불량으로 아예 제외된 행 수 — 조용한 누락을 결과에 남긴다.
             "skipped": stats["skipped"],
+            # 심판 호출 자체가 실패한 건수(원격 경로에서만 0 이 아닐 수 있다). unscored 의
+            # 부분집합이다 — "0 점" 중 몇 건이 모델의 판단이 아니라 통신 실패였는지.
+            "errors": stats.get("errors", 0),
+            # vllm(가중치를 이 잡이 직접 로드) | remote(이미 떠 있는 배포에 요청).
+            "mode": stats.get("judge_mode", "vllm"),
+            "endpoint": stats.get("judge_endpoint"),
         }
+        if stats.get("judge_mode") == "remote":
+            # 결과만 보고도 추적되게 남긴다 — 같은 체크포인트·같은 문항인데 점수가
+            # 달라졌을 때 첫 단서다(로그는 잡이 지워지면 같이 사라진다).
+            metrics["judge"]["note"] = (
+                "원격 심판 사용 · 생성 파라미터(temperature/max_tokens)는 배포 설정을 따른다 "
+                "— 요청의 temperature=0 은 플랫폼 shim 에서 무시된다")
         if gen_stats:
             # 어느 체크포인트로 만든 점수인지가 이 기능의 존재 이유(체크포인트 간 비교)라
             # metrics 에 남긴다 — eval_result 스키마를 건드리지 않고 런에 새기는 방법이다.
@@ -408,9 +562,20 @@ async def _run_job(job_id: str, params: dict) -> None:
                 "max_output_tokens": gen_stats["max_output_tokens"],
                 # 전부는 아니지만 일부가 빈 출력이면 점수가 조용히 깎이므로 노출한다.
                 "empty_rows": gen_stats["empty_rows"],
+                # vllm(이 잡이 가중치 로드) | remote(이미 떠 있는 배포에 위임).
+                "mode": gen_stats["mode"], "endpoint": gen_stats["endpoint"],
+                "model": gen_stats["model"], "errors": gen_stats["errors"],
             }
-            metrics["checkpoint"] = {"name": os.path.basename(checkpoint),
-                                     "path": checkpoint}
+            if gen_stats["mode"] == "remote":
+                # 결과만 보고도 추적되게 남긴다 — 심판 쪽 note 와 같은 취지다.
+                metrics["generate"]["note"] = (
+                    "원격 생성 위임 · chat template 과 생성 파라미터는 배포 설정을 따른다 "
+                    "— 이 컨테이너는 대화 내용과 2턴 구조만 소유하며 "
+                    "enable_thinking=False 를 걸 수 없다. 로컬 vLLM 경로 점수와 직접 "
+                    "비교하지 마라")
+            if checkpoint:
+                metrics["checkpoint"] = {"name": os.path.basename(checkpoint),
+                                         "path": checkpoint}
         metrics["_meta"] = {"name": NAME, "version": VERSION, "item_id": JF_ITEM_ID}
 
         os.makedirs(JF_OUTPUT_PATH, exist_ok=True)
@@ -424,7 +589,9 @@ async def _run_job(job_id: str, params: dict) -> None:
               message="logickor generate+judge+score finished" if gen_stats
                       else "logickor judge+score finished",
               job_id=job_id, overall=agg["overall"], count=agg["count"],
-              unscored=stats["unscored"],
+              unscored=stats["unscored"], errors=stats.get("errors", 0),
+              judge_mode=stats.get("judge_mode", "vllm"),
+              generate_mode=(gen_stats or {}).get("mode"),
               checkpoint=os.path.basename(checkpoint) if checkpoint else None)
     except asyncio.CancelledError:
         j["status"] = "cancelled"
