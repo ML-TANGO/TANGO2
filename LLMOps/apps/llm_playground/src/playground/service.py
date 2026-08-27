@@ -135,6 +135,87 @@ async def get_playground_list(workspace_id, user_id):
         traceback.print_exc()
     return result
 
+# 배포 후보 조회에서 한 번에 상태를 물을 최대 행 수. get_playground_status 는 redis·kube·
+# 외부 잡 트래커를 두드리므로 전부 동시에 던지면 그쪽이 먼저 무너진다. 목록 응답에 status 를
+# 붙이는 게 목적이라 호출 자체를 없앨 수는 없고, 동시성만 묶는다.
+RUNNING_DEPLOYMENT_STATUS_CONCURRENCY = 8
+
+
+async def get_running_deployments(workspace_id, model_id=None, commit_id=None):
+    """실행 중(running)인 배포만, 모델·커밋으로 걸러 반환한다.
+
+    평가(생성용 배포 빌리기 / 원격 심판 고르기)처럼 "지금 답할 수 있는 배포"만 필요한
+    소비자를 위한 read-model. 종전엔 화면이 전체 목록을 받아 status==='running' 으로
+    걸렀는데, 그 목록은 행마다 상태를 실측하므로 워크스페이스가 커질수록 느려지고 모델
+    기준 필터는 아예 없었다.
+
+    N+1 은 두 단계로 다룬다.
+      1) 후보를 SQL 에서 줄인다 — 워크스페이스 + model_allm_id/model_allm_commit_id +
+         한 번도 배포 안 한 행 제외 + dual 자식 제외(db.get_running_playground_candidates).
+         model_id 를 주면 보통 후보가 한 자릿수로 떨어진다.
+      2) 남은 후보의 상태만 동시에 실측한다(세마포어로 상한).
+    상태 실측 자체를 없애지는 못한다 — 배포 중지는 playground 행에 남지 않고(deployment
+    JSON 이 재배포용으로 보존된다) 파드 실측으로만 알 수 있기 때문이다. 캐시를 두려면
+    상태 조회 계층(get_playground_status)에 둬야 하고 그건 이 변경의 범위 밖이다.
+    """
+    rows = await db.get_running_playground_candidates(
+        workspace_id=workspace_id, model_id=model_id, commit_id=commit_id) or []
+    sem = asyncio.Semaphore(RUNNING_DEPLOYMENT_STATUS_CONCURRENCY)
+
+    async def _status(pid):
+        async with sem:
+            try:
+                return (await get_playground_status(playground_id=pid) or {}).get("status")
+            except Exception:
+                # 한 행의 상태 실측 실패가 목록 전체를 죽이지 않게(후보에서 빠질 뿐).
+                traceback.print_exc()
+                return None
+
+    statuses = await asyncio.gather(*(_status(r.get("id")) for r in rows))
+    result = []
+    for row, status in zip(rows, statuses):
+        if status != TYPE.KUBE_POD_STATUS_RUNNING:
+            continue
+        try:
+            model_json = json.loads(row.get("model") or "{}") or {}
+        except (TypeError, ValueError):
+            model_json = {}
+        dual = model_json.get("dual") or {}
+        item = {
+            "id": row.get("id"),
+            "name": row.get("name"),
+            "description": row.get("description"),
+            "workspace_id": row.get("workspace_id"),
+            "deploy_type": row.get("deploy_type") or "cluster",
+            "access": row.get("access"),
+            "status": status,
+            "create_datetime": row.get("create_datetime"),
+            "update_datetime": row.get("update_datetime"),
+            # 무엇이 올라가 있는지 — 호출자가 되묻지 않아도 되게 함께 내린다.
+            # 값은 model JSON 원본(문자열)이라 int 로 정규화한다. HF 직접 배포는 None.
+            "model_id": _as_int_or_none(model_json.get("model_allm_id")),
+            "commit_id": _as_int_or_none(model_json.get("model_allm_commit_id")),
+            "model_type": model_json.get("model_type"),
+            "model_huggingface_id": model_json.get("model_huggingface_id"),
+            "serving_system": model_json.get("serving_system") or "vllm",
+        }
+        if dual.get("mode") == "dual":
+            item["mode"] = "dual"
+            item["prompt_gen_playground_id"] = dual.get("prompt_gen_playground_id")
+        result.append(item)
+    return result
+
+
+def _as_int_or_none(value):
+    """model JSON 의 id 는 문자열(str(model_id))로 저장된다 — 경계에서 int 로 되돌린다."""
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 async def get_deployment_targets(workspace_id, user_id):
     """배포 타겟 통합 read-model — cluster/edge/standalone 3종을 정규화 envelope 로 반환.
     3종 모두 playground row(deploy_type 판별자)이며 workspace 스코프 — deploy_type 로 envelope 디스패치.

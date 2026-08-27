@@ -17,6 +17,34 @@ export const getPlayground = async (workspace_id) => {
   return res;
 };
 
+// 지금 running 인 배포만. model_id 를 주면 **그 모델을 서빙 중인** 배포로 좁힌다 —
+// 평가가 "출력을 만들 배포"를 고르는 후보 목록이다(BE 가 SQL 로 후보를 줄이고 남은 것만
+// 상태를 실측한다). 화면이 전체 목록을 받아 status==='running' 으로 거르던 경로를 대체한다:
+// 그 목록은 행마다 상태를 실측해 워크스페이스가 커질수록 느려지고, 모델 기준 필터가 없어
+// 다른 모델을 서빙하는 배포까지 후보로 세웠다.
+// model_id 를 빼면 워크스페이스의 running 전체 — 심판 배포처럼 대상 모델과 무관한 후보를
+// 고를 때 쓴다.
+export const getRunningPlaygrounds = async (workspace_id, model_id) => {
+  const res = await callApi({
+    url: 'playgrounds/running',
+    method: 'get',
+    params: {
+      workspace_id,
+      ...(model_id ? { model_id } : {}),
+    },
+  });
+  return res;
+};
+
+// 모델 필터가 0 건일 때 "배포가 아예 없다" 와 "있는데 이 모델 것이 아니다" 를 가른다.
+// HF 모델을 직접 올린 배포는 플랫폼 모델 id 가 NULL 이라 **어떤 model_id 필터에도 안 잡힌다** —
+// 사용자 눈에는 그 배포가 running 으로 떠 있으므로, 구분하지 않으면 "왜 목록에 없나" 를
+// 알아낼 방법이 없다. 조회를 아끼려고 **필터 결과가 비었을 때만** 부른다.
+export const hasAnyRunningPlayground = async (workspace_id) => {
+  const res = await getRunningPlaygrounds(workspace_id);
+  return res.status === STATUS_SUCCESS && (res.result?.length ?? 0) > 0;
+};
+
 // 배포 타겟 통합 read-model(cluster/edge/standalone) — deployment_envelope 정규화 목록.
 export const getDeploymentTargets = async (workspace_id) => {
   const res = await callApi({

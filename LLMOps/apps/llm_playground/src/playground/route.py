@@ -173,6 +173,23 @@ async def get_deployment_targets(workspace_id: int=None):
         traceback.print_exc()
         return response(status=0, message=str(e), result=None)
 
+@playgrounds.get("/running", summary='실행 중 배포 목록(모델·커밋 필터)', tags=TAG_LIST)
+async def get_running_deployments(workspace_id: int, model_id: int = None,
+                                  commit_id: int = None):
+    """지금 running 인 배포만 반환한다. model_id/commit_id 를 주면 그 모델(커밋)을 서빙
+    중인 배포로 좁힌다 — 평가가 생성용 배포를 빌리거나 원격 심판을 고를 때의 후보 목록.
+
+    ⚠️ 이 라우트는 아래 "/{playground_id}" 보다 **먼저** 등록돼야 한다(FastAPI 는 등록
+       순서로 매칭 — 뒤에 두면 'running' 이 playground_id 로 잡혀 422 가 난다).
+    """
+    try:
+        res = await svc.get_running_deployments(
+            workspace_id=workspace_id, model_id=model_id, commit_id=commit_id)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
 @playgrounds.post("",summary='목록페이지 - 목록 페이지에서 생성', tags=TAG_LIST)
 async def create_playground(body: dto.CreatePlaygroundInput):
     """

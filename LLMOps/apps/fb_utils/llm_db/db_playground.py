@@ -15,6 +15,50 @@ async def get_playground_list(workspace_id=None):
     res = await select_query(sql, params=(TYPE.TIME_DATE_FORMAT_SQL, TYPE.TIME_DATE_FORMAT_SQL))
     return res
 
+async def get_running_playground_candidates(workspace_id, model_id=None, commit_id=None):
+    """배포 선택 UI 용 후보 조회 — 워크스페이스 + (선택) 모델·커밋으로 **SQL 에서** 좁힌다.
+
+    왜 별도 쿼리인가. get_playground_list 는 워크스페이스 전체를 돌려주고 호출자가 행마다
+    get_playground_status 를 부른다(N+1). 그 상태 조회는 redis·kube·외부 잡 트래커까지
+    두드리므로 행 수에 그대로 비례한다. "이 모델을 서빙 중인 배포"를 찾는 데 워크스페이스의
+    모든 배포 상태를 실측할 이유가 없다 → 상태를 묻기 **전에** 후보를 줄인다.
+
+    필터 가능한 범위는 playground.model JSON 이 실제로 담고 있는 것으로 정해진다
+    (update_playground_options 가 유일한 writer):
+      model_type / model_huggingface_id / model_allm_id / model_allm_commit_id /
+      model_info / serving_system / dual{...}
+    playground 테이블엔 model_id 컬럼이 없고 플랫폼 모델·커밋 id 는 **문자열로** JSON 에
+    들어간다(str(model_id)) → JSON_UNQUOTE 로 꺼내 문자열 비교한다.
+    HuggingFace 직접 배포는 model_allm_id 가 NULL 이라 model_id 필터에 잡히지 않는다(정상 —
+    플랫폼 모델을 평가 대상으로 고르는 화면이 이 필터의 소비자다).
+
+    이중 세션의 자식(prompt_child)은 제외한다 — 목록에 노출되지 않는 내부 행이고,
+    단독으로 추론 대상이 될 수 없다(부모가 세션의 대표).
+    deployment IS NULL(한 번도 배포한 적 없음)도 뺀다 — 상태가 언제나 stop 이라 물어볼
+    필요가 없다. **중지된 배포는 여기서 걸러지지 않는다**(중지 후에도 deployment JSON 이
+    재배포용으로 남는다) → running 판정은 호출자가 상태 실측으로 한다.
+    """
+    sql = """
+    SELECT p.id, p.name, p.workspace_id, p.create_user_id, p.description, p.access,
+           p.deploy_type, p.deployment, p.model,
+           DATE_FORMAT(p.create_datetime, %s) create_datetime,
+           DATE_FORMAT(p.update_datetime, %s) update_datetime
+    FROM playground p
+    WHERE p.workspace_id = %s
+      AND p.deployment IS NOT NULL
+      AND COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p.model, '$.dual.role')), '') <> 'prompt_child'
+    """
+    params = [TYPE.TIME_DATE_FORMAT_SQL, TYPE.TIME_DATE_FORMAT_SQL, workspace_id]
+    if model_id is not None:
+        sql += " AND JSON_UNQUOTE(JSON_EXTRACT(p.model, '$.model_allm_id')) = %s "
+        params.append(str(model_id))
+    if commit_id is not None:
+        sql += " AND JSON_UNQUOTE(JSON_EXTRACT(p.model, '$.model_allm_commit_id')) = %s "
+        params.append(str(commit_id))
+    sql += " ORDER BY p.id DESC "
+    return await select_query(sql, params=tuple(params))
+
+
 async def get_playground(playground_id):
     """
     p.id, p.name, p.workspace_id, p.create_user_id, p.description,
