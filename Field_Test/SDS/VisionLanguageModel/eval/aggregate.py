@@ -53,8 +53,10 @@ NUMERIC_FIELDS = [
     ("타선 침로", "tgt_course"), ("타선 속력", "tgt_speed"),
 ]
 
+# Gemma 4 는 CLIP 계열과 계보가 다른 별도 기준선이므로 맨 뒤에 둔다.
 ORDER = ["qwen3_clean", "qwen3_marine", "qwen3_sds9k",
-         "llama31_clean", "llama31_marine", "llama31_sds9k"]
+         "llama31_clean", "llama31_marine", "llama31_sds9k",
+         "gemma4_sds9k"]
 
 LABEL = {
     "qwen3_clean":   "Qwen3 clean",
@@ -63,6 +65,7 @@ LABEL = {
     "llama31_clean": "Llama3.1 clean",
     "llama31_marine": "Llama3.1 marine",
     "llama31_sds9k": "Llama3.1 SDS-9k",
+    "gemma4_sds9k":  "Gemma4 SDS-9k",
 }
 
 
