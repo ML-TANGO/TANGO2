@@ -34,9 +34,107 @@
   font-weight: 700;
 }
 
-.judge-type {
-  padding-bottom: 16px;
-  border-bottom: 1px solid $mono202;
+.panel-desc {
+  margin: 6px 0 0;
+  color: $sub-text-color;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+// ── 심사 세트 카드 ────────────────────────────────────────────────────
+// 세트가 곧 문항·영역·척도라 라벨 한 줄로는 무엇을 재는지 알 수 없다. 채점기가 없는
+// 자리는 지우지 않고 비활성으로 남겨 "아직 못 돈다"가 보이게 둔다.
+.set-list {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+// width:100% + 좌우 padding 조합이라 border-box 가 필수다(안 그러면 격자 밖으로 넘친다).
+.set-item {
+  display: grid;
+  box-sizing: border-box;
+  align-items: start;
+  width: 100%;
+  padding: 15px 16px;
+  border: 1px solid $disable-color;
+  border-radius: 10px;
+  background-color: $mono200;
+  cursor: pointer;
+  gap: 12px;
+  grid-template-columns: auto 1fr;
+  text-align: left;
+  transition: border-color 0.15s, background-color 0.15s;
+
+  &:hover:not(.off) {
+    border-color: $primary-color;
+  }
+
+  &.on {
+    border-color: $primary-color;
+    background-color: $background-color;
+    box-shadow: inset 0 0 0 1px $primary-color;
+  }
+
+  // 채점기가 없는 자리 — 왜 못 고르는지는 옆 배지가 말한다.
+  &.off {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+}
+
+// 라디오 표식 — 디자인시스템 Radio 는 라벨 텍스트만 렌더해 카드형 옵션에 맞지 않는다.
+.set-radio {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  margin-top: 3px;
+  border: 1.5px solid $mono204;
+  border-radius: 50%;
+
+  .set-item.on & {
+    border-color: $primary-color;
+    border-width: 2px;
+
+    &::after {
+      content: '';
+      position: absolute;
+      border-radius: 50%;
+      background-color: $primary-color;
+      inset: 3px;
+    }
+  }
+}
+
+.set-body {
+  min-width: 0;
+}
+
+.set-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  color: $normal-text-color;
+  font-size: 14px;
+  font-weight: 600;
+  gap: 8px;
+}
+
+.set-desc {
+  display: block;
+  margin-top: 4px;
+  color: $sub-text-color;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+// 절 아래에 붙는 한 줄 설명 — 무엇이 일어나는지를 고르는 자리에서 알린다.
+.note {
+  margin: 0;
+  color: $sub-text-color;
+  font-size: 12.5px;
+  line-height: 1.6;
 }
 
 .form-stack {
@@ -55,34 +153,18 @@
   }
 }
 
-.guide {
-  padding: 16px;
-  border: 1px solid $card-border-color;
-  border-radius: 8px;
-  background-color: $background-color;
-}
-
-.criteria-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
   gap: 12px;
 }
 
-.criterion-option {
-  padding: 14px 16px;
-  border: 1px solid $disable-color;
-  border-radius: 8px;
-  background-color: $mono200;
-
-  > div,
-  label {
-    width: 100%;
-  }
-}
-
-.actions {
-  display: flex;
-  justify-content: flex-end;
+// 실행을 막는 첫 이유 — 버튼 왼쪽에 붙어, 왜 죽어 있는지가 버튼과 같은 줄에서 보인다.
+.block-reason {
+  margin: 0;
+  color: $error-color;
+  font-size: 13px;
 }
 
 // ── Judge 결과 ───────────────────────────────────────────────────────
@@ -177,7 +259,7 @@
     padding: 18px;
   }
 
-  .criteria-grid,
+  .set-list,
   .crit-scores {
     grid-template-columns: 1fr;
   }

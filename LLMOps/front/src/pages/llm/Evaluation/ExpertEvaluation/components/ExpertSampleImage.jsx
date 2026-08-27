@@ -65,7 +65,15 @@ const ExpertSampleImage = ({ modelId, jobId, sample, t }) => {
         <span>{t('evaluation.project.loading')}</span>
       </div>
     );
-  return <img className={cx('img')} src={src} alt={sample.image || 'sample'} />;
+  // alt 는 파일명이 있으면 그것을(무엇을 보고 있는지 가장 구체적) , 없으면 번역된 일반
+  // 설명으로 떨어진다 — 하드코딩 영문 'sample' 은 한국어 로케일에서도 그대로 읽혔다.
+  return (
+    <img
+      className={cx('img')}
+      src={src}
+      alt={sample.image || t('evaluation.expert.imageAlt')}
+    />
+  );
 };
 
 export default ExpertSampleImage;

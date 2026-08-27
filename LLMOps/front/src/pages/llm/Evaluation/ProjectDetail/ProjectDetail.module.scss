@@ -310,3 +310,81 @@
   font-size: 12px;
   font-weight: 700;
 }
+
+// ── 벤치마크 실행 목록(펼친 표) 셀 ────────────────────────────────────────────
+// 표의 골격·정렬 머리글은 molecules/MultiSortTable 이 갖고, 여기서는 셀 톤만 정한다.
+.cell-bench {
+  color: $normal-text-color;
+  font-weight: 700;
+}
+
+.cell-metric {
+  color: $sub-text-color;
+  font-size: 12.5px;
+}
+
+.cell-score {
+  display: inline-flex;
+  align-items: center;
+  color: $normal-text-color;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  gap: 6px;
+  white-space: nowrap;
+
+  // 같은 (벤치마크, 지표) 를 2회 이상 잰 경우에만 붙는다.
+  &.best {
+    color: $lime603;
+  }
+}
+
+// 모델(굵게) 위에, 위임 런이면 어느 배포를 빌렸는지 한 줄 아래에 붙인다.
+.cell-model {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cell-model-name {
+  color: $normal-text-color;
+  font-weight: 700;
+}
+
+.cell-model-via {
+  color: $lime604;
+  font-size: 11px;
+}
+
+// 체크포인트 이름은 식별자라 mono 로 둔다. 목업의 IBM Plex Mono 는 플랫폼이 싣지
+// 않으므로 이 저장소가 쓰는 시스템 mono 스택을 그대로 쓴다. 이름이 길어도 열이
+// 밀리지 않게 자르고, 잘린 전체 이름은 title 이 준다(ProjectDetail.jsx 참고).
+.cell-checkpoint {
+  display: inline-block;
+  max-width: 190px;
+  overflow: hidden;
+  color: $mono206;
+  font-family: 'Menlo', 'Consolas', 'Monaco', monospace;
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
+// 같은 체크포인트로 같은 날 두 번 돌린 런이 갈려야 해서 시:분:초까지 보인다.
+.cell-run {
+  color: $sub-text-color;
+  font-family: 'Menlo', 'Consolas', 'Monaco', monospace;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cell-dim {
+  color: $mono204;
+}
+
+.cell-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}

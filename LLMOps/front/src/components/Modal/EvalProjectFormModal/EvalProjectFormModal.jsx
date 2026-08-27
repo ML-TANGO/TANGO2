@@ -1,11 +1,12 @@
 // i18n
+import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { InputText, Selectbox } from '@jonathan/ui-react';
+import { InputText } from '@jonathan/ui-react';
 
-import Radio from '@src/components/atoms/input/Radio';
 import InputBoxWithLabel from '@src/components/molecules/InputBoxWithLabel';
-import ModelSelector from '@src/components/ModelSelector/ModelSelector';
+
+import { moveRovingFocus } from '@src/utils/a11y';
 
 import NewStyleModalFrame from '../NewStyleModalFrame';
 
@@ -15,35 +16,58 @@ import style from './EvalProjectFormModal.module.scss';
 
 const cx = classNames.bind(style);
 
-// 평가 유형 3종 — label 은 i18n 키(Radio 가 isTranLabel 로 내부 t() 처리). 기존 evaluation.mode.* 재사용.
+// 평가 유형 3종 — 축은 **누가 채점하나**다. 유형이 이후 실행 화면(무엇을 묻는지)과
+// 점수의 척도(0~1 정답률 / 1~10 심판 점수 / 1~5 별점)를 통째로 결정하므로, 라디오 한 줄이
+// 아니라 "무엇으로 채점하는지"를 한두 줄로 말하는 카드로 세운다. 잘못 고르면 프로젝트
+// 유형은 생성 후 불변이라 되돌릴 방법이 삭제뿐이다.
 const TYPE_OPTIONS = [
-  { label: 'evaluation.mode.benchmark.title', value: 'benchmark' },
-  { label: 'evaluation.mode.judge.title', value: 'judge' },
-  { label: 'evaluation.mode.expert.title', value: 'expert' },
+  {
+    value: 'reference',
+    label: 'evaluation.project.type.reference',
+    desc: 'evaluation.project.typeDesc.reference',
+  },
+  {
+    value: 'judge',
+    label: 'evaluation.project.type.judge',
+    desc: 'evaluation.project.typeDesc.judge',
+  },
+  {
+    value: 'expert',
+    label: 'evaluation.project.type.expert',
+    desc: 'evaluation.project.typeDesc.expert',
+  },
 ];
+
+const TYPE_VALUES = TYPE_OPTIONS.map((option) => option.value);
 
 // 새 평가 프로젝트 생성 모달(프레젠테이셔널) — 학습/배포 모달과 동일한 프레임/필드 규격.
 //   NewStyleModalFrame(664px·resize·minimize) + InputBoxWithLabel + 디자인시스템 컴포넌트.
-//   필드: 이름(InputText) → 평가유형(Radio) → 모델(ModelSelector) → 데이터셋(Selectbox 검색형, 단일).
-//   상태·검증·submit 은 컨테이너 소유(BE 계약: name/model_id/dataset_ids/eval_type).
+//   필드: 이름(InputText) → 평가유형(카드 3종). **모델·데이터셋은 여기서 고르지 않는다** —
+//   런을 실행하는 자리(실행 모달)에서 고른다. 한 프로젝트가 여러 모델·데이터셋의 런을
+//   담을 수 있어야 비교가 성립하기 때문이다.
+//   상태·검증·submit 은 컨테이너 소유(BE 계약: name/eval_type/workspace_id).
 function EvalProjectFormModal({
   type,
   data,
-  workspaceId,
   validate,
   name,
   setName,
   evalType,
   setEvalType,
-  modelId,
-  setModelId,
-  datasetOptions,
-  selectedDataset,
-  onSelectDataset,
   onSubmit,
 }) {
   const { t } = useTranslation();
   const { submit, cancel } = data;
+  const groupRef = useRef(null);
+
+  // WAI-ARIA radiogroup — 카드형 옵션이라 디자인시스템 Radio(라벨 텍스트만 렌더)를 쓸 수
+  // 없다. 방향키·Home/End 조작은 공용 유틸이 소유한다(@src/utils/a11y).
+  const moveType = moveRovingFocus(
+    groupRef,
+    TYPE_VALUES,
+    evalType,
+    setEvalType,
+  );
 
   const newSubmit = {
     text: submit.text,
@@ -96,53 +120,36 @@ function EvalProjectFormModal({
             labelSize='large'
             disableErrorMsg
           >
-            <Radio
-              name='evalType'
-              value={evalType}
-              options={TYPE_OPTIONS}
-              onChange={(e) => setEvalType(e.target.value)}
-              isLabelColor
-            />
+            <div
+              ref={groupRef}
+              className={cx('type-cards')}
+              role='radiogroup'
+              aria-label={t('evaluation.project.selectType')}
+              onKeyDown={moveType}
+            >
+              {TYPE_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type='button'
+                  role='radio'
+                  aria-checked={evalType === option.value}
+                  data-value={option.value}
+                  tabIndex={evalType === option.value ? 0 : -1}
+                  className={cx('type-card', evalType === option.value && 'on')}
+                  onClick={() => setEvalType(option.value)}
+                >
+                  <span className={cx('type-mark')} aria-hidden='true' />
+                  <span className={cx('type-body')}>
+                    <span className={cx('type-name')}>{t(option.label)}</span>
+                    <span className={cx('type-desc')}>{t(option.desc)}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
           </InputBoxWithLabel>
         </div>
 
-        {/* ** 모델 ** */}
-        <div className={cx('row')}>
-          <InputBoxWithLabel
-            labelText={t('evaluation.selectModel')}
-            labelSize='large'
-            disableErrorMsg
-          >
-            <ModelSelector
-              wid={workspaceId}
-              selected={modelId}
-              onSelect={(id) => setModelId(id)}
-            />
-          </InputBoxWithLabel>
-        </div>
-
-        {/* ** 데이터셋 (단일 선택 — BE dataset_ids max_length=1) ** */}
-        <div className={cx('row')}>
-          <InputBoxWithLabel
-            labelText={t('evaluation.selectDatasets')}
-            labelSize='large'
-            disableErrorMsg
-          >
-            {datasetOptions.length === 0 ? (
-              <p className={cx('empty')}>{t('evaluation.noDatasets')}</p>
-            ) : (
-              <Selectbox
-                type='search'
-                size='large'
-                list={datasetOptions}
-                placeholder={t('evaluation.searchDataset')}
-                selectedItem={selectedDataset}
-                onChange={(item) => onSelectDataset(item)}
-                scrollAutoFocus={true}
-              />
-            )}
-          </InputBoxWithLabel>
-        </div>
+        {/* 모델·데이터셋은 실행 시점 선택이라 이 폼에 없다(위 주석 참조). */}
       </div>
     </NewStyleModalFrame>
   );

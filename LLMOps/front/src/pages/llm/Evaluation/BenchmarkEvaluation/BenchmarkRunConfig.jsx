@@ -1,404 +1,286 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import {
-  Badge,
-  ButtonV2,
-  Checkbox,
-  InputText,
-  Selectbox,
-} from '@jonathan/ui-react';
+import { Badge, Checkbox, InputText, Selectbox } from '@jonathan/ui-react';
 
+import NewStyleModalFrame from '@src/components/Modal/NewStyleModalFrame';
 import EmptyBox from '@src/components/molecules/EmptyBox';
-import GuideBox from '@src/components/molecules/GuideBox';
-import Tab from '@src/components/molecules/Tab';
-
-import { getBenchmarkJudgeModels } from '@src/apis/llm/evaluation';
-import { callApi, STATUS_SUCCESS } from '@src/network';
-
-import { errorToastMessage, successToastMessage } from '@src/utils';
 
 import {
-  BENCHMARKS,
+  getRunningPlaygrounds,
+  hasAnyRunningPlayground,
+} from '@src/apis/llm/playground';
+import { STATUS_SUCCESS } from '@src/network';
+
+import { errorToastMessage } from '@src/utils';
+import { moveRovingFocus } from '@src/utils/a11y';
+
+import {
   BENCHMARK_CATEGORIES,
-  BENCHMARK_KIND,
-  BENCHMARK_LABEL,
   BENCHMARK_MAP,
   CHECKPOINT_REQUIRED_BENCHMARK_IDS,
-  REAL_BENCHMARK_IDS,
-  TASK_BENCHMARK_IDS,
+  GENERATION_METRICS,
+  REFERENCE_BENCHMARKS,
   categoryCount,
   defaultMetricFor,
+  recordedMetricsFor,
 } from './benchmarks';
-import { METRIC_MAP } from './benchmarkMetrics';
-import {
-  DEFAULT_STRATEGY,
-  RUN_OPTIONS_BENCHMARK_ID,
-  JUDGE_MAX_OUTPUT_MAX,
-  JUDGE_MAX_OUTPUT_MIN,
-  MODEL_LEN_MAX,
-  MODEL_LEN_MIN,
-  STRATEGIES,
-  buildRunOptions,
-} from './runOptions';
+import { metricLabel } from './benchmarkMetrics';
 
 import classNames from 'classnames/bind';
 import style from './BenchmarkEvaluation.module.scss';
 
 const cx = classNames.bind(style);
 
-// 벤치마크 실행 설정(프로젝트 상속) — 모델·데이터셋은 프로젝트에서 잠금.
-// 1) 벤치마크 선택, 2) 벤치마크별 메트릭 지정, 3) 확인 순서를 유지한다.
-// onRun([{ benchmark, metric }]) 로 상위(ProjectDetail)가 runBenchmark를 호출한다.
-const STEPS = [
-  { n: 1, key: 'evaluation.bench.step1' },
-  { n: 2, key: 'evaluation.bench.step2' },
-  { n: 3, key: 'evaluation.bench.step3' },
-];
+// **정답 대조 평가** 실행 설정 — 단일 화면 모달. **평가할 모델·데이터셋도 여기서 고른다**
+// (프로젝트는 이름·유형만 잠근다) — 한 프로젝트가 모델을 여러 개 견주는 것이 프로젝트의
+// 목적이라 생성 시점에 잠글 수 없다. 그 위에 "무엇을(벤치마크 하나) / 무엇으로(실행 중인
+// 배포)"를 고른다. 3단계 위저드였던 것을 한 화면으로 합친 이유:
+//   · 한 런 = 벤치마크 하나이므로 목록 단계와 매핑 단계가 같은 한 줄을 두 번 묻고 있었다.
+//   · 지표는 고를 것이 없다 — 채점기가 한 번에 내는 지표를 전부 기록한다. 그래서 선택
+//     드롭다운을 없애고 "무엇이 기록되는지"만 레일에서 통보한다.
+// onRun({ modelId, datasetId, benchmarks, inferencePlaygroundId }) 로 상위가 실행한다.
+//
+// **심판 설정은 여기 없다.** 정답 대조는 정답이 데이터에 있어 기계가 대조한다 — 심판 LLM 이
+// 개입할 자리가 없고, 심판 배포·내장 심판·프롬프트 전략·심판 출력 상한은 전부 LLM 심사
+// 실행 화면(JudgeRunConfig)의 것이다. 여기서 고를 수 있는 벤치마크도 REFERENCE_BENCHMARKS
+// 로 좁혀, 화면에서만 고를 수 있고 서버에서 거부되는 조합이 생기지 않게 한다.
+//
+// **출력은 언제나 배포에서 가져온다** — 평가 컨테이너는 채점만 하고, 답변 생성은 이미 떠
+// 있는 배포(inference_playground_id)에 요청한다. 컨테이너가 체크포인트를 직접 올려
+// 생성하던 경로는 없앴다: 같은 질문에 답이 둘이면 어느 쪽이 채점됐는지가 화면에서 안 보이고,
+// BE 도 이제 그 필드를 받지 않는다. 후보는 **고른 모델을 서빙 중인** 배포뿐이다.
 
-// 체크포인트 "미지정" 센티넬 — Selectbox 는 value 로 항목을 찾으므로 null 대신 빈 문자열을
-// 쓴다(커밋 id 는 숫자라 충돌하지 않는다).
-const CHECKPOINT_NONE = '';
-
-// 설명 패널의 기본 대상 메트릭. 선택이 비었을 때 되돌아갈 값이라 상수로 둔다.
-const DEFAULT_FOCUS_METRIC = 'accuracy';
-
-const BenchmarkRunConfig = ({ running, modelId, onRun }) => {
+const BenchmarkRunConfig = ({
+  workspaceId,
+  modelOptions,
+  datasetOptions,
+  running,
+  onRun,
+  onClose,
+}) => {
   const { t } = useTranslation();
-  const [step, setStep] = useState(1);
-  // 사용자가 먼저 고르는 축 — 표준(여러 개 동시) / 과제별(하나씩). 한 런에 채점기는
-  // 하나뿐이라 이 둘은 섞일 수 없다. 종류를 먼저 세우면 만들 수 없는 조합이 화면에서
-  // 사라져, 선택 후 실행 시점에 서버 예외로 되돌아오던 경로가 없어진다.
-  const [kind, setKind] = useState(BENCHMARK_KIND.STANDARD);
-  const [selected, setSelected] = useState([]); // 벤치마크 id(선택 순서)
-  const [metricMap, setMetricMap] = useState({}); // { benchmarkId: metricId }
+
+  // 이 런이 평가할 대상 — 모델·데이터셋(단일). 프로젝트 상속이 아니라 런의 선택이다.
+  //   목록은 상위(ProjectDetail)가 이미 조회한 것을 그대로 받는다(중복 조회 X).
+  const [modelId, setModelId] = useState('');
+  const [datasetId, setDatasetId] = useState('');
+
+  const [picked, setPicked] = useState(''); // 벤치마크 id — 라디오(하나)
   const [category, setCategory] = useState('all');
   const [query, setQuery] = useState('');
-  const [focusMetric, setFocusMetric] = useState(DEFAULT_FOCUS_METRIC); // 설명 패널 대상
-  const [commits, setCommits] = useState([]); // 실채점 벤치마크용 커밋 체크포인트 후보
-  const [commitId, setCommitId] = useState(CHECKPOINT_NONE);
-  // 실행 옵션 — 숫자·문자 칸은 빈 문자열이 "미지정"이고, 그때 컨테이너 기본값이 쓰인다.
-  // 기본값을 FE 가 들고 있으면 컨테이너와 어긋날 수 있어 placeholder 로만 안내한다.
-  const [strategy, setStrategy] = useState(DEFAULT_STRATEGY);
-  const [generateModelLen, setGenerateModelLen] = useState('');
-  const [judgeModel, setJudgeModel] = useState('');
-  const [judgeModels, setJudgeModels] = useState([]); // 서버 화이트리스트
-  const [judgeModelLen, setJudgeModelLen] = useState('');
-  const [judgeMaxOutputTokens, setJudgeMaxOutputTokens] = useState('');
+  const [withGeneration, setWithGeneration] = useState(false);
 
-  // 동기 클릭 핸들러라 selected 클로저를 그대로 분기한다. React updater 안에는
-  // 부수효과를 넣지 않아 StrictMode 이중 호출에서도 선택/메트릭 상태를 분리해 유지한다.
-  const toggleBenchmark = (id) => {
-    if (selected.includes(id)) {
-      setSelected((prev) => prev.filter((x) => x !== id));
-      setMetricMap((m) => {
-        const next = { ...m };
-        delete next[id];
-        return next;
-      });
-      return;
-    }
-    // 혼재 차단 분기는 두지 않는다 — 이 그리드에는 표준 벤치마크만 있고, 과제별은
-    // 별도 라디오로 하나만 고르게 되어 있어 섞이는 조합 자체가 만들어지지 않는다.
-    const metric = defaultMetricFor(id);
-    setSelected((prev) => [...prev, id]);
-    setMetricMap((m) => ({ ...m, [id]: metric }));
-    setFocusMetric(metric);
-  };
+  // 출력을 가져올 배포 — 평가 컨테이너가 모델을 새로 올리지 않고 이미 떠 있는 배포에 생성을
+  // 요청한다. 고를 수 있는 건 **고른 모델을 서빙 중인 running 배포**뿐이다(다른 모델의 배포로
+  // 생성하면 채점되는 것이 평가 대상이 아니게 된다). null=아직 모름(미조회/로딩).
+  const [deployments, setDeployments] = useState(null);
+  // 후보가 0 건일 때만 채우는 판정값 — 워크스페이스에 running 배포가 하나라도 있나.
+  // null=아직 안 물어봄. 빈 상태 문구를 두 갈래로 가르는 데만 쓴다.
+  const [anyRunning, setAnyRunning] = useState(null);
+  const [playgroundId, setPlaygroundId] = useState('');
 
-  const setMetric = (benchmarkId, metricId) => {
-    setMetricMap((m) => ({ ...m, [benchmarkId]: metricId }));
-    setFocusMetric(metricId);
-  };
-
-  const clearAll = () => {
-    setSelected([]);
-    setMetricMap({});
-    setCommitId(CHECKPOINT_NONE);
-    setStrategy(DEFAULT_STRATEGY);
-    setGenerateModelLen('');
-    setJudgeModel(judgeModels.find((m) => m.isDefault)?.id ?? '');
-    setJudgeModelLen('');
-    setJudgeMaxOutputTokens('');
-    setStep(1);
-  };
-
-  // 표준 그리드는 표준 벤치마크만 담는다. 과제별은 아래 전용 라디오로 고른다.
-  const selectTask = (id) => {
-    const metric = defaultMetricFor(id);
-    setSelected([id]);
-    setMetricMap({ [id]: metric });
-    setFocusMetric(metric);
-  };
-
-  // 종류를 바꾸면 선택을 비운다 — 표준과 과제별은 한 런에 섞일 수 없으므로 이전 선택을
-  // 들고 넘어가면 만들 수 없는 조합이 된다. 과제별로 넘어갈 때는 첫 과제를 미리 골라
-  // 빈 화면을 보여주지 않는다(어차피 하나는 골라야 한다).
-  // 라디오 그룹 키보드 조작 — 방향키로 옵션을 옮기고 Home/End 로 양끝. WAI-ARIA
-  // radiogroup 패턴이고, 같은 화면군의 StarRating 이 쓰는 방식과 같다(디자인시스템
-  // Radio 는 라벨 텍스트만 렌더해 이 카드형 옵션에는 맞지 않는다).
-  const kindGroupRef = useRef(null);
-  const taskGroupRef = useRef(null);
-
-  const moveRadio = (groupRef, values, current, onPick) => (e) => {
-    const at = values.indexOf(current);
-    let next = null;
-    if (e.key === 'ArrowRight' || e.key === 'ArrowDown')
-      next = values[(at + 1) % values.length];
-    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp')
-      next = values[(at - 1 + values.length) % values.length];
-    else if (e.key === 'Home') next = values[0];
-    else if (e.key === 'End') next = values[values.length - 1];
-    if (next == null) return;
-    e.preventDefault();
-    onPick(next);
-    groupRef.current?.querySelector(`[data-value="${next}"]`)?.focus();
-  };
-
-  const switchKind = (nextKind) => {
-    if (nextKind === kind) return;
-    setKind(nextKind);
-    if (nextKind === BENCHMARK_KIND.TASK) {
-      selectTask(TASK_BENCHMARK_IDS[0]);
-    } else {
-      setSelected([]);
-      setMetricMap({});
-      setFocusMetric(DEFAULT_FOCUS_METRIC);
-    }
-  };
-
-  // 과제별은 라디오다 — 이전 선택을 지우고 하나만 남긴다.
-  const filtered = useMemo(
-    () =>
-      BENCHMARKS.filter(
-        (b) =>
-          !b.real &&
-          (category === 'all' || b.category === category) &&
-          (query.trim() === '' ||
-            b.label.toLowerCase().includes(query.trim().toLowerCase()) ||
-            b.desc.toLowerCase().includes(query.trim().toLowerCase())),
-      ),
-    [category, query],
-  );
-
-  const metricCount = useMemo(
-    () => new Set(selected.map((id) => metricMap[id]).filter(Boolean)).size,
-    [selected, metricMap],
-  );
-
-  // 실채점 벤치마크(LogicKor)만 체크포인트를 쓴다. 선택 단계에서 mock 과 섞이는 것을
-  // 이미 막고 있으므로 selected 는 전부 실채점이거나 전부 mock 이다.
-  const hasRealBenchmark = useMemo(
-    () => selected.some((id) => REAL_BENCHMARK_IDS.includes(id)),
-    [selected],
-  );
-
-  // 실행 옵션(전략·심판)은 LogicKor 채점기의 계약이라 실채점 전체가 아니라 그 벤치마크에만
-  // 붙인다 — MixATIS 는 심판 LLM 이 없어 띄워 봐야 아무 데도 닿지 않는 칸이 된다.
-  const hasRunOptions = useMemo(
-    () => selected.includes(RUN_OPTIONS_BENCHMARK_ID),
-    [selected],
-  );
-
-  // 심판 후보 — 서버 화이트리스트만 렌더한다. 자유 입력을 두면 캐시에 없는 모델이
-  // 통과해 컨테이너가 GPU 를 잡은 뒤에야 죽는다(HF_HUB_OFFLINE=1, /hf-cache RO).
+  // 고를 것이 하나뿐이면 기본 선택 — 어차피 그것밖에 못 고른다(배포 선택과 같은 규약).
   useEffect(() => {
-    if (!hasRunOptions) return undefined;
+    if (modelOptions?.length === 1)
+      setModelId((prev) => prev || modelOptions[0].value);
+  }, [modelOptions]);
+  useEffect(() => {
+    if (datasetOptions?.length === 1)
+      setDatasetId((prev) => prev || datasetOptions[0].value);
+  }, [datasetOptions]);
+
+  // 모델을 바꾸면 배포 선택을 비운다 — 후보 목록이 모델로 걸러져 다시 조회되므로, 이전
+  // 모델의 배포가 선택에 남아 있으면 목록에 없는 값이 그대로 실려 나간다.
+  const pickModel = (nextId) => {
+    setModelId(nextId);
+    setPlaygroundId('');
+    // 옛 모델의 후보가 한 프레임 남지 않게 즉시 '모름'으로 되돌린다(조회는 이펙트가 한다).
+    setDeployments(null);
+  };
+
+  const selectedModel =
+    (modelOptions || []).find((item) => item.value === modelId) || null;
+  const selectedDataset =
+    (datasetOptions || []).find((item) => item.value === datasetId) || null;
+
+  const benchmark = picked ? BENCHMARK_MAP[picked] : null;
+  const needsCheckpoint =
+    !!picked && CHECKPOINT_REQUIRED_BENCHMARK_IDS.includes(picked);
+  const generationMetrics = picked ? GENERATION_METRICS[picked] : null;
+
+  // 라디오 그룹(카드형) 참조 — 키보드 조작은 공용 moveRovingFocus 가 담당한다.
+  const listGroupRef = useRef(null);
+
+  const pickBenchmark = (id) => {
+    setPicked((prev) => (prev === id ? '' : id));
+    setWithGeneration(false);
+  };
+
+  // 출력을 가져올 배포 후보 — **고른 모델을 서빙 중인 running 배포**만 BE 가 내려 준다.
+  // 모델이 정해지기 전에는 물어볼 것이 없으므로 조회하지 않는다(=모름). 모델을 바꾸면
+  // 다시 조회한다 — 선택 비우기는 pickModel 이 맡는다.
+  // 지난 런이 참조하던 배포는 나중에 내려갈 수 있어, 이력에는 남고 선택지에서만 빠진다.
+  useEffect(() => {
+    if (!workspaceId || !modelId) {
+      setDeployments(null);
+      return undefined;
+    }
     let cancelled = false;
+    setDeployments(null);
+    setAnyRunning(null);
     (async () => {
-      const res = await getBenchmarkJudgeModels();
+      const res = await getRunningPlaygrounds(workspaceId, modelId);
       if (cancelled) return;
       if (res.status !== STATUS_SUCCESS) {
         errorToastMessage(res.error, res.message);
+        setDeployments([]);
         return;
       }
-      const list = res.result?.models ?? [];
-      const fallback = res.result?.default ?? null;
-      setJudgeModels(
-        list.map((m) => ({ ...m, isDefault: m.id === fallback })),
-      );
-      // 초기 선택 = 서버가 알려준 기본 심판. 사용자가 이미 고른 게 있으면 건드리지 않는다.
-      setJudgeModel((prev) => prev || fallback || list[0]?.id || '');
+      const list = Array.isArray(res.result) ? res.result : [];
+      // 후보가 없을 때만 워크스페이스 전체를 한 번 더 물어본다 — 문구가 한 프레임 뒤에
+      // 바뀌지 않도록 판정이 끝난 뒤에 빈 상태를 렌더한다.
+      if (list.length === 0) {
+        const any = await hasAnyRunningPlayground(workspaceId);
+        if (cancelled) return;
+        setAnyRunning(any);
+      }
+      setDeployments(list);
+      // 후보가 하나면 기본 선택 — 어차피 그것밖에 못 고른다.
+      if (list.length === 1) setPlaygroundId(list[0].id);
     })();
     return () => {
       cancelled = true;
     };
-  }, [hasRunOptions]);
+  }, [workspaceId, modelId]);
 
-  // 커밋 체크포인트 목록 — 모델 상세(CommitList)·SDS 학습 뷰와 같은 엔드포인트/응답 규약을
-  // 그대로 쓴다(전용 API 헬퍼가 없는 자리라 callApi 직접 호출도 그 선례를 따른다).
-  // mock 전용 런은 체크포인트를 쓰지 않으므로 조회 자체를 하지 않는다.
+  // NewStyleModalFrame 의 Esc 는 Redux 모달을 닫는다 — 로컬 조건부 렌더 경로라 직접 건다
+  // (EvalGenerateModal 과 같은 처리).
   useEffect(() => {
-    if (!hasRealBenchmark || !modelId) return undefined;
-    let cancelled = false;
-    (async () => {
-      const res = await callApi({
-        url: `models/commit-models?model_id=${modelId}`,
-        method: 'get',
-      });
-      if (cancelled) return;
-      if (res.status !== STATUS_SUCCESS) {
-        errorToastMessage(res.error, res.message);
-        return;
-      }
-      // 응답 result = { list: [...commits], model_name } (svc.get_commit_models).
-      // 구버전(평면 배열)도 수용 — SDSExternalFineTuningView 와 같은 방어.
-      const data = res.result;
-      const list = Array.isArray(data) ? data : (data?.list ?? []);
-      // 최신 커밋이 위로(모델 상세 CommitList 와 같은 정렬).
-      setCommits(
-        [...list].sort((a, b) =>
-          String(b?.commit_datetime ?? '').localeCompare(
-            String(a?.commit_datetime ?? ''),
-          ),
-        ),
-      );
-    })();
-    return () => {
-      cancelled = true;
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') onClose();
     };
-  }, [hasRealBenchmark, modelId]);
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [onClose]);
 
-  const checkpointOptions = useMemo(
-    () => [
-      { label: t('evaluation.bench.checkpointNone'), value: CHECKPOINT_NONE },
-      ...commits
-        .filter((c) => c?.id != null && c?.name)
-        .map((c) => ({ label: c.name, value: c.id })),
-    ],
-    [commits, t],
-  );
-  const selectedCheckpoint =
-    checkpointOptions.find((item) => item.value === commitId) ||
-    checkpointOptions[0];
-
-  // 라벨에 크기를 병기한다 — 심판이 커질수록 런이 길어지므로 고르는 자리에서 보이게.
-  const judgeModelOptions = useMemo(
-    () =>
-      judgeModels.map((m) => ({
-        label: m.size_gb ? `${m.label} (${m.size_gb}GB)` : m.label,
-        value: m.id,
-      })),
-    [judgeModels],
-  );
-  const selectedJudgeModel =
-    judgeModelOptions.find((item) => item.value === judgeModel) ||
-    judgeModelOptions[0];
-
-  const strategyOptions = STRATEGIES.map((item) => ({
-    label: item.label,
-    value: item.value,
-  }));
-  const selectedStrategy =
-    strategyOptions.find((item) => item.value === strategy) ||
-    strategyOptions[0];
-
-  const canProceed = selected.length > 0;
-  const goStep = (n) => {
-    if (n > 1 && !canProceed) return;
-    setStep(n);
-  };
-
-  const handleRun = () => {
-    if (!canProceed || running) return;
-    // 체크포인트는 실채점 벤치마크에서만 의미가 있다. mock 런에 실어 보내면 BE 가
-    // 무시하지만, 애초에 보내지 않아 요청이 무엇을 뜻하는지 흐리지 않는다.
-    const withCheckpoint = hasRealBenchmark && commitId !== CHECKPOINT_NONE;
-
-    // 체크포인트가 필수인 벤치마크를 빈 채로 보내면 BE 가 거부하지만, 거기까지 가지 않고
-    // 무엇을 골라야 하는지 여기서 짚어 준다(위 실행옵션 검증과 같은 취지).
-    const missingCheckpoint = selected.filter((id) =>
-      CHECKPOINT_REQUIRED_BENCHMARK_IDS.includes(id),
+  // 검색은 **보이는 문구**를 훑는다 — 설명이 i18n 키가 된 뒤로 카탈로그의 원문을 훑으면
+  // 화면에 뜬 문구와 다른 것을 검색하게 된다(영어 로케일에서 한국어로만 걸리는 식).
+  const visible = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    return REFERENCE_BENCHMARKS.filter(
+      (b) =>
+        (category === 'all' || b.category === category) &&
+        (term === '' ||
+          b.label.toLowerCase().includes(term) ||
+          t(b.descKey).toLowerCase().includes(term)),
     );
-    if (missingCheckpoint.length > 0 && commitId === CHECKPOINT_NONE) {
-      errorToastMessage(
-        null,
-        t('evaluation.bench.checkpointRequired', {
-          benchmarks: missingCheckpoint
-            .map((id) => BENCHMARK_LABEL[id] || id)
-            .join(', '),
-        }),
-      );
-      return;
-    }
-    let runOptions = null;
-    if (hasRunOptions) {
-      // BE 도 같은 경계를 강제하지만, 여기서 먼저 걸러 어느 칸이 틀렸는지 짚어 준다
-      // (서버까지 갔다 오면 어느 필드인지 모르는 422 문구만 남는다).
-      const built = buildRunOptions({
-        strategy,
-        generateModelLen,
-        judgeModel,
-        judgeModelLen,
-        judgeMaxOutputTokens,
-        withGenerate: withCheckpoint,
-      });
-      if (!built.ok) {
-        errorToastMessage(
-          null,
-          t(`evaluation.bench.optErr.${built.errorKey}`, {
-            min: built.min,
-            max: built.max,
-          }),
-        );
-        return;
-      }
-      runOptions = built.options;
-    }
-    onRun(
-      selected.map((id) => ({ benchmark: id, metric: metricMap[id] })),
-      withCheckpoint ? Number(commitId) : null,
-      runOptions,
-    );
-  };
+  }, [category, query, t]);
 
-  const focus = METRIC_MAP[focusMetric];
+  const recorded = useMemo(
+    () => (picked ? recordedMetricsFor(picked, withGeneration) : []),
+    [picked, withGeneration],
+  );
+
+  const deploymentOptions = useMemo(
+    () => (deployments ?? []).map((d) => ({ label: d.name, value: d.id })),
+    [deployments],
+  );
+  const selectedDeployment =
+    deploymentOptions.find((item) => item.value === playgroundId) || null;
+  const deployment = (deployments ?? []).find((d) => d.id === playgroundId);
+
   const categoryOptions = BENCHMARK_CATEGORIES.map((item) => ({
-    label: `${item.label} (${categoryCount(item.id)})`,
+    label: `${t(item.labelKey)} (${categoryCount(item.id)})`,
     value: item.id,
   }));
   const selectedCategory =
     categoryOptions.find((item) => item.value === category) ||
     categoryOptions[0];
-  const stepOptions = STEPS.map((item) => ({
-    label: item.key,
-    value: item.n,
-    disable: item.n > 1 && !canProceed,
-  }));
+
+  // 각 축이 채워졌나 — 레일의 warn 강조와 푸터 문구가 같은 판정을 쓴다.
+  // 출력은 배포에서만 가져오므로 배포 선택이 곧 이 축의 충족 조건이다(BE 도 필수로 받는다).
+  const sourceReady = !!playgroundId;
+
+  // 실행을 막는 첫 이유 하나. 푸터에 그대로 세워, 왜 버튼이 죽어 있는지가 항상 보이게 한다.
+  // (BE 도 같은 경계를 강제하지만 거기까지 가면 어느 칸이 문제인지 모르는 422 만 남는다.)
+  const blockReason = !modelId
+    ? t('evaluation.run.needModel')
+    : !datasetId
+      ? t('evaluation.run.needDataset')
+      : !picked
+        ? t('evaluation.bench.needBenchmark')
+        : !sourceReady
+          ? t('evaluation.bench.needDeployment')
+          : null;
+
+  const summary =
+    blockReason ||
+    t('evaluation.bench.runSummary', {
+      benchmark: benchmark?.label,
+      deployment: deployment?.name || '-',
+      count: recorded.length,
+    });
+
+  const handleRun = () => {
+    if (blockReason || running) return null;
+    // 메트릭은 서버가 권장값으로 고정한다(dto.BenchmarkSelection — 받기만 하고 버린다).
+    // 그래도 실어 보내는 이유는 화면과 서버가 서로 다른 시점에 배포돼도 런이 깨지지 않게
+    // 하기 위해서다 — 옛 서버는 metric 을 요구하고, 새 서버는 무시한다.
+    return onRun({
+      // 이 런이 평가할 대상 — 상위가 model_id / dataset_ids 로 싣는다.
+      modelId,
+      datasetId,
+      benchmarks: [{ benchmark: picked, metric: defaultMetricFor(picked) }],
+      // 출력을 만들 배포 — 필수다. 컨테이너는 이 배포의 답변을 채점만 한다.
+      inferencePlaygroundId: playgroundId,
+    });
+  };
+
+  const modalTitle = t('evaluation.project.detail.newRun');
 
   return (
-    <div className={cx('wizard')}>
-      <div className={cx('wizard-tabs')}>
-        <Tab
-          type='b'
-          option={stepOptions}
-          select={stepOptions[step - 1]}
-          tabHandler={({ value }) => goStep(value)}
-        />
-      </div>
-
-      <div className={cx('wizard-body')}>
-        <div className={cx('wizard-main')}>
-          {step === 1 && (
+    <div
+      onClick={(event) => {
+        // NewStyleModalFrame 은 오버레이에 id={title} 을 건다 — 바깥을 누르면 닫는다.
+        if (event.target.id === modalTitle) onClose();
+      }}
+    >
+      <NewStyleModalFrame
+        type='benchmarkRunConfig'
+        title={modalTitle}
+        footerMessage={summary}
+        submit={{
+          text: running ? 'evaluation.running' : 'evaluation.runBenchmark',
+          func: handleRun,
+        }}
+        cancel={{ text: 'cancel.label', func: onClose }}
+        validate={!blockReason && !running}
+        isResize
+        isMinimize
+        // 기본 폭 664px 은 2단(목록 + 320px 레일)을 담지 못한다.
+        customStyle={{ width: '1080px', maxWidth: 'calc(100vw - 48px)' }}
+      >
+        <div className={cx('run-config')}>
+          <div className={cx('run-main')}>
             <section className={cx('panel')}>
               <div className={cx('panel-head')}>
                 <div>
                   <h3 className={cx('panel-title')}>
-                    {t('evaluation.bench.selectBenchTitle')}
+                    {t('evaluation.bench.referenceTitle')}
                   </h3>
                   <p className={cx('panel-desc')}>
-                    {t('evaluation.bench.selectBenchDesc')}
+                    {t('evaluation.bench.referenceDesc')}
                   </p>
                 </div>
-                {kind === BENCHMARK_KIND.STANDARD && (
                 <div className={cx('filters')}>
                   <Selectbox
                     list={categoryOptions}
                     selectedItem={selectedCategory}
                     onChange={(item) => setCategory(item.value)}
                     customStyle={{
-                      selectboxForm: { width: '184px' },
-                      listForm: { width: '184px' },
+                      selectboxForm: { width: '170px' },
+                      listForm: { width: '170px' },
                     }}
                   />
                   <InputText
@@ -411,90 +293,56 @@ const BenchmarkRunConfig = ({ running, modelId, onRun }) => {
                     disableClearBtn={false}
                     onChange={(e) => setQuery(e.target.value)}
                     onClear={() => setQuery('')}
-                    customStyle={{ width: '220px' }}
+                    customStyle={{ width: '190px' }}
                   />
-                </div>
-                )}
-              </div>
-              <div className={cx('kind-picker')}>
-                <p className={cx('kind-title')}>{t('evaluation.bench.kindTitle')}</p>
-                <div
-                  ref={kindGroupRef}
-                  className={cx('kind-list')}
-                  role='radiogroup'
-                  aria-label={t('evaluation.bench.kindTitle')}
-                  onKeyDown={moveRadio(
-                    kindGroupRef,
-                    [BENCHMARK_KIND.STANDARD, BENCHMARK_KIND.TASK],
-                    kind,
-                    switchKind,
-                  )}
-                >
-                  {[
-                    [BENCHMARK_KIND.STANDARD, 'kindStandard', 'kindStandardDesc'],
-                    [BENCHMARK_KIND.TASK, 'kindTask', 'kindTaskDesc'],
-                  ].map(([value, nameKey, descKey]) => (
-                    <button
-                      key={value}
-                      type='button'
-                      role='radio'
-                      aria-checked={kind === value}
-                      data-value={value}
-                      tabIndex={kind === value ? 0 : -1}
-                      className={cx('kind-item', kind === value && 'on')}
-                      onClick={() => switchKind(value)}
-                    >
-                      <span className={cx('kind-radio')} aria-hidden='true' />
-                      <span>
-                        <span className={cx('kind-name')}>
-                          {t(`evaluation.bench.${nameKey}`)}
-                        </span>
-                        <span className={cx('kind-desc')}>
-                          {t(`evaluation.bench.${descKey}`)}
-                        </span>
-                      </span>
-                    </button>
-                  ))}
                 </div>
               </div>
 
-              {kind === BENCHMARK_KIND.STANDARD && (
-              <div className={cx('benchmark-grid')}>
-                {filtered.map((benchmark) => {
-                  const checked = selected.includes(benchmark.id);
-                  const categoryLabel =
-                    BENCHMARK_CATEGORIES.find(
-                      (item) => item.id === benchmark.category,
-                    )?.label || benchmark.category;
+              <div
+                ref={listGroupRef}
+                className={cx('benchmark-grid')}
+                role='radiogroup'
+                aria-label={t('evaluation.bench.selectBenchTitle')}
+                onKeyDown={moveRovingFocus(
+                  listGroupRef,
+                  visible.map((b) => b.id),
+                  picked,
+                  pickBenchmark,
+                )}
+              >
+                {visible.map((b) => {
+                  const on = picked === b.id;
                   return (
-                    <div
-                      key={benchmark.id}
-                      className={cx('benchmark-option', checked && 'selected')}
+                    <button
+                      key={b.id}
+                      type='button'
+                      role='radio'
+                      aria-checked={on}
+                      data-value={b.id}
+                      tabIndex={
+                        on || (!picked && b.id === visible[0]?.id) ? 0 : -1
+                      }
+                      className={cx('benchmark-option', on && 'selected')}
+                      onClick={() => pickBenchmark(b.id)}
                     >
-                      <Checkbox
-                        checked={checked}
-                        onChange={() => toggleBenchmark(benchmark.id)}
-                        customLabelStyle={{ width: '100%' }}
-                        label={
-                          <div className={cx('benchmark-option-body')}>
-                            <div className={cx('benchmark-option-name')}>
-                              {benchmark.label}
-                            </div>
-                            <div className={cx('benchmark-option-desc')}>
-                              {benchmark.desc}
-                            </div>
+                      <span className={cx('pick-radio')} aria-hidden='true' />
+                      <span className={cx('option-body')}>
+                        <span className={cx('bo-name')}>
+                          {b.label}
+                          {b.requiresFormat && (
                             <Badge
-                              label={categoryLabel}
-                              type='blue'
+                              label={t('evaluation.bench.badgeFormat')}
+                              type='yellow'
                               size='sm'
                             />
-                          </div>
-                        }
-                      />
-                    </div>
+                          )}
+                        </span>
+                        <span className={cx('bo-desc')}>{t(b.descKey)}</span>
+                      </span>
+                    </button>
                   );
                 })}
-                {filtered.length === 0 && (
+                {visible.length === 0 && (
                   <div className={cx('grid-empty')}>
                     <EmptyBox
                       text='evaluation.noSearchResult'
@@ -504,458 +352,195 @@ const BenchmarkRunConfig = ({ running, modelId, onRun }) => {
                   </div>
                 )}
               </div>
-              )}
-
-                {kind === BENCHMARK_KIND.TASK && (
-                  <div className={cx('task-picker')}>
-                    <div
-                      ref={taskGroupRef}
-                      className={cx('task-list')}
-                      role='radiogroup'
-                      aria-label={t('evaluation.bench.kindTask')}
-                      onKeyDown={moveRadio(taskGroupRef, TASK_BENCHMARK_IDS, selected[0], selectTask)}
-                    >
-                      {TASK_BENCHMARK_IDS.map((id) => {
-                        const on = selected.includes(id);
-                        return (
-                          <button
-                            key={id}
-                            type='button'
-                            role='radio'
-                            aria-checked={on}
-                            data-value={id}
-                            tabIndex={on ? 0 : -1}
-                            className={cx('task-item', on && 'on')}
-                            onClick={() => selectTask(id)}
-                          >
-                            <span className={cx('task-radio')} aria-hidden='true' />
-                            <span>
-                              <span className={cx('task-name')}>
-                                {BENCHMARK_LABEL[id] || id}
-                              </span>
-                              <span className={cx('task-meta')}>
-                                {t(`evaluation.bench.taskDesc.${id}`)}
-                              </span>
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                  </div>
-                )}
-
-              <div className={cx('guide')}>
-                <GuideBox
-                  title={t('evaluation.bench.step1')}
-                  isTitleIcon
-                  textList={[t('evaluation.bench.minOne')]}
-                />
-              </div>
             </section>
-          )}
+          </div>
 
-          {step === 2 && (
-            <section className={cx('panel')}>
-              <div>
-                <h3 className={cx('panel-title')}>
-                  {t('evaluation.bench.metricTitle')}
-                </h3>
-                <p className={cx('panel-desc')}>
-                  {t('evaluation.bench.metricDesc')}
+          <aside className={cx('rail')}>
+            <div className={cx('panel', 'rail-panel')}>
+              {/* ⓪ 평가할 모델·데이터셋 — 런이 소유한다. 프로젝트에 잠겨 있던 것을 여기로
+                  옮긴 이유: 한 프로젝트에서 모델·데이터셋을 바꿔 가며 재는 것이 비교의
+                  전제인데, 생성 시점에 잠그면 프로젝트가 '모델 폴더'가 되어 버린다. */}
+              <div
+                className={cx('rail-sec', (!modelId || !datasetId) && 'warn')}
+              >
+                <p className={cx('rail-title')}>
+                  {t('evaluation.run.subjectTitle')}
+                  <Badge
+                    label={t('evaluation.bench.required')}
+                    type='red'
+                    size='sm'
+                  />
                 </p>
-              </div>
-
-              <div className={cx('metric-layout')}>
-                <div className={cx('metric-list')}>
-                  <div className={cx('metric-list-head')}>
-                    <span>{t('evaluation.bench.colBench')}</span>
-                    <span>{t('evaluation.bench.colRecommended')}</span>
-                    <span>{t('evaluation.bench.colMetric')}</span>
-                    <span />
-                  </div>
-                  {selected.map((id) => {
-                    const benchmark = BENCHMARK_MAP[id];
-                    const metricOptions = benchmark.metrics.map((metricId) => ({
-                      label: METRIC_MAP[metricId]?.label || metricId,
-                      value: metricId,
-                    }));
-                    const selectedMetric =
-                      metricOptions.find(
-                        (item) => item.value === metricMap[id],
-                      ) || metricOptions[0];
-                    return (
-                      <div
-                        key={id}
-                        className={cx('metric-row')}
-                        onClick={() => setFocusMetric(metricMap[id])}
-                      >
-                        <div className={cx('metric-benchmark')}>
-                          <div className={cx('benchmark-option-name')}>
-                            {benchmark.label}
-                          </div>
-                          <div className={cx('benchmark-option-desc')}>
-                            {benchmark.desc}
-                          </div>
-                        </div>
-                        <Badge
-                          label={
-                            METRIC_MAP[benchmark.recommended]?.label ||
-                            benchmark.recommended
-                          }
-                          type='green'
-                          size='sm'
-                        />
-                        <Selectbox
-                          list={metricOptions}
-                          selectedItem={selectedMetric}
-                          onChange={(item) => setMetric(id, item.value)}
-                          customStyle={{
-                            selectboxForm: { width: '100%' },
-                            listForm: { width: '100%' },
-                          }}
-                        />
-                        <ButtonV2
-                          type='clear'
-                          colorType='red'
-                          size='s'
-                          label={t('delete.label')}
-                          onClick={() => toggleBenchmark(id)}
-                        />
-                      </div>
-                    );
-                  })}
-                  <div className={cx('custom-action')}>
-                    {/* 섹션 단위 "추가" 액션 — 하우스(Advanced·RagSettingCenter·FineTuning)와 같은 outline+l. */}
-                    <ButtonV2
-                      type='outline'
-                      colorType='blue'
-                      size='l'
-                      label={t('evaluation.bench.addCustom')}
-                      onClick={() =>
-                        successToastMessage(
-                          null,
-                          t('evaluation.bench.addCustomSoon'),
-                        )
-                      }
-                    />
-                  </div>
-                </div>
-
-                <aside className={cx('metric-description')}>
-                  <h4 className={cx('metric-description-title')}>
-                    {t('evaluation.bench.metricPanelTitle')}
-                  </h4>
-                  {focus && (
-                    <>
-                      <div className={cx('metric-description-name')}>
-                        {focus.label}
-                      </div>
-                      <div className={cx('metric-description-sub')}>
-                        {focus.desc}
-                      </div>
-                      {focus.formula && (
-                        <div className={cx('metric-formula')}>
-                          {focus.formula}
-                        </div>
-                      )}
-                      {focus.common?.length > 0 && (
-                        <>
-                          <div className={cx('metric-common-title')}>
-                            {t('evaluation.bench.commonBench')}
-                          </div>
-                          <div className={cx('badge-list')}>
-                            {focus.common.map((item) => (
-                              <Badge
-                                key={item}
-                                label={item}
-                                type='gray'
-                                size='sm'
-                              />
-                            ))}
-                          </div>
-                        </>
-                      )}
-                    </>
-                  )}
-                </aside>
-              </div>
-            </section>
-          )}
-
-          {step === 3 && (
-            <section className={cx('panel')}>
-              <div>
-                <h3 className={cx('panel-title')}>
-                  {t('evaluation.bench.confirmTitle')}
-                </h3>
-                <p className={cx('panel-desc')}>
-                  {t('evaluation.bench.summaryInfo')}
-                </p>
-              </div>
-
-              {/* 체크포인트 선택 — 실채점 벤치마크에서만 뜬다. 고르면 채점 컨테이너가 그
-                  커밋 가중치를 올려 답변 생성부터 수행하고(생성 모드), 미지정이면 종전대로
-                  데이터셋에 담긴 미채점 생성물을 채점한다. 두 모드는 소요가 크게 달라
-                  설명 문구로 어느 쪽인지 항상 보이게 둔다. 벤치마크·메트릭과 달리 런 전체에
-                  하나라서 벤치마크별 표(2단계)가 아니라 확인 단계에 놓는다. */}
-              {hasRealBenchmark && (
-                <div className={cx('checkpoint-box')}>
-                  <div className={cx('checkpoint-head')}>
-                    <span className={cx('checkpoint-title')}>
-                      {t('evaluation.bench.checkpointTitle')}
-                    </span>
+                <div className={cx('opt-field')}>
+                  <span className={cx('opt-label')}>
+                    {t('evaluation.selectModel')}
+                  </span>
+                  {(modelOptions || []).length === 0 ? (
+                    <p className={cx('rail-note', 'err')}>
+                      {t('evaluation.compare.noModels')}
+                    </p>
+                  ) : (
                     <Selectbox
-                      list={checkpointOptions}
-                      selectedItem={selectedCheckpoint}
-                      onChange={(item) => setCommitId(item.value)}
+                      list={modelOptions}
+                      selectedItem={selectedModel}
+                      placeholder={t('select.label')}
+                      onChange={(item) => pickModel(item.value)}
                       customStyle={{
-                        selectboxForm: { width: '260px' },
-                        listForm: { width: '260px' },
+                        selectboxForm: { width: '100%' },
+                        listForm: { width: '100%' },
                       }}
                     />
-                  </div>
-                  <p className={cx('panel-desc')}>
-                    {commitId === CHECKPOINT_NONE
-                      ? t('evaluation.bench.checkpointNoneDesc')
-                      : t('evaluation.bench.checkpointPickedDesc')}
-                  </p>
+                  )}
                 </div>
-              )}
+                <div className={cx('opt-field')}>
+                  <span className={cx('opt-label')}>
+                    {t('evaluation.selectDatasets')}
+                  </span>
+                  {(datasetOptions || []).length === 0 ? (
+                    <p className={cx('rail-note', 'err')}>
+                      {t('evaluation.noDatasets')}
+                    </p>
+                  ) : (
+                    <Selectbox
+                      type='search'
+                      list={datasetOptions}
+                      selectedItem={selectedDataset}
+                      placeholder={t('evaluation.searchDataset')}
+                      onChange={(item) => setDatasetId(item.value)}
+                      scrollAutoFocus={true}
+                      customStyle={{
+                        selectboxForm: { width: '100%' },
+                        listForm: { width: '100%' },
+                      }}
+                    />
+                  )}
+                </div>
+              </div>
 
-              {/* 실행 옵션 — 채점 컨테이너가 실제로 읽는 파라미터만 둔다
-                  (evaluate_logickor_judge app.py 의 params.get). 숫자·문자 칸은 비우면
-                  컨테이너 기본값이라, 기본값을 FE 가 복제하지 않고 placeholder 로만 알린다.
-                  생성 옵션은 체크포인트를 골라 생성 모드로 갈 때만 효력이 있어 그때만 뜬다 —
-                  채점 전용 런에 띄우면 눌러도 아무 일이 없는 칸이 된다. */}
-              {hasRunOptions && (
-                <div className={cx('checkpoint-box')}>
-                  <div className={cx('checkpoint-head')}>
-                    <span className={cx('checkpoint-title')}>
-                      {t('evaluation.bench.runOptionsTitle')}
-                    </span>
-                  </div>
-                  <p className={cx('panel-desc')}>
-                    {t('evaluation.bench.runOptionsDesc')}
+              {/* ① 출력을 어디서 가져오나 — 이미 떠 있는 배포에 생성을 요청한다(GPU 를 새로
+                  잡지 않는다). 후보는 위에서 고른 모델을 서빙 중인 배포뿐이라, 모델을 고르기
+                  전에는 물어볼 것이 없다. 이 절은 '무엇을 평가하나'(⓪)가 아니라 '그 답변을
+                  누가 만드나'를 정한다. */}
+              <div className={cx('rail-sec', !sourceReady && 'warn')}>
+                <p className={cx('rail-title')}>
+                  {t('evaluation.run.sourceTitle')}
+                  <Badge
+                    label={t('evaluation.bench.required')}
+                    type='red'
+                    size='sm'
+                  />
+                </p>
+                {!modelId ? (
+                  <p className={cx('rail-note')}>
+                    {t('evaluation.run.sourceNeedModel')}
                   </p>
+                ) : deployments === null ? (
+                  <p className={cx('rail-note')}>
+                    {t('evaluation.project.loading')}
+                  </p>
+                ) : deploymentOptions.length === 0 ? (
+                  <EmptyBox
+                    text={
+                      anyRunning
+                        ? 'evaluation.run.sourceNoneForModel'
+                        : 'evaluation.run.sourceNone'
+                    }
+                    isBox
+                    customStyle={{
+                      minHeight: '96px',
+                      padding: '12px 14px',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                ) : (
+                  <>
+                    <Selectbox
+                      list={deploymentOptions}
+                      selectedItem={selectedDeployment}
+                      placeholder={t('select.label')}
+                      onChange={(item) => setPlaygroundId(item.value)}
+                      customStyle={{
+                        selectboxForm: { width: '100%' },
+                        listForm: { width: '100%' },
+                      }}
+                    />
+                    {deployment && (
+                      <ul className={cx('rail-meta')}>
+                        {deployment.description && (
+                          <li>{deployment.description}</li>
+                        )}
+                        <li>{deployment.deploy_type || 'cluster'}</li>
+                      </ul>
+                    )}
+                  </>
+                )}
+                <p className={cx('rail-note')}>
+                  {t('evaluation.bench.targetDeployNote')}
+                </p>
+                {/* 형식 경고 — 위험은 그 배포가 올린 모델의 출력 형식이다. 규약을 벗어나면
+                    전 지표가 0 이 된다. */}
+                {needsCheckpoint && (
+                  <p className={cx('rail-note', 'err')}>
+                    {t('evaluation.bench.formatNoteDeploy')}
+                  </p>
+                )}
+              </div>
 
-                  {commitId !== CHECKPOINT_NONE && (
-                    <div className={cx('opt-grid')}>
-                      <div className={cx('opt-field')}>
-                        <span className={cx('opt-label')}>
-                          {t('evaluation.bench.optStrategy')}
-                        </span>
-                        <Selectbox
-                          list={strategyOptions}
-                          selectedItem={selectedStrategy}
-                          onChange={(item) => setStrategy(item.value)}
-                          customStyle={{
-                            selectboxForm: { width: '100%' },
-                            listForm: { width: '100%' },
-                          }}
-                        />
-                      </div>
-                      <div className={cx('opt-field')}>
-                        <span className={cx('opt-label')}>
-                          {t('evaluation.bench.optGenModelLen')}
-                        </span>
-                        <InputText
-                          size='medium'
-                          value={generateModelLen}
-                          placeholder={t('evaluation.bench.optGenModelLenPh', {
-                            min: MODEL_LEN_MIN,
-                            max: MODEL_LEN_MAX,
-                          })}
-                          onChange={(e) => setGenerateModelLen(e.target.value)}
-                          customStyle={{ width: '100%' }}
-                        />
-                      </div>
+              {/* ③ 기록될 지표 — 통보만 한다. 한 번의 채점에서 나오는 지표는 전부 남는다. */}
+              {benchmark && (
+                <div className={cx('rail-sec')}>
+                  <p className={cx('rail-title')}>
+                    {t('evaluation.bench.recordedMetrics')}
+                    <Badge
+                      label={String(recorded.length)}
+                      type='blue'
+                      size='sm'
+                    />
+                  </p>
+                  <ul className={cx('metric-plan')}>
+                    {recorded.map((m) => (
+                      <li
+                        key={m}
+                        className={cx(m === benchmark.recommended && 'rec')}
+                      >
+                        {metricLabel(t, m) || m}
+                        {m === benchmark.recommended && (
+                          <Badge
+                            label={t('evaluation.bench.representative')}
+                            type='blue'
+                            size='sm'
+                          />
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                  {generationMetrics && (
+                    <div className={cx('gen-opt')}>
+                      <Checkbox
+                        checked={withGeneration}
+                        onChange={() => setWithGeneration((v) => !v)}
+                        label={t('evaluation.bench.addGenMetrics', {
+                          metrics: generationMetrics
+                            .map((m) => metricLabel(t, m) || m)
+                            .join(' · '),
+                        })}
+                      />
+                      <Badge
+                        label={t('evaluation.bench.genCost')}
+                        type='yellow'
+                        size='sm'
+                      />
                     </div>
                   )}
-
-                  <div className={cx('opt-grid')}>
-                    <div className={cx('opt-field')}>
-                      <span className={cx('opt-label')}>
-                        {t('evaluation.bench.optJudgeModel')}
-                      </span>
-                      <Selectbox
-                        list={judgeModelOptions}
-                        selectedItem={selectedJudgeModel}
-                        onChange={(item) => setJudgeModel(item.value)}
-                        customStyle={{
-                          selectboxForm: { width: '100%' },
-                          listForm: { width: '100%' },
-                        }}
-                      />
-                    </div>
-                    <div className={cx('opt-field')}>
-                      <span className={cx('opt-label')}>
-                        {t('evaluation.bench.optJudgeModelLen')}
-                      </span>
-                      <InputText
-                        size='medium'
-                        value={judgeModelLen}
-                        placeholder={t('evaluation.bench.optJudgeModelLenPh', {
-                          min: MODEL_LEN_MIN,
-                          max: MODEL_LEN_MAX,
-                        })}
-                        onChange={(e) => setJudgeModelLen(e.target.value)}
-                        customStyle={{ width: '100%' }}
-                      />
-                    </div>
-                    <div className={cx('opt-field')}>
-                      <span className={cx('opt-label')}>
-                        {t('evaluation.bench.optJudgeMaxOut')}
-                      </span>
-                      <InputText
-                        size='medium'
-                        value={judgeMaxOutputTokens}
-                        placeholder={t('evaluation.bench.optJudgeMaxOutPh', {
-                          min: JUDGE_MAX_OUTPUT_MIN,
-                          max: JUDGE_MAX_OUTPUT_MAX,
-                        })}
-                        onChange={(e) =>
-                          setJudgeMaxOutputTokens(e.target.value)
-                        }
-                        customStyle={{ width: '100%' }}
-                      />
-                    </div>
-                  </div>
+                  <p className={cx('rail-note')}>
+                    {t('evaluation.bench.recordedMetricsNote')}
+                  </p>
                 </div>
               )}
-
-              <div className={cx('confirm-list')}>
-                {selected.map((id) => (
-                  <div key={id} className={cx('confirm-row')}>
-                    <span className={cx('confirm-name')}>
-                      {BENCHMARK_MAP[id].label}
-                    </span>
-                    <Badge
-                      label={METRIC_MAP[metricMap[id]]?.label || metricMap[id]}
-                      type='blue'
-                      size='sm'
-                    />
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
+            </div>
+          </aside>
         </div>
-
-        <aside className={cx('summary')}>
-          <div className={cx('summary-card')}>
-            <div className={cx('summary-head')}>
-              <h4 className={cx('summary-title')}>
-                {t('evaluation.bench.selectedBench')} ({selected.length})
-              </h4>
-              {selected.length > 0 && (
-                <ButtonV2
-                  type='clear'
-                  colorType='red'
-                  size='s'
-                  label={t('evaluation.bench.clearAll')}
-                  onClick={clearAll}
-                />
-              )}
-            </div>
-            {selected.length === 0 ? (
-              <EmptyBox
-                text='evaluation.bench.empty'
-                customStyle={{ height: '72px' }}
-              />
-            ) : (
-              <ul className={cx('summary-list')}>
-                {selected.map((id) => (
-                  <li key={id} className={cx('summary-item')}>
-                    <span>{BENCHMARK_MAP[id].label}</span>
-                    <Badge
-                      label={
-                        BENCHMARK_CATEGORIES.find(
-                          (item) => item.id === BENCHMARK_MAP[id].category,
-                        )?.label
-                      }
-                      type='gray'
-                      size='sm'
-                    />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          {selected.length > 0 && (
-            <div className={cx('summary-card')}>
-              <h4 className={cx('summary-title')}>
-                {t('evaluation.bench.metricMapping')}
-              </h4>
-              <ul className={cx('summary-list')}>
-                {selected.map((id) => (
-                  <li key={id} className={cx('summary-item')}>
-                    <span>{BENCHMARK_MAP[id].label}</span>
-                    <Badge
-                      label={METRIC_MAP[metricMap[id]]?.label || metricMap[id]}
-                      type='blue'
-                      size='sm'
-                    />
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          <div className={cx('guide', 'summary-guide')}>
-            <GuideBox
-              title={t('evaluation.bench.setupTitle')}
-              isTitleIcon
-              textList={[
-                t('evaluation.bench.summaryInfo'),
-                `${t('evaluation.bench.totalBench')}: ${selected.length}`,
-                `${t('evaluation.bench.totalMetric')}: ${metricCount}`,
-              ]}
-            />
-          </div>
-
-          <div className={cx('wizard-actions')}>
-            {step > 1 && (
-              <ButtonV2
-                type='outline'
-                colorType='blue'
-                size='l'
-                label={t('evaluation.bench.prev')}
-                onClick={() => setStep(step - 1)}
-              />
-            )}
-            {step < 3 ? (
-              <ButtonV2
-                type='solid'
-                colorType='blue'
-                size='l'
-                label={
-                  step === 1
-                    ? t('evaluation.bench.nextToMetric')
-                    : t('evaluation.bench.nextToConfirm')
-                }
-                disabled={!canProceed}
-                onClick={() => goStep(step + 1)}
-              />
-            ) : (
-              <ButtonV2
-                type='solid'
-                colorType='blue'
-                size='l'
-                label={
-                  running
-                    ? t('evaluation.running')
-                    : t('evaluation.runBenchmark')
-                }
-                disabled={!canProceed || running}
-                isLoading={running}
-                onClick={handleRun}
-              />
-            )}
-          </div>
-        </aside>
-      </div>
+      </NewStyleModalFrame>
     </div>
   );
 };

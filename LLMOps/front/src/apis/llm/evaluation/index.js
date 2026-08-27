@@ -4,12 +4,14 @@ import { callApi, downloadBlob } from '@src/network';
 // 벤치마크 평가 런 생성/폴링/이력/상태. (LLM-judge=P2, 전문가=P3.)
 
 // ── 평가 프로젝트 (P2) ────────────────────────────────────────────────
-// 프로젝트 = 모델 + 데이터셋(들) + 평가유형 + 이름을 묶는 관리 단위(생성 후 불변).
-// run(벤치마크/judge/expert)은 프로젝트에서 model_id·dataset_ids 를 상속받아 생성된다.
+// 프로젝트 = 평가유형 + 이름을 묶는 관리 단위. **모델·데이터셋은 프로젝트가 아니라 런이
+// 고른다**(실행 시점 선택) — 한 프로젝트 안에서 모델·데이터셋을 바꿔 가며 견주는 것이
+// 프로젝트의 목적이라 생성 시점에 잠글 수 없다. 옛 프로젝트는 project.model_id /
+// dataset_ids 를 그대로 갖고 있고(표시용), 새 프로젝트는 null/빈 값이다.
 
-// 프로젝트 생성(대기 상태, run 0개). body: { name, model_id, dataset_ids: number[],
-//   eval_type: 'benchmark'|'judge'|'expert' }. workspace_id 는 서버가 model_id 로 도출(바디 미포함).
-//   → get_project shape 반환 { project, runs }.
+// 프로젝트 생성(대기 상태, run 0개). body: { name, eval_type: 'reference'|'judge'|'expert',
+//   workspace_id } — workspace_id 는 라우트 파라미터에서 온다(모델을 안 받으므로 서버가
+//   model_id 로 도출할 수 없다). → get_project shape 반환 { project, runs }.
 export const createEvalProject = async (body) => {
   return await callApi({ url: 'evaluations/projects', method: 'post', body });
 };
@@ -48,12 +50,17 @@ export const compareProjectRuns = async (projectId) => {
   });
 };
 
-// ── run 생성 (P2+: 프로젝트 상속) ─────────────────────────────────────
-// 벤치마크 런 생성. body: { project_id, benchmarks?: [{ benchmark, metric }] } — 벤치마크→메트릭
-//   매핑(생략 시 전체 벤치마크·권장 메트릭). model/dataset 은 프로젝트에서 상속.
-// LogicKor 심판 후보 목록. → { models: [{id,label,hf_id,size_gb}], default }.
-//   FE 는 이 응답만 렌더한다 — 목록을 프론트에 복제하면 서버 화이트리스트와 드리프트하고,
-//   캐시에 없는 심판이 화면에 뜨는 순간 "GPU 잡고 몇 분 뒤 실패"가 되살아난다.
+// ── run 생성 (P2+: 런이 대상을 지정) ──────────────────────────────────
+// 전 런 계약 공통 필수: model_id(이 런이 평가할 모델), dataset_ids(정확히 1개).
+// 벤치마크 런 생성. body: { project_id, model_id, dataset_ids: [id],
+//   benchmarks?: [{ benchmark, metric }] } — 벤치마크→메트릭 매핑(생략 시 전체·권장 메트릭).
+// LogicKor 내장 심판(컨테이너가 GPU 에 직접 올리는 심판) 후보 목록.
+//   → { models: [{id,label,hf_id,size_gb}], default }.
+//   ⚠️ **지금 이걸 부르는 화면은 없다** — 심판은 떠 있는 배포로 일원화했고(judge_playground_id)
+//   내장 심판 경로는 BE 에 남겨 둔 채 화면에서만 감췄다(JudgeRunConfig 머리 주석).
+//   그 경로를 화면에 되살릴 때 후보를 프론트에 복제하지 말고 이 응답을 그대로 렌더하라 —
+//   서버 화이트리스트와 드리프트하면 캐시에 없는 심판이 화면에 떠서
+//   "GPU 잡고 몇 분 뒤 실패"가 되살아난다.
 export const getBenchmarkJudgeModels = async () => {
   return await callApi({ url: 'evaluations/benchmark/judge-models', method: 'get' });
 };
@@ -62,7 +69,8 @@ export const runBenchmark = async (body) => {
   return await callApi({ url: 'evaluations/benchmark', method: 'post', body });
 };
 
-// 평가 추론 러너(generate) 런 생성. body: { project_id, system_prompt?, inference_playground_id?,
+// 평가 추론 러너(generate) 런 생성. body: { project_id, model_id, dataset_ids: [id],
+//   system_prompt?, inference_playground_id?,
 //   instance_id?, instance_count?, gpu_count?, commit_id? }. running 배포 재사용 or 전용 할당(후 회수).
 //   → 즉시 { job_id, allocated, system_prompt, ... }. per-sample output 은 백그라운드로 생성·영속. (P1 WIP)
 export const runEvalInference = async (body) => {
@@ -77,20 +85,37 @@ export const getEvalResult = async (modelId, jobId) => {
   });
 };
 
-// 모델의 평가 이력(비교표).
-export const getEvalResults = async (modelId) => {
-  return await callApi({
-    url: `evaluations/${modelId}/results`,
-    method: 'get',
-  });
-};
-
 // 교차모델 비교(④ 경량 뷰) — 여러 모델 이력 합쳐 전역 best-per-metric. modelIds: number[].
 export const getEvalCompare = async (modelIds) => {
   return await callApi({
     url: 'evaluations/compare',
     method: 'get',
     params: { model_ids: (modelIds || []).join(',') },
+  });
+};
+
+// 런 단위 교차 비교 후보(P1) — 워크스페이스 전 평가 런(프로젝트 가로지름). 각 항목에
+//   project_name/model_name/checkpoint/source_* /metric_set/status/metrics 가 실려 있어
+//   화면이 "어느 모델의 어느 체크포인트를 언제 돌린 런인가" 를 날짜 없이도 구분할 수 있다.
+export const listEvalRuns = async (workspaceId) => {
+  return await callApi({
+    url: 'evaluations/runs',
+    method: 'get',
+    params: { workspace_id: workspaceId },
+  });
+};
+
+// 런 단위 비교(P1) — 지목한 런들만 열로 세운다. → { runs, metric_keys, best, datasets,
+//   dataset_consistent }. dataset_consistent=false 면 서로 다른 데이터셋을 섞어 본 것이라
+//   화면이 경고를 띄운다(차단은 하지 않는다).
+export const getEvalCompareRuns = async (workspaceId, runIds) => {
+  return await callApi({
+    url: 'evaluations/compare-runs',
+    method: 'get',
+    params: {
+      workspace_id: workspaceId,
+      run_ids: (runIds || []).join(','),
+    },
   });
 };
 
@@ -120,31 +145,19 @@ export const getEvalDatasets = async (workspaceId) => {
   });
 };
 
-// ── LLM-as-a-Judge (P2) ──────────────────────────────────────────────
-// 가용 심판 목록(상용 3종 + 로컬) + 기준.
-export const getJudges = async () => {
-  return await callApi({ url: 'evaluations/judges', method: 'get' });
-};
-
-// judge 런 생성(직접호출 비동기). ⚠️ api_key/base_url = transient — 화면 state 에만, 영속 X.
-// body: { project_id, provider, criteria, judge_model?, api_key?, base_url?, custom_prompt? }
-//   — model/dataset 은 프로젝트에서 상속(바디 미포함).
-export const runJudge = async (body) => {
-  return await callApi({ url: 'evaluations/judge', method: 'post', body });
-};
-
-// judge 런 결과 폴링(eval_result row 직접 조회 — 컨테이너/NFS 미경유).
-export const getJudgeResult = async (modelId, jobId) => {
-  return await callApi({
-    url: `evaluations/${modelId}/${jobId}/judge-result`,
-    method: 'get',
-  });
-};
+// ── LLM 심사 (LLM-as-a-Judge) ────────────────────────────────────────
+// 전용 엔드포인트는 없다. 심사 벤치마크(LogicKor)는 벤치마크 런이므로 생성은 runBenchmark
+//   ({ benchmarks: ['logickor'], inference_playground_id, judge_playground_id, ... }),
+//   결과 폴링은 getEvalResult 를 그대로 쓴다. BE 는 프로젝트 유형과 벤치마크 유형이
+//   어긋나면 런 생성을 거부한다.
+// 폐기(2026-08-27): runJudge(POST /evaluations/judge) · getJudges(GET /evaluations/judges) ·
+//   getJudgeResult(GET /{modelId}/{jobId}/judge-result). 자유 샘플 × 기준 4종 채점은 mock
+//   이었고, 외부 API 심판(키·엔드포인트 수취)은 평가가 아니라 배포 표면의 문제라 옮긴다.
 
 // ── 전문가 평가 (P3) ──────────────────────────────────────────────────
 // 세션 시작 → { job_id, total, expert_prompt, samples: [{ idx, output,
 //   image/image_url/image_served, csv_rows(2D)/csv_text }] }. body: { project_id,
-//   inference_playground_id? } — model/dataset 은 프로젝트에서 상속(바디 미포함).
+//   model_id, dataset_ids: [id], inference_playground_id? } — 대상은 런이 지정한다.
 // expert_prompt(고정 지침)·per-sample csv_rows/csv_text 는 startExpert 시 인라인으로 내려온다
 // (이미지는 별도 blob 엔드포인트 expert-image/{idx} 유지). input/reference 는 계약엔 있으나 FE 미표시.
 export const startExpert = async (body) => {

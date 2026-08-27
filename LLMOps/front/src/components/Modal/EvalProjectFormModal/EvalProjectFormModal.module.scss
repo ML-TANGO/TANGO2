@@ -1,8 +1,9 @@
 @import '@src/styles/color.scss';
 
 // NewStyleModalFrame 안에 들어가는 폼 레이아웃 스타일.
-// 필드는 전부 디자인시스템 컴포넌트(InputText/Radio/Selectbox/ModelSelector)라
-// 별도 스타일이 필요 없고, 행 간격만 학습 모달(.row 32px)과 동일하게 맞춘다.
+// 이름 칸은 디자인시스템 컴포넌트(InputText)라 별도 스타일이 필요 없고, 행 간격만
+// 학습 모달(.row 32px)과 동일하게 맞춘다. 평가 유형만 카드형이라 여기서 그린다 —
+// 라벨 한 줄로는 "무엇으로 채점하는지"를 담을 수 없어 설명 줄이 필요하다.
 
 .form {
   display: flex;
@@ -16,9 +17,66 @@
   }
 }
 
-// 워크스페이스에 데이터셋이 없을 때 안내(구 모달 동작 복원).
-.empty {
-  padding: 12px 0;
-  color: $mono204;
-  font-size: 13px;
+.type-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+// width:100% + 좌우 padding 조합이라 border-box 가 필수다 — 안 그러면 카드가 폼 밖으로 넘친다.
+.type-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid $mono203;
+  border-radius: 6px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    border-color: $primary-color;
+  }
+
+  &.on {
+    border-color: $primary-color;
+    background: $blue101;
+  }
+}
+
+.type-mark {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  border: 1px solid $mono203;
+  border-radius: 50%;
+  background: #fff;
+
+  .type-card.on & {
+    border: 5px solid $primary-color;
+  }
+}
+
+.type-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.type-name {
+  color: $normal-text-color;
+  font-family: SpoqaB;
+  font-size: 14px;
+  line-height: 18px;
+}
+
+.type-desc {
+  color: $sub-text-color;
+  font-family: SpoqaM;
+  font-size: 12px;
+  line-height: 17px;
 }

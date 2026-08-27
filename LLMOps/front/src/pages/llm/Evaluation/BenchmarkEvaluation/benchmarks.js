@@ -1,16 +1,26 @@
 // 벤치마크 정본 — id = llm_evaluation BE constants.BENCHMARK_IDS + evaluate-benchmark-mock 컨테이너와 일치.
-// 벤치마크 평가는 "벤치마크 선택 → 벤치마크별 메트릭 지정" 2단계다. 이 카탈로그가
-//   1단계(선택·카테고리 필터)와 2단계(권장/허용 메트릭)의 소스다. 메트릭 카탈로그는
-//   benchmarkMetrics.js(점수 함수 — 벤치마크 이름과 분리). category id = 카테고리 사이드바 필터.
+// 메트릭 카탈로그는 benchmarkMetrics.js(점수 함수 — 벤치마크 이름과 분리).
+// category id = 카테고리 사이드바 필터.
+//
+// evalType = **누가 채점하나**. 평가 유형(프로젝트 eval_type)과 같은 축이며, 이 값이
+//   벤치마크가 어느 실행 화면에 서는지를 결정한다.
+//     'reference' — 정답이 데이터에 있어 기계가 대조한다. 심판이 없고 재현 가능하다.
+//     'judge'     — 정답이 없어 심판 LLM 이 1~10 점으로 매긴다. 심판 배포가 필수다.
+//   BE 도 프로젝트 유형과 벤치마크 유형이 어긋나면 런 생성을 거부하므로, 두 목록을
+//   섞어 한 화면에 세우면 화면에서만 고를 수 있고 서버에서 죽는 조합이 생긴다.
 
+// ⚠️ 사용자에게 보이는 문구는 **전부 i18n 키**로 둔다(labelKey/descKey). 이 카탈로그는
+// 데이터 모듈이라 t() 를 부를 수 없고, 문자열을 그대로 박아 두면 영어 로케일에서도 한국어가
+// 그대로 나온다(키가 아니라 ko/en 대조로도 안 잡힌다). 렌더하는 쪽에서 t() 로 읽는다.
+// 벤치마크 label(ARC·MMLU…)만은 고유명사라 번역하지 않고 문자열로 둔다.
 export const BENCHMARK_CATEGORIES = [
-  { id: 'all', label: '전체' },
-  { id: 'knowledge', label: '지식/이해' },
-  { id: 'reasoning', label: '추론' },
-  { id: 'commonsense', label: '상식/언어이해' },
-  { id: 'math', label: '수학' },
-  { id: 'safety', label: '사실성/안전성' },
-  { id: 'code', label: '코드' },
+  { id: 'all', labelKey: 'evaluation.bench.cat.all' },
+  { id: 'knowledge', labelKey: 'evaluation.bench.cat.knowledge' },
+  { id: 'reasoning', labelKey: 'evaluation.bench.cat.reasoning' },
+  { id: 'commonsense', labelKey: 'evaluation.bench.cat.commonsense' },
+  { id: 'math', labelKey: 'evaluation.bench.cat.math' },
+  { id: 'safety', labelKey: 'evaluation.bench.cat.safety' },
+  { id: 'code', labelKey: 'evaluation.bench.cat.code' },
 ];
 
 // recommended = 생략 시 채택할 기본 메트릭(BE constants.BENCHMARK_RECOMMENDED_METRIC 와 일치).
@@ -19,72 +29,81 @@ export const BENCHMARKS = [
   {
     id: 'arc',
     label: 'ARC',
-    desc: 'AI2 Reasoning Challenge',
+    descKey: 'evaluation.bench.benchDesc.arc',
     category: 'reasoning',
+    evalType: 'reference',
     recommended: 'accuracy',
     metrics: ['accuracy', 'acc_norm', 'f1'],
   },
   {
     id: 'kobest',
     label: 'KoBEST',
-    desc: '한국어 NLU 벤치마크',
+    descKey: 'evaluation.bench.benchDesc.kobest',
     category: 'knowledge',
+    evalType: 'reference',
     recommended: 'f1',
     metrics: ['f1', 'accuracy', 'acc_norm'],
   },
   {
     id: 'mmlu',
     label: 'MMLU',
-    desc: '다분야 언어 이해 (57개 과목)',
+    descKey: 'evaluation.bench.benchDesc.mmlu',
     category: 'knowledge',
+    evalType: 'reference',
     recommended: 'accuracy',
     metrics: ['accuracy', 'acc_norm'],
   },
   {
     id: 'hellaswag',
     label: 'HellaSwag',
-    desc: '상식 추론 — 문장 완성',
+    descKey: 'evaluation.bench.benchDesc.hellaswag',
     category: 'commonsense',
+    evalType: 'reference',
     recommended: 'acc_norm',
     metrics: ['acc_norm', 'accuracy'],
   },
   {
     id: 'winogrande',
     label: 'WinoGrande',
-    desc: '상식 추론 — 대명사 해소',
+    descKey: 'evaluation.bench.benchDesc.winogrande',
     category: 'commonsense',
+    evalType: 'reference',
     recommended: 'accuracy',
     metrics: ['accuracy', 'acc_norm'],
   },
   {
     id: 'gsm8k',
     label: 'GSM8K',
-    desc: '초등 수학 문제 풀이',
+    descKey: 'evaluation.bench.benchDesc.gsm8k',
     category: 'math',
+    evalType: 'reference',
     recommended: 'accuracy',
     metrics: ['accuracy', 'f1'],
   },
   {
     id: 'truthfulqa',
     label: 'TruthfulQA',
-    desc: '사실 정확성 평가',
+    descKey: 'evaluation.bench.benchDesc.truthfulqa',
     category: 'safety',
+    evalType: 'reference',
     recommended: 'accuracy',
     metrics: ['accuracy', 'f1', 'bleu', 'rouge'],
   },
   {
     id: 'boolq',
     label: 'BoolQ',
-    desc: '예/아니오 질의응답',
+    descKey: 'evaluation.bench.benchDesc.boolq',
     category: 'safety',
+    evalType: 'reference',
     recommended: 'accuracy',
     metrics: ['accuracy', 'f1'],
   },
   {
     id: 'humaneval',
     label: 'HumanEval',
-    desc: '코드 생성 능력 평가',
+    descKey: 'evaluation.bench.benchDesc.humaneval',
     category: 'code',
+    evalType: 'reference',
     recommended: 'accuracy',
     metrics: ['accuracy'],
   },
@@ -95,8 +114,9 @@ export const BENCHMARKS = [
   {
     id: 'logickor',
     label: 'LogicKor',
-    desc: '한국어 추론·생성 — 6영역 × 2턴, 심판 LLM 1~10점',
+    descKey: 'evaluation.bench.benchDesc.logickor',
     category: 'reasoning',
+    evalType: 'judge',
     recommended: 'judge_overall',
     metrics: ['judge_overall', 'judge_single', 'judge_multi'],
     real: true,
@@ -107,8 +127,9 @@ export const BENCHMARKS = [
   {
     id: 'mixatis',
     label: 'MixATIS',
-    desc: '다중의도·슬롯 — 828 발화, 정답 대조 채점(심판 없음)',
+    descKey: 'evaluation.bench.benchDesc.mixatis',
     category: 'reasoning',
+    evalType: 'reference',
     recommended: 'joint_acc',
     metrics: ['joint_acc', 'intent_acc', 'intent_f1', 'slot_f1'],
     real: true,
@@ -116,22 +137,24 @@ export const BENCHMARKS = [
     // MixATIS 채점기는 평가할 가중치가 없으면 기동 직후 거부한다. BE 도
     // constants.CHECKPOINT_REQUIRED_MANIFEST_KEYS 로 파드를 띄우기 전에 막는다.
     requiresCheckpoint: true,
+    // 출력이 UGEN 규약을 벗어나면 파싱이 빈 예측을 만들어 전 지표가 0 이 된다. 고르는
+    // 자리에서 이 사실을 배지로 세워, 형식 학습이 안 된 가중치로 재고 나서 0 을 보는
+    // 일이 없게 한다(실행 차단은 requiresCheckpoint 검증이 담당).
+    requiresFormat: true,
   },
 ];
 
-// 실채점 벤치마크 id 집합 — mock(해시 점수)과 구분해 배지로 표시한다. BE
-// constants.REAL_BENCHMARK_MANIFEST_KEY 와 대응한다(서로 다른 채점 컨테이너로 라우팅되며,
-// 그래서 mock 벤치마크와 한 런에 섞어 실행할 수 없다).
-export const REAL_BENCHMARK_IDS = BENCHMARKS.filter((b) => b.real).map((b) => b.id);
+// 유형별 벤치마크 목록 — 실행 화면 하나가 세우는 후보 전체다. 정답 대조 화면은
+// REFERENCE_BENCHMARKS 를(카테고리 필터·검색과 함께), LLM 심사 화면은 JUDGE_BENCHMARKS 를
+// 그린다. 한 화면이 둘을 함께 세우지 않는 이유는 채점 주체가 다르면 물어야 할 것이
+// 달라지기 때문이다 — 심사에는 심판 배포가 필수이고, 정답 대조에는 심판이 아예 없다.
+export const REFERENCE_BENCHMARKS = BENCHMARKS.filter(
+  (b) => b.evalType === 'reference',
+);
 
-// 사용자에게 보이는 축 — 표준(공개 벤치마크 여러 개를 표준 지표로 한 번에) vs
-// 과제별(특정 과제를 그 과제의 방식으로, 한 번에 하나씩).
-// 내부의 real/mock 과 경계는 같지만 이름을 나눈 이유는, 사용자가 "채점기가 몇 개인지"를
-// 알아야 고를 수 있는 화면은 잘못 만들어진 화면이기 때문이다. real 은 배선용 내부 용어로
-// 남기고, 화면에는 무엇을 재는지로만 말한다.
-export const BENCHMARK_KIND = { STANDARD: 'standard', TASK: 'task' };
-
-export const TASK_BENCHMARK_IDS = REAL_BENCHMARK_IDS;
+export const JUDGE_BENCHMARKS = BENCHMARKS.filter(
+  (b) => b.evalType === 'judge',
+);
 
 // 체크포인트 없이는 채점기가 기동 직후 거부하는 벤치마크. 실행 전에 화면에서 걸러
 // 값비싼 GPU 파드가 떴다가 죽는 것을 막는다(BE 도 같은 경계를 강제한다).
@@ -147,18 +170,14 @@ export const BENCHMARK_LABEL = Object.fromEntries(
   BENCHMARKS.map((b) => [b.id, b.label]),
 );
 
-export const CATEGORY_LABEL = Object.fromEntries(
-  BENCHMARK_CATEGORIES.map((c) => [c.id, c.label]),
-);
-
-// 카테고리별 벤치마크 수(사이드바 카운트). 'all' = 전체.
-// 카테고리 필터는 **표준 그리드에만** 걸린다(과제별은 전용 라디오로 고른다). 그래서
-// 세는 대상도 표준으로 좁힌다 — 전체를 세면 그리드에 없는 과제별 벤치마크까지 잡혀
-// '전체 (11)' 인데 9개만 보이고, 둘 다 category:'reasoning' 이라 '추론 (3)' 인데
-// 1개만 보이는 어긋남이 생긴다.
+// 카테고리별 벤치마크 수(정답 대조 그리드의 필터 카운트). 'all' = 전체.
+// 카테고리 필터는 **정답 대조 그리드에만** 걸리므로 세는 대상도 그 목록으로 좁힌다 —
+// 전 벤치마크를 세면 그리드에 없는 심사 벤치마크(LogicKor)까지 잡혀 '전체 (11)' 인데
+// 10개만 보이고, LogicKor 도 category:'reasoning' 이라 '추론 (3)' 인데 2개만 보이는
+// 어긋남이 생긴다.
 export const categoryCount = (categoryId) =>
-  BENCHMARKS.filter(
-    (b) => !b.real && (categoryId === 'all' || b.category === categoryId),
+  REFERENCE_BENCHMARKS.filter(
+    (b) => categoryId === 'all' || b.category === categoryId,
   ).length;
 
 // 벤치마크의 기본(권장) 메트릭. metrics 후보에 recommended 가 없으면 첫 후보로 폴백.
@@ -166,4 +185,28 @@ export const defaultMetricFor = (benchmarkId) => {
   const b = BENCHMARK_MAP[benchmarkId];
   if (!b) return null;
   return b.metrics.includes(b.recommended) ? b.recommended : b.metrics[0];
+};
+
+// 형식(출력 규약) 학습이 전제인 벤치마크 — 안 맞으면 점수가 0 으로 주저앉는다.
+export const FORMAT_REQUIRED_BENCHMARK_IDS = BENCHMARKS.filter(
+  (b) => b.requiresFormat,
+).map((b) => b.id);
+
+// 추론을 한 번 더 돌려야 나오는 "생성 지표". 나머지는 한 번의 채점에서 전부 나오므로
+// 고를 것이 없지만, 이 둘만은 비용(추론 1회)이 붙어 옵트인으로 둔다.
+// 키 = 벤치마크 id, 값 = 그 벤치마크의 metrics 중 생성 경로가 필요한 메트릭 id.
+export const GENERATION_METRICS = {
+  truthfulqa: ['bleu', 'rouge'],
+};
+
+// 이 런이 기록할 지표 목록. 채점기가 한 번에 계산해 내는 지표는 전부 기록되므로
+// 사용자가 고를 것이 없다 — 화면은 "무엇이 기록되는지"만 통보한다.
+// withGeneration=false 면 생성 지표는 빠진다(기본).
+export const recordedMetricsFor = (benchmarkId, withGeneration = false) => {
+  const benchmark = BENCHMARK_MAP[benchmarkId];
+  if (!benchmark) return [];
+  const generation = GENERATION_METRICS[benchmarkId] || [];
+  return benchmark.metrics.filter(
+    (m) => withGeneration || !generation.includes(m),
+  );
 };

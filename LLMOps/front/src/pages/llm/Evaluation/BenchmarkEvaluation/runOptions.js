@@ -1,102 +1,67 @@
-// 실채점 컨테이너(LogicKor) 실행 옵션 카탈로그 — 경계·전략 목록은 BE
-// llm_evaluation constants.py 의 LOGICKOR_* 와 **같은 값**이어야 한다. 어긋나면 FE 가
-// 통과시킨 값이 서버에서 422 로 되돌아온다.
+// LLM 심사(LogicKor) 실채점 컨테이너 실행 옵션.
 //
-// ⚠️ seed 는 없다. 생성(generate.py temperature=0)·심판(judge.py temperature=0.0) 둘 다
-//    greedy 디코딩이라 시드가 바꿀 난수가 존재하지 않는다 — 노브를 만들면 아무 것도
-//    하지 않는 컨트롤이 된다. 런 간 변동을 보려면 컨테이너 샘플링부터 바꿔야 한다.
-// ⚠️ hf_token 은 컨테이너가 받지만 시크릿이라 이 경로로 노출하지 않는다.
+// ⚠️ 이 옵션들은 **LLM 심사 전용**이다. 정답 대조 평가(BenchmarkRunConfig)는 심판이 없어
+//    대응물 자체가 없고, 실어 보내도 BE 가 manifest_key == 'LOGICKOR' 밖에서는 조용히
+//    버린다 — 화면에는 노브가 있는데 실행에는 영향이 없는 상태가 되므로 그 경로에서는
+//    아예 만들지 않는다(BenchmarkRunConfig 는 이 모듈을 import 하지 않는다).
+//
+// ⚠️ 와이어 포맷은 **평면**이다 — BenchmarkRunBody 는 strategy / judge_max_output_tokens 를
+//    최상위 필드로 받고, route.py 가 그것을 run_options 딕트로 묶어 서비스에 넘긴다.
+//    여기서 만든 객체를 body 에 그대로 펼쳐야 하며(`...options`), run_options 로 감싸
+//    보내면 Pydantic 이 조용히 버려 "설정했는데 컨테이너 기본값으로 돈" 런이 된다.
+//
+// 심판 자체(judge_model)는 여기 없다 — 심판은 **떠 있는 배포**로 일원화했다
+//   (judge_playground_id). 내장 심판 폴백 API 는 BE 에 남아 있지만 화면에서는 감춘다:
+//   컨테이너가 GPU 를 한 장 더 잡는 경로를 사용자가 모르는 채 고르게 두지 않는다.
+// 컨텍스트 길이(generate_model_len / judge_model_len)도 노출하지 않는다 — 전부 optional 이라
+//   안 보내면 컨테이너 기본값(생성 4096 / 심판 8192)이 그대로 쓰이고, 되살리려면 숫자 입력
+//   두 칸을 더 세워야 한다.
 
-// 이 옵션들을 소유한 벤치마크. 실채점 벤치마크라고 다 해당하는 게 아니다 — MixATIS 는
-// 심판 LLM 없이 정답 대조로 채점하므로 심판·전략 옵션에 대응물이 없다. 패널 노출과 전송을
-// 이 id 로 좁힌다(BE 도 manifest_key == 'LOGICKOR' 로 같은 범위를 강제한다).
+// 이 옵션들을 소유한 벤치마크. BE 도 manifest_key == 'LOGICKOR' 로 같은 범위를 강제한다.
 export const RUN_OPTIONS_BENCHMARK_ID = 'logickor';
 
-// 프롬프트 전략 — ETRI 원본 templates.PROMPT_STRATEGY 키. 열거형이라 '미지정'을 두지 않고
-// 정본 기본값(default)을 선택 상태로 두고 항상 보낸다.
-export const STRATEGIES = [
-  { value: 'default', label: '기본 (default)' },
-  { value: '1-shot', label: '1-shot' },
-  { value: 'cot-1-shot', label: 'cot-1-shot' },
-];
-export const DEFAULT_STRATEGY = 'default';
+// 프롬프트 전략 — BE constants.LOGICKOR_STRATEGIES 와 같은 집합이어야 한다.
+// 목록에 없는 값은 422 로 거절된다(dto._validate_strategy).
+export const JUDGE_STRATEGIES = ['default', '1-shot', 'cot-1-shot'];
 
-// 숫자·문자 옵션은 "비우면 컨테이너 기본값" 규약이다. 기본값을 FE 가 들고 있다가 컨테이너와
-// 어긋나는 것을 막으려고, 값을 복제하지 않고 placeholder 로만 안내한다.
-export const MODEL_LEN_MIN = 512;
-export const MODEL_LEN_MAX = 32768;
+// 심판 1회 출력 상한(토큰) — BE constants.LOGICKOR_JUDGE_MAX_OUTPUT_MIN/MAX 와 같은 범위.
 export const JUDGE_MAX_OUTPUT_MIN = 64;
 export const JUDGE_MAX_OUTPUT_MAX = 8192;
 
-// 심판 모델은 서버 화이트리스트의 id 다(getBenchmarkJudgeModels). 자유 입력이 아니라
-// 목록에서 고르는 값이라 FE 형식 검증이 필요 없다 — 유효성은 목록 자체가 보장하고,
-// 서버도 같은 화이트리스트로 다시 막는다.
-
-// 빈 문자열 → 미지정(요청에서 제외). 숫자 문자열 → 정수.
-const asInt = (raw) => {
-  const s = String(raw ?? '').trim();
-  if (s === '') return null;
-  return /^\d+$/.test(s) ? Number(s) : NaN;
+// 정수 범위 파서. 빈 값은 오류가 아니라 "미지정"이다 — 미지정이면 컨테이너 기본값이 쓰인다
+// (기본값을 FE 가 복제해 두지 않는 이유: 컨테이너가 바꾸면 화면이 거짓말을 하게 된다).
+const parseBounded = (raw, min, max) => {
+  const text = String(raw ?? '').trim();
+  if (text === '') return { ok: true, value: null };
+  if (!/^\d+$/.test(text)) return { ok: false };
+  const value = Number(text);
+  if (!Number.isSafeInteger(value) || value < min || value > max) {
+    return { ok: false };
+  }
+  return { ok: true, value };
 };
 
-// 입력 상태 → { ok, options } 또는 { ok:false, errorKey, min?, max? }.
-// errorKey 는 i18n 키(어느 칸이 틀렸는지), min/max 는 그 문구에 끼울 실제 경계다 —
-// 경계 숫자를 번역 문자열에 복제하지 않기 위해 값으로 넘긴다.
-// 유효한 값만 options 에 담고 미지정은 빼서 컨테이너 기본값이 그대로 쓰이게 한다.
-export const buildRunOptions = ({
-  strategy,
-  generateModelLen,
-  judgeModel,
-  judgeModelLen,
-  judgeMaxOutputTokens,
-  withGenerate,
-}) => {
+// 입력 상태 → { ok:true, options } 또는 { ok:false, errorKey }.
+// errorKey 는 i18n 키 꼬리(evaluation.bench.optErr.<errorKey>)로 그대로 이어진다.
+export const buildRunOptions = ({ strategy, judgeMaxOutputTokens }) => {
   const options = {};
 
-  // 생성 옵션은 체크포인트를 골라 생성 모드로 갈 때만 의미가 있다.
-  if (withGenerate) {
-    options.strategy = strategy || DEFAULT_STRATEGY;
-    const genLen = asInt(generateModelLen);
-    const lenBounds = { min: MODEL_LEN_MIN, max: MODEL_LEN_MAX };
-    if (Number.isNaN(genLen)) return { ok: false, errorKey: 'genLen', ...lenBounds };
-    if (genLen !== null) {
-      if (genLen < MODEL_LEN_MIN || genLen > MODEL_LEN_MAX) {
-        return { ok: false, errorKey: 'genLen', ...lenBounds };
-      }
-      options.generate_model_len = genLen;
+  const picked = String(strategy ?? '').trim();
+  if (picked !== '') {
+    // 목록 밖 전략은 서버가 422 로 거절한다 — 여기서 먼저 잡아 어느 칸이 문제인지 보인다.
+    if (!JUDGE_STRATEGIES.includes(picked)) {
+      return { ok: false, errorKey: 'strategy' };
     }
+    options.strategy = picked;
   }
 
-  const model = String(judgeModel ?? '').trim();
-  if (model !== '') options.judge_model = model;
-
-  const judgeLen = asInt(judgeModelLen);
-  if (Number.isNaN(judgeLen)) {
-    return { ok: false, errorKey: 'judgeLen', min: MODEL_LEN_MIN, max: MODEL_LEN_MAX };
-  }
-  if (judgeLen !== null) {
-    if (judgeLen < MODEL_LEN_MIN || judgeLen > MODEL_LEN_MAX) {
-      return { ok: false, errorKey: 'judgeLen', min: MODEL_LEN_MIN, max: MODEL_LEN_MAX };
-    }
-    options.judge_model_len = judgeLen;
-  }
-
-  const maxOut = asInt(judgeMaxOutputTokens);
-  if (Number.isNaN(maxOut)) {
-    return {
-      ok: false, errorKey: 'judgeMaxOut',
-      min: JUDGE_MAX_OUTPUT_MIN, max: JUDGE_MAX_OUTPUT_MAX,
-    };
-  }
-  if (maxOut !== null) {
-    if (maxOut < JUDGE_MAX_OUTPUT_MIN || maxOut > JUDGE_MAX_OUTPUT_MAX) {
-      return {
-        ok: false, errorKey: 'judgeMaxOut',
-        min: JUDGE_MAX_OUTPUT_MIN, max: JUDGE_MAX_OUTPUT_MAX,
-      };
-    }
-    options.judge_max_output_tokens = maxOut;
-  }
+  const maxOut = parseBounded(
+    judgeMaxOutputTokens,
+    JUDGE_MAX_OUTPUT_MIN,
+    JUDGE_MAX_OUTPUT_MAX,
+  );
+  if (!maxOut.ok) return { ok: false, errorKey: 'judgeMaxOut' };
+  if (maxOut.value != null) options.judge_max_output_tokens = maxOut.value;
 
   return { ok: true, options };
 };

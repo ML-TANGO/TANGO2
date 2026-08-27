@@ -1,30 +1,20 @@
 @import '@src/styles/color.scss';
 
-// ── 벤치마크 설정 위저드 ────────────────────────────────────────────────
-.wizard {
-  display: flex;
-  flex-direction: column;
-  max-width: 1280px;
-  margin-top: 8px;
-  gap: 20px;
-}
-
-.wizard-tabs {
-  padding: 12px 16px;
-  border: 1px solid $disable-color;
-  border-radius: 8px;
-  background-color: $mono200;
-}
-
-.wizard-body {
+// ── 벤치마크 실행 설정(단일 화면 모달) ────────────────────────────────
+// 좌: 종류 라디오 + 벤치마크 목록 / 우: 320px 레일(배포·체크포인트·기록될 지표·심판).
+// NewStyleModalFrame 안에 들어가므로 바깥 여백·스크롤은 프레임이 갖는다.
+.run-config {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
   align-items: start;
   gap: 20px;
+  grid-template-columns: minmax(0, 1fr) 320px;
 }
 
-.wizard-main {
+.run-main {
+  display: flex;
   min-width: 0;
+  flex-direction: column;
+  gap: 20px;
 }
 
 .panel {
@@ -55,14 +45,14 @@
   margin: 0;
   color: $title-color;
   font-family: SpoqaB;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
 }
 
 .panel-desc {
   margin: 6px 0 0;
   color: $sub-text-color;
-  font-size: 13px;
+  font-size: 12.5px;
   line-height: 1.5;
 }
 
@@ -76,33 +66,62 @@
   justify-content: flex-end;
   gap: 8px;
 
-  // 좁은 화면에서는 가로 넘침을 막는 쪽이 낫다.
   @media (max-width: 560px) {
     flex-wrap: wrap;
     justify-content: flex-start;
   }
 }
 
+// 라디오 표식 — 디자인시스템 Radio 는 라벨 텍스트만 렌더해 이 카드형 옵션에 맞지 않는다.
+.pick-radio {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  margin-top: 3px;
+  border: 1.5px solid $mono204;
+  border-radius: 50%;
+}
+
+.benchmark-option.selected .pick-radio {
+  border-color: $primary-color;
+  border-width: 2px;
+
+  &::after {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+    background-color: $primary-color;
+    inset: 3px;
+  }
+}
+
+.option-body {
+  min-width: 0;
+}
+
+// ── 정답 대조 벤치마크 그리드 ──────────────────────────────────────────
 .benchmark-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   align-content: start;
   gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
 }
 
 .benchmark-option {
+  display: grid;
+  align-items: start;
+  width: 100%;
   min-width: 0;
   padding: 16px;
   border: 1px solid $disable-color;
   border-radius: 8px;
   background-color: $mono200;
-  transition: border-color 0.15s, background-color 0.15s,
-    box-shadow 0.15s;
-
-  > div,
-  label {
-    width: 100%;
-  }
+  cursor: pointer;
+  gap: 10px;
+  grid-template-columns: auto 1fr;
+  text-align: left;
+  transition: border-color 0.15s, background-color 0.15s, box-shadow 0.15s;
 
   &:hover {
     border-color: $primary-color;
@@ -112,227 +131,149 @@
   &.selected {
     border-color: $primary-color;
     background-color: $background-color;
+    box-shadow: inset 0 0 0 1px $primary-color;
   }
 }
 
-.benchmark-option-body {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-width: 0;
-  gap: 6px;
-}
-
-.benchmark-option-name {
+.bo-name {
+  display: block;
   color: $normal-text-color;
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 13.5px;
+  font-weight: 600;
 }
 
-.benchmark-option-desc {
+.bo-desc {
+  display: block;
+  margin-top: 3px;
   color: $sub-text-color;
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
 .grid-empty {
   grid-column: 1 / -1;
 }
 
-.guide {
-  padding: 16px;
-  border: 1px solid $card-border-color;
-  border-radius: 8px;
-  background-color: $background-color;
-}
-
-// ── 메트릭 매핑 ────────────────────────────────────────────────────────
-.metric-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 260px;
-  align-items: start;
-  gap: 20px;
-}
-
-.metric-list {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.metric-list-head,
-.metric-row {
-  display: grid;
-  grid-template-columns: minmax(150px, 2fr) minmax(100px, 1fr) minmax(
-      150px,
-      1.4fr
-    ) auto;
-  align-items: center;
-  gap: 12px;
-}
-
-.metric-list-head {
-  padding: 0 8px 10px;
-  border-bottom: 1px solid $disable-color;
-  color: $sub-text-color;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.metric-row {
-  padding: 14px 8px;
-  border-bottom: 1px solid $mono202;
-}
-
-.metric-benchmark {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  gap: 3px;
-}
-
-.custom-action {
-  margin-top: 16px;
-}
-
-.metric-description {
-  display: flex;
-  flex-direction: column;
-  padding: 18px;
-  border: 1px solid $disable-color;
-  border-radius: 8px;
-  background-color: $mono201;
-  gap: 10px;
-}
-
-.metric-description-title {
-  margin: 0;
-  color: $normal-text-color;
-  font-family: SpoqaB;
-  font-size: 14px;
-}
-
-.metric-description-name {
-  color: $primary-color;
-  font-size: 16px;
-  font-weight: 700;
-}
-
-.metric-description-sub {
-  color: $sub-text-color;
-  font-size: 13px;
-}
-
-.metric-formula {
-  padding: 12px;
-  border: 1px solid $disable-color;
-  border-radius: 6px;
-  background-color: $mono200;
-  color: $normal-text-color;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.5;
-  word-break: keep-all;
-}
-
-.metric-common-title {
-  margin-top: 4px;
-  color: $sub-text-color;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.badge-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-// ── 확인 및 상시 요약 ─────────────────────────────────────────────────
-.confirm-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.confirm-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px;
-  border: 1px solid $disable-color;
-  border-radius: 8px;
-  background-color: $mono200;
-  gap: 12px;
-}
-
-.confirm-name {
-  color: $normal-text-color;
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.summary {
+// ── 실행 구성 레일 ─────────────────────────────────────────────────────
+// 순서 = 평가 대상 배포(필수) → 체크포인트(필요한 벤치마크만) → 기록될 지표 → 심판 설정.
+// 지표는 고를 것이 없어 통보만 한다 — 채점기가 한 번에 내는 지표는 전부 기록된다.
+.rail {
   position: sticky;
-  top: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+  top: 0;
+
+  @media (max-width: 920px) {
+    position: static;
+  }
 }
 
-.summary-card {
-  display: flex;
-  flex-direction: column;
-  padding: 18px;
-  border: 1px solid $disable-color;
-  border-radius: 8px;
-  background-color: $mono200;
-  gap: 12px;
+.rail-panel {
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
 }
 
-.summary-head {
+.rail-sec {
+  display: flex;
+  flex-direction: column;
+  padding: 16px 18px;
+  border-bottom: 1px solid $mono202;
+  gap: 8px;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  // 아직 못 채운 필수 칸 — 푸터 문구와 같은 곳을 가리킨다.
+  &.warn {
+    background-color: $mono201;
+    box-shadow: inset 3px 0 0 0 $error-color;
+  }
+}
+
+.rail-title {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  margin: 0;
+  color: $sub-text-color;
+  font-size: 12px;
+  font-weight: 700;
   gap: 8px;
 }
 
-.summary-title {
-  margin: 0;
-  color: $normal-text-color;
-  font-family: SpoqaB;
-  font-size: 14px;
-}
-
-.summary-list {
+.rail-meta {
   display: flex;
   flex-direction: column;
   margin: 0;
   padding: 0;
-  gap: 10px;
+  color: $sub-text-color;
+  font-size: 12px;
+  gap: 3px;
   list-style: none;
 }
 
-.summary-item {
+.rail-note {
+  margin: 0;
+  color: $sub-text-color;
+  font-size: 11.5px;
+  line-height: 1.55;
+
+  &.err {
+    color: $error-color;
+  }
+}
+
+.metric-plan {
   display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  gap: 5px;
+  list-style: none;
+
+  li {
+    display: flex;
+    align-items: center;
+    color: $sub-text-color;
+    font-size: 12.5px;
+    gap: 6px;
+
+    &::before {
+      content: '·';
+      color: $mono204;
+    }
+
+    // 대표(권장) 지표 — 이력·목록·비교에 실리는 스칼라가 이것이다.
+    &.rec {
+      color: $normal-text-color;
+      font-weight: 600;
+    }
+  }
+}
+
+.gen-opt {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  color: $normal-text-color;
-  font-size: 13px;
-  gap: 8px;
+  gap: 6px;
 }
 
-.summary-guide {
-  background-color: $mono200;
-}
-
-.wizard-actions {
+.opt-field {
   display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
 
-  > button {
-    flex: 1;
+.opt-label {
+  color: $sub-text-color;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+@media (max-width: 920px) {
+  .run-config {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -676,19 +617,7 @@
 }
 
 @media (max-width: 1080px) {
-  .wizard-body {
-    grid-template-columns: 1fr;
-  }
-
   .logickor-charts {
-    grid-template-columns: 1fr;
-  }
-
-  .summary {
-    position: static;
-  }
-
-  .metric-layout {
     grid-template-columns: 1fr;
   }
 }
@@ -703,45 +632,9 @@
     justify-content: flex-start;
   }
 
-  .metric-list-head {
-    display: none;
-  }
-
-  .metric-row {
-    grid-template-columns: 1fr;
-    padding: 16px 0;
-  }
-
   .chart-label {
     width: 72px;
   }
-}
-
-/* ── 체크포인트 선택(3단계 확인) ────────────────────────────────────────────────
-   실채점 벤치마크에서만 뜨는 런 단위 옵션. 확인 목록(.confirm-list)과 같은 카드 톤을
-   쓰되, 읽기 전용 요약이 아니라 입력이라는 걸 보이게 라벨과 컨트롤을 한 줄에 놓는다. */
-
-.checkpoint-box {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 12px;
-  border: 1px solid $disable-color;
-  border-radius: 8px;
-  background-color: $mono200;
-}
-
-.checkpoint-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.checkpoint-title {
-  color: $normal-text-color;
-  font-size: 13px;
-  font-weight: 700;
 }
 
 /* ── 실행 근거(LogicKor 결과) ──────────────────────────────────────────────────
@@ -788,135 +681,45 @@
   }
 }
 
-/* 실행 옵션 칸 — 체크포인트 박스(.checkpoint-box) 안에 들어간다. 칸 수가 그룹마다 달라서
-   (생성 2칸 / 심판 3칸) 고정 컬럼 대신 최소폭 기준으로 접히게 둔다. */
+// ── 결과 페이지 ───────────────────────────────────────────────────────────────
+// 런 하나를 깊게 읽는 독립 페이지. 헤더는 배포 상세와 같은 규약(DeployDetailHeader)을 쓴다.
+.result-page {
+  padding: 8px 0;
+}
 
-.opt-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+.result-title {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 10px;
-  margin-top: 4px;
 }
 
-.opt-field {
+// 헤더 바로 아래 한 줄 — 이 점수를 해석하는 전제(데이터셋·대표 지표·실행 시각).
+.result-meta {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
+  flex-wrap: wrap;
+  margin: -22px 0 0;
+  color: $sub-text-color;
+  font-size: 13px;
+  gap: 4px 16px;
+
+  em {
+    color: $normal-text-color;
+    font-style: normal;
+  }
 }
 
-.opt-label {
+// 그래프 아래 한 줄 해설 — 무엇을 왜 이 순서로 놓았는지.
+.note-line {
+  margin: 0;
   color: $sub-text-color;
   font-size: 12px;
-  font-weight: 700;
+  line-height: 1.55;
 }
 
-// ── 벤치마크 종류 선택(표준 / 과제별) ────────────────────────────────────────
-// 한 런에 채점기는 하나뿐이라 이 둘은 섞일 수 없다. 라디오로 세워 만들 수 없는 조합을
-// 화면에서 없앤다 — 선택 단계에서 막지 않으면 실행 시점에 서버 예외로 되돌아온다.
-.kind-picker {
-  margin-bottom: 20px;
+// 표 안에서 라벨과 '대표' 배지를 한 줄에 둔다.
+.metric-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
-
-.kind-title {
-  margin: 0 0 2px;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-
-.kind-list {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-
-  @media (max-width: 900px) {
-    grid-template-columns: 1fr;
-  }
-}
-
-.kind-item,
-.task-item {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 12px;
-  align-items: start;
-  width: 100%;
-  padding: 15px 16px;
-  border: 1px solid $disable-color;
-  border-radius: 10px;
-  background: #fff;
-  text-align: left;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
-
-  &:hover {
-    border-color: $primary-color;
-  }
-
-  &.on {
-    border-color: $primary-color;
-    box-shadow: inset 0 0 0 1px $primary-color;
-  }
-}
-
-.kind-radio,
-.task-radio {
-  position: relative;
-  width: 18px;
-  height: 18px;
-  margin-top: 2px;
-  border: 1.5px solid $sub-text-color;
-  border-radius: 50%;
-
-  .kind-item.on &,
-  .task-item.on & {
-    border-color: $primary-color;
-    border-width: 2px;
-  }
-
-  .kind-item.on &::after,
-  .task-item.on &::after {
-    content: '';
-    position: absolute;
-    inset: 3px;
-    border-radius: 50%;
-    background: $primary-color;
-  }
-}
-
-.kind-name,
-.task-name {
-  display: block;
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.kind-desc,
-.task-meta {
-  display: block;
-  margin-top: 4px;
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: $sub-text-color;
-}
-
-// ── 과제별 벤치마크 ──────────────────────────────────────────────────────────
-.task-picker {
-  margin-top: 4px;
-}
-
-
-.task-list {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-
-  @media (max-width: 900px) {
-    grid-template-columns: 1fr;
-  }
-}
-
-
-
-

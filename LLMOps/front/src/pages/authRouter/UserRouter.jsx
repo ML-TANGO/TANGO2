@@ -197,6 +197,13 @@ const EvaluationMenu = lazy(
 const ProjectDetail = lazy(
   () => import('@src/pages/llm/Evaluation/ProjectDetail/ProjectDetail'),
 );
+// 벤치마크 런 결과 — 프로젝트 상세 안의 구획이 아니라 독립 페이지(런 하나를 깊게 읽는다).
+const BenchmarkResultPage = lazy(
+  () =>
+    import(
+      '@src/pages/llm/Evaluation/BenchmarkEvaluation/BenchmarkResultPage'
+    ),
+);
 const EvalCrossCompare = lazy(
   () => import('@src/pages/llm/Evaluation/EvalCrossCompare/EvalCrossCompare'),
 );
@@ -829,6 +836,18 @@ const routeArrAll = [
     activeIcon: IconModelActive,
     platform: 'flightbase',
     render: (props) => <EvaluationMenu {...props} />,
+  },
+  {
+    // 벤치마크 런 결과(독립 페이지). ⚠️ ProjectDetail(exact:false) **앞에** 있어야 한다 —
+    // 바깥 Switch 는 먼저 맞는 라우트를 고르므로, 뒤에 두면 프로젝트 상세가 삼킨다.
+    name: 'BenchmarkResultPage',
+    path: '/user/workspace/:id/evaluation/project/:projectId/run/:runId',
+    exact: true,
+    disabled: true,
+    icon: IconModel,
+    activeIcon: IconModelActive,
+    platform: 'flightbase',
+    render: (props) => <BenchmarkResultPage {...props} />,
   },
   {
     // 평가 프로젝트 상세(목록에서 진입, run 실행·전문가 채점·비교). detail=사이드nav 비노출.
