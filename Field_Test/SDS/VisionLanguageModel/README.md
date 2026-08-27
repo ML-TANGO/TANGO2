@@ -229,32 +229,49 @@ conda create -n eva python=3.11 pip -y
 conda activate eva  # 이후 모든 코드는 가상환경이 활성화되어 있다고 가정함
 ```
 
+이 환경 하나로 지원하는 언어 모델 전부를 학습합니다. 계열마다 요구 사항이 조금씩 다르므로 아래 표를 먼저 확인하십시오.
+
+| 언어 모델 | 학습 진입점 | 최소 `transformers` | flash-attn | torchvision |
+|-----------|-------------|---------------------|------------|-------------|
+| Llama 3.1-8B-Instruct | `train.py` | 5.3.0 | 필요 | 불필요 |
+| Qwen3-8B | `train.py` | 5.3.0 | 필요 | 불필요 |
+| Gemma 4 E2B/E4B-it | `train_gemma4.py` | **5.14.1** | 불필요 | **필요** |
+
+세 계열을 모두 다루려면 `transformers` 를 5.14.1 이상으로 맞추어야 합니다. 5.3.0 에는 `gemma4` 모듈이 아예 없습니다. 반대로 5.14.1 에서 Llama 와 Qwen 경로가 그대로 도는 것은 확인했습니다.
+
+`train.py` 는 `model/vlm_v2.py` 에서 언어 모델을 `attn_implementation="flash_attention_2"` 로 적재하므로 flash-attn 이 없으면 시작하지 못합니다. `train_gemma4.py` 는 그것을 강제하지 않습니다.
+
+`torchvision` 은 Gemma 4 의 이미지 프로세서가 `torchvision.transforms.v2` 를 쓰기 때문에 필요합니다. 없으면 `Gemma4Processor` 임포트 단계에서 실패합니다.
+
 ### 3-4. PyTorch 설치 (CUDA 12.8)
 
 ```bash
-pip install torch==2.11.0 torchvision --index-url https://download.pytorch.org/whl/cu128
+pip install torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu128
 ```
 
 설치 확인:
 ```bash
-python -c "import torch; print(torch.__version__); print('CUDA:', torch.cuda.is_available())"
-# 출력 예: 2.11.0+cu128   CUDA: True
+python -c "import torch, torchvision; print(torch.__version__, torchvision.__version__); print('CUDA:', torch.cuda.is_available())"
+# 출력 예: 2.11.0+cu128 0.26.0+cu128   CUDA: True
 ```
+
+`torchvision` 은 선택 사항이 아닙니다. Gemma 4 를 쓰지 않더라도 함께 설치해 두면 계열을 바꿀 때 다시 손댈 일이 없습니다.
 
 ### 3-5. 나머지 패키지 설치
 
 ```bash
 pip install \
-    transformers==5.3.0 \
+    transformers==5.14.1 \
     tokenizers==0.22.2  \
     huggingface_hub==1.7.2  \
-    safetensors==0.7.0  \
+    safetensors==0.8.0  \
     peft==0.18.1  \
     accelerate==1.13.0  \
     deepspeed==0.18.8 \
     sentencepiece==0.2.1  \
     einops==0.8.2 \
     wandb==0.26.1 \
+    tensorboard==2.21.0 \
     torchinfo==1.8.0  \
     gradio==6.14.0  \
     pillow==12.1.1  \
@@ -267,10 +284,46 @@ pip install \
     pycocoevalcap==1.2
 ```
 
-- `SPICE` 측정을 위해 `pycocoevalcap` 을 사용하며, 시스템에 `JAVA`가 설치되어 있어야 합니다.
+- `tensorboard` 는 `train.py` 와 `train_gemma4.py` 가 기본 로깅 대상으로 지정하므로 없으면 학습이 시작되지 않고 `TensorBoardCallback requires tensorboard to be installed` 로 중단됩니다.
+
+검증셋 채점(`eval/metrics.py`)까지 돌리려면 다음을 추가합니다. 학습에는 필요하지 않습니다.
+
+```bash
+pip install \
+    sacrebleu==2.6.0 \
+    rouge-score \
+    bert-score==0.3.13 \
+    kiwipiepy==0.23.2 \
+    nltk==3.10.3
+```
+
+- `kiwipiepy` 는 한국어 형태소 토큰화에 씁니다. 한국어는 어절 분절로 BLEU 와 ROUGE 를 계산하면 값이 불안정합니다.
+- `bert-score` 는 한국어 인코더(`klue/roberta-large`)로 의미 유사도를 잽니다.
+- `pycocoevalcap` 은 CIDEr 계산에 씁니다. 같은 꾸러미의 `SPICE` 는 Stanford CoreNLP 기반 영어 전용이라 한국어에 쓰지 않으며, 따라서 `JAVA` 도 필요하지 않습니다. 영문 시나리오에서 `SPICE` 를 쓰려면 아래를 설치하십시오.
 
 ```bash
 sudo apt install openjdk-11-jdk
+```
+
+#### 설치 확인
+
+세 계열이 모두 준비되었는지 한 번에 확인합니다.
+
+```bash
+python - <<'PY'
+import torch, torchvision, transformers, peft, os
+print("torch       ", torch.__version__, "| CUDA:", torch.cuda.is_available())
+print("torchvision ", torchvision.__version__)
+print("transformers", transformers.__version__, "| peft", peft.__version__)
+
+models = os.path.join(os.path.dirname(transformers.__file__), "models")
+print("gemma4 지원 :", "gemma4" in os.listdir(models))
+try:
+    import flash_attn
+    print("flash-attn  ", flash_attn.__version__)
+except ImportError:
+    print("flash-attn   없음 — train.py 는 쓸 수 없고 train_gemma4.py 만 가능합니다")
+PY
 ```
 
 ### 3-6. Flash Attntion 2 빌드 및 설치
