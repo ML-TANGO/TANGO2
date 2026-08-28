@@ -1,24 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
 import { useHistory, useRouteMatch } from 'react-router-dom';
 
-import { ButtonV2 } from '@jonathan/ui-react';
-
 import CardTemplate from '@src/components/molecules/CardTemplate/CardTemplate';
-import {
-  deleteEvalProject,
-  getEvalDatasets,
-  listEvalProjects,
-} from '@src/apis/llm/evaluation';
+import { deleteEvalProject, listEvalProjects } from '@src/apis/llm/evaluation';
 import { loadModalComponent } from '@src/modal';
 import { startPath } from '@src/store/modules/breadCrumb';
 import { openConfirm } from '@src/store/modules/confirm';
 import { openModal } from '@src/store/modules/modal';
-import { callApi, STATUS_SUCCESS } from '@src/network';
+import { STATUS_SUCCESS } from '@src/network';
 
 import { errorToastMessage } from '@src/utils';
-import { moveRovingFocus } from '@src/utils/a11y';
 
 import classNames from 'classnames/bind';
 import style from './EvaluationMenu.module.scss';
@@ -35,19 +28,29 @@ const TYPE_KEYS = {
   expert: 'evaluation.project.type.expert',
 };
 
-// 필터 탭 순서 — 'all' 은 유형이 아니라 해제 상태다.
-const TYPE_FILTERS = ['all', 'reference', 'judge', 'expert'];
+// 카드 메타행 상태 배지의 라벨/색. 라벨은 배지에 들어갈 **짧은 말**이어야 한다 —
+// 종전 failed 가 문장 키(evaluation.failed = "평가에 실패했습니다.")를 써서 배지가 한 줄을
+// 통째로 먹었다.
 const STATUS_KEYS = {
   created: 'evaluation.project.status.created',
   running: 'evaluation.project.status.running',
   completed: 'evaluation.project.status.completed',
-  failed: 'evaluation.failed',
-  error: 'evaluation.failed',
+  failed: 'evaluation.project.status.failed',
+  error: 'evaluation.project.status.failed',
+};
+
+// Card 의 status-badge 색 modifier. 회색(대기) → 초록(살아 있음) → 파랑(끝남) / 빨강(실패).
+const STATUS_BADGE_KINDS = {
+  created: 'stopped',
+  running: 'running',
+  completed: 'completed',
+  failed: 'error',
+  error: 'error',
 };
 
 // 평가 프로젝트 목록 = 평가 표면의 랜딩(구 4카드 허브 대체, 설계 §6).
 //   플랫폼 표준 CardTemplate 가 생성 타일·카드·유형/상태 배지·삭제 버튼을 소유한다.
-//   카드 클릭 → 상세 라우트. 삭제는 확인 후 FK CASCADE(BE). model 이름은 1회 models 조회로 매핑.
+//   카드 클릭 → 상세 라우트. 삭제는 확인 후 FK CASCADE(BE). 수정은 설명만 여는 EDIT 모달.
 const EvaluationMenu = () => {
   const { t } = useTranslation();
   const dispatch = useDispatch();
@@ -56,11 +59,6 @@ const EvaluationMenu = () => {
   const { id: workspaceId } = match.params;
 
   const [projects, setProjects] = useState(null); // null=로딩, []=빈 상태
-  const [typeFilter, setTypeFilter] = useState('all'); // 'all' | 유형
-  // 유형 필터 탭 묶음 참조 — 방향키 이동은 공용 moveRovingFocus 가 담당한다.
-  const filterGroupRef = useRef(null);
-  const [modelNames, setModelNames] = useState({}); // model_id → name
-  const [datasetNames, setDatasetNames] = useState({}); // dataset_id → name
 
   const fetchProjects = useCallback(async () => {
     const res = await listEvalProjects(workspaceId);
@@ -74,58 +72,17 @@ const EvaluationMenu = () => {
     }
   }, [workspaceId]);
 
-  // 모델 id→이름 매핑(목록 표시용) — 1회 조회(cheap). 실패해도 목록은 model_id fallback.
-  const fetchModelNames = useCallback(async () => {
-    const res = await callApi({
-      url: `models?workspace_id=${workspaceId}`,
-      method: 'GET',
-    });
-    if (res.status !== STATUS_SUCCESS) return;
-    const list = Array.isArray(res.result)
-      ? res.result
-      : (res.result?.list ?? []);
-    const map = {};
-    list.forEach((m) => {
-      if (m?.id != null) map[m.id] = m.name;
-    });
-    setModelNames(map);
-  }, [workspaceId]);
-
-  // 데이터셋 id→이름 매핑(목록 표시용) — ProjectDetail 과 같은 워크스페이스 목록 1회 조회.
-  const fetchDatasetNames = useCallback(async () => {
-    const res = await getEvalDatasets(workspaceId);
-    if (res.status !== STATUS_SUCCESS) return;
-    const list = Array.isArray(res.result)
-      ? res.result
-      : (res.result?.list ?? []);
-    const map = {};
-    list.forEach((dataset) => {
-      const id = dataset.id ?? dataset.dataset_id;
-      const name = dataset.name ?? dataset.dataset_name;
-      if (id != null && name) map[id] = name;
-    });
-    setDatasetNames(map);
-  }, [workspaceId]);
-
   useEffect(() => {
     dispatch(startPath([{ component: { name: 'Evaluation' } }]));
     loadModalComponent('CREATE_EVAL_PROJECT');
+    loadModalComponent('EDIT_EVAL_PROJECT');
     fetchProjects();
-    fetchModelNames();
-  }, [dispatch, fetchProjects, fetchModelNames]);
-
-  useEffect(() => {
-    fetchDatasetNames();
-  }, [fetchDatasetNames]);
+  }, [dispatch, fetchProjects]);
 
   // Card 의 onClick 규약: (e, id, constructor, isAccess, userList)
   const openDetail = (e, id) => {
     e.stopPropagation();
     history.push(`/user/workspace/${workspaceId}/evaluation/project/${id}`);
-  };
-
-  const openCompare = () => {
-    history.push(`/user/workspace/${workspaceId}/evaluation/compare`);
   };
 
   const handleDelete = (e, id, title) => {
@@ -162,6 +119,27 @@ const EvaluationMenu = () => {
     }
   };
 
+  // 수정 모달 열기 — 모델·배포 목록의 수정 아이콘과 같은 관행(EDIT_* 모달)이다.
+  //   프로젝트에서 고칠 수 있는 건 **설명뿐**이라(이름·유형은 생성 후 불변) 모달도 설명만 연다.
+  //   저장 응답은 프로젝트 전체가 아니라 { project_id, updated, description } 이므로
+  //   목록을 다시 부른다(apis/llm/evaluation 의 updateEvalProject 주석 참조).
+  const handleEdit = (e, id) => {
+    e.stopPropagation();
+    const project = (projects ?? []).find((p) => p.id === id);
+    if (!project) return;
+    dispatch(
+      openModal({
+        modalType: 'EDIT_EVAL_PROJECT',
+        modalData: {
+          submit: { text: 'update.label', func: () => fetchProjects() },
+          cancel: { text: 'cancel.label' },
+          workspaceId,
+          project,
+        },
+      }),
+    );
+  };
+
   // 생성 모달 열기 — 전역 Redux 모달 시스템(학습/배포 생성 모달과 동일 패턴).
   //   submit.func 로 생성 성공 결과를 받아 handleCreated 가 상세로 이동. 프레임이 닫기 담당.
   const openCreateModal = () => {
@@ -179,75 +157,32 @@ const EvaluationMenu = () => {
 
   // 유형별 개수 — 필터 탭에 그대로 실린다. 0 건인 유형도 탭을 지우지 않는다:
   // 개수가 0 이라는 사실 자체가 "이 유형으로는 아직 안 재 봤다"는 정보다.
-  const typeCounts = useMemo(() => {
-    const list = projects ?? [];
-    const counts = { all: list.length };
-    TYPE_FILTERS.filter((key) => key !== 'all').forEach((key) => {
-      counts[key] = list.filter((p) => p.eval_type === key).length;
-    });
-    return counts;
-  }, [projects]);
-
-  const visibleProjects = (projects ?? []).filter(
-    (p) => typeFilter === 'all' || p.eval_type === typeFilter,
-  );
+  const visibleProjects = projects ?? [];
 
   const cardItems = visibleProjects.map((p) => {
     const isRunning = p.status === 'running';
-    const isError = p.status === 'failed' || p.status === 'error';
-    const datasetIds = Array.isArray(p.dataset_ids) ? p.dataset_ids : [];
-    const resolvedDatasetNames = datasetIds
-      .map((id) => datasetNames[id])
-      .filter(Boolean);
-    const hasAllDatasetNames =
-      datasetIds.length > 0 &&
-      resolvedDatasetNames.length === datasetIds.length;
-    const datasetCountLabel = t('evaluation.project.datasetCount', {
-      n: datasetIds.length,
-    });
-    const datasetLabel = hasAllDatasetNames
-      ? resolvedDatasetNames.length === 1
-        ? resolvedDatasetNames[0]
-        : t('evaluation.project.datasetMore', {
-            name: resolvedDatasetNames[0],
-            n: resolvedDatasetNames.length - 1,
-          })
-      : datasetCountLabel;
-    // 프로젝트는 이제 이름·유형만 잠근다 — 모델·데이터셋은 런마다 고른다. 옛 프로젝트만
-    // 잠긴 값을 갖고 있으므로 **있을 때만** 세운다(없는 값을 '#undefined' 로 찍지 않는다).
-    const metaParts = [];
-    if (p.model_id != null) {
-      metaParts.push(
-        `${t('evaluation.project.model')}: ${
-          modelNames[p.model_id] || `#${p.model_id}`
-        }`,
-      );
-    }
-    if (datasetIds.length > 0) {
-      metaParts.push(`${t('evaluation.project.dataset')}: ${datasetLabel}`);
-    }
     return {
       id: p.id,
       title: p.name,
-      subTitle: (
-        <>
-          {metaParts.length > 0 && `${metaParts.join(' · ')} · `}
-          <span
-            className={cx(
-              'card-status',
-              isRunning && 'card-status-running',
-              isError && 'card-status-error',
-            )}
-          >
-            {t(STATUS_KEYS[p.status] || p.status)}
-          </span>
-        </>
-      ),
+      // 본문 = 설명. 모델·배포 카드와 **같은 슬롯**이다. 비면 Card 가 공용
+      // 플레이스홀더(no.desc, 회색)를 그리므로 여기서 대체 문구를 만들지 않는다.
+      //   종전엔 여기에 "모델: X · 데이터셋: Y · 상태" 를 평문으로 넣어 설명 자리를 먹었다.
+      //   모델·데이터셋은 이제 프로젝트가 아니라 **런이** 고르는 값이라(옛 프로젝트만
+      //   잠긴 값을 가짐) 카드가 아니라 상세의 프로젝트 정보에서 읽는 것이 맞다.
+      subTitle: p.description,
       constructor: p.creator,
       createTime: p.create_datetime,
       updateTime: p.update_datetime,
       // 평가 프로젝트는 워크스페이스 단위 목록이며 별도 카드 접근 제한 필드가 없다.
       isAccess: 1,
+      // 실행 중 카드 강조 — 모델 목록이 학습 running 에 쓰는 것과 **같은 프롭**이다
+      // (Model.jsx: status: fine_tuning === 'running' ? 'active' : null).
+      // Card 가 status && status !== 'stop' 일 때 .active 를 붙인다.
+      status: isRunning ? 'active' : null,
+      // 상태는 메타행 배지로 — 배포 카드의 ● Running 과 같은 자리·같은 모양이다.
+      //   status 프롭은 위에서 강조 전용('active')으로 쓰므로 라벨/색을 따로 넘긴다.
+      statusBadgeLabel: t(STATUS_KEYS[p.status] || p.status),
+      statusBadgeKind: STATUS_BADGE_KINDS[p.status] || 'stopped',
       typeBadge: t(TYPE_KEYS[p.eval_type] || p.eval_type),
       kind: p.eval_type,
     };
@@ -257,52 +192,7 @@ const EvaluationMenu = () => {
     <div className={cx('eval-projects')}>
       <div className={cx('title-bar')}>
         <h1 className={cx('title')}>{t('evaluation.project.title')}</h1>
-        {/* 교차 모델 비교는 프로젝트를 가로지르므로 프로젝트 상세가 아니라 허브에 둔다.
-            화면·API·라우트는 이미 있고 이 링크만 없어 URL 직접 입력 외엔 도달 불가였다. */}
-        <ButtonV2
-          type='outline'
-          size='l'
-          label={t('evaluation.compare.open')}
-          onClick={openCompare}
-        />
       </div>
-
-      {/* 유형 필터 — 프로젝트가 유형별로 다른 것을 재므로, 무엇을 재 왔는지가 목록의
-          첫 질문이다. 개수를 라벨에 함께 실어 필터를 열기 전에도 분포가 보이게 한다. */}
-      {projects !== null && (
-        <div
-          ref={filterGroupRef}
-          className={cx('type-filter')}
-          role='tablist'
-          aria-label={t('evaluation.project.selectType')}
-          onKeyDown={moveRovingFocus(
-            filterGroupRef,
-            TYPE_FILTERS,
-            typeFilter,
-            setTypeFilter,
-          )}
-        >
-          {TYPE_FILTERS.map((key) => (
-            <button
-              key={key}
-              type='button'
-              role='tab'
-              aria-selected={typeFilter === key}
-              data-value={key}
-              // roving tabIndex — 탭 묶음은 Tab 진입점이 하나여야 한다(고른 칩).
-              // 안쪽 이동은 방향키가 맡는다(WAI-ARIA tablist).
-              tabIndex={typeFilter === key ? 0 : -1}
-              className={cx('type-chip', typeFilter === key && 'on')}
-              onClick={() => setTypeFilter(key)}
-            >
-              {key === 'all'
-                ? t('evaluation.project.filterAll')
-                : t(TYPE_KEYS[key])}
-              <span className={cx('type-count')}>{typeCounts[key] ?? 0}</span>
-            </button>
-          ))}
-        </div>
-      )}
 
       {projects === null ? (
         <div className={cx('placeholder')}>
@@ -315,6 +205,7 @@ const EvaluationMenu = () => {
           handleCreateCard={openCreateModal}
           handleOnClickCard={openDetail}
           handleDelete={handleDelete}
+          handleEdit={handleEdit}
         />
       )}
     </div>

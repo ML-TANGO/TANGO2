@@ -22,45 +22,7 @@
   }
 
   // 유형 필터 — 제목 바로 아래 붙는 한 줄이라 컨테이너의 40px 리듬에서 빼낸다.
-  .type-filter {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: -24px;
-  }
 
-  .type-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 7px 14px;
-    border: 1px solid $mono203;
-    border-radius: 16px;
-    background: #fff;
-    color: $sub-text-color;
-    font-family: SpoqaM;
-    font-size: 13px;
-    line-height: 16px;
-    cursor: pointer;
-
-    &:hover {
-      border-color: $primary-color;
-      color: $primary-color;
-    }
-
-    &.on {
-      border-color: $primary-color;
-      background: $blue101;
-      color: $primary-color;
-      font-family: SpoqaB;
-    }
-  }
-
-  .type-count {
-    color: inherit;
-    font-family: SpoqaB;
-    opacity: 0.75;
-  }
 
   .placeholder {
     padding: 48px 0;
@@ -68,18 +30,4 @@
     font-size: 14px;
     text-align: center;
   }
-}
-
-.card-status {
-  color: $sub-text-color;
-}
-
-.card-status-running {
-  color: $lime604;
-  font-family: SpoqaB;
-}
-
-.card-status-error {
-  color: $error-color;
-  font-family: SpoqaB;
 }
