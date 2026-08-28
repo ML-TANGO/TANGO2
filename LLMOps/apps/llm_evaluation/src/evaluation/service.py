@@ -2467,15 +2467,20 @@ async def _infer_vlm_output(playground_id: int, image_b64: str, ais_rows: list,
 
 async def _build_expert_samples(model_id: int, model_name: str, dataset_ids: List[int],
                                 ds_names: List[str], inference_target,
-                                run_samples: Optional[list] = None) -> list:
+                                run_samples: Optional[list] = None,
+                                sample_limit: Optional[int] = None) -> list:
     """전문가 채점 샘플(A4) — 실 데이터셋(input/reference/이미지) + 배포모델 추론 output.
     run_samples(러너 생성, P2-b2) 주면 그것을 그대로(이미지/CSV 필드 보존) 채점 대상으로.
     없으면 데이터셋 로드 + 배포 추론, 못 읽으면 합성(레거시 동등), 추론 URL 없으면 mock 폴백."""
     base = ds_names[0] if ds_names else "dataset"
+    # 채점 샘플 상한 — 요청값이 있으면 그것, 없으면 종전대로 전량(천장까지).
+    # 천장(MAX_EXPERT_SAMPLES)은 런어웨이 방지용이라 요청값이 그보다 커도 넘기지 않는다.
+    cap = (MAX_EXPERT_SAMPLES if sample_limit is None
+           else max(1, min(int(sample_limit), MAX_EXPERT_SAMPLES)))
     # P2-b2 — 러너 생성 샘플 우선(재생성/재추론 회피). output 있으면 real_output=True.
     if run_samples:
         out = []
-        for i, s in enumerate(run_samples[:MAX_EXPERT_SAMPLES]):
+        for i, s in enumerate(run_samples[:cap]):
             item = {"idx": i, "dataset": s.get("dataset", base),
                     "input": s.get("input", ""),
                     "output": (s.get("output") or "").strip() or f"[{model_name}] 응답 {i}",
@@ -2487,8 +2492,9 @@ async def _build_expert_samples(model_id: int, model_name: str, dataset_ids: Lis
                     item[k] = s[k]
             out.append(item)
         return out
-    # 데이터셋 전량 로드(ceiling 까지). 구 `len(ds_names)*5` 휴리스틱 제거 — 전문가는 전 샘플 리뷰.
-    n = MAX_EXPERT_SAMPLES
+    # 기본은 데이터셋 전량(ceiling 까지) — 전문가는 전 샘플 리뷰가 기본 의도다.
+    # sample_limit 을 주면 **앞에서부터** 그 개수만(dto 주석에 무작위를 쓰지 않는 이유).
+    n = cap
     rows = await _read_dataset_samples(dataset_ids, n)
     if not rows:    # 실 데이터셋 못 읽음 → 합성 폴백(구 스캐폴딩과 동일 문자열 = 레거시 안정)
         rows = [{"input": f"[{base}] sample {i} 입력 프롬프트", "reference": f"참조 답변 {i}",
@@ -2564,7 +2570,8 @@ async def _expert_session(model_id: int, job_id: str):
 
 async def start_expert(project_id: int, model_id: int, dataset_ids: List[int],
                        inference_playground_id: Optional[int] = None,
-                       inference_job_id: Optional[str] = None) -> dict:
+                       inference_job_id: Optional[str] = None,
+                       sample_limit: Optional[int] = None) -> dict:
     """전문가 평가 세션 시작 — model/dataset 는 **이 세션이 고른다**(2026-08-24 —
     프로젝트 워크스페이스 경계 검증은 유지). 빌린 배포(inference_playground_id)도 같은
     경계로 대조한다(2026-08-27). 채점 샘플 생성 + 세션 행.
@@ -2633,7 +2640,8 @@ async def start_expert(project_id: int, model_id: int, dataset_ids: List[int],
     if not gen_prompt and inference_playground_id:
         gen_prompt = await _resolve_deploy_system_prompt(inference_playground_id)
     samples = await _build_expert_samples(
-        model_id, model_name, dataset_ids, ds_names, inference_target, run_samples)
+        model_id, model_name, dataset_ids, ds_names, inference_target, run_samples,
+        sample_limit=sample_limit)
     # external eva-vlm(SDS)은 내부 system_message 가 없어 위 gen_prompt 가 None → 실사용 프롬프트
     #   미러로 폴백(샘플에 csv_rows=선박 계측표 있으면 SDS 시나리오, _expert_prompt 와 동일 판별).
     if not gen_prompt and any(

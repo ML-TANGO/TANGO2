@@ -17,6 +17,7 @@ from evaluation.constants import (
     LOGICKOR_STRATEGIES,
     MAX_BENCHMARK_DATASETS,
     MAX_BENCHMARK_ITEMS,
+    MAX_EXPERT_SAMPLES,
 )
 
 
@@ -264,6 +265,13 @@ class ExpertStartBody(RunModelSelection):
     inference_job_id: Optional[str] = Field(
         default=None, max_length=128, pattern=r"^[A-Za-z0-9_-]+$",
         description="러너 generate 런 job_id(주면 생성 샘플을 채점, 없으면 배포 추론)")
+    # 채점할 샘플 수 상한. 비우면 종전대로 데이터셋 전량(MAX_EXPERT_SAMPLES 천장까지).
+    # **앞에서부터** 자른다 — 무작위로 뽑으면 런마다 다른 문항이 걸려 런 간 비교가 깨진다
+    # (프로젝트가 여러 런을 나란히 놓고 보는 구조다). 표본 편향이 문제가 되면 씨앗을
+    # 런에 영속하는 고정 무작위가 다음 단계다.
+    sample_limit: Optional[int] = Field(
+        default=None, ge=1, le=MAX_EXPERT_SAMPLES,
+        description="채점 샘플 수(앞에서부터). 비우면 데이터셋 전량")
 
 
 class ExpertRatingBody(BaseModel):
