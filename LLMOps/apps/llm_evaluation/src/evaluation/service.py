@@ -1326,6 +1326,12 @@ _DUAL_INFER_TIMEOUT = 2100.0
 _DATA_EXTS = (".jsonl", ".json", ".csv")
 _MAX_DATA_FILE_BYTES = 50 * 1024 * 1024  # .json 전체 로드 상한(메모리 보호; jsonl/csv 는 스트리밍)
 _EXPERT_INFER_BUDGET = 90      # start_expert 인라인 추론 전체 예산(초) — HTTP 핸들러 점유 cap
+# 인라인 업그레이드 동시성. 순차로 돌리면 예산 안에 (배포 1건 지연 × 샘플 수)가 그대로
+#   쌓여 느린 배포에서는 앞의 서너 개만 실출력이 되고 나머지는 **영구히** mock 으로 남는다
+#   (텍스트 샘플에는 지연 업그레이드가 없다 — infer_expert_sample 은 VLM 전용).
+#   상한을 두는 이유: 배포 하나의 추론 큐를 넘기면 개별 요청이 타임아웃으로 되돌아와
+#   오히려 커버리지가 줄어든다(원격 심판 fan-out 과 같은 판단).
+_EXPERT_INFER_CONCURRENCY = 6
 
 # 멀티모달(VLM) 전문가 평가 — 데이터셋 row 의 이미지 컬럼을 surface 해 사람이 이미지를 보고
 # 채점. 강한 이미지 컬럼명은 값 그대로, 약한(범용) 컬럼명은 이미지 확장자일 때만 채택(오탐 방지).
@@ -1965,9 +1971,14 @@ async def _infer_output(inference_target, prompt: str, session_id: str) -> Optio
                 "session_id": session_id,
             }
         else:
+            # ⚠️ 서빙 래퍼(fb_scheduler deployment_llm/src/llm/playground.py post_llm)는
+            #    test_type / test_question 만 읽는다 — input_type / input 은 아예 보지
+            #    않는다. 옛 키를 보내면 test_question 이 None 이 되어 vLLM 이
+            #    "Prompt should be a string" 으로 죽고 [{"input":null,"output":""}] 가 온다
+            #    (2026-08-28 실측). 플랫폼 정본(llm_playground playground_test)과 같은 키다.
             request_body = {
-                "input_type": "question",
-                "input": prompt,
+                "test_type": "question",
+                "test_question": prompt,
                 "session_id": session_id,
             }
         # dual 은 BFF 체인(LLM1→LLM2)이라 서버 예산이 단일보다 훨씬 크다.
@@ -1987,6 +1998,11 @@ async def _infer_output(inference_target, prompt: str, session_id: str) -> Optio
                 if isinstance(output, str) and output.strip():
                     return output.strip()[:_MAX_FIELD_LEN]
             return None
+        # 서빙 래퍼는 입력 1건에도 **리스트**로 답한다: [{"input","output","time"}].
+        # 첫 원소만 본다(질문 경로는 언제나 1건). 이 정규화가 없으면 키를 고쳐도
+        # dict 분기에 걸리지 않아 계속 None 이 된다.
+        if isinstance(data, list):
+            data = data[0] if data and isinstance(data[0], dict) else None
         if isinstance(data, dict):
             for k in ("output", "response", "answer", "result", "text", "content"):
                 v = data.get(k)
@@ -2493,16 +2509,24 @@ async def _build_expert_samples(model_id: int, model_name: str, dataset_ids: Lis
                 s[k] = row[k]
         samples.append(s)
     if inference_target:
-        async def _upgrade():
-            for s in samples:
-                if not s["input"]:
-                    continue    # image-only(VLM) 샘플 — 텍스트 추론은 이미지 미전달이라
-                    #             무의미. mock 유지, 실 VLM 추론은 infer_expert_sample(지연 단위).
+        # input 이 빈 샘플은 건너뛴다 — image-only(VLM) 샘플은 텍스트 추론에 이미지가 실리지
+        # 않아 무의미하다. mock 유지, 실 VLM 추론은 infer_expert_sample(지연 단위).
+        targets = [s for s in samples if s["input"]]
+        sem = asyncio.Semaphore(_EXPERT_INFER_CONCURRENCY)
+
+        async def _one(s):
+            async with sem:
                 real = await _infer_output(
                     inference_target, s["input"], f"expert-{model_id}-{s['idx']}")
-                if real:
-                    s["output"] = real
-                    s["real_output"] = True
+            if real:
+                s["output"] = real
+                s["real_output"] = True
+
+        async def _upgrade():
+            # 예산 초과로 취소되면 이미 끝난 샘플의 실출력은 그대로 남는다(각 코루틴이
+            # 자기 샘플에 직접 쓴다) — 취소 지점까지의 성과를 잃지 않는다.
+            await asyncio.gather(*(_one(s) for s in targets), return_exceptions=True)
+
         try:
             await asyncio.wait_for(_upgrade(), _EXPERT_INFER_BUDGET)
         except asyncio.TimeoutError:
