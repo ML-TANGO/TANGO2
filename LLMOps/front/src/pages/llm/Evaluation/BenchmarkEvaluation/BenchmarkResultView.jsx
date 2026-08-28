@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Badge, Loading } from '@jonathan/ui-react';
 
 import BorderTable from '@src/components/molecules/BorderTable';
+import ContentBox from '@src/components/molecules/ContentBox';
 import EmptyBox from '@src/components/molecules/EmptyBox';
 
 import { getEvalResult } from '@src/apis/llm/evaluation';
@@ -630,61 +631,59 @@ const BenchmarkResultView = ({ modelId, jobId, onComplete, onMeta }) => {
             {t('evaluation.bench.logickorTitle')}
           </h3>
           <div className={cx('logickor-charts')}>
-            <div className={cx('chart-wrap')}>
-              <h4 className={cx('chart-subtitle')}>
-                {t('evaluation.bench.catChartTitle')}
-              </h4>
-              <div className={cx('cat-rows')}>
-                {logickor.categories.map((row) => (
-                  <div key={row.category} className={cx('cat-row')}>
-                    <div className={cx('cat-name')}>{row.category}</div>
-                    {[
-                      ['single', row.single],
-                      ['multi', row.multi],
-                    ].map(([turn, score]) => (
-                      <div key={turn} className={cx('cat-track')}>
-                        <span className={cx('cat-tag')}>
-                          {turn === 'single' ? 'S' : 'M'}
-                        </span>
-                        <div className={cx('cat-rail')}>
-                          <div
-                            className={cx('cat-fill', turn)}
-                            style={{
-                              width: `${barWidth(score, logickorScaleMax)}%`,
-                            }}
-                          />
+            <ContentBox title={t('evaluation.bench.catChartTitle')}>
+              <div className={cx('chart-body')}>
+                <div className={cx('cat-rows')}>
+                  {logickor.categories.map((row) => (
+                    <div key={row.category} className={cx('cat-row')}>
+                      <div className={cx('cat-name')}>{row.category}</div>
+                      {[
+                        ['single', row.single],
+                        ['multi', row.multi],
+                      ].map(([turn, score]) => (
+                        <div key={turn} className={cx('cat-track')}>
+                          <span className={cx('cat-tag')}>
+                            {turn === 'single' ? 'S' : 'M'}
+                          </span>
+                          <div className={cx('cat-rail')}>
+                            <div
+                              className={cx('cat-fill', turn)}
+                              style={{
+                                width: `${barWidth(score, logickorScaleMax)}%`,
+                              }}
+                            />
+                          </div>
+                          <span className={cx('cat-value', `turn-${turn}`)}>
+                            {fmt2(score)}
+                          </span>
                         </div>
-                        <span className={cx('cat-value', `turn-${turn}`)}>
-                          {fmt2(score)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className={cx('chart-wrap')}>
-              <h4 className={cx('chart-subtitle')}>
-                {t('evaluation.bench.radarTitle')}
-              </h4>
-              <div className={cx('radar-wrap')}>
-                <LogicKorRadar
-                  categories={logickor.categories}
-                  scaleMax={logickorScaleMax}
-                />
-                <div className={cx('radar-legend')}>
-                  <span className={cx('radar-legend-item')}>
-                    <i className={cx('radar-swatch', 'single')} />
-                    {t('evaluation.bench.turnSingle')}
-                  </span>
-                  <span className={cx('radar-legend-item')}>
-                    <i className={cx('radar-swatch', 'multi')} />
-                    {t('evaluation.bench.turnMulti')}
-                  </span>
+                      ))}
+                    </div>
+                  ))}
                 </div>
               </div>
-            </div>
+            </ContentBox>
+
+            <ContentBox title={t('evaluation.bench.radarTitle')}>
+              <div className={cx('chart-body')}>
+                <div className={cx('radar-wrap')}>
+                  <LogicKorRadar
+                    categories={logickor.categories}
+                    scaleMax={logickorScaleMax}
+                  />
+                  <div className={cx('radar-legend')}>
+                    <span className={cx('radar-legend-item')}>
+                      <i className={cx('radar-swatch', 'single')} />
+                      {t('evaluation.bench.turnSingle')}
+                    </span>
+                    <span className={cx('radar-legend-item')}>
+                      <i className={cx('radar-swatch', 'multi')} />
+                      {t('evaluation.bench.turnMulti')}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </ContentBox>
           </div>
         </section>
       ) : (
@@ -692,24 +691,26 @@ const BenchmarkResultView = ({ modelId, jobId, onComplete, onMeta }) => {
           <h3 className={cx('result-section-title')}>
             {t('evaluation.bench.resultChart')}
           </h3>
-          <div className={cx('chart-wrap')}>
-            {metricCards.map((card) => (
-              <div key={card.key} className={cx('chart-row')}>
-                <div className={cx('chart-label')}>{card.label}</div>
-                <div className={cx('chart-bar-wrap')}>
-                  <div
-                    className={cx('chart-bar')}
-                    style={{
-                      width: `${barWidth(card.value, scaleMaxFor(card.metric))}%`,
-                    }}
-                  />
+          <ContentBox>
+            <div className={cx('chart-body', 'untitled')}>
+              {metricCards.map((card) => (
+                <div key={card.key} className={cx('chart-row')}>
+                  <div className={cx('chart-label')}>{card.label}</div>
+                  <div className={cx('chart-bar-wrap')}>
+                    <div
+                      className={cx('chart-bar')}
+                      style={{
+                        width: `${barWidth(card.value, scaleMaxFor(card.metric))}%`,
+                      }}
+                    />
+                  </div>
+                  <div className={cx('chart-value')}>
+                    {formatMetricValue(card.metric, card.value)}
+                  </div>
                 </div>
-                <div className={cx('chart-value')}>
-                  {formatMetricValue(card.metric, card.value)}
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          </ContentBox>
           <p className={cx('note-line')}>
             {mixatis
               ? t('evaluation.bench.mixChartNote')

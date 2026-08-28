@@ -377,14 +377,19 @@
   font-weight: 700;
 }
 
-.chart-wrap {
+// 차트 박스의 겉면(흰 카드 + 제목 줄)은 공용 ContentBox 가 소유한다 — 평가 표면의 다른
+// 박스(프로젝트 정보·전문가 프롬프트)와 같은 것을 쓴다. 여기 남는 건 안쪽 본문뿐이다.
+// 제목이 있는 박스는 제목 줄(padding 20/20/10)에 이어 붙고, 없는 박스는 사방 20px 를 쓴다.
+.chart-body {
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  padding: 20px;
-  border: 1px solid $disable-color;
-  border-radius: 8px;
-  background-color: $mono200;
+  padding: 0 20px 20px;
   gap: 12px;
+
+  &.untitled {
+    padding: 20px;
+  }
 }
 
 .chart-row {
@@ -472,12 +477,6 @@
   gap: 12px;
 }
 
-.chart-subtitle {
-  margin: 0;
-  color: $sub-text-color;
-  font-size: 12px;
-  font-weight: 700;
-}
 
 .cat-rows {
   display: flex;
