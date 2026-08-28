@@ -11,7 +11,7 @@ import {
 import { callApi, STATUS_SUCCESS } from '@src/network';
 import { errorToastMessage } from '@src/utils';
 
-import SimpleNav from '../SimpleNav';
+import SimpleNav from '@src/components/molecules/SimpleNav';
 
 import classNames from 'classnames/bind';
 import style from './ExternalCheckpointList.module.scss';

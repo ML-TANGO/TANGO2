@@ -44,6 +44,14 @@ const Card = ({
   width,
   height,
   statusBadge = false,
+  // 상태 배지 라벨/색을 직접 지정하는 경로(opt-in).
+  //   `status` 프롭은 **카드 강조(.active)와 배지 라벨을 겸한다**. 배포는 두 의미가 같아
+  //   문제가 없지만(running 이면 강조도 배지도 running), 평가는 "강조는 실행 중일 때만,
+  //   배지는 전 상태(대기/진행/완료/실패)"라 겸할 수 없다 — status 에 전 상태를 실으면
+  //   완료·대기 카드까지 테두리가 돌고, 'active' 를 실으면 배지가 t('active') 가 된다.
+  //   라벨을 주면 그 라벨로 그리고, 안 주면 기존 동작(statusBadge && t(status)) 그대로.
+  statusBadgeLabel,
+  statusBadgeKind,
   // opt-in — 접근 불가 카드. 목록에는 계속 보이되 회색 처리 + 진입 불가임을 시각화.
   // 클릭 자체는 그대로 핸들러로 보내 "접근 권한이 없습니다" 안내가 뜨게 한다
   // (조용히 무반응이면 고장으로 보임).
@@ -71,15 +79,15 @@ const Card = ({
         <div className={cx('owner-cont')}>
           <span className={cx('owner-txt')}>{constructor}</span>
           {(isPrivate ?? !isAccess) && <img src={IconLock} alt='private' />}
-          {/* 배포(D6) 카드만 statusBadge opt-in → Rag/Model 등 다른 소비자엔 미노출 */}
-          {statusBadge && status && (
+          {/* 배포(D6)·평가 카드만 opt-in → Rag/Model 등 다른 소비자엔 미노출 */}
+          {(statusBadgeLabel || (statusBadge && status)) && (
             <span
               className={cx(
                 'status-badge',
-                STATUS_BADGE_CLASS[status] || 'pending',
+                statusBadgeKind || STATUS_BADGE_CLASS[status] || 'pending',
               )}
             >
-              {t(status)}
+              {statusBadgeLabel || t(status)}
             </span>
           )}
           {typeBadge && (

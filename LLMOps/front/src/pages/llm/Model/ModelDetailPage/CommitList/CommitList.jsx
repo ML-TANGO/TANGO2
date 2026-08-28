@@ -16,7 +16,7 @@ import useIntervalCall from '@src/hooks/useIntervalCall';
 import { callApi, STATUS_SUCCESS } from '@src/network';
 import { defaultSuccessToastMessage, errorToastMessage } from '@src/utils';
 
-import SimpleNav from '../SimpleNav';
+import SimpleNav from '@src/components/molecules/SimpleNav';
 import CommitListDetail from './CommitListDetail';
 
 import classNames from 'classnames/bind';

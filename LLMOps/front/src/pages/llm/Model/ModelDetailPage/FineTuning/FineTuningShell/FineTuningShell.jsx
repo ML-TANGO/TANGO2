@@ -27,7 +27,7 @@
 //      │  └─ [leftFooter]  — InstanceSetting 자리(Phase 3)
 //      └─ div.right        ← right
 
-import SimpleNav from '../../SimpleNav';
+import SimpleNav from '@src/components/molecules/SimpleNav';
 
 import classNames from 'classnames/bind';
 import style from '../FineTuning.module.scss';

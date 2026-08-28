@@ -1,5 +1,10 @@
 @import '@src/styles/color.scss';
 
+// 표의 골격(머리글·행·셀·페이지네이션)은 공용 molecules/Table 이 그린다.
+// 이 파일에는 **다중 정렬 층에만 있는 것**만 남긴다 — 칩 줄과 머리글 표식.
+// 표를 직접 그리던 규칙(.table-scroll/.table/th/td/.th-btn …)은 하우스 표와
+// 시각이 갈리던 원인이라 전부 걷어냈다.
+
 .multi-sort-table {
   display: flex;
   flex-direction: column;
@@ -7,13 +12,18 @@
 }
 
 // ── 정렬 칩 ─────────────────────────────────────────────────────────────────
-// 헤더에 붙은 순번 배지만으로는 "지금 몇 단계로 정렬 중인지"가 표 밖에서 안 보인다.
+// 머리글에 붙은 순번 배지만으로는 "지금 몇 단계로 정렬 중인지"가 표 밖에서 안 보인다.
 // 칩 줄이 현재 레벨을 나열하고, 레벨 하나만 빼는 경로(✕)를 준다.
 .sort-chips {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+  // 칩 줄이 표 머리글 행에 바짝 붙어 두 층이 한 덩어리로 읽혔다(컨테이너 gap 10px 뿐).
+  // 여기에 14px 을 더해 사이를 24px — 하우스 본문 한 줄 높이(line-height: 24px)만큼 —
+  // 로 벌린다. 표 자체의 여백이 아니라 **칩 층이 자기 아래에 두는 숨 쉴 자리**라
+  // 공용 Table 이 아니라 이 파일이 갖는다.
+  margin-bottom: 14px;
 }
 
 .chips-label {
@@ -78,7 +88,7 @@
   }
 }
 
-// 정렬 레벨 순번 배지 — 헤더와 칩이 같은 표식을 쓴다.
+// 정렬 레벨 순번 배지 — 머리글과 칩이 같은 표식을 쓴다.
 .level {
   display: inline-flex;
   min-width: 14px;
@@ -94,117 +104,19 @@
   line-height: 1;
 }
 
-// ── 표 ──────────────────────────────────────────────────────────────────────
-.table-scroll {
-  overflow-x: auto;
-  border: 1px solid $disable-color;
-  border-radius: 8px;
-  background-color: $mono200;
-}
-
-.table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-
-  th {
-    padding: 0;
-    border-bottom: 1px solid $disable-color;
-    background-color: $mono201;
-    color: $sub-text-color;
-    font-size: 12px;
-    font-weight: 700;
-    text-align: left;
-    white-space: nowrap;
-
-    &.right {
-      text-align: right;
-    }
-  }
-
-  td {
-    padding: 10px 14px;
-    border-bottom: 1px solid $mono202;
-    vertical-align: middle;
-
-    &.right {
-      text-align: right;
-      white-space: nowrap;
-    }
-  }
-
-  tr:last-child td {
-    border-bottom: none;
-  }
-
-  // 선두 범주형 레벨이 바뀌는 자리 = 그룹 경계.
-  tr.group-start td {
-    border-top: 1px solid $disable-color;
-  }
-
-  tr.clickable {
-    cursor: pointer;
-
-    &:hover td {
-      background-color: $background-color;
-    }
-
-    // 키보드로 들어온 행은 어디에 있는지 보여야 한다 — 머리글 버튼과 같은 표식.
-    &:focus-visible {
-      outline: 2px solid $primary-color;
-      outline-offset: -2px;
-    }
-  }
-}
-
-.th-btn,
-.th-static {
-  display: flex;
-  // width:100% 와 좌우 패딩을 함께 쓰므로 border-box 가 필수다. content-box 로 두면
-  // 폭 100% 에 패딩 28px 이 더해져 머리글이 자기 셀 밖으로 정확히 그만큼 삐져나가고,
-  // 중간 컬럼은 옆 셀에 가려 보이지 않다가 **마지막 컬럼만 표 밖으로 밀려 잘린다**
-  // (컬럼 8개에서 'Action' 이 'Acti' 로 잘리는 것으로 드러났다).
-  box-sizing: border-box;
-  width: 100%;
+// ── 머리글 표식 ─────────────────────────────────────────────────────────────
+// 머리글 칸 자체(배경·글꼴·패딩)는 공용 Table 의 것이다. 여기서는 라벨 옆에 붙는
+// 레벨 번호·방향 화살표의 배치와, 정렬이 걸린 열의 강조만 정한다.
+.th-name {
+  display: inline-flex;
   align-items: center;
-  padding: 11px 14px;
-  color: inherit;
-  font: inherit;
   gap: 5px;
-  text-align: left;
-  white-space: nowrap;
-}
 
-.th-btn {
-  border: none;
-  background: none;
-  cursor: pointer;
-
-  &:hover,
   &.active {
     color: $primary-color;
   }
-
-  &:focus-visible {
-    outline: 2px solid $primary-color;
-    outline-offset: -2px;
-  }
-}
-
-.right > .th-btn,
-.right > .th-static {
-  justify-content: flex-end;
 }
 
 .th-arrow {
   font-size: 9px;
-  opacity: 0;
-}
-
-.th-btn:hover .th-arrow {
-  opacity: 0.45;
-}
-
-.th-btn.active .th-arrow {
-  opacity: 1;
 }

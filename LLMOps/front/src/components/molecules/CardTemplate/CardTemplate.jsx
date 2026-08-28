@@ -41,6 +41,8 @@ const CardTemplate = ({
           kind,
           qualifierBadge,
           qualifierBadgeKind,
+          statusBadgeLabel,
+          statusBadgeKind,
         } = cardInfo;
         return (
           <Card
@@ -64,6 +66,8 @@ const CardTemplate = ({
             width={width}
             height={height}
             statusBadge={statusBadge}
+            statusBadgeLabel={statusBadgeLabel}
+            statusBadgeKind={statusBadgeKind}
             noAccess={disableNoAccess && isAccess === 0}
             typeBadge={typeBadge}
             typeBadgeKind={kind}

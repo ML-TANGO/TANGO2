@@ -15,7 +15,7 @@ import {
   startQuantize,
 } from '@src/apis/llm/model';
 
-import SimpleNav from '../SimpleNav';
+import SimpleNav from '@src/components/molecules/SimpleNav';
 import QuantizeModal from './QuantizeModal';
 import EdgeDeployModal from './EdgeDeployModal';
 

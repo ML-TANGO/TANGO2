@@ -10,7 +10,7 @@ import useIntervalCall from '@src/hooks/useIntervalCall';
 // Network
 import { callApi, STATUS_SUCCESS } from '@src/network';
 
-import SimpleNav from '../SimpleNav';
+import SimpleNav from '@src/components/molecules/SimpleNav';
 import MultimodalArchDiagram from '../MultimodalArchDiagram/MultimodalArchDiagram';
 
 import { addNineHours, errorToastMessage } from '@src/utils';

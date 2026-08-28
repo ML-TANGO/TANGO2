@@ -16,7 +16,7 @@ import { openModal } from '@src/store/modules/modal';
 import { callApi, STATUS_SUCCESS } from '@src/network';
 import { loadModalComponent } from '@src/modal';
 
-import SimpleNav from '../SimpleNav';
+import SimpleNav from '@src/components/molecules/SimpleNav';
 import Advanced from './Advanced';
 import DataList from './DataList';
 import FineTuningGraph from './FineTuningGraph';

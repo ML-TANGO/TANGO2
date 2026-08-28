@@ -25,15 +25,20 @@
     .name {
       display: flex;
       align-items: center;
+      // 긴 이름이 우측 액션 버튼을 밀어내지 않도록(평가 상세에서 실측된 넘침).
+      min-width: 0;
       font-family: SpoqaB;
       .sub-title {
         margin-left: 8px;
         font-size: 18px;
         color: $mono205;
         font-family: SpoqaM;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
     }
     .btn {
+      flex-shrink: 0;
     }
 
     // @media screen and (max-width: 1024px) {
@@ -93,29 +98,6 @@
           .stick {
             background-color: $primary-color;
           }
-        }
-      }
-    }
-    .checkbox {
-      margin-left: auto;
-      display: flex;
-      align-items: flex-start;
-      &.disabled {
-        opacity: 0.5;
-      }
-      .checkbox-wrap {
-        display: flex;
-        align-items: center;
-        span {
-          display: flex;
-          align-items: center;
-          font-size: 14px;
-          font-style: normal;
-          font-weight: 500;
-          line-height: 14px;
-          font-family: SpoqaM;
-          color: #3babff;
-          margin-left: 12px;
         }
       }
     }

@@ -140,6 +140,10 @@
         &.error {
           color: $red502;
         }
+        // 평가 런이 끝난 상태 — 살아 있는 running(초록)과 구분되는 종료 색.
+        &.completed {
+          color: $blue104;
+        }
       }
       .type-badge {
         display: inline-flex;
