@@ -184,12 +184,6 @@
   &:last-child {
     border-bottom: none;
   }
-
-  // 아직 못 채운 필수 칸 — 푸터 문구와 같은 곳을 가리킨다.
-  &.warn {
-    background-color: $mono201;
-    box-shadow: inset 3px 0 0 0 $error-color;
-  }
 }
 
 .rail-title {

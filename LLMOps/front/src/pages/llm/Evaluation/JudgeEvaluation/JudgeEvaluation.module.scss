@@ -1,45 +1,10 @@
 @import '@src/styles/color.scss';
 
 // ── Judge 실행 설정 ───────────────────────────────────────────────────
-.judge-config {
-  display: flex;
-  flex-direction: column;
-  max-width: 1040px;
-  margin-top: 8px;
-  gap: 20px;
-}
-
-.panel {
-  display: flex;
-  flex-direction: column;
-  padding: 24px;
-  border: 1px solid $disable-color;
-  border-radius: 8px;
-  background-color: $mono200;
-  gap: 18px;
-}
-
-.panel-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.panel-title {
-  margin: 0;
-  color: $title-color;
-  font-family: SpoqaB;
-  font-size: 16px;
-  font-weight: 700;
-}
-
-.panel-desc {
-  margin: 6px 0 0;
-  color: $sub-text-color;
-  font-size: 12.5px;
-  line-height: 1.5;
-}
+// 실행 설정은 정답 대조와 같은 단일 화면 모달이라 **껍데기·레일 규칙은 이 파일에 없다** —
+// run-config(2단 격자)·panel·rail-sec·opt-field 는 BenchmarkEvaluation.module.scss 의 것을
+// 그대로 쓴다(JudgeRunConfig 가 두 스타일시트를 합쳐 bind 한다). 같은 규칙을 두 벌 두면
+// 한쪽만 고쳐져 두 화면이 서서히 갈라지므로, 여기 남기는 건 심사 전용 카드뿐이다.
 
 // ── 심사 세트 카드 ────────────────────────────────────────────────────
 // 세트가 곧 문항·영역·척도라 라벨 한 줄로는 무엇을 재는지 알 수 없다. 채점기가 없는
@@ -127,44 +92,6 @@
   color: $sub-text-color;
   font-size: 12.5px;
   line-height: 1.5;
-}
-
-// 절 아래에 붙는 한 줄 설명 — 무엇이 일어나는지를 고르는 자리에서 알린다.
-.note {
-  margin: 0;
-  color: $sub-text-color;
-  font-size: 12.5px;
-  line-height: 1.6;
-}
-
-.form-stack {
-  display: flex;
-  flex-direction: column;
-  max-width: 640px;
-  gap: 18px;
-}
-
-.control {
-  width: 100%;
-  margin-top: 8px;
-
-  > div {
-    width: 100%;
-  }
-}
-
-.actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-}
-
-// 실행을 막는 첫 이유 — 버튼 왼쪽에 붙어, 왜 죽어 있는지가 버튼과 같은 줄에서 보인다.
-.block-reason {
-  margin: 0;
-  color: $error-color;
-  font-size: 13px;
 }
 
 // ── Judge 결과 ───────────────────────────────────────────────────────

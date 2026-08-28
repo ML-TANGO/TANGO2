@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
 import {
-  NavLink,
   Redirect,
   Route,
   Switch,
@@ -11,7 +10,7 @@ import {
   useRouteMatch,
 } from 'react-router-dom';
 
-import { Badge, ButtonV2, Loading } from '@jonathan/ui-react';
+import { Badge, ButtonV2, Loading, Textarea } from '@jonathan/ui-react';
 
 import BenchmarkRunConfig from '../BenchmarkEvaluation/BenchmarkRunConfig';
 import {
@@ -30,11 +29,10 @@ import ExpertRunView from '../ExpertEvaluation/ExpertRunView';
 import JudgeResultView from '../JudgeEvaluation/JudgeResultView';
 import JudgeRunConfig from '../JudgeEvaluation/JudgeRunConfig';
 
-import EvalGenerateModal from './EvalGenerateModal';
-
 import ContentBox from '@src/components/molecules/ContentBox';
 import EmptyBox from '@src/components/molecules/EmptyBox';
 import MultiSortTable from '@src/components/molecules/MultiSortTable';
+import SimpleNav from '@src/components/molecules/SimpleNav';
 
 import {
   compareProjectRuns,
@@ -44,8 +42,8 @@ import {
   listEvalProjects,
   markEvalStatus,
   runBenchmark,
-  runEvalInference,
   startExpert,
+  updateEvalProject,
 } from '@src/apis/llm/evaluation';
 import { startPath } from '@src/store/modules/breadCrumb';
 import { openConfirm } from '@src/store/modules/confirm';
@@ -55,6 +53,9 @@ import { addNineHours, errorToastMessage } from '@src/utils';
 
 import classNames from 'classnames/bind';
 import style from './ProjectDetail.module.scss';
+
+import ArrowDownIcon from '@src/static/images/icon/00-ic-basic-arrow-02-down-grey.svg';
+import EditIcon from '@src/static/images/icon/00-ic-basic-pen.svg';
 
 const cx = classNames.bind(style);
 
@@ -83,11 +84,15 @@ const STATUS_BADGE_TYPE = {
   failed: 'red',
   cancelled: 'gray',
 };
-const TYPE_BADGE_TYPE = {
-  reference: 'blue',
-  judge: 'yellow',
-  expert: 'green',
-};
+
+// SimpleNav 에 넘기는 **빈 탭 목록**. 이 화면은 탭이 하나뿐이라 탭바를 없앴다 — 제목·부제·
+// 우측 액션은 그대로 SimpleNav 가 그리고, 목록이 비면 <ul> 만 건너뛴다.
+// 모듈 상수로 두어 렌더마다 새 배열이 생기지 않게 한다.
+const NO_TABS = [];
+
+// 접히는 프로젝트 정보 패널의 id — 토글 버튼의 aria-controls 가 가리키는 곳.
+// 한 화면에 하나뿐이라 상수로 둔다.
+const INFO_PANEL_ID = 'eval-project-info';
 
 const fmtDate = (v) => addNineHours(v) || '-';
 
@@ -97,34 +102,6 @@ const fmtRunMetric = (k, v) => {
   if (k === 'expert_avg_score') return `${v.toFixed(2)}/5`;
   if (k === 'expert_pass_rate') return `${v.toFixed(2)}%`;
   return v >= 1000 ? v.toFixed(0) : v.toFixed(2);
-};
-
-// SimpleNav 는 llmModel.info.name 을 titleName 보다 우선하므로 평가 프로젝트명이 모델명에
-// 오염될 수 있다. 마크업·클래스 구조는 그대로 따르되 평가 데이터만 받는 전용 헤더로 분리한다.
-const EvaluationNav = ({ navList, topButtonList, titleName, subTitle }) => {
-  const { t } = useTranslation();
-
-  return (
-    <div className={cx('nav-box')}>
-      <div className={cx('title')}>
-        <div className={cx('name')}>
-          <div>{titleName}</div>
-          {subTitle && <div className={cx('sub-title')}>{subTitle}</div>}
-        </div>
-        {topButtonList && <div className={cx('btn')}>{topButtonList}</div>}
-      </div>
-      <ul className={cx('nav')}>
-        {navList.map(({ label, path: navPath }) => (
-          <li className={cx('nav-item')} key={navPath}>
-            <NavLink exact to={navPath} activeClassName={cx('active')}>
-              <span className={cx('link-name')}>{t(label)}</span>
-              <span className={cx('stick')} />
-            </NavLink>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
 };
 
 // 네비게이션이라 button 을 유지한다 — div+onClick 은 Tab 으로 도달할 수 없어
@@ -155,6 +132,12 @@ const ProjectDetail = () => {
   const normalizedPath = location.pathname.replace(/\/+$/, '');
 
   const [project, setProject] = useState(null); // null=로딩
+  // 프로젝트 정보는 **기본 접힘**. 상세에 들어온 사람이 먼저 볼 것은 실행 목록이다.
+  const [infoOpen, setInfoOpen] = useState(false);
+  // 설명 인라인 편집 — 모델 상세(ModelInfo)와 같은 언어: 연필 아이콘 → Textarea → 수정 버튼.
+  const [editingDesc, setEditingDesc] = useState(false);
+  const [descDraft, setDescDraft] = useState('');
+  const [savingDesc, setSavingDesc] = useState(false);
   const [runsData, setRunsData] = useState(null); // { metric_keys, best, runs }
   const [notFound, setNotFound] = useState(false);
   const [modelMap, setModelMap] = useState({}); // model_id에서 name으로 매핑
@@ -165,11 +148,10 @@ const ProjectDetail = () => {
   const [projectListUpdate, setProjectListUpdate] = useState(null);
   const [starting, setStarting] = useState(false);
   const [showInferModal, setShowInferModal] = useState(false);
-  const [showGenModal, setShowGenModal] = useState(false);
-  const [generating, setGenerating] = useState(false);
   const [compareData, setCompareData] = useState(null);
-  // 벤치마크 실행 설정은 인라인 위저드에서 단일 화면 모달로 옮겼다 — 한 런이 고르는 것은
-  // 벤치마크 하나·배포 하나뿐이라 별도 화면(라우트)을 차지할 이유가 없다.
+  // 실행 설정은 단일 화면 모달이다 — 정답 대조는 인라인 위저드에서, LLM 심사는 전체 페이지
+  // 라우트(/runs/new)에서 옮겨 왔다. 한 런이 고르는 것은 벤치마크(세트) 하나·배포 한둘뿐이라
+  // 별도 화면을 차지할 이유가 없고, 유형이 갈려도 같은 자리에서 같은 문법으로 뜬다.
   const [showRunConfig, setShowRunConfig] = useState(false);
   // 새 실행 직후 아직 목록 응답에 없는 run의 결과 뷰 props를 URL 전환 사이에 보존한다.
   const [activeRun, setActiveRun] = useState(null);
@@ -184,6 +166,28 @@ const ProjectDetail = () => {
       errorToastMessage(res.error, res.message);
     }
   }, [projectId]);
+
+  const startEditDesc = () => {
+    setDescDraft(project?.description ?? '');
+    setEditingDesc(true);
+  };
+
+  // 저장 후 **get_project 를 다시 부르지 않는다** — 그 조회는 running 런을 컨테이너와
+  // 리콘사일하는 부수효과가 있어(런 상태를 바꾼다) 설명 한 줄 저장이 그 왕복을 끌고 온다.
+  // 서버 응답의 description 만 반영한다(공백만 보내면 서버가 NULL 로 접는다 → 플레이스홀더).
+  const saveDesc = async () => {
+    setSavingDesc(true);
+    const res = await updateEvalProject(projectId, { description: descDraft });
+    setSavingDesc(false);
+    if (res.status !== STATUS_SUCCESS) {
+      errorToastMessage(res.error, res.message);
+      return;
+    }
+    setProject((prev) =>
+      prev ? { ...prev, description: res.result?.description ?? null } : prev,
+    );
+    setEditingDesc(false);
+  };
 
   useEffect(() => {
     dispatch(startPath([{ component: { name: 'Evaluation' } }]));
@@ -256,21 +260,11 @@ const ProjectDetail = () => {
     };
   }, [projectId, workspaceId]);
 
-  // 러너 generate 런이 running 인 동안 프로젝트를 폴링한다. 완료되어 runsData가 갱신되면 genRunning이
-  // false 가 되어 폴링이 멈추고, 배너가 '생성 완료'로 전환 + 채점이 그 output 을 소비 가능.
-  useEffect(() => {
-    const running = (runsData?.runs ?? []).some(
-      (r) => r.metric_set === 'inference' && r.status === 'running',
-    );
-    if (!running) return undefined;
-    const timer = setInterval(() => {
-      fetchProject();
-    }, 4000);
-    return () => clearInterval(timer);
-  }, [runsData, fetchProject]);
-
   // 러너 inference 런(metric_set='inference')은 점수 런이 아니라 "생성" 서브스텝 — 점수 목록에서
-  // 분리(클릭 시 dead-end 방지)하고, 최신 완료본은 배너/benchmark seam(inference_job_id)에 쓴다.
+  // 분리해 클릭 시 dead-end 를 막는다. 이 화면에서 **생성 런을 만드는 경로는 없어졌지만**
+  // (아래 startExpertRun 주석 참조) DB 에 남은 옛 생성 런이 점수 목록에 섞이면 안 되므로
+  // 이 분리는 유지한다. 그 런들이 running 인 동안 돌던 4초 폴링은 함께 걷어냈다 — 새로
+  // 만들어지지 않는 상태를 기다리느라 상세를 열어 둔 내내 조회를 반복할 이유가 없다.
   //
   // ⚠️ 두 목록은 **반드시 memo 여야 한다** — 아래 runDatasetMap·benchRows 의 의존성이라,
   //    본문에서 매 렌더 새 배열을 만들면 그 memo 들이 무관한 상태 변경(모달 열림·실행 중
@@ -280,14 +274,6 @@ const ProjectDetail = () => {
   const runs = useMemo(
     () => allRuns.filter((r) => r.metric_set !== 'inference'),
     [allRuns],
-  );
-  // 아래 둘은 allRuns 가 안정되면 함께 안정된다 — find 는 같은 원소 참조를, some 은 원시값을
-  // 돌려주므로 별도 memo 없이도 참조가 흔들리지 않는다.
-  const latestInference = allRuns.find(
-    (r) => r.metric_set === 'inference' && r.status === 'completed',
-  );
-  const genRunning = allRuns.some(
-    (r) => r.metric_set === 'inference' && r.status === 'running',
   );
   const metricKeys = runsData?.metric_keys ?? [];
 
@@ -713,28 +699,29 @@ const ProjectDetail = () => {
     fetchProject();
   };
 
-  // "새 평가 실행" — expert 는 출력원 선택 후 세션 시작(startExpert), 정답 대조는 단일
-  // 화면 모달, LLM 심사는 설정 화면(라우트)으로 간다.
-  const handleNewRun = async () => {
+  // "새 평가 실행" — 유형과 무관하게 **모달**이다. 목록에서 벗어나지 않고 설정→실행까지
+  // 끝난다(LLM 심사도 전체 페이지 라우트에서 모달로 옮겼다: /runs/new 는 없앴다).
+  // expert 만 모달이 다르다 — 벤치마크 런이 아니라 사람이 채점하는 세션을 시작한다.
+  const handleNewRun = () => {
     if (!project) return;
     if (project.eval_type === 'expert') {
       // 전문가 평가는 실추론(지연 단위 VLM)에 쓸 배포를 먼저 고른 뒤 startExpertRun으로 시작.
       setShowInferModal(true);
-    } else if (project.eval_type === 'reference') {
-      // 정답 대조는 단일 화면 모달 — 목록에서 벗어나지 않고 설정→실행까지 끝난다.
-      setShowRunConfig(true);
-    } else {
-      history.push(`${runsPath}/new`);
+      return;
     }
+    setShowRunConfig(true);
   };
 
-  // 출력 출처 확정 후 전문가 세션 시작. 모달이 배포 | 이전 생성 런 중 **하나만** 채워 넘긴다
-  // (둘 다 없으면 모달이 실행을 막고, 그래도 오면 BE 가 거절한다 — mock 폴백은 없어졌다).
+  // 출력 출처 확정 후 전문가 세션 시작. 출처는 **실행 중 배포 하나뿐**이다 — 모달이
+  // 그것만 고르게 하고, 없으면 실행을 막는다(그래도 오면 BE 가 거절한다).
+  //
+  // ⚠️ BE 의 inference_job_id 경로(이전 생성 런의 출력 재사용)는 살아 있지만 이 화면에서
+  //    더는 채우지 않는다 — 생성 런을 만드는 진입점 자체를 없앴기 때문이다(아래 참조).
   const startExpertRun = async ({
     inferencePlaygroundId,
-    inferenceJobId,
     modelId,
     datasetId,
+    sampleLimit,
   }) => {
     setShowInferModal(false);
     if (starting) return;
@@ -744,11 +731,12 @@ const ProjectDetail = () => {
       project_id: Number(projectId),
       model_id: Number(modelId),
       dataset_ids: [Number(datasetId)],
-      // 출처는 화면이 고른 하나만. 둘을 함께 실으면 BE 우선순위(job > playground)가
-      // 사용자의 선택을 조용히 덮는다.
-      ...(inferenceJobId
-        ? { inference_job_id: inferenceJobId }
-        : { inference_playground_id: inferencePlaygroundId }),
+      // 출처는 배포 하나만 싣는다 — inference_job_id 를 함께 보내면 BE 우선순위
+      // (job > playground)가 사용자의 선택을 조용히 덮는다.
+      inference_playground_id: inferencePlaygroundId,
+      // 채점 샘플 수(앞에서부터). 비었으면 아예 싣지 않아 BE 기본(전량)을 쓴다 —
+      // null 을 보내면 Optional 이라 통과하지만 "명시적으로 비움"과 구분이 흐려진다.
+      ...(sampleLimit ? { sample_limit: Number(sampleLimit) } : {}),
     };
     const res = await startExpert(body);
     setStarting(false);
@@ -761,38 +749,18 @@ const ProjectDetail = () => {
     history.push(`${runsPath}/${res.result.job_id}`);
   };
 
-  // 평가 추론 러너(generate) 실행 — 선택한 running 배포로 데이터셋 전량 batch 추론 후 _samples +
-  // _gen_system_prompt 영속. 백그라운드 런이라 즉시 목록 갱신 후 genRunning 폴링이 완료까지 추적.
-  const handleGenerate = async ({
-    inference_playground_id,
-    system_prompt,
-    model_id,
-    dataset_ids,
-  }) => {
-    setShowGenModal(false);
-    if (generating) return;
-    setGenerating(true);
-    try {
-      const res = await runEvalInference({
-        project_id: Number(projectId),
-        // 생성 런도 대상 모델·데이터셋을 스스로 지정한다(실행 시점 선택).
-        model_id,
-        dataset_ids,
-        inference_playground_id,
-        system_prompt,
-      });
-      if (res.status !== STATUS_SUCCESS || !res.result?.job_id) {
-        errorToastMessage(res.error, res.message);
-        return;
-      }
-      // 러너 런(running)이 목록/배너에 반영되도록 갱신하고 genRunning 폴링이 완료까지 추적.
-      await fetchProject();
-    } finally {
-      // busy 해제는 fetchProject 반영 후에야 — 그 전엔 genRunning 이 아직 false 라 버튼이
-      //   재활성되어 이중 제출될 수 있음(리뷰 HIGH). finally 로 refetch 후 해제.
-      setGenerating(false);
-    }
-  };
+  // ── 생성(추론) 런은 이 화면에서 없앴다 ─────────────────────────────────────
+  // 평가 실행이 이미 "출력을 만들 배포"를 고르므로(정답 대조·LLM 심사의
+  // inference_playground_id, 전문가의 startExpertRun) 출력을 미리 만들어 두는 별도의
+  // '생성 실행' 은 같은 선택을 두 번 묻는 일이었다. 출력 획득을 배포 선택으로 일원화하면서
+  // 버튼·모달(EvalGenerateModal)·상태·폴링·배너를 함께 걷어냈다.
+  //
+  // ⚠️ 되살릴 사람에게: **BE 는 그대로 살아 있고 도달만 불가하다.**
+  //    · POST /evaluations/inference (apps/… llm_evaluation 의 run_eval_inference)
+  //    · 그 런이 만든 출력을 읽던 _load_run_samples / inference_job_id 인자
+  //    FE 에서 이 엔드포인트를 부르는 곳은 이제 0 이다(apis/llm/evaluation 의
+  //    runEvalInference 도 호출자가 없어 함께 지웠다). 되살리려면 이 주석 자리에
+  //    handleGenerate + 모달을 되돌리고 API 래퍼를 다시 만들면 된다.
 
   // 실행 설정 화면이 넘기는 값들. **정답 대조(BenchmarkRunConfig)와 LLM 심사(JudgeRunConfig)가
   // 같은 계약을 쓴다** — 심사 벤치마크(LogicKor)도 벤치마크 런이라 같은 엔드포인트로 나가고,
@@ -802,14 +770,12 @@ const ProjectDetail = () => {
   //   inferencePlaygroundId = 출력을 만들 running 배포. **필수**다 — 평가 컨테이너는 채점만
   //     하고 생성은 언제나 배포가 한다(컨테이너가 체크포인트를 직접 올리던 경로는 폐기).
   //   judgePlaygroundId = 채점을 맡길 running 배포. LLM 심사에서만 채워 온다(필수).
-  //   runOptions = 심사 컨테이너 실행 옵션({ strategy?, judge_max_output_tokens? }).
   const handleBenchmarkRun = async ({
     modelId,
     datasetId,
     benchmarks,
     inferencePlaygroundId,
     judgePlaygroundId,
-    runOptions,
   }) => {
     if (starting) return;
     setStarting(true);
@@ -826,10 +792,6 @@ const ProjectDetail = () => {
       // 원격 심판(LogicKor) — 서버가 배포 id 를 검증하고 OpenAI 호환 base URL 을 조립한다
       //   (URL 직접 수취는 SSRF). judge_model 과는 배타적이라 함께 보내지 않는다.
       ...(judgePlaygroundId ? { judge_playground_id: judgePlaygroundId } : {}),
-      // 심사 컨테이너 실행 옵션. ⚠️ 평면으로 펼친다: BenchmarkRunBody 는 strategy·
-      //   judge_max_output_tokens 를 최상위 필드로 받고 route.py 가 run_options 딕트로
-      //   묶는다. run_options 로 감싸 보내면 Pydantic 이 조용히 버려 컨테이너 기본값으로 돈다.
-      ...(runOptions || {}),
     });
     setStarting(false);
     if (res.status !== STATUS_SUCCESS || !res.result?.job_id) {
@@ -870,8 +832,8 @@ const ProjectDetail = () => {
     history.push(comparePath);
   };
 
-  // 비교 탭은 NavLink·직접 URL·새로고침 어느 경로로 들어와도 데이터를 조회한다.
-  // 비교 가능 여부는 navList 노출로만 제어하고 Route 자체는 항상 마운트한다.
+  // 비교 화면은 상단 버튼·직접 URL·새로고침 어느 경로로 들어와도 데이터를 조회한다.
+  // 탭바를 없앤 뒤에도 Route 는 항상 마운트한다 — 노출만 showCompare 가 제어한다.
   useEffect(() => {
     if (project?.id == null || normalizedPath !== comparePath) return undefined;
     let cancelled = false;
@@ -969,47 +931,12 @@ const ProjectDetail = () => {
   // 카드형이라 비교표가 유일한 대조 수단이므로 그대로 둔다.
   const showCompare =
     !RUN_TABLE_TYPES.includes(project.eval_type) && runs.length >= 2;
-  const navList = [
-    {
-      label: 'evaluation.project.detail.runsTitle',
-      path: runsPath,
-    },
-    // 비교 Route 는 항상 존재하며, 탭 노출만 위 조건으로 제어한다.
-    ...(showCompare
-      ? [
-          {
-            label: 'evaluation.project.detail.compare',
-            path: comparePath,
-          },
-        ]
-      : []),
-  ];
+  // 헤더에는 배지를 달지 않는다 — 모델·배포 상세 헤더와 같은 규약이다. 유형은 이미 제목
+  // 옆 부제에 평문으로 있고, 상태는 표의 행마다 있다. 프로젝트 status 는 런들의 롤업이라
+  // 헤더에 한 낱말로 박으면 "완료"인 프로젝트에서 새 런이 도는 순간 거짓이 된다.
   const topButtonList = (
     <div className={cx('top-actions')}>
-      <Badge
-        label={typeLabel}
-        type={TYPE_BADGE_TYPE[project.eval_type] || 'gray'}
-        size='sm'
-      />
-      <Badge
-        label={t(STATUS_KEYS[project.status] || project.status)}
-        type={STATUS_BADGE_TYPE[project.status] || 'gray'}
-        size='sm'
-      />
       {/* SimpleNav 의 topButtonList 슬롯과 같은 자리라 하우스와 같은 size='l' 을 쓴다. */}
-      <ButtonV2
-        type='outline'
-        colorType='gray'
-        size='l'
-        label={
-          genRunning
-            ? t('evaluation.generate.running')
-            : t('evaluation.generate.action')
-        }
-        disabled={generating || genRunning}
-        isLoading={generating}
-        onClick={() => setShowGenModal(true)}
-      />
       {showCompare && (
         <ButtonV2
           type='outline'
@@ -1037,48 +964,166 @@ const ProjectDetail = () => {
     <div id='ProjectDetail' className={cx('container')}>
       <DetailBack label={backLabel} onClick={goBack} />
       <div className={cx('content')}>
-        <EvaluationNav
-          navList={navList}
+        {/* 탭바는 없앴다 — 탭이 '실행 목록' 하나뿐이라 장식이었다. 비교는 탭이 아니라
+            위 topButtonList 의 버튼이 연다(라우트는 그대로 살아 있다). SimpleNav 는 빈
+            목록이면 <ul> 만 건너뛰고 제목·부제·액션은 그대로 그린다. */}
+        <SimpleNav
+          navList={NO_TABS}
           topButtonList={topButtonList}
           titleName={project.name}
           subTitle={modelName ? `${typeLabel} · ${modelName}` : typeLabel}
         />
 
-        {/* 실행 결과를 해석하는 전제 메타는 별도 탭이 아니라 모든 하위 화면에서 계속 노출한다. */}
-        <ContentBox title={t('evaluation.project.detail.infoTitle')}>
-          <div className={cx('project-meta')}>
-            {/* 데이터셋도 런이 고르므로 프로젝트에 잠긴 값이 있을 때만 세운다. */}
-            {datasetLabel && (
-              <div className={cx('meta-item')}>
-                <span className={cx('meta-label')}>
-                  {t('evaluation.project.dataset')}
+        {/* 실행 결과를 해석하는 전제 메타는 별도 탭이 아니라 모든 하위 화면에서 계속 노출한다.
+            다만 **기본은 접는다** — 상세에 들어온 사람이 먼저 볼 것은 실행 목록이지 생성자·
+            생성 일시가 아닌데, 펼친 박스가 표를 한 화면 아래로 밀어냈다. 접힌 줄이 만든 이·
+            생성 일시·설명 한 줄을 그대로 들고 있어 펼치지 않아도 빈 줄로 보이지 않는다. */}
+        <ContentBox>
+          <div className={cx('info-head')}>
+            <button
+              type='button'
+              className={cx('info-toggle')}
+              aria-expanded={infoOpen}
+              // 접힌 상태에서는 패널이 렌더되지 않는다 — 없는 id 를 가리키면 끊어진
+              // IDREF 가 되므로 펼쳤을 때만 건다(상태는 aria-expanded 가 말한다).
+              aria-controls={infoOpen ? INFO_PANEL_ID : undefined}
+              onClick={() => setInfoOpen((prev) => !prev)}
+            >
+              <span className={cx('info-title')}>
+                {t('evaluation.project.detail.infoTitle')}
+              </span>
+              <img
+                className={cx('info-arrow', infoOpen && 'open')}
+                src={ArrowDownIcon}
+                alt=''
+              />
+            </button>
+            {!infoOpen && (
+              <div className={cx('info-summary')}>
+                <span className={cx('summary-item')}>
+                  <span className={cx('summary-label')}>
+                    {t('evaluation.project.creator')}
+                  </span>
+                  {project.creator || '-'}
                 </span>
-                <span className={cx('meta-value', 'dataset-value')}>
-                  {datasetLabel}
+                <span className={cx('summary-sep')}>·</span>
+                <span className={cx('summary-item')}>
+                  <span className={cx('summary-label')}>
+                    {t('createdAt.label')}
+                  </span>
+                  {fmtDate(project.create_datetime)}
                 </span>
+                {project.description && (
+                  <>
+                    <span className={cx('summary-sep')}>·</span>
+                    <span
+                      className={cx('summary-desc')}
+                      title={project.description}
+                    >
+                      {project.description}
+                    </span>
+                  </>
+                )}
               </div>
             )}
-            <div className={cx('meta-item')}>
-              <span className={cx('meta-label')}>
-                {t('evaluation.project.creator')}
-              </span>
-              <span className={cx('meta-value')}>{project.creator || '-'}</span>
-            </div>
-            <div className={cx('meta-item')}>
-              <span className={cx('meta-label')}>{t('createdAt.label')}</span>
-              <span className={cx('meta-value')}>
-                {fmtDate(project.create_datetime)}
-              </span>
-            </div>
-            <div className={cx('meta-item')}>
-              <span className={cx('meta-label')}>
-                {t('lastUpdatedTime.label')}
-              </span>
-              <span className={cx('meta-value')}>
-                {fmtDate(projectUpdateDatetime)}
-              </span>
-            </div>
           </div>
+
+          {infoOpen && (
+            <div id={INFO_PANEL_ID}>
+              <div className={cx('project-meta')}>
+                {/* 데이터셋도 런이 고르므로 프로젝트에 잠긴 값이 있을 때만 세운다. */}
+                {datasetLabel && (
+                  <div className={cx('meta-item')}>
+                    <span className={cx('meta-label')}>
+                      {t('evaluation.project.dataset')}
+                    </span>
+                    <span className={cx('meta-value', 'dataset-value')}>
+                      {datasetLabel}
+                    </span>
+                  </div>
+                )}
+                <div className={cx('meta-item')}>
+                  <span className={cx('meta-label')}>
+                    {t('evaluation.project.creator')}
+                  </span>
+                  <span className={cx('meta-value')}>
+                    {project.creator || '-'}
+                  </span>
+                </div>
+                <div className={cx('meta-item')}>
+                  <span className={cx('meta-label')}>
+                    {t('createdAt.label')}
+                  </span>
+                  <span className={cx('meta-value')}>
+                    {fmtDate(project.create_datetime)}
+                  </span>
+                </div>
+                <div className={cx('meta-item')}>
+                  <span className={cx('meta-label')}>
+                    {t('lastUpdatedTime.label')}
+                  </span>
+                  <span className={cx('meta-value')}>
+                    {fmtDate(projectUpdateDatetime)}
+                  </span>
+                </div>
+              </div>
+
+              {/* 설명 — 모델 상세와 같은 인라인 편집(연필 → Textarea → 수정).
+                  메타 그리드가 아니라 아래 한 줄을 통째로 쓴다: 산문이라 140px 칸에 안 들어간다.
+                  아이콘은 img+onClick 이 아니라 button 으로 감싼다 — 하우스 마크업과 보이는
+                  것은 같고, Tab 으로 도달·Enter 로 실행된다(WCAG 2.1.1). */}
+              <div className={cx('project-desc')}>
+                <div className={cx('desc-head')}>
+                  <span className={cx('desc-label')}>
+                    {t('description.label')}
+                  </span>
+                  {editingDesc ? (
+                    <ButtonV2
+                      label={t('update.label')}
+                      colorType='skyblue'
+                      disabled={savingDesc}
+                      isLoading={savingDesc}
+                      onClick={saveDesc}
+                    />
+                  ) : (
+                    <button
+                      type='button'
+                      className={cx('desc-edit-btn')}
+                      onClick={startEditDesc}
+                      aria-label={t('description.label')}
+                    >
+                      <img src={EditIcon} alt='' />
+                    </button>
+                  )}
+                </div>
+                {editingDesc ? (
+                  <>
+                    <Textarea
+                      size='large'
+                      placeholder={t('evaluation.project.descPlaceholder')}
+                      value={descDraft}
+                      name='description'
+                      onChange={(e) => setDescDraft(e.target.value)}
+                      maxLength={'5000'}
+                      customStyle={{ fontSize: '14px', height: '80px' }}
+                    />
+                    <div className={cx('desc-length')}>
+                      {descDraft?.length ?? 0}/5000
+                    </div>
+                  </>
+                ) : (
+                  <div
+                    className={cx(
+                      'desc-value',
+                      !project.description && 'no-desc',
+                    )}
+                  >
+                    {project.description || t('no.desc')}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </ContentBox>
 
         <Switch>
@@ -1087,23 +1132,10 @@ const ProjectDetail = () => {
           </Route>
 
           {/* 라우트는 평가 유형·run 수와 무관하게 항상 마운트한다.
-              유형과 비교 가능 여부는 각 Route 내부 분기와 navList 노출로만 제어한다. */}
-          {/* 정답 대조 실행 설정은 라우트가 아니라 모달이다 — 이 자리는 LLM 심사 전용이다.
-              심사는 세트·대상·심판·세부 설정이 한 화면을 채워 모달에 담기지 않는다. */}
-          <Route exact path={`${path}/runs/new`}>
-            {project.eval_type === 'judge' ? (
-              <JudgeRunConfig
-                workspaceId={workspaceId}
-                modelOptions={modelOptions}
-                datasetOptions={datasetOptions}
-                running={starting}
-                onRun={handleBenchmarkRun}
-              />
-            ) : (
-              <Redirect to={runsPath} />
-            )}
-          </Route>
-
+              유형과 비교 가능 여부는 각 Route 내부 분기와 상단 버튼 노출로만 제어한다.
+              탭바를 없앤 것은 UI 뿐이라 /runs·/run/:runId·/compare 는 모두 살아 있다. */}
+          {/* 실행 설정은 유형과 무관하게 모달이라 라우트를 두지 않는다 — 종전의
+              `${path}/runs/new`(LLM 심사 전용 전체 페이지)는 없앴다. */}
           <Route
             exact
             path={`${path}/runs/:jobId`}
@@ -1157,14 +1189,6 @@ const ProjectDetail = () => {
                 </h3>
                 <Badge label={String(runs.length)} type='blue' size='sm' />
               </div>
-
-              {(latestInference || genRunning) && (
-                <div className={cx('gen-banner')}>
-                  {genRunning
-                    ? t('evaluation.generate.running')
-                    : t('evaluation.generate.ready')}
-                </div>
-              )}
 
               {/* 정답 대조·LLM 심사는 펼친 표 — 헤더를 누른 순서가 정렬 레벨이고, 범주형이
                   선두면 그룹 경계선이 그어진다. 앞 두 열의 뜻만 유형별로 갈린다(leadColumns).
@@ -1291,9 +1315,21 @@ const ProjectDetail = () => {
           <Redirect to={runsPath} />
         </Switch>
 
-        {/* 정답 대조 실행 설정 — 단일 화면 모달. 목록에서 벗어나지 않고 설정→실행이 끝난다. */}
+        {/* 실행 설정 — 단일 화면 모달. 목록에서 벗어나지 않고 설정→실행이 끝난다.
+            두 유형은 같은 계약(handleBenchmarkRun)으로 나가고 화면 문법도 같다 —
+            갈리는 것은 좌측에서 고르는 것(벤치마크 / 심사 세트)과 심판 절의 유무뿐이다. */}
         {showRunConfig && project.eval_type === 'reference' && (
           <BenchmarkRunConfig
+            workspaceId={workspaceId}
+            modelOptions={modelOptions}
+            datasetOptions={datasetOptions}
+            running={starting}
+            onRun={handleBenchmarkRun}
+            onClose={() => setShowRunConfig(false)}
+          />
+        )}
+        {showRunConfig && project.eval_type === 'judge' && (
+          <JudgeRunConfig
             workspaceId={workspaceId}
             modelOptions={modelOptions}
             datasetOptions={datasetOptions}
@@ -1307,19 +1343,8 @@ const ProjectDetail = () => {
             workspaceId={workspaceId}
             modelOptions={modelOptions}
             datasetOptions={datasetOptions}
-            inferenceRun={latestInference}
             onConfirm={startExpertRun}
             onClose={() => setShowInferModal(false)}
-          />
-        )}
-        {showGenModal && (
-          <EvalGenerateModal
-            workspaceId={workspaceId}
-            modelOptions={modelOptions}
-            datasetOptions={datasetOptions}
-            running={generating}
-            onConfirm={handleGenerate}
-            onClose={() => setShowGenModal(false)}
           />
         )}
       </div>

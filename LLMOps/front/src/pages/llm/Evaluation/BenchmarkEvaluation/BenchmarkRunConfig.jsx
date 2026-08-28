@@ -155,7 +155,7 @@ const BenchmarkRunConfig = ({
   }, [workspaceId, modelId]);
 
   // NewStyleModalFrame 의 Esc 는 Redux 모달을 닫는다 — 로컬 조건부 렌더 경로라 직접 건다
-  // (EvalGenerateModal 과 같은 처리).
+  // (ExpertInferenceModal 과 같은 처리).
   useEffect(() => {
     const handleEscape = (event) => {
       if (event.key === 'Escape') onClose();
@@ -360,16 +360,9 @@ const BenchmarkRunConfig = ({
               {/* ⓪ 평가할 모델·데이터셋 — 런이 소유한다. 프로젝트에 잠겨 있던 것을 여기로
                   옮긴 이유: 한 프로젝트에서 모델·데이터셋을 바꿔 가며 재는 것이 비교의
                   전제인데, 생성 시점에 잠그면 프로젝트가 '모델 폴더'가 되어 버린다. */}
-              <div
-                className={cx('rail-sec', (!modelId || !datasetId) && 'warn')}
-              >
+              <div className={cx('rail-sec')}>
                 <p className={cx('rail-title')}>
                   {t('evaluation.run.subjectTitle')}
-                  <Badge
-                    label={t('evaluation.bench.required')}
-                    type='red'
-                    size='sm'
-                  />
                 </p>
                 <div className={cx('opt-field')}>
                   <span className={cx('opt-label')}>
@@ -421,14 +414,9 @@ const BenchmarkRunConfig = ({
                   잡지 않는다). 후보는 위에서 고른 모델을 서빙 중인 배포뿐이라, 모델을 고르기
                   전에는 물어볼 것이 없다. 이 절은 '무엇을 평가하나'(⓪)가 아니라 '그 답변을
                   누가 만드나'를 정한다. */}
-              <div className={cx('rail-sec', !sourceReady && 'warn')}>
+              <div className={cx('rail-sec')}>
                 <p className={cx('rail-title')}>
                   {t('evaluation.run.sourceTitle')}
-                  <Badge
-                    label={t('evaluation.bench.required')}
-                    type='red'
-                    size='sm'
-                  />
                 </p>
                 {!modelId ? (
                   <p className={cx('rail-note')}>
