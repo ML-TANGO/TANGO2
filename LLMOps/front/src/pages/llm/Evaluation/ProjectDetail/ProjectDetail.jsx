@@ -722,6 +722,8 @@ const ProjectDetail = () => {
     modelId,
     datasetId,
     sampleLimit,
+    runName,
+    expertPrompt,
   }) => {
     setShowInferModal(false);
     if (starting) return;
@@ -737,6 +739,10 @@ const ProjectDetail = () => {
       // 채점 샘플 수(앞에서부터). 비었으면 아예 싣지 않아 BE 기본(전량)을 쓴다 —
       // null 을 보내면 Optional 이라 통과하지만 "명시적으로 비움"과 구분이 흐려진다.
       ...(sampleLimit ? { sample_limit: Number(sampleLimit) } : {}),
+      // 세션 제목·평가 지침(선택). 빈 값은 싣지 않는다 — BE 가 '미입력'으로 보고
+      // 기본값(제목=데이터셋명 / 지침=시나리오 기본 지침)으로 폴백한다.
+      ...(runName ? { run_name: runName } : {}),
+      ...(expertPrompt ? { expert_prompt: expertPrompt } : {}),
     };
     const res = await startExpert(body);
     setStarting(false);
@@ -1234,14 +1240,37 @@ const ProjectDetail = () => {
                         onClick={() => openRun(run)}
                       >
                         <div className={cx('run-main')}>
+                          {/* 제목이 있으면 그것이 1행 — 없으면 기존대로 데이터셋명. */}
                           <span className={cx('run-dataset')}>
-                            {run.dataset_name || '-'}
+                            {run.run_name || run.dataset_name || '-'}
                           </span>
+                          {run.run_name && run.dataset_name && (
+                            <span className={cx('run-config')}>
+                              {run.dataset_name}
+                            </span>
+                          )}
                           {summary && (
                             <span className={cx('run-config')}>{summary}</span>
                           )}
                         </div>
                         <div className={cx('run-side')}>
+                          {/* 전문가 세션은 완료 전까지 metrics 에 점수가 없다 — BE 가 실어준
+                              부분 집계로 진행 상황과 현재 평균을 목록에서 바로 보여준다. */}
+                          {run.expert_progress && (
+                            <span className={cx('run-metrics')}>
+                              {t('evaluation.expert.progress', {
+                                rated: run.expert_progress.rated ?? 0,
+                                total: run.expert_progress.total ?? 0,
+                              })}
+                              {run.expert_progress.avg_score != null
+                                ? ` · ${t(
+                                    'evaluation.expert.avgScore',
+                                  )} ${Number(
+                                    run.expert_progress.avg_score,
+                                  ).toFixed(2)}/5`
+                                : ''}
+                            </span>
+                          )}
                           {preview.length > 0 && (
                             <span className={cx('run-metrics')}>
                               {preview

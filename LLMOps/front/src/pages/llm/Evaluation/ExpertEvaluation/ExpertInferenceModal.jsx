@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { InputText, Selectbox } from '@jonathan/ui-react';
+import { InputText, Selectbox, Textarea } from '@jonathan/ui-react';
 
 import NewStyleModalFrame from '@src/components/Modal/NewStyleModalFrame';
 import EmptyBox from '@src/components/molecules/EmptyBox';
@@ -59,6 +59,11 @@ const ExpertInferenceModal = ({
   const [datasetId, setDatasetId] = useState('');
   // 채점할 샘플 수 — '' 이면 데이터셋 전량(BE 기본과 같다). 앞에서부터 자른다.
   const [sampleLimit, setSampleLimit] = useState('');
+  // 세션 제목·평가 지침 — 둘 다 선택. 제목은 run 목록·채점 헤더의 표시원이고, 지침은
+  // 채점 화면 상단 박스에 그대로 뜬다. 비우면 BE 가 기본값(데이터셋명 / 시나리오 기본
+  // 지침)으로 폴백하므로 빈 문자열을 억지로 보내지 않는다.
+  const [runName, setRunName] = useState('');
+  const [guideline, setGuideline] = useState('');
 
   // 배포 후보는 모델이 정해져야 물어볼 수 있다. 모델을 바꾸면 다시 조회한다
   // (선택 비우기는 pickModel 이 맡는다).
@@ -187,6 +192,9 @@ const ExpertInferenceModal = ({
         datasetId,
         // 비우면 보내지 않는다 — BE 가 없을 때의 기본(전량)을 그대로 쓰게 둔다.
         sampleLimit: sampleLimitText === '' ? null : Number(sampleLimitText),
+        // 빈 입력은 undefined 로 — BE 가 '미입력'으로 보고 기본값으로 폴백한다.
+        runName: runName.trim() || undefined,
+        expertPrompt: guideline.trim() || undefined,
       }),
   };
   const cancel = {
@@ -336,6 +344,44 @@ const ExpertInferenceModal = ({
             <p className={cx('rail-note')}>
               {t('evaluation.bench.targetDeployNote')}
             </p>
+          </div>
+
+          {/* ② 세션 정보 — 둘 다 선택. 제목은 run 목록과 채점 진행 헤더의 표시원이고,
+              지침은 채점 화면 상단 '평가 지침' 박스에 그대로 뜬다. 비우면 BE 가
+              기본값(제목=데이터셋명 / 지침=시나리오 기본 지침)으로 폴백한다. */}
+          <div className={cx('rail-sec')}>
+            <p className={cx('rail-title')}>
+              {t('evaluation.expert.sessionSection')}
+            </p>
+            <div className={cx('opt-field')}>
+              <span className={cx('opt-label')}>
+                {t('evaluation.expert.runName')}
+              </span>
+              <InputText
+                size='medium'
+                value={runName}
+                placeholder={t('evaluation.expert.runNamePlaceholder')}
+                onChange={(event) => setRunName(event.target.value)}
+                onClear={() => setRunName('')}
+                disableLeftIcon
+                options={{ autoComplete: 'off', maxLength: 100 }}
+                customStyle={{ width: '100%' }}
+              />
+            </div>
+            <div className={cx('opt-field')}>
+              <span className={cx('opt-label')}>
+                {t('evaluation.expert.guideline')}
+              </span>
+              <Textarea
+                size='large'
+                maxLength={2000}
+                options={{ id: 'expert-guideline', rows: 4 }}
+                placeholder={t('evaluation.expert.guidelinePlaceholder')}
+                value={guideline}
+                onChange={(event) => setGuideline(event.target.value)}
+                customStyle={{ width: '100%', minHeight: '96px' }}
+              />
+            </div>
           </div>
         </div>
       </NewStyleModalFrame>

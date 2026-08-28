@@ -169,7 +169,9 @@ async def start_expert(body: dto.ExpertStartBody):
             model_id=body.model_id, dataset_ids=body.dataset_ids,
             inference_playground_id=body.inference_playground_id,
             inference_job_id=body.inference_job_id,
-            sample_limit=body.sample_limit)
+            sample_limit=body.sample_limit,
+            run_name=body.run_name,
+            expert_prompt=body.expert_prompt)
         return response(status=1, result=res)
     except Exception as e:
         traceback.print_exc()

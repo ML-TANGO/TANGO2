@@ -29,6 +29,17 @@ import style from './ExpertEvaluation.module.scss';
 
 const cx = classNames.bind(style);
 
+// 코멘트 의무화 임계 — 이 점수 이하로 매기면 사유(코멘트)를 반드시 남겨야 한다.
+// 낮은 점수는 "왜 낮은지"가 재학습·모델 개선의 실제 신호이므로 근거 없는 감점을 막는다.
+const COMMENT_REQUIRED_MAX_SCORE = 3;
+
+// 현재 채점이 '코멘트 미입력 상태의 낮은 점수'인가 — 별점 확정 보류·다음 잠금의 단일 판정.
+const needsComment = (rating) =>
+  !!rating &&
+  rating.score != null &&
+  rating.score <= COMMENT_REQUIRED_MAX_SCORE &&
+  !(rating.comment || '').trim();
+
 // 전문가 run 상세 뷰 (P4). 셋업 뷰 없음 — 모델·데이터셋은 프로젝트에서 상속, 세션은 이미
 // "세션 시작"(startExpert)으로 생성됨. (modelId, jobId) 로 진입.
 //   재개(P7): getExpertSamples 로 samples/expert_prompt/이전 채점 복원 + getExpertResult 로
@@ -76,6 +87,8 @@ const ExpertRunView = ({ modelId, jobId, onExit }) => {
         inference_enabled: !!s.inference_enabled,
         // 생성 시스템 프롬프트(헤더 고정 박스, P3) — 러너 런/바인드 배포에서 옴(없으면 박스 숨김).
         gen_system_prompt: s.gen_system_prompt,
+        // 세션 제목 — 생성 시 사용자가 입력해 동결한 값(없으면 헤더에 제목 줄 생략).
+        run_name: s.run_name,
       });
       // 이전 채점 복원 — ratings[] 각 행(sample_idx 별 현재값)을 FE ratings 맵으로.
       const map = {};
@@ -174,6 +187,15 @@ const ExpertRunView = ({ modelId, jobId, onExit }) => {
     if (prev.savedScore === score && (prev.savedComment || '') === comment) {
       return;
     }
+    // 낮은 점수(≤COMMENT_REQUIRED_MAX_SCORE)는 코멘트가 있어야 확정한다. 코멘트 없이 별점만
+    // 누른 상태는 화면에만 반영하고 서버 영속을 보류한다(‘다음’도 함께 잠긴다).
+    //   ⚠️ 보류가 필수인 이유: 전량 채점되는 순간 BE 가 세션을 completed 로 마감하고, 완료
+    //   세션은 재채점이 차단돼 코멘트를 덧붙일 수 없다. 즉 마지막 샘플을 별점만으로 확정하면
+    //   그 샘플의 사유는 영영 남길 수 없다 — 확정 자체를 코멘트 뒤로 미뤄야 정책이 성립한다.
+    if (score <= COMMENT_REQUIRED_MAX_SCORE && !comment.trim()) {
+      setRatings((p) => ({ ...p, [idx]: { ...p[idx], score } }));
+      return;
+    }
     const prevScore = prev.score;
     setRatings((p) => ({ ...p, [idx]: { ...p[idx], score } }));
     const res = await submitExpertRating(mId, jobId, {
@@ -225,6 +247,8 @@ const ExpertRunView = ({ modelId, jobId, onExit }) => {
   const goNext = () => setCurrent((c) => Math.min(samples.length - 1, c + 1));
   const sample = samples[current];
   const r = (sample && ratings[sample.idx]) || {};
+  // 완료 세션은 읽기 전용이라 게이트를 걸지 않는다(과거 세션 열람이 막히면 안 됨).
+  const commentRequired = !progress?.completed && needsComment(r);
 
   return (
     <div className={cx('expert')}>
@@ -232,6 +256,7 @@ const ExpertRunView = ({ modelId, jobId, onExit }) => {
         <GenPromptBox prompt={session.gen_system_prompt} t={t} />
         <ExpertPromptBox prompt={session.expert_prompt} t={t} />
         <ExpertProgressHeader
+          runName={session.run_name}
           rated={progress?.rated}
           total={progress?.total ?? session.total}
           current={current}
@@ -240,6 +265,7 @@ const ExpertRunView = ({ modelId, jobId, onExit }) => {
           completed={progress?.completed}
           onPrev={goPrev}
           onNext={goNext}
+          nextBlocked={commentRequired}
           onReset={onExit}
           t={t}
         />
@@ -304,11 +330,16 @@ const ExpertRunView = ({ modelId, jobId, onExit }) => {
                 />
                 <InputText
                   size='medium'
-                  placeholder={t('evaluation.expert.commentPlaceholder')}
+                  placeholder={t(
+                    commentRequired
+                      ? 'evaluation.expert.commentPlaceholderRequired'
+                      : 'evaluation.expert.commentPlaceholder',
+                  )}
                   value={r.comment || ''}
                   onChange={(e) => setComment(sample.idx, e.target.value)}
                   onBlur={() => {
                     // 채점된 샘플의 코멘트 수정은 blur 시 영속(미완료 세션 한정, dedup 이 무변경 차단).
+                    // 보류 중이던 낮은 점수도 코멘트가 채워진 이 시점에 함께 확정된다.
                     if (r.score && !progress?.completed)
                       rate(sample.idx, r.score);
                   }}
@@ -316,6 +347,13 @@ const ExpertRunView = ({ modelId, jobId, onExit }) => {
                   disableClearBtn
                   customStyle={{ width: '100%' }}
                 />
+                {commentRequired && (
+                  <span className={cx('comment-required')} role='alert'>
+                    {t('evaluation.expert.commentRequired', {
+                      score: COMMENT_REQUIRED_MAX_SCORE,
+                    })}
+                  </span>
+                )}
               </div>
 
               {r.score && (r.rater || r.ratedAt) && (
