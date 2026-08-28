@@ -169,7 +169,9 @@
 .rail-panel {
   padding: 0;
   gap: 0;
-  overflow: hidden;
+  // overflow 를 자르지 않는다 — 자르면 열린 드롭다운이 패널을 스크롤 가능하게 만들고,
+  // Selectbox 의 scrollAutoFocus 가 그 패널을 스크롤해 절 제목이 위로 사라진다.
+  // (스크롤바가 없어 되돌릴 수도 없다.) 목록은 패널 밖으로 겹쳐 내려오는 것이 맞다.
 }
 
 .rail-sec {
