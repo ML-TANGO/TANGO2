@@ -120,10 +120,15 @@ CREATE TABLE IF NOT EXISTS `quantize_lineage` (
 --   여러 모델의 런이 쌓인다 — CASCADE 로 두면 원래 모델을 지울 때 다른 모델의 런까지
 --   프로젝트째 사라진다. 신규 프로젝트는 어차피 NULL 로 시작하므로 SET NULL 이 그
 --   상태로 수렴하는 것이고, 라이브 DB 는 migrations/003 이 같은 규칙으로 바꾼다.
+-- 2026-08-27: description 신설 — 목록 카드가 모델·배포 카드와 같은 결이 되도록
+--   본문 슬롯에 넣을 설명을 갖는다(없으면 화면이 플레이스홀더). 길이는 배포
+--   (playground.description)와 같은 VARCHAR(5000) 로 맞췄고, 선택 입력 + 기존 행이
+--   있으므로 NULL 허용/기본 NULL. 라이브 DB 는 migrations/004 로 적용.
 CREATE TABLE IF NOT EXISTS `eval_project` (
     `id`                INT(11) NOT NULL AUTO_INCREMENT,
     `workspace_id`      INT(11) NOT NULL,
     `name`              VARCHAR(255) NOT NULL,
+    `description`       VARCHAR(5000) DEFAULT NULL,
     `model_id`          INT(11),
     `dataset_ids`       JSON,
     `eval_type`         VARCHAR(20) NOT NULL,

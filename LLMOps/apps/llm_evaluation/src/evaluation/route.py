@@ -23,7 +23,8 @@ async def create_project(body: dto.EvalProjectCreateBody,
     try:
         res = await svc.create_project(
             name=body.name, eval_type=body.eval_type,
-            workspace_id=body.workspace_id, creator=jf_user)
+            workspace_id=body.workspace_id, creator=jf_user,
+            description=body.description)
         return response(status=1, result=res)
     except Exception as e:
         traceback.print_exc()
@@ -57,6 +58,25 @@ async def get_project(project_id: int):
 async def compare_project_runs(project_id: int):
     try:
         res = await svc.compare_project_runs(project_id=project_id)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+
+@evaluations.put("/projects/{project_id}", summary="평가 프로젝트 설명 수정", tags=TAG)
+async def update_project(project_id: int, body: dto.EvalProjectUpdateBody):
+    """설명만 고친다(이름·유형·워크스페이스는 정체성이라 생성 후 고정).
+
+    PATCH 가 아니라 PUT 인 이유는 의미론이 아니라 **관행**이다 — 이 모노레포의 수정
+    엔드포인트는 전부 PUT 이고(배포 설명 수정 playgrounds.put("/description") 포함)
+    PATCH 는 한 곳도 없다. 혼자 PATCH 를 쓰면 게이트웨이·클라이언트 레이어에서 이
+    경로만 다른 취급을 받게 된다. 경로는 이 라우터의 프로젝트 단건 규약을 따른다
+    (GET/DELETE /projects/{project_id} 와 같은 자리).
+
+    없는 프로젝트는 service 가 사유와 함께 올리고 envelope message 로 나간다."""
+    try:
+        res = await svc.update_project(project_id=project_id, description=body.description)
         return response(status=1, result=res)
     except Exception as e:
         traceback.print_exc()

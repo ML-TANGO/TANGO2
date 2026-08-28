@@ -1071,32 +1071,37 @@ def build_eval_comparison(rows: list) -> dict:
 async def create_eval_project(workspace_id : int, name : str, eval_type : str,
                               model_id : int = None,
                               dataset_ids_json : str = None,
-                              creator : str = None) -> int:
+                              creator : str = None,
+                              description : str = None) -> int:
     """평가 프로젝트 생성(status='created', run 0개). 생성된 project id 반환.
 
     2026-08-24: model_id/dataset_ids 는 선택이다 — 프로젝트가 모델·데이터셋을 잠그던
     계약이 끝나고 무엇을 평가하는지는 run(eval_result.source_model_id/dataset_id)이
-    정한다. 두 컬럼은 잠금 시절 프로젝트의 값을 보존하려고 남아 있고 신규 생성은 NULL."""
+    정한다. 두 컬럼은 잠금 시절 프로젝트의 값을 보존하려고 남아 있고 신규 생성은 NULL.
+
+    2026-08-27: description 은 선택 입력(미지정 시 NULL) — 목록 카드 본문에 실린다."""
     # 'created' 리터럴 유지 — 대응 상수 PROJECT_STATUS_CREATED 는 앱 레이어
     # (llm_evaluation.evaluation.constants)에 있어, 공유 lib 인 fb_utils 가 특정 앱을
     # import 하면 레이어 역의존이 된다. 리터럴로 두는 게 계층 규율상 옳다.
     sql = """
         INSERT INTO eval_project
-            (workspace_id, name, model_id, dataset_ids, eval_type, status, creator)
-        VALUES (%s, %s, %s, %s, %s, 'created', %s)
+            (workspace_id, name, description, model_id, dataset_ids, eval_type, status, creator)
+        VALUES (%s, %s, %s, %s, %s, %s, 'created', %s)
     """
     return await commit_query(query=sql, params=(
-        workspace_id, name, model_id, dataset_ids_json, eval_type, creator,
+        workspace_id, name, description, model_id, dataset_ids_json, eval_type, creator,
     ))
 
 
 async def list_eval_projects(workspace_id : int) -> list:
     """워크스페이스의 평가 프로젝트 목록(최신순). dataset_ids 는 JSON 컬럼(문자열 반환) —
-    호출부(서비스)가 파싱. 프로젝트 본문은 생성 후 불변이므로 update_datetime 은 별도 컬럼이
-    아니라 최근 run 생성 시각(없으면 프로젝트 생성 시각)으로 파생한다."""
+    호출부(서비스)가 파싱. update_datetime 은 별도 컬럼이 아니라 최근 run 생성 시각
+    (없으면 프로젝트 생성 시각)으로 파생한다 — 이 목록이 말하는 '갱신'은 평가 활동이지
+    설명 문구 수정이 아니므로, description 이 편집 가능해진 뒤(2026-08-27)에도 파생
+    규칙은 그대로 둔다."""
     sql = """
-        SELECT p.id, p.workspace_id, p.name, p.model_id, p.dataset_ids, p.eval_type,
-               p.status, p.creator,
+        SELECT p.id, p.workspace_id, p.name, p.description, p.model_id, p.dataset_ids,
+               p.eval_type, p.status, p.creator,
                DATE_FORMAT(p.create_datetime, %s) AS create_datetime,
                DATE_FORMAT(
                    COALESCE(
@@ -1123,7 +1128,8 @@ async def list_eval_projects(workspace_id : int) -> list:
 async def get_eval_project(project_id : int) -> dict:
     """평가 프로젝트 단건 조회(불변 model/dataset/type — run-start 시 주입원)."""
     sql = """
-        SELECT id, workspace_id, name, model_id, dataset_ids, eval_type, status, creator,
+        SELECT id, workspace_id, name, description, model_id, dataset_ids, eval_type,
+               status, creator,
                DATE_FORMAT(create_datetime, %s) AS create_datetime
         FROM eval_project
         WHERE id = %s
@@ -1137,6 +1143,17 @@ async def update_eval_project_status(project_id : int, status : str) -> bool:
     """프로젝트 상태 갱신(created→running→completed). run 생성/집계 마감 시 호출."""
     sql = "UPDATE eval_project SET status = %s WHERE id = %s"
     await commit_query(query=sql, params=(status, project_id))
+    return True
+
+
+async def update_eval_project_description(project_id : int, description : str) -> bool:
+    """프로젝트 설명 갱신. description=None 이면 설명을 지운다(NULL — 화면은 플레이스홀더).
+
+    설명만 따로 두는 이유: 이름·유형·워크스페이스는 프로젝트의 정체성이라 생성 후 고정이고
+    (런들이 그 경계 위에 쌓인다), 설명은 그 정체성을 바꾸지 않는 자유 문구다. 형제
+    update_eval_project_status 와 같은 규약 — 존재확인은 호출부, 반환은 True 고정."""
+    sql = "UPDATE eval_project SET description = %s WHERE id = %s"
+    await commit_query(query=sql, params=(description, project_id))
     return True
 
 

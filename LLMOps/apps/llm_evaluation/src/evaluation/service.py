@@ -41,6 +41,7 @@ from evaluation.constants import (
     REAL_BENCHMARK_MANIFEST_KEY,
     EVAL_DEPLOY_MAX_POLLS,
     EVAL_INFER_RUN_SECONDS,
+    EVAL_PROJECT_DESCRIPTION_MAX,
     EVAL_TYPES,
     MAX_BENCHMARK_DATASETS,
     MAX_BENCHMARK_ITEMS,
@@ -1063,8 +1064,25 @@ def _run_dataset_ids(dataset_ids: List[int]) -> List[int]:
     return out
 
 
+def _normalize_project_description(description: Optional[str]) -> Optional[str]:
+    """설명 입력 → 저장값. 공백만 남는 입력과 빈 문자열은 '설명 없음'(NULL)으로 접는다 —
+    화면은 값이 없을 때 플레이스홀더를 세우는데, ' ' 가 저장되면 플레이스홀더도 설명도
+    아닌 빈 칸이 남는다. 길이는 dto 가 경계에서 이미 막지만 여기서도 본다: service 는
+    라우트 밖(다른 앱·스크립트)에서도 불릴 수 있고, 초과분은 거절하지 않으면 DB 에서
+    조용히 잘린다."""
+    if description is None:
+        return None
+    text = description.strip()
+    if not text:
+        return None
+    if len(text) > EVAL_PROJECT_DESCRIPTION_MAX:
+        raise ValueError(f"project description too long (max {EVAL_PROJECT_DESCRIPTION_MAX})")
+    return text
+
+
 async def create_project(name: str, eval_type: str, workspace_id: int,
-                         creator: Optional[str] = None) -> dict:
+                         creator: Optional[str] = None,
+                         description: Optional[str] = None) -> dict:
     """평가 프로젝트 생성(대기 상태 created, run 0개, P5) — **유형·이름만** 고정한다.
 
     2026-08-24: 모델·데이터셋 잠금 해제. 무엇을 평가하는지는 런이 고르고(eval_result 가
@@ -1072,20 +1090,24 @@ async def create_project(name: str, eval_type: str, workspace_id: int,
     관리 단위 + 워크스페이스 경계다. 모델이 빠지면서 워크스페이스를 파생할 원천이
     사라졌으므로 요청이 직접 준다 — 존재 여부는 여기서 검증한다(없는 워크스페이스로
     만들면 그 프로젝트에서는 어떤 모델도 경계 검증을 통과하지 못한다).
-    creator 는 라우트가 jf-User 헤더로 주입."""
+    creator 는 라우트가 jf-User 헤더로 주입.
+
+    2026-08-27: description 은 선택 입력 — 목록 카드 본문에 실린다(update_project 로
+    사후 수정 가능)."""
     if eval_type not in EVAL_TYPES:
         raise ValueError(f"unknown eval_type: {eval_type}")
     if not name or not name.strip():
         raise ValueError("project name required")
     if len(name) > 255:
         raise ValueError("project name too long")
+    description = _normalize_project_description(description)
     workspace = await db_model.get_workspace_model(workspace_id=workspace_id)
     if not workspace:
         raise Exception(f"workspace {workspace_id} not found")
     # model_id/dataset_ids 는 신규 프로젝트에서 NULL 이다 — 잠금이 박혀 있던 옛
     # 프로젝트의 값을 보존하려고 컬럼만 남겼다(_parse_dataset_ids 가 NULL → [] 로 정규화).
     project_id = await db_model.create_eval_project(
-        workspace_id=workspace_id, name=name.strip(),
+        workspace_id=workspace_id, name=name.strip(), description=description,
         eval_type=eval_type, creator=creator)
     if not project_id:
         raise Exception("eval project create failed")
@@ -1162,6 +1184,34 @@ async def get_project(project_id: int) -> dict:
     return {"project": {**project, "dataset_ids": _parse_dataset_ids(project.get("dataset_ids")),
                         "status": derived_status},
             "runs": comparison}
+
+
+async def update_project(project_id: int, description: Optional[str] = None) -> dict:
+    """프로젝트 설명 수정. 존재확인 후 갱신하고 저장된 설명을 돌려준다(없으면 not-found
+    를 사유와 함께 올린다 — get_project·compare_project_runs 와 같은 규약).
+
+    ⚠️ 워크스페이스 경계: 이 경로는 **project_id 만으로** 동작한다 — 형제인
+    delete_project 와 같은 수준이다. 배포 id 를 받는 네 경로에는
+    _playground_in_workspace 대조가 있지만 그건 다른 문제를 푼다: 거기서는 요청이
+    *두* 개의 경계(런의 워크스페이스와 배포의 워크스페이스)를 엮으므로, 대조하지
+    않으면 남의 배포로 낸 출력이 이 워크스페이스의 점수로 기록된다. 여기는 엮을 두
+    번째 경계가 없고 "요청자가 이 프로젝트에 접근할 수 있는가"만 남는데, 그 판정은
+    이 서비스가 아니라 플랫폼의 workspace_access_check(전역 비활성 — SP-13)가 할 일로
+    분류돼 있다. 삭제(더 파괴적인 연산)가 그 수준에 있는데 수정만 더 엄격하게 만들면
+    같은 리소스에 두 개의 경계 규칙이 생겨 일관성이 깨지고, 나중에 SP-13 이 authZ 를
+    켤 때 어느 쪽이 정본인지 알 수 없게 된다. 플랫폼 차원에서 함께 조인다."""
+    project = await db_model.get_eval_project(project_id=project_id)
+    if not project:
+        raise Exception(f"eval project {project_id} not found")
+    description = _normalize_project_description(description)
+    await db_model.update_eval_project_description(
+        project_id=project_id, description=description)
+    # 응답은 형제 delete_project 처럼 가볍게 — 저장된 값(공백 정규화 후)만 돌려준다.
+    # get_project 를 돌려주지 않는 이유: 그 경로는 running 런을 컨테이너에 되물어
+    # 정리하고(외부 호출 N회 + 타임아웃) 런 비교표까지 조립한다. 설명 한 줄 저장이
+    # 그 대가를 치를 이유가 없고, 더 나쁘게는 **텍스트 저장의 부수효과로 런 상태가
+    # 바뀐다**. 화면은 이 응답으로 카드의 설명만 갈아 끼우면 된다.
+    return {"project_id": project_id, "updated": True, "description": description}
 
 
 async def delete_project(project_id: int) -> dict:

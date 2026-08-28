@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from evaluation.constants import (
     BENCHMARK_IDS,
+    EVAL_PROJECT_DESCRIPTION_MAX,
     EVAL_TYPES,
     EXPERT_SCORE_MAX,
     EXPERT_SCORE_MIN,
@@ -29,6 +30,12 @@ class EvalProjectCreateBody(BaseModel):
     workspace_id: int = Field(..., ge=1, description="프로젝트가 속할 워크스페이스 id")
     eval_type: str = Field(
         ..., description="평가 유형: reference(정답 대조)|judge(LLM 심사)|expert(전문가)")
+    # 선택 입력 — 목록 카드 본문에 실린다(모델·배포 카드와 같은 자리). max_length 는
+    # eval_project.description 의 VARCHAR(5000) 과 **같은 값**이어야 한다: 크게 두면
+    # 초과분이 422 가 아니라 DB 에서 조용히 잘려 사용자가 쓴 글이 사라진다.
+    description: Optional[str] = Field(
+        default=None, max_length=EVAL_PROJECT_DESCRIPTION_MAX,
+        description="프로젝트 설명(선택 — 목록 카드 본문)")
 
     @field_validator("eval_type")
     @classmethod
@@ -43,6 +50,21 @@ class EvalProjectCreateBody(BaseModel):
         if v not in EVAL_TYPES:
             raise ValueError(f"unknown eval_type: {v}")
         return v
+
+
+class EvalProjectUpdateBody(BaseModel):
+    """평가 프로젝트 수정 — **설명만** 고친다.
+
+    이름·유형·워크스페이스는 넣지 않았다: 그 셋은 프로젝트의 정체성이고 이미 쌓인 런들이
+    그 위에 서 있다(유형은 run-start 게이트가 대조하고, 워크스페이스는 모델·배포 경계
+    검증의 기준이다). 설명은 그 무엇도 바꾸지 않는 자유 문구라 사후 편집이 안전하다.
+
+    빈 문자열은 '설명 지우기'다 — service 가 NULL 로 정규화한다. 그래서 min_length 를
+    두지 않는다(0 자를 422 로 막으면 한번 쓴 설명을 지울 방법이 없어진다)."""
+
+    description: Optional[str] = Field(
+        default=None, max_length=EVAL_PROJECT_DESCRIPTION_MAX,
+        description="프로젝트 설명(빈 문자열/null 이면 설명 삭제)")
 
 
 class RunModelSelection(BaseModel):

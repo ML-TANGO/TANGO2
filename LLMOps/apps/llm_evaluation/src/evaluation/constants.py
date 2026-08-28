@@ -300,6 +300,12 @@ MAX_COMPARE_RUNS = 20
 #    extra=ignore 로 조용히 무시되면 사용자가 고른 적 없는 유형의 프로젝트가 생긴다).
 EVAL_TYPES = ("reference", "judge", "expert")
 
+# 프로젝트 설명 상한 — eval_project.description 의 VARCHAR(5000) 과 **같은 값**이어야
+# 한다. 상수로 뽑는 이유는 dto(경계 422)와 service(방어 검증) 두 곳이 같은 숫자를 봐야
+# 하기 때문이다. 크게 잡으면 초과분이 거절 대신 DB 에서 조용히 잘려 사용자가 쓴 글이
+# 사라진다. 길이 자체는 배포(playground.description)와 맞췄다 — 같은 카드 본문 값이다.
+EVAL_PROJECT_DESCRIPTION_MAX = 5000
+
 # 프로젝트 상태(created=구성만 확정·run 0 / running=run 존재 / completed=집계 마감).
 PROJECT_STATUS_CREATED = "created"
 PROJECT_STATUS_RUNNING = "running"

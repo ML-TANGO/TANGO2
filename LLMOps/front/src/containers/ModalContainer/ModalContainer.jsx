@@ -467,8 +467,9 @@ function ModalContainer() {
               type={modalType}
             />
           )}
-          {/* Evaluation Project Modal */}
-          {modalType === 'CREATE_EVAL_PROJECT' && (
+          {/* Evaluation Project Modal — 생성/수정이 한 컨테이너를 공유한다(학습/배포와 동일). */}
+          {(modalType === 'CREATE_EVAL_PROJECT' ||
+            modalType === 'EDIT_EVAL_PROJECT') && (
             <EvalProjectFormModalContainer
               data={modal[modalType]}
               type={modalType}

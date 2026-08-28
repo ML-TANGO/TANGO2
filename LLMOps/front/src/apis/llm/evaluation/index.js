@@ -10,8 +10,10 @@ import { callApi, downloadBlob } from '@src/network';
 // dataset_ids 를 그대로 갖고 있고(표시용), 새 프로젝트는 null/빈 값이다.
 
 // 프로젝트 생성(대기 상태, run 0개). body: { name, eval_type: 'reference'|'judge'|'expert',
-//   workspace_id } — workspace_id 는 라우트 파라미터에서 온다(모델을 안 받으므로 서버가
-//   model_id 로 도출할 수 없다). → get_project shape 반환 { project, runs }.
+//   description?, workspace_id } — workspace_id 는 라우트 파라미터에서 온다(모델을 안 받으므로
+//   서버가 model_id 로 도출할 수 없다). description 은 선택·최대 5000자(VARCHAR(5000) nullable)
+//   이며 목록/단건 조회 양쪽 응답에 그대로 실려 온다(카드용 별도 조회 불필요).
+//   → get_project shape 반환 { project, runs }.
 export const createEvalProject = async (body) => {
   return await callApi({ url: 'evaluations/projects', method: 'post', body });
 };
@@ -32,6 +34,27 @@ export const getEvalProject = async (projectId) => {
     url: `evaluations/projects/${projectId}`,
     method: 'get',
   });
+};
+
+// 프로젝트 설명 수정 — **확정 계약**(BE 마이그레이션 004, dev 라이브 검증 완료).
+//   PUT evaluations/projects/{id}  body { description: string|null }
+//   → result { project_id, updated, description }.
+//   PATCH 가 아니라 PUT 인 이유: 이 모노레포에 PATCH 라우트가 0개이고, 정확한 유사물인
+//   playgrounds.put('/description') 이 PUT 이다. (network.js 의 demo 계정 쓰기 차단도
+//   put/post/delete 만 막으므로 PATCH 였다면 demo 가 이 경로로만 쓰기를 통과했을 것이다.)
+//   ⚠️ 응답은 **프로젝트 전체가 아니라 작은 dict** 다. 의도된 설계로, get_project 는 running
+//   런을 컨테이너와 리콘사일하는 부수효과가 있어 설명 한 줄 저장이 그 왕복을 기다리고 런
+//   상태까지 바꾼다. 그래서 저장 후 화면 갱신은 이 응답의 description 을 쓰거나 목록을
+//   다시 부른다 — 저장 응답으로 프로젝트를 통째로 갈아끼우지 마라.
+//   공백만 보내면 서버가 NULL 로 접는다(빈 설명 = 카드가 no.desc 플레이스홀더를 그림).
+//   요청 서술은 여기 한 곳에만 둔다 — 호출부는 updateEvalProject 시그니처만 안다.
+const EVAL_PROJECT_UPDATE = (projectId) => ({
+  url: `evaluations/projects/${projectId}`,
+  method: 'put',
+});
+
+export const updateEvalProject = async (projectId, body) => {
+  return await callApi({ ...EVAL_PROJECT_UPDATE(projectId), body });
 };
 
 // 프로젝트 삭제(FK CASCADE 로 run·채점·이력 자식행 정리). → { project_id, deleted }.
