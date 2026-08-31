@@ -835,104 +835,75 @@ hf download ETRI-TANGO/tango2-sds-vlm-eva \
 ```bash
 tango2-sds-vlm-eva
 ├── clip_llama31_proj
-│   ├── chat_template.jinja
-│   ├── projector.bin
-│   ├── tokenizer_config.json
-│   └── tokenizer.json
 ├── clip_llama31_proj_lora
-│   ├── adapter_config.json
-│   ├── adapter_model.safetensors
-│   ├── chat_template.jinja
-│   ├── projector.bin
-│   ├── README.md
-│   ├── tokenizer_config.json
-│   ├── tokenizer.json
-│   └── vlm_config.json
 ├── clip_llama31_proj_lora_marine
-│   ├── adapter_config.json
-│   ├── adapter_model.safetensors
-│   ├── chat_template.jinja
-│   ├── projector.bin
-│   ├── README.md
-│   ├── tokenizer_config.json
-│   └── tokenizer.json
 ├── clip_llama31_proj_lora_marine_sds_ko_9k
-│   ├── adapter_config.json
-│   ├── adapter_model.safetensors
-│   ├── all_results.json
-│   ├── chat_template.jinja
-│   ├── eval_results.json
-│   ├── projector.bin
-│   ├── README.md
-│   ├── tokenizer_config.json
-│   ├── tokenizer.json
-│   └── vlm_config.json
 ├── clip_llama31_proj_lora_marine_sds_lora_en
-│   ├── adapter_config.json
-│   ├── adapter_model.safetensors
-│   ├── chat_template.jinja
-│   ├── projector.bin
-│   ├── README.md
-│   ├── tokenizer_config.json
-│   ├── tokenizer.json
-│   └── vlm_config.json
 ├── clip_llama31_proj_lora_marine_sds_lora_ko
-│   ├── adapter_config.json
-│   ├── adapter_model.safetensors
-│   ├── chat_template.jinja
-│   ├── projector.bin
-│   ├── README.md
-│   ├── tokenizer_config.json
-│   ├── tokenizer.json
-│   └── vlm_config.json
 ├── clip_qwen3_proj
-│   ├── chat_template.jinja
-│   ├── projector.bin
-│   ├── tokenizer_config.json
-│   └── tokenizer.json
 ├── clip_qwen3_proj_lora
-│   ├── adapter_config.json
-│   ├── adapter_model.safetensors
-│   ├── chat_template.jinja
-│   ├── projector.bin
-│   ├── README.md
-│   ├── tokenizer_config.json
-│   ├── tokenizer.json
-│   └── vlm_config.json
+├── clip_qwen3_proj_lora_cross_attn
+├── clip_qwen3_proj_lora_linear
 ├── clip_qwen3_proj_lora_marine
-│   ├── adapter_config.json
-│   ├── adapter_model.safetensors
-│   ├── chat_template.jinja
-│   ├── projector.bin
-│   ├── README.md
-│   ├── tokenizer_config.json
-│   ├── tokenizer.json
-│   └── vlm_config.json
+├── clip_qwen3_proj_lora_marine_cross_attn
+├── clip_qwen3_proj_lora_marine_linear
+├── clip_qwen3_proj_lora_marine_mlp3x_gelu
+├── clip_qwen3_proj_lora_marine_qformer
 ├── clip_qwen3_proj_lora_marine_sds_ko_9k
-│   ├── adapter_config.json
-│   ├── adapter_model.safetensors
-│   ├── all_results.json
-│   ├── chat_template.jinja
-│   ├── eval_results.json
-│   ├── projector.bin
-│   ├── README.md
-│   ├── tokenizer_config.json
-│   ├── tokenizer.json
-│   └── vlm_config.json
+├── clip_qwen3_proj_lora_marine_sds_ko_9k_cross_attn
+├── clip_qwen3_proj_lora_marine_sds_ko_9k_linear
+├── clip_qwen3_proj_lora_marine_sds_ko_9k_mlp3x_gelu
+├── clip_qwen3_proj_lora_marine_sds_ko_9k_qformer
+├── clip_qwen3_proj_lora_mlp3x_gelu
+├── clip_qwen3_proj_lora_qformer
+├── clip_qwen3_projector_cross_attn
+├── clip_qwen3_projector_linear
+├── clip_qwen3_projector_mlp3x_gelu
+├── clip_qwen3_projector_qformer
+├── gemma4_e4b_sds_ko_9k_lora
+├── .gitattributes
 └── README.md
 ```
 
+디렉토리마다 담긴 파일은 학습 단계에 따라 다릅니다.
+
+| 파일 | 담긴 내용 | 있는 디렉토리 |
+|------|-----------|---------------|
+| `projector.bin` | 비전 프로젝터 가중치 | 전부 |
+| `tokenizer.json`, `tokenizer_config.json`, `chat_template.jinja` | 토크나이저와 대화 서식 | 전부 |
+| `vlm_config.json` | 비전 인코더, 언어 모델, 프로젝터 구조 설정 | `clip_llama31_proj`, `clip_qwen3_proj`, `clip_llama31_proj_lora_marine`, `gemma4_e4b_sds_ko_9k_lora` 를 제외한 전부 |
+| `adapter_config.json`, `adapter_model.safetensors` | LoRA 어댑터와 확장된 입출력 임베딩 | 프로젝터만 학습한 디렉토리를 제외한 전부 |
+| `eval_results.json`, `all_results.json` | 검증셋 1,000건에 대한 손실 | 이름이 `_sds_ko_9k` 로 끝나거나 그 뒤에 프로젝터 구조가 붙은 디렉토리 |
+| `connector.bin`, `processor_config.json`, `gemma4_train_config.json` | Gemma 4 의 비전 커넥터와 전처리기 설정 | `gemma4_e4b_sds_ko_9k_lora` |
+
 이름 끝의 `_9k` 는 20260728 데이터셋의 한글 시나리오 9,000건으로 학습했다는 뜻입니다. 접미사가 없는 `_sds_lora_ko` / `_sds_lora_en` 은 그보다 앞선 20260227 데이터셋으로 학습된 별개의 체크포인트이므로 혼동하지 마십시오.
+
+이름 끝의 `_linear`, `_cross_attn`, `_mlp3x_gelu`, `_qformer` 는 비전 프로젝터 구조를 가리킵니다. 구조 이름이 붙지 않은 CLIP 계열 체크포인트의 프로젝터는 `mlp2x_gelu` 입니다.
+
+언어 모델별 체크포인트는 다음과 같습니다.
 
 | 디렉토리 | 언어 모델 | 이어받은 체크포인트 | 학습 데이터 | 최종 검증 손실 |
 |----------|-----------|---------------------|-------------|----------------|
 | `clip_qwen3_proj_lora_marine` | Qwen3-8B | `clip_qwen3_proj_lora` | LLaMarine-SFT 54,657건, 1 epoch (855 step) | 측정 안 함 |
 | `clip_qwen3_proj_lora_marine_sds_ko_9k` | Qwen3-8B | `clip_qwen3_proj_lora_marine` | SDS 20260728 한글 9,000건, 3 epoch (846 step) | 0.1903 |
 | `clip_llama31_proj_lora_marine_sds_ko_9k` | Llama-3.1-8B-Instruct | `clip_llama31_proj_lora_marine` | SDS 20260728 한글 9,000건, 3 epoch (846 step) | 0.2260 |
+| `gemma4_e4b_sds_ko_9k_lora` | Gemma-4-E4B-it | `google/gemma-4-E4B-it` | SDS 20260728 한글 9,000건, 3 epoch (846 step) | 0.2085 |
 
-세 체크포인트 모두 비전 인코더는 `openai/clip-vit-large-patch14-336` 이고 프로젝터는 `mlp2x_gelu` 입니다. LoRA 는 `r=128`, `lora_alpha=256`, 대상 모듈은 `q_proj`, `k_proj`, `v_proj`, `o_proj`, `gate_proj`, `up_proj`, `down_proj` 입니다.
+CLIP 계열 세 체크포인트의 비전 인코더는 `openai/clip-vit-large-patch14-336` 이고 프로젝터는 `mlp2x_gelu` 입니다. LoRA 는 `r=128`, `lora_alpha=256`, 대상 모듈은 `q_proj`, `k_proj`, `v_proj`, `o_proj`, `gate_proj`, `up_proj`, `down_proj` 입니다. `gemma4_e4b_sds_ko_9k_lora` 는 CLIP 을 쓰지 않는 네이티브 멀티모달 구조이며 별도 기준선입니다.
 
-검증 손실은 학습에 쓰지 않은 20260728 한글 1,000건에 대한 다음 토큰 예측 손실이며 `eval_results.json` 에 함께 담겨 있습니다. 두 조합의 값은 서로 다른 토크나이저가 만든 서로 다른 토큰 열에 대한 교차 엔트로피이므로 같은 척도로 비교할 수 없습니다. 또한 이 값은 참조 문장의 토큰 분포와의 거리만 나타내며 생성 품질, 묘사의 사실 정확도, COLREG 조항 인용의 타당성을 나타내지 않습니다.
+비전 프로젝터 구조별 체크포인트는 Qwen3-8B 로 고정하고 프로젝터 구조만 바꾸어 Phase 1 부터 Phase 3 까지 전 단계를 새로 학습한 것입니다. 단계별 디렉토리는 `clip_qwen3_projector_<구조>`, `clip_qwen3_proj_lora_<구조>`, `clip_qwen3_proj_lora_marine_<구조>`, `clip_qwen3_proj_lora_marine_sds_ko_9k_<구조>` 입니다.
+
+| 프로젝터 구조 | 프로젝터 파라미터 | 이미지 토큰 수 | 최종 검증 손실 |
+|---------------|-------------------|----------------|----------------|
+| `linear` | 4,198,400 (4.20M) | 576 | 0.1857 |
+| `mlp2x_gelu` (구조 이름 없음) | 20,979,712 (20.98M) | 576 | 0.1903 |
+| `cross_attn` | 30,479,364 (30.48M) | 32 | 0.1866 |
+| `mlp3x_gelu` | 37,761,024 (37.76M) | 576 | 0.1857 |
+| `qformer` | 38,880,260 (38.88M) | 32 | 0.1853 |
+
+`mlp2x_gelu` 는 앞선 학습에서 만든 체크포인트입니다. Phase 2b 와 Phase 3 의 학습 조건은 나머지 넷과 같으나 Phase 1 과 Phase 2 는 이번 일괄 실행에서 만들어진 것이 아니므로 조건이 같은지 확인할 수 없습니다.
+
+검증 손실은 학습에 쓰지 않은 20260728 한글 1,000건에 대한 다음 토큰 예측 손실이며 `eval_results.json` 에 함께 담겨 있습니다. 서로 다른 언어 모델의 값은 서로 다른 토크나이저가 만든 서로 다른 토큰 열에 대한 교차 엔트로피이므로 같은 척도로 비교할 수 없습니다. 프로젝터 구조별 값은 토크나이저가 같으므로 이 제약을 받지 않습니다. 다만 이 값은 어느 경우에도 참조 문장의 토큰 분포와의 거리만 나타내며 생성 품질, 묘사의 사실 정확도, COLREG 조항 인용의 타당성을 나타내지 않습니다.
 
 학습셋과 검증셋은 다음과 같이 재현할 수 있습니다.
 
