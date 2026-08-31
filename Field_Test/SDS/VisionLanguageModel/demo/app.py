@@ -8,8 +8,9 @@ demo/app.py — VisionLanguageModelV2 SDS 데모 웹 애플리케이션
   [신 포맷 — 20251031]  input.csv (대소문자) + frame_N.png + output.csv
   [평면 포맷 — 20260728] csv/ png/ describe_ko/ advice_ko/ 4개 디렉토리에
                          동일 stem 파일이 병렬 배치 (샘플 10,000개)
-                         ※ bbox_* 컬럼은 이미지와 다른 카메라 기준이라 바운딩박스를
-                           그리지 않는다. FLAT_BBOX_NOTICE 참고.
+                         ※ bbox_* 는 배포본에 따라 이미지 좌표계와 맞기도 하고
+                           어긋나기도 한다. 박스는 원본 값 그대로 그리고
+                           모델 프롬프트에서만 뺀다. FLAT_BBOX_NOTICE 참고.
 
 레이아웃:
   [상단 좌] 이미지 / CSV 테이블     [상단 우] 데이터셋 탐색기 (+ 프레임/인덱스 선택)
@@ -89,19 +90,27 @@ FLAT_REQUIRED_DIRS = ("csv", "png")
 # 평면 포맷 샘플 드롭다운에 현재 인덱스 기준 앞뒤로 표시할 항목 수
 FLAT_WINDOW = 50
 
-# 평면 포맷(20260728)의 bbox_* 컬럼은 PNG와 다른 카메라 기준으로 생성되어 있다.
-# 타선 1척 샘플 250건을 픽셀에서 검출해 비교한 결과 IoU 는 전 건 0 이었고
-# 박스 중심 거리는 중앙값 442px 였다. AIS 상대방위로 핀홀 모델을 적합하면
-# bbox 는 광학중심 562px(폭 약 1124 기준)에 R²=1.000 으로 맞는 반면,
-# 이미지 속 실제 선박은 광학중심 962px(1920 폭 기준)에 맞는다.
-# 따라서 이 포맷에서는 바운딩박스를 그리지 않고 안내만 표시한다.
-# 같은 이유로 모델 프롬프트의 AIS 텍스트에서도 바운딩박스를 뺀다. 이 포맷으로
-# 학습한 체크포인트가 bbox 없는 입력으로 학습되므로 추론 입력도 같아야 한다.
-# AIS 표에는 원본 값을 그대로 보여준다.
+# 평면 포맷(20260728)의 bbox_* 는 배포본에 따라 두 가지가 돌아다닌다.
+#
+#   구 배포본  PNG 와 다른 카메라 기준. AIS 상대방위로 핀홀 모델을 적합하면
+#              광학중심이 562px(폭 약 1124 기준)로 나와 1920 폭 이미지와 맞지
+#              않는다. 타선 1척 샘플 250건에서 IoU 는 전 건 0, 박스 중심
+#              거리는 중앙값 442px 였다.
+#   신 배포본  이미지 좌표계로 맞춰져 있다. 같은 적합에서 광학중심 960.2px,
+#              R²=0.9998, 잔차 중앙값 1.31px 로 1920 폭 이미지 중심과 맞는다.
+#
+# 어느 쪽인지 파일만 보고는 알 수 없으므로 박스는 CSV 값 그대로 그린다.
+# 신 배포본이면 선박 위에 놓이고, 구 배포본이면 눈에 띄게 어긋나 보인다.
+#
+# 모델 프롬프트의 AIS 텍스트에서는 바운딩박스를 뺀다. 지금 체크포인트들이
+# 구 배포본으로, 그것도 bbox 없는 입력으로 학습되었으므로 추론 입력도 같아야
+# 한다. AIS 표에는 원본 값을 그대로 보여준다.
 FLAT_BBOX_NOTICE = (
-    "⚠️ 이 데이터셋의 `bbox_*` 좌표는 이미지와 다른 카메라 기준으로 생성되어 "
-    "1920×1080 이미지 위치와 일치하지 않습니다. 바운딩박스를 표시하지 않고, "
-    "모델 프롬프트에서도 제외합니다. AIS 표에는 원본 값을 그대로 표시합니다."
+    "ℹ️ 바운딩박스는 `bbox_*` 값을 그대로 그립니다. 이 데이터셋의 구 배포본은 "
+    "좌표가 다른 카메라 기준이라 박스가 선박에서 크게 벗어나 보이고, 신 배포본은 "
+    "선박 위에 놓입니다. 모델 프롬프트에서는 bbox 를 제외합니다. 현재 체크포인트가 "
+    "bbox 없는 입력으로 학습되었기 때문입니다. AIS 표에는 원본 값을 그대로 "
+    "표시합니다."
 )
 
 PROMPT_MAP = {
@@ -343,8 +352,9 @@ def _format_ais_df(df: pd.DataFrame, lang: str, include_bbox: bool = True) -> st
     ship_type 컬럼이 있으면 포함한다. cpa/tcpa 컬럼(평면 포맷 20260728)이 있으면
     타선 항목에 함께 포함한다.
 
-    include_bbox=False 이면 타선 항목에서 바운딩박스를 뺀다. 평면 포맷은 bbox_*
-    좌표가 이미지와 맞지 않으므로(FLAT_BBOX_NOTICE) 이 경로를 쓴다.
+    include_bbox=False 이면 타선 항목에서 바운딩박스를 뺀다. 평면 포맷은 현재
+    체크포인트가 bbox 없는 입력으로 학습되었으므로 이 경로를 쓴다
+    (FLAT_BBOX_NOTICE).
 
     이 문자열은 모델 입력이 되므로 scripts/prepare_sds_dataset.py 의
     format_ais() 와 같아야 한다. 한쪽만 고치면 학습 프롬프트와 추론 프롬프트가
@@ -520,7 +530,11 @@ def load_sample(dataset_path: str, sample_name: str, frame: str = None):
         df_raw = _load_csv_normalized(csv_path) if os.path.exists(csv_path) else None
         image  = Image.open(img_path).convert("RGB") if os.path.exists(img_path) else None
 
-        # bbox_* 가 이미지 좌표계와 불일치하므로 박스를 그리지 않는다 (FLAT_BBOX_NOTICE).
+        # bbox_* 를 원본 값 그대로 그린다 (FLAT_BBOX_NOTICE).
+        # 모델 프롬프트에서는 여전히 제외한다.
+        if image is not None and df_raw is not None and not df_raw.empty:
+            image = _draw_bboxes(image, df_raw)
+
         if df_raw is not None:
             df_display = df_raw.rename(columns=CSV_KO_COLUMNS)
             if "자선여부" in df_display.columns:
