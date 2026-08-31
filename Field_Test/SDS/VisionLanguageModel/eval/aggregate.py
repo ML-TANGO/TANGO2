@@ -53,20 +53,43 @@ NUMERIC_FIELDS = [
     ("타선 침로", "tgt_course"), ("타선 속력", "tgt_speed"),
 ]
 
-# Gemma 4 는 CLIP 계열과 계보가 다른 별도 기준선이므로 맨 뒤에 둔다.
-ORDER = ["qwen3_clean", "qwen3_marine", "qwen3_sds9k",
+# 집계 대상은 두 축이 있다.
+#   family    : 언어 모델 계열 비교. 단계별 기준선 둘을 함께 본다.
+#               Gemma 4 는 CLIP 계열과 계보가 다른 별도 기준선이므로 맨 뒤에 둔다.
+#   projector : 비전 프로젝터 구조 비교. LLM 은 Qwen3 로 고정하고
+#               SDS-9k 까지 학습한 최종 단계만 본다.
+GROUPS = {
+    "family": (
+        ["qwen3_clean", "qwen3_marine", "qwen3_sds9k",
          "llama31_clean", "llama31_marine", "llama31_sds9k",
-         "gemma4_sds9k"]
-
-LABEL = {
-    "qwen3_clean":   "Qwen3 clean",
-    "qwen3_marine":  "Qwen3 marine",
-    "qwen3_sds9k":   "Qwen3 SDS-9k",
-    "llama31_clean": "Llama3.1 clean",
-    "llama31_marine": "Llama3.1 marine",
-    "llama31_sds9k": "Llama3.1 SDS-9k",
-    "gemma4_sds9k":  "Gemma4 SDS-9k",
+         "gemma4_sds9k"],
+        {
+            "qwen3_clean":    "Qwen3 clean",
+            "qwen3_marine":   "Qwen3 marine",
+            "qwen3_sds9k":    "Qwen3 SDS-9k",
+            "llama31_clean":  "Llama3.1 clean",
+            "llama31_marine": "Llama3.1 marine",
+            "llama31_sds9k":  "Llama3.1 SDS-9k",
+            "gemma4_sds9k":   "Gemma4 SDS-9k",
+        },
+    ),
+    "projector": (
+        ["qwen3_sds9k", "proj_linear", "proj_mlp3x_gelu",
+         "proj_cross_attn", "proj_qformer"],
+        {
+            # 기존 mlp2x_gelu 체크포인트가 곧 5종 중 하나다. 다만 Phase 1/2 는
+            # 이번 일괄 실행이 아니라 앞선 학습에서 만들어진 것이며 그 로그가
+            # 남아 있지 않다. 표에서 이를 밝힌다.
+            "qwen3_sds9k":     "mlp2x_gelu (기존)",
+            "proj_linear":     "linear",
+            "proj_mlp3x_gelu": "mlp3x_gelu",
+            "proj_cross_attn": "cross_attn",
+            "proj_qformer":    "qformer",
+        },
+    ),
 }
+
+ORDER, LABEL = GROUPS["family"]
 
 
 def get(d, path):
@@ -96,7 +119,12 @@ def main():
     ap = argparse.ArgumentParser("채점 결과 집계")
     ap.add_argument("--dir", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--group", default="family", choices=sorted(GROUPS),
+                    help="집계 대상 축 (family 또는 projector)")
     args = ap.parse_args()
+
+    global ORDER, LABEL
+    ORDER, LABEL = GROUPS[args.group]
 
     loaded = OrderedDict()
     for name in ORDER:
@@ -139,11 +167,23 @@ def main():
               for n in names]
         num_body.append(f"| {disp} 절대오차 중앙값 | " + " | ".join(ae) + " |")
 
+    title = {
+        "family":    "# 20260728 검증셋 1,000건 평가 (언어 모델 계열)",
+        "projector": "# 20260728 검증셋 1,000건 평가 (비전 프로젝터 구조)",
+    }[args.group]
+    note = {
+        "family":    "",
+        "projector": ("LLM 은 Qwen3-8B 로 고정하고 SDS-9k 까지 학습한 최종 단계만 비교한다. "
+                      "mlp2x_gelu 는 앞선 학습에서 만든 기존 체크포인트로, "
+                      "Phase 2b 와 Phase 3 의 학습 조건은 나머지 넷과 같으나 "
+                      "Phase 1 과 Phase 2 는 이번 일괄 실행에서 만들어진 것이 아니다."),
+    }[args.group]
     md = [
-        "# 20260728 검증셋 1,000건 평가",
+        title,
         "",
         f"샘플 수: {loaded[names[0]]['n']:,}건. 생성은 greedy, `max_new_tokens=512` 고정.",
         "",
+    ] + ([note, ""] if note else []) + [
         "## 전체 지표",
         "",
         md_table(names, body),
