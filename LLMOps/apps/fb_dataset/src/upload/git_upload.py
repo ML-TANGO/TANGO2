@@ -8,6 +8,7 @@ from utils.common import change_own
 from utils.redis_key import DATASET_UPLOAD_LIST
 from datetime import datetime
 import json
+from urllib.parse import quote
 import git
 import githublfs
 import traceback
@@ -111,7 +112,13 @@ def clone():
         
         # Format the repository URL to include the token for authentication if private
         if git_access == "private" and git_access_token:
-            repo_url_with_token = git_repo_url.replace("https://", f"https://{git_access_token}@")
+            # "https://<token>@host" 형태는 git 이 토큰을 username 으로만 읽고 password 를 되묻는다.
+            # 잡에는 tty 가 없어 그대로 exit 128 로 죽으므로 user:token 형태로 넘긴다.
+            # (huggingface 는 username 을 무시하고 토큰만 검증한다)
+            repo_url_with_token = git_repo_url.replace(
+                "https://",
+                f"https://{quote(git_id or 'user', safe='')}:{quote(git_access_token, safe='')}@",
+            )
         else:
             repo_url_with_token = git_repo_url
         print(repo_path)
@@ -145,7 +152,10 @@ def pull():
         origin = repo.remote(name='origin')
         if git_access == "private" and git_access_token:
             # Set the remote URL with the token for authentication
-            remote_url_with_token = origin.url.replace("https://", f"https://{git_access_token}@")
+            remote_url_with_token = origin.url.replace(
+                "https://",
+                f"https://{quote(git_id or 'user', safe='')}:{quote(git_access_token, safe='')}@",
+            )
             origin.set_url(remote_url_with_token)
         
         origin.pull()
