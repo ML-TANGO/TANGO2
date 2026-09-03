@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import httpx
 from fastapi import FastAPI
@@ -26,6 +27,7 @@ from launch import JobStateRepository, JobTracker, SchedulerClient
 from manifest import (
     InMemoryManifestRegistry,
     MariaDBManifestRegistry,
+    seed_manifests,
 )
 
 
@@ -163,6 +165,21 @@ async def _wire_db(app, pool, logger) -> None:
     logger.info(
         "MariaDB persistence active (manifest registry + job state repository)"
     )
+    # Seed the manifests that ship with the service. Runs here rather than in
+    # the lifespan so the background DB retry path seeds too — the registry is
+    # only durable once the pool is live, and seeding an in-memory registry
+    # that is about to be swapped out would be wasted work. Idempotent, so the
+    # normal case (rows already present) is one SELECT.
+    settings = get_settings()
+    try:
+        counts = await seed_manifests(
+            app.state.registry,
+            Path(settings.manifest_seed_dir) if settings.manifest_seed_dir else None,
+        )
+        if counts["seeded"] or counts["invalid"]:
+            logger.info("manifest seed: %s", counts)
+    except Exception:
+        logger.exception("manifest seed raised — continuing without seeding")
     # Restore in-flight jobs left behind by the previous BFF process.
     # Best-effort — any failure logs and yields to normal operation.
     try:

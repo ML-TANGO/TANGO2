@@ -277,12 +277,19 @@ post-install hook도 없으므로, 앱 설치 후 manifest를 직접 등록해�
 | `evaluate-selfmetric` | `1.0.0` | `apps/evaluate/manifest.yaml` | 자동평가(BLEU/ROUGE/perplexity) |
 | `evaluate-benchmark-mock` | `0.2.0` | `apps/evaluate_benchmark_mock/manifest.yaml` | 벤치마크 평가 |
 | `fewshot-prompt-optimizer` | `1.0.0` | `Data_Augmentation/fewshot_prompting/manifest.yaml` | 프롬프트 최적화 |
-| `eva-vlm-train` / `eva-vlm-infer` | `1.0.0` | `examples/external-container-manifests/` | SDS 도메인 VLM 학습·추론 |
+| `eva-vlm-train` / `eva-vlm-infer` | `1.1.0` | `apps/fb_external_container/manifests/` | SDS 도메인 VLM 학습·추론 (**부팅 시 자동 시드**) |
 
 이름/버전 기본값은 `apps/fb_utils/settings.py`의 `*_MANIFEST_NAME` / `*_MANIFEST_VERSION`
 상수이며, 다른 버전을 쓰려면 해당 환경변수로 flip 합니다 (예: `SDS_MANIFEST_VERSION`).
 
-등록 방법 — BFF(`jfb-app-external-container`)에 직접 POST 합니다.
+`apps/fb_external_container/manifests/` 안의 YAML은 **부팅 시 자동 등록**됩니다
+(`src/manifest/seed.py`, MariaDB 연결이 붙는 시점에 실행). 이미 있는 `(name, version)`은
+건너뛰므로 재시작마다 돌아도 안전하고, 같은 `service_family` 두 짝은 자동으로 pair 등록됩니다.
+파일을 추가한 뒤 `kubectl rollout restart deploy/jfb-app-external-container` 만 하면 됩니다.
+레포에 없는 판본(내부 패치 이미지 등)을 쓰는 인스턴스는 `EXTERNAL_MANIFEST_SEED_DIR` 로
+다른 디렉터리를 가리키거나, 아래 수동 등록을 씁니다.
+
+나머지 manifest 등록 방법 — BFF(`jfb-app-external-container`)에 직접 POST 합니다.
 등록 API는 Kong/`llm_model`로 프록시되지 않습니다 (`GET /api/external/manifests`는
 조회 전용) — 따라서 port-forward 또는 클러스터 내부에서 호출해야 합니다.
 

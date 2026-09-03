@@ -270,10 +270,13 @@ MIXATIS_MANIFEST_VERSION = os.getenv('MIXATIS_MANIFEST_VERSION', '0.2.4')
 # 이 상수로 external_manifest_name/version 을 해석. 바인딩 버전은 **env 로 flip**
 # (FE 리빌드/코드 커밋 없이). 아래는 fresh-install 용 기본값(canonical base)일 뿐,
 # 실 클러스터는 env `SDS_MANIFEST_VERSION` 로 운영 버전을 지정한다
-# (예: 운영 클러스터 = `1.0.0-acryl-patched-v7`, recipe 포함). recipe 가 있는
-# 버전이어야 FT 탭이 master-detail(레시피 파이프라인)로 렌더된다.
+# (예: 운영 클러스터 = `1.0.0-acryl-patched-v11`, 내부 패치 이미지). recipe 가
+# 있는 버전이어야 FT 탭이 master-detail(레시피 파이프라인)로 렌더된다 — 기본값을
+# 1.1.0 으로 두는 이유가 이것이다. 1.1.0 은 fb_external_container 가 부팅 시
+# 시드하는 표준 판본(apps/fb_external_container/manifests/)이라 신규 설치에서도
+# recipe 가 항상 존재한다. recipe 없는 1.0.0 을 가리키면 화면이 raw-params 로 떨어진다.
 SDS_MANIFEST_NAME = os.getenv('SDS_MANIFEST_NAME', 'eva-vlm-train')
-SDS_MANIFEST_VERSION = os.getenv('SDS_MANIFEST_VERSION', '1.0.0')
+SDS_MANIFEST_VERSION = os.getenv('SDS_MANIFEST_VERSION', '1.1.0')
 
 # [KAFKA]
 JF_KAFKA_DNS = os.getenv('JF_KAFKA_DNS', None)

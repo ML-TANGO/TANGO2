@@ -80,6 +80,12 @@ class Settings(BaseSettings):
         default=5.0, alias="JF_DB_CONNECT_TIMEOUT"
     )
 
+    # Boot-time manifest seed directory. Empty = the `manifests/` folder that
+    # ships next to the service code (src/manifest/seed.py:DEFAULT_SEED_DIR).
+    # Override when an instance runs manifests that are not in the repo — e.g.
+    # an internally patched partner image whose YAML is mounted in.
+    manifest_seed_dir: str = Field(default="", alias="EXTERNAL_MANIFEST_SEED_DIR")
+
     log_level: str = "INFO"
 
     # populate_by_name lets tests / direct construction also use the field

@@ -28,6 +28,7 @@ from .schema import (
     Spec,
     WorkspaceScope,
 )
+from .seed import seed_manifests
 from .validator import (
     HybridPairValidationError,
     ManifestValidationError,
@@ -56,6 +57,7 @@ __all__ = [
     "RegistryConflictError",
     "Resources",
     "Secrets",
+    "seed_manifests",
     "Spec",
     "WorkspaceScope",
     "validate_hybrid_pair",

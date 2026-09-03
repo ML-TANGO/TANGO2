@@ -1,0 +1,93 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# fewshot-prompt-optimizer.yaml — 부팅 시드 manifest (프롬프트 최적화, async)
+#
+# ⚠️ 정본은 컨테이너 소스 옆의 `Data_Augmentation/fewshot_prompting/manifest.yaml`
+# 이다. 이 파일은 부팅 자동 등록(src/manifest/seed.py)을 위한 **사본**이라,
+# 한쪽을 고치면 반드시 다른 쪽도 맞춰야 한다(이미지 태그·버전이 특히 그렇다).
+# 사본을 두는 이유: 시드 디렉터리는 이미지에 COPY 되고 NFS src 마운트로도 잡히는데,
+# 리포 루트 밖을 가리키는 심링크는 이미지 빌드에서 깨진다.
+#
+# service_family 가 없으므로 페어가 아니라 단건으로 등록된다(짝 컨테이너 없음).
+# metadata.name 은 ADAPTER_REGISTRY 키와 일치해야 하고(불일치 시 무증상 폴백),
+# 플랫폼 바인딩은 settings 의 PROMPT_OPT_MANIFEST_NAME/VERSION 이 해석한다.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# fewshot-prompt-optimizer — ETRI few-shot 프롬프트 최적화 컨테이너.
+# few-shot 예시로부터 최적화된 system prompt 를 생성한다(DSPy MIPROv2 + textgrad
+# harvest). 모델을 학습하지 않는다 — params.llm_url 의 OpenAI 호환 엔드포인트를
+# 호출해 프롬프트만 탐색하므로 gpu:0 이고, 부하는 대상 모델 쪽 GPU 에 걸린다.
+# 계약 전문: ../../examples/hello-plugin/external-container-spec.md
+# 설계: ../../docs/superpowers/specs/2026-07-31-fewshot-prompt-optimizer-integration-design.md
+apiVersion: tango.acryl.ai/v1
+kind: ExternalContainer
+
+metadata:
+  name: fewshot-prompt-optimizer   # ★ ADAPTER_REGISTRY 키와 반드시 일치(불일치 시 무증상 폴백)
+  version: "1.0.0"
+  vendor: "ETRI"
+  contact: "platform@acryl.ai"
+  description: |
+    few-shot 예시(query/response)를 받아 최적화된 시스템 프롬프트를 생성한다.
+    pre-pass MIPRO → textgrad harvest(합성 예시 증강) → selection MIPRO 3단계로
+    instruction + demo 부분집합을 holdout 점수 기준으로 선택한다.
+    산출물은 result.system_prompt (단일 텍스트)이며 배포 추론에 주입해 사용한다.
+
+spec:
+  # bert_score 메트릭을 실제로 쓰려면 bert-score 가 포함된 빌드여야 한다(기본 :1.0.0 은
+  #   torch 를 빼려고 제외한 빌드라 fewshot_task._bert_f1 이 token_f1 로 폴백한다).
+  #   :1.0.0-bertscore = requirements.txt 의 bert-score 를 살려 빌드한 것. 노드 containerd
+  #   k8s.io 에 import 되어 있고 io.cri-containerd.image=managed 라벨이 붙어 IfNotPresent
+  #   로 로컬 이미지를 그대로 쓴다(라벨 없으면 pull 시도 → ErrImagePull).
+  #   1.1.0 = 제안자(메타) LM 분리. instruction 제안·reflection·예시생성은 구조화 출력을
+  #   요구해 VLM(SDS)이 수행할 수 없다 → params.proposer_llm_url 로 텍스트 LM 을 따로 문다.
+  #   미지정이면 종전대로 llm_url 하나로 전부 처리한다(내부 배포 회귀 없음).
+  #   1.1.1 = flat POST 폴백 누락 수정. 플랫폼은 envelope 없이 params 를 그대로 POST 하는데
+  #   RunRequest 의 flat 필드 목록에 proposer_llm_url 이 없어 pydantic 이 버리고 있었다.
+  image: "docker.io/acrylaaai/fewshot-prompt-optimizer:1.2.0-bertscore"
+
+  # optimize — 모델이 아니라 프롬프트를 산출한다. generate 를 쓰면 안 되는 이유:
+  #   db_synthesis.list_generate_manifests / db_pipeline.get_generation_manifests 가
+  #   job_type='generate' 로 합성 모듈·파이프라인 생성 노드 드롭다운을 채우므로
+  #   이 컨테이너가 거기 섞여 노출되고, 고르면 입력 계약(examples/llm_url) 불일치로 실패한다.
+  job_type: optimize
+  # async: /run 으로 등록하고 폴링. 최적화가 2~10분이라 플랫폼 60s sync 타임아웃 초과.
+  execution_mode: async
+  port: 30000                # Dockerfile EXPOSE 30000 / ENV PORT=30000
+
+  resources:
+    cpu: "2"
+    memory: "4Gi"            # 모델 미보유 — HTTP 호출 + JSON 파싱/문자열 처리만
+    gpu: 0
+
+  inputs:
+    params:
+      required: true         # llm_url(필수) + examples(필수, >=2) + metric/rounds 등
+    dataset:
+      required: false        # 컨테이너는 마운트를 읽지 않는다 — 예시는 params 로만 전달
+
+  outputs:
+    metrics: false           # /output 미사용 — 결과는 폴링 응답의 result 로만 보고
+    artifacts: false
+
+  secrets:
+    required: []             # 대상 LLM 은 클러스터 내부(api_key="EMPTY")
+
+  network:
+    egress_whitelist: []     # llm_url = 플랫폼 내부 shim (외부 egress 없음)
+
+  endpoints:
+    info: "/info"
+    health: "/health"
+    run: "/run"
+    # 컨테이너가 표준 /jobs/{id} 대신 /status?job_id= 를 쓴다 → 계약서 §5.4 의
+    #   "자체 URL 컨벤션은 endpoints 에 템플릿 명시" 규정을 사용.
+    jobs: "/status?job_id={id}"
+    # /live·/cancel 미제공(async 필수는 info/health/run/jobs) → cancel 은 어댑터에서
+    #   no-op 이 되므로 UI 에 "취소 불가"를 표시할 것.
+
+  capabilities:
+    estimated_startup_seconds: 15
+    estimated_duration_seconds: 600   # 2~10분(rounds/예시 수에 비례)
+    timeout_seconds: 1800
+
+  workspace_scope: per-workspace
