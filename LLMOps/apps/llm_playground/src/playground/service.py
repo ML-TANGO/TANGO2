@@ -202,19 +202,36 @@ def _remote_api_proxy_url(workspace_id, playground_id):
             f":{REMOTE_API_PROXY_PORT}/")
 
 
+def _helm_set_value(v):
+    """helm `--set` 값 이스케이프 — 자유 입력이 **다른 키를 덮어쓰지 못하게** 한다.
+
+    helm 은 하나의 `--set` 인자 안에서도 콤마를 `key=value` 구분자로 읽는다. 그래서 값에
+    콤마가 들어가면 값이 잘리는 데서 끝나지 않고, 뒤따르는 문자열이 **다른 키의 값으로**
+    해석된다. 모델명은 사용자가 자유롭게 적는 값이므로 `x,image=...` 한 줄로 이 릴리스의
+    컨테이너 이미지를 바꿀 수 있었다 — 차트가 image 를 `.Values.image` 로 그대로 쓴다.
+    셸 인용(common.shell_arg)은 이 통로를 막지 못한다: 인용은 셸에서의 인자 경계를 지킬
+    뿐이고, 문제의 파싱은 helm 안에서 일어난다.
+    백슬래시를 먼저 이스케이프한다 — 값 끝의 `\\` 가 뒤 콤마의 이스케이프를 삼키면
+    같은 우회가 되살아난다.
+    """
+    return str(v if v is not None else "").replace("\\", "\\\\").replace(",", "\\,")
+
+
 def _install_remote_api_proxy(workspace_id, playground_id, cfg, has_key):
     """프록시 워커 helm install(멱등 — upgrade --install)."""
     ns = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=workspace_id)
     name = _remote_api_release(playground_id)
+    # ⚠️ 값은 출처를 가리지 않고 **전부** _helm_set_value 를 통과시킨다 — 자유 입력 하나가
+    # 다른 키를 덮어쓰는 통로를 닫는 것이 목적이라 "이건 내부 값이니 괜찮다" 는 예외를 두지
+    # 않는다(예외가 생기면 다음 사람이 그 자리에 자유 입력을 넣는다).
     sets = [
-        f"namespace={ns}", f"name={name}",
-        f"image={REMOTE_API_PROXY_IMAGE}", f"port={REMOTE_API_PROXY_PORT}",
-        f"provider={cfg.get('provider','')}",
-        f"model={cfg.get('model','')}",
-        # baseUrl 에는 `,` 가 들어갈 수 있다 — helm --set 은 콤마를 값 구분자로 읽으므로
-        # 반드시 이스케이프한다(플랫폼 전역 함정).
-        "baseUrl={}".format((cfg.get("base_url") or "").replace(",", "\\,")),
-        f"secretName={_remote_api_secret_name(playground_id) if has_key else ''}",
+        f"namespace={_helm_set_value(ns)}", f"name={_helm_set_value(name)}",
+        f"image={_helm_set_value(REMOTE_API_PROXY_IMAGE)}",
+        f"port={REMOTE_API_PROXY_PORT}",
+        f"provider={_helm_set_value(cfg.get('provider'))}",
+        f"model={_helm_set_value(cfg.get('model'))}",
+        f"baseUrl={_helm_set_value(cfg.get('base_url'))}",
+        f"secretName={_helm_set_value(_remote_api_secret_name(playground_id)) if has_key else ''}",
     ]
     # --wait 는 쓰지 않는다 — helm 의 준비 대기는 replicasets 를 list 하는데
     # jfb-playground-sa 에 그 권한이 없어(실측) 리소스는 만들어지고 명령만 실패한다.
