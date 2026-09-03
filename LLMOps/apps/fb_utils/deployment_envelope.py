@@ -8,7 +8,7 @@ FE/BFF 가 하나의 형태로 소비하도록 **정규화**하는 순수 함수
 - 상세는 target_details 로 원본 병기(손실적 정규화 방지). phase 는 coarse 5-state.
 
 envelope = {
-    "target":          "cluster" | "edge" | "standalone",
+    "target":          "cluster" | "edge" | "standalone" | "remote_api",
     "native_id":       원본 식별자(현 목록: 3종 모두 playground id — edge 도 playground 배포),
     # 주: edge 는 두 생산자 — edge_deploy_envelope(playground row, deploy_type='edge', 현 목록 소스) /
     #     edge_envelope(edge_worker 디바이스 기반, 디바이스 뷰용 — 현재 목록 미사용).
@@ -38,6 +38,7 @@ CAP_PACKAGE_DOWNLOAD = "package_download"
 TARGET_CLUSTER = "cluster"
 TARGET_EDGE = "edge"
 TARGET_STANDALONE = "standalone"  # 오프라인 번들(playground row, deploy_type='standalone')
+TARGET_REMOTE_API = "remote_api"  # 외부 LLM(playground row, deploy_type='remote_api') — 상용 API 3사 + 사용자 엔드포인트
 
 # cluster 서빙 상태 문자열 → coarse phase (fb_deployment/llm_playground deployment_status.status).
 _CLUSTER_PHASE = {
@@ -165,5 +166,37 @@ def standalone_envelope(dep: dict, workspace_id=None) -> dict:
         "last_observed_at": None,
         "target_details": {
             "workspace_id": dep.get("workspace_id") if dep.get("workspace_id") is not None else workspace_id,
+        },
+    }
+
+
+def remote_api_envelope(dep: dict, workspace_id=None) -> dict:
+    """외부 LLM 배포 행 dict → envelope. playground row(deploy_type='remote_api').
+
+    pod 이 없어 live 시계열(CAP_LIVE_METRICS)도, Kong 게시(CAP_EXTERNAL_ACCESS — 그쪽은
+    fb_deployment PK 가 있는 클러스터 배포 전용)도 광고하지 않는다. 회전 가능한 자격증명
+    (API 키)은 실제로 있으므로 CAP_CREDENTIAL_ROTATION 만 광고한다.
+
+    provider/model 은 식별에 필요해 target_details 로 병기한다 — **키는 절대 싣지 않는다**
+    (키 원본은 K8s Secret 에만 있고 이 read-model 은 목록 화면까지 흘러간다)."""
+    # phase 는 형제(standalone/edge_deploy)와 같은 규칙 — 목록 행의 flat `status` 를 쓴다.
+    # 그 값은 get_playground_status 의 remote_api 분기가 이미 마지막 도달성 결과에서
+    # 파생해 둔 것이라(running/error/stop) 여기서 다시 파생하지 않는다.
+    status = _cluster_status_str(dep)
+    cfg = dep.get("remote_api") or {}
+    return {
+        "target": TARGET_REMOTE_API,
+        "native_id": dep.get("id") or dep.get("playground_id"),
+        "name": dep.get("name"),
+        "phase": normalize_cluster_phase(status),
+        "capabilities": [CAP_CREDENTIAL_ROTATION],
+        "links": {},
+        "last_observed_at": cfg.get("verified_at"),
+        "target_details": {
+            "workspace_id": dep.get("workspace_id") if dep.get("workspace_id") is not None else workspace_id,
+            "provider": cfg.get("provider"),
+            "model": cfg.get("model"),
+            "base_url": cfg.get("base_url"),
+            "last_error": cfg.get("last_error"),
         },
     }

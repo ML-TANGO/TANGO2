@@ -82,6 +82,31 @@ export const postPlayground = async ({
   return res;
 };
 
+// 외부 LLM 배포(deploy_type='remote_api') 구성. 키는 요청으로만 보내고 서버가 K8s
+// Secret 에 넣는다 — 응답·조회 어디에도 키가 실려 오지 않는다(has_key 로만 판별).
+export const putRemoteApiConfig = async ({
+  playground_id,
+  provider,
+  model,
+  base_url,
+  api_key,
+}) => {
+  const res = await callApi({
+    url: 'playgrounds/remote-api',
+    method: 'put',
+    body: { playground_id, provider, model, base_url, api_key },
+  });
+  return res;
+};
+
+export const getRemoteApiConfig = async (playgroundId) => {
+  const res = await callApi({
+    url: `playgrounds/remote-api/${playgroundId}`,
+    method: 'get',
+  });
+  return res;
+};
+
 export const getDetailPlayground = async (playgroundId) => {
   const res = await callApi({
     url: `playgrounds/${playgroundId}`,

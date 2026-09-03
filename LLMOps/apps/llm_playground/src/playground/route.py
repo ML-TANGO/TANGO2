@@ -609,6 +609,31 @@ async def provision_dual_session(body: dto.ProvisionDualInput):
         traceback.print_exc()
         return response(status=0, message=str(e), result=None)
 
+@playgrounds.put("/remote-api", summary='배포 - 외부 LLM 배포 구성 저장', tags=TAG_DEPLOYMENT)
+async def save_remote_api_config(body: dto.RemoteApiConfigInput):
+    """외부 LLM(deploy_type='remote_api') 배포 구성.
+
+    키는 워크스페이스 K8s Secret 으로만 가고 playground 행에는 남지 않는다. 저장 직후
+    도달성을 확인하므로, 성공 응답은 "실제로 호출 가능하다"는 뜻이다."""
+    try:
+        res = await svc.save_remote_api_config(
+            playground_id=body.playground_id, provider=body.provider,
+            model=body.model, base_url=body.base_url, api_key=body.api_key)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+@playgrounds.get("/remote-api/{playground_id}", summary='배포 - 외부 LLM 배포 구성 조회', tags=TAG_DEPLOYMENT)
+async def get_remote_api_config(playground_id: int):
+    """구성 + 선택 가능한 provider 목록. 키는 반환하지 않고 보유 여부(has_key)만 준다."""
+    try:
+        res = await svc.get_remote_api_config(playground_id=playground_id)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
 @playgrounds.post("/stop", summary='배포 - 중지', tags=TAG_DEPLOYMENT)
 async def stop_playground(body: dto.PlaygroundIdInput):
     """

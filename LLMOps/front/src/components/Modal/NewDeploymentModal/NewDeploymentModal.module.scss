@@ -6,47 +6,6 @@
   padding: 4px 2px;
 }
 
-.target-row {
-  display: flex;
-  gap: 14px;
-}
-
-.target-card {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 12px 14px;
-  border: 1px solid #d9dee5;
-  border-radius: 8px;
-  background: #fff;
-  cursor: pointer;
-  text-align: left;
-  transition: border-color 0.15s ease, background 0.15s ease;
-
-  &:hover {
-    border-color: #7aa7ff;
-  }
-
-  &.selected {
-    border-color: #3b82f6;
-    background: #f0f6ff;
-  }
-}
-
-.target-label {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1f2937;
-}
-
-.target-desc {
-  font-size: 12px;
-  color: #6b7280;
-  line-height: 1.4;
-}
-
-
 /* 단일/이중 모드 탭 */
 .mode-tabs {
   display: flex;

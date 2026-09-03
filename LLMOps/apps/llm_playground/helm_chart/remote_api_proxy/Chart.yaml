@@ -1,0 +1,6 @@
+apiVersion: v2
+name: remote-api-proxy
+description: 외부 LLM 배포(deploy_type=remote_api)의 워커 — OpenAI/외부 엔드포인트 리레이
+type: application
+version: 0.1.0
+appVersion: "0.1"

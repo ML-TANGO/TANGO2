@@ -1,0 +1,166 @@
+.remote-cont {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.loading {
+  padding: 40px;
+  color: #6b7280;
+}
+
+.type-chip {
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: #eef2ff;
+  color: #4338ca;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 4px 0 40px;
+  overflow-y: auto;
+}
+
+.panel {
+  padding: 20px 24px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+
+  h3 {
+    margin: 0 0 4px;
+    font-size: 15px;
+    font-weight: 700;
+  }
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+
+  h3 {
+    margin: 0;
+  }
+}
+
+.state-chip {
+  padding: 3px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+
+  &.ok {
+    background: #dcfce7;
+    color: #15803d;
+  }
+  &.error {
+    background: #fee2e2;
+    color: #b91c1c;
+  }
+  &.idle {
+    background: #f3f4f6;
+    color: #6b7280;
+  }
+}
+
+.hint {
+  margin: 0 0 14px;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.provider-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.provider-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 14px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, box-shadow 0.15s;
+
+  &:hover {
+    border-color: #a5b4fc;
+  }
+
+  &.selected {
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 1px #4f46e5 inset;
+  }
+}
+
+.provider-icon {
+  font-size: 18px;
+}
+
+.provider-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.provider-model {
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 16px;
+
+  label {
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  input {
+    height: 36px;
+    padding: 0 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 13px;
+
+    &:focus {
+      border-color: #4f46e5;
+      outline: none;
+    }
+  }
+}
+
+.field-hint {
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+.error-box {
+  margin-top: 16px;
+  padding: 10px 12px;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 13px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 22px;
+}

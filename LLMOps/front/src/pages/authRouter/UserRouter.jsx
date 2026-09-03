@@ -88,6 +88,9 @@ const EdgeDeploymentDetail = lazy(
 const StandaloneDeploymentDetail = lazy(
   () => import('../llm/Standalone/StandaloneDeploymentDetail'),
 );
+const RemoteApiDeploymentDetail = lazy(
+  () => import('../llm/RemoteApi/RemoteApiDeploymentDetail'),
+);
 const DualDeployDetail = lazy(
   () => import('@src/pages/llm/Inference/DualDeployDetail/DualDeployDetail'),
 );
@@ -941,6 +944,16 @@ const routeArrAll = [
     activeIcon: IconNavPlaygroundActive,
     platform: 'flightbase',
     render: (props) => <StandaloneDeploymentDetail {...props} />,
+  },
+  {
+    name: 'RemoteApiDeploymentDetail',
+    path: '/user/workspace/:id/remote-api-deploy/:deployId',
+    exact: false,
+    disabled: true,
+    icon: IconNavPlaygroundActive,
+    activeIcon: IconNavPlaygroundActive,
+    platform: 'flightbase',
+    render: (props) => <RemoteApiDeploymentDetail {...props} />,
   },
   {
     name: 'DualDeploymentDetail',

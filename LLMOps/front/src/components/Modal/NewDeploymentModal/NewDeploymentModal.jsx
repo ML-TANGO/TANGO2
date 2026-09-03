@@ -6,6 +6,7 @@ import { toast } from 'react-toastify';
 
 import { InputText, Textarea } from '@jonathan/ui-react';
 
+import Radio from '@src/components/atoms/input/Radio';
 import AccessOwnerSelect from '@src/components/molecules/AccessOwnerSelect';
 import InputBoxWithLabel from '@src/components/molecules/InputBoxWithLabel';
 import MultiSelect from '@src/components/molecules/MultiSelect';
@@ -35,30 +36,26 @@ const cx = classNames.bind(style);
 const EMPTY_LIST = [];
 const DUAL_NAME_MAX_LENGTH = 20;
 
-// 배포 대상(playground.deploy_type) 3종 — 라벨/설명은 i18n(deploymentTarget.*).
-const TARGETS = [
-  {
-    id: 'cluster',
-    label: 'deploymentTarget.cluster.label',
-    desc: 'deploymentTarget.cluster.desc',
-  },
-  {
-    id: 'edge',
-    label: 'deploymentTarget.edge.label',
-    desc: 'deploymentTarget.edge.desc',
-  },
-  {
-    id: 'standalone',
-    label: 'deploymentTarget.standalone.label',
-    desc: 'deploymentTarget.standalone.desc',
-  },
-];
+// 배포 대상(playground.deploy_type) 4종 — 라벨은 i18n(deploymentTarget.*.label).
+// Radio 는 isTranLabel 기본값이 true 라 라벨 키를 그대로 넘기면 내부에서 번역한다
+// (접근 권한 AccessOwnerSelect 의 accessOption 과 같은 관용구).
+const TARGET_OPTIONS = [
+  { value: 'cluster', label: 'deploymentTarget.cluster.label' },
+  { value: 'edge', label: 'deploymentTarget.edge.label' },
+  { value: 'standalone', label: 'deploymentTarget.standalone.label' },
+  { value: 'remote_api', label: 'deploymentTarget.remote_api.label' },
+].map((o) => ({
+  ...o,
+  labelStyle: { fontSize: '14px', fontFamily: 'SpoqaM' },
+}));
 
 // 배포 유형별 상세 라우팅(생성 셸 → 유형별 구성 화면). PlaygroundMenu 의 detailPath 규칙과 동일.
 const detailPath = (wid, kind, id) => {
   if (kind === 'edge') return `/user/workspace/${wid}/edge-deploy/${id}`;
   if (kind === 'standalone')
     return `/user/workspace/${wid}/standalone-deploy/${id}`;
+  if (kind === 'remote_api')
+    return `/user/workspace/${wid}/remote-api-deploy/${id}`;
   return `/user/workspace/${wid}/llmplayground/${id}/llmplayground`;
 };
 
@@ -229,20 +226,14 @@ const NewDeploymentModal = ({ data, type }) => {
             labelSize='large'
             disableErrorMsg
           >
-            <div className={cx('target-row')}>
-              {TARGETS.map((tg) => (
-                <button
-                  key={tg.id}
-                  type='button'
-                  className={cx('target-card', target === tg.id && 'selected')}
-                  aria-pressed={target === tg.id}
-                  onClick={() => setTarget(tg.id)}
-                >
-                  <span className={cx('target-label')}>{t(tg.label)}</span>
-                  <span className={cx('target-desc')}>{t(tg.desc)}</span>
-                </button>
-              ))}
-            </div>
+            <Radio
+              name='deployTarget'
+              value={target}
+              options={TARGET_OPTIONS}
+              onChange={(e) => setTarget(e.target.value)}
+              customStyle={{ marginTop: '16px' }}
+              isLabelColor
+            />
           </InputBoxWithLabel>
         )}
 

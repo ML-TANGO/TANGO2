@@ -8,7 +8,7 @@ from requests.exceptions import HTTPError, ConnectionError, Timeout
 
 from utils import topic_key
 from utils.settings import JF_KAFKA_DNS
-from utils.kube import PodName
+from utils.kube import PodName, create_or_replace_secret, delete_secret
 from utils import TYPE
 from utils import settings
 from utils import redis_key
@@ -27,6 +27,7 @@ from utils.redis import get_redis_client_async
 from utils.workspace_resource import get_workspace_instance_total_info
 from utils.msa_db import db_dashboard
 from playground import dual_metrics
+from utils import remote_api   # 외부 LLM 어댑터 — 프록시 앱과 공유(fb_utils)
 from utils.external_client import (
     start_infer_job, cancel_infer_job, run_inference, get_job_status,
     get_paired_manifest, ExternalInferError, MANIFEST_JOB_TYPE_INFER,
@@ -34,6 +35,247 @@ from utils.external_client import (
 
 DUAL_SHELL_NAME_MAX_LENGTH = 20
 DUAL_PROMPT_CHILD_SUFFIX = "-promptgen"
+
+
+# ── 외부 LLM 배포(deploy_type='remote_api') 헬퍼 ──────────────────────────────
+# pod 이 없는 배포다. 상태·추론·shim 세 곳이 기존 external(협력기관 컨테이너) 분기와
+# 같은 모양으로 `deployment` JSON 의 키 하나(remote_api)를 보고 갈라진다.
+# 키 원본은 워크스페이스 ns 의 K8s Secret 에만 두고, 행에는 secret 이름만 남긴다
+# (SP-3 하드닝과 같은 posture — helm values/PodSpec 평문 금지).
+REMOTE_API_SECRET_KEY = "API_KEY"
+
+
+def _remote_api_secret_name(playground_id):
+    # playground id 기반 → RFC1123. 배포 1개당 Secret 1개(재구성 시 교체).
+    return f"remote-api-playground-{int(playground_id)}"
+
+
+def _remote_api_cfg(pg):
+    """playground 행 → remote_api 구성 dict(없으면 None). 기존 _deployment_external_job_id 와 같은 관용구."""
+    try:
+        return (json.loads(pg.get("deployment") or "{}") or {}).get("remote_api")
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
+def _remote_api_key(workspace_id, playground_id):
+    """K8s Secret 에서 키를 읽는다. 없으면 None(엔드포인트는 키 없이도 동작 가능)."""
+    from kubernetes import client as k8s
+    from kubernetes.client.rest import ApiException
+    ns = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=workspace_id)
+    try:
+        sec = k8s.CoreV1Api().read_namespaced_secret(
+            name=_remote_api_secret_name(playground_id), namespace=ns)
+    except ApiException as e:
+        if e.status == 404:
+            return None
+        raise
+    raw = (sec.data or {}).get(REMOTE_API_SECRET_KEY)
+    return base64.b64decode(raw).decode() if raw else None
+
+
+async def _remote_api_context(playground_id, pg=None):
+    """(cfg, api_key) — 추론 3경로가 공통으로 쓰는 진입점. 미구성이면 예외."""
+    pg = pg or await db.get_playground(playground_id=playground_id)
+    if not pg:
+        raise Exception(f"playground {playground_id} not found")
+    cfg = _remote_api_cfg(pg)
+    if not cfg:
+        raise Exception("외부 LLM 배포가 구성되지 않았습니다 — 제공자와 키를 먼저 저장하세요")
+    key = await run_in_threadpool(
+        _remote_api_key, pg.get("workspace_id"), playground_id)
+    return cfg, key
+
+
+async def _remote_api_mark(playground_id, state, error=None):
+    """deployment JSON 의 remote_api.state 를 갱신(phase 파생의 소스). 실패해도 추론을 막지 않는다."""
+    try:
+        pg = await db.get_playground(playground_id=playground_id)
+        dep = json.loads(pg.get("deployment") or "{}") or {}
+        cfg = dep.get("remote_api")
+        if not cfg:
+            return
+        cfg["state"] = state
+        cfg["last_error"] = error
+        if state == "running":
+            cfg["verified_at"] = datetime.now().isoformat()
+        dep["remote_api"] = cfg
+        await db.update_playground(
+            playground_id=playground_id, deployment=json.dumps(dep))
+    except Exception:
+        traceback.print_exc()
+
+
+async def save_remote_api_config(playground_id, provider, model=None,
+                                 base_url=None, api_key=None):
+    """외부 LLM 배포 구성 저장. 키는 K8s Secret 으로, 행에는 secret_ref 만.
+
+    키를 비우고 저장하면 기존 Secret 을 유지한다(모델만 바꾸는 흔한 재구성).
+    저장 직후 도달성 확인(verify)까지 해서, 화면의 'running' 이 실제로 부를 수 있다는
+    뜻이 되게 한다 — 여기서 실패하면 state='error' 로 남기고 예외를 올린다."""
+    pg = await db.get_playground(playground_id=playground_id)
+    if not pg:
+        raise Exception("Not Exist Playground")
+    if (pg.get("deploy_type") or "cluster") != deployment_envelope.TARGET_REMOTE_API:
+        raise Exception("외부 LLM 배포(remote_api)가 아닙니다")
+
+    cfg = remote_api.validate_config(provider=provider, model=model, base_url=base_url)
+    workspace_id = pg.get("workspace_id")
+    ns = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=workspace_id)
+    secret_name = _remote_api_secret_name(playground_id)
+
+    if api_key:
+        await run_in_threadpool(
+            create_or_replace_secret, ns, secret_name,
+            {REMOTE_API_SECRET_KEY: api_key})
+    effective_key = api_key or await run_in_threadpool(
+        _remote_api_key, workspace_id, playground_id)
+    if cfg["provider"] in remote_api.COMMERCIAL_PROVIDERS and not effective_key:
+        raise Exception(f"{remote_api.PROVIDER_LABEL[cfg['provider']]} API 키를 입력하세요")
+
+    cfg["secret_ref"] = secret_name if effective_key else None
+    dep = json.loads(pg.get("deployment") or "{}") or {}
+    # deployment_run 은 기존 화면·상태 로직이 '구성됨'을 판별하는 공통 키다. 자원이 없는
+    # 배포라도 이 키가 있어야 목록/상세가 미설정으로 오해하지 않는다.
+    dep["deployment_run"] = True
+    dep["remote_api"] = cfg
+    if not await db.update_playground(
+            playground_id=playground_id, deployment=json.dumps(dep)):
+        raise Exception("외부 LLM 배포 구성 저장에 실패했습니다")
+
+    # 도달성 확인은 하되 **저장을 실패시키지 않는다**. 대상이 잠깐 느리거나 큐가 밀렸다는
+    # 이유로 사용자가 방금 입력한 키까지 잃는 것은 과한 처벌이고, 상태 모델(§ phase 는
+    # 마지막 도달성 결과에서 파생)과도 어긋난다. 결과는 state/last_error 로 정직하게
+    # 남기고 화면이 그대로 보여준다 — 확정적인 재시도는 '시작' 버튼(start_playground)이다.
+    state, err = "running", None
+    try:
+        await remote_api.verify(cfg, effective_key)
+    except remote_api.RemoteApiError as e:
+        state, err = "error", str(e)
+    await _remote_api_mark(playground_id, state, err)
+    return {"provider": cfg["provider"], "model": cfg["model"],
+            "base_url": cfg.get("base_url"), "state": state, "last_error": err}
+
+
+async def get_remote_api_config(playground_id):
+    """구성 조회 — 키는 절대 반환하지 않고 보유 여부(has_key)만 알린다."""
+    pg = await db.get_playground(playground_id=playground_id)
+    if not pg:
+        raise Exception("Not Exist Playground")
+    cfg = _remote_api_cfg(pg) or {}
+    return {
+        "provider": cfg.get("provider"),
+        "model": cfg.get("model"),
+        "base_url": cfg.get("base_url"),
+        "state": cfg.get("state"),
+        "last_error": cfg.get("last_error"),
+        "verified_at": cfg.get("verified_at"),
+        "has_key": bool(cfg.get("secret_ref")),
+        "providers": remote_api.provider_catalog(),
+    }
+
+
+# ── 프록시 워커(pod) 라이프사이클 ────────────────────────────────────────────
+# 이 배포도 다른 배포처럼 **자기 파드와 서비스**를 갖는다. 외부로 나가는 호출이 컨트롤
+# 플레인이 아니라 이 파드에서 일어나고, 상태를 파드로 관측하며, 시작/중지가 helm 릴리스
+# 생명주기와 같아진다. 파드가 플랫폼 서빙 래퍼 계약(POST / → {"output":...})을 그대로
+# 말하므로 추론·일괄·이중·shim 은 **분기 없이** 이 URL 만 받으면 된다.
+#
+# helm 을 스케줄러(Kafka)로 넘기지 않는 이유: 그 경로는 deployment/worker/instance/image
+# 행과 GPU 배정을 전제하는데 이 워커에는 그중 어느 것도 없다. llm_playground 이미지에는
+# helm 이 들어 있고(uninstall_worker 가 이미 직접 셸을 쓴다) 차트는 소스와 함께 마운트된다.
+REMOTE_API_PROXY_CHART = "/app/helm_chart/remote_api_proxy"
+REMOTE_API_PROXY_IMAGE = "docker.io/acrylaaai/genai-platform-remote-api-proxy:tango_v0.1.0"
+REMOTE_API_PROXY_PORT = 8000
+
+
+def _remote_api_release(playground_id):
+    # RFC1123 — release/pod/service 공통 base name.
+    return f"remote-api-playground-{int(playground_id)}"
+
+
+def _remote_api_proxy_url(workspace_id, playground_id):
+    """프록시 서비스의 클러스터 내부 URL(끝에 / — 래퍼 계약은 루트 POST)."""
+    ns = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=workspace_id)
+    return (f"http://{_remote_api_release(playground_id)}--service.{ns}"
+            f":{REMOTE_API_PROXY_PORT}/")
+
+
+def _install_remote_api_proxy(workspace_id, playground_id, cfg, has_key):
+    """프록시 워커 helm install(멱등 — upgrade --install)."""
+    ns = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=workspace_id)
+    name = _remote_api_release(playground_id)
+    sets = [
+        f"namespace={ns}", f"name={name}",
+        f"image={REMOTE_API_PROXY_IMAGE}", f"port={REMOTE_API_PROXY_PORT}",
+        f"provider={cfg.get('provider','')}",
+        f"model={cfg.get('model','')}",
+        # baseUrl 에는 `,` 가 들어갈 수 있다 — helm --set 은 콤마를 값 구분자로 읽으므로
+        # 반드시 이스케이프한다(플랫폼 전역 함정).
+        "baseUrl={}".format((cfg.get("base_url") or "").replace(",", "\\,")),
+        f"secretName={_remote_api_secret_name(playground_id) if has_key else ''}",
+    ]
+    # --wait 는 쓰지 않는다 — helm 의 준비 대기는 replicasets 를 list 하는데
+    # jfb-playground-sa 에 그 권한이 없어(실측) 리소스는 만들어지고 명령만 실패한다.
+    # 준비 판정은 파드로 직접 한다(_wait_remote_api_proxy_ready, pods 권한은 있다).
+    cmd = ("helm upgrade --install {name} {chart} -n {ns} --create-namespace "
+           "{sets}").format(
+        name=common.shell_arg(name), chart=REMOTE_API_PROXY_CHART, ns=common.shell_arg(ns),
+        sets=" ".join("--set " + common.shell_arg(x) for x in sets))
+    r = subprocess.run(cmd, shell=True, text=True,
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if r.returncode != 0:
+        raise Exception("프록시 워커 배포에 실패했습니다: {}".format(
+            (r.stderr or r.stdout or "")[-400:]))
+    return name
+
+
+def _wait_remote_api_proxy_ready(workspace_id, playground_id, timeout=120, interval=3):
+    """프록시 파드가 Ready 가 될 때까지 대기(상한 있음). 준비 못 되면 False."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if _remote_api_proxy_ready(workspace_id, playground_id) is True:
+            return True
+        time.sleep(interval)
+    return False
+
+
+def _uninstall_remote_api_proxy(workspace_id, playground_id):
+    """프록시 워커 helm uninstall(멱등, best-effort — 없으면 무시)."""
+    ns = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=workspace_id)
+    cmd = "helm uninstall -n {ns} {name}".format(
+        ns=common.shell_arg(ns), name=common.shell_arg(_remote_api_release(playground_id)))
+    subprocess.run(cmd, shell=True, text=True,
+                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+
+def _remote_api_proxy_ready(workspace_id, playground_id):
+    """프록시 파드가 Ready 인가 — 상태 파생의 소스(다른 배포와 같이 파드로 관측)."""
+    from kubernetes import client as k8s
+    ns = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=workspace_id)
+    try:
+        pods = k8s.CoreV1Api().list_namespaced_pod(
+            namespace=ns, label_selector=f"app={_remote_api_release(playground_id)}")
+    except Exception:
+        traceback.print_exc()
+        return None
+    if not pods.items:
+        return None
+    for pod in pods.items:
+        for c in (pod.status.conditions or []):
+            if c.type == "Ready" and c.status == "True":
+                return True
+    return False
+
+
+def _delete_remote_api_secret(workspace_id, playground_id):
+    """배포 삭제 시 Secret 정리(멱등, best-effort)."""
+    try:
+        ns = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=workspace_id)
+        delete_secret(ns, _remote_api_secret_name(playground_id))
+    except Exception:
+        traceback.print_exc()
 
 
 def _dual_shell_names(name):
@@ -113,6 +355,18 @@ async def get_playground_list(workspace_id, user_id):
                 "bookmark" : 1 if item.get("id") in user_playground_bookmark_list else 0,
                 "users":  users,
             }
+            # 외부 LLM 배포면 provider/model 메타 동봉(카드 배지·targets read-model 용).
+            # 키는 절대 싣지 않는다 — 이 행은 목록 화면까지 그대로 흘러간다.
+            if (item.get("deploy_type") or "") == deployment_envelope.TARGET_REMOTE_API:
+                _rcfg = _remote_api_cfg(item) or {}
+                row["remote_api"] = {
+                    "provider": _rcfg.get("provider"),
+                    "model": _rcfg.get("model"),
+                    "base_url": _rcfg.get("base_url"),
+                    "state": _rcfg.get("state"),
+                    "last_error": _rcfg.get("last_error"),
+                    "verified_at": _rcfg.get("verified_at"),
+                }
             # 이중 세션 부모면 FE 배지/모델태그용 메타 동봉.
             if _dual.get("mode") == "dual":
                 row["mode"] = "dual"
@@ -230,7 +484,9 @@ async def get_deployment_targets(workspace_id, user_id):
         #   edge 도 별도 playground 로 관리(배포 디바이스=edge_worker 는 상세 '배포' 탭에서 선택하는 타겟, 목록 항목 아님).
         for dep in cluster_list:
             dt = dep.get("deploy_type") or "cluster"
-            if dt == deployment_envelope.TARGET_STANDALONE:
+            if dt == deployment_envelope.TARGET_REMOTE_API:
+                targets.append(deployment_envelope.remote_api_envelope(dep, workspace_id=workspace_id))
+            elif dt == deployment_envelope.TARGET_STANDALONE:
                 targets.append(deployment_envelope.standalone_envelope(dep, workspace_id=workspace_id))
             elif dt == deployment_envelope.TARGET_EDGE:
                 targets.append(deployment_envelope.edge_deploy_envelope(dep, workspace_id=workspace_id))
@@ -869,6 +1125,14 @@ async def delete_playground(id_list):
             playground_info = await db.get_playground(playground_id=playground_id)
             if playground_info is None:
                 continue
+            # 외부 LLM(remote_api) 키 Secret 정리 — 행보다 먼저 지운다(행이 사라지면
+            # workspace_id 를 잃어 어느 ns 의 Secret 인지 알 수 없다). 멱등.
+            if _remote_api_cfg(playground_info):
+                _rws = playground_info.get("workspace_id")
+                await run_in_threadpool(
+                    _uninstall_remote_api_proxy, _rws, playground_id)
+                await run_in_threadpool(
+                    _delete_remote_api_secret, _rws, playground_id)
             _component_dual = (
                 json.loads(playground_info.get("model") or "{}") or {}
             ).get("dual") or {}
@@ -1044,6 +1308,24 @@ async def get_playground_status(playground_id, _skip_dual=False):
         if playground_deployment_info is None: #정보 없을경우 세팅도 안된 상태
             return result
         playground_deployment_info = json.loads(playground_deployment_info)
+
+        # ── 외부 LLM(remote_api) 분기 ────────────────────────────────
+        # pod 이 없어 deployment_worker_list/redis 경로가 성립하지 않는다. 상태는
+        # 마지막 도달성 결과(remote_api.state)에서 파생한다 — 구성됐으면 init=True.
+        _remote_cfg = playground_deployment_info.get("remote_api")
+        if _remote_cfg:
+            # 다른 배포와 같이 **파드로** 관측한다. 파드가 없으면 중지(구성만 있는 상태),
+            # 있는데 Ready 가 아니면 설치중, Ready 면 running.
+            _ready = await run_in_threadpool(
+                _remote_api_proxy_ready, playground_info.get("workspace_id"), playground_id)
+            if _ready is None:
+                # 파드가 없다 — 마지막 도달성 결과가 error 면 그 사실을 보존한다.
+                if _remote_cfg.get("state") == "error":
+                    return {"status": TYPE.KUBE_POD_STATUS_ERROR, "init_deployment": True}
+                return {"status": TYPE.KUBE_POD_STATUS_STOP, "init_deployment": True}
+            if _ready:
+                return {"status": TYPE.KUBE_POD_STATUS_RUNNING, "init_deployment": True}
+            return {"status": TYPE.KUBE_POD_STATUS_INSTALLING, "init_deployment": True}
 
         # ── External 분기 ────────────────────────────────────────────
         # external_job_id 있으면 일반 deployment_worker_list/redis 경로 안 탐.
@@ -1843,6 +2125,34 @@ async def start_playground(user_name, playground_id,
     """
     try:
         # =============================================================================
+        # 외부 LLM 배포(remote_api) — 자원이 없으므로 아래 자원/헬름 경로에 아예 안 들어간다.
+        # "시작" = 저장된 구성으로 도달성을 다시 확인하는 것. 구성 자체는 별도 엔드포인트
+        # (PUT /remote-api)에서 저장한다. deployment_run 게이트(아래)를 remote_api 가
+        # 영원히 못 넘기 때문에 반드시 여기서 먼저 갈라져야 한다.
+        # =============================================================================
+        _pg_head = await db.get_playground(playground_id=playground_id)
+        if _pg_head and (_pg_head.get("deploy_type") or "cluster") == deployment_envelope.TARGET_REMOTE_API:
+            cfg, key = await _remote_api_context(playground_id, _pg_head)
+            # 도달성부터 확인한다 — 못 부르는 구성으로 파드를 띄우면 Ready 는 되는데
+            # 추론만 실패해 원인이 화면에서 사라진다.
+            try:
+                await remote_api.verify(cfg, key)
+            except remote_api.RemoteApiError as e:
+                await _remote_api_mark(playground_id, "error", str(e))
+                raise Exception(str(e))
+            _ws = _pg_head.get("workspace_id")
+            await run_in_threadpool(
+                _install_remote_api_proxy, _ws, playground_id, cfg, bool(key))
+            _ok = await run_in_threadpool(
+                _wait_remote_api_proxy_ready, _ws, playground_id)
+            if not _ok:
+                await _remote_api_mark(
+                    playground_id, "error", "프록시 워커가 준비되지 않았습니다")
+                raise Exception("프록시 워커가 준비되지 않았습니다 — 파드 상태를 확인하세요")
+            await _remote_api_mark(playground_id, "running")
+            return True
+
+        # =============================================================================
         # 재식작일 경우, 중단
         # =============================================================================
         if restart:
@@ -2235,6 +2545,16 @@ async def run_deployment_playground(playground_id, run_embedding=False, run_rera
 async def stop_playground(playground_id, _dual_cascaded=False):
     partner_stopped = True
     try:
+        # 외부 LLM(remote_api) — 내릴 pod/helm 이 없다. 구성은 남기고 상태만 stopped 로
+        # (다시 '시작'하면 도달성 재확인만 한다). 키 Secret 은 삭제 때만 지운다.
+        _pg_stop = await db.get_playground(playground_id=playground_id)
+        if _pg_stop and _remote_api_cfg(_pg_stop):
+            # 파드는 내리고 구성·키는 남긴다(다시 시작하면 같은 구성으로 재설치).
+            await run_in_threadpool(
+                _uninstall_remote_api_proxy, _pg_stop.get("workspace_id"), playground_id)
+            await _remote_api_mark(playground_id, "stopped")
+            return True
+
         playground_info = await db.get_playground(playground_id=playground_id)
         if playground_info is None:
             return True
@@ -3050,6 +3370,29 @@ async def playground_test(playground_id, test_type, test_dataset_id, test_datase
         deployment_playground_id = playground_deployment_info.get("deployment_playground_id")
         external_job_id = playground_deployment_info.get("external_job_id")
 
+        # ── 외부 LLM(remote_api) 분기 ────────────────────────────────
+        # 아래 internal/external 경로는 둘 다 pod 을 전제한다. 외부 LLM 은 어댑터가
+        # 직접 나가며, 반환 형태는 internal 경로와 같은 [{"output": ...}] 이라
+        # 추론 화면·일괄·이중모델이 무수정으로 동작한다.
+        remote_cfg = playground_deployment_info.get("remote_api")
+        if remote_cfg:
+            if test_type != "question" or not test_question:
+                raise Exception("외부 LLM 배포는 단일 질문 추론만 지원합니다")
+            question, _injected = await _apply_active_prompt_optimization(
+                playground_id, test_question)
+            # 외부 호출은 프록시 워커가 한다 — 여기서는 그 파드에 래퍼 계약으로 묻는다
+            # (기존 internal 배포와 같은 _infer_question 경로).
+            proxy_url = _remote_api_proxy_url(
+                playground_info.get("workspace_id"), playground_id)
+            try:
+                text = await _infer_question(proxy_url, question,
+                                             timeout=remote_api.DEFAULT_TIMEOUT)
+            except Exception as e:
+                await _remote_api_mark(playground_id, "error", str(e))
+                raise
+            await _remote_api_mark(playground_id, "running")
+            return [{"output": text}], message
+
         # 중지 상태(external_job_id 정리됨 + internal 배포 없음)에서 테스트가 들어오면
         # 아래 internal 경로가 get_deployment(None) 을 타 모호한 AttributeError 를 낸다.
         if not external_job_id and deployment_playground_id is None:
@@ -3355,6 +3698,10 @@ async def _playground_internal_test_url(playground_id, pg=None):
         raise Exception(
             f"playground {playground_id} is an external deployment — "
             "the OpenAI shim only serves internal (vLLM/TGI 등) deployments")
+    # 외부 LLM(remote_api)은 자기 프록시 워커를 갖는다. 그 파드가 플랫폼 서빙 래퍼 계약을
+    # 그대로 말하므로 여기서 그 URL 만 돌려주면 shim·추론·일괄이 분기 없이 동작한다.
+    if _remote_api_cfg(pg):
+        return _remote_api_proxy_url(pg.get("workspace_id"), playground_id)
     ws = pg.get("workspace_id")
     if not ws:
         raise Exception(f"playground {playground_id} has no workspace")

@@ -26,11 +26,12 @@ import style from './PlaygroundMenu.module.scss';
 
 const cx = classNames.bind(style);
 
-// 배포 유형(playground.deploy_type) → 유형 라벨 칩(상태 배지 옆). 3종 모두 playground row.
+// 배포 유형(playground.deploy_type) → 유형 라벨 칩(상태 배지 옆). 4종 모두 playground row.
 const TYPE_LABEL = {
   cluster: '클러스터',
   edge: '온디바이스',
   standalone: 'Standalone',
+  remote_api: '외부 LLM',
 };
 
 // 배포 유형별 상세 라우팅 경로.
@@ -38,6 +39,8 @@ const detailPath = (wid, kind, id) => {
   if (kind === 'edge') return `/user/workspace/${wid}/edge-deploy/${id}`;
   if (kind === 'standalone')
     return `/user/workspace/${wid}/standalone-deploy/${id}`;
+  if (kind === 'remote_api')
+    return `/user/workspace/${wid}/remote-api-deploy/${id}`;
   return `/user/workspace/${wid}/llmplayground/${id}/llmplayground`;
 };
 

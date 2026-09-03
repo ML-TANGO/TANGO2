@@ -12,7 +12,21 @@ class CreatePlaygroundInput(BaseModel):
     access: int = Field(default=1, description='Access Type : 0 = private, 1 = public')
     owner_id: int = Field(default=None, description='Users Id' )
     users_id: Optional[list] = Field(default=list(), description='Users Id' )
-    deploy_type: Literal['cluster', 'edge', 'standalone'] = Field(default='cluster', description='배포 유형(cluster|edge|standalone) — 미지원 값/null 거부')
+    deploy_type: Literal['cluster', 'edge', 'standalone', 'remote_api'] = Field(default='cluster', description='배포 유형(cluster|edge|standalone|remote_api) — 미지원 값/null 거부')
+
+class RemoteApiConfigInput(BaseModel):
+    """외부 LLM 배포(deploy_type='remote_api') 구성 저장.
+
+    ⚠️ api_key 는 요청으로만 받고 **DB 에 저장하지 않는다** — 워크스페이스 네임스페이스의
+    K8s Secret 으로 가고, playground 행에는 secret 이름(secret_ref)만 남는다.
+    재구성 시 키를 비우면 기존 Secret 을 유지한다(모델만 바꾸는 흔한 경우)."""
+    playground_id: int
+    provider: Literal['chatgpt', 'claude', 'gemini', 'endpoint'] = Field(
+        description='외부 LLM 제공자. 상용 3사는 호스트를 플랫폼이 고정한다')
+    model: Optional[str] = Field(default=None, description='모델명(미지정 시 provider 기본값)')
+    base_url: Optional[str] = Field(default=None, description="provider='endpoint' 일 때 필수. OpenAI 호환 base URL")
+    api_key: Optional[str] = Field(default=None, description='API 키(저장은 K8s Secret). 재구성 시 생략하면 기존 키 유지')
+
 
 class UpdatePlaygroundInput(BaseModel):
     playground_id: int
