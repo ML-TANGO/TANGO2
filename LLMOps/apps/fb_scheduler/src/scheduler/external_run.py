@@ -29,6 +29,7 @@ from typing import Optional, Tuple
 
 import yaml
 
+from utils import redis_key as _redis_key
 from scheduler.dto import Accelerator, ExternalPodInfo, Node
 
 logger = logging.getLogger(__name__)
@@ -116,7 +117,9 @@ _SENSITIVE_TOP_LEVEL_KEYS: frozenset[str] = frozenset({"secrets", "env", "env_ov
 # double-book → CUDA OOM. per-GPU SETNX 예약 키로 원자적 claim 하여 직렬화한다
 # (SETNX 자체가 atomic → 별도 분산 lock 불필요). TTL 은 helm install + 대용량
 # image pull + 컨테이너 Running(= monitoring 이 used_info 기록) 까지 커버.
-_GPU_RESERVE_KEY = "resource:gpu:reserved:{uuid}"
+# 예약 키 포맷의 정본은 utils.redis_key.GPU_RESERVE_KEY 다 — 쓰는 쪽(여기)과
+# 읽는 쪽(fb_resource 가용량 조회)이 갈리면 예약이 통째로 안 보인다. 지역 별칭만 둔다.
+_GPU_RESERVE_KEY = _redis_key.GPU_RESERVE_KEY
 _GPU_RESERVE_BY_RELEASE_KEY = "resource:gpu:reserved:by_release:{release}"
 _GPU_RESERVE_TTL = 900  # seconds
 
@@ -557,10 +560,19 @@ def _ensure_gpu_allocation(pod_info: ExternalPodInfo) -> None:
         _release_gpu_reservations(redis_client, claimed)
 
     if not chosen_node:
+        # 진단 문구는 **예약키까지 반영한** 스냅샷으로 쓴다. used_info 만 세면
+        # external 잡이 claim 중인 GPU 가 free 로 잡혀 "free 2 인데 1장 실패" 라는
+        # 모순된 메시지가 나온다(실측). 스냅샷 실패는 진단을 막지 않는다.
+        try:
+            from utils import gpu_pool
+            snap = gpu_pool.snapshot(redis_client)
+            detail = (f"total={snap['total']} in_use={snap['in_use']} "
+                      f"reserved={snap['reserved']} free={snap['free']}")
+        except Exception as exc:
+            detail = f"pool snapshot unavailable: {exc}"
         raise GpuAllocationError(
             f"{pod_info.helm_release}: no single node could atomically claim "
-            f"{gpu_count} free GPU(s) (free buckets: "
-            f"{ {n: len(u) for n, u in by_node.items()} })"
+            f"{gpu_count} free GPU(s) ({detail})"
         )
 
     matched_uuids = chosen_uuids
