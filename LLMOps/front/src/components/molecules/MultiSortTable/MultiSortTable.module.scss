@@ -5,6 +5,15 @@
 // 표를 직접 그리던 규칙(.table-scroll/.table/th/td/.th-btn …)은 하우스 표와
 // 시각이 갈리던 원인이라 전부 걷어냈다.
 
+// 키보드로 들어온 행은 어디에 있는지 보여야 한다 — 포커스만 되고 표시가 없으면 반쪽이다.
+// 행 노드는 공용 Table 이 위임하는 react-data-table-component 가 그리므로 클래스가
+// CSS 모듈 해시를 타지 않는다 → :global 로 잡는다. 마우스 클릭에 링이 뜨지 않도록
+// :focus-visible(플랫폼 관례). 값은 자체 <table> 시절 tr.clickable 과 같다.
+.multi-sort-table :global(.rdt_TableRow):focus-visible {
+  outline: 2px solid $primary-color;
+  outline-offset: -2px;
+}
+
 .multi-sort-table {
   display: flex;
   flex-direction: column;

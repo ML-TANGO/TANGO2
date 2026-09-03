@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import Table from '@src/components/molecules/Table';
@@ -70,6 +70,53 @@ const MultiSortTable = ({
   }, []);
 
   const resetSort = useCallback(() => setSort([]), []);
+
+  // ── 행 키보드 활성화 ──────────────────────────────────────────────────────
+  // 위임 대상인 react-data-table-component 는 행에 tabIndex 도 onKeyDown 도 달지 않는다
+  // (라이브러리 소스 확인 — 유일한 tabIndex 는 정렬 헤더에 있다). 그런데 이 표는 행 클릭이
+  // 결과 화면으로 들어가는 **유일한 길**이라(actions 열엔 중지·삭제뿐) 그대로 두면 키보드
+  // 사용자가 결과에 닿을 수 없다. 자체 <table> 을 그리던 시절 tr 에 직접 달았던 것을,
+  // 위임 구조에서는 렌더된 행 노드에 tabIndex 를 얹고 래퍼에서 키를 위임받아 되살린다.
+  //
+  // role 은 덮지 않는다 — 행의 암묵적 role='row' 를 유지해야 표 시맨틱(행·열 관계)이 남고,
+  // role='button' 은 인터랙티브 자손을 가질 수 없는데 이 행 안에는 중지·삭제 버튼이 들어간다.
+  // 포커스와 Enter/Space 활성화는 tabIndex + 키 위임으로 충분하다.
+  const wrapRef = useRef(null);
+
+  useEffect(() => {
+    const root = wrapRef.current;
+    if (!root || !onRowClick) return undefined;
+    const mark = () => {
+      root.querySelectorAll('.rdt_TableRow').forEach((el) => {
+        if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '0');
+      });
+    };
+    mark();
+    // 정렬·페이지 이동은 행 노드를 통째로 갈아 끼우는데 그 시점을 이 컴포넌트가 알 수 없다
+    // (페이지네이션은 공용 Table 안 DataTable 의 내부 상태다) → 관찰로 따라간다.
+    const observer = new MutationObserver(mark);
+    observer.observe(root, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [onRowClick]);
+
+  const handleRowKeyDown = useCallback(
+    (event) => {
+      if (!onRowClick) return;
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      const row = event.target;
+      // 행 자신에 포커스가 있을 때만 연다 — 행 안의 버튼(중지·삭제)에서 올라온 키는
+      // 그 버튼의 것이지 행의 것이 아니다.
+      if (!row?.classList?.contains('rdt_TableRow')) return;
+      event.preventDefault(); // Space 의 기본 스크롤을 막는다
+      // 데이터 인덱스를 되매핑하지 않고 마우스와 **같은 경로**를 태운다
+      // (expandOnRowClicked → onRowExpandToggled → onRowClick).
+      // ⚠️ 클릭 핸들러는 행이 아니라 **셀**에 달려 있다(실측: row.click() 은 아무 일도
+      //    일어나지 않고 cell.click() 만 동작한다). 그래서 첫 셀에 합성한다 — 마지막
+      //    actions 셀은 중지·삭제 버튼을 감싼 래퍼가 stopPropagation 을 걸어 두어 무효다.
+      row.querySelector('.rdt_TableCell')?.click();
+    },
+    [onRowClick],
+  );
 
   // DataTable 이 알려 주는 것은 "어느 열을 눌렀나"뿐이다 — 방향은 우리 레벨 스택이 정한다
   // (RDTC 의 sortDirection 은 축이 하나라 레벨 2 이상의 방향을 담지 못한다).
@@ -235,23 +282,25 @@ const MultiSortTable = ({
         </div>
       )}
 
-      <Table
-        columns={tableColumns}
-        data={tableData}
-        // 공용 Table 은 loading 을 안 주면 "data 가 한 번 더 바뀔 때까지" 스피너를 띄우는
-        // 자체 휴리스틱으로 떨어진다(모듈 전역 renderCount). 이 표는 상위가 프로젝트를
-        // 다 받은 뒤에야 마운트되므로 그 조건이 영영 오지 않아 스피너에 갇힌다.
-        loading={false}
-        hideSearchBox
-        selectableRows={false}
-        onRowClick={onRowClick}
-        noDataMessage={emptyText}
-        customStyles={customStyles}
-        conditionalRowStyles={conditionalRowStyles}
-        // 자체 정렬을 끄고 헤더 클릭만 받는다(다중 레벨은 우리가 소유한다).
-        sortServer
-        onChangeSort={handleHeaderSort}
-      />
+      <div ref={wrapRef} onKeyDown={handleRowKeyDown}>
+        <Table
+          columns={tableColumns}
+          data={tableData}
+          // 공용 Table 은 loading 을 안 주면 "data 가 한 번 더 바뀔 때까지" 스피너를 띄우는
+          // 자체 휴리스틱으로 떨어진다(모듈 전역 renderCount). 이 표는 상위가 프로젝트를
+          // 다 받은 뒤에야 마운트되므로 그 조건이 영영 오지 않아 스피너에 갇힌다.
+          loading={false}
+          hideSearchBox
+          selectableRows={false}
+          onRowClick={onRowClick}
+          noDataMessage={emptyText}
+          customStyles={customStyles}
+          conditionalRowStyles={conditionalRowStyles}
+          // 자체 정렬을 끄고 헤더 클릭만 받는다(다중 레벨은 우리가 소유한다).
+          sortServer
+          onChangeSort={handleHeaderSort}
+        />
+      </div>
     </div>
   );
 };
