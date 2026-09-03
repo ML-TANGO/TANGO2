@@ -171,11 +171,132 @@
   width: auto;
   max-width: 100%;
   height: auto;
-  max-height: 560px;
+  max-height: 720px;
   border: 1px solid $mono203;
   border-radius: 4px;
   background-color: $mono201;
   object-fit: contain;
+}
+
+/* 바운딩박스 오버레이 — 이미지 표시 영역에 딱 겹치는 래퍼(원본 비율 그대로 축소되므로 % 좌표가
+   그대로 맞는다). 박스/이름표 규약은 SDS 데모(_draw_bboxes)와 동일: 초록 테두리 + 위쪽 이름표. */
+.img-frame {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+  vertical-align: top;
+}
+
+.bbox-layer {
+  position: absolute;
+  inset: 0;
+  display: block;
+  pointer-events: none;
+}
+
+.bbox {
+  position: absolute;
+  display: block;
+  box-sizing: border-box;
+  border: 2px solid #00ff00;
+}
+
+.bbox-label {
+  position: absolute;
+  bottom: 100%;
+  left: -2px;
+  padding: 0 6px;
+  background-color: #00cc00;
+  color: #000;
+  font-family: SpoqaB;
+  font-size: 13px;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+/* 이미지 위쪽에 붙은 배는 이름표를 위에 두면 잘린다 — 박스 안쪽으로. */
+.bbox-label--inside {
+  top: 0;
+  bottom: auto;
+}
+
+/* 확대 크롭이 잘라 간 영역 — 패널 테두리 색·번호와 짝지어 어느 배인지 눈으로 잇는다. */
+.bbox-region {
+  position: absolute;
+  display: block;
+  box-sizing: border-box;
+  border: 2px solid;
+  border-radius: 2px;
+}
+
+.bbox-region-index {
+  position: absolute;
+  bottom: 100%;
+  left: -2px;
+  min-width: 20px;
+  padding: 0 6px;
+  color: #000;
+  font-family: SpoqaB;
+  font-size: 13px;
+  line-height: 20px;
+  text-align: center;
+}
+
+.bbox-region-index--inside {
+  top: 0;
+  bottom: auto;
+}
+
+/* 배별 확대 크롭 — 원본에서 박스 주변을 잘라 최근접 보간으로 키운다(없는 정보는 만들지 않는다). */
+.crop-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.crop-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.crop {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.crop-view {
+  position: relative;
+  box-sizing: content-box;
+  overflow: hidden;
+  border: 2px solid;
+  border-radius: 4px;
+  background-color: $mono201;
+}
+
+.crop-inner {
+  position: absolute;
+}
+
+.crop-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+.crop-caption {
+  color: $sub-text-color;
+  font-family: SpoqaM;
+  font-size: 14px;
+}
+
+.crop-omitted {
+  color: $sub-text-color;
+  font-family: SpoqaM;
+  font-size: 14px;
 }
 
 /* 확대 라이트박스 — 페이지 헤더/드롭다운(999~1000 대)보다 위. */
@@ -191,9 +312,18 @@
   cursor: zoom-out;
 }
 
+.lightbox-frame {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+  cursor: default;
+}
+
+/* 래퍼 높이가 auto 라 % 는 해석되지 않는다 — 뷰포트에서 .lightbox 패딩(32px×2)을 뺀 값으로 제한. */
 .lightbox-img {
-  max-width: 100%;
-  max-height: 100%;
+  display: block;
+  max-width: calc(100vw - 64px);
+  max-height: calc(100vh - 64px);
   cursor: default;
   object-fit: contain;
 }

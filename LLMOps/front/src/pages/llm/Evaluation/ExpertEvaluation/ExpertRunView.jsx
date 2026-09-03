@@ -299,7 +299,11 @@ const ExpertRunView = ({ modelId, jobId, onExit }) => {
                 t={t}
               />
 
-              <CsvTable rows={sample.csv_rows} text={sample.csv_text} />
+              <CsvTable
+                rows={sample.csv_rows}
+                text={sample.csv_text}
+                t={t}
+              />
 
               {sample.input ? (
                 <div className={cx('input-block')}>
