@@ -289,6 +289,32 @@ post-install hook도 없으므로, 앱 설치 후 manifest를 직접 등록해�
 레포에 없는 판본(내부 패치 이미지 등)을 쓰는 인스턴스는 `EXTERNAL_MANIFEST_SEED_DIR` 로
 다른 디렉터리를 가리키거나, 아래 수동 등록을 씁니다.
 
+### 모델 가중치 사전 스테이징 (외부 컨테이너 학습에 필수)
+
+manifest 를 등록해도 **가중치가 공유 HF 캐시에 없으면 학습이 못 돕니다.** 잡 파드의
+`/hf-cache` 는 RO 마운트이고 manifest env 가 `HF_HUB_OFFLINE=1`(폐쇄망 전제)이라
+런타임에 내려받을 수 없기 때문입니다 — 이 단계를 빼면 파트너 컨테이너가
+`model_loaded:false` → `/health` 503 으로 readiness 를 통과하지 못해 교착합니다.
+
+```bash
+# 워크스페이스 네임스페이스별로 한 번씩. 기본 목록 = SDS VLM 학습용 2종
+# (openai/clip-vit-large-patch14-336, meta-llama/Llama-3.1-8B-Instruct)
+devops/hf-prefetch/run.sh tango-dev-2
+devops/hf-prefetch/run.sh jonathan-system-2 <추가-모델-repo-id>
+```
+
+스크립트가 함께 처리하는 것(전부 실제로 밟은 함정입니다):
+
+- gated repo(meta-llama)용 토큰을 플랫폼 ns `jfb-settings` 에서 읽어 대상 ns Secret 으로만 주입
+- 워크스페이스 ns 의 ResourceQuota 대응(limits 명시 없으면 파드 생성 거부)
+- **safetensors 보정** — `openai/clip-vit-large-patch14-336` 처럼 업스트림에 safetensors 가
+  없는 저장소는 `.bin` → `model.safetensors` 로 변환(`weights_only=True`). 파트너 컨테이너가
+  `from_pretrained(..., use_safetensors=True)` 로 부르기 때문
+- **권한 보정(0644)** — 잡 파드는 차트 기본값이 비-root(UID 1000)라 0600 파일을 못 읽고,
+  safetensors 가 그 권한 오류를 `FileNotFoundError` 로 표면화해 오진을 유발함
+
+끝나면 안내되는 cleanup 명령으로 Job 과 토큰 Secret 을 지웁니다.
+
 나머지 manifest 등록 방법 — BFF(`jfb-app-external-container`)에 직접 POST 합니다.
 등록 API는 Kong/`llm_model`로 프록시되지 않습니다 (`GET /api/external/manifests`는
 조회 전용) — 따라서 port-forward 또는 클러스터 내부에서 호출해야 합니다.
