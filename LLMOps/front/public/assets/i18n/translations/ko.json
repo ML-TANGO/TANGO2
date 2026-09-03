@@ -3170,6 +3170,7 @@
   "externalTraining.recipe.trainTarget.label": "학습 대상",
   "externalTraining.recipe.trainTarget.hint": "학습 대상은 단계에 따라 자동 결정됩니다. 개별 변경은 지원하지 않습니다.",
   "externalTraining.recipe.checkpoint.label": "체크포인트 설정",
+  "externalTraining.recipe.dataset.label": "학습 데이터셋",
   "externalTraining.recipe.checkpointName.label": "체크포인트 이름",
   "externalTraining.recipe.resume.label": "이어서 학습 (선택)",
   "externalTraining.recipe.resume.hint": "선택한 체크포인트의 가중치에서 이어서 학습합니다(옵티마이저·step 은 새로 시작). 저장된 체크포인트가 없으면 목록이 비어 있습니다.",

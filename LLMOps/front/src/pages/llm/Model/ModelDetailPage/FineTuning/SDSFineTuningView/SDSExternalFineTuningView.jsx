@@ -24,6 +24,7 @@ import { shallowEqual, useDispatch, useSelector } from 'react-redux';
 
 import { openModal } from '@src/store/modules/modal';
 import { openConfirm } from '@src/store/modules/confirm';
+import { getDatasetList } from '@src/apis/flightbase/trainings';
 import { callApi, STATUS_SUCCESS } from '@src/network';
 import { loadModalComponent } from '@src/modal';
 import { errorToastMessage, successToastMessage } from '@src/utils';
@@ -579,6 +580,31 @@ const SDSExternalFineTuningView = memo(function SDSExternalFineTuningView({
   //       2단 `applyChaining`(번역·제거) = 이 파일의 `launchPhase`.
   //       `onRunPhase(phase, editedParams)` 계약과 호출 순서 무변경.
   //    ⚠️ `key={manifest@version}` = phase 폼/선택/체크포인트 상태의 리셋 장치(무변경).
+  // 학습 데이터셋 선택지 — 레시피 phase 의 `_dataset` 을 바꿀 수 있게 워크스페이스 데이터셋을
+  // 훑는다(평가 화면과 같은 목록 API 재사용). 실패하면 빈 목록 = 선택 UI 만 비고 매니페스트
+  // 기본값 그대로 학습한다(기능 저하 없음).
+  const [datasetOptions, setDatasetOptions] = useState([]);
+  useEffect(() => {
+    if (!workspaceId) return undefined;
+    let active = true;
+    (async () => {
+      const res = await getDatasetList(workspaceId);
+      if (!active || res.status !== STATUS_SUCCESS) return;
+      const list = Array.isArray(res.result)
+        ? res.result
+        : (res.result?.list ?? []);
+      setDatasetOptions(
+        list
+          .map((d) => d.name ?? d.dataset_name)
+          .filter(Boolean)
+          .map((name) => ({ label: name, value: name })),
+      );
+    })();
+    return () => {
+      active = false;
+    };
+  }, [workspaceId]);
+
   if (recipeMode) {
     return (
       <SDSRecipeFineTuningView
@@ -594,6 +620,7 @@ const SDSExternalFineTuningView = memo(function SDSExternalFineTuningView({
         activePhaseStatus={fineTuningStatus}
         donePhases={donePhases}
         phaseCommitMap={phaseCommitMap}
+        datasetOptions={datasetOptions}
         onRunPhase={onRunPhase}
         graphData={graphData}
         progressData={progressData}

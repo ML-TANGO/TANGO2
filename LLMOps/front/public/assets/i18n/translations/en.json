@@ -3162,6 +3162,7 @@
   "externalTraining.recipe.trainTarget.label": "Training Target",
   "externalTraining.recipe.trainTarget.hint": "Training targets are determined automatically by phase. Individual changes are not supported.",
   "externalTraining.recipe.checkpoint.label": "Checkpoint Settings",
+  "externalTraining.recipe.dataset.label": "Training dataset",
   "externalTraining.recipe.checkpointName.label": "Checkpoint Name",
   "externalTraining.recipe.resume.label": "Resume Training (optional)",
   "externalTraining.recipe.resume.hint": "Training resumes from the weights of the selected checkpoint (optimizer and step restart from zero). The list is empty when no checkpoint has been saved.",

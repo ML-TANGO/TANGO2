@@ -37,6 +37,8 @@ import {
   CKPT_NUM_SPECS,
   HP_SPECS,
   buildPhaseForm,
+  applyDatasetChoice,
+  datasetNameOf,
   mergePhaseParams,
 } from './payload/recipeParams';
 import { canRunPhase, derivePhaseStatus } from './payload/recipeState';
@@ -46,6 +48,7 @@ import SDSMonitorSummary from './SDSMonitorSummary';
 import SDSTopButtons from './SDSTopButtons';
 import RecipeArchSection, { FIXED_PROJ } from './sections/RecipeArchSection';
 import RecipeCheckpointSection from './sections/RecipeCheckpointSection';
+import RecipeDatasetSection from './sections/RecipeDatasetSection';
 import RecipeFreezeSection from './sections/RecipeFreezeSection';
 import RecipeHyperParamsSection from './sections/RecipeHyperParamsSection';
 import RecipeResumeSection from './sections/RecipeResumeSection';
@@ -101,6 +104,8 @@ const SDSRecipeFineTuningView = ({
   activePhaseStatus,
   donePhases,
   phaseCommitMap,
+  // 워크스페이스 데이터셋 [{label,value}] — 학습에 쓸 데이터셋 선택지(부모 조회).
+  datasetOptions,
   onRunPhase,
   // 모니터(부모 SSE 구독 결과) + 컨트롤 핸들러
   graphData,
@@ -121,6 +126,11 @@ const SDSRecipeFineTuningView = ({
     });
     return m;
   });
+
+  // phase 별 학습 데이터셋 선택 — 기본값은 매니페스트의 `_dataset.name`.
+  // 학습/평가 분할(sds_train ↔ sds_eval)이 생기면서 "무엇으로 학습했나" 가 결과 신뢰도를
+  // 좌우해 화면에서 고를 수 있게 한다. 경로 파라미터 동반 재작성은 실행 시 순수 함수가 한다.
+  const [datasetSel, setDatasetSel] = useState({});
 
   // 선택 phase — 기본: 활성(실행 중) phase → 없으면 첫 미완료 → 없으면 첫 phase.
   const [selectedPhaseId, setSelectedPhaseId] = useState(() => {
@@ -237,16 +247,20 @@ const SDSRecipeFineTuningView = ({
   // launchPhase → applyChaining 이다(2단 프로토콜, payload/recipeParams.js 주석 참조).
   const handleRun = useCallback(
     (phase) => {
+      // 데이터셋 교체를 **먼저** 적용한다 — mergePhaseParams 가 얹는 값은 숫자/이름뿐이라
+      // 순서에 영향받지 않지만, 경로 재작성은 원본 phase.params 기준이어야 안전하다.
+      const chosen = datasetSel[phase.id];
+      const base = chosen ? applyDatasetChoice(phase.params, chosen) : phase.params;
       onRunPhase(
         phase,
         mergePhaseParams({
-          phaseParams: phase.params,
+          phaseParams: base,
           form: forms[phase.id],
           resumeSelection: resumeSel,
         }),
       );
     },
-    [forms, onRunPhase, resumeSel],
+    [datasetSel, forms, onRunPhase, resumeSel],
   );
 
   const selectedPhase =
@@ -405,6 +419,20 @@ const SDSRecipeFineTuningView = ({
                 form={selForm}
                 onChange={(key, value) =>
                   setField(selectedPhase.id, key, value)
+                }
+              />
+            ) : null,
+            datasetNameOf(selectedPhase.params) ? (
+              <RecipeDatasetSection
+                key='dataset'
+                t={t}
+                options={datasetOptions || []}
+                value={
+                  datasetSel[selectedPhase.id] ||
+                  datasetNameOf(selectedPhase.params)
+                }
+                onChange={(name) =>
+                  setDatasetSel((s) => ({ ...s, [selectedPhase.id]: name }))
                 }
               />
             ) : null,

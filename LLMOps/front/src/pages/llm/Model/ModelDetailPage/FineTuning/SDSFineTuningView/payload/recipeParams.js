@@ -104,6 +104,40 @@ export const buildPhaseForm = (params = {}) => {
  * pass-through. `resumeSelection` 이 있으면 FE-내부 마커를 **심는다** —
  * 번역은 applyChaining() 담당(2단 프로토콜의 1단).
  */
+/** phase params 의 `_dataset.name` 현재값. 없으면 ''(레시피가 데이터셋을 안 쓰는 phase). */
+export const datasetNameOf = (params = {}) => {
+  const d = params && params._dataset;
+  return d && typeof d.name === 'string' ? d.name : '';
+};
+
+/**
+ * 학습 데이터셋 교체 — `_dataset.name` 을 바꾸고, 그 데이터셋을 가리키던 **경로 파라미터도
+ * 같이** 옮긴다.
+ *
+ * 왜 경로까지 건드리나: 컨테이너는 데이터셋을 `/dataset/<이름>` 에 마운트받고, 레시피는
+ * `data_path`/`image_dir` 같은 평범한 문자열 파라미터로 그 안을 가리킨다. 이름만 바꾸면
+ * 마운트는 새 데이터셋인데 경로는 옛 이름을 가리켜 학습이 "파일 없음"으로 죽는다.
+ * 그래서 `/dataset/<옛이름>` 으로 시작하는 문자열만 접두를 갈아끼운다(그 외 값은 불변).
+ *
+ * 순수 함수 — 원본을 건드리지 않고 새 객체를 돌려준다.
+ */
+export const applyDatasetChoice = (params = {}, nextName = '') => {
+  const prev = datasetNameOf(params);
+  const next = String(nextName || '').trim();
+  if (!next || !prev || next === prev) return params;
+  const from = `/dataset/${prev}`;
+  const to = `/dataset/${next}`;
+  const out = {};
+  Object.entries(params).forEach(([key, value]) => {
+    out[key] =
+      typeof value === 'string' && (value === from || value.startsWith(`${from}/`))
+        ? to + value.slice(from.length)
+        : value;
+  });
+  out._dataset = { ...(params._dataset || {}), name: next };
+  return out;
+};
+
 export const mergePhaseParams = ({ phaseParams, form, resumeSelection }) => {
   const f = form || {};
   const merged = { ...(phaseParams || {}) };
@@ -179,7 +213,15 @@ export const buildExternalJobBody = ({
   manifest_name: manifestName,
   manifest_version: manifestVersion,
   workspace_id: Number(workspaceId),
-  namespace: String(namespace === null || namespace === undefined ? '' : namespace).trim(),
+  // namespace 는 **비었으면 키 자체를 뺀다**. BFF/컨테이너 dto 가 모두
+  // `Field(default=<플랫폼 ns>, min_length=1)` 이라 빈 문자열은 422 이고,
+  // 키를 빼야 그 기본값이 적용된다. 그러면 backend `_resolve_namespace` 가
+  // `{플랫폼 ns}-{workspace_id}` 로 파생한다 — 인스턴스(dev/serving)마다 자기
+  // ns 안에 머무는 유일한 경로다. 값을 적어 보내면 cross-workspace 실행으로
+  // 그대로 존중된다(admin 탈출구).
+  ...(String(namespace ?? '').trim()
+    ? { namespace: String(namespace).trim() }
+    : {}),
   params,
   instance_id: instanceId,
   instance_count: parseInt(instanceCount, 10),
