@@ -1540,32 +1540,75 @@ def pick_min_cpu_instance(instances : List[dict]) -> dict:
     ))[0]
 
 
-async def ensure_format_convert_project(workspace_id : int, owner_id : int, header_user_id : int) -> int:
-    """데이터셋 상세 '포맷 변환' 전용 built-in 프로젝트 find-or-create (멱등).
+SDS_CONVERT_PROJECT_NAME = "dataset-sds-llava-convert"
 
-    FE 가 프로젝트를 고르지 않도록 워크스페이스당 하나의 FORMAT_CONVERT 프로젝트를
+
+async def ensure_format_convert_project(workspace_id : int, owner_id : int, header_user_id : int) -> int:
+    """데이터셋 상세 '포맷 변환' 전용 프로젝트 (얇은 래퍼)."""
+    return await _ensure_builtin_project(
+        workspace_id=workspace_id, owner_id=owner_id, header_user_id=header_user_id,
+        built_in_data_tf=TYPE_BUILT_IN.FORMAT_CONVERT,
+        project_name=FORMAT_CONVERT_PROJECT_NAME,
+        built_in_data_type=TYPE_BUILT_IN.PREPROCESSING_BUILT_IN_TABULAR_TYPE,
+        description="Auto-created for dataset format conversion (CSV/TXT/Parquet to JSON/JSONL).",
+        fail_message="Failed to prepare the format conversion project.",
+    )
+
+
+async def ensure_sds_convert_project(workspace_id : int, owner_id : int, header_user_id : int) -> int:
+    """데이터셋 상세 'SDS 변환' 전용 프로젝트 (얇은 래퍼).
+
+    포맷 변환과 프로젝트를 분리하는 이유: 프로젝트 엔티티가 built_in_data_tf 를
+    하나만 갖고, 스케줄러가 그 값으로 실행 스크립트를 고른다(preprocessing_tool_run).
+    한 프로젝트를 공유하면 두 변환이 서로의 스크립트로 돌아간다.
+    """
+    return await _ensure_builtin_project(
+        workspace_id=workspace_id, owner_id=owner_id, header_user_id=header_user_id,
+        built_in_data_tf=TYPE_BUILT_IN.SDS_LLAVA_CONVERT,
+        project_name=SDS_CONVERT_PROJECT_NAME,
+        built_in_data_type=TYPE_BUILT_IN.PREPROCESSING_BUILT_IN_DOMAIN_TYPE,
+        description="Auto-created for SDS VLM dataset conversion (SDS scenarios to LLaVA JSON).",
+        fail_message="Failed to prepare the SDS conversion project.",
+    )
+
+
+async def _ensure_builtin_project(workspace_id : int, owner_id : int, header_user_id : int, *,
+                                  built_in_data_tf : str, project_name : str,
+                                  built_in_data_type : str, description : str,
+                                  fail_message : str) -> int:
+    """데이터셋 상세에서 바로 실행하는 빌트인 변환용 프로젝트 find-or-create (멱등).
+
+    FE 가 프로젝트를 고르지 않도록 워크스페이스당 (built_in_data_tf 별로) 하나를
     보장한다. run_job 은 프로젝트에 instance 할당을 요구하므로(Allocate the instance)
     instance_id 가 있는 프로젝트만 재사용 가능으로 본다.
 
     Return: preprocessing_id
     """
+    # 헤더 유저가 해석되지 않으면(get_user_id 가 None) owner_id NULL 로 프로젝트가
+    # 만들어지고, run_job 의 PreprocessingJob 검증이 owner_id/owner_name 에서 터진다.
+    # 그 프로젝트는 아래 재사용 분기에 계속 걸려 워크스페이스의 버튼이 영구히 죽으므로
+    # 만들기 전에 끊는다.
+    if not owner_id:
+        raise CustomError("Cannot resolve the requesting user (check the jf-user header).")
+
     projects = await db_prepro.get_preprocessing_list(workspace_id=workspace_id,
                                                       preprocessing_type=TYPE.PREPROCESSING_TYPE_B)
     matched = sorted(
-        [p for p in (projects or []) if p.get("built_in_data_tf") == TYPE_BUILT_IN.FORMAT_CONVERT],
+        [p for p in (projects or []) if p.get("built_in_data_tf") == built_in_data_tf],
         key=lambda p: p["id"]
     )
 
-    # 1) 바로 쓸 수 있는(인스턴스 할당된) 기존 프로젝트 재사용 — 가장 낮은 id(결정적).
+    # 1) 바로 쓸 수 있는(인스턴스 + owner 가 살아있는) 기존 프로젝트 재사용 — 가장 낮은
+    #    id(결정적). owner 가 비어 있으면 잡 생성이 실패하므로 재사용 대상이 아니다.
     for project in matched:
-        if project.get("instance_id"):
+        if project.get("instance_id") and project.get("owner_id"):
             return project["id"]
 
     instance = pick_min_cpu_instance(await db_prepro.get_workspace_instances(workspace_id=workspace_id))
 
     # 2) 예약 프로젝트가 인스턴스 없이 남아있는 경우(예: instance 삭제 → ON DELETE SET NULL)
     #    만 자동 재할당. 사용자가 직접 만든 프로젝트는 건드리지 않는다.
-    reserved = next((p for p in matched if p.get("name") == FORMAT_CONVERT_PROJECT_NAME), None)
+    reserved = next((p for p in matched if p.get("name") == project_name), None)
     if reserved:
         users = await db_prepro.get_preprocessing_user_list(preprocessing_id=reserved["id"])
         await update_preprocessing(
@@ -1575,7 +1618,9 @@ async def ensure_format_convert_project(workspace_id : int, owner_id : int, head
             description=reserved.get("description") or "",
             instance_id=instance["instance_id"],
             instance_allocate=1,
-            owner_id=reserved["owner_id"],
+            # owner 가 비어 있던 프로젝트(유저 삭제 → SET NULL, 또는 해석 실패로
+            # 만들어진 것)는 호출자로 복구한다 — 안 그러면 잡 생성이 계속 실패한다.
+            owner_id=reserved.get("owner_id") or owner_id,
             header_user_id=header_user_id,
         )
         return reserved["id"]
@@ -1584,26 +1629,26 @@ async def ensure_format_convert_project(workspace_id : int, owner_id : int, head
     #    패자는 아래 재조회에서 승자의 id 를 그대로 돌려받는다(멱등).
     try:
         await create_preprocessing(
-            preprocessing_name=FORMAT_CONVERT_PROJECT_NAME,
+            preprocessing_name=project_name,
             preprocessing_type=TYPE.PREPROCESSING_TYPE_B,
             workspace_id=workspace_id,
             owner_id=owner_id,
             access=1,  # public — 워크스페이스 공용 유틸리티 프로젝트
-            description="Auto-created for dataset format conversion (CSV/TXT/Parquet to JSON/JSONL).",
+            description=description,
             instance_id=instance["instance_id"],
             instance_allocate=1,
             user_list=[],
-            built_in_data_type=TYPE_BUILT_IN.PREPROCESSING_BUILT_IN_TABULAR_TYPE,
-            built_in_data_tf=TYPE_BUILT_IN.FORMAT_CONVERT,
+            built_in_data_type=built_in_data_type,
+            built_in_data_tf=built_in_data_tf,
         )
     except Exception:
         # 중복 생성(동시 호출 패자)일 수 있으므로 삼키고 재조회로 판정.
         traceback.print_exc()
 
     created = await db_prepro.get_preprocessing(workspace_id=workspace_id,
-                                                preprocessing_name=FORMAT_CONVERT_PROJECT_NAME)
+                                                preprocessing_name=project_name)
     if not created or not created.get("instance_id"):
-        raise CustomError("Failed to prepare the format conversion project.")
+        raise CustomError(fail_message)
     return created["id"]
 
 DATA_PIPELINE_PROJECT_PREFIX = "dp-pipeline"

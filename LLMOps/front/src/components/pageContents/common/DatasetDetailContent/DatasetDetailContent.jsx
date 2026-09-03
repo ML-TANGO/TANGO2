@@ -26,6 +26,7 @@ import { callApi, STATUS_SUCCESS } from '@src/network';
 
 import DatasetFinder from './DatasetFinder';
 import DatasetFormatConvert from './DatasetFormatConvert';
+import DatasetSdsConvert from './DatasetSdsConvert';
 // import UploadButton from './UploadButton';
 import DatasetMoveCopy from './DatasetMoveCopy';
 import EditIcon from './EditIcon';
@@ -131,6 +132,7 @@ function DatasetDetailContent({
   rowClickFetching,
   fromUploadFetching,
   onFormatConvert, // 포맷 변환 실행 (선택 파일 1개)
+  onSdsConvert, // SDS→LLaVA 변환 실행 (선택 폴더 1개 또는 현재 경로)
   converting, // 포맷 변환 요청 중
   convertJob, // 진행 중/직전 포맷 변환 잡 { id, name, status, reason }
   onOpenConvertLog, // 포맷 변환 시스템 로그 모달 열기
@@ -196,6 +198,18 @@ function DatasetDetailContent({
     !convertTarget ||
     convertTarget.type !== 'file' ||
     !FORMAT_CONVERT_EXTS.includes(convertTargetExt) ||
+    isDisabledBtn ||
+    isTempPath;
+
+  /**
+   * SDS 변환 — 대상은 "디렉터리". sds_llava_convert.py 가 입력 디렉터리를 스캔해
+   * 그 안에 결과를 쓰므로 폴더 1개 선택 또는 미선택(현재 경로 = 데이터셋 전체)만 허용.
+   * 파일 선택·다중 선택은 비활성 — 파일을 넘기면 스크립트가 즉시 실패한다.
+   */
+  const sdsConvertTarget = selectedRows.length === 1 ? selectedRows[0] : null;
+  const isSdsConvertDisabled =
+    selectedRows.length > 1 ||
+    (sdsConvertTarget && sdsConvertTarget.type !== 'dir') ||
     isDisabledBtn ||
     isTempPath;
 
@@ -647,6 +661,13 @@ function DatasetDetailContent({
         disabled={isFormatConvertDisabled}
         converting={converting}
         onConfirm={onFormatConvert}
+        btnCustomStyle={{ marginRight: '12px' }}
+      />
+      <DatasetSdsConvert
+        targetDirName={sdsConvertTarget?.name || loc || '/'}
+        disabled={isSdsConvertDisabled}
+        converting={converting}
+        onConfirm={onSdsConvert}
         btnCustomStyle={{ marginRight: '12px' }}
       />
       <Button

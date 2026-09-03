@@ -213,6 +213,26 @@ async def post_format_convert_ensure(args: dto.FormatConvertEnsureModel):
         error_msg = getattr(e, 'message', str(e))
         return response(status=0, message="Format convert project ensure error : {}".format(error_msg))
 
+@prepro.post("/sds-convert/ensure", tags=TAG_PREPROCESSING)
+async def post_sds_convert_ensure(args: dto.FormatConvertEnsureModel):
+    """데이터셋 상세 'SDS 변환' 전용 built-in 프로젝트 find-or-create (멱등).
+
+    포맷 변환과 같은 흐름 — FE 가 전처리 프로젝트를 따로 만들지 않고 데이터셋에서
+    바로 실행하도록 워크스페이스당 SDS_LLAVA_CONVERT 프로젝트 하나를 보장한다.
+    (요청 본문이 workspace_id 하나뿐이라 FormatConvertEnsureModel 을 그대로 재사용.)
+    """
+    try:
+        user_id = get_user_id()
+        preprocessing_id = await svc.ensure_sds_convert_project(workspace_id=args.workspace_id,
+                                                                owner_id=user_id, header_user_id=user_id)
+        return response(status=1, result={"preprocessing_id": preprocessing_id})
+    except CustomErrorList as ce:
+        return ce.response()
+    except Exception as e:
+        traceback.print_exc()
+        error_msg = getattr(e, 'message', str(e))
+        return response(status=0, message="SDS convert project ensure error : {}".format(error_msg))
+
 @prepro.post("/data-pipeline/ensure", tags=TAG_PREPROCESSING)
 async def post_data_pipeline_ensure(args: dto.DataPipelineEnsureModel):
     """데이터 파이프라인 전용 built-in 프로젝트 find-or-create (멱등).

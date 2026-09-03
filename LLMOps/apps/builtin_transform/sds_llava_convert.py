@@ -4,10 +4,20 @@
 fb_preprocessing 빌트인(TYPE_BUILT_IN.SDS_LLAVA_CONVERT) 잡이 이미지 안에서
 ``python3 -u /built_in/sds_llava_convert.py <params> --input_data=/dataset/<name>`` 로 실행.
 
-- 입력: SDS 데이터셋 **디렉터리**(시나리오 subdir 다수). 각 subdir 안:
-    input_data.csv, input_image.png,
-    output_describe_en.txt / output_advice_en.txt,
-    output_describe_kor.txt / output_advice_kor.txt, output_advice_compact.txt
+- 입력: SDS 데이터셋 **디렉터리**. 두 레이아웃을 자동 감지한다(A 우선, 없으면 B):
+
+  A) 시나리오 subdir 레이아웃 — 각 subdir 안:
+     input_data.csv, input_image.png,
+     output_describe_en.txt / output_advice_en.txt,
+     output_describe_kor.txt / output_advice_kor.txt, output_advice_compact.txt
+
+  B) 타입별 디렉터리 레이아웃 (에이브노틱스 20260728 드롭 형식) — 같은 stem 으로 조인:
+     png/<stem>.png, csv/<stem>.csv,
+     describe_ko/<stem>.describe_ko.txt, advice_ko/<stem>.advice_ko.txt
+     (en/compact 은 describe_en·advice_en·advice_compact 디렉터리가 있을 때만)
+
+  B 를 재배치 없이 그대로 먹는 이유: 드롭이 10,000 샘플 × 4 파일이라 A 구조로
+  옮기면 NFS 에서 40,000 파일을 1만 개 디렉터리로 이동해야 하고 원본이 훼손된다.
 - 출력: **입력 디렉터리 안 sidecar** ``<input_data>/<result_file_name>_<variant>.json`` (LLaVA 대화 포맷).
   image 필드는 **상대경로** ``<scenario>/input_image.png`` — 학습 pod 이 IMAGE_DIR=/dataset/<name> 으로 마운트해 해석.
 - Field_Test/SDS/.../prepare_sds_dataset.py 로직 포팅. 컬럼 매핑 없음(도메인 고정 포맷).
@@ -104,20 +114,86 @@ def read_txt(path):
         return f.read().strip()
 
 
+def _scenario_samples(input_dir):
+    """레이아웃 A — 시나리오 subdir 하나가 샘플 하나."""
+    out = []
+    for name in sorted(d for d in os.listdir(input_dir)
+                       if os.path.isdir(os.path.join(input_dir, d))):
+        sd = os.path.join(input_dir, name)
+        out.append({
+            "name": name,
+            "csv": os.path.join(sd, "input_data.csv"),
+            "img": os.path.join(sd, "input_image.png"),
+            # image 는 input_dir(= IMAGE_DIR) 기준 상대경로여야 학습 pod 이 찾는다.
+            "img_rel": f"{name}/input_image.png",
+            "texts": {
+                "desc_en": os.path.join(sd, "output_describe_en.txt"),
+                "adv_en": os.path.join(sd, "output_advice_en.txt"),
+                "desc_kor": os.path.join(sd, "output_describe_kor.txt"),
+                "adv_kor": os.path.join(sd, "output_advice_kor.txt"),
+                "compact": os.path.join(sd, "output_advice_compact.txt"),
+            },
+        })
+    return out
+
+
+def _type_dir_samples(input_dir):
+    """레이아웃 B — png/·csv/·<kind>/ 를 stem 으로 조인해 샘플 구성.
+
+    stem 은 png 파일명에서 뽑는다(이미지 없는 샘플은 학습에 못 쓰므로 기준으로
+    적합). 텍스트는 `<kind>/<stem>.<kind>.txt` 규약 — 드롭이 파일명에 kind 를
+    한 번 더 박아두는 형식이라 그대로 따른다. 없는 kind 디렉터리는 빈 경로를
+    넘겨 read_txt 가 ""를 돌려주고, 해당 variant 만 자연히 0건이 된다.
+    """
+    img_dir = os.path.join(input_dir, "png")
+    csv_dir = os.path.join(input_dir, "csv")
+    if not (os.path.isdir(img_dir) and os.path.isdir(csv_dir)):
+        return []
+
+    def _txt(kind, stem):
+        # 디렉터리가 없으면 존재하지 않는 경로를 그대로 반환 — read_txt 가 "" 처리.
+        return os.path.join(input_dir, kind, f"{stem}.{kind}.txt")
+
+    out = []
+    for fname in sorted(f for f in os.listdir(img_dir) if f.endswith(".png")):
+        stem = fname[: -len(".png")]
+        out.append({
+            "name": stem,
+            "csv": os.path.join(csv_dir, f"{stem}.csv"),
+            "img": os.path.join(img_dir, fname),
+            "img_rel": f"png/{fname}",
+            "texts": {
+                "desc_en": _txt("describe_en", stem),
+                "adv_en": _txt("advice_en", stem),
+                "desc_kor": _txt("describe_ko", stem),
+                "adv_kor": _txt("advice_ko", stem),
+                "compact": _txt("advice_compact", stem),
+            },
+        })
+    return out
+
+
 def build(input_dir):
-    """시나리오 디렉터리들 → (en_data, ko_data, compact_data, stats)."""
-    samples = sorted(
-        d for d in os.listdir(input_dir)
-        if os.path.isdir(os.path.join(input_dir, d))
-    )
+    """SDS 데이터셋 디렉터리 → (en_data, ko_data, compact_data, stats).
+
+    레이아웃 A(시나리오 subdir)를 먼저 보고, 쓸 수 있는 샘플이 하나도 없으면
+    B(타입별 디렉터리)로 폴백한다. A 판정 기준을 "subdir 존재"가 아니라
+    "input_data.csv 를 가진 subdir 존재"로 둔 이유: B 드롭도 png/·csv/ 라는
+    subdir 를 갖고 있어서, 디렉터리 유무만 보면 A 로 오판해 전부 skip 된다.
+    """
+    samples = [s for s in _scenario_samples(input_dir) if os.path.exists(s["csv"])]
+    layout = "scenario-dirs"
+    if not samples:
+        samples = _type_dir_samples(input_dir)
+        layout = "type-dirs"
+    print(f"[sds_llava] layout={layout} candidates={len(samples)}", flush=True)
+
     en_data, ko_data, compact_data = [], [], []
     stats = {"ok": 0, "skipped": 0}
 
-    for name in samples:
-        sd = os.path.join(input_dir, name)
-        csv_path = os.path.join(sd, "input_data.csv")
-        img_path = os.path.join(sd, "input_image.png")
-        img_rel = f"{name}/input_image.png"  # relative to input_dir (= IMAGE_DIR)
+    for sample in samples:
+        name = sample["name"]
+        csv_path, img_path, img_rel = sample["csv"], sample["img"], sample["img_rel"]
 
         if not os.path.exists(csv_path) or not os.path.exists(img_path):
             stats["skipped"] += 1
@@ -134,11 +210,12 @@ def build(input_dir):
             stats["skipped"] += 1
             continue
 
-        desc_en = read_txt(os.path.join(sd, "output_describe_en.txt"))
-        adv_en = read_txt(os.path.join(sd, "output_advice_en.txt"))
-        desc_kor = read_txt(os.path.join(sd, "output_describe_kor.txt"))
-        adv_kor = read_txt(os.path.join(sd, "output_advice_kor.txt"))
-        compact = read_txt(os.path.join(sd, "output_advice_compact.txt"))
+        texts = sample["texts"]
+        desc_en = read_txt(texts["desc_en"])
+        adv_en = read_txt(texts["adv_en"])
+        desc_kor = read_txt(texts["desc_kor"])
+        adv_kor = read_txt(texts["adv_kor"])
+        compact = read_txt(texts["compact"])
 
         ais_en = format_ais(rows, "en")
         ais_ko = format_ais(rows, "ko")
@@ -196,13 +273,22 @@ def main():
     total = sum(len(by_variant[v]) for v in targets)
     if total == 0:
         print(f"[sds_llava] ok={stats['ok']} skipped={stats['skipped']} produced 0 records — "
-              "check dataset structure (scenario subdirs with input_data.csv + input_image.png + output_*.txt).",
+              "check dataset structure — expected either scenario subdirs "
+              "(input_data.csv + input_image.png + output_*.txt) or type dirs "
+              "(png/ + csv/ + describe_ko/ + advice_ko/).",
               flush=True)
         sys.exit(1)
 
     written = []
     for v in targets:
         data = by_variant[v]
+        # 0건 variant 는 파일을 만들지 않는다. variant=all 이 기본인데 드롭에
+        # 따라(예: ko 라벨만 있는 데이터) 나머지가 늘 0건이고, 빈 [] 파일이
+        # 남으면 그걸 학습 입력으로 지목했을 때 조용히 0 샘플로 학습된다.
+        # total==0 을 실패로 끊는 위 가드와 같은 취지를 variant 단위로 적용.
+        if not data:
+            print(f"[sds_llava] {v}: 0 samples — skip writing", flush=True)
+            continue
         out_path = os.path.join(input_dir, f"{safe_name}_{v}.json")
         with open(out_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)

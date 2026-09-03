@@ -1256,11 +1256,49 @@ function DatasetDetailPage({ trackingEvent }) {
     const target = selectedRows.length === 1 ? selectedRows[0] : null;
     // 폴더/루트를 넘기면 결과가 상위 디렉터리에 생기므로 "파일" 만 허용(버튼도 동일 가드).
     if (!target || target.type !== 'file' || !workspaceId) return;
+    await runBuiltInConvert({
+      ensureUrl: 'preprocessing/format-convert/ensure',
+      datasetDataPath: extractPath(`${path.join('/')}/${target.name}`),
+      builtInParam,
+    });
+  };
 
+  /**
+   * SDS → LLaVA 변환 실행 — 포맷 변환과 같은 "프로젝트 없이 데이터셋에서 바로" 흐름.
+   *
+   * 포맷 변환과 다른 점은 대상이 **디렉터리**라는 것 하나다. sds_llava_convert.py 는
+   * 입력 디렉터리를 스캔해(시나리오 subdir 또는 png/·csv/ 타입별 디렉터리) 그 안에
+   * sidecar JSON 을 쓴다. 선택이 없으면 현재 탐색 경로(= 데이터셋 루트 포함)를 대상으로
+   * 삼는다 — 데이터셋 전체 변환이 기본 사용법이기 때문.
+   */
+  const onSdsConvert = async (builtInParam) => {
+    if (!workspaceId) return;
+    const target = selectedRows.length === 1 ? selectedRows[0] : null;
+    if (target && target.type !== 'dir') return;
+    const base = path.join('/');
+    const rel = target ? `${base}/${target.name}` : base;
+    await runBuiltInConvert({
+      // extractPath 는 루트('' 또는 '/')에서 null 을 돌려준다. 스케줄러가
+      // `--input_data=/dataset/{path}` 로 조립하므로 루트는 빈 문자열이어야
+      // `/dataset/` = 데이터셋 루트가 된다(null 이면 경로가 깨진다).
+      ensureUrl: 'preprocessing/sds-convert/ensure',
+      datasetDataPath: extractPath(rel) || '',
+      builtInParam,
+    });
+  };
+
+  /**
+   * 데이터셋 상세에서 바로 실행하는 빌트인 변환 공통 러너.
+   *
+   * 1) <ensureUrl> 로 워크스페이스 전용 전처리 프로젝트 확보(멱등)
+   * 2) preprocessing/jobs/run 으로 잡 실행 (GPU 미요청, 빌트인 기본 이미지)
+   * 진행 상태 폴링/시스템 로그는 변환 종류와 무관하게 convertJob 하나로 공유한다.
+   */
+  const runBuiltInConvert = async ({ ensureUrl, datasetDataPath, builtInParam }) => {
     setConverting(true);
     try {
       const ensureRes = await callApi({
-        url: 'preprocessing/format-convert/ensure',
+        url: ensureUrl,
         method: 'post',
         body: { workspace_id: Number(workspaceId) },
       });
@@ -1288,7 +1326,7 @@ function DatasetDetailPage({ trackingEvent }) {
           dataset_id: Number(datasetId),
           // 스케줄러가 --input_data=/dataset/{dataset_data_path} 로 주입하므로
           // 선행 '/' 없는 상대 경로(NewDatasetSearch 의 full_path 와 동일 규약).
-          dataset_data_path: extractPath(`${path.join('/')}/${target.name}`),
+          dataset_data_path: datasetDataPath,
           built_in_param: builtInParam,
           get_job_id: 1,
         },
@@ -2445,6 +2483,7 @@ function DatasetDetailPage({ trackingEvent }) {
       rowClickFetching={rowClickFetching}
       fromUploadFetching={fromUploadFetching}
       onFormatConvert={onFormatConvert}
+      onSdsConvert={onSdsConvert}
       converting={converting}
       convertJob={convertJob}
       onOpenConvertLog={onOpenConvertLog}
