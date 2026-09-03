@@ -7,6 +7,7 @@ from evaluation.constants import (
     BENCHMARK_IDS,
     EVAL_PROJECT_DESCRIPTION_MAX,
     EVAL_TYPES,
+    EXPERT_SAMPLE_SET_COUNT,
     EXPERT_SCORE_MAX,
     EXPERT_SCORE_MIN,
     LOGICKOR_JUDGE_MAX_OUTPUT_MAX,
@@ -285,6 +286,12 @@ class ExpertStartBody(RunModelSelection):
     sample_limit: Optional[int] = Field(
         default=None, ge=1, le=MAX_EXPERT_SAMPLES,
         description="채점 샘플 수(앞에서부터). 비우면 데이터셋 전량")
+    # 평가 세트(1..EXPERT_SAMPLE_SET_COUNT) — 주면 sample_limit 대신 이게 구간을 정한다
+    # (offset=(N-1)*SIZE, limit=SIZE). 평가자가 여러 명일 때 카드마다 다른 구간을 맡기 위한 것이라
+    # 프로젝트 안에서 같은 데이터셋의 같은 세트를 두 카드가 쓰지 못한다(서비스에서 거절).
+    sample_set: Optional[int] = Field(
+        default=None, ge=1, le=EXPERT_SAMPLE_SET_COUNT,
+        description=f"평가 세트 번호(1~{EXPERT_SAMPLE_SET_COUNT}). 주면 그 100개 구간만 채점")
     # 세션 생성 시 사용자 입력(표시 전용·세션 동결). eval_result 에 name 컬럼이 없어 제목은
     # metrics._run_name 으로 영속한다(llm_db 마이그레이션 러너 없음 → DDL 회피).
     run_name: Optional[str] = Field(

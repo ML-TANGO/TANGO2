@@ -275,6 +275,16 @@ const ProjectDetail = () => {
     () => allRuns.filter((r) => r.metric_set !== 'inference'),
     [allRuns],
   );
+
+  // 이 프로젝트에서 이미 잡힌 평가 세트 — 새 카드 생성 모달이 중복 선택을 막는 근거.
+  // 런이 삭제되면 목록에서 사라지므로 그 세트는 자동으로 다시 열린다(반납 처리 불필요).
+  const usedSets = useMemo(
+    () =>
+      (runs || [])
+        .filter((run) => run.sample_set && run.dataset_id != null)
+        .map((run) => ({ datasetId: run.dataset_id, set: run.sample_set })),
+    [runs],
+  );
   const metricKeys = runsData?.metric_keys ?? [];
 
   // 프로젝트 응답에는 데이터셋 ID만 있으므로 목록 API 이름을 우선하고, 실행 응답 이름으로 보강한다.
@@ -721,7 +731,7 @@ const ProjectDetail = () => {
     inferencePlaygroundId,
     modelId,
     datasetId,
-    sampleLimit,
+    sampleSet,
     runName,
     expertPrompt,
   }) => {
@@ -736,9 +746,9 @@ const ProjectDetail = () => {
       // 출처는 배포 하나만 싣는다 — inference_job_id 를 함께 보내면 BE 우선순위
       // (job > playground)가 사용자의 선택을 조용히 덮는다.
       inference_playground_id: inferencePlaygroundId,
-      // 채점 샘플 수(앞에서부터). 비었으면 아예 싣지 않아 BE 기본(전량)을 쓴다 —
-      // null 을 보내면 Optional 이라 통과하지만 "명시적으로 비움"과 구분이 흐려진다.
-      ...(sampleLimit ? { sample_limit: Number(sampleLimit) } : {}),
+      // 평가 세트(1~10) — BE 가 (N-1)*100 부터 100개 구간을 잘라 이 카드에 고정한다.
+      // 같은 프로젝트에서 같은 데이터셋의 같은 세트는 BE 가 거절한다(평가자 간 중복 방지).
+      ...(sampleSet ? { sample_set: Number(sampleSet) } : {}),
       // 세션 제목·평가 지침(선택). 빈 값은 싣지 않는다 — BE 가 '미입력'으로 보고
       // 기본값(제목=데이터셋명 / 지침=시나리오 기본 지침)으로 폴백한다.
       ...(runName ? { run_name: runName } : {}),
@@ -1259,6 +1269,15 @@ const ProjectDetail = () => {
                               {run.dataset_name}
                             </span>
                           )}
+                          {/* 어느 100문항 구간을 맡은 카드인지 — 평가자가 여러 명일 때
+                              자기 카드를 찾는 기준이 된다. */}
+                          {run.sample_set && (
+                            <span className={cx('run-config')}>
+                              {t('evaluation.expert.sampleSetShort', {
+                                n: run.sample_set,
+                              })}
+                            </span>
+                          )}
                           {summary && (
                             <span className={cx('run-config')}>{summary}</span>
                           )}
@@ -1379,6 +1398,7 @@ const ProjectDetail = () => {
         )}
         {showInferModal && (
           <ExpertInferenceModal
+            usedSets={usedSets}
             workspaceId={workspaceId}
             modelOptions={modelOptions}
             datasetOptions={datasetOptions}

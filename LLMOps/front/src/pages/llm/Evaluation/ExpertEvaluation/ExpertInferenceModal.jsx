@@ -14,10 +14,12 @@ import { STATUS_SUCCESS } from '@src/network';
 
 import { errorToastMessage } from '@src/utils';
 
-// 채점 샘플 수 경계 — BE dto.ExpertStartBody.sample_limit(ge=1, le=MAX_EXPERT_SAMPLES)과
-// 같은 값이어야 한다. 넘기면 422 로 되돌아오는데 그때는 어느 칸이 문제인지 알 수 없다.
-const SAMPLE_LIMIT_MIN = 1;
-const SAMPLE_LIMIT_MAX = 1000;
+// 평가 세트 규격 — BE constants.EXPERT_SAMPLE_SET_SIZE/COUNT 와 **같은 값이어야 한다**.
+// 어긋나면 라벨에 적힌 구간(예: 201~300)과 실제 채점 구간이 달라진다.
+//   공인시험은 평가자가 여러 명이라 1k 데이터셋을 100개씩 10구간으로 미리 나눠 두고 카드마다
+//   하나를 맡는다. 종전의 자유 입력(상위 N개)은 두 카드가 같은 앞부분을 중복 채점하게 돼 폐기.
+const SAMPLE_SET_SIZE = 100;
+const SAMPLE_SET_COUNT = 10;
 
 import classNames from 'classnames/bind';
 import style from '../BenchmarkEvaluation/BenchmarkEvaluation.module.scss';
@@ -43,6 +45,9 @@ const ExpertInferenceModal = ({
   workspaceId,
   modelOptions,
   datasetOptions,
+  // 이 프로젝트에서 이미 잡힌 세트 [{ datasetId, set }] — 같은 데이터셋의 같은 세트를 두 카드가
+  // 맡으면 두 사람이 같은 문항을 채점하게 되므로 목록에서 비활성화한다(BE 도 거절한다).
+  usedSets,
   onConfirm,
   onClose,
 }) => {
@@ -58,7 +63,7 @@ const ExpertInferenceModal = ({
   const [modelId, setModelId] = useState('');
   const [datasetId, setDatasetId] = useState('');
   // 채점할 샘플 수 — '' 이면 데이터셋 전량(BE 기본과 같다). 앞에서부터 자른다.
-  const [sampleLimit, setSampleLimit] = useState('');
+  const [sampleSet, setSampleSet] = useState('');
   // 세션 제목·평가 지침 — 둘 다 선택. 제목은 run 목록·채점 헤더의 표시원이고, 지침은
   // 채점 화면 상단 박스에 그대로 뜬다. 비우면 BE 가 기본값(데이터셋명 / 시나리오 기본
   // 지침)으로 폴백하므로 빈 문자열을 억지로 보내지 않는다.
@@ -135,6 +140,9 @@ const ExpertInferenceModal = ({
     if (datasetOptions?.length === 1)
       setDatasetId((prev) => prev || datasetOptions[0].value);
   }, [datasetOptions]);
+  // 데이터셋이 바뀌면 세트 선택을 비운다 — 세트는 데이터셋별로 세므로, 그대로 두면 새 데이터셋
+  // 에서 이미 잡힌 세트가 선택된 채 남아 시작 시 BE 가 거절한다.
+  useEffect(() => setSampleSet(''), [datasetId]);
 
   // 모델을 바꾸면 출력 경로 선택을 비운다 — 후보가 모델로 걸러져 다시 조회되므로, 이전
   // 모델의 배포가 선택에 남으면 목록에 없는 값이 그대로 실려 나간다.
@@ -160,27 +168,48 @@ const ExpertInferenceModal = ({
 
   const loading = !!modelId && deployments === null;
 
-  // 실행을 막는 첫 이유 하나 — 다른 실행 모달과 같은 방식으로 푸터에 세운다.
-  // 빈 값은 오류가 아니라 "전량"이다 — 기본값을 FE 가 복제하지 않는다.
-  const sampleLimitText = String(sampleLimit ?? '').trim();
-  const sampleLimitValid =
-    sampleLimitText === '' ||
-    (/^\d+$/.test(sampleLimitText) &&
-      Number(sampleLimitText) >= SAMPLE_LIMIT_MIN &&
-      Number(sampleLimitText) <= SAMPLE_LIMIT_MAX);
+  // 세트 목록 — 고른 데이터셋에서 이미 잡힌 세트는 비활성화(disabled)해 남겨 둔다. 목록에서
+  // 빼 버리면 "왜 세트 3 이 없지?" 가 되고, 남겨 두면 누가 이미 맡았다는 사실이 보인다.
+  const takenSets = useMemo(() => {
+    const ids = new Set();
+    (usedSets || []).forEach((u) => {
+      if (u && String(u.datasetId) === String(datasetId)) ids.add(Number(u.set));
+    });
+    return ids;
+  }, [usedSets, datasetId]);
+  const sampleSetOptions = useMemo(
+    () =>
+      Array.from({ length: SAMPLE_SET_COUNT }, (_, i) => {
+        const n = i + 1;
+        const from = i * SAMPLE_SET_SIZE + 1;
+        const to = n * SAMPLE_SET_SIZE;
+        const taken = takenSets.has(n);
+        return {
+          label: taken
+            ? t('evaluation.expert.sampleSetTaken', { n, from, to })
+            : t('evaluation.expert.sampleSetLabel', { n, from, to }),
+          value: n,
+          disabled: taken,
+        };
+      }),
+    [takenSets, t],
+  );
+  const selectedSampleSet =
+    sampleSetOptions.find((item) => item.value === sampleSet) || null;
+  const allSetsTaken = takenSets.size >= SAMPLE_SET_COUNT;
 
+  // 실행을 막는 첫 이유 하나 — 다른 실행 모달과 같은 방식으로 푸터에 세운다.
   const blockReason = !modelId
     ? t('evaluation.run.needModel')
     : !datasetId
       ? t('evaluation.run.needDataset')
-      : !playgroundId
-        ? t('evaluation.bench.needDeployment')
-        : !sampleLimitValid
-          ? t('evaluation.expert.sampleLimitErr', {
-              min: SAMPLE_LIMIT_MIN,
-              max: SAMPLE_LIMIT_MAX,
-            })
-          : null;
+      : allSetsTaken
+        ? t('evaluation.expert.sampleSetAllTaken')
+        : !sampleSet
+          ? t('evaluation.expert.needSampleSet')
+          : !playgroundId
+            ? t('evaluation.bench.needDeployment')
+            : null;
 
   const submit = {
     text: 'evaluation.expert.inferStart',
@@ -190,8 +219,8 @@ const ExpertInferenceModal = ({
         inferencePlaygroundId: Number(playgroundId),
         modelId,
         datasetId,
-        // 비우면 보내지 않는다 — BE 가 없을 때의 기본(전량)을 그대로 쓰게 둔다.
-        sampleLimit: sampleLimitText === '' ? null : Number(sampleLimitText),
+        // 세트가 구간(offset·개수)을 정한다 — BE 가 (N-1)*100 부터 100개를 잘라 준다.
+        sampleSet: Number(sampleSet),
         // 빈 입력은 undefined 로 — BE 가 '미입력'으로 보고 기본값으로 폴백한다.
         runName: runName.trim() || undefined,
         expertPrompt: guideline.trim() || undefined,
@@ -273,21 +302,26 @@ const ExpertInferenceModal = ({
             </div>
             <div className={cx('opt-field')}>
               <span className={cx('opt-label')}>
-                {t('evaluation.expert.sampleLimit')}
+                {t('evaluation.expert.sampleSet')}
               </span>
-              <InputText
-                size='medium'
-                value={sampleLimit}
-                placeholder={t('evaluation.expert.sampleLimitPh')}
-                onChange={(e) => setSampleLimit(e.target.value)}
-                onClear={() => setSampleLimit('')}
-                disableLeftIcon
-                options={{ autoComplete: 'off', inputMode: 'numeric' }}
-                customStyle={{ width: '100%' }}
+              <Selectbox
+                list={sampleSetOptions}
+                selectedItem={selectedSampleSet}
+                placeholder={t('select.label')}
+                onChange={(item) => {
+                  if (item.disabled) return; // 이미 잡힌 세트 — 표시만 하고 선택은 막는다
+                  setSampleSet(item.value);
+                }}
+                customStyle={{
+                  selectboxForm: { width: '100%' },
+                  listForm: { width: '100%' },
+                }}
               />
-              <p className={cx('rail-note')}>
-                {t('evaluation.expert.sampleLimitNote')}
-              </p>
+              {allSetsTaken && (
+                <p className={cx('rail-note', 'err')}>
+                  {t('evaluation.expert.sampleSetAllTaken')}
+                </p>
+              )}
             </div>
           </div>
 

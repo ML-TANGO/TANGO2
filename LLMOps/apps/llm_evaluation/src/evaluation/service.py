@@ -70,6 +70,8 @@ from evaluation.constants import (
     LOGICKOR_STRATEGIES,
     MAX_COMPARE_MODELS,
     MAX_COMPARE_RUNS,
+    EXPERT_SAMPLE_SET_COUNT,
+    EXPERT_SAMPLE_SET_SIZE,
     MAX_EXPERT_SAMPLES,
     SDS_GEN_SYSTEM_PROMPT,
     SDS_SAMPLE_DIR_GLOB,
@@ -1208,6 +1210,12 @@ async def _attach_expert_run_view(runs: list, rows: list) -> None:
         name = _session_run_name(row)
         if name:
             run["run_name"] = name
+        # 평가 세트 — 카드 표시 + 새 카드 생성 시 중복 비활성화의 근거. dataset_id 는 런 비교
+        # shape 에 없어 여기서 같이 실어 준다(세트는 데이터셋별로 세므로 짝이 있어야 한다).
+        sset = _session_sample_set(row)
+        if sset:
+            run["sample_set"] = sset
+            run["dataset_id"] = row.get("dataset_id")
         if row.get("metric_set") == "expert" and row.get("status") != "completed":
             pending.append(run)
     if not pending:
@@ -1681,13 +1689,18 @@ def _read_sds_samples(ddir_real: str, ds_name: str, need: int):
     return out or None
 
 
-async def _read_dataset_samples(dataset_ids: List[int], limit: int) -> list:
+async def _read_dataset_samples(dataset_ids: List[int], limit: int, offset: int = 0) -> list:
     """워크스페이스 NFS 데이터셋에서 (input, reference) 샘플을 limit 개까지 읽는다.
     eval pod 가 /jf-data 를 마운트(get_eval_result 의 metrics.json 읽기와 동일 마운트).
-    파일 없음/포맷 불일치(arrow 등) → 빈 리스트 → 호출자가 mock 으로 폴백."""
+    파일 없음/포맷 불일치(arrow 등) → 빈 리스트 → 호출자가 mock 으로 폴백.
+
+    offset 은 평가 세트(100개씩 10구간)용. 하위 리더(파일워크·SDS 서브디렉토리)는 "앞에서부터
+    N개"만 지원하므로 offset+limit 을 읽고 앞을 버린다 — 상한이 MAX_EXPERT_SAMPLES(1000)라
+    전량 읽기와 같은 비용이고, 무엇보다 리더마다 offset 을 심는 것보다 어긋날 여지가 없다."""
+    need = max(0, int(offset)) + limit
     samples = []
     for did in dataset_ids:
-        if len(samples) >= limit:
+        if len(samples) >= need:
             break
         try:
             ds = await db_model.get_dataset_model(dataset_id=did)
@@ -1713,7 +1726,7 @@ async def _read_dataset_samples(dataset_ids: List[int], limit: int) -> list:
             # SDS(샘플당 디렉토리) 레이아웃 우선 — tango_sds-*/ 서브디렉토리가 있으면
             # 디렉토리-워크 빌더(CSV 인라인 + 이미지 blob)로. 레이아웃 부재 시 None → 기존
             # 행/열 파일-워크로 자연 폴백(graceful, 일반 데이터셋 무영향).
-            sds = _read_sds_samples(ddir_real, str(ds["name"]), limit - len(samples))
+            sds = _read_sds_samples(ddir_real, str(ds["name"]), need - len(samples))
             if sds is not None:
                 samples.extend(sds)
                 continue
@@ -1722,12 +1735,12 @@ async def _read_dataset_samples(dataset_ids: List[int], limit: int) -> list:
                 for r, _dirs, fns in os.walk(ddir_real)
                 for fn in fns if fn.lower().endswith(_DATA_EXTS))
             for fp in files:
-                if len(samples) >= limit:
+                if len(samples) >= need:
                     break
                 # 경로 봉쇄(심링크 이탈 방지) — 다른 워크스페이스 파일 읽기 차단.
                 if os.path.commonpath([os.path.realpath(fp), ddir_real]) != ddir_real:
                     continue
-                for rec in _read_data_file(fp, limit - len(samples)):
+                for rec in _read_data_file(fp, need - len(samples)):
                     sample = {
                         "input": rec["input"][:_MAX_FIELD_LEN],
                         "reference": (rec.get("reference") or "")[:_MAX_FIELD_LEN],
@@ -1736,12 +1749,13 @@ async def _read_dataset_samples(dataset_ids: List[int], limit: int) -> list:
                     if rec.get("image"):
                         _attach_image(sample, rec["image"], fp, ddir_real)
                     samples.append(sample)
-                    if len(samples) >= limit:
+                    if len(samples) >= need:
                         break
         except Exception:
             traceback.print_exc()
             continue
-    return samples
+    # 앞의 offset 개는 다른 세트의 몫 — 여기서 버린다(부족하면 빈 리스트 = 그 세트는 없음).
+    return samples[max(0, int(offset)):]
 
 
 async def _resolve_inference_target(playground_id: Optional[int]) -> Optional[dict]:
@@ -2612,7 +2626,8 @@ async def _infer_vlm_output(playground_id: int, image_b64: str, ais_rows: list,
 async def _build_expert_samples(model_id: int, model_name: str, dataset_ids: List[int],
                                 ds_names: List[str], inference_target,
                                 run_samples: Optional[list] = None,
-                                sample_limit: Optional[int] = None) -> list:
+                                sample_limit: Optional[int] = None,
+                                sample_offset: int = 0) -> list:
     """전문가 채점 샘플(A4) — 실 데이터셋(input/reference/이미지) + 배포모델 추론 output.
     run_samples(러너 생성, P2-b2) 주면 그것을 그대로(이미지/CSV 필드 보존) 채점 대상으로.
     없으면 데이터셋 로드 + 배포 추론, 못 읽으면 합성(레거시 동등), 추론 URL 없으면 mock 폴백."""
@@ -2639,8 +2654,16 @@ async def _build_expert_samples(model_id: int, model_name: str, dataset_ids: Lis
     # 기본은 데이터셋 전량(ceiling 까지) — 전문가는 전 샘플 리뷰가 기본 의도다.
     # sample_limit 을 주면 **앞에서부터** 그 개수만(dto 주석에 무작위를 쓰지 않는 이유).
     n = cap
-    rows = await _read_dataset_samples(dataset_ids, n)
-    if not rows:    # 실 데이터셋 못 읽음 → 합성 폴백(구 스캐폴딩과 동일 문자열 = 레거시 안정)
+    rows = await _read_dataset_samples(dataset_ids, n, offset=sample_offset)
+    if not rows:
+        # 세트를 지정한 경우(offset>0)엔 합성 폴백을 쓰지 않는다. 데이터셋이 그 구간까지
+        # 없는 것인데 mock 100개를 만들어 주면 평가자는 그게 가짜인 줄 모르고 채점하고,
+        # 그 점수가 공인시험 결과로 남는다 — 조용한 폴백이 가장 위험한 지점이다.
+        if sample_offset:
+            raise Exception(
+                f"selected sample set is out of range for this dataset "
+                f"(offset={sample_offset})")
+        # 실 데이터셋 못 읽음 → 합성 폴백(구 스캐폴딩과 동일 문자열 = 레거시 안정)
         rows = [{"input": f"[{base}] sample {i} 입력 프롬프트", "reference": f"참조 답변 {i}",
                  "dataset": ds_names[i % len(ds_names)] if ds_names else base}
                 for i in range(n)]
@@ -2716,6 +2739,7 @@ async def start_expert(project_id: int, model_id: int, dataset_ids: List[int],
                        inference_playground_id: Optional[int] = None,
                        inference_job_id: Optional[str] = None,
                        sample_limit: Optional[int] = None,
+                       sample_set: Optional[int] = None,
                        run_name: Optional[str] = None,
                        expert_prompt: Optional[str] = None) -> dict:
     """전문가 평가 세션 시작 — model/dataset 는 **이 세션이 고른다**(2026-08-24 —
@@ -2785,9 +2809,23 @@ async def start_expert(project_id: int, model_id: int, dataset_ids: List[int],
     # 생성 시스템 프롬프트(P3 헤더 고정 박스) — 러너 런 우선, 없으면 바인드 배포의 system_message.
     if not gen_prompt and inference_playground_id:
         gen_prompt = await _resolve_deploy_system_prompt(inference_playground_id)
+    # 평가 세트 — 공인시험은 평가자가 여러 명이라 카드마다 다른 100문항 구간을 맡는다.
+    # 같은 프로젝트 안에서 같은 데이터셋의 같은 세트를 두 카드가 잡으면 두 사람이 같은 문항을
+    # 채점하게 되므로(그러라고 나눈 게 아니다) 여기서 거절한다. 범위는 프로젝트 안까지만 —
+    # 재시험·다른 모델 평가에서는 같은 세트를 다시 써야 한다.
+    sample_offset = 0
+    if sample_set is not None:
+        sample_set = int(sample_set)
+        if not 1 <= sample_set <= EXPERT_SAMPLE_SET_COUNT:
+            raise Exception(f"sample_set must be 1..{EXPERT_SAMPLE_SET_COUNT}")
+        if (dataset_ids[0], sample_set) in await _expert_sets_in_use(project_id):
+            raise Exception(f"sample set {sample_set} is already taken in this project")
+        sample_offset = (sample_set - 1) * EXPERT_SAMPLE_SET_SIZE
+        sample_limit = EXPERT_SAMPLE_SET_SIZE
+
     samples = await _build_expert_samples(
         model_id, model_name, dataset_ids, ds_names, inference_target, run_samples,
-        sample_limit=sample_limit)
+        sample_limit=sample_limit, sample_offset=sample_offset)
     # external eva-vlm(SDS)은 내부 system_message 가 없어 위 gen_prompt 가 None → 실사용 프롬프트
     #   미러로 폴백(샘플에 csv_rows=선박 계측표 있으면 SDS 시나리오, _expert_prompt 와 동일 판별).
     if not gen_prompt and any(
@@ -2816,6 +2854,8 @@ async def start_expert(project_id: int, model_id: int, dataset_ids: List[int],
         metrics_obj["_inference_playground_id"] = int(inference_playground_id)
     if run_name:      # 세션 제목 동결(run 목록·채점 헤더 표시원)
         metrics_obj["_run_name"] = run_name
+    if sample_set:    # 평가 세트 동결 — 목록의 중복 판정과 카드 표시가 이 값을 읽는다
+        metrics_obj["_sample_set"] = sample_set
     await db_model.set_eval_result_metrics(
         job_str_id=job_id, source_model_id=model_id,
         metrics_json=json.dumps(metrics_obj))
@@ -2862,7 +2902,8 @@ def _session_gen_prompt(row: dict) -> Optional[str]:
 
 # 세션 동결 키 — start 시 metrics 에 동결해 재개·완료 후에도 표시가 유지돼야 하는 값들.
 # 완료 시 submit_expert_rating 이 metrics 를 새로 쓰므로 그때 이월하지 않으면 소실된다.
-_SESSION_FROZEN_KEYS = ("_run_name", "_gen_system_prompt", "_inference_playground_id")
+_SESSION_FROZEN_KEYS = ("_run_name", "_gen_system_prompt", "_inference_playground_id",
+                        "_sample_set")
 
 
 def _session_metrics(row: dict) -> dict:
@@ -2881,6 +2922,27 @@ def _session_run_name(row: dict) -> Optional[str]:
     metrics 에 싣는다(llm_db 마이그레이션 러너 없음 → DDL 회피). 없으면 None(목록=데이터셋명)."""
     val = _session_metrics(row).get("_run_name")
     return val if isinstance(val, str) and val else None
+
+
+def _session_sample_set(row: dict) -> Optional[int]:
+    """세션이 잡은 평가 세트 번호(_sample_set). 없으면 None — 세트를 안 쓰고 만든 세션이다
+    (전량/상위 N개). 중복 판정에서도 제외돼 새 카드가 어떤 세트든 고를 수 있다."""
+    val = _session_metrics(row).get("_sample_set")
+    return int(val) if isinstance(val, int) and val > 0 else None
+
+
+async def _expert_sets_in_use(project_id: int) -> set:
+    """이 프로젝트에서 이미 잡힌 (dataset_id, 세트번호) 집합. 삭제된 런은 행이 사라지므로
+    그 세트는 자동으로 다시 열린다 — 별도 반납 처리가 필요 없다."""
+    rows = await db_model.list_eval_results_by_project(eval_project_id=project_id) or []
+    out = set()
+    for row in rows:
+        if row.get("metric_set") != "expert":
+            continue
+        n = _session_sample_set(row)
+        if n and row.get("dataset_id") is not None:
+            out.add((int(row["dataset_id"]), n))
+    return out
 
 
 def _session_frozen(row: dict) -> dict:

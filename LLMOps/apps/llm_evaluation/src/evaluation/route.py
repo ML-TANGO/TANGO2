@@ -173,6 +173,7 @@ async def start_expert(body: dto.ExpertStartBody):
             inference_playground_id=body.inference_playground_id,
             inference_job_id=body.inference_job_id,
             sample_limit=body.sample_limit,
+            sample_set=body.sample_set,
             run_name=body.run_name,
             expert_prompt=body.expert_prompt)
         return response(status=1, result=res)
