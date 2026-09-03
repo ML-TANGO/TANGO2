@@ -776,12 +776,16 @@ const ProjectDetail = () => {
   //   inferencePlaygroundId = 출력을 만들 running 배포. **필수**다 — 평가 컨테이너는 채점만
   //     하고 생성은 언제나 배포가 한다(컨테이너가 체크포인트를 직접 올리던 경로는 폐기).
   //   judgePlaygroundId = 채점을 맡길 running 배포. LLM 심사에서만 채워 온다(필수).
+  //   formatTrain = 평가 전 형식(출력 규약) 학습 여부. 정답 대조의 MixATIS 에서만 채워
+  //     온다 — 켜면 inferencePlaygroundId 는 '출력을 만들 배포'가 아니라 '학습할
+  //     체크포인트의 출처'가 된다(서버가 그 배타를 강제한다).
   const handleBenchmarkRun = async ({
     modelId,
     datasetId,
     benchmarks,
     inferencePlaygroundId,
     judgePlaygroundId,
+    formatTrain,
   }) => {
     if (starting) return;
     setStarting(true);
@@ -798,6 +802,12 @@ const ProjectDetail = () => {
       // 원격 심판(LogicKor) — 서버가 배포 id 를 검증하고 OpenAI 호환 base URL 을 조립한다
       //   (URL 직접 수취는 SSRF). judge_model 과는 배타적이라 함께 보내지 않는다.
       ...(judgePlaygroundId ? { judge_playground_id: judgePlaygroundId } : {}),
+      // 포맷 학습(MixATIS) — 켜면 서버가 위 배포를 생성에 쓰지 않고, 그 배포가 서빙 중인
+      //   체크포인트를 컨테이너에 마운트해 형식 학습 → 평가를 한 잡에서 돌린다(배타).
+      //   끈 경우에도 명시해 보낸다: 지원 벤치마크에서 이 키가 없으면 서버가 기본값을
+      //   정하게 되는데, 그 기본값이 화면의 스위치와 갈리면 사용자가 본 설정과 실제로
+      //   돈 설정이 달라진다.
+      ...(formatTrain === undefined ? {} : { format_train: !!formatTrain }),
     });
     setStarting(false);
     if (res.status !== STATUS_SUCCESS || !res.result?.job_id) {

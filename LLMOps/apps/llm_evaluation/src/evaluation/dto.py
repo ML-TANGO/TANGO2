@@ -187,6 +187,19 @@ class BenchmarkRunBody(RunModelSelection):
     judge_playground_id: Optional[int] = Field(
         default=None, ge=1,
         description="심판으로 쓸 running 배포 id(LogicKor 전용 — 주면 원격 채점)")
+    # 포맷 학습(train+evaluate) — 채점기가 체크포인트를 로컬에 올려 출력 규약을 LoRA 로
+    # 짧게 학습한 뒤 평가한다. UGEN 처럼 고정 형식을 생성해야 채점되는 벤치마크(MixATIS)는
+    # 형식을 배우지 않은 가중치로 재면 내용을 알아도 0 점이 나오기 때문이다.
+    #   ⚠️ **배포 위임과 배타**다 — 학습 LoRA 를 원격 배포에 얹을 통로가 없어 컨테이너도
+    #      generate_base_url 이 있으면 학습을 건너뛴다. 켜면 service 가 generate_base_url
+    #      대신 checkpoint_name 을 싣는다(그 이름은 고른 배포가 서빙 중인 커밋에서 푼다 —
+    #      commit_id 는 요청 필드로 폐기됐다, 위 _reject_commit_id 참고).
+    #   ⚠️ 그래서 이 런은 GPU 를 실제로 쓴다(위임 런의 gpu_count=0 최적화가 적용되지 않는다).
+    #   지원하지 않는 채점기에 켜면 service 가 사유와 함께 거절한다(조용히 무시하면
+    #   "학습하고 쟀다"고 믿는 점수가 남는다).
+    format_train: Optional[bool] = Field(
+        default=None,
+        description="평가 전 형식(출력 규약) 학습 수행 — MixATIS 전용, 배포 위임과 배타")
     # ── 실채점 컨테이너 실행 옵션(전부 선택 — 미지정이면 컨테이너 기본값) ──────────
     # 자유형식 dict passthrough 로 두지 않는 이유: 이 값들은 그대로 vLLM 기동 인자와
     # 모델 식별자가 되므로, 어떤 키가 컨테이너에 도달할 수 있는지를 서버가 알고 있어야

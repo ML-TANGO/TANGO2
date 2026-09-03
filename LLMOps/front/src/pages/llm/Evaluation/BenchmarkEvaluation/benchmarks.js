@@ -141,6 +141,11 @@ export const BENCHMARKS = [
     // 자리에서 이 사실을 배지로 세워, 형식 학습이 안 된 가중치로 재고 나서 0 을 보는
     // 일이 없게 한다(실행 차단은 requiresCheckpoint 검증이 담당).
     requiresFormat: true,
+    // 그 형식을 **평가 직전에 같은 잡에서** 학습할 수 있다(채점기 evaluate-intent 0.2.0+
+    // 의 train 단계). 켜면 배포 위임을 걷고 그 배포의 체크포인트를 마운트해 LoRA 를 짧게
+    // 태운 뒤 로컬에서 생성·채점한다 — 학습 LoRA 를 원격 배포에 얹을 통로가 없어 두 경로는
+    // 배타다(BE constants.FORMAT_TRAIN_MANIFEST_KEYS 와 같은 집합이어야 한다).
+    supportsFormatTrain: true,
   },
 ];
 
@@ -190,6 +195,13 @@ export const defaultMetricFor = (benchmarkId) => {
 // 형식(출력 규약) 학습이 전제인 벤치마크 — 안 맞으면 점수가 0 으로 주저앉는다.
 export const FORMAT_REQUIRED_BENCHMARK_IDS = BENCHMARKS.filter(
   (b) => b.requiresFormat,
+).map((b) => b.id);
+
+// 그 형식 학습을 평가 런 안에서 돌릴 수 있는 벤치마크. 실행 화면이 '포맷 학습' 스위치를
+// 세우는 조건이고, BE 도 같은 경계를 강제한다(FORMAT_TRAIN_MANIFEST_KEYS) — 지원하지 않는
+// 벤치마크에 켜서 보내면 조용히 무시되는 대신 사유와 함께 거절된다.
+export const FORMAT_TRAIN_BENCHMARK_IDS = BENCHMARKS.filter(
+  (b) => b.supportsFormatTrain,
 ).map((b) => b.id);
 
 // 추론을 한 번 더 돌려야 나오는 "생성 지표". 나머지는 한 번의 채점에서 전부 나오므로

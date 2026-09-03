@@ -27,6 +27,20 @@ REAL_BENCHMARK_MANIFEST_KEY = {
 # 기록으로 남긴다. 체크포인트 경로를 되살리면 가드도 함께 복원해야 한다.
 CHECKPOINT_REQUIRED_MANIFEST_KEYS = ("MIXATIS",)
 
+# 형식(출력 규약) 학습을 **평가 전에 같은 잡에서** 돌릴 수 있는 채점기. UGEN 처럼 정답을
+# 고정 형식으로 생성해야 채점되는 벤치마크는 형식을 배우지 않은 가중치로 재면 내용을 알아도
+# 0 점이 나온다(MixATIS 실측: zero-shot 형식 준수 0/828 · joint_acc 0.0 → 발화 1500 을
+# 1 에폭 태우면 0.4855). evaluate-intent 0.2.0+ 가 `train` 파라미터로 그 단계를 갖고 있다.
+#
+# ⚠️ 포맷 학습은 **배포 위임과 배타**다. 학습 산출물은 채점기가 로컬에 올린 모델에 얹는
+#    LoRA 어댑터라 원격 배포에 붙일 통로가 없다 — 컨테이너도 `generate_base_url` 이 있으면
+#    학습을 스스로 건너뛴다(evaluate_intent/app.py:376). 그래서 이 경로를 켜면 서비스가
+#    generate_base_url 을 싣지 않고 checkpoint_name 을 대신 넘긴다(run_benchmark).
+# ⚠️ 그 결과 이 경로는 위 CHECKPOINT_REQUIRED_MANIFEST_KEYS 를 **다시 살린다** — 체크포인트
+#    없이는 학습할 대상이 없다. 다만 요청은 commit_id 를 받지 않으므로(dto tombstone) 이름은
+#    고른 배포가 서빙 중인 커밋에서 역으로 푼다(_resolve_format_checkpoint).
+FORMAT_TRAIN_MANIFEST_KEYS = ("MIXATIS",)
+
 # 벤치마크 정본(10) — id = FE benchmarks.js + 채점 컨테이너와 일치. 벤치마크
 # = 표준 평가 태스크(ARC·MMLU…). "벤치마크 선택 → 벤치마크별 메트릭" 2단계의 1단계 후보다.
 BENCHMARK_IDS = MOCK_BENCHMARK_IDS + tuple(REAL_BENCHMARK_MANIFEST_KEY)

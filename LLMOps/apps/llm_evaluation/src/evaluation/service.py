@@ -39,6 +39,7 @@ from evaluation.constants import (
     JUDGE_BENCHMARK_IDS,
     REFERENCE_BENCHMARK_IDS,
     REAL_BENCHMARK_MANIFEST_KEY,
+    FORMAT_TRAIN_MANIFEST_KEYS,
     EVAL_DEPLOY_MAX_POLLS,
     EVAL_INFER_RUN_SECONDS,
     EVAL_PROJECT_DESCRIPTION_MAX,
@@ -86,6 +87,7 @@ async def run_benchmark(project_id: int, model_id: int, dataset_ids: List[int],
                         benchmarks: Optional[List] = None,
                         inference_playground_id: Optional[int] = None,
                         judge_playground_id: Optional[int] = None,
+                        format_train: Optional[bool] = None,
                         run_options: Optional[dict] = None) -> dict:
     """벤치마크 평가 런 — 이 런이 고른 model/dataset 으로 evaluate 컨테이너 런치.
     model_id·dataset_ids 는 **요청이 준다**(2026-08-24 — 프로젝트 잠금 해제). 둘 다
@@ -117,6 +119,18 @@ async def run_benchmark(project_id: int, model_id: int, dataset_ids: List[int],
     ⚠️ 컨테이너 계약은 그대로다 — 매니페스트/이미지는 여전히 checkpoint_name·samples 를
     받는다. 우리가 보내지 않을 뿐이라 되돌리기는 이 함수의 분기 복원으로 끝난다.
     (judge/expert 의 inference_job_id 는 채점이 이 서비스 안에서 일어나 실제로 동작한다.)
+
+    format_train=True 는 **그 하나뿐인 생성 경로를 되돌린다** — 채점기가 체크포인트를 자기
+    GPU 에 올려 출력 규약을 LoRA 로 학습한 뒤 그대로 생성·채점한다(train+evaluate 한 잡).
+    되돌리는 것이 아니라 되살리는 것인 이유: UGEN 처럼 고정 형식을 생성해야 채점되는
+    벤치마크는 형식을 배우지 않은 가중치로 재면 **구조적으로 0 점**이고(MixATIS 실측
+    joint_acc 0.0), 그 학습은 로컬 모델에 얹는 LoRA 라 원격 배포에는 붙일 통로가 없다.
+    컨테이너도 generate_base_url 이 있으면 학습을 스스로 건너뛴다 → 두 경로는 **배타**다.
+    체크포인트 이름은 요청이 아니라 **고른 배포가 서빙 중인 커밋**에서 푼다
+    (_resolve_format_checkpoint) — commit_id 를 요청 필드로 되살리면 "고른 체크포인트"와
+    "실제로 점수를 낸 가중치"가 다시 어긋날 수 있고, 그것이 그 필드를 폐기한 이유다.
+    이 경로의 런은 결과 화면에서 `source_mode='checkpoint'` 로 읽힌다(fb_utils
+    `_eval_run_source` 가 metrics.checkpoint.name 을 그대로 쓴다 — 추가 배선 없음).
 
     judge_playground_id 를 주면 LogicKor 심판을 컨테이너 안 vLLM 대신 이미 떠 있는 배포에
     위임한다(params.judge_base_url). run_options 는 실채점 컨테이너 실행 옵션(컨텍스트
@@ -235,11 +249,22 @@ async def run_benchmark(project_id: int, model_id: int, dataset_ids: List[int],
     manifest_version = getattr(settings, f"{manifest_key}_MANIFEST_VERSION")
     benchmark_set = [p["benchmark"] for p in pairs]
     metric_map = {p["benchmark"]: p["metric"] for p in pairs}
-    # ⚠️ 체크포인트가 **필수**인 채점기(MIXATIS)의 가드는 여기서 사라졌다 — 생성이 언제나
+    # ⚠️ 체크포인트가 **필수**인 채점기(MIXATIS)의 가드는 위임 경로에서는 사라졌다 — 생성이
     # 배포 위임이면 컨테이너는 마운트할 체크포인트가 필요 없다(evaluate_intent 0.2.4 /
     # evaluate-logickor-judge 0.2.5 부터 `generate_base_url` 이 있으면 _resolve_checkpoint
     # 를 우회한다). ⚠️ 그 이전 이미지 태그로 되돌리면 이 런들이 파드를 띄운 뒤 죽는다 →
     # settings 의 MANIFEST_VERSION 을 되돌릴 때는 체크포인트 경로도 함께 복원해야 한다.
+    # 포맷 학습(아래)을 켜면 그 가드가 되살아난다 — 학습할 가중치가 없으면 성립하지 않는다.
+
+    # ── 포맷 학습 게이트 — 배포 위임과 배타 ─────────────────────────────────────
+    # 지원 채점기 밖에서 켜면 **조용히 무시하지 않고 거절한다**. 무시하면 사용자는 "형식을
+    # 학습하고 잰 점수"라고 믿는데 실제로는 zero-shot 점수가 이력에 남고, 그 차이는 결과
+    # 화면 어디에도 드러나지 않는다(심판 배타 검증·채점기 혼재 거부와 같은 취지).
+    format_train_on = bool(format_train)
+    if format_train_on and manifest_key not in FORMAT_TRAIN_MANIFEST_KEYS:
+        raise Exception(
+            "포맷 학습은 출력 형식을 학습해야 채점되는 벤치마크에서만 쓸 수 있습니다 — "
+            f"{', '.join(benchmark_set)} 에는 학습 단계가 없습니다")
 
     # eval_result.metric_set(VARCHAR 255) = "benchmark:metric" CSV — 런 설정 요약 + 재개 소스
     # (기존 flat metric CSV 대체). 전체 결과(점수)는 metrics JSON 에 별도 영속.
@@ -337,9 +362,26 @@ async def run_benchmark(project_id: int, model_id: int, dataset_ids: List[int],
     # Kong 60s 와 경쟁하던 문제가 구조적으로 사라졌다.
     # 왜 BE 가 대신 생성하지 않는가: 프롬프트 조립이 컨테이너 소유다(LogicKor 2턴 의존·
     # 채팅 템플릿·토큰 예산, MixATIS UGEN 형식). 함수 docstring 참고.
-    generate_remote = await _resolve_remote_generator(
-        inference_playground_id, model_id=model_id, workspace_id=workspace_id)
-    params["generate_base_url"] = generate_remote["base_url"]
+    # 단, **포맷 학습을 켜면 위임하지 않는다** — 학습 LoRA 는 채점기가 로컬에 올린 모델에만
+    # 얹을 수 있고, generate_base_url 을 함께 실으면 컨테이너가 학습 단계를 조용히 건너뛴다
+    # (evaluate_intent app.py:376). 그 조합은 "학습을 켰는데 학습이 안 된" 런이 된다.
+    generate_remote = None
+    checkpoint_name = None
+    if format_train_on:
+        # 배포는 이 경로에서 **생성을 하지 않는다** — 어느 커밋을 마운트할지만 말해 준다.
+        checkpoint_name = await _resolve_format_checkpoint(
+            inference_playground_id, model_id=model_id, workspace_id=workspace_id)
+        params["checkpoint_name"] = checkpoint_name
+        params["train"] = True
+    else:
+        generate_remote = await _resolve_remote_generator(
+            inference_playground_id, model_id=model_id, workspace_id=workspace_id)
+        params["generate_base_url"] = generate_remote["base_url"]
+        if manifest_key in FORMAT_TRAIN_MANIFEST_KEYS:
+            # 컨테이너는 위임 경로에서 어차피 학습을 건너뛰지만(기본값이 train=true 라
+            # 경고를 찍고 끈다), 끈 주체를 **우리로** 명시해 둔다 — 잡 로그에 남는 경고가
+            # 사용자가 고른 적 없는 설정을 되돌린 것처럼 읽히지 않게 한다.
+            params["train"] = False
 
     # ── 완전 위임이면 GPU 를 요청하지 않는다 ────────────────────────────────────
     # 매니페스트의 resources.gpu 는 런타임 파라미터를 모른 채 **최악**(로컬 생성 + 로컬
@@ -351,7 +393,9 @@ async def run_benchmark(project_id: int, model_id: int, dataset_ids: List[int],
     # 판정이 틀리면 GPU 없이 뜬 파드가 vLLM 초기화에서 죽으므로 보수적으로 본다 —
     # 확신이 없으면 None 을 넘겨 매니페스트 기본값을 그대로 쓴다.
     # 부수 효과가 아니라 목적 중 하나다: 위임 런이 쓰지도 않을 GPU 를 예약하던 것을 없앤다.
-    fully_delegated = judge_remote is not None if manifest_key == "LOGICKOR" else True
+    #   포맷 학습  : 켜져 있으면 로컬에 모델을 올려 학습·생성한다 → 위임이 아니다.
+    fully_delegated = (not format_train_on) and (
+        judge_remote is not None if manifest_key == "LOGICKOR" else True)
     gpu_count = 0 if fully_delegated else None
 
     try:
@@ -393,10 +437,16 @@ async def run_benchmark(project_id: int, model_id: int, dataset_ids: List[int],
         "manifest_name": manifest_name,
         "manifest_version": manifest_version,
         "job_id": job_id, "mode": "benchmark",
-        # 생성 경로는 이제 하나뿐이라 언제나 배포다. 키는 남긴다 — FE 배너·운영 추적이
-        # 이 값을 읽고, 없어지면 undefined 접근이 된다(아래 generated 와 같은 이유).
-        "used_deployment": True,
+        # 생성이 배포에서 일어났나. 포맷 학습 런은 채점기가 로컬에서 생성하므로 False 다 —
+        # 그 런에서 배포는 '어느 커밋인가'만 말해 준 것이고, 그 사실을 True 로 남기면
+        # 나중에 출처를 되짚을 때 배포가 답을 만든 것으로 읽힌다.
+        "used_deployment": not format_train_on,
+        # 포맷 학습 런에서도 남긴다 — 체크포인트를 어느 배포에서 풀었는지의 기록이다.
         "inference_playground_id": inference_playground_id,
+        # 포맷 학습을 돌렸나 + 무엇을 학습했나. 실제 레시피(예제 수·에폭·스텝)는 컨테이너가
+        # metrics.train 에 새기고, 여기에는 런 생성 시점에 우리가 정한 것만 싣는다.
+        "format_train": format_train_on,
+        "checkpoint": checkpoint_name,
         # 인라인 생성이 사라져 **항상 None** 이다(생성은 컨테이너 안에서 일어나므로 건수·
         # 빈 출력은 런 결과 metrics.generate 에 컨테이너가 새긴다). 키 자체는 남긴다 —
         # 소비하는 화면이 있고, 없어지면 undefined 접근이 된다.
@@ -1824,6 +1874,62 @@ def _playground_shim_base_url(playground_id: int) -> str:
     """
     return (f"http://{settings.LLM_PLAYGROUND_DNS}:80"
             f"/api/playgrounds/{int(playground_id)}/openai/v1")
+
+
+async def _resolve_format_checkpoint(inference_playground_id: int, model_id: int,
+                                     workspace_id: int) -> str:
+    """포맷 학습 런이 마운트할 체크포인트 **이름**을 고른 배포에서 역으로 푼다.
+
+    왜 요청이 아니라 배포에서 푸나 — `commit_id` 는 요청 필드로 폐기됐다
+    (dto.`_reject_commit_id`). 폐기 사유가 "사용자가 고른 체크포인트"와 "실제로 점수를 낸
+    가중치"가 어긋나던 것이었으므로, 되살리면 같은 어긋남을 다시 들인다. 배포는 자기가 어떤
+    커밋을 올렸는지 이미 알고 있고(playground 상세가 커밋을 조인해 내려준다) 화면은 그 배포를
+    이미 고르게 하므로, 여기서 역으로 풀면 두 값이 어긋날 자리 자체가 없어진다.
+
+    _resolve_remote_generator 와 다른 점 둘:
+      1) **running 을 보지 않는다.** 이 경로에서 배포는 생성을 하지 않는다 — 학습도 생성도
+         채점기가 자기 GPU 에서 한다. 커밋은 배포가 내려가 있어도 그대로이므로, 실행 중을
+         요구하면 쓰지도 않을 GPU 한 장을 이유 없이 더 붙들게 한다.
+      2) **모델 확인 실패를 통과시키지 않는다.** 저쪽은 식별자를 못 읽으면 경고만 남기고
+         진행하는데(정상 배포까지 막지 않으려고), 이쪽은 못 읽으면 **엉뚱한 가중치를 마운트해
+         학습까지 시킨다**. 확인 못 하면 거절이 맞다.
+
+    이름만 돌려주는 것은 플랫폼 규약이다 — 경로를 넘기면 params 로 마운트 밖을 열 수 있고
+    NFS 실경로가 로그·응답에 샌다(`_strip_internal_paths` 와 같은 취지). 컨테이너는 이름을
+    /models/checkpoints/<name> 으로만 해석한다.
+    """
+    pid = int(inference_playground_id)
+    # 워크스페이스 경계(조회 실패·없음·타 워크스페이스 거절)는 공유 규칙 한 곳에 있다.
+    detail = await _playground_in_workspace("inference", pid, workspace_id)
+    model = detail.get("model") or {}
+
+    # 배포가 이 런의 모델을 서빙하나 — 아니면 다른 모델의 가중치를 학습해 이 프로젝트
+    # 모델의 점수로 기록하게 된다. model_allm_id 는 상세가 커밋 행에서 뽑아 준 값이라,
+    # 일치하면 아래 커밋도 같은 모델의 것임이 함께 보장된다.
+    served_model_id = model.get("model_allm_id")
+    try:
+        model_matches = int(served_model_id) == int(model_id)
+    except (TypeError, ValueError):
+        model_matches = False
+    if not model_matches:
+        raise Exception(
+            f"배포 {pid} 가 평가 대상 모델을 서빙하는지 확인하지 못했습니다 — 포맷 학습은 "
+            "그 배포의 체크포인트를 학습해 점수를 내므로, 확인되지 않으면 다른 모델의 "
+            "가중치를 이 프로젝트 모델의 점수로 기록하게 됩니다. 평가 대상 모델의 "
+            "체크포인트를 올린 배포를 고르거나 포맷 학습을 끄세요")
+
+    name = str(model.get("model_allm_commit_name") or "").strip()
+    if not name:
+        # HF 모델을 직접 올린 배포는 플랫폼 커밋이 없다 — 학습할 대상이 없다.
+        raise Exception(
+            f"배포 {pid} 에는 학습할 체크포인트가 없습니다 — 포맷 학습은 플랫폼 커밋을 "
+            "올린 배포에서만 할 수 있습니다(HF 모델을 직접 올린 배포에는 커밋이 없습니다). "
+            "체크포인트를 올린 배포를 고르거나 포맷 학습을 끄세요")
+    if not _SAFE_SEGMENT_RE.match(name):
+        # 이 이름은 컨테이너 안에서 마운트 경로 한 조각이 된다 — 경계에서 막는다.
+        raise Exception(
+            f"체크포인트 이름에 마운트에 쓸 수 없는 문자가 있습니다: {name!r}")
+    return name
 
 
 async def _resolve_remote_generator(inference_playground_id: int, model_id: int,

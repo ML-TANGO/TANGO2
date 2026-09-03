@@ -120,6 +120,9 @@ async def run_benchmark(body: dto.BenchmarkRunBody):
             benchmarks=benchmarks,
             inference_playground_id=body.inference_playground_id,
             judge_playground_id=body.judge_playground_id,
+            # 포맷 학습 — 켜면 배포 위임을 걷고 그 배포가 서빙 중인 커밋을 마운트해
+            # 학습→평가를 한 잡에서 돈다(둘은 배타 — dto.format_train 참고).
+            format_train=body.format_train,
             run_options=run_options or None)
         return response(status=1, result=res)
     except Exception as e:
