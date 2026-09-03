@@ -12,7 +12,7 @@
   justify-content: center;
   gap: 12px;
   color: $sub-text-color;
-  font-size: 13px;
+  font-size: 15px;
 }
 
 /* 단일 항목 리뷰 뷰 */
@@ -33,7 +33,7 @@
 }
 
 .review-content {
-  padding: 20px;
+  padding: 24px;
 }
 
 .sample-badge {
@@ -50,27 +50,27 @@
 .input-label,
 .output-label {
   display: block;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   color: $sub-text-color;
   font-family: SpoqaB;
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .input-text {
-  padding: 10px 12px;
+  padding: 12px 14px;
   border-radius: 4px;
   background-color: $background-color;
   color: $normal-text-color;
-  font-size: 14px;
-  line-height: 1.6;
+  font-size: 16px;
+  line-height: 1.7;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .output-text {
   color: $normal-text-color;
-  font-size: 14px;
-  line-height: 1.6;
+  font-size: 16px;
+  line-height: 1.7;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -86,5 +86,5 @@
 .audit-line {
   margin-top: 12px;
   color: $sub-text-color;
-  font-size: 11px;
+  font-size: 13px;
 }

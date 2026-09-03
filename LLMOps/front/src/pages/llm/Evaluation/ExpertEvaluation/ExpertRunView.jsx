@@ -288,7 +288,7 @@ const ExpertRunView = ({ modelId, jobId, onExit }) => {
                 <Badge
                   label={`${sample.idx + 1} / ${samples.length}`}
                   type='blue'
-                  size='sm'
+                  size='lg'
                 />
               </div>
 
@@ -333,7 +333,7 @@ const ExpertRunView = ({ modelId, jobId, onExit }) => {
                   t={t}
                 />
                 <InputText
-                  size='medium'
+                  size='large'
                   placeholder={t(
                     commentRequired
                       ? 'evaluation.expert.commentPlaceholderRequired'

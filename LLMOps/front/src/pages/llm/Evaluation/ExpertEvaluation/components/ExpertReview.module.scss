@@ -5,8 +5,8 @@
   margin: 0;
   padding: 0 20px 20px;
   color: $normal-text-color;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 15px;
+  line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -16,8 +16,8 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
-  font-size: 13px;
+  padding: 14px 16px;
+  font-size: 15px;
 }
 
 .ph-summary,
@@ -32,7 +32,7 @@
   overflow: hidden;
   color: $normal-text-color;
   font-family: SpoqaB;
-  font-size: 14px;
+  font-size: 16px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -56,10 +56,10 @@
 }
 
 .ph-position {
-  min-width: 56px;
+  min-width: 64px;
   color: $sub-text-color;
   font-family: SpoqaM;
-  font-size: 12px;
+  font-size: 14px;
   text-align: center;
 }
 
@@ -72,8 +72,8 @@
 
 .star {
   display: inline-flex;
-  width: 34px;
-  height: 34px;
+  width: 42px;
+  height: 42px;
   padding: 4px;
   align-items: center;
   justify-content: center;
@@ -97,8 +97,8 @@
 }
 
 .star-icon {
-  width: 26px;
-  height: 26px;
+  width: 32px;
+  height: 32px;
   background-color: $mono204;
   mask: url('/images/icon/ic-star.svg') center / contain no-repeat;
   -webkit-mask: url('/images/icon/ic-star.svg') center / contain no-repeat;
@@ -116,21 +116,27 @@
   margin-left: 8px;
   color: $normal-text-color;
   font-family: SpoqaB;
-  font-size: 13px;
+  font-size: 16px;
 }
 
 /* 코멘트 의무 안내 — 낮은 점수인데 사유가 비었을 때 채점 블록 하단에 노출. */
 .comment-required {
   color: $error-color;
   font-family: SpoqaM;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.5;
 }
 
-/* CSV 테이블 */
+/* CSV 테이블 — AIS 계측값은 숫자 비교라 기본 14px 로는 눈이 금방 지친다. 이 표만 키운다. */
 .csv-wrap {
-  margin: 4px 0 16px;
+  margin: 4px 0 20px;
   overflow-x: auto;
+
+  :global(.rdt_TableCol),
+  :global(.rdt_TableCol_Sortable),
+  :global(.rdt_TableCell) {
+    font-size: 16px;
+  }
 }
 
 /* 완료 안내 */
@@ -361,7 +367,7 @@
   justify-content: center;
   gap: 8px;
   color: $sub-text-color;
-  font-size: 12px;
+  font-size: 14px;
 }
 
 @media (max-width: 960px) {

@@ -53,7 +53,7 @@ const ExpertProgressHeader = ({
             <Badge
               label={t('evaluation.expert.completed')}
               type={STATUS_BADGE_TYPE.completed}
-              size='sm'
+              size='lg'
             />
           )}
         </div>
@@ -65,7 +65,7 @@ const ExpertProgressHeader = ({
           <ButtonV2
             type='outline'
             colorType='blue'
-            size='s'
+            size='m'
             label={t('evaluation.expert.prev')}
             onClick={onPrev}
             disabled={current <= 0}
@@ -75,7 +75,7 @@ const ExpertProgressHeader = ({
           <ButtonV2
             type='outline'
             colorType='blue'
-            size='s'
+            size='m'
             label={t('evaluation.expert.next')}
             onClick={onNext}
             disabled={current >= count - 1 || !!nextBlocked}
@@ -86,7 +86,7 @@ const ExpertProgressHeader = ({
           <ButtonV2
             type='clear'
             colorType='gray'
-            size='s'
+            size='m'
             label={t('evaluation.expert.newSession')}
             onClick={onReset}
           />
