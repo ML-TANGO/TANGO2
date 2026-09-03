@@ -6,7 +6,13 @@ import { STATUS_SUCCESS } from '@src/network';
 import { errorToastMessage } from '@src/utils';
 
 import {
-  Badge, DataTable, PageHeader, SectionHead, Select, dsBase, useDatasetNav,
+  Badge,
+  DataTable,
+  PageHeader,
+  SectionHead,
+  Select,
+  dsBase,
+  useDatasetNav,
 } from './components';
 import { fmt } from './lib/format';
 import common from './styles/common.module.scss';
@@ -25,7 +31,8 @@ const CHANGE_LABEL = { added: '추가됨', removed: '제거됨', param: '값 변
 
 /** 증감 한 칸. 0 은 색을 주지 않는다 — 안 변한 것이 눈에 띄면 변한 걸 못 찾는다. */
 function Delta({ n }) {
-  if (n === null || n === undefined) return <span className={style['d-none']}>—</span>;
+  if (n === null || n === undefined)
+    return <span className={style['d-none']}>—</span>;
   if (n === 0) return <span className={style['d-zero']}>0</span>;
   return (
     <span className={n > 0 ? style['d-up'] : style['d-down']}>
@@ -36,7 +43,9 @@ function Delta({ n }) {
 
 /** 실행 선택기의 한 줄 라벨. run_id 만 보이면 어느 게 어느 설정인지 못 고른다. */
 function runOption(r) {
-  const when = (r.end_datetime || r.create_datetime || '').toString().slice(5, 16);
+  const when = (r.end_datetime || r.create_datetime || '')
+    .toString()
+    .slice(5, 16);
   const tag = r.dry_run ? '미리보기' : '실행';
   return {
     v: r.run_id,
@@ -81,12 +90,18 @@ export default function ComparePage() {
       const list = res.result?.runs || [];
       setRuns(list);
       // 가장 최근 둘을 기본으로 집는다 — 방금 껐다 켠 두 번이 대개 그 둘이다.
-      if (list.length >= 2) { setA(list[1].run_id); setB(list[0].run_id); }
+      if (list.length >= 2) {
+        setA(list[1].run_id);
+        setB(list[0].run_id);
+      }
     })();
   }, [dsId, nodeIndex]);
 
   const compare = useCallback(async () => {
-    if (!a || !b || a === b) { setDiff(null); return; }
+    if (!a || !b || a === b) {
+      setDiff(null);
+      return;
+    }
     const res = await compareRuns(dsId, a, b);
     if (res.status === STATUS_SUCCESS) {
       setDiff(res.result);
@@ -99,14 +114,16 @@ export default function ComparePage() {
     setNote(res.message || '비교할 수 없습니다');
   }, [dsId, a, b]);
 
-  useEffect(() => { compare(); }, [compare]);
+  useEffect(() => {
+    compare();
+  }, [compare]);
 
   const options = runs.map(runOption);
 
   return (
     <div className={style.page}>
       <PageHeader
-        title="실행 비교"
+        title='실행 비교'
         back={{ to: `${dsBase(wsId, dsId)}/flow`, label: '파이프라인' }}
       />
 
@@ -124,7 +141,8 @@ export default function ComparePage() {
 
       {runs.length < 2 && (
         <span className={common.prose}>
-          비교하려면 실행이 두 번 이상 있어야 합니다. 기능을 바꿔 한 번 더 실행하세요.
+          비교하려면 실행이 두 번 이상 있어야 합니다. 기능을 바꿔 한 번 더
+          실행하세요.
         </span>
       )}
       {note && <span className={style.note}>{note}</span>}
@@ -133,17 +151,28 @@ export default function ComparePage() {
         <>
           {/* 얼마나 달라졌나 */}
           <div className={style.totals}>
-            {[['입력', diff.delta.in], ['통과', diff.delta.passed ?? diff.delta.out], ['제외', diff.delta.dropped]]
-              .map(([label, n]) => (
-                <span key={label} className={style.total}>
-                  <span className={style['total-label']}>{label}</span>
-                  <span className={style['total-delta']}><Delta n={n} /></span>
+            {[
+              ['입력', diff.delta.in],
+              ['통과', diff.delta.passed ?? diff.delta.out],
+              ['제외', diff.delta.dropped],
+            ].map(([label, n]) => (
+              <span key={label} className={style.total}>
+                <span className={style['total-label']}>{label}</span>
+                <span className={style['total-delta']}>
+                  <Delta n={n} />
                 </span>
-              ))}
+              </span>
+            ))}
             <span className={style['total-meta']}>
-              <Badge tone={STATUS_TONE[diff.a.status] || 'warn'}>A {diff.a.status}</Badge>
-              <Badge tone={STATUS_TONE[diff.b.status] || 'warn'}>B {diff.b.status}</Badge>
-              {(diff.a.dry_run || diff.b.dry_run) && <Badge tone="warn">미리보기 포함</Badge>}
+              <Badge tone={STATUS_TONE[diff.a.status] || 'warn'}>
+                A {diff.a.status}
+              </Badge>
+              <Badge tone={STATUS_TONE[diff.b.status] || 'warn'}>
+                B {diff.b.status}
+              </Badge>
+              {(diff.a.dry_run || diff.b.dry_run) && (
+                <Badge tone='warn'>미리보기 포함</Badge>
+              )}
             </span>
           </div>
 
@@ -152,7 +181,8 @@ export default function ComparePage() {
             <SectionHead>설정 차이</SectionHead>
             {diff.config_diff.length === 0 ? (
               <span className={common.prose}>
-                설정이 같습니다. 카운트가 달라졌다면 입력 데이터가 바뀐 것입니다.
+                설정이 같습니다. 카운트가 달라졌다면 입력 데이터가 바뀐
+                것입니다.
               </span>
             ) : (
               <DataTable

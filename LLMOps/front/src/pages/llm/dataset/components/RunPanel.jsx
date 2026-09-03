@@ -27,12 +27,12 @@ function RunBadge({ run }) {
   if (!run) return null;
   return (
     <span className={style['run-meta']}>
-      <Badge tone={STATUS_TONE[run.status] || 'warn'} size="lg">
+      <Badge tone={STATUS_TONE[run.status] || 'warn'} size='lg'>
         {STATUS_LABEL[run.status] || run.status}
       </Badge>
       {/* 미리보기 실행도 latest_run 으로 올라온다. 표시하지 않으면 표본만 돌린 결과를
           전량 실행 결과로 오해한다. */}
-      {run.dry_run && <Badge tone="warn">미리보기</Badge>}
+      {run.dry_run && <Badge tone='warn'>미리보기</Badge>}
       {run.error_reason && (
         <span className={style['run-error']}>{run.error_reason}</span>
       )}
@@ -55,7 +55,7 @@ function AssetTile({ datasetId, runId, item }) {
           className={style['tile-img']}
           src={runThumbUrl(datasetId, runId, item.asset_id)}
           alt={label}
-          loading="lazy"
+          loading='lazy'
         />
       ) : (
         <span className={style['tile-blank']}>썸네일 없음</span>
@@ -68,7 +68,8 @@ function AssetTile({ datasetId, runId, item }) {
 /** 통과·입력 열 — 썸네일 그리드. */
 function PassedColumn({ datasetId, data, empty, note, failed }) {
   // 요청 실패를 '0건'과 같은 문구로 그리면 사용자는 통과분이 정말 없는 줄 안다.
-  if (failed) return <span className={style['col-fail']}>불러오지 못했습니다</span>;
+  if (failed)
+    return <span className={style['col-fail']}>불러오지 못했습니다</span>;
   if (!data || !data.total) {
     return <span className={style['col-empty']}>{empty}</span>;
   }
@@ -108,14 +109,19 @@ function PassedColumn({ datasetId, data, empty, note, failed }) {
  * thumb 엔드포인트에 제외 자산을 물으면 전건 404 다. 사유·건수·단계를 보여준다.
  */
 function DroppedColumn({ data, failed }) {
-  if (failed) return <span className={style['col-fail']}>불러오지 못했습니다</span>;
+  if (failed)
+    return <span className={style['col-fail']}>불러오지 못했습니다</span>;
   if (!data || !data.total) {
     return <span className={style['col-empty']}>제외된 항목이 없습니다</span>;
   }
-  const reasons = Object.entries(data.reasons || {}).sort((a, b) => b[1] - a[1]);
+  const reasons = Object.entries(data.reasons || {}).sort(
+    (a, b) => b[1] - a[1],
+  );
   return (
     <>
-      <span className={style['col-count']}><b>{fmt(data.total)}</b>건 제외</span>
+      <span className={style['col-count']}>
+        <b>{fmt(data.total)}</b>건 제외
+      </span>
       {reasons.length > 0 && (
         <span className={style.reasons}>
           {reasons.map(([reason, n]) => (
@@ -180,7 +186,10 @@ export default function RunPanel({ datasetId, node, upstreamRun, onCompare }) {
 
   const load = useCallback(async () => {
     if (!datasetId || !runId) {
-      setDetail(null); setPassed(null); setDropped(null); setInput(null);
+      setDetail(null);
+      setPassed(null);
+      setDropped(null);
+      setInput(null);
       return;
     }
     setLoading(true);
@@ -190,7 +199,10 @@ export default function RunPanel({ datasetId, node, upstreamRun, onCompare }) {
       previewRun(datasetId, runId, { kind: 'passed', limit: PAGE }),
       previewRun(datasetId, runId, { kind: 'dropped', limit: PAGE }),
     ]);
-    const ok = { passed: p.status === STATUS_SUCCESS, dropped: dr.status === STATUS_SUCCESS };
+    const ok = {
+      passed: p.status === STATUS_SUCCESS,
+      dropped: dr.status === STATUS_SUCCESS,
+    };
     setDetail(d.status === STATUS_SUCCESS ? d.result : null);
     setPassed(ok.passed ? { ...p.result, run_id: runId } : null);
     setDropped(ok.dropped ? dr.result : null);
@@ -198,12 +210,19 @@ export default function RunPanel({ datasetId, node, upstreamRun, onCompare }) {
     // 입력 열 = 상류 실행의 통과분. 상류가 아직 안 돌았으면 비는 게 맞다.
     if (upstreamRunId) {
       const up = await previewRun(datasetId, upstreamRunId, {
-        kind: 'passed', limit: PAGE,
+        kind: 'passed',
+        limit: PAGE,
       });
-      setInput(up.status === STATUS_SUCCESS
-        ? { ...up.result, run_id: upstreamRunId } : null);
-      setFailed({ passed: !ok.passed, dropped: !ok.dropped,
-        input: up.status !== STATUS_SUCCESS });
+      setInput(
+        up.status === STATUS_SUCCESS
+          ? { ...up.result, run_id: upstreamRunId }
+          : null,
+      );
+      setFailed({
+        passed: !ok.passed,
+        dropped: !ok.dropped,
+        input: up.status !== STATUS_SUCCESS,
+      });
     } else {
       setInput(null);
       setFailed({ passed: !ok.passed, dropped: !ok.dropped, input: false });
@@ -211,14 +230,17 @@ export default function RunPanel({ datasetId, node, upstreamRun, onCompare }) {
     setLoading(false);
   }, [datasetId, runId, upstreamRunId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   if (!runId) {
     return (
       <span className={style.panel}>
         <span className={common.eyebrow}>실행 결과</span>
         <span className={style['col-empty']}>
-          아직 실행 기록이 없습니다. 이 노드를 실행하면 통과·제외 결과가 여기 나옵니다.
+          아직 실행 기록이 없습니다. 이 노드를 실행하면 통과·제외 결과가 여기
+          나옵니다.
         </span>
       </span>
     );
@@ -232,7 +254,7 @@ export default function RunPanel({ datasetId, node, upstreamRun, onCompare }) {
         <span className={common.eyebrow}>실행 결과</span>
         <RunBadge run={run} />
         {onCompare && (
-          <Btn size="sm" fill="outline" tone="gray" onClick={onCompare}>
+          <Btn size='sm' fill='outline' tone='gray' onClick={onCompare}>
             다른 실행과 비교
           </Btn>
         )}
@@ -253,10 +275,12 @@ export default function RunPanel({ datasetId, node, upstreamRun, onCompare }) {
             datasetId={datasetId}
             data={input}
             failed={failed.input}
-            note="상류 노드의 통과분입니다"
-            empty={upstreamRunId
-              ? '상류 실행에 통과분이 없습니다'
-              : '상류 노드를 먼저 실행하세요'}
+            note='상류 노드의 통과분입니다'
+            empty={
+              upstreamRunId
+                ? '상류 실행에 통과분이 없습니다'
+                : '상류 노드를 먼저 실행하세요'
+            }
           />
         </span>
         <span className={style.col}>
@@ -265,7 +289,11 @@ export default function RunPanel({ datasetId, node, upstreamRun, onCompare }) {
             datasetId={datasetId}
             data={passed}
             failed={failed.passed}
-            empty={run.status === 'running' ? '실행 중입니다' : '통과한 항목이 없습니다'}
+            empty={
+              run.status === 'running'
+                ? '실행 중입니다'
+                : '통과한 항목이 없습니다'
+            }
           />
         </span>
         <span className={style.col}>
