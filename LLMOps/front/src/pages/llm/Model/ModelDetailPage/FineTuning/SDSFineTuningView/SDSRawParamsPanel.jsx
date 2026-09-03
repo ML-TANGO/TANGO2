@@ -38,6 +38,9 @@ function SDSRawParamsPanel({
           type='text'
           value={namespace}
           onChange={(e) => onChangeNamespace(e.target.value)}
+          // 비워두면 backend 가 이 인스턴스의 워크스페이스 ns 를 파생한다.
+          // 직접 적는 건 cross-workspace 실행이 필요한 admin 용 탈출구.
+          placeholder='자동 (워크스페이스 네임스페이스)'
           disabled={disabled}
         />
       </div>

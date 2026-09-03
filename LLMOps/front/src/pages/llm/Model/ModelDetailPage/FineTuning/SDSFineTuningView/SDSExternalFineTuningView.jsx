@@ -109,13 +109,17 @@ const SDSExternalFineTuningView = memo(function SDSExternalFineTuningView({
 
   // 좌측 panel — 사용자가 사전에 편집하는 params JSON + namespace.
   // 실행 모달로 들어갈 때 closure 로 이 값을 캡쳐해서 BFF 호출에 같이 보낸다.
-  // workspace_scope=per-workspace manifest 의 namespace 규칙 (platform
-  // convention): jonathan-system-{workspace_id}. backend lifecycle.py 도
-  // 같은 값으로 override 하지만, frontend default 를 일치시켜 UX 일관성.
-  const defaultNamespace = workspaceId
-    ? `jonathan-system-${workspaceId}`
-    : 'jonathan-system';
-  const [namespaceInput, setNamespaceInput] = useState(defaultNamespace);
+  //
+  // 기본값은 **빈 값(자동)** 이다. backend `_resolve_namespace`(lifecycle.py) 가
+  // 빈 값이면 `{플랫폼 ns}-{workspace_id}` 를 파생하고, 그 플랫폼 ns 는 인스턴스별
+  // env(JF_SYSTEM_NAMESPACE)에서 온다. 여기서 `jonathan-system-{id}` 를 리터럴로
+  // 만들어 보내면 backend 는 그것을 "admin 이 의도한 cross-namespace 실행"으로
+  // 보고 그대로 쓴다 — 개발 인스턴스에서 실행한 잡이 **서빙 워크스페이스 ns 에
+  // 파드를 띄우고 서빙 PVC/GPU 를 쓰는** 사고가 실제로 났다(dev/serving 분리 때
+  // backend 는 고쳤는데 이 리터럴이 남아 있던 반쪽). 값을 비워 backend 가
+  // 결정하게 두면 어느 인스턴스에서 열어도 자기 ns 안에 머문다.
+  // 명시적 cross-workspace 실행이 필요하면 아래 입력에 직접 적으면 된다(탈출구 유지).
+  const [namespaceInput, setNamespaceInput] = useState('');
   const [paramsInput, setParamsInput] = useState('{}');
   // 다단계 학습 레시피(manifest.recipe, SP-10) — 있으면 phase 카드 파이프라인 렌더.
   const [recipe, setRecipe] = useState(null);
@@ -318,10 +322,6 @@ const SDSExternalFineTuningView = memo(function SDSExternalFineTuningView({
   // → PATCH external-job(활성 job 바인딩). 단일 launch 와 phase launch 가 모두 사용.
   const submitExternalJob = useCallback(
     async ({ params, outputSubdir, instanceId, instanceCount, gpuCount }) => {
-      if (!namespaceInput.trim()) {
-        errorToastMessage(null, t('externalTraining.start.failed.label'));
-        return false;
-      }
       const launch = await callApi({
         url: 'external/jobs',
         method: 'post',
@@ -329,7 +329,8 @@ const SDSExternalFineTuningView = memo(function SDSExternalFineTuningView({
           manifestName,
           manifestVersion,
           workspaceId,
-          namespace: namespaceInput,
+          // 빈 값 = 자동(backend 가 워크스페이스 ns 파생). 위 주석 참조.
+          namespace: namespaceInput.trim(),
           params,
           instanceId,
           instanceCount,
