@@ -85,9 +85,19 @@ spec:
       - llama-3.1-8b
       - qwen3-8b
     min_gpu_memory_gb: 16
-    estimated_startup_seconds: 300    # startupProbe failureThreshold 산정 기준
+    # 8B VLM 콜드스타트 실측 ~730s(가중치 로드) + 어댑터 로드. 이 값이 곧
+    # startupProbe 예산(failureThreshold = 값/5, periodSeconds 5)이라, 모자라면
+    # kubelet 이 로딩 중인 컨테이너를 죽인다 — infer 는 모델을 다 올린 뒤에야
+    # 포트를 바인드해서 그때까지 /health 가 connection refused 다.
+    estimated_startup_seconds: 1800   # startupProbe failureThreshold 산정 기준
     estimated_duration_seconds: 30    # 추론 1회 평균 응답 시간 (참고)
-    timeout_seconds: 300              # 추론 hard timeout
+    # ⚠️ 이 값은 추론 1회 timeout 이 아니라 **기동 준비 시한**으로도 쓰인다.
+    # lifecycle._poll_loop 가 timeout_seconds 로 deadline 을 만들고
+    # _wait_until_ready 가 그 안에 /health 200 을 못 받으면 E_STARTUP_TIMEOUT
+    # → helm uninstall 로 **로딩 중인 파드를 죽인다**(실측: 600 이면 598초에 종료).
+    # sync 는 준비 후 _drive_until_terminal 이 즉시 반환하므로 값을 키워도
+    # 서빙 수명에는 영향이 없다. 8B VLM 콜드스타트 ~730초 기준 여유값.
+    timeout_seconds: 1800             # 기동 준비 시한 겸 추론 hard timeout
 
   # ── Hybrid pair 공유 메타 (eva-vlm-train.yaml 과 동일 값 유지 필수) ────────
   # 플랫폼이 두 manifest 가 paired 인지, image/contract version skew 가 없는지

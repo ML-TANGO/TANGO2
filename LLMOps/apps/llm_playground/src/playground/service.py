@@ -2310,6 +2310,24 @@ async def start_playground(user_name, playground_id,
                     except Exception:
                         traceback.print_exc()
 
+                # 인스턴스는 **반드시** 실어 보낸다. 비우면 fb_scheduler 가 노드
+                # 교집합으로 추정하는데, 워크스페이스에 GPU/CPU 인스턴스가 하나씩
+                # 있으면 둘 다 같은 노드라 "모호" 로 판정해 라벨을 비우고,
+                # 그 라벨을 쓰는 resource-bundle 파생까지 스킵돼 매니페스트 원시
+                # cpu 가 그대로 나가 쿼터 초과로 helm install 이 죽는다
+                # (실측: eva-vlm-infer cpu=8 vs tango-dev-2 quota 6).
+                infer_instance_id = playground_instance_id
+                if not infer_instance_id:
+                    # model.instance_id 가 비어 있는 external 모델이 있다(실측).
+                    # 배포 규모를 모르므로 VRAM 요구는 걸지 않고 GPU 인스턴스 중
+                    # 여유 있는 것을 고른다. 실패는 비-치명 — 기존처럼 미지정으로
+                    # 진행시켜 지금 되던 배포를 거절로 바꾸지 않는다.
+                    try:
+                        infer_instance_id = await _resolve_deploy_instance(
+                            workspace_id, 0, gpu_count)
+                    except Exception:
+                        traceback.print_exc()
+                        infer_instance_id = None
                 try:
                     job_resp = await start_infer_job(
                         manifest_name=manifest_name,
@@ -2319,6 +2337,7 @@ async def start_playground(user_name, playground_id,
                         params={"_base_model": {"name": model_row.get("name") or "external"}},
                         gpu_count=int(gpu_count),
                         env_overrides=env_overrides if env_overrides else None,
+                        instance_id=infer_instance_id,
                     )
                 except ExternalInferError as e:
                     traceback.print_exc()

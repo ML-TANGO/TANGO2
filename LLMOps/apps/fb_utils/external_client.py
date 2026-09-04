@@ -123,11 +123,19 @@ async def start_infer_job(
     gpu_count: int = 1,
     namespace: str = settings.SYSTEM_NAMESPACE,
     env_overrides: dict[str, str] | None = None,
+    instance_id: int | None = None,
 ) -> dict[str, Any]:
     """Launch a partner pod via fb_external_container /api/v1/jobs.
 
     env_overrides — manifest spec.env 위에 덮어쓰기. launch 시점에 결정되는
     동적 env (예: EVA_CHECKPOINT_PATH = model.latest_commit name).
+
+    instance_id — 이 배포가 쓸 GPU 인스턴스. **꼭 넘겨야 한다.** 비우면
+    fb_scheduler 가 노드 교집합으로 추정하는데, 워크스페이스에 GPU/CPU 인스턴스가
+    하나씩 있으면 둘 다 같은 노드라 후보가 2개로 남아 "모호" 로 판정하고 라벨을
+    비운다. 그러면 같은 라벨을 쓰는 resource-bundle 파생까지 스킵돼 **매니페스트의
+    원시 cpu/memory** 가 그대로 helm 에 실리고, 네임스페이스 쿼터(limits.cpu)를
+    넘겨 admission 에서 하드 실패한다 (실측: eva-vlm-infer cpu=8 vs quota 6).
     """
     body: dict[str, Any] = {
         "manifest_name": manifest_name,
@@ -140,6 +148,8 @@ async def start_infer_job(
     }
     if env_overrides:
         body["env_overrides"] = env_overrides
+    if instance_id is not None:
+        body["instance_id"] = int(instance_id)
     return await _post("/api/v1/jobs", json=body, expected=202)
 
 
