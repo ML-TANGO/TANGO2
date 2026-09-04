@@ -138,7 +138,60 @@ export const applyDatasetChoice = (params = {}, nextName = '') => {
   return out;
 };
 
-export const mergePhaseParams = ({ phaseParams, form, resumeSelection }) => {
+/**
+ * 데이터셋 파일 트리(`options/preprocessing/data` 의 hierarchy 응답)를 상대경로 목록으로.
+ *
+ * 응답 노드는 `{type:'file'|'folder', name, full_path, sub_list}`. `full_path` 는 데이터셋
+ * 루트 기준 상대경로라 그대로 쓰고, 없을 때만 부모 경로를 이어붙인다.
+ *
+ * ⚠️ 확장자 필터링은 **여기서 해야 한다** — `options/preprocessing/data` 라우트는
+ * `extension_list` 를 넘기지 않아(fb_option route.py) 이미지(.png)까지 전부 내려온다.
+ * 디렉터리당 500개 cap 이 걸려 있어 응답 크기는 유한하다.
+ *
+ * 순수 함수 — 입력을 건드리지 않는다.
+ */
+/**
+ * 이 phase 가 학습 파일을 담는 **파라미터 키와 확장자**.
+ *
+ * 레시피마다 다르다 — projector/lora/lora_sds 는 `data_path`(.json), lora_marine 은
+ * `marine_data_path`(.parquet). 키를 하나로 못박으면 lora_marine 에서 무시되는 값을
+ * 넣게 된다(컨테이너 train_manager 가 phase 별로 다른 키를 읽는다). 현재 값에서
+ * 파생하므로 매니페스트가 바뀌어도 따라간다. 없으면 null(선택기 미표시).
+ */
+export const dataFileParamOf = (params = {}) => {
+  const keys = ['data_path', 'marine_data_path'];
+  for (let i = 0; i < keys.length; i += 1) {
+    const value = params && params[keys[i]];
+    if (typeof value === 'string' && value) {
+      const dot = value.lastIndexOf('.');
+      return { key: keys[i], ext: dot > 0 ? value.slice(dot).toLowerCase() : '' };
+    }
+  }
+  return null;
+};
+
+export const flattenDatasetFiles = (nodes, prefix = '', ext = '.json') => {
+  if (!Array.isArray(nodes)) return [];
+  return nodes.flatMap((node) => {
+    if (!node || typeof node.name !== 'string') return [];
+    const path =
+      typeof node.full_path === 'string' && node.full_path
+        ? node.full_path
+        : prefix
+          ? `${prefix}/${node.name}`
+          : node.name;
+    if (node.type === 'folder')
+      return flattenDatasetFiles(node.sub_list, path, ext);
+    return !ext || path.toLowerCase().endsWith(ext) ? [path] : [];
+  });
+};
+
+export const mergePhaseParams = ({
+  phaseParams,
+  form,
+  resumeSelection,
+  chainSelection,
+}) => {
   const f = form || {};
   const merged = { ...(phaseParams || {}) };
   [...HP_KEYS, ...CKPT_NUM_SPECS.map((s) => s.key)].forEach((key) => {
@@ -147,7 +200,16 @@ export const mergePhaseParams = ({ phaseParams, form, resumeSelection }) => {
   });
   const name = (f.output_checkpoint_name || '').trim();
   if (name) merged.output_checkpoint_name = name; // 빈값이 필수키를 덮지 않도록
+  // 학습 파일(data_path) — 데이터셋마다 파일명이 달라 `/dataset/<이름>` 접두사 치환만으로는
+  // 맞출 수 없다(sds_train_ko.json ↔ sds_train_ko_9k.json). 사용자가 실제 존재하는 파일을
+  // 고르면 그 값이 매니페스트 기본값을 덮는다. 빈값이면 기본값 유지(하위호환).
+  // 학습 파일 키는 phase 마다 다르다(dataFileParamOf) — 둘 다 통과시킨다.
+  ['data_path', 'marine_data_path'].forEach((key) => {
+    const value = (f[key] || '').trim();
+    if (value) merged[key] = value;
+  });
   if (resumeSelection) merged._resume_checkpoint = resumeSelection;
+  if (chainSelection) merged._chain_commit = chainSelection;
   return merged;
 };
 
@@ -172,7 +234,19 @@ export const applyChaining = ({
 }) => {
   const out = { ...(params || {}) };
   if (phase && phase.chain_from) {
-    const priorCommit = (phaseCommitMap || {})[phase.chain_from];
+    // `_chain_commit` = 사용자가 고른 선행 커밋(재학습으로 커밋이 여러 개일 때) — 1단
+    // `mergePhaseParams` 가 심은 FE-내부 마커. 없으면 기존대로 최신(phaseCommitMap).
+    // 다른 phase 의 커밋이 흘러들면 엉뚱한 산출물에 이어붙으므로, 커밋명 규약
+    // `{phase.id}-{YYYYMMDD}-{HHMMSS}` 로 **정확히** 검증한다 (prefix 만 보면 `lora` 가
+    // `lora-cc3m-...` 을 통과시킨다 — 기존 anchored 규칙과 동일).
+    const requested =
+      typeof out._chain_commit === 'string' ? out._chain_commit.trim() : '';
+    const belongs =
+      requested.startsWith(`${phase.chain_from}-`) &&
+      /^\d{8}-\d{6}$/.test(requested.slice(phase.chain_from.length + 1));
+    const priorCommit = belongs
+      ? requested
+      : (phaseCommitMap || {})[phase.chain_from];
     if (!priorCommit) return { ok: false, code: 'CHAIN_MISSING' };
     const chainInputs = phase.chain_inputs || {};
     Object.keys(chainInputs).forEach((key) => {
@@ -194,6 +268,9 @@ export const applyChaining = ({
       out._base_model = { name: baseModelName };
     }
   }
+  // 마커는 파트너로 보내지 않는다(`_resume_checkpoint` 와 같은 규칙). chain_from 이
+  // 없는 phase 에 남는 경우까지 막으려고 분기 밖에서 제거한다.
+  delete out._chain_commit;
   return { ok: true, params: out };
 };
 

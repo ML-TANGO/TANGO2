@@ -21,6 +21,9 @@ const cookies = new Cookies();
 // `mode`:
 //   'internal' (default) → /api/models/fine-tuning/sse-graph/{modelId}
 //   'external'           → /api/external/jobs/{jobId}/sse-graph (v1.0.0 emits {graph: {}})
+//   'phase'              → /api/external/models/{modelId}/phases/{phaseId}/sse-graph
+//                          — 레시피 4-phase 용. 조회 단위가 job 이 아니라 phase 라,
+//                          활성 job 이 다른 phase 여도 선택한 phase 자기 곡선을 받는다.
 const useSSEGraph = (
   modelId,
   userName,
@@ -28,6 +31,7 @@ const useSSEGraph = (
   setGraphData,
   mode = 'internal',
   setCheckpoints = () => {},
+  phaseId = null,
 ) => {
   const eventSourceRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
@@ -50,8 +54,14 @@ const useSSEGraph = (
     }
   }, []);
   useEffect(() => {
+    // phase 모드는 활성 job 과 무관하게(이미 끝난 phase 포함) 그 phase 산출물을
+    // 읽으므로 fineTuningStatus 를 게이트로 쓰지 않는다 — 쓰면 완료 phase 가 영영 빈 차트가 된다.
+    const canStream =
+      mode === 'phase'
+        ? Boolean(modelId && phaseId)
+        : Boolean(modelId && fineTuningStatus);
     // if (!modelId || fineTuningStatus !== 'running') {
-    if (!modelId || !fineTuningStatus) {
+    if (!canStream) {
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
         eventSourceRef.current = null;
@@ -65,9 +75,11 @@ const useSSEGraph = (
 
     const connectSSE = () => {
       const url =
-        mode === 'external'
-          ? `${API_HOST}external/jobs/${modelId}/sse-graph`
-          : `${API_HOST}models/fine-tuning/sse-graph/${modelId}`;
+        mode === 'phase'
+          ? `${API_HOST}external/models/${modelId}/phases/${phaseId}/sse-graph`
+          : mode === 'external'
+            ? `${API_HOST}external/jobs/${modelId}/sse-graph`
+            : `${API_HOST}models/fine-tuning/sse-graph/${modelId}`;
       const option = {
         headers: {
           // 'Content-Type': 'application/json;charset=UTF-8',
@@ -121,7 +133,7 @@ const useSSEGraph = (
         if (verdict !== SSE_FAILURE.RETRY) return;
         if (retryRef.current.attempt >= SSE_RETRY.GIVE_UP_AFTER) return;
 
-        if (fineTuningStatus === 'running') {
+        if (fineTuningStatus === 'running' || mode === 'phase') {
           const delay = sseRetryDelay(retryRef.current.attempt);
           retryRef.current.attempt += 1;
           reconnectTimeoutRef.current = setTimeout(() => {
@@ -157,7 +169,7 @@ const useSSEGraph = (
       }
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [modelId, userName, fineTuningStatus, setGraphData, mode, disconnectSSE]);
+  }, [modelId, userName, fineTuningStatus, setGraphData, mode, phaseId, disconnectSSE]);
 };
 
 export default useSSEGraph;

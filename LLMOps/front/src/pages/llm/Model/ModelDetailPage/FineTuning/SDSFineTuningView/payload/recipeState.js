@@ -17,6 +17,27 @@ export const escapeRegExp = (s) =>
  * (phase.id 가 하이픈을 허용). 그래서 타임스탬프까지 **anchored 정규식**으로
  * 정확 매칭한다. ts 가 고정폭이라 lexicographic 정렬 = 시간순.
  */
+/**
+ * phase.id → 커밋 이름 **목록**(최신 우선).
+ *
+ * `derivePhaseCommitMap` 은 최신 1개로 접는다 — 완료 여부 판정에는 그걸로 충분하지만,
+ * 재학습을 허용하면 한 phase 에 커밋이 여러 개 쌓이고 "어느 산출물에 이어붙일지" 를
+ * 골라야 한다. 접기 전 목록이 필요한 곳은 이 함수를 쓴다(기존 함수는 무변경).
+ */
+export const derivePhaseCommitsMap = (commits, phases) => {
+  const map = {};
+  (phases || []).forEach((p) => {
+    const re = new RegExp(`^${escapeRegExp(p.id)}-\\d{8}-\\d{6}$`);
+    const matched = (commits || [])
+      .map((c) => c && c.name)
+      .filter((n) => typeof n === 'string' && re.test(n))
+      .sort()
+      .reverse(); // ts 고정폭 → 사전 역순 = 최신 우선
+    if (matched.length) map[p.id] = matched;
+  });
+  return map;
+};
+
 export const derivePhaseCommitMap = (commits, phases) => {
   const map = {};
   (phases || []).forEach((p) => {

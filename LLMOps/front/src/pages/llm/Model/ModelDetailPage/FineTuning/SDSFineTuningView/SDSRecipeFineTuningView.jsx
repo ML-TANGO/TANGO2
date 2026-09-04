@@ -28,6 +28,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { getExternalCheckpoints } from '@src/apis/llm/model';
+import { getDatasetDataList } from '@src/apis/flightbase/trainings';
 import { STATUS_SUCCESS } from '@src/network';
 
 import FineTuningGraph from '../FineTuningGraph';
@@ -38,7 +39,9 @@ import {
   HP_SPECS,
   buildPhaseForm,
   applyDatasetChoice,
+  dataFileParamOf,
   datasetNameOf,
+  flattenDatasetFiles,
   mergePhaseParams,
 } from './payload/recipeParams';
 import { canRunPhase, derivePhaseStatus } from './payload/recipeState';
@@ -47,6 +50,7 @@ import RecipeStepNav from './RecipeStepNav';
 import SDSMonitorSummary from './SDSMonitorSummary';
 import SDSTopButtons from './SDSTopButtons';
 import RecipeArchSection, { FIXED_PROJ } from './sections/RecipeArchSection';
+import RecipeChainSection from './sections/RecipeChainSection';
 import RecipeCheckpointSection from './sections/RecipeCheckpointSection';
 import RecipeDatasetSection from './sections/RecipeDatasetSection';
 import RecipeFreezeSection from './sections/RecipeFreezeSection';
@@ -103,7 +107,11 @@ const SDSRecipeFineTuningView = ({
   activePhaseId,
   activePhaseStatus,
   donePhases,
-  phaseCommitMap,
+  // phase.id → 커밋 목록(최신 우선). 이력 표시 + "이어서 할 커밋" 선택에 쓴다.
+  // (단수 phaseCommitMap 은 부모가 donePhases 파생에만 쓰고 여기선 안 받는다.)
+  phaseCommits,
+  // 선택 phase 통지 — 부모가 그래프 SSE 를 이 phase 로 건다(조회 단위=phase).
+  onSelectedPhaseChange,
   // 워크스페이스 데이터셋 [{label,value}] — 학습에 쓸 데이터셋 선택지(부모 조회).
   datasetOptions,
   onRunPhase,
@@ -116,7 +124,6 @@ const SDSRecipeFineTuningView = ({
   onSystemLog,
 }) => {
   const done = donePhases || new Set();
-  const commitMap = phaseCommitMap || {};
 
   // phase 별 편집 폼 — 각 phase params 로 시드(기본값). 선택 전환 시 이전 편집 보존.
   const [forms, setForms] = useState(() => {
@@ -131,6 +138,11 @@ const SDSRecipeFineTuningView = ({
   // 학습/평가 분할(sds_train ↔ sds_eval)이 생기면서 "무엇으로 학습했나" 가 결과 신뢰도를
   // 좌우해 화면에서 고를 수 있게 한다. 경로 파라미터 동반 재작성은 실행 시 순수 함수가 한다.
   const [datasetSel, setDatasetSel] = useState({});
+  // 선택된 데이터셋 안의 학습 파일(json) 목록. 데이터셋마다 파일명이 달라
+  // (`sds_train_ko.json` ↔ `sds_train_ko_9k.json`) 경로를 접두사 치환으로 맞출 수 없다 —
+  // 실재하는 파일만 고르게 해서 "없는 경로로 조용히 학습" 을 구조적으로 막는다.
+  const [datasetFiles, setDatasetFiles] = useState([]);
+  const [datasetFilesLoading, setDatasetFilesLoading] = useState(false);
 
   // 선택 phase — 기본: 활성(실행 중) phase → 없으면 첫 미완료 → 없으면 첫 phase.
   const [selectedPhaseId, setSelectedPhaseId] = useState(() => {
@@ -165,6 +177,12 @@ const SDSRecipeFineTuningView = ({
   useEffect(() => {
     if (activePhaseId) setSelectedPhaseId(activePhaseId);
   }, [activePhaseId]);
+
+  // 선택 phase 를 부모로 올린다 — 우측 모니터(그래프·loss·grad)가 좌측 선택을 따라가야
+  // 한다. 부모가 SSE 소유자라 여기서 통지만 하고 구독은 부모가 한다(불변식 S1).
+  useEffect(() => {
+    if (onSelectedPhaseChange) onSelectedPhaseChange(selectedPhaseId);
+  }, [selectedPhaseId, onSelectedPhaseChange]);
 
   // 커밋이 비동기로 늦게 도착할 수 있다 — done 이 채워지고 활성 job 이 없을 때 현재 선택이
   // 이미 완료된 phase 면 첫 미완료로 보정(부분 완료 레시피 리로드 시 done 카드 선택 방지).
@@ -201,7 +219,12 @@ const SDSRecipeFineTuningView = ({
   // 이어서 학습(가중치 warm-start) — 모델의 저장된 체크포인트 목록. 선택 시 그 가중치에서
   // 이어서 학습(옵티마이저/step 은 리셋). 목록 소스 = list_external_checkpoints(P1).
   const [resumeCkpts, setResumeCkpts] = useState([]);
-  const [resumeSel, setResumeSel] = useState(''); // '' = 처음부터. 값 = "<commit>/checkpoint-<step>"
+  // phase 별 "이어서 학습" 선택. '' = 처음부터. 값 = "<commit>/checkpoint-<step>".
+  // ⚠️ 단일 값이면 phase 를 옮겨도 앞 phase 에서 고른 체크포인트가 그대로 실행에 딸려간다
+  //    (그래프·로그에서 고친 phase 간 누출과 같은 계열) → phase.id 로 키를 준다.
+  const [resumeSelMap, setResumeSelMap] = useState({});
+  // phase 별 "이어서 할 커밋"(선행 phase 산출물). '' = 최신.
+  const [chainSelMap, setChainSelMap] = useState({})
   // 이어서 학습 체크포인트 → 조나단 Selectbox list(label/value) 형태로 변환.
   const resumeOptions = useMemo(
     () => [
@@ -219,7 +242,8 @@ const SDSRecipeFineTuningView = ({
     // 모델 전환 시 이전 모델의 체크포인트 선택 잔존 방지(컴포넌트가 manifest@version 로만
     // keyed 라 같은 매니페스트의 다른 모델로 이동 시 미리마운트 → stale 선택으로 오모델
     // 체크포인트 주입 위험, codex MED).
-    setResumeSel('');
+    setResumeSelMap({});
+    setChainSelMap({});
     setResumeCkpts([]);
     if (!modelId) return undefined;
     let alive = true;
@@ -242,7 +266,8 @@ const SDSRecipeFineTuningView = ({
   // 실행 — 편집한 숫자 하이퍼파라미터/step 과 체크포인트 이름만 phase.params 위에 오버레이,
   // 나머지 키(경로·phase·scenario·chain)는 pass-through(계약 보존). 체인 주입은 부모가 처리.
   //
-  // `resumeSel` 이 있으면 mergePhaseParams 가 FE-내부 마커 `_resume_checkpoint` 를 심는다.
+  // phase 별 `resumeSelMap`/`chainSelMap` 값이 있으면 mergePhaseParams 가 FE-내부 마커
+  // `_resume_checkpoint`/`_chain_commit` 를 심는다.
   // 그 마커를 partner 키(resume_lora_path/projector_path)로 번역하고 제거하는 것은 부모
   // launchPhase → applyChaining 이다(2단 프로토콜, payload/recipeParams.js 주석 참조).
   const handleRun = useCallback(
@@ -256,11 +281,12 @@ const SDSRecipeFineTuningView = ({
         mergePhaseParams({
           phaseParams: base,
           form: forms[phase.id],
-          resumeSelection: resumeSel,
+          resumeSelection: resumeSelMap[phase.id] || '',
+          chainSelection: chainSelMap[phase.id] || '',
         }),
       );
     },
-    [datasetSel, forms, onRunPhase, resumeSel],
+    [chainSelMap, datasetSel, forms, onRunPhase, resumeSelMap],
   );
 
   const selectedPhase =
@@ -276,6 +302,89 @@ const SDSRecipeFineTuningView = ({
   }, [selectedStatus]);
 
   const selForm = selectedPhase ? forms[selectedPhase.id] || {} : {};
+
+  // ── 학습 파일(data_path) 선택 ──
+  // 컨테이너는 데이터셋을 `/dataset/<이름>` 에 마운트하므로 최종 경로는
+  // `/dataset/<이름>/<상대경로>`. 목록은 실재하는 json 만 담는다.
+  const selectedDatasetName = selectedPhase
+    ? datasetSel[selectedPhase.id] || datasetNameOf(selectedPhase.params)
+    : '';
+  // 이 phase 가 쓰는 학습파일 파라미터(키·확장자). lora_marine 은 marine_data_path(.parquet).
+  const dataFileParam = selectedPhase
+    ? dataFileParamOf(selectedPhase.params)
+    : null;
+  const dataFileKey = dataFileParam ? dataFileParam.key : 'data_path';
+  const dataFileExt = dataFileParam ? dataFileParam.ext : '.json';
+  const selectedDatasetId = useMemo(
+    () =>
+      (datasetOptions || []).find((o) => o.value === selectedDatasetName)?.id,
+    [datasetOptions, selectedDatasetName],
+  );
+  useEffect(() => {
+    if (!selectedDatasetId) {
+      setDatasetFiles([]);
+      return undefined;
+    }
+    let active = true;
+    // 데이터셋이 바뀌면 이전 목록을 **즉시** 비운다 — 남겨두면 새 목록이 오기 전에
+    // 자동선택(후보 1개)이 이전 데이터셋의 파일명을 새 데이터셋 경로에 붙여버린다.
+    setDatasetFiles([]);
+    setDatasetFilesLoading(true);
+    (async () => {
+      try {
+        const res = await getDatasetDataList(selectedDatasetId, {
+          extension: dataFileExt,
+        });
+        if (!active) return;
+        // 실패하면 빈 목록 = 선택기만 비고 매니페스트 기본값 그대로 (기능 저하 없음).
+        const tree =
+          res?.status === STATUS_SUCCESS && Array.isArray(res.result)
+            ? res.result
+            : [];
+        setDatasetFiles(flattenDatasetFiles(tree, '', dataFileExt));
+      } catch {
+        if (active) setDatasetFiles([]);
+      } finally {
+        if (active) setDatasetFilesLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [selectedDatasetId, dataFileExt]);
+  const datasetFileOptions = useMemo(
+    () => datasetFiles.map((f) => ({ label: f, value: f })),
+    [datasetFiles],
+  );
+  // 현재 data_path 를 목록의 상대경로로 환산. 매니페스트 기본값이 데이터셋 밖(이미지 내부
+  // 경로)을 가리키면 매칭되지 않아 빈 선택으로 보이는데, 그 자체가 "기본값 그대로" 신호다.
+  const selectedDataFile = useMemo(() => {
+    const current =
+      selForm[dataFileKey] || selectedPhase?.params?.[dataFileKey] || '';
+    const prefix = `/dataset/${selectedDatasetName}/`;
+    return typeof current === 'string' && current.startsWith(prefix)
+      ? current.slice(prefix.length)
+      : '';
+  }, [selForm, dataFileKey, selectedPhase, selectedDatasetName]);
+  // json 이 하나뿐인 데이터셋은 자동 선택한다. 데이터셋만 바꾸고 파일을 안 고르면
+  // data_path 가 매니페스트 기본값(이미지 내부 데모 파일)에 남아, 고른 데이터셋과 무관한
+  // 파일로 학습되는 원래의 사고가 그대로 재현된다. 후보가 둘 이상이면 사용자가 고른다.
+  useEffect(() => {
+    if (!selectedPhase || selectedDataFile || datasetFiles.length !== 1) return;
+    setField(
+      selectedPhase.id,
+      dataFileKey,
+      `/dataset/${selectedDatasetName}/${datasetFiles[0]}`,
+    );
+  }, [
+    datasetFiles,
+    selectedDataFile,
+    selectedPhase,
+    selectedDatasetName,
+    dataFileKey,
+    setField,
+  ]);
+
   const target = selectedPhase
     ? TRAIN_TARGET[selectedPhase.params?.phase]
     : null;
@@ -288,18 +397,35 @@ const SDSRecipeFineTuningView = ({
   const isSelRunning =
     selectedStatus === 'running' || selectedStatus === 'pending';
   const isSelDone = selectedStatus === 'done';
+  // 이 phase 의 커밋 이력(최신 우선). 재학습하면 여러 개가 쌓인다.
+  const commitList = selectedPhase
+    ? (phaseCommits || {})[selectedPhase.id] || []
+    : [];
+  // 선행 phase 의 커밋 목록 — "이어서 할 커밋" 후보.
+  const chainCommitList =
+    selectedPhase && selectedPhase.chain_from
+      ? (phaseCommits || {})[selectedPhase.chain_from] || []
+      : [];
 
-  // ── 모니터 파생값(활성 job 의 SSE) ──
+  // ── 모니터 파생값 ──
+  // `monStatus`/`isMonRunning` 은 **활성 job** 범위 그대로 둔다 — 상단 실행/중지 버튼
+  // 게이트라, 다른 phase 를 보는 동안 중지 버튼이 사라지면 안 된다.
   const monStatus = fineStatus?.fine_tuning_status?.status;
   const isMonRunning = monStatus === 'running' || monStatus === 'pending';
+  // 반면 요약카드 **표시값**은 선택 phase 기준이다. loss/grad 는 phase 단위 그래프에서
+  // 그대로 따라오고, 진행률·에폭은 활성 job 의 라이브 값이라 선택 phase 가 활성일 때만
+  // 유효하다 — 아니면 다른 phase 진행률이 곡선과 어긋난 채 표시된다(같은 부류의 누출).
+  const isSelActive = Boolean(selectedPhase && activePhaseId === selectedPhase.id);
+  const liveProgress = isSelActive ? progressData : null;
   const monLoss = graphData?.['train/loss']?.values?.slice(-1)?.[0];
   const monGrad = graphData?.['train/grad_norm']?.values?.slice(-1)?.[0];
   // 바 width 는 숫자, 라벨은 1% 미만에서 소수 2자리(progressFormat 참조).
-  const monPctValue = toPercentValue(progressData?.percent);
-  const monPct = formatPercentLabel(progressData?.percent);
+  // 완료 phase 는 라이브 진행률이 없다 — 0% 로 두면 미실행과 구분되지 않아 100% 로 고정.
+  const monPctValue = isSelDone ? 100 : toPercentValue(liveProgress?.percent);
+  const monPct = isSelDone ? '100' : formatPercentLabel(liveProgress?.percent);
   const monEpoch =
-    Number.isFinite(progressData?.progress_epoch) && progressData?.total_epoch
-      ? `${progressData.progress_epoch}/${progressData.total_epoch}`
+    Number.isFinite(liveProgress?.progress_epoch) && liveProgress?.total_epoch
+      ? `${liveProgress.progress_epoch}/${liveProgress.total_epoch}`
       : '—';
   // 키 순서만 정렬 — null/undefined 는 그대로 통과(FineTuningGraph 의 no-data 분기 유지).
   const orderedGraphData = graphData
@@ -348,7 +474,9 @@ const SDSRecipeFineTuningView = ({
           label: t('systemLog.label'),
           colorType: 'skyblue',
           onClick: onSystemLog,
-          disabled: !fineStatus,
+          // 로그는 **선택 phase** 의 것을 연다 — 실행 중이거나 완료면 파일이 있다.
+          // 활성 job 유무(`!fineStatus`)로 막으면 끝난 phase 로그를 볼 수 없다.
+          disabled: !(isSelRunning || isSelDone),
         },
         isMonRunning
           ? {
@@ -359,7 +487,11 @@ const SDSRecipeFineTuningView = ({
             }
           : {
               key: 'run',
-              label: t('externalTraining.recipe.run.label'),
+              // 완료 phase 에서 누르면 "처음부터 다시" 라는 뜻이므로 라벨로 드러낸다
+              // (같은 버튼이 새 커밋을 하나 더 만든다 — 기존 커밋은 이력에 남는다).
+              label: isSelDone
+                ? t('externalTraining.recipe.rerun.label')
+                : t('externalTraining.recipe.run.label'),
               onClick: () => selectedPhase && handleRun(selectedPhase),
               disabled: !canRun(selectedPhase),
             },
@@ -393,83 +525,113 @@ const SDSRecipeFineTuningView = ({
         }
       />
     ) : null,
-    ...(isSelDone
+    // 완료 phase 도 설정을 그대로 보여준다 — 숨기면 "다시 학습" 이 무슨 설정으로 도는지
+    // 알 수 없고 바꿀 수도 없다(재실행 자체는 canRunPhase 가 막지 않는다). 커밋 이력은
+    // 그 위에 얹는다. 실행 중일 때만 설정을 감춘다(진행 상황은 우측 모니터).
+    ...(isSelRunning
       ? [
-          <Fragment key='commit'>
-            <div className={cx('title')}>
-              {t('externalTraining.recipe.savedCommit.label')}
-            </div>
-            <div className={cx('name')}>
-              {commitMap[selectedPhase.id] || '-'}
-            </div>
-          </Fragment>,
+          <div key='running' className={lx('train-hint')}>
+            {t('externalTraining.recipe.running.hint')}
+          </div>,
         ]
-      : isSelRunning
-        ? [
-            <div key='running' className={lx('train-hint')}>
-              {t('externalTraining.recipe.running.hint')}
-            </div>,
-          ]
-        : [
-            presentHp.length ? (
-              <RecipeHyperParamsSection
-                key='hp'
-                t={t}
-                specs={presentHp}
-                form={selForm}
-                onChange={(key, value) =>
-                  setField(selectedPhase.id, key, value)
-                }
-              />
-            ) : null,
-            datasetNameOf(selectedPhase.params) ? (
-              <RecipeDatasetSection
-                key='dataset'
-                t={t}
-                options={datasetOptions || []}
-                value={
-                  datasetSel[selectedPhase.id] ||
-                  datasetNameOf(selectedPhase.params)
-                }
-                onChange={(name) =>
-                  setDatasetSel((s) => ({ ...s, [selectedPhase.id]: name }))
-                }
-              />
-            ) : null,
-            <RecipeCheckpointSection
-              key='ckpt'
+      : [
+          isSelDone ? (
+            <Fragment key='commit'>
+              <div className={cx('title')}>
+                {t('externalTraining.recipe.savedCommit.label')}
+              </div>
+              {(commitList.length ? commitList : ['-']).map((name, i) => (
+                <div key={name} className={cx('name')}>
+                  {name}
+                  {commitList.length && i === 0
+                    ? ` (${t('externalTraining.recipe.chain.latest')})`
+                    : ''}
+                </div>
+              ))}
+            </Fragment>
+          ) : null,
+          presentHp.length ? (
+            <RecipeHyperParamsSection
+              key='hp'
               t={t}
-              name={selForm.output_checkpoint_name || ''}
-              onChangeName={(value) =>
-                setField(selectedPhase.id, 'output_checkpoint_name', value)
-              }
-              specs={CKPT_NUM_SPECS}
+              specs={presentHp}
               form={selForm}
-              onChange={(key, value) => setField(selectedPhase.id, key, value)}
-            />,
-            <RecipeResumeSection
-              key='resume'
+              onChange={(key, value) =>
+                setField(selectedPhase.id, key, value)
+              }
+            />
+          ) : null,
+          datasetNameOf(selectedPhase.params) ? (
+            <RecipeDatasetSection
+              key='dataset'
               t={t}
-              options={resumeOptions}
-              value={resumeSel}
-              onChange={setResumeSel}
-            />,
-            <RecipeArchSection
-              key='arch'
-              t={t}
-              projType={projType}
-              onProjType={setProjType}
-              mlpHidden={mlpHidden}
-              onMlpHidden={setMlpHidden}
-              xAttnHeads={xAttnHeads}
-              onXAttnHeads={setXAttnHeads}
-              qTokens={qTokens}
-              onQTokens={setQTokens}
-              diagramOpen={diagramOpen}
-              onOpenDiagram={() => setDiagramOpen(true)}
-              onCloseDiagram={() => setDiagramOpen(false)}
-            />,
-          ]),
+              options={datasetOptions || []}
+              value={
+                datasetSel[selectedPhase.id] ||
+                datasetNameOf(selectedPhase.params)
+              }
+              onChange={(name) => {
+                setDatasetSel((s) => ({ ...s, [selectedPhase.id]: name }));
+                // 데이터셋이 바뀌면 이전 데이터셋의 파일을 가리키던 선택은 무효다.
+                setField(selectedPhase.id, dataFileKey, '');
+              }}
+              fileOptions={datasetFileOptions}
+              fileValue={selectedDataFile}
+              fileLoading={datasetFilesLoading}
+              onChangeFile={(rel) =>
+                setField(
+                  selectedPhase.id,
+                  dataFileKey,
+                  rel ? `/dataset/${selectedDatasetName}/${rel}` : '',
+                )
+              }
+            />
+          ) : null,
+          <RecipeCheckpointSection
+            key='ckpt'
+            t={t}
+            name={selForm.output_checkpoint_name || ''}
+            onChangeName={(value) =>
+              setField(selectedPhase.id, 'output_checkpoint_name', value)
+            }
+            specs={CKPT_NUM_SPECS}
+            form={selForm}
+            onChange={(key, value) => setField(selectedPhase.id, key, value)}
+          />,
+          <RecipeChainSection
+            key='chain'
+            t={t}
+            commits={chainCommitList}
+            value={chainSelMap[selectedPhase.id] || ''}
+            onChange={(v) =>
+              setChainSelMap((m) => ({ ...m, [selectedPhase.id]: v }))
+            }
+          />,
+          <RecipeResumeSection
+            key='resume'
+            t={t}
+            options={resumeOptions}
+            value={resumeSelMap[selectedPhase.id] || ''}
+            onChange={(v) =>
+              setResumeSelMap((m) => ({ ...m, [selectedPhase.id]: v }))
+            }
+          />,
+          <RecipeArchSection
+            key='arch'
+            t={t}
+            projType={projType}
+            onProjType={setProjType}
+            mlpHidden={mlpHidden}
+            onMlpHidden={setMlpHidden}
+            xAttnHeads={xAttnHeads}
+            onXAttnHeads={setXAttnHeads}
+            qTokens={qTokens}
+            onQTokens={setQTokens}
+            diagramOpen={diagramOpen}
+            onOpenDiagram={() => setDiagramOpen(true)}
+            onCloseDiagram={() => setDiagramOpen(false)}
+          />,
+        ]),
   ].filter(Boolean);
 
   // ⚠️ 구분선(`border`)은 `type-box` **안** `boxSections` 에만 `idx > 0` 로 인터리브된다.
@@ -517,9 +679,9 @@ const SDSRecipeFineTuningView = ({
           <SDSMonitorSummary
             t={t}
             label={t('externalTraining.trainControl.label')}
-            status={monStatus}
+            status={selectedStatus}
             reason={
-              monStatus === 'error'
+              selectedStatus === 'error'
                 ? fineStatus?.fine_tuning_status?.reason
                 : null
             }

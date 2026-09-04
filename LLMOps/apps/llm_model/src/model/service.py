@@ -132,6 +132,22 @@ def tfevents_memo_put(key, sig, value):
     _TFEVENTS_MEMO[key] = (sig, value)
 
 
+def _downsample_series(steps, values, max_steps):
+    """steps/values 를 max_steps 개로 축약(구간 평균) — SSE 페이로드 크기 상한.
+    max_steps 이하면 원본 그대로. events 파싱과 trainer_state 폴백이 같은 해상도를
+    내도록 두 경로가 공유한다."""
+    if len(steps) <= max_steps:
+        return steps, values
+    indices = np.linspace(0, len(steps) - 1, max_steps, dtype=int)
+    return (
+        [steps[i] for i in indices],
+        [
+            np.mean(values[indices[j]:indices[j + 1]]) if j + 1 < len(indices) else np.mean(values[indices[j]:])
+            for j in range(len(indices))
+        ],
+    )
+
+
 async def parse_tensorboard_scalars_async(log_dir, max_steps=20):
     """
     TensorBoard 로그 디렉토리에서 스칼라 태그들을 파싱하여 각 태그의 x, y 데이터를 딕셔너리 형태로 반환합니다 (async 버전).
@@ -177,13 +193,7 @@ async def parse_tensorboard_scalars_async(log_dir, max_steps=20):
         latest_steps = max(latest_steps, steps[-1])
 
         # 스텝 수를 최대 max_steps로 제한하고 평균값 계산
-        if len(steps) > max_steps:
-            indices = np.linspace(0, len(steps) - 1, max_steps, dtype=int)
-            steps = [steps[i] for i in indices]
-            values = [
-                np.mean(values[indices[j]:indices[j + 1]]) if j + 1 < len(indices) else np.mean(values[indices[j]:])
-                for j in range(len(indices))
-            ]
+        steps, values = _downsample_series(steps, values, max_steps)
 
         parsed_data[tag] = {'steps': steps, 'values': values}
 
@@ -225,6 +235,90 @@ async def _resolve_checkpoint_steps(checkpoint_root: str, save_steps=None, lates
     if save_steps > 0 and latest_step > 0:
         return list(range(save_steps, latest_step + 1, save_steps))
     return []
+
+
+# ── trainer_state.json 폴백 (events 없는 파트너 학습) ────────────────────────
+# 파트너 스크립트가 TensorBoard 를 켜지 않으면 events 파일이 없어 그래프 소스가
+# 사라진다(eva-vlm 의 train_text_lora.py = `report_to="none"`, phase `lora_marine`
+# 전용 분기). HF Trainer 가 체크포인트마다 남기는 trainer_state.json 의 log_history
+# 는 같은 지표를 logging_steps 주기로 담고 있어 동일 태그로 환산할 수 있다.
+# 한계: save_steps 주기로만 갱신 → 마지막 체크포인트 이후 구간은 빠진다(정확한
+# 해상도는 컨테이너측 report_to 패치가 정답, 이건 소급·내성용 폴백).
+_TRAINER_STATE_FIELD_TAGS = (
+    ("loss", "train/loss"),
+    ("grad_norm", "train/grad_norm"),
+    ("learning_rate", "train/learning_rate"),
+    ("eval_loss", "eval/loss"),
+)
+
+
+def _trainer_state_path_sync(output_dir: str) -> Optional[str]:
+    """최고 step 체크포인트의 trainer_state.json — log_history 가 가장 완전(list_checkpoints 와 동일 관례)."""
+    steps = _scan_checkpoint_steps_sync(output_dir)
+    if not steps:
+        return None
+    path = os.path.join(output_dir, f"checkpoint-{steps[-1]}", "trainer_state.json")
+    return path if os.path.isfile(path) else None
+
+
+def _trainer_state_signature(path: str):
+    """memo 서명 — 체크포인트가 새로 저장되면 경로/크기/mtime 중 하나는 반드시 바뀐다."""
+    try:
+        st = os.stat(path)
+    except OSError:
+        return None
+    return (path, st.st_size, st.st_mtime)
+
+
+async def parse_trainer_state_scalars_async(output_dir, max_steps=20):
+    """`parse_tensorboard_scalars_async` 와 동일한 (parsed, latest_step) 계약의 폴백.
+
+    반환 태그도 FINE_TUNING_LOG_TAGS 로 맞춰 프론트 차트 계약이 바뀌지 않는다.
+    """
+    path = await asyncio.to_thread(_trainer_state_path_sync, output_dir)
+    if not path:
+        return {}, 0
+    sig = await asyncio.to_thread(_trainer_state_signature, path)
+    if sig is None:
+        return {}, 0
+    memo_key = ("trainer_state", output_dir, max_steps)
+    cached = tfevents_memo_get(memo_key, sig)
+    if cached is not None:
+        return cached
+
+    try:
+        raw = await asyncio.to_thread(_read_text_capped, path)
+        log_history = json.loads(raw).get("log_history") or []
+    except (OSError, ValueError):
+        return {}, 0
+
+    parsed_data = {}
+    latest_steps = 0
+    for field, tag in _TRAINER_STATE_FIELD_TAGS:
+        if tag not in TYPE.FINE_TUNING_LOG_TAGS:
+            continue
+        steps, values = [], []
+        for h in log_history:
+            step, value = h.get("step"), h.get(field)
+            if step is None or isinstance(value, bool) or not isinstance(value, (int, float)):
+                continue
+            # events 경로와 같은 규칙으로 비정상 값을 0.0 으로 정규화한다. 정규화하지
+            # 않으면 json.dumps 가 비표준 NaN/Infinity 를 SSE 에 실어 프런트
+            # JSON.parse 가 그 메시지를 통째로 버린다(차트가 조용히 안 갱신됨).
+            value = float(value)
+            if not math.isfinite(value):
+                value = 0.0
+            steps.append(int(step))
+            values.append(value)
+        if not steps:
+            continue
+        latest_steps = max(latest_steps, steps[-1])
+        steps, values = _downsample_series(steps, values, max_steps)
+        parsed_data[tag] = {'steps': steps, 'values': values}
+
+    result = (parsed_data, latest_steps)
+    tfevents_memo_put(memo_key, sig, result)
+    return result
 
 
 async def _model_checkpoint_steps(model_info: dict, workspace_info: dict, latest_step) -> list:

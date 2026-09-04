@@ -517,6 +517,144 @@ async def _build_graph_payload(detail: Optional[dict], job_id: Optional[str] = N
     return {"graph": parsed or {}, "checkpoints": ckpt_steps}
 
 
+# ── Phase 단위 그래프 (SDS 레시피) ───────────────────────────────────────────
+# /jobs/{job_id}/sse-graph 는 "모델에 바인딩된 활성 job" 하나만 본다. 4-phase 레시피
+# 에서는 phase 가 조회 단위라, 활성 job 이 phase 3 이어도 사용자가 phase 1 을 고르면
+# phase 1 의 곡선이 나와야 한다. 게다가 job 기준 해석은 잡 경로에 events 가 없을 때
+# `commit_models/<latest_commit>` 으로 폴백해 **직전 phase 곡선을 현재 phase 인 양**
+# 흘렸다(학습 종료 후 차트 유지 목적의 폴백이 실행 중에도 발동). 아래 해석은 phase 를
+# 경로에 못박아 그 누출을 구조적으로 차단한다.
+
+# phase.id 는 launch 시 output_subdir 로 그대로 쓰이므로 동일 제약(job_router 의
+# _OUTPUT_SUBDIR_RE)을 적용한다 — path 세그먼트로 들어가니 traversal 차단이 필수.
+_PHASE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+def _phase_commit_dirs_sync(commit_root: str, phase_id: str) -> list[str]:
+    """`{phase_id}-{YYYYMMDD-HHMMSS}` 커밋 이름을 최신순으로.
+
+    커밋명 = `{output_subdir}-{ts}` (service.py 의 external commit) 이고 레시피는
+    output_subdir=phase.id 로 실행한다. 프론트 derivePhaseCommitMap 과 같은 anchored
+    규칙 — prefix 매칭이면 `lora` 가 `lora_marine-...` 을 오매칭할 수 있다.
+    ts 가 고정폭이라 사전순 정렬 = 시간순.
+    """
+    import os
+    pattern = re.compile(r"^" + re.escape(phase_id) + r"-\d{8}-\d{6}$")
+    try:
+        names = [n for n in os.listdir(commit_root) if pattern.match(n)]
+    except OSError:
+        return []
+    names.sort(reverse=True)
+    return names
+
+
+def _run_dirs_by_mtime_sync(runs_dir: str) -> list[str]:
+    """runs/ 하위 실행 디렉토리를 mtime 내림차순으로(없으면 빈 목록)."""
+    import os
+    try:
+        entries = [os.path.join(runs_dir, d) for d in os.listdir(runs_dir)]
+    except OSError:
+        return []
+
+    def _mtime(path: str) -> float:
+        try:
+            return os.path.getmtime(path)
+        except OSError:
+            return -1.0
+
+    entries.sort(key=_mtime, reverse=True)
+    return entries
+
+
+async def _resolve_phase_output_dir(model_id: int, phase_id: str) -> Optional[str]:
+    """해당 phase 자신의 산출물 디렉토리(runs/ 와 checkpoint-*/ 의 부모).
+
+    1) 모델에 바인딩된 활성 job 이 이 phase 면 jobs/<job>/output/<phase_id> (학습 중 라이브)
+    2) 아니면 commit_models/{phase_id}-{ts} 최신 (완료분)
+    다른 phase 디렉토리로는 폴백하지 않는다 — 없으면 None(빈 그래프)이 정답.
+    """
+    import os
+    from utils.llm_db import db_model as _dbm
+    from utils.llm_db.db_base_async import select_query
+    from utils import PATH
+
+    try:
+        rows = await select_query(
+            "SELECT id, workspace_id, name, external_job_id FROM model WHERE id = %s LIMIT 1",
+            params=(model_id,),
+        )
+    except Exception:
+        logger.exception("phase sse-graph: model lookup failed for %s", model_id)
+        return None
+    if not rows:
+        return None
+    model_row = rows[0]
+
+    try:
+        ws = await _dbm.get_workspace_model(workspace_id=int(model_row["workspace_id"]))
+    except Exception:
+        logger.exception("phase sse-graph: ws lookup failed for %s", model_row.get("workspace_id"))
+        return None
+    if not ws:
+        return None
+    main_root = PATH.JF_MAIN_STORAGE_PATH.format(
+        STORAGE_NAME=ws["main_storage_name"], WORKSPACE_NAME=ws["name"],
+    )
+
+    job_id = model_row.get("external_job_id")
+    if job_id:
+        cand = _contained_path(main_root, "jobs", job_id, "output", phase_id)
+        if cand and await asyncio.to_thread(os.path.isdir, cand):
+            return cand
+
+    commit_root = _contained_path(main_root, "models", model_row["name"], "commit_models")
+    if not commit_root:
+        return None
+    for name in await asyncio.to_thread(_phase_commit_dirs_sync, commit_root, phase_id):
+        cand = _contained_path(commit_root, name)
+        if cand:
+            return cand
+    return None
+
+
+async def _build_phase_graph_payload(model_id: int, phase_id: str) -> dict:
+    """phase 단위 그래프 — /jobs/{id}/sse-graph 와 같은 payload shape.
+
+    events 가 없으면 trainer_state.json 으로 폴백한다. 파트너 스크립트가 TensorBoard
+    를 켜지 않는 경우가 실재하기 때문(eva-vlm 의 `lora_marine` 전용 train_text_lora.py).
+    """
+    import os
+    from model import service as _model_svc
+
+    base = await _resolve_phase_output_dir(model_id, phase_id)
+    if not base:
+        return {"graph": {}}
+
+    parsed: dict = {}
+    latest_step = 0
+    run_dirs = await asyncio.to_thread(_run_dirs_by_mtime_sync, os.path.join(base, "runs"))
+    if run_dirs:
+        try:
+            parsed, latest_step = await _model_svc.parse_tensorboard_scalars_async(
+                run_dirs[0], max_steps=50)
+        except Exception:
+            logger.exception("phase sse-graph: events parse failed for %s", run_dirs[0])
+    if not parsed:
+        try:
+            parsed, latest_step = await _model_svc.parse_trainer_state_scalars_async(
+                base, max_steps=50)
+        except Exception:
+            logger.exception("phase sse-graph: trainer_state parse failed for %s", base)
+    if not parsed:
+        return {"graph": {}}
+
+    try:
+        ckpt_steps = await _model_svc._resolve_checkpoint_steps(base, None, latest_step)
+    except Exception:
+        ckpt_steps = []
+    return {"graph": parsed, "checkpoints": ckpt_steps}
+
+
 # ── Manifest listings (BFF surface for frontend) ─────────────────────────
 
 # Contract (frontend 와 합의됨 — 변경 금지):
@@ -919,6 +1057,41 @@ async def stream_fine_tuning_graph(job_id: str, request: Request) -> StreamingRe
     return StreamingResponse(_iterate(), media_type="text/event-stream")
 
 
+@external.get("/models/{model_id}/phases/{phase_id}/sse-graph")
+async def stream_phase_fine_tuning_graph(
+    model_id: int, phase_id: str, request: Request,
+) -> StreamingResponse:
+    """레시피 phase 단위 학습 그래프 SSE.
+
+    payload shape 은 /jobs/{job_id}/sse-graph 와 동일(`{graph, checkpoints}`)해서
+    프론트 차트(FineTuningGraph/SDSMonitorSummary)가 그대로 소비한다. 활성 job 유무와
+    무관하게 조회되므로 이미 끝난 phase 도 자기 곡선을 돌려준다.
+    """
+    if not _PHASE_ID_RE.match(phase_id or ""):
+        raise HTTPException(status_code=400, detail="invalid phase_id")
+
+    async def _iterate() -> AsyncIterator[bytes]:
+        last_payload: Optional[dict] = None
+        last_emit = datetime.now(timezone.utc)
+
+        while True:
+            if await request.is_disconnected():
+                return
+            payload = await _build_phase_graph_payload(model_id, phase_id)
+            now = datetime.now(timezone.utc)
+            if payload != last_payload:
+                yield f"data: {json.dumps(payload)}\n\n".encode()
+                last_payload = payload
+                last_emit = now
+            elif (now - last_emit).total_seconds() >= 30:
+                yield f"data: {json.dumps(payload)}\n\n".encode()
+                last_emit = now
+
+            await asyncio.sleep(3)
+
+    return StreamingResponse(_iterate(), media_type="text/event-stream")
+
+
 # ── REST — raw log (1s polling on the frontend side) ────────────────────
 
 
@@ -1004,6 +1177,34 @@ async def _resolve_train_log_path(job_id: str, detail: Optional[dict]) -> Option
     return None
 
 
+def _read_log_tail_sync(log_path: str, max_bytes: int = 256 * 1024,
+                        max_lines: int = 200) -> tuple[str, int, int]:
+    """(tail 텍스트, 파일 전체 크기, 실제 줄 수) — 모달 폴링용.
+    큰 파일 보호로 끝에서 max_bytes 만 읽는다. job/phase 로그 조회가 공유."""
+    import os
+    with open(log_path, "rb") as f:
+        f.seek(0, os.SEEK_END)
+        size = f.tell()
+        read_size = min(size, max_bytes)
+        f.seek(size - read_size)
+        content = f.read().decode("utf-8", errors="replace")
+    lines = content.splitlines()[-max_lines:]
+    return "\n".join(lines), size, len(lines)
+
+
+def _read_log_full_sync(log_path: str) -> tuple[str, int, int]:
+    """(내용, 파일 전체 크기, 실제 읽은 bytes) — 다운로드용.
+    상한 초과 시 뒤쪽(최근)을 남긴다. job/phase 다운로드가 공유."""
+    import os
+    with open(log_path, "rb") as f:
+        f.seek(0, os.SEEK_END)
+        size = f.tell()
+        read_size = min(size, _LOG_DOWNLOAD_MAX_BYTES)
+        f.seek(size - read_size)
+        content = f.read().decode("utf-8", errors="replace")
+    return content, size, read_size
+
+
 @external.get("/jobs/{job_id}/system-log")
 async def get_external_system_log(job_id: str) -> dict[str, Any]:
     """Drop-in replacement for /api/models/fine-tuning/system-log?model_id=.
@@ -1016,8 +1217,6 @@ async def get_external_system_log(job_id: str) -> dict[str, Any]:
 
     Modal 의 폴링 (1초 간격) 에 매번 마지막 200 줄 응답.
     """
-    import os
-
     client = await _get_client()
     detail: Optional[dict]
     try:
@@ -1031,22 +1230,14 @@ async def get_external_system_log(job_id: str) -> dict[str, Any]:
     log_path = await _resolve_train_log_path(job_id, detail)
     if log_path:
         try:
-            # 마지막 200 줄. 큰 파일 보호 위해 tail-style read.
-            with open(log_path, "rb") as f:
-                f.seek(0, os.SEEK_END)
-                size = f.tell()
-                read_size = min(size, 256 * 1024)  # 256KB tail
-                f.seek(size - read_size)
-                content = f.read().decode("utf-8", errors="replace")
-            lines = content.splitlines()[-200:]
-            tail = "\n".join(lines)
+            tail, size, n_lines = _read_log_tail_sync(log_path)
             # ⚠️ 소스 **경로**는 싣지 않는다. 이 문자열은 로그 모달에 그대로 렌더되는데,
             #    NFS 실경로는 내부 스토리지/워크스페이스 명명과 잡 디렉터리 구조를 그대로
             #    공개한다(정찰 정보). 플랫폼 규약도 체크포인트를 이름으로만 노출한다.
             #    내부 대응 경로(models/fine-tuning/system-log)도 경로를 싣지 않는다.
             header = (
                 f"[platform] external job {job_id}  "
-                f"size={size} bytes  showing last {len(lines)} lines\n"
+                f"size={size} bytes  showing last {n_lines} lines\n"
                 f"{'-' * 80}\n"
             )
             return _envelope(status=1, result=header + tail)
@@ -1101,8 +1292,6 @@ async def download_external_system_log(job_id: str):
     로그 파일이 없으면 404 — 프런트는 HTTP status 로 성공을 판정하므로, 여기서
     envelope 200 을 돌려주면 안내 문구가 .log 파일로 저장돼 버린다.
     """
-    import os
-
     from utils import common
 
     client = await _get_client()
@@ -1123,12 +1312,7 @@ async def download_external_system_log(job_id: str):
         )
 
     try:
-        with open(log_path, "rb") as f:
-            f.seek(0, os.SEEK_END)
-            size = f.tell()
-            read_size = min(size, _LOG_DOWNLOAD_MAX_BYTES)
-            f.seek(size - read_size)
-            content = f.read().decode("utf-8", errors="replace")
+        content, size, read_size = _read_log_full_sync(log_path)
     except OSError:
         logger.exception("system-log download: read failed for %s", log_path)
         raise HTTPException(
@@ -1145,3 +1329,103 @@ async def download_external_system_log(job_id: str):
     )
     return await common.text_response_generator_async(
         data_str=header + content, filename=f"[EXTERNAL]{job_id}.log")
+
+
+# ── Phase 단위 시스템 로그 (SDS 레시피) ──────────────────────────────────────
+# 그래프와 같은 이유로 phase 를 조회 단위로 잡는다. job 기준(`/jobs/{id}/system-log`)
+# 은 (a) 활성 job 이 없으면 열 수 없고 (b) 커밋 폴백이 `latest_commit_id` 를 써서
+# 끝난 phase 의 로그를 요청해도 **최신 phase 의 로그**가 나온다. 기존 endpoint 는
+# 비레시피 external 잡(평가·변환의 run.log 분기 포함)이 계속 쓰므로 그대로 둔다.
+
+
+async def _resolve_phase_train_log_path(model_id: int, phase_id: str) -> Optional[str]:
+    """선택 phase 자신의 로그 파일. 실행 중이면 jobs/, 끝났으면 그 phase 의 커밋에서.
+
+    train.log(학습 컨테이너 산출물) 우선, 없으면 run.log — 기존 job 경로와 같은 관례.
+    """
+    import os
+
+    base = await _resolve_phase_output_dir(model_id, phase_id)
+    if not base:
+        return None
+    for name in ("train.log", "run.log"):
+        path = _contained_path(base, name)
+        if path and os.path.exists(path):
+            return path
+    return None
+
+
+@external.get("/models/{model_id}/phases/{phase_id}/system-log")
+async def get_phase_system_log(model_id: int, phase_id: str) -> dict[str, Any]:
+    """레시피 phase 단위 로그 조회 — 모달 폴링용(마지막 200 줄).
+
+    응답은 job 판과 같은 envelope + 같은 'showing last N lines' 헤더 규약이다.
+    프런트가 그 문구로 실제 로그/안내문구를 구분하므로 바꾸면 안 된다.
+    """
+    if not _PHASE_ID_RE.match(phase_id or ""):
+        raise HTTPException(status_code=400, detail="invalid phase_id")
+
+    log_path = await _resolve_phase_train_log_path(model_id, phase_id)
+    if log_path:
+        try:
+            tail, size, n_lines = _read_log_tail_sync(log_path)
+            # ⚠️ 소스 경로는 싣지 않는다(job 판과 동일 — NFS 실경로 노출 방지).
+            header = (
+                f"[platform] model {model_id} phase {phase_id}  "
+                f"size={size} bytes  showing last {n_lines} lines\n"
+                f"{'-' * 80}\n"
+            )
+            return _envelope(status=1, result=header + tail)
+        except Exception:
+            logger.exception("phase system-log: read failed for %s", log_path)
+            return _envelope(
+                status=1,
+                result=f"[platform] failed to read log for phase {phase_id} — see server logs",
+            )
+
+    placeholder = (
+        f"[platform] model {model_id} phase {phase_id}\n"
+        f"\n"
+        f"[platform] 이 phase 의 로그 파일을 찾지 못했습니다.\n"
+        f"\n"
+        f"           흔한 원인:\n"
+        f"           - 아직 실행하지 않은 phase 다.\n"
+        f"           - 방금 시작해 컨테이너가 첫 줄을 쓰지 않았다(잠시 후 다시 조회).\n"
+        f"           - 학습 산출물이 commit 으로 옮겨지는 중이다.\n"
+    )
+    return _envelope(status=1, result=placeholder)
+
+
+@external.get("/models/{model_id}/phases/{phase_id}/system-log/download")
+async def download_phase_system_log(model_id: int, phase_id: str):
+    """phase 로그 전문 다운로드. 파일이 없으면 404 — 프런트가 HTTP status 로 성공을
+    판정하므로 envelope 200 을 주면 안내 문구가 .log 로 저장된다(job 판과 동일)."""
+    from utils import common
+
+    if not _PHASE_ID_RE.match(phase_id or ""):
+        raise HTTPException(status_code=400, detail="invalid phase_id")
+
+    log_path = await _resolve_phase_train_log_path(model_id, phase_id)
+    if not log_path:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"no log file for model {model_id} phase {phase_id}",
+        )
+
+    try:
+        content, size, read_size = _read_log_full_sync(log_path)
+    except OSError:
+        logger.exception("phase system-log download: read failed for %s", log_path)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="failed to read log file",
+        )
+
+    header = (
+        f"[platform] model {model_id} phase {phase_id}\n"
+        f"           size={size} bytes"
+        + (f" (truncated to last {read_size} bytes)" if read_size < size else "")
+        + "\n" + "-" * 80 + "\n"
+    )
+    return await common.text_response_generator_async(
+        data_str=header + content, filename=f"[PHASE]{model_id}-{phase_id}.log")

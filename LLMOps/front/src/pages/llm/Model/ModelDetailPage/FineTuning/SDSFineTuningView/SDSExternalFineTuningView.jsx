@@ -40,7 +40,10 @@ import {
   buildExternalJobBody,
   parseRawParams,
 } from './payload/recipeParams';
-import { derivePhaseCommitMap } from './payload/recipeState';
+import {
+  derivePhaseCommitMap,
+  derivePhaseCommitsMap,
+} from './payload/recipeState';
 import useSSEStatus from '../useSSEStatus';
 import useSSETime from '../useSSEFinetuningTime';
 import useSSEGraph from '../useSSEGraph';
@@ -126,6 +129,9 @@ const SDSExternalFineTuningView = memo(function SDSExternalFineTuningView({
   // activePhaseId = 현재 externalJobId 에 묶인(실행 중) phase. 완료 phase 는
   // 세션이 아니라 커밋(`{phase.id}-{ts}`)에서 derive → cross-reload 생존.
   const [activePhaseId, setActivePhaseId] = useState(null);
+  // 조회(선택) phase — 자식 RecipePipeline 이 올려준다. 활성(실행 중) phase 와 다를 수
+  // 있고, 그래프/모니터는 **선택** 기준이어야 한다(레시피의 조회 단위 = phase).
+  const [viewPhaseId, setViewPhaseId] = useState(null);
   const [commits, setCommits] = useState([]);
   // 커밋 API 가 돌려주는 model_name(=model_info["name"], commit dir 에 쓰는 그 값)
   // — _base_model.name 의 권위 source. client 추정(fineTuningData.model_name) 대체.
@@ -205,6 +211,9 @@ const SDSExternalFineTuningView = memo(function SDSExternalFineTuningView({
   // (리뷰 C1/codex#4).
   useEffect(() => {
     setActivePhaseId(null);
+    // recipe 없는 매니페스트로 바뀌면 이 화면은 phase 개념이 없다 — 남겨두면 그래프가
+    // 이전 레시피의 phase 를 계속 구독한다.
+    setViewPhaseId(null);
     setCommits([]);
     setCommitModelName('');
   }, [modelId, manifestName, manifestVersion]);
@@ -291,6 +300,12 @@ const SDSExternalFineTuningView = memo(function SDSExternalFineTuningView({
     () => derivePhaseCommitMap(commits, recipe?.phases),
     [commits, recipe],
   );
+  // 접기 전 커밋 목록(최신 우선) — 재학습으로 한 phase 에 커밋이 여러 개 쌓이면
+  // 이력 표시와 "이어서 할 커밋" 선택에 원본이 필요하다. 완료 판정은 위 단수 맵 그대로.
+  const phaseCommits = useMemo(
+    () => derivePhaseCommitsMap(commits, recipe?.phases),
+    [commits, recipe],
+  );
 
   // 완료 phase = 커밋이 존재하는 phase (세션 아님 → reload 후에도 유지).
   const donePhases = useMemo(
@@ -306,13 +321,25 @@ const SDSExternalFineTuningView = memo(function SDSExternalFineTuningView({
     fineTuningStatus,
     'external',
   );
+  // 선택 phase 가 있으면(=레시피) phase 단위로, 아니면 기존 job 단위로 구독한다.
+  // job 단위는 활성 job 하나만 보므로 완료 phase 를 고르면 곡선이 안 나오고, 잡 경로에
+  // events 가 없을 땐 직전 커밋으로 폴백해 다른 phase 곡선을 흘렸다.
+  const usePhaseGraph = Boolean(viewPhaseId);
   useSSEGraph(
-    externalJobId || null,
+    usePhaseGraph ? modelId : externalJobId || null,
     userName,
     fineTuningStatus,
     setGraphData,
-    'external',
+    usePhaseGraph ? 'phase' : 'external',
+    undefined, // setCheckpoints 기본값 유지(이 화면은 체크포인트 점을 쓰지 않음)
+    usePhaseGraph ? viewPhaseId : null,
   );
+
+  // phase 전환 시 이전 phase 곡선 잔상 제거 — 새 SSE 첫 메시지 전까지 남으면
+  // 사용자는 그동안 "다른 phase 의 곡선" 을 보게 된다.
+  useEffect(() => {
+    if (viewPhaseId) setGraphData(null);
+  }, [viewPhaseId]);
 
   // 실행 모달의 onSubmit — instance/gpu 정보 받음. BFF body 에 추가해 forward.
   // (backend 가 v1.0.0 에서 instance/gpu 를 helm resources override 로 쓰지
@@ -517,7 +544,9 @@ const SDSExternalFineTuningView = memo(function SDSExternalFineTuningView({
   }, [dispatch, externalJobId, doCancel]);
 
   const onClickSystemLog = useCallback(() => {
-    if (!externalJobId) return;
+    // 레시피(phase 선택)면 활성 job 이 없어도 연다 — 끝난 phase 의 train.log 는
+    // 그 phase 의 커밋에 남아 있고, BFF 가 phase 기준으로 찾아준다.
+    if (!viewPhaseId && !externalJobId) return;
     dispatch(
       openModal({
         modalType: 'FINETUNING_SYSTEM_LOG',
@@ -525,6 +554,7 @@ const SDSExternalFineTuningView = memo(function SDSExternalFineTuningView({
           workspaceId,
           modelId,
           jobId: externalJobId,
+          phaseId: viewPhaseId || undefined,
           manifestName: `${manifestName}@${manifestVersion}`,
           mode: 'external',
         },
@@ -533,6 +563,7 @@ const SDSExternalFineTuningView = memo(function SDSExternalFineTuningView({
   }, [
     dispatch,
     externalJobId,
+    viewPhaseId,
     modelId,
     manifestName,
     manifestVersion,
@@ -596,9 +627,11 @@ const SDSExternalFineTuningView = memo(function SDSExternalFineTuningView({
         : (res.result?.list ?? []);
       setDatasetOptions(
         list
-          .map((d) => d.name ?? d.dataset_name)
-          .filter(Boolean)
-          .map((name) => ({ label: name, value: name })),
+          // id 를 함께 보존한다 — 학습 파일 목록(`options/preprocessing/data`)이
+          // dataset_id 로만 조회되고, 이름→id 역해석 경로가 따로 없다.
+          .map((d) => ({ id: d.id, name: d.name ?? d.dataset_name }))
+          .filter((d) => d.name)
+          .map((d) => ({ label: d.name, value: d.name, id: d.id })),
       );
     })();
     return () => {
@@ -620,7 +653,8 @@ const SDSExternalFineTuningView = memo(function SDSExternalFineTuningView({
         activePhaseId={activePhaseId}
         activePhaseStatus={fineTuningStatus}
         donePhases={donePhases}
-        phaseCommitMap={phaseCommitMap}
+        phaseCommits={phaseCommits}
+        onSelectedPhaseChange={setViewPhaseId}
         datasetOptions={datasetOptions}
         onRunPhase={onRunPhase}
         graphData={graphData}

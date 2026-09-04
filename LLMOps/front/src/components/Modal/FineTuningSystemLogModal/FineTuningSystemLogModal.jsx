@@ -24,9 +24,21 @@ const FineTuningSystemLogModal = ({ data, type }) => {
   // internal callers pass `{ modelId, modelName }` and `mode` defaults to 'internal'.
   // For external v1.0.0 the BFF returns a platform-side placeholder string —
   // raw partner log streaming lands when ETRI v1.0.1 exposes /train/log.
-  const { modelId, modelName, jobId, manifestName, mode = 'internal' } = data;
+  // 레시피 호출자는 `{ modelId, phaseId, mode: 'external' }` 를 함께 넘긴다 — 조회
+  // 단위가 job 이 아니라 phase 라, 활성 job 이 없는(=이미 끝난) phase 도 열려야 한다.
+  const {
+    modelId,
+    modelName,
+    jobId,
+    manifestName,
+    phaseId,
+    mode = 'internal',
+  } = data;
   const isExternal = mode === 'external';
-  const targetId = isExternal ? jobId : modelId;
+  const isPhase = isExternal && Boolean(phaseId);
+  // phase 모드의 조회 키는 modelId 다(jobId 는 없을 수 있다) — jobId 로 두면
+  // 아래 `!targetId` 가드에서 조기 반환돼 완료 phase 가 빈 화면이 된다.
+  const targetId = isPhase || !isExternal ? modelId : jobId;
   const displayName = isExternal ? manifestName : modelName;
   const dispatch = useDispatch();
   const isFirstFetch = useRef(true);
@@ -46,9 +58,11 @@ const FineTuningSystemLogModal = ({ data, type }) => {
     // 조회는 모달 폴링용이라 마지막 200 줄만 받는다. 다운로드는 전문을 받아야 하므로
     // 별도 endpoint 를 탄다 — external 도 내부와 같은 응답 헬퍼를 쓰므로 처리가 같다.
     const { data, status } = await network.callApiWithPromise({
-      url: isExternal
-        ? `external/jobs/${jobId}/system-log/download`
-        : `models/fine-tuning/system-log/download?model_id=${modelId}`,
+      url: isPhase
+        ? `external/models/${modelId}/phases/${phaseId}/system-log/download`
+        : isExternal
+          ? `external/jobs/${jobId}/system-log/download`
+          : `models/fine-tuning/system-log/download?model_id=${modelId}`,
       method: 'GET',
     });
 
@@ -56,9 +70,11 @@ const FineTuningSystemLogModal = ({ data, type }) => {
       const url = window.URL.createObjectURL(new Blob([data]));
       const link = document.createElement('a');
       link.href = url;
-      link.download = isExternal
-        ? `[External]${jobId}.log`
-        : `[Finetuning]No.${modelId}.log`;
+      link.download = isPhase
+        ? `[Phase]${phaseId}.log`
+        : isExternal
+          ? `[External]${jobId}.log`
+          : `[Finetuning]No.${modelId}.log`;
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
@@ -83,9 +99,11 @@ const FineTuningSystemLogModal = ({ data, type }) => {
       isPendingRef.current = false;
       return;
     }
-    const url = isExternal
-      ? `external/jobs/${targetId}/system-log`
-      : `models/fine-tuning/system-log?model_id=${targetId}`;
+    const url = isPhase
+      ? `external/models/${targetId}/phases/${phaseId}/system-log`
+      : isExternal
+        ? `external/jobs/${targetId}/system-log`
+        : `models/fine-tuning/system-log?model_id=${targetId}`;
     const controller = new AbortController();
     let didTimeout = false;
     const timeoutId = setTimeout(() => {
@@ -142,7 +160,9 @@ const FineTuningSystemLogModal = ({ data, type }) => {
       }
       isPendingRef.current = false;
     }
-  }, [targetId, isExternal]);
+  // phase 모드에선 targetId 가 modelId 라 phase 를 바꿔도 안 변한다 — phaseId/isPhase 를
+  // 빼면 (이 모달은 최소화해도 언마운트되지 않으므로) 이전 phase 로그를 계속 폴링한다.
+  }, [targetId, isExternal, isPhase, phaseId]);
 
   useEffect(() => {
     getSystemLog();
