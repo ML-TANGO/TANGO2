@@ -140,7 +140,7 @@ export default function ComposePage() {
     <div className={style.page}>
       <PageHeader
         title={dsName}
-        back={{ to: listBase(wsId), label: '데이터셋 목록' }}
+        back={{ to: listBase(wsId), label: '데이터셋' }}
       />
       <DatasetTabs active='구성 · 분할' />
 

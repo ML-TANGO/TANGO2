@@ -106,7 +106,7 @@ export default function AnalysisPage() {
     <div className={style.page}>
       <PageHeader
         title={dsName}
-        back={{ to: listBase(wsId), label: '데이터셋 목록' }}
+        back={{ to: listBase(wsId), label: '데이터셋' }}
         meta={
           cov
             ? `레코드 ${fmt(cov.total_records || 0)}건 · 원본 ${fmt(cov.dataset_assets || 0)}건`

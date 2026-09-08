@@ -172,7 +172,7 @@ export default function ReviewPage() {
     <div className={style.page}>
       <PageHeader
         title={dsName}
-        back={{ to: listBase(wsId), label: '데이터셋 목록' }}
+        back={{ to: listBase(wsId), label: '데이터셋' }}
         meta={`미검수 ${fmt(pending)}건 · 이번 세션 ${fmt(done)}건 처리`}
       />
       <DatasetTabs active='검수' />

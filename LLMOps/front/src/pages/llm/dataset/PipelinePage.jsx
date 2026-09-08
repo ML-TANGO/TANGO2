@@ -384,7 +384,7 @@ export default function PipelinePage() {
       <div className={style.page}>
         <PageHeader
           title={dsName}
-          back={{ to: listBase(wsId), label: '데이터셋 목록' }}
+          back={{ to: listBase(wsId), label: '데이터셋' }}
         />
         <DatasetTabs active='파이프라인' />
         <div className={style['pending-banner']}>
@@ -401,7 +401,7 @@ export default function PipelinePage() {
     <div className={style.page}>
       <PageHeader
         title={dsName}
-        back={{ to: listBase(wsId), label: '데이터셋 목록' }}
+        back={{ to: listBase(wsId), label: '데이터셋' }}
       />
       <DatasetTabs active='파이프라인' />
 

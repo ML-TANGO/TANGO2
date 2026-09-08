@@ -191,7 +191,7 @@ export default function DatasetListPage() {
   return (
     <div className={style.page}>
       <PageHeader
-        title='데이터셋 목록'
+        title='데이터셋'
         meta={`${datasets.length}개 데이터셋 · 미검수 합계 ${fmt(unreviewed)}건`}
         actions={
           <Btn size='md' onClick={openCreate}>

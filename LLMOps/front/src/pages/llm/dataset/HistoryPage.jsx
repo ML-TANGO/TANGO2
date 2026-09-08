@@ -142,7 +142,7 @@ export default function HistoryPage() {
     <div className={style.page}>
       <PageHeader
         title={dsName}
-        back={{ to: listBase(wsId), label: '데이터셋 목록' }}
+        back={{ to: listBase(wsId), label: '데이터셋' }}
         meta={
           latest
             ? `${versions.length}개 버전 · 최신 ${latest.version}`
