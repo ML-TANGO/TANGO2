@@ -351,6 +351,11 @@ const routeArrAll = [
     // 남겨 두면 클릭할 때마다 빈 화면을 한 번 거친다.
     path: '/user/workspace/:id/datasets',
     exact: true,
+    // 드라이브(/datasets/management)는 경로만 이 아래에 있는 **별개 목적지**다
+    // (사이드 메뉴가 아니라 사이드바 상단 카드로 들어간다). NavLink 의 기본 매칭은
+    // prefix 라 드라이브에 있는 동안 이 '데이터' 항목까지 점등되므로, 제외할 하위
+    // 첫 세그먼트를 지정해 그 오점등만 끊는다(DS NavItem 의 excludeChildren).
+    excludeChildren: ['management'],
     icon: IconLnbDatasetsGray,
     activeIcon: IconLnbDatasetsBlue,
     platform: 'flightbase',
@@ -1088,7 +1093,7 @@ const TopCardNav = ({ workspaceId }) => {
         >
           <path d='M199.336 22.9974L194.003 22.9974L192.669 21.6641H188.669C187.936 21.6641 187.343 22.2641 187.343 22.9974L187.336 30.9974C187.336 31.7307 187.936 32.3307 188.669 32.3307H199.336C200.069 32.3307 200.669 31.7307 200.669 30.9974V24.3307C200.669 23.5974 200.069 22.9974 199.336 22.9974ZM199.336 30.9974L188.669 30.9974V29.2831L199.336 29.2831V30.9974Z' />
         </svg>
-        데이터셋
+        드라이브
       </NavLink>
     </div>
   );

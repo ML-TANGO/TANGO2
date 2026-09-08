@@ -542,7 +542,7 @@
   "Datasets": "데이터셋",
   "dataset.label": "데이터셋",
   "datasets.label": "데이터셋",
-  "datasetManagement.label": "데이터 관리",
+  "datasetManagement.label": "드라이브",
   "dataset.subtitle": "로컬 데이터를 업로드하고 학습 데이터셋으로 관리합니다.",
   "dataset.upload.title": "로컬 데이터셋 업로드",
   "dataset.upload.desc": "파일을 이 영역으로 드래그하거나 클릭하여 업로드하세요.",

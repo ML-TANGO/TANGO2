@@ -535,7 +535,7 @@
   "Datasets": "Datasets",
   "dataset.label": "Dataset",
   "datasets.label": "Datasets",
-  "datasetManagement.label": "Data Management",
+  "datasetManagement.label": "Drive",
   "dataset.subtitle": "Upload local data and manage it as training datasets.",
   "dataset.upload.title": "Upload Local Dataset",
   "dataset.upload.desc": "Drag files into this area or click to upload.",
