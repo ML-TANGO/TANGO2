@@ -33,15 +33,72 @@ export const STATUS_INTERNAL_SERVER_ERROR = 'STATUS_INTERNAL_SERVER_ERROR';
 // 불편했음 → 세션 정리 + /login 이동(자동 로그아웃) + 부드러운 안내 토스트로 통일.
 // 동시 다발 401 응답에 토스트/리다이렉트가 중복되지 않도록 1회만 처리(잠시 후 해제 → 재로그인 대비).
 let sessionExpiredHandled = false;
-// export — SSE(EventSource)는 network.js 를 거치지 않아 만료를 스스로 감지할 수 없다.
-// utils/sse.js 가 SSE 실패를 분류한 뒤 만료로 판정되면 이 함수를 직접 호출한다.
-export const handleSessionExpired = () => {
-  if (sessionExpiredHandled) return;
-  sessionExpiredHandled = true;
-  setTimeout(() => {
-    sessionExpiredHandled = false;
-  }, 3000);
 
+// ── 만료 확정 전 재확인 ──────────────────────────────────────────────────────
+// 게이트웨이의 미인증 거부(401 / 403+비-JSON)는 이 플랫폼의 유일한 만료 신호지만
+// (아래 isGatewayTermination 주석 참조), 일시적 원인으로도 나온다 — Kong config sync,
+// consumer 캐시 조회 실패, 라우트가 잠시 key-auth/request-termination 짝을 잃는 순간 등.
+// 예전엔 그 거부 1회로 곧바로 세션을 버리고 /login 으로 보냈다 → 쿠키가 아직 유효한데도
+// 사용자가 튕겼다(체감 "로그인이 몇 분마다 끊긴다"). 그래서 버리기 전에 한 번 더 확인한다.
+// (Kong 세션 자체엔 조기 만료가 없음을 실측했다 — 활동 중 59분, 발급 후 79분(갱신 작동),
+//  유휴 16분 모두 정상. 즉 조기 로그아웃의 원인은 게이트웨이가 아니라 이 판정이었다.)
+//
+// 확인 규칙:
+//  - 대상은 **인증 게이트를 지나는** 엔드포인트여야 한다. ALLOWED_PATH(login/logout/
+//    users.register/users.check/`/`)는 미인증에도 통과하므로 만료를 영영 감지하지 못한다.
+//    workspaces/healthz 는 게이트를 지나고 부작용이 없어 확인용으로 안전하다.
+//  - axios 가 아니라 fetch 를 쓴다 — 인터셉터를 다시 타면 재귀한다
+//    (utils/sse.js 의 probeFailure 와 같은 이유·같은 방식).
+//  - 판정은 3값이다: gone(만료 확정) / alive(유효) / unknown(판정 불가).
+//    unknown 을 무조건 "유지"로 두면 프로브 엔드포인트나 네트워크가 죽은 동안 실제 만료를
+//    **영영** 감지하지 못해 로그아웃이 무기한 보류된다(fail-open). 그래서 연속 unknown
+//    상한을 두고 넘으면 만료로 간주한다. 상한에 닿으려면 게이트웨이 거부가 그만큼 반복돼야
+//    하므로 "일시적 거부 1회"는 여전히 걸러진다.
+//  - 동시 다발 거부에 확인이 N 번 나가지 않도록 in-flight 하나만 둔다.
+const SESSION_CONFIRM_URL = `${API_HOST}workspaces/healthz`;
+const SESSION_CONFIRM_DELAY_MS = 1000;
+const SESSION_CONFIRM_TIMEOUT_MS = 5000;
+const SESSION_CONFIRM_MAX_UNKNOWN = 3;
+// 확인 창(지연+타임아웃) 동안 error 토스트를 삼킬 시간 — handleSessionExpired 주석 참조.
+const SESSION_CONFIRM_MUTE_MS =
+  SESSION_CONFIRM_DELAY_MS + SESSION_CONFIRM_TIMEOUT_MS + 1000;
+
+const SESSION_GONE = 'gone';
+const SESSION_ALIVE = 'alive';
+const SESSION_UNKNOWN = 'unknown';
+
+let sessionConfirmInFlight = false;
+let sessionUnknownStreak = 0;
+
+const probeSession = async () => {
+  const controller = new AbortController();
+  const timer = setTimeout(
+    () => controller.abort(),
+    SESSION_CONFIRM_TIMEOUT_MS,
+  );
+  try {
+    const res = await fetch(SESSION_CONFIRM_URL, {
+      credentials: 'include',
+      signal: controller.signal,
+    });
+    const contentType = res.headers.get('content-type') || '';
+    const isJson = contentType.includes('application/json');
+    // 게이트웨이 종단만 만료다. 앱이 직접 내는 403 은 JSON(권한 문제)이라 제외한다.
+    if (res.status === 401 || (res.status === 403 && !isJson)) {
+      return SESSION_GONE;
+    }
+    // 200+JSON = 게이트를 지났다 = 세션 유효.
+    if (res.ok && isJson) return SESSION_ALIVE;
+    // 그 밖(502/504, healthz 의 Redis 장애 503 등)은 세션과 무관한 백엔드 장애다.
+    return SESSION_UNKNOWN;
+  } catch (e) {
+    return SESSION_UNKNOWN; // 네트워크/timeout — 원인 미확정
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
+const logoutExpiredSession = () => {
   resetSession(); // sessionStorage clear + auth 상태 초기화(isAuth=false)
 
   if (MODE === 'INTEGRATION') {
@@ -56,6 +113,50 @@ export const handleSessionExpired = () => {
   toast.muteErrors(5000);
   toast.info(i18n.t('sessionExpired.message'));
   storeObj.store.dispatch(goToHome('/login'));
+};
+
+// export — SSE(EventSource)는 network.js 를 거치지 않아 만료를 스스로 감지할 수 없다.
+// utils/sse.js 가 SSE 실패를 분류한 뒤 만료로 판정되면 이 함수를 직접 호출한다.
+// 실제 로그아웃은 위 재확인을 통과한 뒤에만 일어난다(호출측 시그니처는 그대로 동기).
+export const handleSessionExpired = () => {
+  if (sessionExpiredHandled || sessionConfirmInFlight) return;
+  sessionConfirmInFlight = true;
+  // ⚠️ 확인 창(최대 ~6초)이 열려 있는 동안에도 동시 실패 요청은 계속 쏟아진다. 예전엔
+  // 감지 즉시 로그아웃과 함께 muteErrors 가 걸려 그 폭주가 가려졌는데, 확인 단계를 넣으면서
+  // 뮤트가 확인 이후로 밀려 토스트 폭주가 되살아났다(Toast.jsx 주석이 말하는 그 증상).
+  // 그래서 확인을 시작하는 시점에 창을 먼저 연다. 확인 결과가 "유지"면 사용자는 아무 것도
+  // 보지 않고 조용히 넘어가는데, 일시적 거부에는 그게 맞는 결과다.
+  toast.muteErrors(SESSION_CONFIRM_MUTE_MS);
+  // 이 IIFE 는 아무도 await 하지 않는다 → 안에서 던지면 미처리 rejection 이 되고 로그아웃도
+  // 안 일어난다. AbortController 생성이나 logoutExpiredSession 처럼 probe 의 try 밖에서
+  // 던질 수 있는 지점이 있으므로 몸통 전체를 감싼다.
+  (async () => {
+    try {
+      await new Promise((resolve) =>
+        setTimeout(resolve, SESSION_CONFIRM_DELAY_MS),
+      );
+      const verdict = await probeSession();
+      if (verdict === SESSION_ALIVE) {
+        sessionUnknownStreak = 0;
+        return; // 일시적 거부였다 → 세션 유지
+      }
+      if (verdict === SESSION_UNKNOWN) {
+        sessionUnknownStreak += 1;
+        if (sessionUnknownStreak < SESSION_CONFIRM_MAX_UNKNOWN) return;
+      }
+      if (sessionExpiredHandled) return;
+      sessionExpiredHandled = true;
+      sessionUnknownStreak = 0;
+      setTimeout(() => {
+        sessionExpiredHandled = false;
+      }, 3000);
+      logoutExpiredSession();
+    } catch (e) {
+      console.error('세션 만료 확인 실패:', e);
+    } finally {
+      sessionConfirmInFlight = false;
+    }
+  })();
 };
 
 // 만료 신호 판정 —
