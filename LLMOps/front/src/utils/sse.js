@@ -21,7 +21,11 @@ import { handleSessionExpired } from '@src/network';
  */
 
 export const SSE_FAILURE = {
-  /** 세션 만료 — 이 유틸이 자동 로그아웃까지 처리했다. 호출측은 재연결하지 말 것. */
+  /**
+   * 세션 만료 **확정** — network.js 가 재확인까지 마쳤고 자동 로그아웃도 처리했다.
+   * 호출측은 재연결하지 말 것(곧 /login 으로 이동하며 언마운트된다).
+   * 게이트웨이가 거부했지만 확인 결과 세션이 멀쩡하면 EXPIRED 가 아니라 RETRY 가 온다.
+   */
   EXPIRED: 'expired',
   /** 권한 없음/영구 실패 — 재연결해도 같은 결과. 호출측은 재연결 중단. */
   FATAL: 'fatal',
@@ -119,9 +123,13 @@ const probeFailure = async (url, headers) => {
 export const classifySseFailure = async ({ errorEvent, url, headers }) => {
   const status = errorEvent?.status;
 
+  // ⚠️ 게이트웨이 거부는 **잠정** 신호다. handleSessionExpired 가 한 번 더 확인해
+  // "정말 만료였는가" 를 돌려주므로 그 결과로만 EXPIRED 를 확정한다. 예전엔 확인 없이
+  // EXPIRED 를 돌려줘, 오탐이면 세션은 멀쩡한데 소비처들이 재연결을 멈춰 스트림만 죽었다.
   if (status === 401) {
-    handleSessionExpired();
-    return SSE_FAILURE.EXPIRED;
+    return (await handleSessionExpired())
+      ? SSE_FAILURE.EXPIRED
+      : SSE_FAILURE.RETRY;
   }
   // 403 = 이 플랫폼의 만료 신호(게이트웨이 종단, HTML 본문).
   // 앱이 직접 내는 권한 부족 403 은 JSON 이므로 헤더가 읽히면 그걸로 구분하고,
@@ -133,15 +141,20 @@ export const classifySseFailure = async ({ errorEvent, url, headers }) => {
         ? rawHeaders.get('content-type')
         : rawHeaders?.['content-type']) || '';
     if (contentType.includes('application/json')) return SSE_FAILURE.FATAL;
-    handleSessionExpired();
-    return SSE_FAILURE.EXPIRED;
+    return (await handleSessionExpired())
+      ? SSE_FAILURE.EXPIRED
+      : SSE_FAILURE.RETRY;
   }
 
   // status 200 인데 error = Content-Type 이 text/event-stream 이 아님
   //   → 앱이 스트림 대신 JSON(expired / forbidden / server error)을 반환한 경우.
   if (status === 200 && url) {
     const verdict = await probeFailure(url, headers);
-    if (verdict === SSE_FAILURE.EXPIRED) handleSessionExpired();
+    if (verdict === SSE_FAILURE.EXPIRED) {
+      return (await handleSessionExpired())
+        ? SSE_FAILURE.EXPIRED
+        : SSE_FAILURE.RETRY;
+    }
     return verdict;
   }
 

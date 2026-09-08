@@ -90,6 +90,9 @@ const Alarm = () => {
     const loginedSession = sessionStorage.getItem('loginedSession');
 
     const retry = sseRetryRef.current;
+    // 새 세대(userName 변경)는 이전 세대의 소진된 재시도 횟수를 물려받지 않는다 —
+    // 상속하면 새 사용자의 첫 실패가 곧바로 상한에 걸려 재연결이 아예 없다.
+    retry.attempt = 0;
     // 공유 상태의 `notified`(첫 실패 1회만 토스트 안내)는 의도적으로 쓰지 않는다 — 알람은
     // 헤더 배지라 실시간 갱신이 끊겨도 토스트를 띄우지 않는다(useDashboardSse 와 다른 점).
     // ⚠️ 생존 판정은 **effect 지역 플래그**로 한다. 공유 상태의 `alive` 를 effect 재실행마다
@@ -119,6 +122,10 @@ const Alarm = () => {
     // accessToken)는 visibilitychange 에서 userName 을 빼고 호출해 헤더가 한 칸씩
     // 밀려 있었다(jf-User 에 token 이 들어갔다).
     const connectSSE = () => {
+      // 탭이 숨었다 돌아오는 사이 늦게 resolve 된 에러 핸들러가 재연결을 예약하면,
+      // visibility 핸들러가 이미 만든 연결을 덮어써 추적 불가한 소스가 하나 남는다.
+      // 진입 시 기존 소스를 반드시 닫아 ref 가 항상 살아있는 연결 하나만 가리키게 한다.
+      if (eventSourceRef.current) eventSourceRef.current.close();
       const source = new EventSourcePolyfill(url, { headers });
       eventSourceRef.current = source;
 
@@ -152,12 +159,10 @@ const Alarm = () => {
             url,
             headers,
           });
-          // FATAL(권한없음)만 영구 중단이다. EXPIRED 는 **잠정** 판정이다 —
-          // network.js 가 한 번 더 확인해 "세션 유지"로 뒤집을 수 있는데, 여기서 영구
-          // 중단하면 세션이 멀쩡한데 알람 스트림만 죽는다. 그래서 EXPIRED 는 아래
-          // 백오프(GIVE_UP_AFTER 상한)에 맡긴다 — 진짜 만료면 곧 /login 으로 나가며
-          // 이 컴포넌트가 언마운트되고, 오탐이면 재연결로 스스로 복구된다.
-          if (verdict === SSE_FAILURE.FATAL) {
+          // EXPIRED 는 network.js 가 재확인까지 마친 **확정** 만료다(오탐이면 RETRY 가
+          // 온다 — utils/sse.js 계약). 확정 만료면 곧 /login 으로 이동하며 이 컴포넌트가
+          // 언마운트되고, FATAL(권한없음)은 재연결해도 같은 결과다. 둘 다 영구 중단.
+          if (verdict === SSE_FAILURE.EXPIRED || verdict === SSE_FAILURE.FATAL) {
             stopped = true;
             return;
           }

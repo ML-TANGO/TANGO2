@@ -59,6 +59,9 @@ const SESSION_CONFIRM_URL = `${API_HOST}workspaces/healthz`;
 const SESSION_CONFIRM_DELAY_MS = 1000;
 const SESSION_CONFIRM_TIMEOUT_MS = 5000;
 const SESSION_CONFIRM_MAX_UNKNOWN = 3;
+// "연속" 으로 볼 시간 창. 이 간격을 넘겨 들어온 unknown 은 새 카운트로 본다 — 스트릭이
+// 모듈 전역이라 로그아웃/재로그인을 넘어 누적되면 멀쩡한 새 세션이 애매한 확인 한 번에 끊긴다.
+const SESSION_UNKNOWN_WINDOW_MS = 60000;
 // 확인 창(지연+타임아웃) 동안 error 토스트를 삼킬 시간 — handleSessionExpired 주석 참조.
 const SESSION_CONFIRM_MUTE_MS =
   SESSION_CONFIRM_DELAY_MS + SESSION_CONFIRM_TIMEOUT_MS + 1000;
@@ -67,8 +70,11 @@ const SESSION_GONE = 'gone';
 const SESSION_ALIVE = 'alive';
 const SESSION_UNKNOWN = 'unknown';
 
-let sessionConfirmInFlight = false;
+// 진행 중인 확인의 promise. 동시 다발 거부가 **같은 결과를 공유**한다(예전엔 in-flight
+// 중 도착한 신호를 그냥 버려서, 그 사이 진짜 만료가 와도 다음 실패까지 로그아웃이 밀렸다).
+let sessionConfirmPromise = null;
 let sessionUnknownStreak = 0;
+let sessionUnknownAt = 0;
 
 const probeSession = async () => {
   const controller = new AbortController();
@@ -87,8 +93,8 @@ const probeSession = async () => {
     if (res.status === 401 || (res.status === 403 && !isJson)) {
       return SESSION_GONE;
     }
-    // 200+JSON = 게이트를 지났다 = 세션 유효.
-    if (res.ok && isJson) return SESSION_ALIVE;
+    // 200+JSON = 게이트를 지났다 = 세션 유효. 다른 2xx 는 healthz 계약이 아니라 판정 불가.
+    if (res.status === 200 && isJson) return SESSION_ALIVE;
     // 그 밖(502/504, healthz 의 Redis 장애 503 등)은 세션과 무관한 백엔드 장애다.
     return SESSION_UNKNOWN;
   } catch (e) {
@@ -117,20 +123,41 @@ const logoutExpiredSession = () => {
 
 // export — SSE(EventSource)는 network.js 를 거치지 않아 만료를 스스로 감지할 수 없다.
 // utils/sse.js 가 SSE 실패를 분류한 뒤 만료로 판정되면 이 함수를 직접 호출한다.
-// 실제 로그아웃은 위 재확인을 통과한 뒤에만 일어난다(호출측 시그니처는 그대로 동기).
-export const handleSessionExpired = () => {
-  if (sessionExpiredHandled || sessionConfirmInFlight) return;
-  sessionConfirmInFlight = true;
+//
+// **반환값은 "정말 만료라서 로그아웃했는가"** 다(Promise<boolean>). 게이트웨이 거부는
+// 잠정 신호라 확인 전에는 알 수 없는데, 예전엔 이 함수가 즉시 반환해 호출측이 그 잠정
+// 판정을 확정으로 취급했다 — utils/sse.js 가 EXPIRED 를 돌려주면 6개 소비처가 재연결을
+// 멈추므로, 오탐이면 세션은 멀쩡한데 실시간 스트림만 조용히 죽었다. 이제 결과를 돌려주어
+// 공유 계약이 사실을 말하게 한다.
+//
+// @param {boolean} [confirmed] 이미 확정된 만료인가. 앱이 본문으로 알린 만료
+//   (200 + {expired:true})가 여기 해당한다 — 게이트웨이 프로브는 Kong 쿠키만 보므로,
+//   쿠키는 살아 있고 앱 토큰만 거부된 상태를 "유지" 로 뒤집어 영영 로그아웃하지 못한다.
+export const handleSessionExpired = ({ confirmed = false } = {}) => {
+  if (sessionExpiredHandled) return Promise.resolve(true);
+
+  const commitLogout = () => {
+    sessionExpiredHandled = true;
+    sessionUnknownStreak = 0;
+    setTimeout(() => {
+      sessionExpiredHandled = false;
+    }, 3000);
+    logoutExpiredSession();
+    return true;
+  };
+
+  if (confirmed) return Promise.resolve(commitLogout());
+  if (sessionConfirmPromise) return sessionConfirmPromise;
+
   // ⚠️ 확인 창(최대 ~6초)이 열려 있는 동안에도 동시 실패 요청은 계속 쏟아진다. 예전엔
   // 감지 즉시 로그아웃과 함께 muteErrors 가 걸려 그 폭주가 가려졌는데, 확인 단계를 넣으면서
   // 뮤트가 확인 이후로 밀려 토스트 폭주가 되살아났다(Toast.jsx 주석이 말하는 그 증상).
-  // 그래서 확인을 시작하는 시점에 창을 먼저 연다. 확인 결과가 "유지"면 사용자는 아무 것도
-  // 보지 않고 조용히 넘어가는데, 일시적 거부에는 그게 맞는 결과다.
+  // 그래서 확인을 시작하는 시점에 창을 먼저 열고, "유지" 로 끝나면 즉시 닫는다 — 뮤트는
+  // 전역이라 열어둔 채 두면 무관한 에러 토스트까지 삼킨다.
   toast.muteErrors(SESSION_CONFIRM_MUTE_MS);
-  // 이 IIFE 는 아무도 await 하지 않는다 → 안에서 던지면 미처리 rejection 이 되고 로그아웃도
-  // 안 일어난다. AbortController 생성이나 logoutExpiredSession 처럼 probe 의 try 밖에서
-  // 던질 수 있는 지점이 있으므로 몸통 전체를 감싼다.
-  (async () => {
+  const unmute = () => toast.muteErrors(0);
+
+  sessionConfirmPromise = (async () => {
     try {
       await new Promise((resolve) =>
         setTimeout(resolve, SESSION_CONFIRM_DELAY_MS),
@@ -138,25 +165,33 @@ export const handleSessionExpired = () => {
       const verdict = await probeSession();
       if (verdict === SESSION_ALIVE) {
         sessionUnknownStreak = 0;
-        return; // 일시적 거부였다 → 세션 유지
+        unmute();
+        return false; // 일시적 거부였다 → 세션 유지
       }
       if (verdict === SESSION_UNKNOWN) {
+        const now = Date.now();
+        if (now - sessionUnknownAt > SESSION_UNKNOWN_WINDOW_MS) {
+          sessionUnknownStreak = 0;
+        }
+        sessionUnknownAt = now;
         sessionUnknownStreak += 1;
-        if (sessionUnknownStreak < SESSION_CONFIRM_MAX_UNKNOWN) return;
+        if (sessionUnknownStreak < SESSION_CONFIRM_MAX_UNKNOWN) {
+          unmute();
+          return false;
+        }
       }
-      if (sessionExpiredHandled) return;
-      sessionExpiredHandled = true;
-      sessionUnknownStreak = 0;
-      setTimeout(() => {
-        sessionExpiredHandled = false;
-      }, 3000);
-      logoutExpiredSession();
+      return commitLogout();
     } catch (e) {
+      // 확인 자체가 깨졌다면 만료로 단정하지 않는다(오탐이 곧 강제 로그아웃).
       console.error('세션 만료 확인 실패:', e);
+      unmute();
+      return false;
     } finally {
-      sessionConfirmInFlight = false;
+      sessionConfirmPromise = null;
     }
   })();
+
+  return sessionConfirmPromise;
 };
 
 // 만료 신호 판정 —
@@ -268,7 +303,7 @@ export const network = (() => {
     const headerToken = res.headers?.token;
     const { expired, token: bodyToken } = res.data;
     if (expired) {
-      handleSessionExpired();
+      handleSessionExpired({ confirmed: true });
       return res;
     }
     if (bodyToken || headerToken) {
@@ -349,7 +384,7 @@ export const network = (() => {
     })
       .then((res) => {
         if (res.data.expired) {
-          handleSessionExpired();
+          handleSessionExpired({ confirmed: true });
         }
         if (
           (res.data?.token || res.headers?.token) &&
@@ -606,7 +641,7 @@ export async function callApi({
     if (expired) {
       response.status = STATUS_FAIL;
       response.message = MSG.TOKEN_EXPIRED;
-      handleSessionExpired();
+      handleSessionExpired({ confirmed: true });
       return response;
     }
     if (bodyToken || headerToken) {
@@ -744,7 +779,7 @@ export async function upload({
     if (expired) {
       response.status = STATUS_FAIL;
       response.message = MSG.TOKEN_EXPIRED;
-      handleSessionExpired();
+      handleSessionExpired({ confirmed: true });
       return response;
     }
     if (bodyToken || headerToken) {
@@ -842,7 +877,7 @@ export const download = async ({
   const headerToken = res.headers?.token;
   const { expired, token: bodyToken } = res.data;
   if (expired) {
-    handleSessionExpired();
+    handleSessionExpired({ confirmed: true });
     return res;
   }
   if (bodyToken || headerToken) {
