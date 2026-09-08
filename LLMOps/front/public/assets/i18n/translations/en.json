@@ -417,6 +417,7 @@
   "evaluation.expert.commentPlaceholderRequired": "Comment (required) — explain why you gave a low score.",
   "evaluation.expert.commentRequired": "A comment is required for scores of {{score}} or below. The score is saved and you can move on once you enter the reason.",
   "evaluation.expert.nextBlocked": "Enter a comment to move to the next sample.",
+  "evaluation.expert.finish": "Finish rating",
   "evaluation.expert.ratedBy": "Rated by {{rater}}",
   "evaluation.expert.unknownRater": "(unknown)",
   "evaluation.expert.reRated": "rated {{count}}×",

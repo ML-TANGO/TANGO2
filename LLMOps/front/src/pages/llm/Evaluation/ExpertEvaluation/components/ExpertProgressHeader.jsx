@@ -25,6 +25,8 @@ const ExpertProgressHeader = ({
   completed,
   onPrev,
   onNext,
+  isLast,
+  committing,
   nextBlocked,
   onReset,
   t,
@@ -70,18 +72,26 @@ const ExpertProgressHeader = ({
             onClick={onPrev}
             disabled={current <= 0}
           />
-          {/* nextBlocked = 낮은 점수인데 코멘트가 비어 있음 — 사유를 남기기 전에는 다음으로
-              넘어가지 못하게 잠근다(왜 잠겼는지는 코멘트 입력 아래 안내문 + title 로 전달). */}
+          {/* '다음' 은 이동 버튼이 아니라 **확정 버튼**이다 — 감점 방식이라 별을 건드리지 않은
+              샘플도 이 클릭에서 기본 만점으로 채점 저장된다. 그래서 마지막 샘플에서도 비활성이
+              아니라 '평가 완료' 로 바뀌어 마지막 한 건을 확정한다(예전처럼 잠그면 마지막 샘플이
+              영영 채점되지 않아 세션이 마감되지 않는다).
+              nextBlocked = 낮은 점수인데 코멘트가 비어 있음 — 사유를 남기기 전에는 확정·이동을
+              잠근다(왜 잠겼는지는 코멘트 입력 아래 안내문 + title 로 전달). */}
           <ButtonV2
             type='outline'
             colorType='blue'
             size='m'
-            label={t('evaluation.expert.next')}
+            label={t(
+              isLast ? 'evaluation.expert.finish' : 'evaluation.expert.next',
+            )}
             onClick={onNext}
-            disabled={current >= count - 1 || !!nextBlocked}
-            title={
-              nextBlocked ? t('evaluation.expert.nextBlocked') : undefined
+            disabled={
+              completed
+                ? current >= count - 1 // 읽기 전용 세션은 예전처럼 순수 열람 네비게이션.
+                : !!nextBlocked || !!committing
             }
+            title={nextBlocked ? t('evaluation.expert.nextBlocked') : undefined}
           />
           <ButtonV2
             type='clear'

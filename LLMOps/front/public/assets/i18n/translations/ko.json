@@ -422,6 +422,7 @@
   "evaluation.expert.commentPlaceholderRequired": "코멘트(필수) — 낮은 점수를 준 이유를 적어 주세요.",
   "evaluation.expert.commentRequired": "{{score}}점 이하는 코멘트가 필수입니다. 사유를 입력해야 점수가 저장되고 다음으로 넘어갈 수 있습니다.",
   "evaluation.expert.nextBlocked": "코멘트를 입력해야 다음 샘플로 넘어갈 수 있습니다.",
+  "evaluation.expert.finish": "평가 완료",
   "evaluation.expert.ratedBy": "채점자: {{rater}}",
   "evaluation.expert.unknownRater": "(미상)",
   "evaluation.expert.reRated": "{{count}}회 채점",

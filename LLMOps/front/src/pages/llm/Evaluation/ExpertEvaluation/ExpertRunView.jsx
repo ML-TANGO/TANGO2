@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Badge, InputText, Loading } from '@jonathan/ui-react';
@@ -33,6 +33,14 @@ const cx = classNames.bind(style);
 // 낮은 점수는 "왜 낮은지"가 재학습·모델 개선의 실제 신호이므로 근거 없는 감점을 막는다.
 const COMMENT_REQUIRED_MAX_SCORE = 3;
 
+// 감점 방식 — 모든 샘플은 만점에서 시작하고, 평가자는 잘못된 부분을 찾았을 때만 별을 눌러
+// 내린다(도메인 요청). 별을 건드리지 않고 '다음' 으로 넘어간 샘플은 이 점수로 확정되며,
+// 그렇게 확정된 만점과 평가자가 직접 5를 누른 만점은 **구분하지 않는다**(도메인 결정).
+//   ⚠️ 표시만 만점으로 바꾸면 안 된다 — 채점 row 가 없으면 BE 의 rated 가 오르지 않아
+//   (rated>=total 에서만 세션이 completed 로 마감) "만점처럼 보이는데 영영 미완료" 가 된다.
+//   그래서 디폴트 표시와 확정 저장(goNext)은 한 쌍이다.
+const DEFAULT_SCORE = 5;
+
 // 현재 채점이 '코멘트 미입력 상태의 낮은 점수'인가 — 별점 확정 보류·다음 잠금의 단일 판정.
 const needsComment = (rating) =>
   !!rating &&
@@ -57,6 +65,12 @@ const ExpertRunView = ({ modelId, jobId, onExit }) => {
   const [notFound, setNotFound] = useState(false);
   const [infering, setInfering] = useState({}); // idx → bool (VLM 지연 실추론 로딩 스피너)
   const [attempted, setAttempted] = useState({}); // idx → bool (1회 시도 표시 — 실패해도 재시도 X)
+  const [committing, setCommitting] = useState(false); // '다음/평가 완료' 확정 저장 in-flight
+  // idx → { key: `score|comment`, promise }. savedScore dedup 은 state 반영(비동기) 뒤에만
+  // 유효해서, 코멘트 blur 저장과 '다음' 확정처럼 응답 전에 겹치는 두 경로를 막지 못한다.
+  // ref 는 즉시 갱신되므로 중복 제출을 차단하고(감사 이력·rate_count 부풀림 방지), 겹친
+  // 호출자는 진행 중인 요청의 promise 를 공유해 성공·실패를 똑같이 돌려받는다.
+  const submittedRef = useRef({});
 
   // 재개 배선 — 마운트 시 세션 샘플 + 이전 채점 + 진행/집계 복원.
   useEffect(() => {
@@ -65,6 +79,7 @@ const ExpertRunView = ({ modelId, jobId, onExit }) => {
     setNotFound(false);
     setInfering({}); // 세션 재로드 시 이전 세션의 로딩/시도 플래그 초기화(idx 재사용 오탐 방지)
     setAttempted({});
+    submittedRef.current = {};
     (async () => {
       const [sRes, rRes] = await Promise.all([
         getExpertSamples(mId, jobId),
@@ -180,12 +195,14 @@ const ExpertRunView = ({ modelId, jobId, onExit }) => {
 
   // rate(idx, score) — 낙관적 반영 → 서버 영속 → 실패 시 롤백. 무변경(같은 score+코멘트)이면
   // 재제출 안 함(감사 이력 중복/rate_count 부풀림 방지). 정본=savedScore. (구 페이지 로직 동형.)
+  //   반환값 = "이 샘플이 지금 서버에 확정되어 있는가". '다음/평가 완료' 의 이동 가드가 이 값을
+  //   보고, false(코멘트 보류·저장 실패)면 이동시키지 않는다.
   const rate = async (idx, score) => {
-    if (!session) return;
+    if (!session) return false;
     const prev = ratings[idx] || {};
     const comment = prev.comment || '';
     if (prev.savedScore === score && (prev.savedComment || '') === comment) {
-      return;
+      return true;
     }
     // 낮은 점수(≤COMMENT_REQUIRED_MAX_SCORE)는 코멘트가 있어야 확정한다. 코멘트 없이 별점만
     // 누른 상태는 화면에만 반영하고 서버 영속을 보류한다(‘다음’도 함께 잠긴다).
@@ -194,33 +211,46 @@ const ExpertRunView = ({ modelId, jobId, onExit }) => {
     //   그 샘플의 사유는 영영 남길 수 없다 — 확정 자체를 코멘트 뒤로 미뤄야 정책이 성립한다.
     if (score <= COMMENT_REQUIRED_MAX_SCORE && !comment.trim()) {
       setRatings((p) => ({ ...p, [idx]: { ...p[idx], score } }));
-      return;
+      return false;
     }
+    // 동일 페이로드가 이미 나가 있으면 재제출하지 않고 **그 요청의 결과를 함께 기다린다**.
+    // 결과를 안 기다리고 true 를 돌려주면, 코멘트 blur 저장이 실패했는데도 '다음' 은 확정된 줄
+    // 알고 넘어가 버린다(하필 저점+코멘트 = 가장 중요한 데이터가 그 경로에 걸린다).
+    const payloadKey = `${score}|${comment}`;
+    const inflight = submittedRef.current[idx];
+    if (inflight && inflight.key === payloadKey) return inflight.promise;
+
     const prevScore = prev.score;
-    setRatings((p) => ({ ...p, [idx]: { ...p[idx], score } }));
-    const res = await submitExpertRating(mId, jobId, {
-      sample_idx: idx,
-      score,
-      comment: comment || undefined,
-    });
-    if (res.status !== STATUS_SUCCESS) {
-      setRatings((p) => ({ ...p, [idx]: { ...p[idx], score: prevScore } }));
-      errorToastMessage(res.error, res.message);
-      return;
-    }
-    setProgress(res.result);
-    setRatings((p) => ({
-      ...p,
-      [idx]: {
-        ...p[idx],
+    const promise = (async () => {
+      setRatings((p) => ({ ...p, [idx]: { ...p[idx], score } }));
+      const res = await submitExpertRating(mId, jobId, {
+        sample_idx: idx,
         score,
-        rater: res.result?.rater_user,
-        ratedAt: res.result?.rated_at,
-        count: res.result?.rate_count,
-        savedScore: score,
-        savedComment: comment,
-      },
-    }));
+        comment: comment || undefined,
+      });
+      if (res.status !== STATUS_SUCCESS) {
+        delete submittedRef.current[idx]; // 실패는 재시도 가능해야 한다
+        setRatings((p) => ({ ...p, [idx]: { ...p[idx], score: prevScore } }));
+        errorToastMessage(res.error, res.message);
+        return false;
+      }
+      setProgress(res.result);
+      setRatings((p) => ({
+        ...p,
+        [idx]: {
+          ...p[idx],
+          score,
+          rater: res.result?.rater_user,
+          ratedAt: res.result?.rated_at,
+          count: res.result?.rate_count,
+          savedScore: score,
+          savedComment: comment,
+        },
+      }));
+      return true;
+    })();
+    submittedRef.current[idx] = { key: payloadKey, promise };
+    return promise;
   };
 
   if (loading) {
@@ -243,12 +273,33 @@ const ExpertRunView = ({ modelId, jobId, onExit }) => {
   }
 
   const samples = session.samples;
-  const goPrev = () => setCurrent((c) => Math.max(0, c - 1));
-  const goNext = () => setCurrent((c) => Math.min(samples.length - 1, c + 1));
   const sample = samples[current];
   const r = (sample && ratings[sample.idx]) || {};
+  const isLast = current >= samples.length - 1;
   // 완료 세션은 읽기 전용이라 게이트를 걸지 않는다(과거 세션 열람이 막히면 안 됨).
   const commentRequired = !progress?.completed && needsComment(r);
+
+  const goPrev = () => setCurrent((c) => Math.max(0, c - 1));
+
+  // '다음'(마지막 샘플은 '평가 완료') — 현재 샘플을 서버에 확정한 뒤에만 이동한다. 별을
+  // 건드리지 않았으면 감점 방식의 기본값(DEFAULT_SCORE)으로 확정된다. 확정 실패(코멘트 보류·
+  // 서버 오류)면 제자리에 머물러 미저장인 채로 지나치는 것을 막는다. 되돌아보기용 '이전' 은
+  // 확정하지 않는다 — 확정 지점을 '다음' 한 곳으로 두어야 진행률의 의미가 흐려지지 않는다.
+  const goNext = async () => {
+    if (!sample || committing) return;
+    // 완료 세션은 읽기 전용 — 확정 없이 열람 이동만 한다(과거 세션 넘겨보기가 막히면 안 됨).
+    if (progress?.completed) {
+      setCurrent((c) => Math.min(samples.length - 1, c + 1));
+      return;
+    }
+    const from = current;
+    setCommitting(true);
+    const ok = await rate(sample.idx, r.score ?? DEFAULT_SCORE);
+    setCommitting(false);
+    // 확정을 기다리는 사이 사용자가 '이전' 등으로 직접 이동했다면 그 조작을 존중한다. 뒤늦게
+    // resolve 된 확정이 함수형 업데이터로 "지금 위치 +1" 을 해버리면 엉뚱한 샘플로 튄다.
+    if (ok && !isLast) setCurrent((c) => (c === from ? c + 1 : c));
+  };
 
   return (
     <div className={cx('expert')}>
@@ -265,6 +316,8 @@ const ExpertRunView = ({ modelId, jobId, onExit }) => {
           completed={progress?.completed}
           onPrev={goPrev}
           onNext={goNext}
+          isLast={isLast}
+          committing={committing}
           nextBlocked={commentRequired}
           onReset={onExit}
           t={t}
@@ -299,11 +352,7 @@ const ExpertRunView = ({ modelId, jobId, onExit }) => {
                 t={t}
               />
 
-              <CsvTable
-                rows={sample.csv_rows}
-                text={sample.csv_text}
-                t={t}
-              />
+              <CsvTable rows={sample.csv_rows} text={sample.csv_text} t={t} />
 
               {sample.input ? (
                 <div className={cx('input-block')}>
@@ -327,9 +376,11 @@ const ExpertRunView = ({ modelId, jobId, onExit }) => {
 
               <div className={cx('rate-block')}>
                 <StarRating
-                  value={r.score}
+                  value={r.score ?? DEFAULT_SCORE}
                   onChange={(score) => rate(sample.idx, score)}
-                  disabled={progress?.completed || !!infering[sample.idx]}
+                  disabled={
+                    progress?.completed || !!infering[sample.idx] || committing
+                  }
                   t={t}
                 />
                 <InputText
