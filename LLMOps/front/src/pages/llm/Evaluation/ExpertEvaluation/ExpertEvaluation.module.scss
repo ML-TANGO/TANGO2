@@ -1,5 +1,8 @@
 @import '@src/styles/color.scss';
 
+// 실행 모달 폼 규격은 세 실행 모달(정답 대조·LLM 심사·전문가)이 한 벌을 나눠 쓴다.
+@import '../_runModal.scss';
+
 .expert {
   padding: 24px 4px;
   overflow-y: auto;

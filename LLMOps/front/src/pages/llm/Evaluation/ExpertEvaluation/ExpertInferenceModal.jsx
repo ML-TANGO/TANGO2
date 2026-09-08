@@ -22,12 +22,12 @@ const SAMPLE_SET_SIZE = 100;
 const SAMPLE_SET_COUNT = 10;
 
 import classNames from 'classnames/bind';
-import style from '../BenchmarkEvaluation/BenchmarkEvaluation.module.scss';
+import style from './ExpertEvaluation.module.scss';
 
-// 레일 클래스(panel·rail-panel·rail-sec·opt-field…)는 **정답 대조의 스타일시트를 그대로
-// 쓴다** — 세 실행 모달이 같은 규격(절 제목 + Required 배지 + 하단 검증 문구)으로 보이게
-// 하려면 같은 규칙을 봐야 한다. 전문가는 고를 '세트'가 없어 좌측 목록 패널이 없으므로
-// 레일 하나만 세운 단일 컬럼이다.
+// 실행 모달 폼 클래스(run-*)는 **세 실행 모달이 나눠 쓰는 한 벌**(Evaluation/_runModal.scss)
+// 에서 온다. 종전에는 정답 대조 스타일시트의 rail-*·opt-* 를 빌려 썼는데, 그 시트는 결과
+// 뷰까지 함께 import 하므로 손대면 무관한 화면이 같이 바뀐다 — 그래서 폼 규격만 뽑아 냈다.
+// 전문가는 고를 '세트'가 없어 좌측 목록 패널 없이 단일 컬럼이다.
 const cx = classNames.bind(style);
 
 // 전문가 평가 세션 시작 모달 — **채점할 모델·데이터셋**(런의 선택)과 출력을 만들 배포를
@@ -250,18 +250,19 @@ const ExpertInferenceModal = ({
         isMinimize
         customStyle={{ width: '664px' }}
       >
-        <div className={cx('panel', 'rail-panel')}>
+        <div className={cx('run-form')}>
           {/* ⓪ 채점할 모델·데이터셋 — 이 세션이 무엇을 재는지. 배포 선택보다 앞선다. */}
-          <div className={cx('rail-sec')}>
-            <p className={cx('rail-title')}>
+          <div className={cx('run-sec')}>
+            <p className={cx('run-sec-title')}>
               {t('evaluation.run.subjectTitle')}
             </p>
-            <div className={cx('opt-field')}>
-              <span className={cx('opt-label')}>
+            <div className={cx('run-field')}>
+              <span className={cx('run-label')}>
                 {t('evaluation.selectModel')}
+                <span className={cx('req')}>*</span>
               </span>
               {(modelOptions || []).length === 0 ? (
-                <p className={cx('rail-note', 'err')}>
+                <p className={cx('run-hint', 'err')}>
                   {t('evaluation.compare.noModels')}
                 </p>
               ) : (
@@ -277,12 +278,13 @@ const ExpertInferenceModal = ({
                 />
               )}
             </div>
-            <div className={cx('opt-field')}>
-              <span className={cx('opt-label')}>
+            <div className={cx('run-field')}>
+              <span className={cx('run-label')}>
                 {t('evaluation.selectDatasets')}
+                <span className={cx('req')}>*</span>
               </span>
               {(datasetOptions || []).length === 0 ? (
-                <p className={cx('rail-note', 'err')}>
+                <p className={cx('run-hint', 'err')}>
                   {t('evaluation.noDatasets')}
                 </p>
               ) : (
@@ -300,9 +302,10 @@ const ExpertInferenceModal = ({
                 />
               )}
             </div>
-            <div className={cx('opt-field')}>
-              <span className={cx('opt-label')}>
+            <div className={cx('run-field')}>
+              <span className={cx('run-label')}>
                 {t('evaluation.expert.sampleSet')}
+                <span className={cx('req')}>*</span>
               </span>
               <Selectbox
                 list={sampleSetOptions}
@@ -318,7 +321,7 @@ const ExpertInferenceModal = ({
                 }}
               />
               {allSetsTaken && (
-                <p className={cx('rail-note', 'err')}>
+                <p className={cx('run-hint', 'err')}>
                   {t('evaluation.expert.sampleSetAllTaken')}
                 </p>
               )}
@@ -326,56 +329,61 @@ const ExpertInferenceModal = ({
           </div>
 
           {/* ① 출력을 어디서 가져오나 — 실행 중 배포(전문가가 여는 샘플만 지연 실추론).
-              고르지 않으면 시작할 수 없다: 예시 출력으로 채점하던 폴백은 사라졌다. */}
-          <div className={cx('rail-sec')}>
-            <p className={cx('rail-title')}>
+              고르지 않으면 시작할 수 없다: 예시 출력으로 채점하던 폴백은 사라졌다.
+              빈 상태가 두 갈래(이 모델용 배포만 없음 / 워크스페이스에 아무 배포도 없음)라
+              선택 상자를 disabled 로 세우는 대신 판정이 끝난 뒤 문구를 갈라 렌더한다. */}
+          <div className={cx('run-sec')}>
+            <p className={cx('run-sec-title')}>
               {t('evaluation.run.sourceTitle')}
+              <span className={cx('req')}>*</span>
             </p>
-            {!modelId ? (
-              <p className={cx('rail-note')}>
-                {t('evaluation.run.sourceNeedModel')}
-              </p>
-            ) : loading ? (
-              <p className={cx('rail-note')}>
-                {t('evaluation.project.loading')}
-              </p>
-            ) : deploymentOptions.length === 0 ? (
-              <EmptyBox
-                text={
-                  anyRunning
-                    ? 'evaluation.run.sourceNoneForModel'
-                    : 'evaluation.run.sourceNone'
-                }
-                isBox
-                customStyle={{
-                  minHeight: '96px',
-                  padding: '12px 14px',
-                  boxSizing: 'border-box',
-                }}
-              />
-            ) : (
-              <>
-                <Selectbox
-                  list={deploymentOptions}
-                  selectedItem={selectedDeployment}
-                  placeholder={t('select.label')}
-                  onChange={(item) => setPlaygroundId(item.value)}
+            <div className={cx('run-field')}>
+              {!modelId ? (
+                <p className={cx('run-hint')}>
+                  {t('evaluation.run.sourceNeedModel')}
+                </p>
+              ) : loading ? (
+                <p className={cx('run-hint')}>
+                  {t('evaluation.project.loading')}
+                </p>
+              ) : deploymentOptions.length === 0 ? (
+                <EmptyBox
+                  text={
+                    anyRunning
+                      ? 'evaluation.run.sourceNoneForModel'
+                      : 'evaluation.run.sourceNone'
+                  }
+                  isBox
                   customStyle={{
-                    selectboxForm: { width: '100%' },
-                    listForm: { width: '100%' },
+                    minHeight: '96px',
+                    padding: '12px 14px',
+                    boxSizing: 'border-box',
                   }}
                 />
-                {deployment && (
-                  <ul className={cx('rail-meta')}>
-                    {deployment.description && (
-                      <li>{deployment.description}</li>
-                    )}
-                    <li>{deployment.deploy_type || 'cluster'}</li>
-                  </ul>
-                )}
-              </>
-            )}
-            <p className={cx('rail-note')}>
+              ) : (
+                <>
+                  <Selectbox
+                    list={deploymentOptions}
+                    selectedItem={selectedDeployment}
+                    placeholder={t('select.label')}
+                    onChange={(item) => setPlaygroundId(item.value)}
+                    customStyle={{
+                      selectboxForm: { width: '100%' },
+                      listForm: { width: '100%' },
+                    }}
+                  />
+                  {deployment && (
+                    <ul className={cx('run-meta')}>
+                      {deployment.description && (
+                        <li>{deployment.description}</li>
+                      )}
+                      <li>{deployment.deploy_type || 'cluster'}</li>
+                    </ul>
+                  )}
+                </>
+              )}
+            </div>
+            <p className={cx('run-note')}>
               {t('evaluation.bench.targetDeployNote')}
             </p>
           </div>
@@ -383,13 +391,14 @@ const ExpertInferenceModal = ({
           {/* ② 세션 정보 — 둘 다 선택. 제목은 run 목록과 채점 진행 헤더의 표시원이고,
               지침은 채점 화면 상단 '평가 지침' 박스에 그대로 뜬다. 비우면 BE 가
               기본값(제목=데이터셋명 / 지침=시나리오 기본 지침)으로 폴백한다. */}
-          <div className={cx('rail-sec')}>
-            <p className={cx('rail-title')}>
+          <div className={cx('run-sec')}>
+            <p className={cx('run-sec-title')}>
               {t('evaluation.expert.sessionSection')}
             </p>
-            <div className={cx('opt-field')}>
-              <span className={cx('opt-label')}>
+            <div className={cx('run-field')}>
+              <span className={cx('run-label')}>
                 {t('evaluation.expert.runName')}
+                <span className={cx('opt')}>{t('optional.label')}</span>
               </span>
               <InputText
                 size='medium'
@@ -402,9 +411,10 @@ const ExpertInferenceModal = ({
                 customStyle={{ width: '100%' }}
               />
             </div>
-            <div className={cx('opt-field')}>
-              <span className={cx('opt-label')}>
+            <div className={cx('run-field')}>
+              <span className={cx('run-label')}>
                 {t('evaluation.expert.guideline')}
+                <span className={cx('opt')}>{t('optional.label')}</span>
               </span>
               <Textarea
                 size='large'

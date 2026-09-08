@@ -24,10 +24,11 @@ import classNames from 'classnames/bind';
 import benchStyle from '../BenchmarkEvaluation/BenchmarkEvaluation.module.scss';
 import style from './JudgeEvaluation.module.scss';
 
-// 모달 껍데기·레일 클래스(run-config·rail-sec·opt-field…)는 **정답 대조의 스타일시트를 그대로
-// 쓴다** — 같은 레이아웃 언어를 두 벌 복제해 두면 한쪽만 고쳐져 서서히 갈라진다. 여기 스타일
-// 시트에서 오는 것은 심사 전용 카드(set-*)뿐이고, 이름이 겹치는 것(panel·panel-head·
-// panel-title·panel-desc)은 정답 대조 쪽이 이기도록 뒤에 편다.
+// 모달 껍데기(run-config·run-main·rail)와 폼 규격(run-form·run-sec·run-label·run-note…)은
+// **정답 대조의 스타일시트를 그대로 쓴다** — 폼 규격은 그 시트가 @import 하는
+// Evaluation/_runModal.scss 에서 오고, 세 실행 모달(정답 대조·심사·전문가)이 같은 한 벌이다.
+// 같은 레이아웃 언어를 두 벌 복제해 두면 한쪽만 고쳐져 서서히 갈라진다. 여기 스타일시트에서
+// 오는 것은 심사 전용 카드(set-*)뿐이고, 이름이 겹치면 정답 대조 쪽이 이기도록 뒤에 편다.
 const cx = classNames.bind({ ...style, ...benchStyle });
 
 // **LLM 심사** 실행 설정 — 정답 대조(BenchmarkRunConfig)와 같은 단일 화면 모달이다.
@@ -265,94 +266,89 @@ const JudgeRunConfig = ({
         <div className={cx('run-config')}>
           <div className={cx('run-main')}>
             {/* 심사 세트 — 무엇으로 채점하나. 먼저 서는 이유: 세트가 곧 문항·영역·척도다. */}
-            <section className={cx('panel')}>
-              <div className={cx('panel-head')}>
-                <div>
-                  <h3 className={cx('panel-title')}>
-                    {t('evaluation.judge.setTitle')}
-                  </h3>
-                  <p className={cx('panel-desc')}>
-                    {t('evaluation.judge.setDesc')}
-                  </p>
-                </div>
-              </div>
+            <div className={cx('run-heading')}>
+              <h3 className={cx('run-sec-title')}>
+                {t('evaluation.judge.setTitle')}
+              </h3>
+              <p className={cx('run-prose')}>{t('evaluation.judge.setDesc')}</p>
+            </div>
 
-              <div
-                ref={setGroupRef}
-                className={cx('set-list')}
-                role='radiogroup'
-                aria-label={t('evaluation.judge.setTitle')}
-                onKeyDown={moveRovingFocus(
-                  setGroupRef,
-                  setValues,
-                  setId,
-                  setSetId,
-                )}
-              >
-                {JUDGE_BENCHMARKS.map((b) => (
-                  <button
-                    key={b.id}
-                    type='button'
-                    role='radio'
-                    aria-checked={setId === b.id}
-                    data-value={b.id}
-                    tabIndex={
-                      setId === b.id || (!setId && b.id === setValues[0])
-                        ? 0
-                        : -1
-                    }
-                    className={cx('set-item', setId === b.id && 'on')}
-                    onClick={() => setSetId(b.id)}
-                  >
-                    <span className={cx('set-radio')} aria-hidden='true' />
-                    <span className={cx('set-body')}>
-                      <span className={cx('set-name')}>{b.label}</span>
-                      <span className={cx('set-desc')}>{t(b.descKey)}</span>
+            <div
+              ref={setGroupRef}
+              className={cx('set-list')}
+              role='radiogroup'
+              aria-label={t('evaluation.judge.setTitle')}
+              onKeyDown={moveRovingFocus(
+                setGroupRef,
+                setValues,
+                setId,
+                setSetId,
+              )}
+            >
+              {JUDGE_BENCHMARKS.map((b) => (
+                <button
+                  key={b.id}
+                  type='button'
+                  role='radio'
+                  aria-checked={setId === b.id}
+                  data-value={b.id}
+                  tabIndex={
+                    setId === b.id || (!setId && b.id === setValues[0])
+                      ? 0
+                      : -1
+                  }
+                  className={cx('set-item', setId === b.id && 'on')}
+                  onClick={() => setSetId(b.id)}
+                >
+                  <span className={cx('set-radio')} aria-hidden='true' />
+                  <span className={cx('set-body')}>
+                    <span className={cx('set-name')}>{b.label}</span>
+                    <span className={cx('set-desc')}>{t(b.descKey)}</span>
+                  </span>
+                </button>
+              ))}
+              {UNAVAILABLE_SETS.map((item) => (
+                <button
+                  key={item.id}
+                  type='button'
+                  role='radio'
+                  aria-checked={false}
+                  aria-disabled='true'
+                  disabled
+                  className={cx('set-item', 'off')}
+                  onClick={() => {}}
+                >
+                  <span className={cx('set-radio')} aria-hidden='true' />
+                  <span className={cx('set-body')}>
+                    <span className={cx('set-name')}>
+                      {item.label}
+                      <Badge
+                        label={t('evaluation.judge.setUnavailable')}
+                        type='gray'
+                        size='sm'
+                      />
                     </span>
-                  </button>
-                ))}
-                {UNAVAILABLE_SETS.map((item) => (
-                  <button
-                    key={item.id}
-                    type='button'
-                    role='radio'
-                    aria-checked={false}
-                    aria-disabled='true'
-                    disabled
-                    className={cx('set-item', 'off')}
-                    onClick={() => {}}
-                  >
-                    <span className={cx('set-radio')} aria-hidden='true' />
-                    <span className={cx('set-body')}>
-                      <span className={cx('set-name')}>
-                        {item.label}
-                        <Badge
-                          label={t('evaluation.judge.setUnavailable')}
-                          type='gray'
-                          size='sm'
-                        />
-                      </span>
-                      <span className={cx('set-desc')}>{t(item.descKey)}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </section>
+                    <span className={cx('set-desc')}>{t(item.descKey)}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
 
           <aside className={cx('rail')}>
-            <div className={cx('panel', 'rail-panel')}>
+            <div className={cx('run-form')}>
               {/* ⓪ 채점할 모델·데이터셋 — 런이 소유한다(프로젝트는 이름·유형만 잠근다). */}
-              <div className={cx('rail-sec')}>
-                <p className={cx('rail-title')}>
+              <div className={cx('run-sec')}>
+                <p className={cx('run-sec-title')}>
                   {t('evaluation.run.subjectTitle')}
                 </p>
-                <div className={cx('opt-field')}>
-                  <span className={cx('opt-label')}>
+                <div className={cx('run-field')}>
+                  <span className={cx('run-label')}>
                     {t('evaluation.selectModel')}
+                    <span className={cx('req')}>*</span>
                   </span>
                   {(modelOptions || []).length === 0 ? (
-                    <p className={cx('rail-note', 'err')}>
+                    <p className={cx('run-hint', 'err')}>
                       {t('evaluation.compare.noModels')}
                     </p>
                   ) : (
@@ -368,12 +364,13 @@ const JudgeRunConfig = ({
                     />
                   )}
                 </div>
-                <div className={cx('opt-field')}>
-                  <span className={cx('opt-label')}>
+                <div className={cx('run-field')}>
+                  <span className={cx('run-label')}>
                     {t('evaluation.selectDatasets')}
+                    <span className={cx('req')}>*</span>
                   </span>
                   {(datasetOptions || []).length === 0 ? (
-                    <p className={cx('rail-note', 'err')}>
+                    <p className={cx('run-hint', 'err')}>
                       {t('evaluation.noDatasets')}
                     </p>
                   ) : (
@@ -394,93 +391,101 @@ const JudgeRunConfig = ({
               </div>
 
               {/* ① 출력을 어디서 가져오나 — 채점 컨테이너는 생성하지 않고 이미 떠 있는
-                  배포에 요청한다. 후보는 위에서 고른 모델을 서빙 중인 배포뿐이다. */}
-              <div className={cx('rail-sec')}>
-                <p className={cx('rail-title')}>
+                  배포에 요청한다. 후보는 위에서 고른 모델을 서빙 중인 배포뿐이다.
+                  빈 상태가 두 갈래(이 모델용만 없음 / 워크스페이스에 아무 배포도 없음)라
+                  선택 상자를 비활성으로 세우는 대신 판정이 끝난 뒤 문구를 갈라 렌더한다. */}
+              <div className={cx('run-sec')}>
+                <p className={cx('run-sec-title')}>
                   {t('evaluation.run.sourceTitle')}
+                  <span className={cx('req')}>*</span>
                 </p>
-                {!modelId ? (
-                  <p className={cx('rail-note')}>
-                    {t('evaluation.run.sourceNeedModel')}
-                  </p>
-                ) : deployments === null ? (
-                  <p className={cx('rail-note')}>
-                    {t('evaluation.project.loading')}
-                  </p>
-                ) : deploymentOptions.length === 0 ? (
-                  <EmptyBox
-                    text={
-                      anyRunning
-                        ? 'evaluation.run.sourceNoneForModel'
-                        : 'evaluation.run.sourceNone'
-                    }
-                    isBox
-                    customStyle={{
-                      minHeight: '96px',
-                      padding: '12px 14px',
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                ) : (
-                  <>
-                    <Selectbox
-                      list={deploymentOptions}
-                      selectedItem={selectedDeployment}
-                      placeholder={t('select.label')}
-                      onChange={(item) => setPlaygroundId(item.value)}
+                <div className={cx('run-field')}>
+                  {!modelId ? (
+                    <p className={cx('run-hint')}>
+                      {t('evaluation.run.sourceNeedModel')}
+                    </p>
+                  ) : deployments === null ? (
+                    <p className={cx('run-hint')}>
+                      {t('evaluation.project.loading')}
+                    </p>
+                  ) : deploymentOptions.length === 0 ? (
+                    <EmptyBox
+                      text={
+                        anyRunning
+                          ? 'evaluation.run.sourceNoneForModel'
+                          : 'evaluation.run.sourceNone'
+                      }
+                      isBox
                       customStyle={{
-                        selectboxForm: { width: '100%' },
-                        listForm: { width: '100%' },
+                        minHeight: '96px',
+                        padding: '12px 14px',
+                        boxSizing: 'border-box',
                       }}
                     />
-                    {deployment && (
-                      <ul className={cx('rail-meta')}>
-                        {deployment.description && (
-                          <li>{deployment.description}</li>
-                        )}
-                        <li>{deployment.deploy_type || 'cluster'}</li>
-                      </ul>
-                    )}
-                  </>
-                )}
-                <p className={cx('rail-note')}>
+                  ) : (
+                    <>
+                      <Selectbox
+                        list={deploymentOptions}
+                        selectedItem={selectedDeployment}
+                        placeholder={t('select.label')}
+                        onChange={(item) => setPlaygroundId(item.value)}
+                        customStyle={{
+                          selectboxForm: { width: '100%' },
+                          listForm: { width: '100%' },
+                        }}
+                      />
+                      {deployment && (
+                        <ul className={cx('run-meta')}>
+                          {deployment.description && (
+                            <li>{deployment.description}</li>
+                          )}
+                          <li>{deployment.deploy_type || 'cluster'}</li>
+                        </ul>
+                      )}
+                    </>
+                  )}
+                </div>
+                <p className={cx('run-note')}>
                   {t('evaluation.bench.targetDeployNote')}
                 </p>
               </div>
 
               {/* ② 누가 채점하나 — 필수. 대상으로 고른 배포는 후보에서 빠지고(자기 채점),
                   후보를 대상 모델로 좁히지 않는다(좁히면 자기 자신뿐이 된다). */}
-              <div className={cx('rail-sec')}>
-                <p className={cx('rail-title')}>
+              <div className={cx('run-sec')}>
+                <p className={cx('run-sec-title')}>
                   {t('evaluation.judge.judgeDeployTitle')}
+                  <span className={cx('req')}>*</span>
                 </p>
-                {judgePool === null ? (
-                  <p className={cx('rail-note')}>
-                    {t('evaluation.project.loading')}
-                  </p>
-                ) : judgeOptions.length === 0 ? (
-                  <EmptyBox
-                    text='evaluation.bench.noJudgeDeploy'
-                    isBox
-                    customStyle={{
-                      minHeight: '96px',
-                      padding: '12px 14px',
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                ) : (
-                  <Selectbox
-                    list={judgeOptions}
-                    selectedItem={selectedJudge}
-                    placeholder={t('select.label')}
-                    onChange={(item) => setJudgePlaygroundId(item.value)}
-                    customStyle={{
-                      selectboxForm: { width: '100%' },
-                      listForm: { width: '100%' },
-                    }}
-                  />
-                )}
-                <p className={cx('rail-note')}>
+                <div className={cx('run-field')}>
+                  {judgePool === null ? (
+                    <p className={cx('run-hint')}>
+                      {t('evaluation.project.loading')}
+                    </p>
+                  ) : judgeOptions.length === 0 ? (
+                    <EmptyBox
+                      text='evaluation.bench.noJudgeDeploy'
+                      isBox
+                      customStyle={{
+                        minHeight: '96px',
+                        padding: '12px 14px',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  ) : (
+                    <Selectbox
+                      list={judgeOptions}
+                      selectedItem={selectedJudge}
+                      placeholder={t('select.label')}
+                      onChange={(item) => setJudgePlaygroundId(item.value)}
+                      customStyle={{
+                        selectboxForm: { width: '100%' },
+                        listForm: { width: '100%' },
+                      }}
+                    />
+                  )}
+                </div>
+                <p className={cx('run-micro')}>
                   {t('evaluation.bench.judgeNote')}
                 </p>
               </div>

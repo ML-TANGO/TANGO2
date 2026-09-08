@@ -1,162 +1,53 @@
 @import '@src/styles/color.scss';
 
+// 실행 모달 폼 규격(run-form·run-sec·run-label·run-note…)은 세 실행 모달
+// (정답 대조·LLM 심사·전문가)이 한 벌을 나눠 쓴다. LLM 심사는 이 시트를 JS 에서 합쳐
+// 쓰므로(JudgeRunConfig 의 cx bind) 여기서 import 하면 심사 쪽도 같은 규격을 받는다.
+@import '../_runModal.scss';
+
 // ── 벤치마크 실행 설정(단일 화면 모달) ────────────────────────────────
-// 좌: 종류 라디오 + 벤치마크 목록 / 우: 320px 레일(배포·체크포인트·기록될 지표·심판).
-// NewStyleModalFrame 안에 들어가므로 바깥 여백·스크롤은 프레임이 갖는다.
+// 좌: 종류 필터 + 이름 검색 + 벤치마크 카드 격자 / 우: 340px 레일(평가 대상 → 포맷 학습
+// → 출력 배포 → 기록될 지표). NewStyleModalFrame 안에 들어가므로 바깥 여백·스크롤은
+// 프레임이 갖는다. 두 컬럼 모두 카드(테두리·배경)를 두르지 않는다 — 모달 시트가 이미
+// 카드이고, 그 안에 또 카드를 두르면 위계가 한 겹 헛돈다.
 .run-config {
   display: grid;
   align-items: start;
-  gap: 20px;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) 340px;
 }
 
 .run-main {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 20px;
+  gap: 12px;
 }
 
-.panel {
+// 종류 필터와 이름 검색은 한 쌍이라 한 줄로 세운다 — 폭이 모자라면 검색이 줄고
+// (customStyle 의 1fr) 필터는 제 폭을 지킨다.
+.run-filters {
   display: flex;
-  flex-direction: column;
-  padding: 24px;
-  border: 1px solid $disable-color;
-  border-radius: 8px;
-  background-color: $mono200;
-  gap: 20px;
-}
-
-.panel-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-
-  // 제목 블록이 줄어들 수 있게 한다. flex item 의 기본 min-width 는 auto 라 긴 설명문이
-  // 그대로 최소폭이 되고, 그만큼 오른쪽 필터가 눌려 필터 안에서 줄바꿈이 났다.
-  > div:first-child {
-    min-width: 0;
-  }
-}
-
-.panel-title {
-  margin: 0;
-  color: $title-color;
-  font-family: SpoqaB;
-  font-size: 15px;
-  font-weight: 700;
-}
-
-.panel-desc {
-  margin: 6px 0 0;
-  color: $sub-text-color;
-  font-size: 12.5px;
-  line-height: 1.5;
-}
-
-.filters {
-  display: flex;
-  // 카테고리 필터와 검색은 한 쌍이라 쪼개지지 않게 한다 — 폭이 모자라면 둘이 갈라서는
-  // 대신 .panel-head 의 wrap 이 쌍째로 다음 줄로 내린다.
-  flex: none;
-  flex-wrap: nowrap;
   align-items: center;
-  justify-content: flex-end;
   gap: 8px;
 
   @media (max-width: 560px) {
     flex-wrap: wrap;
-    justify-content: flex-start;
   }
 }
 
-// 라디오 표식 — 디자인시스템 Radio 는 라벨 텍스트만 렌더해 이 카드형 옵션에 맞지 않는다.
-.pick-radio {
-  position: relative;
-  width: 16px;
-  height: 16px;
-  flex: none;
-  margin-top: 3px;
-  border: 1.5px solid $mono204;
-  border-radius: 50%;
-}
-
-.benchmark-option.selected .pick-radio {
-  border-color: $primary-color;
-  border-width: 2px;
-
-  &::after {
-    content: '';
-    position: absolute;
-    border-radius: 50%;
-    background-color: $primary-color;
-    inset: 3px;
-  }
-}
-
-.option-body {
+// 남는 폭을 먹는 쪽(이름 검색). InputText 는 customStyle 을 <input> 에만 실어 주므로
+// (제 래퍼 div.input 은 display:block) 폭은 여기서 잡는다 — 래퍼가 이 칸을 채우고
+// 안쪽 input 이 100% 를 받는다.
+.run-filters-grow {
   min-width: 0;
-}
+  flex: 1;
 
-// ── 정답 대조 벤치마크 그리드 ──────────────────────────────────────────
-.benchmark-grid {
-  display: grid;
-  align-content: start;
-  gap: 12px;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-}
-
-.benchmark-option {
-  display: grid;
-  align-items: start;
-  width: 100%;
-  min-width: 0;
-  padding: 16px;
-  border: 1px solid $disable-color;
-  border-radius: 8px;
-  background-color: $mono200;
-  cursor: pointer;
-  gap: 10px;
-  grid-template-columns: auto 1fr;
-  text-align: left;
-  transition: border-color 0.15s, background-color 0.15s, box-shadow 0.15s;
-
-  &:hover {
-    border-color: $primary-color;
-    box-shadow: $card-hover-color;
-  }
-
-  &.selected {
-    border-color: $primary-color;
-    background-color: $background-color;
-    box-shadow: inset 0 0 0 1px $primary-color;
+  input {
+    width: 100%;
   }
 }
 
-.bo-name {
-  display: block;
-  color: $normal-text-color;
-  font-size: 13.5px;
-  font-weight: 600;
-}
-
-.bo-desc {
-  display: block;
-  margin-top: 3px;
-  color: $sub-text-color;
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.grid-empty {
-  grid-column: 1 / -1;
-}
-
-// ── 실행 구성 레일 ─────────────────────────────────────────────────────
-// 순서 = 평가 대상 배포(필수) → 체크포인트(필요한 벤치마크만) → 기록될 지표 → 심판 설정.
-// 지표는 고를 것이 없어 통보만 한다 — 채점기가 한 번에 내는 지표는 전부 기록된다.
 .rail {
   position: sticky;
   top: 0;
@@ -166,59 +57,91 @@
   }
 }
 
-.rail-panel {
-  padding: 0;
-  gap: 0;
-  // overflow 를 자르지 않는다 — 자르면 열린 드롭다운이 패널을 스크롤 가능하게 만들고,
-  // Selectbox 의 scrollAutoFocus 가 그 패널을 스크롤해 절 제목이 위로 사라진다.
-  // (스크롤바가 없어 되돌릴 수도 없다.) 목록은 패널 밖으로 겹쳐 내려오는 것이 맞다.
+// ── 정답 대조 벤치마크 격자 ────────────────────────────────────────────
+.benchmark-grid {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
 }
 
-.rail-sec {
-  display: flex;
-  flex-direction: column;
-  padding: 16px 18px;
-  border-bottom: 1px solid $mono202;
-  gap: 8px;
+// 선택 표시를 테두리 두께가 아니라 inset 링으로 준다 — border-width 를 바꾸면 고를
+// 때마다 카드 안 내용이 1px 씩 밀린다.
+.benchmark-option {
+  display: grid;
+  align-items: start;
+  width: 100%;
+  min-width: 0;
+  padding: 14px 14px 14px 12px;
+  border: 0;
+  border-radius: 9px;
+  background-color: $mono200;
+  box-shadow: inset 0 0 0 1px $mono202;
+  cursor: pointer;
+  gap: 10px;
+  grid-template-columns: auto 1fr;
+  text-align: left;
+  transition: box-shadow 0.12s cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 0.12s cubic-bezier(0.4, 0, 0.2, 1);
 
-  &:last-child {
-    border-bottom: none;
+  &:hover:not(.selected) {
+    box-shadow: inset 0 0 0 1px $blue103;
+  }
+
+  &.selected {
+    background-color: $background-color;
+    box-shadow: inset 0 0 0 1px $primary-color;
   }
 }
 
-.rail-title {
+// 라디오 표식 — 디자인시스템 Radio 는 라벨 텍스트만 렌더해 이 카드형 옵션에 맞지 않는다.
+.pick-radio {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  margin-top: 1px;
+  border-radius: 50%;
+  background-color: $mono200;
+  box-shadow: inset 0 0 0 1px $mono203;
+}
+
+.benchmark-option.selected .pick-radio {
+  box-shadow: inset 0 0 0 4.5px $primary-color, inset 0 0 0 1px $primary-color;
+}
+
+.option-body {
+  min-width: 0;
+}
+
+.bo-name {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  margin: 0;
-  color: $sub-text-color;
-  font-size: 12px;
+  color: $blue107;
+  font-size: 14px;
   font-weight: 700;
-  gap: 8px;
+  gap: 6px;
 }
 
-.rail-meta {
-  display: flex;
-  flex-direction: column;
-  margin: 0;
-  padding: 0;
+.benchmark-option.selected .bo-name {
+  color: $primary-color;
+}
+
+.bo-desc {
+  display: block;
+  margin-top: 5px;
   color: $sub-text-color;
   font-size: 12px;
-  gap: 3px;
-  list-style: none;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  line-height: 18px;
 }
 
-.rail-note {
-  margin: 0;
-  color: $sub-text-color;
-  font-size: 11.5px;
-  line-height: 1.55;
-
-  &.err {
-    color: $error-color;
-  }
+.grid-empty {
+  grid-column: 1 / -1;
 }
 
+// ── 레일: 기록될 지표 ──────────────────────────────────────────────────
 .metric-plan {
   display: flex;
   flex-direction: column;
@@ -252,19 +175,6 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-}
-
-.opt-field {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.opt-label {
-  color: $sub-text-color;
-  font-size: 12px;
-  font-weight: 700;
 }
 
 @media (max-width: 920px) {
@@ -618,15 +528,6 @@
 }
 
 @media (max-width: 760px) {
-  .panel {
-    padding: 18px;
-  }
-
-  .filters {
-    width: 100%;
-    justify-content: flex-start;
-  }
-
   .chart-label {
     width: 72px;
   }

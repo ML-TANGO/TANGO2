@@ -1,74 +1,75 @@
 @import '@src/styles/color.scss';
 
 // ── Judge 실행 설정 ───────────────────────────────────────────────────
-// 실행 설정은 정답 대조와 같은 단일 화면 모달이라 **껍데기·레일 규칙은 이 파일에 없다** —
-// run-config(2단 격자)·panel·rail-sec·opt-field 는 BenchmarkEvaluation.module.scss 의 것을
-// 그대로 쓴다(JudgeRunConfig 가 두 스타일시트를 합쳐 bind 한다). 같은 규칙을 두 벌 두면
-// 한쪽만 고쳐져 두 화면이 서서히 갈라지므로, 여기 남기는 건 심사 전용 카드뿐이다.
+// 실행 설정은 정답 대조와 같은 단일 화면 모달이라 **껍데기·폼 규칙은 이 파일에 없다** —
+// 2단 격자(run-config·run-main·rail)는 BenchmarkEvaluation.module.scss 의 것을, 폼 규격
+// (run-form·run-sec·run-label·run-note…)은 그 시트가 @import 하는 Evaluation/_runModal.scss
+// 의 것을 그대로 쓴다(JudgeRunConfig 가 두 스타일시트를 합쳐 bind 한다). 같은 규칙을 두 벌
+// 두면 한쪽만 고쳐져 두 화면이 서서히 갈라지므로, 여기 남기는 건 심사 전용 카드뿐이다.
 
 // ── 심사 세트 카드 ────────────────────────────────────────────────────
 // 세트가 곧 문항·영역·척도라 라벨 한 줄로는 무엇을 재는지 알 수 없다. 채점기가 없는
 // 자리는 지우지 않고 비활성으로 남겨 "아직 못 돈다"가 보이게 둔다.
 .set-list {
-  display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-// width:100% + 좌우 padding 조합이라 border-box 가 필수다(안 그러면 격자 밖으로 넘친다).
+// width:100% + 좌우 padding 조합이라 border-box 가 필수다(안 그러면 목록 밖으로 넘친다).
+// 선택 표시를 테두리 두께가 아니라 inset 링으로 준다 — border-width 를 바꾸면 고를
+// 때마다 카드 안 내용이 1px 씩 밀린다.
 .set-item {
   display: grid;
   box-sizing: border-box;
   align-items: start;
   width: 100%;
-  padding: 15px 16px;
-  border: 1px solid $disable-color;
-  border-radius: 10px;
+  padding: 16px;
+  border: 0;
+  border-radius: 9px;
   background-color: $mono200;
+  box-shadow: inset 0 0 0 1px $mono203;
   cursor: pointer;
   gap: 12px;
   grid-template-columns: auto 1fr;
   text-align: left;
-  transition: border-color 0.15s, background-color 0.15s;
+  transition: box-shadow 0.12s cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 0.12s cubic-bezier(0.4, 0, 0.2, 1);
 
-  &:hover:not(.off) {
-    border-color: $primary-color;
+  &:hover:not(.off):not(.on) {
+    box-shadow: inset 0 0 0 1px $blue103;
   }
 
   &.on {
-    border-color: $primary-color;
     background-color: $background-color;
     box-shadow: inset 0 0 0 1px $primary-color;
   }
 
-  // 채점기가 없는 자리 — 왜 못 고르는지는 옆 배지가 말한다.
+  // 채점기가 없는 자리 — 왜 못 고르는지는 옆 배지가 말한다. 흐리게(opacity) 덮는 대신
+  // 링·글자색을 낮춘다: opacity 는 배지까지 같이 죽여 그 설명이 먼저 안 읽혔다.
   &.off {
+    box-shadow: inset 0 0 0 1px $mono202;
     cursor: not-allowed;
-    opacity: 0.55;
   }
 }
 
 // 라디오 표식 — 디자인시스템 Radio 는 라벨 텍스트만 렌더해 카드형 옵션에 맞지 않는다.
 .set-radio {
-  position: relative;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   flex: none;
-  margin-top: 3px;
-  border: 1.5px solid $mono204;
+  margin-top: 1px;
   border-radius: 50%;
+  background-color: $mono200;
+  box-shadow: inset 0 0 0 1px $mono203;
 
   .set-item.on & {
-    border-color: $primary-color;
-    border-width: 2px;
+    box-shadow: inset 0 0 0 5px $primary-color, inset 0 0 0 1px $primary-color;
+  }
 
-    &::after {
-      content: '';
-      position: absolute;
-      border-radius: 50%;
-      background-color: $primary-color;
-      inset: 3px;
-    }
+  .set-item.off & {
+    background-color: $mono202;
+    box-shadow: inset 0 0 0 1px $mono204;
   }
 }
 
@@ -80,18 +81,27 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  color: $normal-text-color;
+  color: $blue107;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
   gap: 8px;
+
+  .set-item.off & {
+    color: $mono204;
+  }
 }
 
 .set-desc {
   display: block;
-  margin-top: 4px;
+  margin-top: 6px;
   color: $sub-text-color;
-  font-size: 12.5px;
-  line-height: 1.5;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+
+  .set-item.off & {
+    color: $mono204;
+  }
 }
 
 // ── Judge 결과 ───────────────────────────────────────────────────────
@@ -182,11 +192,6 @@
 }
 
 @media (max-width: 760px) {
-  .panel {
-    padding: 18px;
-  }
-
-  .set-list,
   .crit-scores {
     grid-template-columns: 1fr;
   }

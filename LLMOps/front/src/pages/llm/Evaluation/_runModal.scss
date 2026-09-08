@@ -1,0 +1,166 @@
+// ── 평가 실행 모달 공통 폼 규격 ─────────────────────────────────────────
+// 정답 대조(BenchmarkRunConfig) · LLM 심사(JudgeRunConfig) · 전문가(ExpertInferenceModal)
+// 세 실행 모달이 **같은 규격**으로 보이게 하는 한 벌. 종전에는 정답 대조 스타일시트의
+// rail-*·opt-* 를 두 모달이 빌려 쓰고 전문가만 따로 놀았는데, 그 시트는 결과 뷰까지
+// 함께 import 하므로 손대면 무관한 화면이 같이 바뀐다 — 그래서 폼 규격만 여기로 뽑았다.
+// 세 .module.scss 가 각각 @import 하며, CSS Modules 라 모듈별로 해시된 사본이 나온다
+// (JudgeRunConfig 처럼 두 시트를 JS 에서 합쳐 쓰는 곳도 이름이 같아 그대로 맞물린다).
+//
+// ⚠️ 이 규격의 어떤 조상에도 overflow 를 걸지 않는다. 자르면 열린 Selectbox 목록이
+// 컨테이너를 스크롤 가능하게 만들고 scrollAutoFocus 가 그 컨테이너를 스크롤해 절 제목이
+// 위로 사라진다. 스크롤은 NewStyleModalFrame 의 .modal-content 가 이미 맡는다.
+@import '@src/styles/color.scss';
+
+// 절을 헤어라인으로 잇는 단일 컬럼. 카드(테두리 + 배경)를 두르지 않는다 —
+// 모달 시트 자체가 이미 카드다.
+.run-form {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.run-sec {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  padding-bottom: 24px;
+  border-bottom: 1px solid $mono202;
+  margin-bottom: 24px;
+  gap: 12px;
+
+  &:last-child {
+    padding-bottom: 0;
+    border-bottom: none;
+    margin-bottom: 0;
+  }
+}
+
+.run-sec-title {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  color: $blue107;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  gap: 8px;
+
+  // 제목 오른쪽 끝에 조작부(Switch 등)를 붙일 때 — 배지처럼 제목에 붙는 것과 달리
+  // 스위치는 행의 끝에 서는 것이 플랫폼 관례다.
+  &.spread {
+    justify-content: space-between;
+  }
+
+  // gap(8px)은 옆에 서는 배지·스위치를 위한 것이다. 필수 표식은 제목 글자에 붙어
+  // 읽혀야 하므로 그 gap 을 상쇄해 2px 로 되돌린다.
+  .req {
+    margin-left: -6px;
+  }
+}
+
+// 절 제목 + 한두 줄 설명을 한 덩어리로 묶는다(제목-설명 사이는 절 안 간격보다 좁다).
+.run-heading {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+// 절 제목 아래 한두 줄 설명. 라벨(13px/1) 보다 행간이 넓다 — 읽는 문장이라서.
+.run-prose {
+  margin: 0;
+  color: $sub-text-color;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.run-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.run-label {
+  display: flex;
+  align-items: center;
+  color: $sub-text-color;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+// 필수 — 비면 푸터에 막는 이유(blockReason)가 뜨고 실행 버튼이 잠긴다. 라벨(run-label)과
+// 절 제목(run-sec-title) 양쪽에서 쓰이므로 라벨 안에 중첩해 두지 않는다 — 중첩해 두면
+// 제목에 붙인 표식이 색도 간격도 못 받는다.
+.req {
+  margin-left: 2px;
+  color: $blue104;
+}
+
+// 선택 항목 배지. 라벨 문자열에 '(선택)' 을 박아 두던 것을 대신하며,
+// 플랫폼 다른 모달의 optionalText 와 같은 i18n 키(optional.label)를 쓴다.
+.opt {
+  margin-left: 6px;
+  color: $mono204;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+}
+
+// 절 안의 안내문 — 평문으로 흘려 두면 읽히지 않아 채움 상자로 세운다.
+.run-note {
+  display: flex;
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background-color: $blue100;
+  color: $sub-text-color;
+  font-size: 13px;
+  line-height: 20px;
+  gap: 8px;
+
+  &::before {
+    content: '';
+    width: 16px;
+    height: 16px;
+    flex: 0 0 auto;
+    margin-top: 2px;
+    background-image: url(@src/static/images/icon/00-ic-alert-info-o-blue.svg);
+    background-size: 16px 16px;
+  }
+}
+
+// 상태 문구(로딩·선행 선택 필요) 와 오류 문구(목록 없음·가용 0).
+.run-hint {
+  margin: 0;
+  color: $sub-text-color;
+  font-size: 13px;
+  line-height: 20px;
+
+  &.err {
+    color: $error-color;
+  }
+}
+
+// 규칙을 덧대는 잔글씨 — 안내 상자로 세우기엔 부차적인 단서.
+.run-micro {
+  margin: 0;
+  color: $mono204;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  line-height: 18px;
+}
+
+.run-meta {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  color: $sub-text-color;
+  font-size: 12px;
+  gap: 3px;
+  list-style: none;
+}

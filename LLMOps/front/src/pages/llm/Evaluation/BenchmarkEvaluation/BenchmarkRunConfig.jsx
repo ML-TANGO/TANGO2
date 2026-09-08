@@ -372,113 +372,123 @@ const BenchmarkRunConfig = ({
       >
         <div className={cx('run-config')}>
           <div className={cx('run-main')}>
-            <section className={cx('panel')}>
-              <div className={cx('panel-head')}>
-                <div>
-                  <h3 className={cx('panel-title')}>
-                    {t('evaluation.bench.referenceTitle')}
-                  </h3>
-                  <p className={cx('panel-desc')}>
-                    {t('evaluation.bench.referenceDesc')}
-                  </p>
-                </div>
-                <div className={cx('filters')}>
-                  <Selectbox
-                    list={categoryOptions}
-                    selectedItem={selectedCategory}
-                    onChange={(item) => setCategory(item.value)}
-                    customStyle={{
-                      selectboxForm: { width: '170px' },
-                      listForm: { width: '170px' },
-                    }}
-                  />
-                  <InputText
-                    size='medium'
-                    value={query}
-                    placeholder={t('evaluation.bench.searchPlaceholder')}
-                    leftIcon='/images/icon/ic-search.svg'
-                    closeIcon='/images/icon/close-c.svg'
-                    disableLeftIcon={false}
-                    disableClearBtn={false}
-                    onChange={(e) => setQuery(e.target.value)}
-                    onClear={() => setQuery('')}
-                    customStyle={{ width: '190px' }}
-                  />
-                </div>
-              </div>
+            <div className={cx('run-heading')}>
+              <h3 className={cx('run-sec-title')}>
+                {t('evaluation.bench.referenceTitle')}
+                <span className={cx('req')}>*</span>
+              </h3>
+              <p className={cx('run-prose')}>
+                {t('evaluation.bench.referenceDesc')}
+              </p>
+            </div>
 
-              <div
-                ref={listGroupRef}
-                className={cx('benchmark-grid')}
-                role='radiogroup'
-                aria-label={t('evaluation.bench.selectBenchTitle')}
-                onKeyDown={moveRovingFocus(
-                  listGroupRef,
-                  visible.map((b) => b.id),
-                  picked,
-                  pickBenchmark,
-                )}
-              >
-                {visible.map((b) => {
-                  const on = picked === b.id;
-                  return (
-                    <button
-                      key={b.id}
-                      type='button'
-                      role='radio'
-                      aria-checked={on}
-                      data-value={b.id}
-                      tabIndex={
-                        on || (!picked && b.id === visible[0]?.id) ? 0 : -1
-                      }
-                      className={cx('benchmark-option', on && 'selected')}
-                      onClick={() => pickBenchmark(b.id)}
-                    >
-                      <span className={cx('pick-radio')} aria-hidden='true' />
-                      <span className={cx('option-body')}>
-                        <span className={cx('bo-name')}>
-                          {b.label}
-                          {b.requiresFormat && (
-                            <Badge
-                              label={t('evaluation.bench.badgeFormat')}
-                              type='yellow'
-                              size='sm'
-                            />
-                          )}
-                        </span>
-                        <span className={cx('bo-desc')}>{t(b.descKey)}</span>
-                      </span>
-                    </button>
-                  );
-                })}
-                {visible.length === 0 && (
-                  <div className={cx('grid-empty')}>
-                    <EmptyBox
-                      text='evaluation.noSearchResult'
-                      isBox
-                      customStyle={{ height: '120px' }}
-                    />
-                  </div>
-                )}
+            {/* 종류 필터 + 이름 검색 — 제목 오른쪽에 끼워 넣던 것을 제 줄로 내렸다.
+                320px 남짓 폭에서 필터 안에서 줄바꿈이 나던 문제가 사라진다. */}
+            <div className={cx('run-filters')}>
+              {/* Selectbox 의 **외곽** 래퍼는 자기 스타일시트에서 width:100% 다. flex 행에
+                  넣으면 그 100% 가 곧 flex-basis 라 행의 여유 폭을 통째로 먹고, 옆 검색칸이
+                  폭 0 으로 밀린다 — 그래서 안쪽 상자(selectboxForm)만이 아니라
+                  외곽(globalForm)까지 폭을 못박고 flex:none 으로 고정한다. */}
+              <Selectbox
+                list={categoryOptions}
+                selectedItem={selectedCategory}
+                onChange={(item) => setCategory(item.value)}
+                customStyle={{
+                  globalForm: { width: '180px', flex: 'none' },
+                  selectboxForm: { width: '180px' },
+                  listForm: { width: '180px' },
+                }}
+              />
+              {/* InputText 는 customStyle 을 <input> 에만 싣는다(래퍼 div.input 은
+                  display:block). 폭은 이 칸의 스타일시트가 잡는다 — 래퍼가 flex 로 늘고
+                  안쪽 input 이 100% 를 받는다. */}
+              <div className={cx('run-filters-grow')}>
+                <InputText
+                  size='medium'
+                  value={query}
+                  placeholder={t('evaluation.bench.searchPlaceholder')}
+                  leftIcon='/images/icon/ic-search.svg'
+                  closeIcon='/images/icon/close-c.svg'
+                  disableLeftIcon={false}
+                  disableClearBtn={false}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onClear={() => setQuery('')}
+                />
               </div>
-            </section>
+            </div>
+
+            <div
+              ref={listGroupRef}
+              className={cx('benchmark-grid')}
+              role='radiogroup'
+              aria-label={t('evaluation.bench.selectBenchTitle')}
+              onKeyDown={moveRovingFocus(
+                listGroupRef,
+                visible.map((b) => b.id),
+                picked,
+                pickBenchmark,
+              )}
+            >
+              {visible.map((b) => {
+                const on = picked === b.id;
+                return (
+                  <button
+                    key={b.id}
+                    type='button'
+                    role='radio'
+                    aria-checked={on}
+                    data-value={b.id}
+                    tabIndex={
+                      on || (!picked && b.id === visible[0]?.id) ? 0 : -1
+                    }
+                    className={cx('benchmark-option', on && 'selected')}
+                    onClick={() => pickBenchmark(b.id)}
+                  >
+                    <span className={cx('pick-radio')} aria-hidden='true' />
+                    <span className={cx('option-body')}>
+                      <span className={cx('bo-name')}>
+                        {b.label}
+                        {b.requiresFormat && (
+                          <Badge
+                            label={t('evaluation.bench.badgeFormat')}
+                            type='yellow'
+                            size='sm'
+                          />
+                        )}
+                      </span>
+                      <span className={cx('bo-desc')}>{t(b.descKey)}</span>
+                    </span>
+                  </button>
+                );
+              })}
+              {visible.length === 0 && (
+                <div className={cx('grid-empty')}>
+                  <EmptyBox
+                    text='evaluation.noSearchResult'
+                    isBox
+                    customStyle={{ height: '120px' }}
+                  />
+                </div>
+              )}
+            </div>
           </div>
 
           <aside className={cx('rail')}>
-            <div className={cx('panel', 'rail-panel')}>
+            <div className={cx('run-form')}>
               {/* ⓪ 평가할 모델·데이터셋 — 런이 소유한다. 프로젝트에 잠겨 있던 것을 여기로
                   옮긴 이유: 한 프로젝트에서 모델·데이터셋을 바꿔 가며 재는 것이 비교의
                   전제인데, 생성 시점에 잠그면 프로젝트가 '모델 폴더'가 되어 버린다. */}
-              <div className={cx('rail-sec')}>
-                <p className={cx('rail-title')}>
+              <div className={cx('run-sec')}>
+                <p className={cx('run-sec-title')}>
                   {t('evaluation.run.subjectTitle')}
                 </p>
-                <div className={cx('opt-field')}>
-                  <span className={cx('opt-label')}>
+                <div className={cx('run-field')}>
+                  <span className={cx('run-label')}>
                     {t('evaluation.selectModel')}
+                    <span className={cx('req')}>*</span>
                   </span>
                   {(modelOptions || []).length === 0 ? (
-                    <p className={cx('rail-note', 'err')}>
+                    <p className={cx('run-hint', 'err')}>
                       {t('evaluation.compare.noModels')}
                     </p>
                   ) : (
@@ -494,12 +504,16 @@ const BenchmarkRunConfig = ({
                     />
                   )}
                 </div>
-                <div className={cx('opt-field')}>
-                  <span className={cx('opt-label')}>
+                {/* 데이터셋은 **필수**다 — 드롭 목업은 '미입력 시 벤치마크 기본 데이터'로
+                    그렸지만 blockReason 이 !datasetId 로 막고 BE 도 dataset_ids 를 요구한다.
+                    선택으로 표시하면 채울 수 없는 조건으로 버튼이 죽어 있게 된다. */}
+                <div className={cx('run-field')}>
+                  <span className={cx('run-label')}>
                     {t('evaluation.selectDatasets')}
+                    <span className={cx('req')}>*</span>
                   </span>
                   {(datasetOptions || []).length === 0 ? (
-                    <p className={cx('rail-note', 'err')}>
+                    <p className={cx('run-hint', 'err')}>
                       {t('evaluation.noDatasets')}
                     </p>
                   ) : (
@@ -522,10 +536,11 @@ const BenchmarkRunConfig = ({
               {/* ① 포맷 학습 — 평가 전에 출력 규약을 학습할지. 아래 배포 절보다 **먼저**
                   두는 이유는 이 스위치가 배포 절의 의미를 바꾸기 때문이다: 켜면 배포가
                   '출력을 만들 곳'이 아니라 '학습할 체크포인트의 출처'가 되고, 체크포인트가
-                  없는 배포는 후보에서 빠진다. 지원하는 벤치마크에서만 보인다. */}
+                  없는 배포는 후보에서 빠진다. 지원하는 벤치마크에서만 보인다.
+                  (드롭 목업에는 없는 절이지만 실제로 도는 기능이라 규격만 맞춰 남긴다.) */}
               {supportsFormatTrain && (
-                <div className={cx('rail-sec')}>
-                  <p className={cx('rail-title')}>
+                <div className={cx('run-sec')}>
+                  <p className={cx('run-sec-title', 'spread')}>
                     {t('evaluation.bench.formatTrainTitle')}
                     <Switch
                       name='format-train'
@@ -533,7 +548,7 @@ const BenchmarkRunConfig = ({
                       onChange={() => setFormatTrain((v) => !v)}
                     />
                   </p>
-                  <p className={cx('rail-note')}>
+                  <p className={cx('run-hint')}>
                     {t(
                       formatTrain
                         ? 'evaluation.bench.formatTrainOnNote'
@@ -543,7 +558,7 @@ const BenchmarkRunConfig = ({
                   {/* GPU 현황 — 켰을 때만. 가용 0 이면 실행을 막으므로 왜 막혔는지가
                       같은 자리에 보여야 한다. 조회 중/실패는 숫자를 지어내지 않는다. */}
                   {formatTrain && gpu !== null && (
-                    <p className={cx('rail-note', gpuBlocked && 'err')}>
+                    <p className={cx('run-hint', gpuBlocked && 'err')}>
                       {gpu === false
                         ? t('evaluation.bench.gpuUnknown')
                         : t('evaluation.bench.gpuStat', {
@@ -563,59 +578,62 @@ const BenchmarkRunConfig = ({
                   전에는 물어볼 것이 없다. 이 절은 '무엇을 평가하나'(⓪)가 아니라 '그 답변을
                   누가 만드나'를 정한다 — 포맷 학습이 켜지면 '어느 체크포인트를 학습하나'가
                   된다(제목이 함께 바뀐다). */}
-              <div className={cx('rail-sec')}>
-                <p className={cx('rail-title')}>
+              <div className={cx('run-sec')}>
+                <p className={cx('run-sec-title')}>
                   {t(
                     formatTrain
                       ? 'evaluation.bench.checkpointSourceTitle'
                       : 'evaluation.run.sourceTitle',
                   )}
+                  <span className={cx('req')}>*</span>
                 </p>
-                {!modelId ? (
-                  <p className={cx('rail-note')}>
-                    {t('evaluation.run.sourceNeedModel')}
-                  </p>
-                ) : deployments === null ? (
-                  <p className={cx('rail-note')}>
-                    {t('evaluation.project.loading')}
-                  </p>
-                ) : deploymentOptions.length === 0 ? (
-                  <EmptyBox
-                    text={
-                      anyRunning
-                        ? 'evaluation.run.sourceNoneForModel'
-                        : 'evaluation.run.sourceNone'
-                    }
-                    isBox
-                    customStyle={{
-                      minHeight: '96px',
-                      padding: '12px 14px',
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                ) : (
-                  <>
-                    <Selectbox
-                      list={deploymentOptions}
-                      selectedItem={selectedDeployment}
-                      placeholder={t('select.label')}
-                      onChange={(item) => setPlaygroundId(item.value)}
+                <div className={cx('run-field')}>
+                  {!modelId ? (
+                    <p className={cx('run-hint')}>
+                      {t('evaluation.run.sourceNeedModel')}
+                    </p>
+                  ) : deployments === null ? (
+                    <p className={cx('run-hint')}>
+                      {t('evaluation.project.loading')}
+                    </p>
+                  ) : deploymentOptions.length === 0 ? (
+                    <EmptyBox
+                      text={
+                        anyRunning
+                          ? 'evaluation.run.sourceNoneForModel'
+                          : 'evaluation.run.sourceNone'
+                      }
+                      isBox
                       customStyle={{
-                        selectboxForm: { width: '100%' },
-                        listForm: { width: '100%' },
+                        minHeight: '96px',
+                        padding: '12px 14px',
+                        boxSizing: 'border-box',
                       }}
                     />
-                    {deployment && (
-                      <ul className={cx('rail-meta')}>
-                        {deployment.description && (
-                          <li>{deployment.description}</li>
-                        )}
-                        <li>{deployment.deploy_type || 'cluster'}</li>
-                      </ul>
-                    )}
-                  </>
-                )}
-                <p className={cx('rail-note')}>
+                  ) : (
+                    <>
+                      <Selectbox
+                        list={deploymentOptions}
+                        selectedItem={selectedDeployment}
+                        placeholder={t('select.label')}
+                        onChange={(item) => setPlaygroundId(item.value)}
+                        customStyle={{
+                          selectboxForm: { width: '100%' },
+                          listForm: { width: '100%' },
+                        }}
+                      />
+                      {deployment && (
+                        <ul className={cx('run-meta')}>
+                          {deployment.description && (
+                            <li>{deployment.description}</li>
+                          )}
+                          <li>{deployment.deploy_type || 'cluster'}</li>
+                        </ul>
+                      )}
+                    </>
+                  )}
+                </div>
+                <p className={cx('run-note')}>
                   {t('evaluation.bench.targetDeployNote')}
                 </p>
                 {/* 후보는 있는데 **전부 체크포인트가 없는** 경우 — 드롭다운이 통째로
@@ -624,7 +642,7 @@ const BenchmarkRunConfig = ({
                 {formatTrain &&
                   deploymentOptions.length > 0 &&
                   checkpointDeployCount === 0 && (
-                    <p className={cx('rail-note', 'err')}>
+                    <p className={cx('run-hint', 'err')}>
                       {t('evaluation.bench.noCheckpointDeploy')}
                     </p>
                   )}
@@ -632,8 +650,8 @@ const BenchmarkRunConfig = ({
 
               {/* ③ 기록될 지표 — 통보만 한다. 한 번의 채점에서 나오는 지표는 전부 남는다. */}
               {benchmark && (
-                <div className={cx('rail-sec')}>
-                  <p className={cx('rail-title')}>
+                <div className={cx('run-sec')}>
+                  <p className={cx('run-sec-title')}>
                     {t('evaluation.bench.recordedMetrics')}
                     <Badge
                       label={String(recorded.length)}
