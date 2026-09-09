@@ -148,7 +148,9 @@ export default function DatasetListPage() {
             d.unreviewed_count ? common.warn : common.mute,
           ].join(' ')}
         >
-          {d.unreviewed_count ? fmt(d.unreviewed_count) : '0'}
+          {/* 레코드가 아예 없으면 미검수라는 개념도 없다 — 다른 칸은 '—' 인데 여기만
+              '0' 을 찍으면 같은 '데이터 없음' 을 두 방식으로 말하게 된다. */}
+          {!d.record_count ? '—' : fmt(d.unreviewed_count || 0)}
         </span>
       ),
     },

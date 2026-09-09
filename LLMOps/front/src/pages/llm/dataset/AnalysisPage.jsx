@@ -70,7 +70,7 @@ export default function AnalysisPage() {
 
   const [cov, setCov] = useState(null);
   const [records, setRecords] = useState([]);
-  const [selected, setSelected] = useState(0);
+  const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -95,7 +95,12 @@ export default function AnalysisPage() {
   }, [load]);
 
   const coverage = cov?.coverage || [];
-  const cap = coverage[selected] || null;
+  // 0 을 그대로 쓰면 대개 데이터가 없는 첫 유형이 잡혀 상세가 빈 채로 열린다.
+  // 사용자가 아직 아무것도 고르지 않았을 때만 데이터가 있는 첫 유형으로 보낸다.
+  const firstWithData = coverage.findIndex((c) => (c.record_count || 0) > 0);
+  const shown =
+    selected === null ? (firstWithData >= 0 ? firstWithData : 0) : selected;
+  const cap = coverage[shown] || null;
   const rec = cap
     ? records.find((r) => r.capability === cap.capability) || null
     : null;
@@ -129,8 +134,9 @@ export default function AnalysisPage() {
         <DataTable
           cols={[
             '데이터 유형',
+            // 막대와 숫자가 같은 값이라 '비율'·'%' 로 두면 컬럼이 중복돼 보인다.
+            '분포',
             '비율',
-            '%',
             '레코드',
             '데이터',
             '판정',
@@ -139,7 +145,15 @@ export default function AnalysisPage() {
           loading={loading}
           onRowClick={setSelected}
           rows={coverage.map((c) => {
-            const bad = c.flag !== '충분';
+            // 색과 조치는 다른 판단이다. 한 변수로 묶으면 '데이터 없음' 을 덜 강조하려다
+            // 그 행의 '데이터 추가' 버튼까지 없애게 된다(빈 데이터셋에서는 전 유형이
+            // '데이터 없음' 이라 업로드 진입로가 통째로 사라진다).
+            // 조치: 충분하지 않으면 언제나 할 일이 있다.
+            const actionable = c.flag !== '충분';
+            // 색: 아직 안 만든 것까지 빨갛게 칠하면 전부 고장난 것처럼 보인다.
+            //     손대야 할 것은 '있는데 모자란' 유형이다.
+            const empty = c.flag === '데이터 없음';
+            const bad = actionable && !empty;
             return [
               {
                 node: (
@@ -181,7 +195,7 @@ export default function AnalysisPage() {
                 ),
               },
               {
-                node: bad ? (
+                node: actionable ? (
                   <Btn
                     size='sm'
                     fill='outline'

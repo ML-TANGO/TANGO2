@@ -67,6 +67,8 @@
   display: flex;
   align-items: baseline;
   gap: 6px;
+  // flex 아이템의 기본 min-width 는 auto 라 파일명이 줄지 않고 카드 밖으로 나간다.
+  min-width: 0;
   color: $dp-ink;
 
   b {
@@ -76,7 +78,12 @@
 
 .col-file {
   @include dp-solid(11px);
+  // 좁은 컬럼(생성 화면 380px)에서는 이름을 줄여서라도 카드 안에 둔다.
+  overflow: hidden;
+  min-width: 0;
   color: $dp-ink-faint;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .col-empty {

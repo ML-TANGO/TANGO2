@@ -27,6 +27,7 @@ import { fmt } from './lib/format';
 import {
   NOT_RUNNABLE,
   configStageOfNode,
+  isStaleRun,
   stageOfNode,
   upstreamRunOf,
 } from './lib/stage';
@@ -171,7 +172,7 @@ function parseSourcePath(raw, datasets) {
 }
 
 export default function PipelinePage() {
-  const { wsId, dsId, go } = useDatasetNav();
+  const { wsId, dsId, go, goList } = useDatasetNav();
   const dsName = useDatasetName(dsId);
   const [flow, setFlow] = useState(null);
   const [failed, setFailed] = useState('');
@@ -196,8 +197,19 @@ export default function PipelinePage() {
       }
       // 조용한 폴링 실패로 화면을 비우면 사용자는 실행이 사라진 줄 안다 — 직전 상태를 남긴다.
       if (!quiet) {
-        setFailed(res.message || '파이프라인을 불러오지 못했습니다');
-        errorToastMessage(res.error, res.message);
+        // 서버 문구는 영문 원문("dataset not found: 5")이라 그대로 띄우면
+        // 사용자 화면에 개발자 메시지가 노출된다. 없는 데이터셋만 따로 말한다.
+        //
+        // 앵커를 붙여 좁힌다 — BE 에는 `record not found:` 도 있어서 /not found/i 로
+        // 잡으면 멀쩡한 데이터셋을 "삭제됐다" 고 단정하게 된다(사용자가 재생성이라는
+        // 되돌릴 수 없는 대응을 한다).
+        const gone = /^dataset not found/i.test(res.message || '');
+        setFailed(
+          gone ? 'notfound' : res.message || '파이프라인을 불러오지 못했습니다',
+        );
+        // 배너를 한글로 바꿔 놓고 토스트로 원문을 띄우면 노출량은 그대로고 화면만
+        // 두 목소리로 갈린다. 이 경우 message 를 넘기지 않아 공용 폴백 문구를 태운다.
+        errorToastMessage(res.error, gone ? null : res.message);
       }
     },
     [dsId],
@@ -267,6 +279,14 @@ export default function PipelinePage() {
   const isDomain = flow?.preset === 'sds_colreg';
   const canEdit = flow?.editable !== false;
 
+  // 간선은 view 보다 먼저 필요하다 — 노드마다 상류 실행 시각을 봐야 하기 때문이다.
+  // BE 가 간선을 안 주면 선형(0→1→2…)이다. 해양 프리셋만은 갈래가 있는 그래프라
+  // 선형으로 그리면 조인이 두 갈래를 받는다는 사실이 화면에서 사라진다.
+  let flowEdges;
+  if (flow?.flow?.length) flowEdges = flow.flow;
+  else if (isDomain) flowEdges = SDS_FLOW;
+  else flowEdges = nodes.map((_, i) => [i, i + 1]).slice(0, -1);
+
   const view = nodes.map((n, i) => {
     const state = STATE_BY_WARN[n.state] || '정상';
     const t = TONE[state];
@@ -289,6 +309,8 @@ export default function PipelinePage() {
           ]
         : null,
       run: runLabel(run),
+      // 상류가 나보다 나중에 돌았으면 이 숫자는 옛 입력의 결과다.
+      stale: isStaleRun(nodes, flowEdges, i),
       steps: n.steps && n.steps.length ? n.steps : undefined,
       isSource: n.kind === 'data' || n.kind === 'src',
       source: sources[i],
@@ -305,13 +327,6 @@ export default function PipelinePage() {
       warnInk: t.ink,
     };
   });
-
-  // BE 가 간선을 안 주면 선형(0→1→2…)이다. 해양 프리셋만은 갈래가 있는 그래프라
-  // 선형으로 그리면 조인이 두 갈래를 받는다는 사실이 화면에서 사라진다.
-  let flowEdges;
-  if (flow?.flow?.length) flowEdges = flow.flow;
-  else if (isDomain) flowEdges = SDS_FLOW;
-  else flowEdges = view.map((_, i) => [i, i + 1]).slice(0, -1);
 
   const home = layoutFor(view.length, isDomain);
   const width = isDomain ? 288 : 216;
@@ -380,18 +395,31 @@ export default function PipelinePage() {
   };
 
   if (failed) {
+    const gone = failed === 'notfound';
     return (
       <div className={style.page}>
         <PageHeader
-          title={dsName}
+          // 없는 데이터셋에서 useDatasetName 은 이름을 못 찾아 원시 ID 를 돌려준다.
+          title={gone ? '데이터셋을 찾을 수 없습니다' : dsName}
           back={{ to: listBase(wsId), label: '데이터셋' }}
         />
-        <DatasetTabs active='파이프라인' />
+        {/* 데이터셋이 없으면 탭은 갈 곳이 없다 — 남겨 두면 죽은 화면을 계속 순회한다. */}
+        {!gone && <DatasetTabs active='파이프라인' />}
         <div className={style['pending-banner']}>
-          <span className={common.prose}>{failed}</span>
-          <Btn size='md' onClick={() => load()}>
-            다시 시도
-          </Btn>
+          <span className={common.prose}>
+            {gone
+              ? `${dsId}번 데이터셋을 찾을 수 없습니다. 삭제되었거나 주소가 잘못됐습니다.`
+              : failed}
+          </span>
+          {gone ? (
+            <Btn size='md' onClick={goList}>
+              데이터셋 목록으로
+            </Btn>
+          ) : (
+            <Btn size='md' onClick={() => load()}>
+              다시 시도
+            </Btn>
+          )}
         </div>
       </div>
     );

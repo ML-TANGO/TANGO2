@@ -263,7 +263,9 @@ export default function RunPanel({ datasetId, node, upstreamRun, onCompare }) {
       {/* 단계별 잔존 — 어느 기능에서 얼마나 빠졌는지가 한 줄로 보인다. */}
       {fn && (
         <span className={style.block}>
-          <span className={common.eyebrow}>단계별 잔존</span>
+          {/* 이 목록은 실제로 돈 순서다. 왼쪽 기능 목록(라이브러리 순서)과 다를 수
+              있어, 밝히지 않으면 어느 쪽이 실행 순서인지가 화면마다 다르게 읽힌다. */}
+          <span className={common.eyebrow}>단계별 잔존 · 실행 순서</span>
           <Funnel rows={fn.rows} total={fn.total} />
         </span>
       )}

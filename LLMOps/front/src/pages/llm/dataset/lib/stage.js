@@ -67,3 +67,54 @@ export function upstreamRunOf(nodes, edges, index) {
   const from = edge ? edge[0] : index - 1;
   return nodes?.[from]?.latest_run || null;
 }
+
+/**
+ * 실행 시각을 비교 가능한 수로.
+ *
+ * BE 는 DATETIME 을 **드라이버에 따라 datetime 또는 str 로** 내려준다(service.py 의
+ * `_age_seconds` 주석이 명시한다). 전자는 'T', 후자는 공백으로 구분되는데 공백(0x20)이
+ * 'T'(0x54) 보다 작아, 두 형식이 한 응답에 섞이면 사전식 비교가 조용히 뒤집힌다.
+ * 낡은 노드를 최신으로 잘못 판정하면 사용자는 어긋난 데이터를 그대로 릴리스한다.
+ */
+function runTimeKey(run) {
+  const raw = run?.started_at;
+  if (!raw) return null;
+  const ms = Date.parse(String(raw).replace(' ', 'T'));
+  return Number.isNaN(ms) ? null : ms;
+}
+
+/**
+ * 이 노드의 실행이 상류보다 오래됐는가.
+ *
+ * 상류를 다시 돌리면 하류 숫자는 **옛 입력의 결과**로 남는다. 화면은 노드마다 숫자를
+ * 같은 비중으로 나란히 놓기 때문에, 표시가 없으면 서로 20일 떨어진 실행도 한 번의
+ * 일관된 실행처럼 읽힌다(생성 13건 → 심사 100건 입력 같은 모순이 그렇게 숨는다).
+ *
+ * 상류가 둘인 노드(조인)가 있으므로 간선을 모두 본다 — `upstreamRunOf` 는 하나만
+ * 집어 오므로 여기서는 쓰지 않는다.
+ *
+ * 폴백은 **간선을 아예 못 받았을 때만** 선형(index-1)으로 본다. "이 노드로 들어오는
+ * 간선이 없을 때" 로 하면 안 된다 — BE `_derive_edges` 가 원천 노드(kind in data/src)를
+ * 건너뛰므로 정상 그래프에서도 소스는 진입 간선이 0개이고, 그러면 무관한 형제 소스와
+ * 시각을 비교해 오탐이 난다(해양 프리셋의 'AIS 로그' 가 '항해 영상' 을 상류로 오인).
+ *
+ * 한계: 판정은 직속 상류 1홉만 본다. 0→1→2 에서 0 만 재실행하면 1 에는 배지가 붙지만
+ * 2 에는 붙지 않는다. 다단 전파는 위상 순회가 필요해 별도 과제로 둔다.
+ */
+export function isStaleRun(nodes, edges, index) {
+  const mineAt = runTimeKey(nodes?.[index]?.latest_run);
+  if (mineAt === null) return false;
+
+  const all = edges || [];
+  const ups = all.filter(([, b]) => b === index).map(([a]) => a);
+  const from = ups.length ? ups : (all.length ? [] : [index - 1]);
+
+  return from.some((i) => {
+    const up = nodes?.[i]?.latest_run;
+    // 미리보기·미완료 실행은 정식 산출물을 바꾸지 않는다(하류 입력은 성공한 비-미리보기
+    // 실행만 쓴다). 이걸 세면 상류에서 '미리보기' 를 누르는 것만으로 배지가 붙는다.
+    if (!up || up.dry_run || up.status !== 'done') return false;
+    const upAt = runTimeKey(up);
+    return upAt !== null && upAt > mineAt;
+  });
+}

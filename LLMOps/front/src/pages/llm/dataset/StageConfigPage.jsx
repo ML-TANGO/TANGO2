@@ -211,7 +211,9 @@ export default function StageConfigPage({ stage: stageProp }) {
                         isFilter ? style['step-tag-del'] : '',
                       ].join(' ')}
                     >
-                      {isFilter ? (enabled[s.key] ? '제외' : '') : '변환'}
+                      {/* 배지는 이 기능이 무엇을 하는지(제외 / 변환)를 말한다.
+                          켜짐 여부는 바로 옆 체크박스가 이미 말하고 있다. */}
+                      {isFilter ? '제외' : '변환'}
                     </span>
                   </span>
                   <span className={style['step-desc']}>{s.desc}</span>

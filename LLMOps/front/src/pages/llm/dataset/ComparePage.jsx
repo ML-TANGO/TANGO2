@@ -33,7 +33,7 @@ const CHANGE_LABEL = { added: '추가됨', removed: '제거됨', param: '값 변
 function Delta({ n }) {
   if (n === null || n === undefined)
     return <span className={style['d-none']}>—</span>;
-  if (n === 0) return <span className={style['d-zero']}>0</span>;
+  if (n === 0) return <span className={style['d-zero']}>±0</span>;
   return (
     <span className={n > 0 ? style['d-up'] : style['d-down']}>
       {n > 0 ? `+${fmt(n)}` : `−${fmt(Math.abs(n))}`}
@@ -152,9 +152,11 @@ export default function ComparePage() {
           {/* 얼마나 달라졌나 */}
           <div className={style.totals}>
             {[
-              ['입력', diff.delta.in],
-              ['통과', diff.delta.passed ?? diff.delta.out],
-              ['제외', diff.delta.dropped],
+              // 라벨에 '증감'이 없으면 A·B 가 각각 100건이어도 요약이 0/0/0 이라
+              // "결과가 0건" 으로 읽힌다. 아래 단계별 표의 '증감' 컬럼과 같은 값이다.
+              ['입력 증감', diff.delta.in],
+              ['통과 증감', diff.delta.passed ?? diff.delta.out],
+              ['제외 증감', diff.delta.dropped],
             ].map(([label, n]) => (
               <span key={label} className={style.total}>
                 <span className={style['total-label']}>{label}</span>

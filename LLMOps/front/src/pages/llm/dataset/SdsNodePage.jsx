@@ -96,12 +96,16 @@ export default function SdsNodePage() {
     );
   }
 
+  const isSource = node.kind === 'src';
+
   // 설정은 노드에 붙어 있는 steps 와 저장된 params 를 같이 보여준다.
   // 둘 다 없으면 "설정할 항목이 없다"고 적는다 — 빈 카드는 고장으로 읽힌다.
-  const cfgRows = [
-    ...(node.steps || []).map(([k, v]) => [k, String(v)]),
-    ...Object.entries(config?.params || {}).map(([k, v]) => [k, String(v)]),
-  ];
+  const cfgSteps = (node.steps || []).map(([k, v]) => [k, String(v)]);
+  const cfgParams = Object.entries(config?.params || {}).map(([k, v]) => [
+    k,
+    String(v),
+  ]);
+  const cfgRows = [...cfgSteps, ...cfgParams];
 
   const runTone =
     run?.status === 'failed'
@@ -115,7 +119,11 @@ export default function SdsNodePage() {
       <PageHeader
         title={node.name}
         back={{ to: `${dsBase(wsId, dsId)}/flow`, label: '파이프라인' }}
-        meta={`${node.input_type} → ${node.output_type}`}
+        meta={
+          isSource
+            ? `산출 · ${node.output_type}`
+            : `${node.input_type} → ${node.output_type}`
+        }
         actions={
           stage ? (
             <span className={style.toolbar}>
@@ -148,13 +156,25 @@ export default function SdsNodePage() {
       )}
 
       <div className={common.tiles}>
-        <MetricTile value={run ? fmt(run.in ?? 0) : '—'} label='입력' />
+        {/* 소스 노드는 상류가 없어 in 이 out 과 같은 값으로 채워진다. 그대로 쓰면
+            '입력 100' 과 실행 패널의 '상류 노드를 먼저 실행하세요' 가 한 화면에서
+            서로를 부정한다. 상류가 있는 노드에서만 입력을 말한다. */}
+        <MetricTile
+          value={!isSource && run ? fmt(run.in ?? 0) : '—'}
+          label='입력'
+        />
         {/* 통과는 passed. 심사 노드는 미달을 버리지 않아 out 은 산출 건수다. */}
         <MetricTile value={run ? fmt(run.passed ?? run.out ?? 0) : '—'} label='통과' />
         <MetricTile value={run ? fmt(run.dropped ?? 0) : '—'} label='제외' />
         <MetricTile
-          value={run ? (run.dry_run ? '미리보기' : '실행') : '없음'}
-          label='최근 실행'
+          // 값이 문자열이 아니면(.slice 부재) 타일 하나가 아니라 페이지 전체가
+          // 렌더 예외로 빈 화면이 된다 — String() 한 겹이 그 부류를 통째로 막는다.
+          value={
+            run?.started_at
+              ? String(run.started_at).replace('T', ' ').slice(5, 16)
+              : '없음'
+          }
+          label={run?.dry_run ? '최근 실행 · 미리보기' : '최근 실행'}
         />
       </div>
 
@@ -171,9 +191,30 @@ export default function SdsNodePage() {
             className={common['card-pad']}
             style={{ paddingTop: 8, paddingBottom: 16 }}
           >
-            {cfgRows.map(([k, v]) => (
-              <span key={k} className={style['cfg-row']}>
+            {cfgSteps.map(([k, v]) => (
+              <span key={`s-${k}`} className={style['cfg-row']}>
                 <span className={common.label} style={{ flexShrink: 0 }}>
+                  {k}
+                </span>
+                <span className={style['cfg-value']}>{v}</span>
+              </span>
+            ))}
+            {/* params 는 steps 와 같은 설정을 원시 키로 한 번 더 보여준다. 구분 없이
+                이어 붙이면 같은 값이 두 줄로 적힌 것처럼 읽힌다. */}
+            {cfgParams.length > 0 && (
+              <span
+                className={common.label}
+                style={{ display: 'block', marginTop: 12, marginBottom: 4 }}
+              >
+                저장된 파라미터
+              </span>
+            )}
+            {cfgParams.map(([k, v]) => (
+              <span key={`p-${k}`} className={style['cfg-row']}>
+                <span
+                  className={[common.label, common.mute].join(' ')}
+                  style={{ flexShrink: 0 }}
+                >
                   {k}
                 </span>
                 <span className={style['cfg-value']}>{v}</span>

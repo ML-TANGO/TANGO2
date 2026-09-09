@@ -163,6 +163,8 @@ export default function ReviewPage() {
   }));
   const pending = Math.max(0, (data?.stats?.pending ?? 0) - done);
   const taxDist = data?.taxonomy_distribution || [];
+  // 비율만 두면 100건 전체 기준으로 읽힌다 — 실제 모수는 유형이 붙은(거절된) 몇 건뿐이다.
+  const taxTotal = taxDist.reduce((n, t) => n + (t.count || 0), 0);
   // 원본 이미지는 서버가 레코드 id 로 찾아 준다. 화면이 run_id·경로를 조립하면
   // 검수 큐 응답에 계보를 실어야 하고(지금은 실리지 않아 이미지가 아예 안 떴다),
   // 썸네일은 일부만 만들어져 점수 낮은 레코드에서 오히려 비어 있다.
@@ -196,7 +198,14 @@ export default function ReviewPage() {
             className={[common.stack, common.divider].join(' ')}
             style={{ paddingTop: 20 }}
           >
-            <span className={common.label}>오류 유형</span>
+            <span className={common['row-flex']}>
+              <span className={common.label}>오류 유형</span>
+              {taxTotal > 0 && (
+                <span className={common['cell-mute']}>
+                  거절 {fmt(taxTotal)}건 기준
+                </span>
+              )}
+            </span>
             {taxDist.map((t) => {
               // 25% 를 넘는 유형은 개별 레코드 문제가 아니라 생성 조건 문제다.
               const hot = t.pct > 25;
@@ -275,7 +284,7 @@ export default function ReviewPage() {
                     질문 · 편집 가능
                   </span>
                   <Textarea
-                    height={60}
+                    height={96}
                     value={edits[rec.id]?.q ?? rec.question ?? ''}
                     onChange={(v) =>
                       setEdits({
@@ -292,8 +301,10 @@ export default function ReviewPage() {
                   >
                     답 · 편집 가능
                   </span>
+                  {/* 답은 CPA·TCPA 수치와 COLREG 조치까지 이어지는 긴 문단이다.
+                      84px(약 3줄)로는 판정 근거가 보이지 않아 검수가 성립하지 않는다. */}
                   <Textarea
-                    height={84}
+                    height={220}
                     value={edits[rec.id]?.a ?? rec.answer ?? ''}
                     onChange={(v) =>
                       setEdits({

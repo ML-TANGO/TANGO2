@@ -449,9 +449,11 @@
 
 .threshold-row {
   display: grid;
-  grid-template-columns: 104px minmax(0, 1fr) 44px;
+  // 104px 은 'COLREG 판단 정확도' 를 담지 못해 라벨이 슬라이더에 붙어 보였다.
+  // 임계값을 조정하는 컨트롤이라 잘못 잡으면 그대로 재심사로 이어진다.
+  grid-template-columns: 132px minmax(0, 1fr) 44px;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
 
 .fail-row {
@@ -534,9 +536,45 @@
 // ── 검수 ────────────────────────────────────────────────────────────────────
 .review-grid {
   display: grid;
-  grid-template-columns: 240px minmax(420px, 1fr) 360px;
+  // 가운데 칸의 하한을 두면 좁아질 때 줄어드는 대신 넘친다. 캔버스 안쪽(.review-shot
+  // /.review-edit)이 이미 max-width 560px 로 제 폭을 지키므로 하한이 필요 없다.
+  grid-template-columns: 240px minmax(0, 1fr) 360px;
   align-items: start;
   gap: 24px;
+}
+
+// 세 칸(240 + 420 + 360 + gap)은 사이드바·패딩까지 더해 실측 1444px 을 요구한다. 그 아래에서
+// 그냥 두면 판정 패널이 뷰포트 밖으로 나가는데 **가로 스크롤도 생기지 않아** 승인·거절
+// 버튼에 아예 도달할 수 없다(1366×768 은 흔한 노트북 해상도다).
+// 정렬·오류 유형은 판정에 필수가 아니므로 위로 올리고, 캔버스와 판정을 남긴다.
+@media (max-width: 1459px) {
+  .review-grid {
+    grid-template-columns: minmax(0, 1fr) 340px;
+  }
+
+  .review-grid > :first-child {
+    grid-column: 1 / -1;
+  }
+
+  // 완료 화면에는 판정 패널이 없다. 2단을 유지하면 340px 이 빈 채로 남는다.
+  .review-done {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 900px) {
+  .review-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .review-grid > :first-child {
+    grid-column: auto;
+  }
+
+  // 완료 카드의 span 2 가 남으면 1단 규칙을 뚫고 암시적 2번째 열을 만든다.
+  .review-done {
+    grid-column: auto;
+  }
 }
 
 .review-canvas {

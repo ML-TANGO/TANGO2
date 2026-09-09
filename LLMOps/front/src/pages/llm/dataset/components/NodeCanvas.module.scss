@@ -126,6 +126,17 @@
   @include dp-solid(10px);
 }
 
+// 상류가 다시 돌아 숫자가 낡은 노드. '실행중' 과 같은 자리를 쓰되 색으로 갈린다.
+.node-stale {
+  flex-shrink: 0;
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: #fff0e4;
+  color: #b35500;
+  @include dp-num;
+  @include dp-solid(10px);
+}
+
 // 상태 점 — 위험이면 halo(바깥 링)가 함께 붙어 멀리서도 눈에 띈다.
 .node-dot {
   flex-shrink: 0;

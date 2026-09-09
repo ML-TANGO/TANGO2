@@ -153,6 +153,16 @@ export default function NodeCanvas({
               <span className={style['node-head']}>
                 <span className={style['node-name']}>{n.name}</span>
                 {running && runningIdx === i && <span className={style['node-live']}>실행중</span>}
+                {/* 상류가 나중에 돌았으면 이 노드 숫자는 옛 입력의 결과다. 표시가 없으면
+                    20일 떨어진 실행도 한 번의 일관된 실행처럼 읽힌다. */}
+                {n.stale && !(running && runningIdx === i) && (
+                  <span
+                    className={style['node-stale']}
+                    title='상류 노드가 이 노드보다 나중에 실행됐습니다 — 이 숫자는 이전 입력의 결과입니다'
+                  >
+                    재실행 필요
+                  </span>
+                )}
                 <span
                   className={style['node-dot']}
                   style={{ background: n.dot, boxShadow: n.halo ? `0 0 0 3px ${n.halo}` : 'none' }}

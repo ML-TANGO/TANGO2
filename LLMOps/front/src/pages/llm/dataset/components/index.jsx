@@ -334,7 +334,7 @@ export function RadioBtn({ checked, onChange, label, name = 'dp-radio' }) {
   );
 }
 
-export function Slider({ min = 0, max = 100, value, onChange }) {
+export function Slider({ min = 0, max = 100, value, onChange, disabled }) {
   return (
     <input
       type='range'
@@ -342,6 +342,7 @@ export function Slider({ min = 0, max = 100, value, onChange }) {
       min={min}
       max={max}
       value={value}
+      disabled={disabled}
       onChange={(e) => onChange && onChange(parseInt(e.target.value, 10))}
     />
   );

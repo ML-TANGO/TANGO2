@@ -188,7 +188,9 @@ export default function HistoryPage() {
                   </span>
                 ),
               },
-              (v.create_datetime || '').slice(0, 10) || '—',
+              // 같은 날 여러 버전을 릴리스하는 일이 흔한데 날짜만 찍으면 어느 쪽이
+              // 나중인지 화면에서 판별할 수 없다(버전 문자열이 역행한 경우 특히).
+              (v.create_datetime || '').slice(0, 16) || '—',
               deltaCell(fmt(v.record_count || 0), v.delta?.record_count),
               deltaCell(`${v.pass_rate ?? '—'}%`, v.delta?.pass_rate, '%'),
               deltaCell(fmt(v.human_reviewed || 0), v.delta?.human_reviewed),

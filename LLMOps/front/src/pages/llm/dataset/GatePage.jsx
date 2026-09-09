@@ -222,8 +222,10 @@ export default function GatePage() {
         <div className={common.stack}>
           <SectionHead
             aside={
+              // 축별 막대의 합(한 레코드가 여러 축에서 걸린다)은 이 수보다 크다.
+              // 설명이 없으면 헤더 숫자가 틀린 것처럼 보인다.
               <span className={[common.num, common['cell-mute']].join(' ')}>
-                {fmt(failTotal)}건
+                미달 {fmt(failTotal)}건 · 한 건이 여러 축에 걸릴 수 있음
               </span>
             }
           >

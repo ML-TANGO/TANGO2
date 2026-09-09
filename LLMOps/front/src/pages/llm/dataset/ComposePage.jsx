@@ -168,9 +168,17 @@ export default function ComposePage() {
                   >
                     {c.capability}
                   </span>
+                  {/* 뽑을 레코드가 없는 유형은 비중을 올려도 결과가 그대로다.
+                      움직이는 슬라이더는 무언가 달라진다는 약속이라 잠가 둔다.
+
+                      판정은 보유량(record_count)으로 한다. 배분 결과인 counts 를 보면
+                      **슬라이더가 스스로를 잠근다** — 0 으로 내리면 counts 가 0 이 되고
+                      그 순간 비활성이라 다시 올릴 수 없다. floor 배분이라 pool 이 작으면
+                      (생성 13건 같은 규모) 레코드가 있는 유형도 0 으로 떨어진다. */}
                   <Slider
                     min={0}
                     max={50}
+                    disabled={!(c.record_count > 0)}
                     value={weights[c.capability] ?? 0}
                     onChange={(v) =>
                       setWeights({ ...weights, [c.capability]: v })
