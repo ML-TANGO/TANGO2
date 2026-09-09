@@ -63,7 +63,8 @@ DEFAULT_CONCURRENCY = 4
 # 두 실행을 나란히 놔도 차이가 설정 때문인지 프롬프트 때문인지 알 수 없다.
 #   1 = 조우유형·조항·기상 명시
 #   2 = + 조치를 수치로(변침각·목표 CPA·안전속력) — 심사의 actionability 축이 수치를 본다
-PROMPT_REVISION = 2
+#   3 = 사용자 프롬프트를 형식 지시보다 **앞**에 둠 — 형식 지시가 최종 발언이 되게
+PROMPT_REVISION = 3
 
 ENCOUNTER_KO = {"head_on": "정면", "crossing": "교차", "overtaking": "추월", "safe": "안전"}
 # 자선 역할도 번역한다 — 안 하면 "자선은 제17조에 따라 stand_on 선박으로" 처럼 내부 값이
@@ -175,8 +176,14 @@ def build_gen_prompt(ais_text, facts, lang, extra=""):
                  # 수치를 요구하지 않으면 방향만 말하게 되고 그 축은 정확히 낮게 채점된다.
                  "조치를 반드시 **숫자로** 제시하라 — 변침 각도(예: 우현 20°), 확보할 "
                  "목표 CPA(해리), 필요한 안전속력(kt) 중 이 상황에 해당하는 것을 수치로 쓰라.")
-    body = f"{ais_text}\n\n{_facts_block(facts, lang)}\n\n{instr}\n{tag}"
-    return f"{body}\n{extra}".rstrip() if extra else body
+    # 형식 지시(tag)는 **항상 마지막**이어야 한다. 사용자 프롬프트를 그 뒤에 붙이면
+    # 그것이 최종 발언이 되어, "JSON 배열로 답하라" 같은 문장 하나가 describe/advice
+    # 지시를 덮어쓴다 — 그렇게 생성 100건 중 87건이 parse_failed 로 떨어진 적이 있다.
+    body = f"{ais_text}\n\n{_facts_block(facts, lang)}\n\n{instr}"
+    extra = (extra or "").strip()
+    if extra:
+        body = f"{body}\n{extra}"
+    return f"{body}\n{tag}"
 
 
 def parse_action(raw):

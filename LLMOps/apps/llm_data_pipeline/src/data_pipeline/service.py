@@ -25,7 +25,6 @@ from data_pipeline.constants import (
     COORD_REMAP_STEP,
     DATASET_STATE_LABEL,
     DEFAULT_MAX_REGENERATE,
-    DEFAULT_PROMPT,
     DEFAULT_SPLIT,
     DEFAULT_SPLIT_BY,
     DIRECTIONAL_STEPS,
@@ -56,6 +55,7 @@ from data_pipeline.constants import (
     THRESHOLD_MIN,
     TRAIN_FORMATS,
     axes_for,
+    prompt_for,
     stages_for,
     thresholds_for,
 )
@@ -144,7 +144,9 @@ def get_meta():
         "generation_models": [dict(m) for m in GENERATION_MODELS],
         "generation_templates": [dict(t) for t in GENERATION_TEMPLATES],
         "prompt_chips": [dict(c) for c in PROMPT_CHIPS],
-        "default_prompt": DEFAULT_PROMPT,
+        # 기본 프롬프트도 프리셋마다 다르다. 하나만 내려주면 해양 파이프라인에도
+        # 범용 VQA 프롬프트가 프리필돼 생성이 형식을 어긴다.
+        "default_prompt_by_preset": {p: prompt_for(p) for p in PRESET_META},
         "hard_negative_max_pct": HARD_NEGATIVE_MAX_PCT,
         "splits": list(SPLITS),
         "default_split": dict(DEFAULT_SPLIT),
@@ -1046,7 +1048,7 @@ async def get_stage(dataset_id, stage):
         payload["models"] = [dict(m) for m in GENERATION_MODELS]
         payload["templates"] = [dict(t) for t in GENERATION_TEMPLATES]
         payload["prompt_chips"] = [dict(c) for c in PROMPT_CHIPS]
-        payload["default_prompt"] = DEFAULT_PROMPT
+        payload["default_prompt"] = prompt_for(preset)
     if stage == "gate":
         payload["axes"] = [dict(a) for a in axes_for(preset)]
         payload["default_thresholds"] = thresholds_for(preset)

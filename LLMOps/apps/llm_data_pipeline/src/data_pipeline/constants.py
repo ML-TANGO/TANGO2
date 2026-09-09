@@ -269,6 +269,31 @@ DEFAULT_PROMPT = (
     "출력은 JSON 배열로 하고 각 원소는 question, answer 키를 가진다."
 )
 
+# 프리셋별 기본 생성 프롬프트. 이 값은 사용자 프롬프트로 저장돼 노드 프롬프트에 그대로
+# 들어가므로(dp_generate.build_gen_prompt 의 extra), 프리셋과 어긋나면 모델에게 상충하는
+# 지시를 주게 된다 — 해양 파이프라인에 범용 VQA 기본값("질문 3개와 답을 JSON 배열로")이
+# 프리필돼 생성 100건 중 87건이 parse_failed 로 떨어진 일이 있었다. 형식이 깨지는 쪽은
+# 그 뒤 조립 순서를 고쳐(형식 지시가 항상 마지막) 막았고, **내용이 상충하는** 쪽을 막는
+# 것이 여기다. 해양은 노드가 이미 완결된 지시(describe/advice + 수치 요구)를 만들므로
+# 덧붙일 것이 없다 = 빈 문자열.
+PRESET_PROMPTS = {
+    PRESET_GENERIC: DEFAULT_PROMPT,
+    PRESET_SDS_COLREG: "",
+}
+
+
+def prompt_for(preset):
+    """프리셋의 기본 생성 프롬프트.
+
+    미지 프리셋은 범용 프롬프트가 아니라 **빈 문자열**로 떨어진다. 새 프리셋을
+    PRESET_META 에만 추가하고 여기를 빼먹었을 때, 범용 VQA 지시가 도메인 노드에
+    주입되는 것이 빈 프롬프트보다 나쁘다 — 조립 순서 수정으로 형식은 지켜지므로
+    parse_failed 같은 큰 신호 없이 내용 품질만 조용히 나빠진다. preset 이 아예
+    없는(레거시) 데이터셋은 범용으로 본다.
+    """
+    return PRESET_PROMPTS.get(preset or PRESET_GENERIC, "")
+
+
 # 함정 데이터 비율 상한 — 답할 수 없는 질문을 일부러 섞어 거절을 학습시킨다.
 HARD_NEGATIVE_MAX_PCT = 15
 
