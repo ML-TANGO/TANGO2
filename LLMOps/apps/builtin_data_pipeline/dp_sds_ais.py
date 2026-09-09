@@ -25,6 +25,7 @@
 """
 import argparse
 import csv
+import re
 import json
 import os
 import time
@@ -117,6 +118,103 @@ def _i(row, key):
     return int(_f(row, key))
 
 
+def _safe_text(value, limit=120):
+    """사람이 적는 자유 문자열을 씬에 싣기 전에 공백만 정리한다.
+
+    ⚠️ 상한이 `vessel_category` 의 판정 품질을 정한다 — 씬에는 절단된 값만 남고 분류는
+    그 값으로 돌기 때문에, 판별어가 상한 뒤로 밀리면 조용히 동력선으로 떨어진다(그 방향이
+    "자선이 유지선" 이라 위험한 쪽이다). 120 은 ITU 선종 전체 문구와 흔한 수식어가 함께
+    들어갈 여유다. 그보다 긴 표기는 여전히 뒤집힐 수 있고, 그건 문서화된 한계다.
+
+    ⚠️ 이 값을 프롬프트에 그대로 넣지 않는다. 프롬프트에는 `category_label()` 의 정규
+    라벨만 내보낸다 — 자유 문자열은 판사 프롬프트로 가는 유일한 통로다.
+    """
+    return " ".join(str(value or "").split())[:limit]
+
+
+# ── 선종 어휘 ───────────────────────────────────────────────────────────────
+# AIS 선종 표기 → 범주. COLREG 제18조 서열의 입력이라 dp_colreg 가 이 함수를 쓴다.
+#
+# **부분일치**로 본다. 한국어는 공백 분절이 없어 '화물선'·'유조선'·'어로종사선' 같은
+# 합성어가 어절 단위 일치로는 통째로 빠진다. 대신 부분일치가 위험한 라틴 축약(nuc·ram·
+# wig·sail)과 접두 충돌(unrestricted / not under commander / stowing)만 경계로 좁힌다.
+_NEEDLES = (
+    ("not_under_command", r"(?<![a-z])nuc(?![a-z])|not under command(?!er)|조종불능"),
+    # 3조(g) 의 예시(준설·잠수)만 받는다. 맨 'towing' 은 "조종능력을 심각하게 제한하는"
+    # 한정을 버리므로 넣지 않는다 — 단순 예인 예선까지 최상위 서열이 된다.
+    ("restricted", r"(?<![a-z])ram(?![a-z])|(?<!un)restricted in ability"
+                   r"|dredging|diving|조종제한|준설|잠수"),
+    ("fishing", r"fishing|trawl|어선|어로"),
+    ("sailing", r"sailing|(?<![a-z])sail(?![a-z])|범선|요트"),
+    # 18(d)/(e)/(f) — 서열이 (a)~(c)와 다른 별도 의무라 dp_colreg 가 판정을 보류한다.
+    ("constrained_draught", r"constrained by (?:her )?draught|흘수제약"),
+    ("seaplane", r"seaplane|수상항공기"),
+    ("wig", r"(?<![a-z])wig(?![a-z])|wing in ground|위그"),
+    ("power_driven", r"cargo|tanker|passenger|cruise|ferry|tug|pilot|military|boat"
+                     r"|ship|vessel|motor|craft|yacht|화물|유조|여객|동력|예선|선박"),
+)
+_NEEDLE_RES = tuple((category, re.compile(pattern)) for category, pattern in _NEEDLES)
+# 어로 '종사' 를 명시적으로 부정하거나 지원선이라고 적은 표기는 제3조(d) 의 어로종사선이
+# 아니다. 부정이 지원선 예외보다 강하다 — 둘이 함께 있으면 부정을 따른다.
+_NOT_FISHING_RE = re.compile(r"not engaged|종사하지|미종사")
+_SUPPORT_RE = re.compile(r"support|지원")
+_ENGAGED_FISHING_RE = re.compile(r"engaged in fishing|어로 종사")
+# ITU-R M.1371 선종 숫자코드. 자선이 보통 70·80대라 특수선 코드만 넣으면 자선이 미인식
+# 되어 제18조가 통째로 보류된다 — 그래서 범위 전체를 덮는다. "70.0"(pandas 재저장)도 받는다.
+_CODE_RE = re.compile(r"(\d{1,3})(?:\.0+)?$")
+_AIS_CODE_RANGES = (
+    (20, 29, "wig"), (30, 30, "fishing"), (31, 34, "restricted"), (35, 35, "power_driven"),
+    (36, 36, "sailing"), (37, 37, "power_driven"), (40, 49, "power_driven"),
+    (50, 59, "power_driven"), (60, 99, "power_driven"),
+)
+# 프롬프트·화면에 내보내는 정규 라벨. 원문을 내보내지 않는 이유는 _safe_text 주석 참조.
+CATEGORY_LABELS = {
+    "not_under_command": ("조종불능선", "not under command"),
+    "restricted": ("조종제한선", "restricted in ability to manoeuvre"),
+    "fishing": ("어선", "fishing vessel"),
+    "sailing": ("범선", "sailing vessel"),
+    "power_driven": ("동력선", "power-driven vessel"),
+    "constrained_draught": ("흘수제약선", "constrained by draught"),
+    "seaplane": ("수상항공기", "seaplane"),
+    "wig": ("위그선", "WIG craft"),
+}
+
+
+def vessel_category(name):
+    """AIS 선종 → 범주. 알아볼 수 없으면 None.
+
+    None 을 동력선으로 치지 않는다 — 모르는 표기를 동력선으로 가정하면 실제로는 어선인
+    배에 대해 자선을 유지선으로 라벨링하게 되고, 그것이 그대로 학습데이터의 정답이 된다.
+    dp_colreg 는 None 을 받으면 제18조 판정을 보류한다.
+    """
+    flat = re.sub(r"[^0-9a-z가-힣.]+", " ", str(name or "").lower()).strip()
+    if not flat:
+        return None
+    code = _CODE_RE.fullmatch(flat)
+    if code:
+        number = int(code.group(1))
+        for low, high, category in _AIS_CODE_RANGES:
+            if low <= number <= high:
+                return category
+        return None
+    skip_fishing = bool(_NOT_FISHING_RE.search(flat)) or (
+        bool(_SUPPORT_RE.search(flat)) and not _ENGAGED_FISHING_RE.search(flat))
+    for category, pattern in _NEEDLE_RES:
+        if category == "fishing" and skip_fishing:
+            continue
+        if pattern.search(flat):
+            return category
+    return None
+
+
+def category_label(name, lang="ko"):
+    """프롬프트·화면용 정규 라벨. 알아볼 수 없으면 '기타'."""
+    category = vessel_category(name)
+    if category is None:
+        return "other" if lang == "en" else "기타"
+    return CATEGORY_LABELS[category][1 if lang == "en" else 0]
+
+
 def _ident(row):
     return {"timestamp": row.get("timestamp", ""), "ship_id": row.get("ship_id", "")}
 
@@ -163,6 +261,9 @@ def refine_rows(rows, checks):
 def row_to_ship(row):
     return {
         "ship_id": _i(row, "ship_id"), "is_own": _i(row, "my_ship") == 1,
+        # Rule 18 판정 근거. 선택 컬럼이라 없으면 빈 문자열 — 그 경우 18조는 적용되지
+        # 않고 기하만으로 판정한다(예전 데이터셋과 같은 동작).
+        "type": _safe_text(row.get("ship_type")),
         "lat": _f(row, "latitude"), "lon": _f(row, "longitude"),
         "knot": _f(row, "knot"), "heading": _f(row, "heading"),
         "length": _i(row, "length"), "width": _i(row, "width"), "draft": _i(row, "draft"),
@@ -172,7 +273,10 @@ def row_to_ship(row):
 
 
 def _fmt_ko(s):
-    head = (f"위도:{s['lat']:.6f} 경도:{s['lon']:.6f} | 속도:{s['knot']:.1f}kt "
+    # 선종은 제18조(동력선은 어선·범선 등에 양보)의 근거라, 계산된 사실에만 있고 AIS
+    # 서술에 없으면 모델이 "왜 양보하는지" 를 쓸 수 없다.
+    kind = f"선종:{category_label(s['type'], 'ko')} | " if s.get("type") else ""
+    head = (f"{kind}위도:{s['lat']:.6f} 경도:{s['lon']:.6f} | 속도:{s['knot']:.1f}kt "
             f"방향:{s['heading']:.1f}° | 선체:{s['length']}m × {s['width']}m 흘수:{s['draft']}m")
     if s["is_own"]:
         return f"- 자선 (ID:{s['ship_id']}) | {head}"
@@ -182,7 +286,8 @@ def _fmt_ko(s):
 
 
 def _fmt_en(s):
-    head = (f"Lat:{s['lat']:.6f} Lon:{s['lon']:.6f} | Speed:{s['knot']:.1f}kt "
+    kind = f"Type:{category_label(s['type'], 'en')} | " if s.get("type") else ""
+    head = (f"{kind}Lat:{s['lat']:.6f} Lon:{s['lon']:.6f} | Speed:{s['knot']:.1f}kt "
             f"Heading:{s['heading']:.1f}° | Size:{s['length']}m x {s['width']}m Draft:{s['draft']}m")
     if s["is_own"]:
         return f"- Own vessel (ID:{s['ship_id']}) | {head}"

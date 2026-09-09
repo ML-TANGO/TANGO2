@@ -48,6 +48,8 @@ import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
+import dp_generate
+
 TS_FMT = "%Y-%m-%d %H:%M:%S"
 SAMPLE_LIMIT = 24
 THUMB_EDGE = 320
@@ -59,14 +61,63 @@ DEFAULT_CONCURRENCY = 4
 DEFAULT_THRESHOLDS = {"situation_accuracy": 0.75, "colreg_correctness": 0.80,
                       "image_grounding": 0.70, "actionability": 0.75}
 RUBRIC_AXES = ("situation_accuracy", "colreg_correctness", "actionability")
+# 앵커 대조 방식의 판. v1 = 맨 숫자 매칭(변침각·CPA 숫자에 오탐), v2 = 인용 형태 매칭,
+# v3 = 복수형·대소문자 수용 + 역할 모순 검사 + 조항 없는 사실의 공허 통과 차단,
+# v4 = 역할 검사를 자선 주어 한정으로 + 안전 표기 좁힘 + 언어 게이팅 제거,
+# v5 = 역할 검사를 **점수 개입에서 경고로 강등**(자유 서술 정규식으로는 오탐·오탈을 함께
+#      없앨 수 없음이 세 차례 확인됐다) + 조우 표기를 dp_generate 에서 파생(판사가 자기
+#      목록을 들면 프롬프트가 강제한 단어를 배제해 지시를 따른 조언이 0 점이 된다).
+# 방식이 다르면 colreg_correctness 를 나란히 놓고 비교할 수 없어 산출물에 남긴다.
+ANCHOR_RULE_VERSION = 5
 ALL_AXES = ("situation_accuracy", "colreg_correctness", "image_grounding", "actionability")
 
-# 조우유형이 조언에 등장했는지 볼 때 인정하는 표기. 한국어 생성과 영어 생성을 모두 받는다.
-ENCOUNTER_KW = {
-    "head_on": ["head_on", "head-on", "정면", "마주"],
-    "crossing": ["crossing", "교차", "횡단"],
-    "overtaking": ["overtaking", "추월", "앞지르"],
-    "safe": ["safe", "안전", "위험 없"],
+# 조우유형이 조언에 등장했는지 볼 때 인정하는 표기.
+# ⚠️ 판사가 자기 목록을 따로 들면 안 된다 — dp_generate.build_gen_prompt 가 조언에
+# "조우유형을 '{ENCOUNTER_KO[...]}' 라는 단어로 명시하라" 고 **강제**하므로, 그 단어를
+# 목록에서 빼면 지시를 정확히 따른 조언이 앵커에서 0 점이 된다(실제로 그렇게 깨졌다).
+# 그래서 생성 노드의 표를 정본으로 삼아 파생시키고, 표기가 다른 뜻으로도 쓰이는 경우만
+# 좁힌다.
+_ENCOUNTER_EXTRA = {
+    "head_on": ("마주",),
+    "crossing": ("교차", "횡단"),
+    "overtaking": ("앞지르",),
+    "safe": ("충돌위험 없", "위험 대상 없", "위험이 없", "no risk of collision"),
+}
+# "안전속력(kt)" 과 "unsafe" 는 프롬프트가 모든 상황에 요구하는 말이라 조우유형의 근거가
+# 되지 못한다. 부정문("안전하지 않다" / "not safe")도 근거가 아니다. 강제 표기는 살리고
+# 이 충돌만 배제한다.
+_ENCOUNTER_NARROWED = {
+    "안전": r"안전(?!\s*속력)(?!하지\s*않)",
+    "safe": r"(?<!un)(?<!not )\bsafe\b(?!\s*speed)",
+}
+
+
+def _encounter_words(key):
+    """이 조우유형을 인정하는 표기 목록. dp_generate 의 강제 표기 + 동의 표기."""
+    words = [dp_generate.ENCOUNTER_KO[key], dp_generate.ENCOUNTER_EN[key], key]
+    words += list(_ENCOUNTER_EXTRA.get(key, ()))
+    return list(dict.fromkeys(words))
+
+
+ENCOUNTER_KW = {key: _encounter_words(key) for key in dp_generate.ENCOUNTER_KO}
+ENCOUNTER_PAT = {
+    key: re.compile("|".join(_ENCOUNTER_NARROWED.get(word, re.escape(word))
+                             for word in words), re.IGNORECASE)
+    for key, words in ENCOUNTER_KW.items()
+}
+
+
+# **자선을 주어로 하는** 역할 주장만 찾는다. 표기를 문장 전체에서 찾으면 두 방향으로
+# 동시에 깨진다: "유지선인 타선의 선미로 통과하라"(정상 조언)가 모순으로 탈락하고,
+# "자선은 유지선, 타선은 피항선"(진짜 모순)은 두 표기가 함께 있다는 이유로 통과한다.
+# 주어를 앵커로 잡으면 둘 다 해소되고, 동사 부정("유지하지 말고")도 명사 표기를 요구하는
+# 것으로 자연히 걸러진다.
+_SELF_ROLE = {
+    "ko": re.compile(r"자선[^.\n]{0,20}?"
+                     r"(유지선|피항선|진로를\s*양보|침로.{0,3}속력.{0,3}유지)"),
+    "en": re.compile(r"own vessel[^.\n]{0,30}?"
+                     r"(stand-?on|give-?way|keep (?:her )?course and speed|"
+                     r"keep out of the way)", re.IGNORECASE),
 }
 
 RUBRIC_P = (
@@ -207,17 +258,84 @@ def parse_same_score(raw):
 
 
 # ── 앵커 대조 ───────────────────────────────────────────────────────────────
-def colreg_anchor_ok(advice, facts):
+def _article_pat(article, lang):
+    """조항 인용을 찾는 정규식.
+
+    맨 숫자를 찾으면 안 된다 — 생성 프롬프트가 변침각·목표 CPA·안전속력을 **숫자로**
+    쓰라고 강제하므로(dp_generate.build_gen_prompt), "목표 CPA 0.6해리" 가 6조 인용으로,
+    "우현 15° 변침" 이 15조 인용으로 잡힌다. 그러면 조항을 한 번도 인용하지 않은 조언이
+    앵커를 통과해 colreg_correctness 가 부풀고, 게이트가 실력이 아니라 숫자 우연으로
+    갈린다. 프롬프트가 요구하는 인용 형태("제15조" / "Rule 15") 그대로 찾아야 한다.
+
+    반대 방향의 오탈락도 같은 무게로 나쁘다 — 이 앵커는 불일치 시 모델 점수를 0 으로
+    **덮어쓰므로**, 옳게 인용한 조언을 놓치면 그것도 우연 채점이 된다. 그래서 복수형
+    (Rules 15 and 16) · 하이픈(Rule-15) · 소문자(rule 15) 를 모두 받고, 한국어도 '제' 를
+    선택으로 둔다("15조" 도 인용은 인용이다).
+    """
+    if lang == "en":
+        # 개행은 넣지 않는다 — `[\s\-]*` 로 두면 "per the Rules\n15 knots" 가 15조
+        # 인용으로 잡힌다.
+        return rf"\bRules?[ \t\-]*{article}(?!\d)"
+    # "제16조" 안의 "6조" 가 6조 인용으로 잡히지 않게 앞자리 숫자를 막는다.
+    return rf"(?<!\d){article}\s*조"
+
+
+def self_asserted_role(advice):
+    """조언이 **자선에 대해** 주장하는 역할. 주장이 없으면 None.
+
+    언어를 가리지 않고 둘 다 시도한다 — 한쪽만 보면 반대 언어로 적힌 정상 조언이
+    판정 대상에서 빠진다.
+    """
+    for pattern in (_SELF_ROLE["ko"], _SELF_ROLE["en"]):
+        found = pattern.search(advice or "")
+        if not found:
+            continue
+        token = found.group(1).lower()
+        if any(k in token for k in ("유지선", "유지", "stand", "course and speed")):
+            return "stand_on"
+        return "give_way"
+    return None
+
+
+def role_contradicted(advice, own_role):
+    """조언이 계산된 자선 역할과 정반대를 주장하는 것처럼 보이는가. **참고용이다.**
+
+    ⚠️ 이 판정으로 점수를 깎지 않는다. 자유 서술에서 역할 주장을 정규식으로 집어내려는
+    시도는 세 차례 모두 오탐과 오탈을 함께 남겼다 — 어순("자선의 좌현측 타선이 유지선"),
+    명사 부정("유지선이 아니라 피항선"), 대명사("she must keep her course"), 문장부호
+    없는 긴 조언이 각각 반대 방향으로 깨진다. 앵커는 모델 점수를 **덮어쓰는** 판정이라
+    오탐 하나가 옳은 답을 게이트에서 떨어뜨린다. 그래서 채점에서 분리하고 사람이 읽는
+    사유 문자열에만 남긴다. 정확한 검증이 필요하면 생성 계약에 역할 태그를 추가해야 한다.
+    """
+    asserted = self_asserted_role(advice)
+    if asserted is None:
+        return False
+    expected = "give_way" if own_role == "both_give_way" else own_role
+    if expected not in ("give_way", "stand_on"):
+        return False
+    return asserted != expected
+
+
+def colreg_anchor_ok(advice, facts, lang="ko"):
     """계산된 조우유형이나 조항이 조언에 실제로 등장하는가.
 
     둘 중 하나만 있어도 통과로 본다(프로토타입과 같은 판정) — 조항만 인용하고 유형을
     말로 안 쓰는 답도 규칙을 짚은 것은 맞다.
+
+    역할 모순은 여기서 보지 않는다. `role_contradicted` 는 참고 주석으로만 쓴다 —
+    자세한 이유는 그 함수의 docstring 참조.
     """
-    text = (advice or "").lower()
-    enc_ok = any(kw.lower() in text for kw in ENCOUNTER_KW.get(facts.get("encounter"), []))
+    pattern = ENCOUNTER_PAT.get(facts.get("encounter"))
+    enc_ok = bool(pattern and pattern.search(advice or ""))
     articles = facts.get("articles") or []
-    art_ok = (not articles) or any(
-        re.search(rf"(?<!\d){a}(?!\d)", advice or "") for a in articles)
+    # 조항이 없는 사실(제7조상 위험 없음)에서 이 검사를 공허하게 참으로 두면 아무 말이나
+    # 앵커를 통과한다. 그때는 조우유형 표기로만 판정한다.
+    # 언어를 가리지 않고 두 표기를 모두 시도한다. 한쪽만 보면 ko 레코드에 영어로 인용한
+    # (또는 그 반대) 정상 조언이 오탈락하고, 이 앵커는 점수를 0 으로 덮어쓴다.
+    art_ok = bool(articles) and any(
+        re.search(_article_pat(a, "ko"), advice or "", re.IGNORECASE)
+        or re.search(_article_pat(a, "en"), advice or "", re.IGNORECASE)
+        for a in articles)
     return enc_ok or art_ok
 
 
@@ -261,11 +379,18 @@ def score_one(url, rec, abs_path):
     why = {ax: rub[ax][1] for ax in RUBRIC_AXES}
 
     # 2) 앵커 대조 — 모델 점수보다 이것이 우선한다.
-    if not colreg_anchor_ok(advice, facts):
+    if not colreg_anchor_ok(advice, facts, rec.get("lang") or "ko"):
         scores["colreg_correctness"] = 0.0
         why["colreg_correctness"] = (why.get("colreg_correctness", "")
                                      + f" [앵커 불일치({facts.get('encounter')}"
                                        f"/{facts.get('articles')}) → 0 강등]").strip()
+    elif role_contradicted(advice, facts.get("own_role")):
+        # 점수에 개입하지 않는다(role_contradicted docstring 참조). 사람이 검수할 때
+        # 볼 수 있게 사유에만 남긴다.
+        why["colreg_correctness"] = (why.get("colreg_correctness", "")
+                                     + f" [참고: 자선 역할 주장이 계산"
+                                       f"({facts.get('own_role')})과 어긋나 보임 — "
+                                       "문장 구조에 따른 오탐 가능]").strip()
 
     # 3) 어블레이션 — 이미지 없이 만든 조언이 원본과 같은지.
     pred = None
@@ -432,6 +557,7 @@ def run(params):
         json.dump(summary, f, ensure_ascii=False, indent=2)
     with open(os.path.join(out_dir, "config.json"), "w", encoding="utf-8") as f:
         json.dump({"config": cfg, "thresholds": thresholds, "inputs": params.get("inputs"),
+                   "anchor_rule_version": ANCHOR_RULE_VERSION,
                    "serving": (params.get("serving") or {}).get("judge"),
                    "dry_run": dry_run, "sample_size": sample_size,
                    "concurrency": concurrency, "created_at": time.strftime(TS_FMT)},
