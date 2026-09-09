@@ -780,10 +780,15 @@ async def upsert_serving(dataset_id, role, model_id, hf_id):
             (dataset_id, role, model_id, hf_id, status, last_used_datetime)
         VALUES (%s, %s, %s, %s, 'pending', NOW())
         ON DUPLICATE KEY UPDATE
+            -- 모델이 바뀌었으면 기존 배포는 더 쓸 수 없다 → 다시 준비 상태로.
+            -- ⚠️ 이 줄이 model_id 대입보다 **먼저** 와야 한다. MariaDB 는 ON DUPLICATE KEY
+            -- UPDATE 의 대입을 좌→우로 평가하고 오른쪽 항은 이미 갱신된 값을 읽으므로,
+            -- model_id 를 먼저 덮으면 model_id = VALUES(model_id) 가 항상 참이 되어
+            -- 이 가드가 죽는다 — 심사 모델만 바꿨을 때 장부가 옛 배포를 ready 로 물고
+            -- 있어 잡이 그 죽은 주소로 간다.
+            status = IF(model_id = VALUES(model_id) AND status = 'ready', 'ready', 'pending'),
             model_id = VALUES(model_id), hf_id = VALUES(hf_id),
             last_used_datetime = NOW(),
-            -- 모델이 바뀌었으면 기존 배포는 더 쓸 수 없다 → 다시 준비 상태로.
-            status = IF(model_id = VALUES(model_id) AND status = 'ready', 'ready', 'pending'),
             error_reason = NULL, release_datetime = NULL
     """
     return await commit_query(sql, params=[dataset_id, role, model_id, hf_id])

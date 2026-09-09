@@ -227,21 +227,33 @@ COORD_REMAP_STEP = "영역 좌표 보정"
 # 카탈로그가 이름표일 뿐이라 노드가 무엇을 띄워야 할지 알 수 없다.
 # min_vram_gb 는 bf16 가중치 + KV cache 여유의 대략치 — 배포 전에 자원이 되는지 보고
 # 안 되면 잡을 띄우기 전에 거절한다(띄운 뒤 OOM 으로 죽으면 원인이 안 보인다).
+# vision = 이 플랫폼 서빙 스택에서 **이미지 입력을 받을 수 있는가**. 서빙 파드는
+# AutoProcessor 에 image_processor 가 붙는지로 VLM 을 판별하는데
+# (deployment_llm/src/llm/playground.py `_load_processor`), InternVL 계열은 표준
+# AutoProcessor 를 제공하지 않고 자체 타일링 파이프라인을 쓴다 → IS_VLM=False 로 떨어져
+# 이미지가 실린 요청을 전부 HTTP 400 으로 거부한다(심사 100건이 전량 거부된 실측 사례).
+# 카탈로그에서 지우지 않고 플래그로 두는 이유: 왜 빠졌는지가 남고, 서빙이 나중에 이
+# 계열을 지원하면 여기만 바꾸면 된다.
 GENERATION_MODELS = (
     {"id": "qwen8b", "name": "Qwen3-VL-8B-Instruct", "license": "apache-2.0", "family": "qwen",
-     "hf_id": "Qwen/Qwen3-VL-8B-Instruct", "min_vram_gb": 24},
+     "hf_id": "Qwen/Qwen3-VL-8B-Instruct", "min_vram_gb": 24, "vision": True},
     {"id": "qwen4b", "name": "Qwen3-VL-4B-Instruct", "license": "apache-2.0", "family": "qwen",
-     "hf_id": "Qwen/Qwen3-VL-4B-Instruct", "min_vram_gb": 16},
+     "hf_id": "Qwen/Qwen3-VL-4B-Instruct", "min_vram_gb": 16, "vision": True},
     {"id": "intern3", "name": "InternVL3-8B", "license": "mit", "family": "internvl",
-     "hf_id": "OpenGVLab/InternVL3-8B", "min_vram_gb": 24},
+     "hf_id": "OpenGVLab/InternVL3-8B", "min_vram_gb": 24, "vision": False},
     {"id": "gemma3", "name": "Gemma 3 12B", "license": "Gemma Terms", "family": "gemma",
-     "hf_id": "google/gemma-3-12b-it", "min_vram_gb": 32},
+     "hf_id": "google/gemma-3-12b-it", "min_vram_gb": 32, "vision": True},
     # 소형 검증용. 실 데이터 규모로 돌리기 전에 배선·계약을 확인하는 용도라 품질 기대치는 낮다.
     {"id": "qwen2vl2b", "name": "Qwen2-VL-2B-Instruct", "license": "apache-2.0", "family": "qwen",
-     "hf_id": "Qwen/Qwen2-VL-2B-Instruct", "min_vram_gb": 8},
+     "hf_id": "Qwen/Qwen2-VL-2B-Instruct", "min_vram_gb": 8, "vision": True},
     {"id": "intern2b", "name": "InternVL2-2B", "license": "mit", "family": "internvl",
-     "hf_id": "OpenGVLab/InternVL2-2B", "min_vram_gb": 8},
+     "hf_id": "OpenGVLab/InternVL2-2B", "min_vram_gb": 8, "vision": False},
 )
+
+# 화면에 후보로 내보내는 것. 생성도 심사도 이미지를 넣으므로, 이미지를 못 받는 모델은
+# 고를 수 있게 두면 안 된다 — 고르면 배포는 성공하고 추론만 전량 실패해서
+# 원인이 화면에 드러나지 않는다.
+SELECTABLE_MODELS = tuple(m for m in GENERATION_MODELS if m.get("vision"))
 
 GENERATION_TEMPLATES = (
     {"key": "ocr_document", "name": "문서 OCR QA"},

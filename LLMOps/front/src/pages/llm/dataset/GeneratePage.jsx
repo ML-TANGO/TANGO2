@@ -82,13 +82,20 @@ export default function GeneratePage() {
     );
     // 저장값이 없으면 서로 다른 모델이 기본으로 잡히게 한다 — 같은 모델이 기본이면
     // 화면을 열자마자 차단 상태가 된다.
-    const gen = cfg.generator_model || models[0]?.id || '';
+    // 저장값이 후보에 더 이상 없을 수도 있다(이미지 입력 불가로 제외된 모델). Select 는
+    // 값이 목록에 없으면 첫 항목 라벨을 보여 주므로(components/index.jsx Select), 그대로
+    // 두면 화면에 보이는 것과 저장되는 값이 어긋난다.
+    const isOffered = (id) => !!id && models.some((m) => m.id === id);
+    const gen = (isOffered(cfg.generator_model) ? cfg.generator_model : models[0]?.id) || '';
     setGenModel(gen);
     // 심사 모델 기본값은 **다른 계열**에서 고른다. id 만 다르게 잡으면 같은 계열이
     // 걸려(qwen8b ↔ qwen4b) 화면을 열자마자 경고 상태로 시작한다.
+    // 저장된 심사 모델이 폴백된 생성 모델과 같아지는 경우도 걸러야 한다 — 생성 모델만
+    // 제외돼 목록 첫 모델로 폴백되면 그것이 살아 있는 심사 모델과 겹쳐, 사용자가 아무것도
+    // 건드리지 않았는데 화면이 열리자마자 차단 상태가 된다.
     const genFam = models.find((m) => m.id === gen)?.family;
     setJudgeModel(
-      cfg.judge_model
+      (isOffered(cfg.judge_model) && cfg.judge_model !== gen ? cfg.judge_model : null)
         || models.find((m) => m.family !== genFam)?.id
         || models.find((m) => m.id !== gen)?.id
         || '',

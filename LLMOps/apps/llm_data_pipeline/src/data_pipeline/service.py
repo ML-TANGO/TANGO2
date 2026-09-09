@@ -47,6 +47,7 @@ from data_pipeline.constants import (
     SDS_COLREG_LIBRARY,
     SDS_JOIN_LIBRARY,
     SDS_VIDEO_LIBRARY,
+    SELECTABLE_MODELS,
     SPLIT_BY,
     SPLITS,
     STAGES,
@@ -141,7 +142,9 @@ def get_meta():
         "stages_by_preset": {p: list(stages_for(p)) for p in PRESET_META},
         "preprocess_library": [dict(s) for s in PREPROCESS_LIBRARY],
         "filter_library": [dict(s) for s in FILTER_LIBRARY],
-        "generation_models": [dict(m) for m in GENERATION_MODELS],
+        # 이미지를 못 받는 모델은 후보에서 뺀다 — 고르면 배포는 되고 추론만
+        # 전량 실패해서 원인이 화면에 드러나지 않는다.
+        "generation_models": [dict(m) for m in SELECTABLE_MODELS],
         "generation_templates": [dict(t) for t in GENERATION_TEMPLATES],
         "prompt_chips": [dict(c) for c in PROMPT_CHIPS],
         # 기본 프롬프트도 프리셋마다 다르다. 하나만 내려주면 해양 파이프라인에도
@@ -858,20 +861,93 @@ STAGE_SERVING_ROLES = {
 _DISPATCH_TASKS = {}
 
 
-async def _serving_urls(dataset_id, roles):
-    """준비된 서빙 주소 {역할: {url, model_id, hf_id}} 와 아직 없는 역할 목록."""
+async def _serving_urls(dataset_id, roles, jf_user=None, verify=False):
+    """준비된 서빙 주소 {역할: {url, model_id, hf_id}} 와 아직 없는 역할 목록.
+
+    verify=True 면 장부가 ready 라고 해도 **배포가 실제로 살아 있는지** 확인한다.
+    장부만 믿으면 밖에서 내려간 배포의 주소를 그대로 내보내고, 그것을 받은 잡이 사라진
+    내부 DNS 를 불러 전량 serving_error 로 죽는다 — 실측으로 심사 100건이
+    'Name or service not known' 으로 전멸했다.
+
+    확인이 필요한 곳은 잡을 바로 던지는 빠른 경로뿐이다. ensure_serving 직후에 다시
+    묻는 것은 중복이고, 그 조회가 일시적으로 실패하면 건강한 서빙을 두고 실행만
+    죽는다 → 그 경로는 verify=False 로 둔다.
+    """
     ds = await get_dataset(dataset_id)
+    user = jf_user or ds.get("create_user") or ""
     ready, missing = {}, []
     for role in roles:
         row = await db.get_serving(dataset_id, role)
-        if row and row.get("status") == "ready" and row.get("playground_id"):
-            ready[role] = {
-                "url": serving_endpoint(row["playground_id"], ds["workspace_id"]),
-                "model_id": row.get("model_id"), "hf_id": row.get("hf_id"),
-            }
-        else:
+        if not (row and row.get("status") == "ready" and row.get("playground_id")):
             missing.append(role)
+            continue
+        if verify and not await _serving_usable(dataset_id, role, row, user):
+            missing.append(role)
+            continue
+        ready[role] = {
+            "url": serving_endpoint(row["playground_id"], ds["workspace_id"]),
+            "model_id": row.get("model_id"), "hf_id": row.get("hf_id"),
+        }
+        # 노드는 내부 DNS 로 직접 부르므로 BE 에 호출 기록이 남지 않는다. 여기서 찍지
+        # 않으면 유휴가 배포 시각 기준으로 계산돼, 방금 쓴 배포가 회수된다.
+        # 순전한 부기이므로 실패가 실행을 죽이게 두지 않는다 — 여기서 예외가 나가면
+        # job_name 이 빈 running 행이 남아 리콘사일러가 30분간 그 데이터셋을 busy 로 본다.
+        try:
+            await db.touch_serving(dataset_id, role)
+        except Exception:  # noqa: BLE001
+            logging.warning("[dp-serving] 사용시각 기록 실패 dataset=%s role=%s",
+                            dataset_id, role, exc_info=True)
     return ready, missing
+
+
+async def _serving_usable(dataset_id, role, row, user):
+    """장부의 이 배포를 그대로 잡에 넘겨도 되는가.
+
+    두 가지를 본다. 모델 대조가 먼저인 이유는 값이 싸고, 교체할 배포에 생존 확인
+    비용을 들일 필요가 없기 때문이다.
+    """
+    # 1) 장부가 가리키는 모델이 지금 설정과 다르면 옛 배포가 살아 있어도 쓸 수 없다.
+    #    사용자가 모델만 바꿔 저장하면 장부는 그대로이므로(upsert 는 ensure_serving
+    #    에서만 돈다) 여기서 걸러야 한다. 안 걸러내면 화면은 새 모델이라 말하는데
+    #    생성·채점은 옛 모델이 하고, 그 model_id 가 산출물 config.json 에 기록돼
+    #    "두 실행을 나란히 비교한다"는 전제가 조용히 깨진다.
+    try:
+        want = await _role_model_id(dataset_id, role)
+    except Exception:  # noqa: BLE001 - 설정을 못 읽으면 ensure_serving 이 사유를 낸다
+        want = None
+    if want != row.get("model_id"):
+        logging.warning("[dp-serving] 설정 모델 불일치 → 재준비 dataset=%s role=%s "
+                        "장부=%s 설정=%s", dataset_id, role, row.get("model_id"), want)
+        return False
+    return await _serving_alive(row["playground_id"], user, dataset_id, role)
+
+
+async def _serving_alive(playground_id, user, dataset_id, role):
+    """배포가 지금도 도는가. **부정 판정은 한 번 더 확인한 뒤에** 내린다.
+
+    이 상태 API 는 사라진 배포만 예외로 알려 주는 것이 아니다. llm_playground 의
+    get_playground_status 는 기본값이 `{"status": "stop"}` 이고, Redis 파드 캐시가
+    비었거나 내부 오류를 삼켰을 때 그 기본값을 **정상 응답으로** 돌려준다. 그래서
+    _playground_gone 만으로는 흔한 오탐을 못 가른다. 한 번을 그대로 믿으면 멀쩡한
+    배포를 헐고 30분 콜드 스타트를 다시 태운다 — 부정 판정의 대가가 그만큼 크므로
+    10초를 더 쓴다. 연속으로 확정하는 모양은 PLAYGROUND_GONE_LIMIT 관례와 같다.
+    """
+    for attempt in (1, 2):
+        try:
+            if await _playground_status(playground_id, user) == "running":
+                return True
+        except Exception as e:  # noqa: BLE001 - 사라진 것은 즉시 확정, 나머지는 재확인
+            if _playground_gone(e):
+                logging.warning("[dp-serving] 배포 없음 dataset=%s role=%s playground=%s",
+                                dataset_id, role, playground_id)
+                return False
+            logging.warning("[dp-serving] 상태 조회 실패(%s회) dataset=%s role=%s",
+                            attempt, dataset_id, role, exc_info=True)
+        if attempt == 1:
+            await asyncio.sleep(SERVING_POLL_S)
+    logging.warning("[dp-serving] 연속 2회 not-running → 재준비 dataset=%s role=%s "
+                    "playground=%s", dataset_id, role, playground_id)
+    return False
 
 
 async def _write_and_dispatch(out_dir, params, dispatch, run_pk, job_name, jf_user):
@@ -896,7 +972,7 @@ async def _dispatch_when_serving_ready(dataset_id, roles, out_dir, params, dispa
     try:
         for role in roles:
             await ensure_serving(dataset_id, role, jf_user)
-        serving, missing = await _serving_urls(dataset_id, roles)
+        serving, missing = await _serving_urls(dataset_id, roles, jf_user)
         if missing:
             raise Conflict("서빙 준비가 끝나지 않았습니다: " + ", ".join(missing))
         params["serving"] = serving
@@ -1011,7 +1087,7 @@ async def run_stage(dataset_id, stage, dry_run=False, sample_size=10, jf_user=No
                                                   run_pk, job_name, jf_user)
         return result
 
-    serving, missing = await _serving_urls(dataset_id, roles)
+    serving, missing = await _serving_urls(dataset_id, roles, jf_user, verify=True)
     if not missing:
         params["serving"] = serving
         result["job"] = await _write_and_dispatch(out_dir, params, dispatch,
@@ -1045,7 +1121,7 @@ async def get_stage(dataset_id, stage):
         "library": [dict(s) for s in _stage_library(stage)],
     }
     if stage == "generate":
-        payload["models"] = [dict(m) for m in GENERATION_MODELS]
+        payload["models"] = [dict(m) for m in SELECTABLE_MODELS]
         payload["templates"] = [dict(t) for t in GENERATION_TEMPLATES]
         payload["prompt_chips"] = [dict(c) for c in PROMPT_CHIPS]
         payload["default_prompt"] = prompt_for(preset)
@@ -1098,6 +1174,13 @@ def judge_model_pairing(generator_model, judge_model):
     g, j = by_id.get(generator_model), by_id.get(judge_model)
     if not g or not j:
         return {"level": "error", "message": "알 수 없는 모델입니다"}
+    # 이미지를 못 받는 모델은 배포까지는 성공하고 추론이 전량 400 으로 실패한다.
+    # 그 실패는 노드 drops 에만 남아 화면에서 원인이 안 보이므로 여기서 막는다.
+    unusable = list(dict.fromkeys(m["name"] for m in (g, j) if not m.get("vision")))
+    if unusable:
+        return {"level": "blocked",
+                "message": f"{', '.join(unusable)} 은 이미지 입력을 받지 못해 이 "
+                           "파이프라인에 쓸 수 없습니다. 다른 모델을 고르세요."}
     if generator_model == judge_model:
         return {"level": "blocked",
                 "message": "생성 모델과 심사 모델이 같으면 맹점이 겹쳐 게이트가 무의미해집니다. "
@@ -1974,6 +2057,12 @@ def _catalog_model(model_id):
         if m["id"] == model_id:
             if not m.get("hf_id"):
                 raise Conflict(f"'{m['name']}' 은 배포 경로가 없는 모델입니다")
+            # 후보에서 빼기 전에 저장된 설정이 남아 있을 수 있다. 그대로 띄우면 배포는
+            # 성공하고 추론만 전량 400 이 되므로, 30분 콜드 스타트를 태우기 전에 끊는다.
+            if not m.get("vision"):
+                raise Conflict(f"'{m['name']}' 은 이미지 입력을 받지 못하는 모델입니다"
+                               "(서빙이 멀티모달 프로세서를 만들지 못함) — "
+                               "생성 단계에서 다른 모델을 고르세요")
             return m
     raise NotFound(f"카탈로그에 없는 모델입니다: {model_id}")
 
@@ -2056,15 +2145,36 @@ async def _teardown_playground(playground_id, jf_user):
         logging.warning("[dp-serving] delete 실패 playground=%s", playground_id, exc_info=True)
 
 
+# 같은 (데이터셋, 역할) 의 준비를 직렬화한다. 두 실행 요청이 죽은 ready 배포를 동시에
+# 발견하면 각자 teardown + 배포를 해서, 나중 기록이 앞선 playground_id 를 덮어쓰고 그
+# 배포가 장부 밖 고아로 GPU 를 문다 — upsert 를 배포보다 먼저 하는 이유(고아 방지)와 같은
+# 취지다. 이 서비스는 레플리카 1개 전제이며, 다중 레플리카로 가면 외부 컨테이너 GPU 경합에
+# 쓰는 Redis SETNX 방식으로 올려야 한다.
+_SERVING_LOCKS = {}
+
+
+def _serving_lock(dataset_id, role):
+    key = (dataset_id, role)
+    lock = _SERVING_LOCKS.get(key)
+    if lock is None:
+        lock = _SERVING_LOCKS[key] = asyncio.Lock()
+    return lock
+
+
 async def ensure_serving(dataset_id, role, jf_user=None):
+    """역할당 준비를 하나씩만 돌린다. 실제 준비는 _ensure_serving."""
+    if role not in SERVING_ROLE_SOURCE:
+        raise ValueError(f"알 수 없는 역할입니다: {role}")
+    async with _serving_lock(dataset_id, role):
+        return await _ensure_serving(dataset_id, role, jf_user)
+
+
+async def _ensure_serving(dataset_id, role, jf_user=None):
     """역할(generator|judge)에 맞는 VLM 서빙을 준비하고 노드가 쓸 주소를 돌려준다.
 
     이미 같은 모델이 살아 있으면 그대로 쓴다 — 콜드 스타트가 수 분이라, 노드마다 다시
     띄우면 실행 시간이 배포 대기로 채워진다.
     """
-    if role not in SERVING_ROLE_SOURCE:
-        raise ValueError(f"알 수 없는 역할입니다: {role}")
-
     ds = await get_dataset(dataset_id)
     if not ds:
         raise NotFound(f"데이터셋이 없습니다: {dataset_id}")
@@ -2075,17 +2185,15 @@ async def ensure_serving(dataset_id, role, jf_user=None):
     existing = await db.get_serving(dataset_id, role)
     if (existing and existing.get("status") == "ready"
             and existing.get("model_id") == model_id and existing.get("playground_id")):
-        try:
-            if await _playground_status(existing["playground_id"], user) == "running":
-                await db.touch_serving(dataset_id, role)
-                return {"role": role, "model_id": model_id, "hf_id": model["hf_id"],
-                        "playground_id": existing["playground_id"], "status": "ready",
-                        "endpoint": serving_endpoint(existing["playground_id"],
-                                                     ds["workspace_id"]),
-                        "reused": True}
-        except Exception:  # noqa: BLE001 - 상태를 못 읽으면 새로 띄운다
-            logging.warning("[dp-serving] 상태 조회 실패 → 재배포 dataset=%s role=%s",
-                            dataset_id, role, exc_info=True)
+        # 생존 판별은 _serving_alive 하나만 쓴다. 여기와 빠른 경로가 서로 다른 기준을
+        # 쓰면, 같은 일시적 조회 실패가 들어온 경로에 따라 재배포되거나 재사용된다.
+        if await _serving_alive(existing["playground_id"], user, dataset_id, role):
+            await db.touch_serving(dataset_id, role)
+            return {"role": role, "model_id": model_id, "hf_id": model["hf_id"],
+                    "playground_id": existing["playground_id"], "status": "ready",
+                    "endpoint": serving_endpoint(existing["playground_id"],
+                                                 ds["workspace_id"]),
+                    "reused": True}
 
     # 소유 기록을 배포 **전에** 남긴다. 여기서 프로세스가 끊겨도 리콘사일러가 이 행을
     # 보고 정리할 수 있다 — 기록이 없으면 GPU 만 물고 아무도 모르는 배포가 된다.
@@ -2286,6 +2394,23 @@ async def reconcile_servings_once():
                                     exc_info=True)
 
             if row["dataset_id"] in busy:
+
+                # 실행 중이면 회수하지 않는다. 이때 사용시각을 찍어 둬야 유휴 시계가
+
+                # "실행이 끝난 시점"부터 돈다 — 안 찍으면 45분짜리 잡이 끝난 직후
+
+                # 다음 주기에서 이미 45분 유휴로 보여 방금 쓴 배포가 즉시 회수된다.
+
+                try:
+
+                    await db.touch_serving(row["dataset_id"], row["role"])
+
+                except Exception:  # noqa: BLE001 - 부기 실패가 리콘사일러를 멈추지 않게
+
+                    logging.warning("[dp-serving] 사용시각 기록 실패 dataset=%s role=%s",
+
+                                    row["dataset_id"], row["role"], exc_info=True)
+
                 continue
             idle = _age_seconds(row.get("last_used_datetime") or row.get("create_datetime"))
             if idle < SERVING_IDLE_RECLAIM_S:
