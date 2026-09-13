@@ -169,6 +169,11 @@ CREATE TABLE IF NOT EXISTS `edge_worker` (
     `token_prefix`       VARCHAR(16) DEFAULT NULL,       -- 토큰 식별 prefix (표시용)
     `token_expires_at`   DATETIME DEFAULT NULL,          -- 토큰 만료 (발급+90일)
     `last_heartbeat_json` TEXT DEFAULT NULL,             -- 최근 heartbeat 원본 (자원/지연/에러)
+    -- 디바이스 heartbeat 수신 시각 — last_seen 과 분리한다. last_seen 은 '생존 증거'라
+    -- refresh(/metrics 폴링)·deploy 도 갱신하는데, 30초 throttle 을 그 값에 걸면 UI
+    -- 새로고침 한 번이 디바이스의 다음 heartbeat 를 429 로 튕긴다(2026-09-11 재현).
+    -- throttle 은 이 컬럼(디바이스 푸시만 갱신)을 기준으로 판단해야 한다.
+    `last_heartbeat_at`  DATETIME DEFAULT NULL,
     `create_datetime`    DATETIME DEFAULT CURRENT_TIMESTAMP,
     `update_datetime`    DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY(`id`),

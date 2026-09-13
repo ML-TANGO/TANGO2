@@ -8,6 +8,53 @@ import traceback
 from utils.msa_db.db_base import get_db
 
 
+# ── 스키마 보정 ──────────────────────────────────────────────────────────────
+
+def ensure_edge_worker_schema():
+    """기동 시 `edge_worker` 의 후행 추가 컬럼을 멱등 보정한다.
+
+    schema.sql 두 파일은 `CREATE TABLE IF NOT EXISTS` 안쪽이라 **이미 테이블이 있는
+    기존 설치에는 새 컬럼이 생기지 않는다.** 이 리포에는 마이그레이션 러너가 없어
+    (`apps/*/migrations/*.sql` 은 아무도 실행하지 않는다) 그 간극을 메우는 장치가 없었고,
+    `last_heartbeat_at` 없이 새 코드가 올라가면 heartbeat UPDATE 가 실패해
+    `record_heartbeat` 가 전건 거부된다 → last_seen 정지 → 300초 후 전 디바이스 offline.
+
+    seed_manifests 와 같은 규율: **멱등**(`ADD COLUMN IF NOT EXISTS`, MariaDB)이고
+    **never fatal**(실패는 로그만 — 스키마 보정 실패가 서비스 CrashLoop 이 되면 안 된다).
+    컬럼을 추가만 하며 기존 컬럼·데이터는 건드리지 않는다.
+    """
+    # 컬럼명·타입은 하드코딩 리터럴만 — 외부 입력 불가(SQLi 방어 + 리팩터 안전망).
+    _ADDITIVE = (
+        ("last_heartbeat_at", "DATETIME DEFAULT NULL AFTER last_heartbeat_json"),
+    )
+    # DDL 이 오래 걸릴 수 있는 자리다(Galera TOI · metadata lock 대기). 상한을 두지
+    # 않으면 "never fatal" 과 무관하게 기동 자체가 붙잡힌다.
+    _DDL_TIMEOUT_SEC = 10
+    result = {"applied": [], "failed": []}
+    for col, decl in _ADDITIVE:
+        try:
+            with get_db() as conn:
+                cur = conn.cursor()
+                # MariaDB 세션 문장 시간 제한(초). 미지원 엔진이면 무시되게 별도 try.
+                try:
+                    cur.execute(f"SET SESSION max_statement_time={_DDL_TIMEOUT_SEC}")
+                except Exception:
+                    pass
+                cur.execute(
+                    f"ALTER TABLE edge_worker ADD COLUMN IF NOT EXISTS {col} {decl}"
+                )
+                conn.commit()
+                result["applied"].append(col)
+        except Exception as e:
+            traceback.print_exc()
+            # 실패를 반환값에 뭉개지 않는다. 이전 판본은 실패 시 빈 목록을 돌려줘
+            # 호출자가 "이미 컬럼이 있어 할 일 없음" 과 구분할 수 없었고, 그래서
+            # 한 번의 일시적 실패가 INFO 로 묻힌 채 컬럼 없는 서비스가 계속 살아
+            # heartbeat 전건 실패가 지속될 수 있었다(2026-09-11 리뷰).
+            result["failed"].append({"column": col, "error": f"{type(e).__name__}: {e}"})
+    return result
+
+
 # ── edge_worker ─────────────────────────────────────────────────────────────
 
 def insert_edge_worker(device_id, name, device_type, remote_manager_url):
@@ -119,14 +166,19 @@ def update_edge_worker_token(worker_id, token_hash, token_prefix, token_expires_
 
 
 def update_edge_worker_heartbeat(worker_id, last_heartbeat_json, last_seen):
-    """디바이스 heartbeat 수신 → 원본 저장 + last_seen 갱신 + online 표시."""
+    """디바이스 heartbeat 수신 → 원본 저장 + last_seen/last_heartbeat_at 갱신 + online 표시.
+
+    last_heartbeat_at 은 **이 경로에서만** 갱신된다(디바이스 푸시 전용). last_seen 은
+    refresh(/metrics 폴링)·deploy 도 갱신하는 '생존 증거'라, 30초 throttle 을 last_seen
+    에 걸면 UI 새로고침 한 번이 디바이스의 다음 heartbeat 를 429 로 튕긴다.
+    """
     try:
         with get_db() as conn:
             cur = conn.cursor()
             cur.execute(
                 "UPDATE edge_worker SET conn_status='online', last_seen=%s, "
-                "last_heartbeat_json=%s WHERE id=%s",
-                (last_seen, last_heartbeat_json, worker_id),
+                "last_heartbeat_at=%s, last_heartbeat_json=%s WHERE id=%s",
+                (last_seen, last_seen, last_heartbeat_json, worker_id),
             )
             conn.commit()
             return True

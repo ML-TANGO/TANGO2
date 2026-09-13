@@ -10,6 +10,7 @@ import DeployDetailHeader from '@src/components/pageContents/llm/DeployDetail/De
 import {
   deployEdgeWorker,
   getEdgeWorkers,
+  stopEdgeWorker,
   refreshEdgeWorker,
 } from '@src/apis/flightbase/edge';
 import { getModel, getQuantizeLineage } from '@src/apis/llm/model';
@@ -108,6 +109,8 @@ export default function EdgeDeploymentDetail() {
   const [lineageId, setLineageId] = useState('');
   const [params, setParams] = useState(DEFAULT_PARAMS);
   const [deploying, setDeploying] = useState(false);
+  const [stopping, setStopping] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const isCustomEngine = engine === CUSTOM_ENGINE;
 
@@ -224,6 +227,38 @@ export default function EdgeDeploymentDetail() {
     }
   };
 
+  // 목록 GET 만으로는 부족하다: BE `_worker_view` 는 heartbeat 토큰이 있는 워커만
+  // last_seen staleness 로 conn_status 를 파생하고, pull-only 워커(remote_manager_url
+  // 만 있음)는 **저장된** conn_status 를 그대로 돌려준다(주기 폴러 부재). 그 값은
+  // POST /refresh 가 /metrics 를 찍어야 갱신되므로, 선택된 디바이스가 있으면 먼저
+  // refresh 를 돌린 뒤 목록을 다시 받는다. 하필 canOperate 가 겨냥하는 게 그 워커군이다.
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    if (targetId) {
+      // 실패를 삼키지 않는다 — 화면이 그대로면 사용자는 "정상(오프라인)" 인지
+      // "요청 자체가 실패" 인지 구분할 수 없다. handleStop 과 대칭을 맞춘다.
+      const res = await refreshEdgeWorker(targetId);
+      if (res.status !== STATUS_SUCCESS) {
+        toast.error(res.message || t('edge.toast.refreshFail'));
+      }
+    }
+    await loadWorkers();
+    setRefreshing(false);
+  };
+
+  const handleStop = async () => {
+    if (!worker) return toast.error(t('edge.toast.selectDevice'));
+    setStopping(true);
+    const { status, message } = await stopEdgeWorker(targetId);
+    setStopping(false);
+    if (status === STATUS_SUCCESS) {
+      toast.success(t('edge.toast.stopRequested'));
+      loadWorkers();
+    } else {
+      toast.error(message || t('edge.toast.stopFail'));
+    }
+  };
+
   const heartbeat = useMemo(() => {
     try {
       return worker?.last_heartbeat_json
@@ -235,6 +270,57 @@ export default function EdgeDeploymentDetail() {
   }, [worker]);
 
   const isOnline = worker?.conn_status === 'online';
+  // online 은 heartbeat(디바이스→플랫폼) 판정이고, 실행·중지는 remote_manager_url 로
+  // 가는 반대 방향이다. 그 주소는 선택 입력이라(heartbeat-only 디바이스 허용) online
+  // 인데도 /ops 를 보낼 수 없는 조합이 존재한다 — 그 경우 버튼을 열어두면 누를 때마다
+  // "unsafe or invalid remote_manager_url" 로 실패한다. 두 조건을 함께 본다.
+  //
+  // 존재 여부만 보면 부족하다: BE `_safe_rm_url` 은 스킴·userinfo·path/query/fragment·
+  // loopback 을 거절하므로 `http://127.0.0.1` 이나 경로가 붙은 URL 은 저장돼 있어도
+  // 매번 서버에서 거절된다. 같은 규칙을 여기서 미리 걸러 "누를 수 있는데 항상 실패"
+  // 를 없앤다(서버가 정본이고 이건 UI 예측이다).
+  const hasRemoteUrl = useMemo(() => {
+    const raw = worker?.remote_manager_url;
+    if (!raw) return false;
+    try {
+      const u = new URL(raw);
+      if (!['http:', 'https:'].includes(u.protocol)) return false;
+      if (u.username || u.password || u.search || u.hash) return false;
+      if (u.pathname && u.pathname !== '/') return false;
+      // WHATWG URL 은 IPv6 를 브래킷째 준다 — `new URL('http://[::1]').hostname`
+      // === '[::1]'. 문자열 배열 비교로는 잡히지 않는다(실측 확인).
+      const host = u.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+      if (host === 'localhost' || host === '::1' || host === '::') return false;
+      // BE `_safe_rm_url` 은 해석된 IP 가 loopback/link-local/multicast/unspecified/
+      // reserved 인지 본다. 여기서 대역을 맞춘다 — 문자열 하나만 막았을 때
+      // 127.0.0.2 · 169.254.169.254(메타데이터) · 224.0.0.1 이 전부 통과했다.
+      const m = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+      if (m) {
+        const a = Number(m[1]);
+        const b = Number(m[2]);
+        if (a === 127 || a === 0) return false; // loopback 127/8 · unspecified 0/8
+        if (a === 169 && b === 254) return false; // link-local (메타데이터 SSRF 타깃)
+        if (a >= 224) return false; // multicast 224/4 + reserved 240/4
+      }
+      // DNS 이름이 위 대역으로 해석되는 경우는 브라우저가 판정할 수 없다 — 서버가
+      // 정본이고 이건 "누를 수 있는데 항상 실패" 를 줄이는 UI 예측이다.
+      return true;
+    } catch {
+      return false;
+    }
+  }, [worker]);
+  const canOperate = isOnline && hasRemoteUrl;
+  // deploy 가 202(async)를 받으면 deploy_state 는 deploying 으로 남는다. 그 상태를
+  // 중지 대상에서 빼면 끊긴 배포를 끌 수단이 없어지고("중지할 배포가 없습니다" 라는
+  // 거짓 안내까지 붙는다) 워커를 지워도 디바이스에 컨테이너가 유령으로 남는다 —
+  // 이 기능이 없애려던 문제가 바로 그 구간에서 재현된다. BE 삭제 게이트도 동일 집합.
+  // error 도 포함한다 — deploy 실패는 "컨테이너가 없다" 는 보장이 아니다(이미지 pull
+  // 실패 후 Created/crash-loop 컨테이너가 남을 수 있고, agent 도 docker 불가 시 기존
+  // 컨테이너를 건드리지 않고 error 를 준다). BE stop_edge_worker 는 deploy_state 를
+  // 아예 검사하지 않으므로, FE 가 여기서 막으면 정리 경로가 UI 에서 사라진다.
+  const stoppable = ['running', 'deploying', 'error'].includes(
+    worker?.deploy_state,
+  );
   const tabOptions = [
     { label: 'information.label', value: 'INFO' },
     { label: 'deployment.label', value: 'DEPLOY' },
@@ -470,11 +556,16 @@ export default function EdgeDeploymentDetail() {
                 value={targetId}
                 onChange={(e) => setTargetId(e.target.value)}
               >
-                {workers.length === 0 && (
-                  <option value={targetId}>
-                    {t('edge.field.device.none')}
-                  </option>
-                )}
+                {/* placeholder 는 워커가 있든 없든 항상 렌더한다. 없으면 targetId 초기값('')이
+                    어떤 option 과도 매칭되지 않아 브라우저가 첫 워커를 '표시만' 하고 state 는
+                    빈 문자열로 남는다 → worker undefined → isOnline false → '배포 실행' 이
+                    영구 비활성. 게다가 디바이스가 1개면 같은 항목을 다시 골라도 값이 바뀌지
+                    않아 change 이벤트가 안 나므로 사용자가 복구할 수 없다(2026-09-11 실측). */}
+                <option value=''>
+                  {workers.length === 0
+                    ? t('edge.field.device.none')
+                    : t('edge.field.device.select')}
+                </option>
                 {workers.map((w) => (
                   <option key={w.id} value={String(w.id)}>
                     {w.name || w.device_id}{' '}
@@ -482,6 +573,20 @@ export default function EdgeDeploymentDetail() {
                   </option>
                 ))}
               </select>
+              {/* 목록은 마운트 시 1회만 받으므로 뒤늦게 online 이 된 디바이스가 반영되지
+                  않는다. 모니터링 탭은 refreshEdgeWorker 를 폴링하지만 이 탭에는 갱신 수단이
+                  없었다 — 여기서 명시적으로 다시 받는다. */}
+              <ButtonV2
+                type='outline'
+                size='s'
+                label={t('edge.action.refresh')}
+                onClick={handleRefresh}
+                // refresh 가 stop 직전의 running metrics 를 읽고 stop 의 DB 갱신
+                // 뒤에 기록하면 제거된 컨테이너가 다시 running 으로 표시된다.
+                // 배포·중지 버튼도 refreshing 을 보므로 양방향으로 막힌다.
+                disabled={refreshing || deploying || stopping}
+                style={{ marginTop: '4px' }}
+              />
               <Row k={t('type.label')} v={worker?.device_type || '-'} />
               <Row
                 k={t('edge.detail.connection')}
@@ -501,9 +606,18 @@ export default function EdgeDeploymentDetail() {
                 k={t('status.label')}
                 v={worker?.deploy_state || t('edge.detail.notDeployed')}
               />
+              {/* `''` 는 stop·refresh 가 "배포 없음" 을 **명시적으로** 새긴 값이고
+                  null/undefined 는 "정보 없음" 이다. 둘을 falsy 로 뭉개면 빈 문자열이
+                  heartbeat 폴백으로 새고, last_heartbeat_json 은 디바이스가 마지막에
+                  push 한 원본이라 다음 heartbeat(~35초)까지 옛 모델명이 계속 보인다 —
+                  "배포 필드를 비운다" 는 수정이 이 화면에서 무효화되던 지점이다. */}
               <Row
                 k={t('edge.detail.loadedModel')}
-                v={worker?.deploy_model || heartbeat?.model_loaded || '-'}
+                v={
+                  worker?.deploy_model != null
+                    ? worker.deploy_model || '-'
+                    : heartbeat?.model_loaded || '-'
+                }
               />
               <Row k={t('edge.detail.lastSeen')} v={worker?.last_seen || '-'} />
               <ButtonV2
@@ -513,12 +627,42 @@ export default function EdgeDeploymentDetail() {
                     : t('edge.detail.runDeploy')
                 }
                 colorType='skyblue'
-                disabled={deploying || !isOnline}
+                disabled={deploying || stopping || refreshing || !canOperate}
                 onClick={handleDeploy}
                 style={{ width: '100%', marginTop: '8px' }}
               />
-              {!isOnline && (
+              <ButtonV2
+                type='outline'
+                label={
+                  stopping
+                    ? t('edge.detail.stopping')
+                    : t('edge.detail.stopDeploy')
+                }
+                disabled={
+                  deploying ||
+                  stopping ||
+                  refreshing ||
+                  !canOperate ||
+                  !stoppable
+                }
+                onClick={handleStop}
+                style={{ width: '100%', marginTop: '6px' }}
+              />
+              {/* 비활성 사유를 분기해 보여준다. 같은 회색 버튼에 원인이 여러 개면
+                  사용자가 무엇을 고쳐야 하는지 알 수 없다. online 은 heartbeat
+                  (디바이스→플랫폼) 판정이고 실행·중지는 remote_manager_url 로 가는
+                  반대 방향이라, online 이어도 조작이 불가능한 조합이 존재한다. */}
+              {!worker && (
+                <p className={cx('hint')}>{t('edge.detail.selectFirst')}</p>
+              )}
+              {worker && !isOnline && (
                 <p className={cx('hint')}>{t('edge.detail.onlineOnly')}</p>
+              )}
+              {worker && isOnline && !hasRemoteUrl && (
+                <p className={cx('hint')}>{t('edge.detail.noRemoteUrl')}</p>
+              )}
+              {canOperate && !stoppable && (
+                <p className={cx('hint')}>{t('edge.detail.nothingToStop')}</p>
               )}
             </section>
           </div>

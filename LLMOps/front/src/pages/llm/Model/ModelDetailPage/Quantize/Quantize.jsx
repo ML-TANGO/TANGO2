@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useHistory } from 'react-router-dom';
 
 import { ButtonV2 } from '@jonathan/ui-react';
 
@@ -17,7 +18,6 @@ import {
 
 import SimpleNav from '@src/components/molecules/SimpleNav';
 import QuantizeModal from './QuantizeModal';
-import EdgeDeployModal from './EdgeDeployModal';
 
 import classNames from 'classnames/bind';
 import style from './Quantize.module.scss';
@@ -64,7 +64,8 @@ const saveBlob = (blob, filename) => {
  */
 const Quantize = memo(function Quantize({ navList, data, ...rest }) {
   const { t } = useTranslation();
-  const { modelId } = data;
+  const history = useHistory();
+  const { modelId, workspaceId } = data;
 
   const [titleName, setTitleName] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
@@ -73,7 +74,6 @@ const Quantize = memo(function Quantize({ navList, data, ...rest }) {
   const [status, setStatus] = useState(null);
   const [pkg, setPkg] = useState(null); // { files: [{name,bytes}], ready }
   const [lineage, setLineage] = useState([]); // 4.6 양자화 이력
-  const [deployOpen, setDeployOpen] = useState(false); // 3.10 Edge 배포
   const pollRef = useRef(null);
 
   const filteredRest = useMemo(() => {
@@ -329,9 +329,6 @@ const Quantize = memo(function Quantize({ navList, data, ...rest }) {
 
   const isRunning = job && !TERMINAL.includes(status);
   const isFailed = status === 'failed' || status === 'cancelled';
-  const ggufFile = (pkg?.files || []).find((f) =>
-    f.name.endsWith('.gguf'),
-  )?.name;
 
   return (
     <div id='quantize-tab' className={cx('quantize-tab')}>
@@ -399,11 +396,25 @@ const Quantize = memo(function Quantize({ navList, data, ...rest }) {
                     {t('quantize.package.label')}
                   </span>
                   <div className={cx('package-actions')}>
+                    {/* 엣지 배포 입구는 '배포' 메뉴 하나로 모은다. 여기 있던 EdgeDeployModal
+                        은 SP-6/3.10 때 이 화면 안에서 최단거리로 만든 것인데, 이후 D6
+                        재설계로 NewDeploymentModal(cluster/edge/standalone/remote_api) +
+                        EdgeDeploymentDetail 이 들어오면서 중복이 됐고 모든 면에서 열등했다 —
+                        배포 레코드를 만들지 않아 목록·이력·수명주기 관리 밖이었고(감사 추적
+                        불가), 기관 이미지를 자유입력 필수로 받고, job 이 localStorage 에만
+                        있어 다른 브라우저에서는 도달조차 못 했다. 기획 정본(front_etri
+                        목업)에도 양자화 화면이 없고 양자화 옵션은 배포 상세 안에 있다.
+                        동선은 링크로 살린다 — 방금 만든 GGUF 는 lineage 기반이라
+                        EdgeDeploymentDetail 의 드롭다운에 이미 후보로 나타난다. */}
                     <ButtonV2
                       type='outline'
                       size='s'
-                      label={t('edgeDeploy.title')}
-                      onClick={() => setDeployOpen(true)}
+                      label={t('quantize.goDeploy')}
+                      onClick={() =>
+                        history.push(
+                          `/user/workspace/${workspaceId}/llmplayground`,
+                        )
+                      }
                     />
                     <ButtonV2
                       colorType='blue'
@@ -511,14 +522,6 @@ const Quantize = memo(function Quantize({ navList, data, ...rest }) {
         submitting={submitting}
       />
 
-      <EdgeDeployModal
-        open={deployOpen}
-        onClose={() => setDeployOpen(false)}
-        modelName={titleName}
-        jobId={job?.jobId}
-        ggufFile={ggufFile}
-        targetQuant={job?.targetQuant}
-      />
     </div>
   );
 });

@@ -167,6 +167,9 @@ CREATE TABLE IF NOT EXISTS `edge_worker` (
     `token_prefix`       VARCHAR(16) DEFAULT NULL,
     `token_expires_at`   DATETIME DEFAULT NULL,
     `last_heartbeat_json` TEXT DEFAULT NULL,
+    -- heartbeat 수신 시각(디바이스 푸시만 갱신). 30초 throttle 기준 — last_seen 은
+    -- refresh/deploy 도 쓰므로 그 값에 걸면 UI 새로고침이 heartbeat 를 429 로 튕긴다.
+    `last_heartbeat_at`  DATETIME DEFAULT NULL,
     `create_datetime`    DATETIME DEFAULT CURRENT_TIMESTAMP,
     `update_datetime`    DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY(`id`),

@@ -90,8 +90,23 @@ async def ops(req: Request):
     if op == "deploy":
         return _deploy(body)
     if op == "stop":
-        if _docker_available():
-            _docker(["rm", "-f", CONTAINER], timeout=60)
+        # 실패를 stopped 로 보고하면 안 된다. 이전 판본은 docker 부재 시 rm 을 건너뛰고,
+        # rm 이 실패해도 returncode 를 보지 않은 채 항상 {"status":"stopped"} 를 돌려줬다.
+        # 플랫폼은 그걸 확정 성공으로 받아 deploy_state=stopped 로 새기므로, 컨테이너가
+        # 살아 있는데 화면은 "중지됨" 이라 말하는 조용한 거짓이 된다(2026-09-11 리뷰).
+        # _last_deploy.clear() 도 성공한 뒤에만 한다 — 실패했는데 /metrics 주석에서
+        # 배포 흔적을 지우면 플랫폼이 실상태를 되짚을 근거까지 사라진다.
+        if not _docker_available():
+            return {"status": "error", "detail": "docker not available on device"}
+        try:
+            proc = _docker(["rm", "-f", CONTAINER], timeout=60)
+        except Exception as e:  # timeout·실행 실패
+            return {"status": "error", "detail": f"docker rm failed: {type(e).__name__}"}
+        if proc.returncode != 0:
+            # 이미 없는 컨테이너는 실패가 아니다 — 목표 상태(중지)가 이미 충족됐다.
+            err = (proc.stderr or "").strip()
+            if "No such container" not in err:
+                return {"status": "error", "detail": f"docker rm failed: {err[:300]}"}
         with _lock:
             _last_deploy.clear()
         return {"status": "stopped"}

@@ -153,8 +153,18 @@ function NodeTable({
       setEdgeBusyId(edgeId);
       const res = await deleteEdgeWorker(edgeId);
       setEdgeBusyId(null);
-      if (res.status === STATUS_SUCCESS) refetchEdge?.();
-      else toast.error(res.message || t('edge.toast.deleteFail'));
+      if (res.status === STATUS_SUCCESS) {
+        // BE 는 배포가 돌고 있으면 stop 을 best-effort 로 먼저 보내고, 결과와 무관하게
+        // 삭제를 진행한다(죽은 디바이스를 영구히 못 지우는 것을 막기 위해). 실패했다면
+        // 디바이스에 컨테이너가 유령으로 남으므로 조용히 넘기지 않고 알린다.
+        const stop = res.result?.stop;
+        if (stop?.attempted && !stop.ok) {
+          toast.warning(
+            t('edge.toast.deletedButStopFailed', { device: deviceId }),
+          );
+        }
+        refetchEdge?.();
+      } else toast.error(res.message || t('edge.toast.deleteFail'));
     },
     [refetchEdge, t],
   );

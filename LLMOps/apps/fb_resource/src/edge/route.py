@@ -71,6 +71,19 @@ async def deploy_worker(worker_id: int, body: model.DeployEdgeModel):
         return response(status=0, message=str(e), result=None)
 
 
+@edge.post('/workers/{worker_id}/stop')
+# [authZ] 배포 중지 = 배포 실행과 동일 게이트(일반 사용자 개방, 등록/토큰만 admin).
+async def stop_worker(worker_id: int):
+    # 배포된 컨테이너를 remoteManager /ops op:"stop" 으로 제거 (blocking → threadpool).
+    # 디바이스 쪽 stop 은 원래 구현돼 있었고 플랫폼의 호출 경로만 없었다.
+    try:
+        res = await run_in_threadpool(edge_service.stop_edge_worker, worker_id)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+
 @edge.post('/workers/{worker_id}/token')
 @admin_access_check()
 async def issue_worker_token(worker_id: int):

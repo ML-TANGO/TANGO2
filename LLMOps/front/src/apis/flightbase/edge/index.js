@@ -32,6 +32,16 @@ export const deleteEdgeWorker = async (workerId) => {
   return await callApi({ url: `edge/workers/${workerId}`, method: 'delete' });
 };
 
+// 배포된 컨테이너 중지 — remoteManager /ops op:"stop". 디바이스 쪽 stop 은 원래
+// 구현돼 있었고 플랫폼 호출 경로만 없어서, 배포는 되지만 중지가 불가능했다.
+// remote_manager_url 이 없는 heartbeat-only 디바이스는 BE 가 사유를 구분해 거절한다.
+export const stopEdgeWorker = async (workerId) => {
+  return await callApi({
+    url: `edge/workers/${workerId}/stop`,
+    method: 'post',
+  });
+};
+
 // SP-6 / 3.10 — 양자화 패키지(GGUF)를 Edge 워커에 remoteManager /ops 로 배포.
 export const deployEdgeWorker = async (workerId, body) => {
   // body: { image, model_name?, model_version?, gguf_path?, params? }

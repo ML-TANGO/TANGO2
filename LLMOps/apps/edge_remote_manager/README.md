@@ -27,7 +27,7 @@ export DEVICE_TOKEN="<발급받은 raw token>"
 3. 배포 실행 → 플랫폼이 `/ops` 로 `{op:deploy,image,model,version,gguf_path,params}` 전송 → 에이전트가 pull+run.
 
 ## 계약
-- `POST /ops` `{op:"deploy",image,model,version,gguf_path,params}` → `docker pull` + `docker run`(교체) → `{"status":"running"}` (실패 `{"status":"error","detail":...}`). `op:"stop"` → 컨테이너 제거.
+- `POST /ops` `{op:"deploy",image,model,version,gguf_path,params}` → `docker pull` + `docker run`(교체) → `{"status":"running"}` (실패 `{"status":"error","detail":...}`). `op:"stop"` → 컨테이너 제거 → `{"status":"stopped"}`. **실패는 반드시 `{"status":"error","detail":...}` 로 보고한다**(docker 부재 · `docker rm` 비0 종료 · 타임아웃). 이미 없는 컨테이너(`No such container`)는 목표 상태가 충족된 것이므로 성공으로 본다. 플랫폼이 이 응답으로 `deploy_state` 를 확정하므로, 실패를 `stopped` 로 보고하면 컨테이너가 살아 있는데 화면이 "중지됨" 이라 말하는 거짓이 된다.
   - `params` 옵션: `port`(호스트/컨테이너 포트), `env`(dict), `docker_args`(list, 추가 플래그), `cmd`(list, 컨테이너 실행 인자). 모델 파일은 `MODEL_DIR` 를 `/models` 로 마운트하고 `MODEL_PATH=/models/<gguf_path>` env 주입.
 - `GET /metrics` → `{containers:[{name,image,state,model,version}],container_count,node_cpu_total,memory_total,gpu}`.
 

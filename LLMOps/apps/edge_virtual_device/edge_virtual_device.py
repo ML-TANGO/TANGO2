@@ -42,6 +42,14 @@ def root():
 @app.post("/ops")
 async def ops(req: Request):
     body = await req.json()
+    # op:"stop" — 실 remote_manager_agent 는 `docker rm -f` 로 컨테이너를 제거하고
+    # {"status":"stopped"} 를 준다. 하네스가 이걸 구현하지 않으면 플랫폼은 stopped 로
+    # 기록하는데 /metrics 는 컨테이너 1건을 계속 보고하고, 다음 refresh 가 deploy_state
+    # 를 running 으로 되돌린다 — "중지했다" 는 거짓이 조용히 복구된다(2026-09-11 실측).
+    if body.get("op") == "stop":
+        with _lock:
+            _state["deploy"] = None
+        return {"status": "stopped"}
     if body.get("op") == "deploy":
         with _lock:
             _state["deploy"] = {

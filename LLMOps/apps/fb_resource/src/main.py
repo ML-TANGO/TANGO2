@@ -65,11 +65,34 @@ def initialize_app():
 
     @app.on_event("startup")
     async def startup_event():
+        import logging
+        logger = logging.getLogger("resource-server")
+        # 후행 추가 컬럼 멱등 보정. schema.sql 두 파일은 CREATE TABLE IF NOT EXISTS
+        # 안쪽이라 **기존 설치에는 새 컬럼이 생기지 않고**, 이 리포에는 마이그레이션
+        # 러너가 없다(apps/*/migrations 는 아무도 실행하지 않음). last_heartbeat_at 이
+        # 없으면 heartbeat UPDATE 가 실패해 record_heartbeat 가 전건 거부되고
+        # (→ last_seen 정지 → 300초 후 전 디바이스 offline) 그 사실이 조용히 묻힌다.
+        # 기동 시 여기서 메운다. never fatal — 보정 실패가 CrashLoop 이 되면 안 된다.
+        # ⚠️ 이 보정은 replicas=1 을 전제한다(devops/fb_resource/helm/templates/
+        #    deployment.yaml 에 리터럴로 박혀 있음). 스케일아웃하면 동시 기동 ALTER 가
+        #    Galera TOI 락에서 경쟁하므로, 그 전제가 사라지는 순간 재검토해야 한다.
+        try:
+            from utils.msa_db import db_edge
+            res = db_edge.ensure_edge_worker_schema()
+            # 실패를 성공과 구분해 올린다 — 삼키면 컬럼 없는 서비스가 조용히 계속
+            # 살아 heartbeat 가 전건 실패한다(그게 이 보정이 막으려던 상태다).
+            if res.get("failed"):
+                logger.warning(
+                    "edge_worker 스키마 보정 실패 — heartbeat 영속이 깨질 수 있음: "
+                    f"{res['failed']} (적용됨: {res.get('applied')})"
+                )
+            else:
+                logger.info(f"edge_worker 스키마 보정: 적용 {res.get('applied')}")
+        except Exception as e:
+            logger.warning(f"edge_worker 스키마 보정 호출 실패(계속 진행): {str(e)}")
         try:
             await connection_manager.get_redis_client()
         except Exception as e:
-            import logging
-            logger = logging.getLogger("resource-server")
             logger.warning(f"초기 Redis 연결 실패: {str(e)}")
     
     return app
