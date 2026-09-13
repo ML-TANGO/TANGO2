@@ -1,0 +1,85 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# evaluate-logickor.yaml — 부팅 시드 manifest (LogicKor 벤치마크, async)
+#
+# ⚠️ 정본은 컨테이너 소스 옆의 `apps/evaluate_logickor/manifest.yaml` 이다. 이 파일은 부팅 자동 등록
+# (src/manifest/seed.py)을 위한 **사본**이라, 한쪽을 고치면 반드시 다른 쪽도 맞춰야
+# 한다(이미지 태그·버전이 특히 그렇다).
+# 사본을 두는 이유: 시드 디렉터리는 이미지에 COPY 되고 NFS src 마운트로도 잡히는데,
+# 리포 루트 밖을 가리키는 심링크는 이미지 빌드에서 깨진다.
+#
+# service_family 가 없으므로 페어가 아니라 단건으로 등록된다(짝 컨테이너 없음).
+# LOGICKOR_MANIFEST_NAME/VERSION 의 기본값은 evaluate-logickor-judge/0.2.5 이고,
+# 이 판본은 settings.py 주석이 예시로 든 대안 바인딩이다
+#   LOGICKOR_MANIFEST_NAME=evaluate-logickor  LOGICKOR_MANIFEST_VERSION=0.1.0
+#
+# 이 파일이 없으면: 레지스트리 등록은 런타임 POST /api/v1/manifests 뿐이라, 신규
+# 설치 인스턴스는 이 컨테이너가 미등록 상태로 뜨고 해당 평가 경로가 조용히 막힌다
+# (dev 의 evaluate 행들은 과거에 손으로 POST 한 것이다).
+#
+# 🔴 이미지 미push(2026-09-11 실측): docker.io/acrylaaai/evaluate-logickor 는
+# 리포지토리 자체가 HTTP 404 다(사내 레지스트리에도 없음). 이 클러스터에서 과거
+# 실행이 됐던 건 노드 containerd 에 로컬 빌드 이미지가 남아 있었기 때문이고,
+# 신규 서버에서는 ErrImagePull 이 된다. 등록과 별개인 릴리스 작업이다.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# evaluate-logickor — LogicKor 채점 집계 컨테이너.
+# LogicKor 파이프라인의 score 단계만 수행한다(생성·심판은 별 단계). 모델을 로드하지 않아
+# GPU 0 · CPU only 이고, 그래서 LogicKor 의 transformers 5.5.4 / vllm 핀과 무관하다
+# (플랫폼 기본은 transformers>=4.52.4,<5.0.0 — 생성·심판 단계는 전용 이미지가 필요).
+# 계약 전문: ../../examples/hello-plugin/external-container-spec.md
+apiVersion: tango.acryl.ai/v1
+kind: ExternalContainer
+
+metadata:
+  name: evaluate-logickor
+  version: "0.1.0"
+  vendor: "Acryl (platform-owned)"
+  contact: "platform@acryl.ai"
+  description: |
+    LogicKor 벤치마크 채점 집계. ETRI evaluator 가 채점해 둔 jsonl(문항별 심판 점수
+    1~10)을 읽어 6영역 × 1턴/2턴 격자와 종합 점수를 산출한다. 대표 스칼라는 요청의
+    metric(judge_overall/judge_single/judge_multi)이 결정하고, 전체 격자는 metrics JSON
+    의 'logickor' 키에 함께 실린다. 해시 mock 이 아닌 실채점이다.
+
+spec:
+  image: "docker.io/acrylaaai/evaluate-logickor:0.1.0"
+
+  job_type: evaluate
+  execution_mode: async
+  port: 8000
+
+  resources:
+    cpu: "1"
+    memory: "512Mi"           # 모델 로드 없음 — 42문항 × 파일수 jsonl 파싱만.
+    gpu: 0
+
+  inputs:
+    params:
+      required: false         # benchmarks[{benchmark,metric}] / datasets / evaluated_subdir
+    dataset:
+      required: true          # evaluator 산출 jsonl 이 담긴 데이터셋(/dataset/<name>).
+
+  outputs:
+    metrics: true             # /output/metrics.json
+    artifacts: false
+
+  secrets:
+    required: []
+
+  network:
+    egress_whitelist: []      # 외부 호출 없음(로컬 파일 집계만).
+
+  endpoints:
+    info: "/info"
+    health: "/health"
+    live: "/live"
+    run: "/run"
+    jobs: "/jobs/{id}"
+    cancel: "/jobs/{id}/cancel"
+
+  capabilities:
+    estimated_startup_seconds: 5
+    estimated_duration_seconds: 15
+    timeout_seconds: 600
+
+  workspace_scope: per-workspace
