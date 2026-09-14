@@ -229,8 +229,16 @@ everything-claude-code/
 CLAUDE.md
 
 # Environment-specific values (서버별로 복사해서 쓰는 파일 — 운영 IP/암호 포함 가능)
+# 선행 슬래시가 규칙을 리포 루트에 고정한다. 실제 파일은 devops/<서비스>/ 한 단계
+# 아래라 예전 규칙을 그대로 통과했다 — gaip_maraidb 의 것(운영 IP 포함)은
+# .git/info/exclude 로만 막혀 있었고, 그 파일은 클론에 따라가지 않는다.
 /devops/values_*.yaml
+/devops/**/values_*.yaml
 /devops/values.yaml.template.old
+
+# 예외: dev 단일 브로커 오버라이드. IP·자격증명이 없고, 브로커 1대에서 컨슈머 그룹이
+# 죽는 원인과 JVM 힙 OOM 을 적어 둔 재현 문서라 추적을 유지한다.
+!/devops/gaip_kafka/values_dev_single.yaml
 
 # NFS provisioner per-env values (_dev suffix 는 운영 IP 가 박혀 있어 추적 제외)
 /devops/gaip_nfs_provisioner/values-*_dev.yaml
