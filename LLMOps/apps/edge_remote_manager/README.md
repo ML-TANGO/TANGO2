@@ -3,7 +3,7 @@
 엣지 디바이스에서 실행되어, TANGO 플랫폼의 배포 지시(`/ops`)를 **실제 컨테이너 실행**으로 이행하고
 상태/자원(`/metrics`)을 보고하며, 플랫폼으로 heartbeat를 보낸다. 향후 기관 배포용 실물 에이전트.
 
-가상 디바이스 하네스(`apps/edge_virtual_device`)와 **동일 계약**을 구현한다(계약: `docs/superpowers/specs/2026-07-21-edge-virtual-device-e2e-design.md` §4).
+가상 디바이스 하네스(`apps/edge_virtual_device`)와 **동일 계약**을 구현한다(계약: `엣지 가상 디바이스 E2E 설계 문서(내부)` §4).
 
 ## 요구사항
 - Docker 설치 + 실행 권한(에이전트 실행 사용자가 `docker` 사용 가능해야 함)

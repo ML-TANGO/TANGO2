@@ -106,7 +106,7 @@ Step 1 이 파일 없음으로 죽는다.
 (README 들은 토큰을 요구하지만 실제로는 rate limit 회피용). 넣고 싶으면:
 
 ```bash
-echo 'HF_TOKEN=hf_xxxx' > /home/julian/etri-eval-serve/secrets.env
+echo 'HF_TOKEN=hf_xxxx' > ~/etri-eval-serve/secrets.env
 ./serve.sh restart all
 ```
 
@@ -132,10 +132,10 @@ echo 'HF_TOKEN=hf_xxxx' > /home/julian/etri-eval-serve/secrets.env
 
 ## 런타임 산출물 위치
 
-저장소를 더럽히지 않도록 전부 `SERVE_ROOT`(기본 `/home/julian/etri-eval-serve`) 아래에 둔다.
+저장소를 더럽히지 않도록 전부 `SERVE_ROOT`(기본 `~/etri-eval-serve`) 아래에 둔다.
 
 ```
-/home/julian/etri-eval-serve/
+~/etri-eval-serve/
 ├── bin/docker          # sudo shim
 ├── venvs/logickor/     # py3.11 + vllm/torch (ETRI 핀 스냅샷)
 ├── venvs/intent/       # py3.11 stdlib 전용

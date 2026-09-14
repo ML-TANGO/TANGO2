@@ -18,7 +18,7 @@
 - `examples/hello-plugin/external-container-spec.md` — SP-1 v2 contract 전문 (§6 manifest schema)
 - `docs/Tango MSA 탑재 가이드.md` — 기본 contract (`/health`, `/info`, `/run`)
 - `docs/adr/0003-external-service-onboarding-pattern.md` — MSA 컨테이너 표준 결정
-- `docs/superpowers/reviews/2026-05-12-ETRI-SDS-VLM-API-review.md` §11 — 회신 메일
+- `SDS-VLM API 연동 리뷰 문서(내부)` §11 — 회신 메일
 
 ## 협력기관용 작성 가이드
 

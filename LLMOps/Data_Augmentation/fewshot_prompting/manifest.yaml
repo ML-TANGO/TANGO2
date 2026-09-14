@@ -3,7 +3,7 @@
 # harvest). 모델을 학습하지 않는다 — params.llm_url 의 OpenAI 호환 엔드포인트를
 # 호출해 프롬프트만 탐색하므로 gpu:0 이고, 부하는 대상 모델 쪽 GPU 에 걸린다.
 # 계약 전문: ../../examples/hello-plugin/external-container-spec.md
-# 설계: ../../docs/superpowers/specs/2026-07-31-fewshot-prompt-optimizer-integration-design.md
+# 설계: few-shot 프롬프트 최적화 통합 설계 문서(내부)
 apiVersion: tango.acryl.ai/v1
 kind: ExternalContainer
 

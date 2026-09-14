@@ -41,7 +41,7 @@ CONSTANTS = LLMOPS_ROOT / "apps/llm_evaluation/src/evaluation/constants.py"
 # 캐시 레이아웃은 <root>/hub/models--<org>--<name> 이다.
 #   kubectl get pv hf-model-cache-tango-dev-2-pv -o jsonpath='{.spec.nfs.path}'
 DEFAULT_CACHE_ROOT = os.environ.get(
-    "HF_CACHE_ROOT", "/home/julian/tango-storage/huggingface-dev")
+    "HF_CACHE_ROOT", os.path.expanduser("~/tango-storage/huggingface-dev"))
 
 # 심판 추론에 쓰지 않는 포맷. 같은 가중치를 여러 포맷으로 올려 둔 저장소에서 캐시가
 # 두 배로 불어나는 것을 막는다(.bin 은 safetensors 가 없는 저장소가 있어 남긴다).

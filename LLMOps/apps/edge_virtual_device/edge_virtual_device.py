@@ -1,7 +1,7 @@
 """Edge 가상 디바이스 하네스 — mock remoteManager(/ops,/metrics) + heartbeat sender.
 
 실장비 없이 엣지 배포 e2e 검증용 (테스트 전용, 외부 비노출).
-스펙: docs/superpowers/specs/2026-07-21-edge-virtual-device-e2e-design.md
+스펙: 엣지 가상 디바이스 E2E 설계 문서(내부)
 계약(§4): /ops POST {op,image,model,version,gguf_path,params} -> 200 {"status":"running"},
           /metrics GET -> {containers,container_count,node_cpu_total,memory_total,gpu},
           heartbeat: 플랫폼 /api/edge/devices/{id}/heartbeat 로 Bearer 토큰 POST(>=30s 간격).

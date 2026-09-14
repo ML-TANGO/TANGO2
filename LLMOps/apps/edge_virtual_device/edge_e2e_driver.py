@@ -2,7 +2,7 @@
 
 in-cluster 파드에서 실행(예: kubectl exec -i <pod> -- python3 < edge_e2e_driver.py).
 admin 엣지 API는 Kong 우회 서비스 직접호출 + 헤더 jf-user:admin (s2s). stdlib 만 사용.
-스펙: docs/superpowers/specs/2026-07-21-edge-virtual-device-e2e-design.md
+스펙: 엣지 가상 디바이스 E2E 설계 문서(내부)
 """
 import json
 import os

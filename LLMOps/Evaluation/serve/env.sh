@@ -9,7 +9,7 @@ INTENT_DIR="${EVAL_DIR}/Intent_web"
 LOGICKOR_DIR="${EVAL_DIR}/Logickor_web"
 
 # 런타임 산출물(venv/캐시/로그/pid)은 저장소 밖에 둔다.
-SERVE_ROOT="${SERVE_ROOT:-/home/julian/etri-eval-serve}"
+SERVE_ROOT="${SERVE_ROOT:-$HOME/etri-eval-serve}"
 LOG_DIR="${SERVE_ROOT}/logs"
 RUN_DIR_PID="${SERVE_ROOT}/run"
 SHIM_BIN="${SERVE_ROOT}/bin"

@@ -1,7 +1,7 @@
 """Adapter for ETRI SDS-VLM (eva-vlm-{infer,train}).
 
 ETRI deviates from SP-1 v2 in two known ways the platform must absorb
-(see docs/superpowers/reviews/2026-05-12-ETRI-SDS-VLM-API-review.md):
+(see SDS-VLM API 연동 리뷰 문서(내부)):
 
 1. ``/train`` returns ``{"id": "..."}`` (key is ``id`` not ``job_id``).
 2. Error responses currently return HTTP 200 with ``status: "ERROR"`` and

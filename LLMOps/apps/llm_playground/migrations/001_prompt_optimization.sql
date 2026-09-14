@@ -15,7 +15,7 @@
 --     helm release 를 teardown 한다 — 즉 결과를 붙잡아 둘 곳이 어디에도 없다.
 --   → status 가 completed 로 전이하는 순간 여기 저장해야 산출물이 남는다.
 --
--- 설계: docs/superpowers/specs/2026-07-31-fewshot-prompt-optimizer-integration-design.md §5
+-- 설계: few-shot 프롬프트 최적화 통합 설계 문서(내부) §5
 
 CREATE TABLE IF NOT EXISTS `prompt_optimization` (
     `id`              INT(11) NOT NULL AUTO_INCREMENT,

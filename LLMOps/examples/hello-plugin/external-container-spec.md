@@ -27,7 +27,7 @@ TANGO2 GenAI 플랫폼이 **외부 협력기관**이 제공하는 ML 컨테이�
 | D | 모델 변환 | 다양 | 학습된 모델 | 양자화 (AWQ, WSQ, GGUF), 가지치기, 추론엔진 변환 | 변환된 모델 + 실행 이미지 |
 | E | 추론 서비스 | 학계/협력기관 | 학습된 체크포인트 + 요청 데이터 | 실시간 추론 (LLM, VLM, 멀티모달) | 추론 결과 (텍스트, 분류, 임베딩) |
 
-> **Hybrid 컨테이너 (예: SDS-VLM)**: 한 코드베이스가 추론(E, sync) + 학습(C, async) 두 성격을 모두 가진 경우 → **두 manifest 로 분리해 등록** 권장 (같은 이미지, 다른 entrypoint). 예: `eva-vlm-infer.yaml` (execution_mode: sync, /run 영구 배포) + `eva-vlm-train.yaml` (execution_mode: async, 학습 시 launch). 자세한 사례는 `docs/superpowers/reviews/2026-05-12-ETRI-SDS-VLM-API-review.md` §E1 참고.
+> **Hybrid 컨테이너 (예: SDS-VLM)**: 한 코드베이스가 추론(E, sync) + 학습(C, async) 두 성격을 모두 가진 경우 → **두 manifest 로 분리해 등록** 권장 (같은 이미지, 다른 entrypoint). 예: `eva-vlm-infer.yaml` (execution_mode: sync, /run 영구 배포) + `eva-vlm-train.yaml` (execution_mode: async, 학습 시 launch). 자세한 사례는 `SDS-VLM API 연동 리뷰 문서(내부)` §E1 참고.
 
 ### 1.2 비대상 (v1 제외)
 
@@ -493,7 +493,7 @@ spec:
 - 두 manifest 가 같은 Docker 이미지 참조 가능 (entrypoint 만 다르게: uvicorn 추론 vs 학습 launcher).
 - 학습 결과 reload: train pod 의 `/output` 가 commit_model 테이블에 commit 되면 infer pod 이 reload 신호 수신 (POST `/reload-model` 또는 commit_model watch).
 
-레퍼런스 사례: ETRI SDS-VLM 통합 (`docs/superpowers/reviews/2026-05-12-ETRI-SDS-VLM-API-review.md` §E1).
+레퍼런스 사례: ETRI SDS-VLM 통합 (`SDS-VLM API 연동 리뷰 문서(내부)` §E1).
 
 ---
 

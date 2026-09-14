@@ -16,7 +16,7 @@
 | 네임스페이스 | `tango-dev` (개발), 서빙 `jonathan-system` 과 분리 |
 | 배포 서비스 | `jfb-llm-playground` / `docker.io/acrylaaai/genai-platform-playground_app:tango_v2.0.1` |
 | 레거시 | `jfb-app-deployment`(fb_deployment) — 배포 탭 소스 아님, 건드리지 않음 |
-| **소스 반영** | `/app`=`jf-src-playground-pvc`, `/fb_utils`=`jf-src-utils-pvc` → NFS `172.20.30.21:/home/julian/TANGO2-dev/LLMOps/apps/...` |
+| **소스 반영** | `/app`=`jf-src-playground-pvc`, `/fb_utils`=`jf-src-utils-pvc` → NFS `<NFS 서버>:<개발 워크트리>/LLMOps/apps/...` |
 | 검증 | pod 내 `/app/src/playground/service.py` md5 = 워크트리 md5 (일치) |
 | FE | `jfb-app-front` → `jf-src-front-pvc` → `/front-data` |
 | front repo | **단일 monorepo** (별도 repo 아님 — 스킬 문서의 "front=별도 repo" 는 stale) |

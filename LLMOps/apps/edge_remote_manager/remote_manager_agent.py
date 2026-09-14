@@ -5,7 +5,7 @@
 - GET  /metrics: 실제 컨테이너 상태 + 노드 자원(CPU/메모리/GPU)
 - heartbeat   : (설정 시) 플랫폼 /api/edge/devices/{id}/heartbeat 로 Bearer 토큰 POST
 
-계약 정본: docs/superpowers/specs/2026-07-21-edge-virtual-device-e2e-design.md §4.
+계약 정본: 엣지 가상 디바이스 E2E 설계 문서(내부) §4.
 동일 계약을 가상 디바이스(apps/edge_virtual_device)가 mock 하므로, 기존 e2e 드라이버로 계약 검증됨.
 
 ⚠️ 신뢰 LAN 전용: /ops·/metrics 는 무인증(플랫폼↔remoteManager 계약이 그러함). 방화벽/사설망 안에서만 노출.
