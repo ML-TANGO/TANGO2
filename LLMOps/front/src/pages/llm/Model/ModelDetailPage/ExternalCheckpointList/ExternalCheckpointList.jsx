@@ -34,8 +34,15 @@ const fmtTs = (sec) => {
   const p = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 };
-// 행 식별자 — 체크포인트는 (commit_id, step) 로 유일.
+// 행 식별자 — 체크포인트는 (commit_id, step) 로 유일. 최종 행은 step 센티넬 0 을 쓰는데,
+// BE 가 "HF Trainer 실제 step 은 항상 1 이상"을 근거로 충돌 없음을 보장한다(service.py
+// _EXTERNAL_FINAL_STEP). 그 불변식이 깨지면 여기 key 와 busy 락 문자열이 같이 흔들린다.
 const rowKey = (c) => `${c.commit_id}:${c.step}`;
+// 행 라벨 — is_final(커밋 루트 = 학습 완료본)은 step 센티넬 0 이라 'Step 0' 으로 보이면 안 된다.
+// 실제 서빙 단위가 이 '최종' 행이다(per-step 은 HF Trainer 덤프라 로더 계약 불만족).
+// 최종 행은 커밋마다 하나씩 생기고 행에 커밋명이 따로 없으므로 라벨에 커밋명을 병기한다.
+const ckptLabel = (c) =>
+  c.is_final ? `최종 · ${c.commit_name}` : `Step ${c.step.toLocaleString()}`;
 
 /**
  * 모델 상세 '체크포인트' 탭 — SDS/external(training_type='external') 모델 전용(P1).
@@ -143,7 +150,7 @@ function ExternalCheckpointList({ navList, data, ...rest }) {
     try {
       const res = await setBestExternalCheckpoint(modelId, cid, step);
       if (res.status === STATUS_SUCCESS) {
-        toast.success(`step ${step} 을(를) BEST 로 지정했습니다`);
+        toast.success(`${ckptLabel(c)} 을(를) BEST 로 지정했습니다`);
         await fetchCheckpoints();
       } else {
         errorToastMessage(res.error, res.message);
@@ -166,14 +173,14 @@ function ExternalCheckpointList({ navList, data, ...rest }) {
     // eslint-disable-next-line no-alert
     if (
       typeof window !== 'undefined' &&
-      !window.confirm(`체크포인트 step ${step} 을(를) 삭제할까요?`)
+      !window.confirm(`체크포인트 ${ckptLabel(c)} 을(를) 삭제할까요?`)
     )
       return;
     setBusy(`del:${cid}:${step}`);
     try {
       const res = await deleteExternalCheckpoint(modelId, cid, step);
       if (res.status === STATUS_SUCCESS) {
-        toast.success(`체크포인트 step ${step} 삭제됨`);
+        toast.success(`체크포인트 ${ckptLabel(c)} 삭제됨`);
         await fetchCheckpoints(); // 재조회 완료까지 락 유지(레이스/중복 DELETE 방지)
       } else {
         // best/서빙 중 체크포인트 등 가드 실패 — 서버 메시지 그대로 노출.
@@ -195,7 +202,7 @@ function ExternalCheckpointList({ navList, data, ...rest }) {
         toast.success('서빙 체크포인트로 전환했습니다');
         await fetchCheckpoints();
       } else {
-        // projector 단계 거부·infer pod 미실행 등 가드 실패 — 서버 메시지 그대로 노출.
+        // 로더 계약 불만족·infer pod 미실행 등 가드 실패 — 서버 메시지 그대로 노출.
         errorToastMessage(res.error, res.message);
       }
     } finally {
@@ -245,9 +252,7 @@ function ExternalCheckpointList({ navList, data, ...rest }) {
                   >
                     <div className={cx('ckpt-top')}>
                       <div className={cx('ckpt-id')}>
-                        <span className={cx('ckpt-step')}>
-                          Step {c.step.toLocaleString()}
-                        </span>
+                        <span className={cx('ckpt-step')}>{ckptLabel(c)}</span>
                         {Number.isFinite(c.epoch) && (
                           <span className={cx('ckpt-epoch')}>
                             Epoch {c.epoch}
@@ -284,7 +289,7 @@ function ExternalCheckpointList({ navList, data, ...rest }) {
                             className={cx('best-btn')}
                             onClick={() => handleSetBest(c)}
                             disabled={busy !== null}
-                            aria-label={`step ${c.step.toLocaleString()} 을 BEST 로 지정`}
+                            aria-label={`${ckptLabel(c)} 을 BEST 로 지정`}
                             title='이 체크포인트를 BEST 로 지정'
                           >
                             {besting ? '지정 중…' : 'Best 지정'}
@@ -302,16 +307,18 @@ function ExternalCheckpointList({ navList, data, ...rest }) {
                             {serving ? '서빙 전환 중…' : '서빙 시작'}
                           </button>
                         )}
-                        <button
-                          type='button'
-                          className={cx('del-btn')}
-                          onClick={() => handleDelete(c)}
-                          disabled={busy !== null}
-                          aria-label={`체크포인트 step ${c.step.toLocaleString()} 삭제`}
-                          title='이 체크포인트 삭제'
-                        >
-                          {deleting ? '삭제 중…' : '삭제'}
-                        </button>
+                        {!c.is_final && (
+                          <button
+                            type='button'
+                            className={cx('del-btn')}
+                            onClick={() => handleDelete(c)}
+                            disabled={busy !== null}
+                            aria-label={`체크포인트 ${ckptLabel(c)} 삭제`}
+                            title='이 체크포인트 삭제'
+                          >
+                            {deleting ? '삭제 중…' : '삭제'}
+                          </button>
+                        )}
                       </div>
                     </div>
                     <div className={cx('ckpt-metrics')}>

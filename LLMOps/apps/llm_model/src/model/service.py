@@ -2438,6 +2438,31 @@ def _external_best_marker_file(model_root: str) -> str:
     return os.path.join(model_root, _EXTERNAL_BEST_MARKER)
 
 
+# EVA infer 로더 계약(컨테이너 api/model_manager._load_checkpoint) — projector.bin 이 없으면
+# FileNotFoundError, adapter_config.json 이 없으면 has_lora=False 로 base+projector 만 조용히
+# 로드된다. 즉 '서빙 가능한 단위'는 두 파일을 모두 가진 디렉터리뿐이다.
+# SDS VLM 트레이너(train.py VLMTrainer._save_checkpoint)는 이 둘을 런 루트(= 커밋 루트)에 쓰고
+# checkpoint-<step>/ 에는 HF Trainer 기본 덤프(model.safetensors)만 남긴다 → per-step 디렉터리는
+# 서빙 불가이고 커밋 루트가 실제 서빙 단위다. 컨테이너 list_checkpoints 도 루트만 스캔한다.
+_EVA_SERVABLE_FILES = ("projector.bin", "adapter_config.json")
+
+# 커밋 루트(= 학습 완료본)를 목록/best/서빙에서 가리키는 step 센티넬. HF Trainer 의 실제 step 은
+# 항상 1 이상이라 0 과 충돌하지 않는다.
+_EXTERNAL_FINAL_STEP = 0
+
+
+def _eva_servable_sync(path: str) -> bool:
+    return all(os.path.exists(os.path.join(path, f)) for f in _EVA_SERVABLE_FILES)
+
+
+def _external_ckpt_dir(model_root: str, commit_name: str, step: int) -> str:
+    """(commit, step) → 실제 디렉터리. step==_EXTERNAL_FINAL_STEP 이면 커밋 루트(최종 산출물)."""
+    base = os.path.join(model_root, "commit_models", commit_name)
+    if int(step) == _EXTERNAL_FINAL_STEP:
+        return base
+    return os.path.join(base, "checkpoint-{}".format(int(step)))
+
+
 def _dir_size_bytes(path: str) -> int:
     """디렉토리 전체 크기(메타데이터만, 파일 내용 미read). SDS 체크포인트는 full 모델이라 폴더 du."""
     total = 0
@@ -2453,19 +2478,39 @@ def _dir_size_bytes(path: str) -> int:
 # du 캐시 — SDS 체크포인트는 커밋 후 frozen(mtime 불변)이라 dir mtime 이 같으면 재사용.
 # 매 GET 마다 멀티-GB 트리를 재귀 walk 하던 NFS 과부하(이 코드베이스의 기존 이력)를 완화한다.
 # 프로세스-로컬(재시작/멀티-pod 는 1회 재계산) — 정합성 위해 mtime 서명으로 무효화.
-_dir_size_cache = {}    # path -> (mtime, size_bytes)
+_dir_size_cache = {}    # (path, sizer) -> (mtime, size_bytes)
 
 
-def _cached_dir_size(path: str) -> int:
+def _commit_root_size_bytes(path: str) -> int:
+    """커밋 루트의 '직속 파일'만 합산 — 최종 산출물(projector.bin/adapter/토크나이저)은 전부 루트
+    직속이다. 재귀하지 않는 이유: checkpoint-<step>/ 는 각 step 행이 따로 계상(이중계상)하고,
+    runs/(TensorBoard) 같은 나머지 하위 트리는 서빙 아티팩트가 아니면서 매 목록 조회마다
+    재귀 walk 비용만 만든다(이 리포의 NFS 과부하 이력). scandir 비재귀 = 심링크 추종도 없음."""
+    total = 0
+    try:
+        entries = list(os.scandir(path))
+    except OSError:
+        return 0
+    for e in entries:
+        try:
+            if e.is_file(follow_symlinks=False):
+                total += e.stat(follow_symlinks=False).st_size
+        except OSError:
+            pass
+    return total
+
+
+def _cached_dir_size(path: str, sizer=_dir_size_bytes) -> int:
     try:
         mtime = os.path.getmtime(path)
     except OSError:
         return 0
-    hit = _dir_size_cache.get(path)
+    key = (path, sizer)    # 같은 경로를 다른 sizer 로도 재므로 키에 포함(함수 객체 = 동명 충돌 없음)
+    hit = _dir_size_cache.get(key)
     if hit and hit[0] == mtime:
         return hit[1]
-    size = _dir_size_bytes(path)
-    _dir_size_cache[path] = (mtime, size)
+    size = sizer(path)
+    _dir_size_cache[key] = (mtime, size)
     return size
 
 
@@ -2597,7 +2642,10 @@ async def list_external_checkpoints(model_id: int) -> dict:
         # 각 checkpoint-<step> 도 심볼릭 escape 방어(list 도 set/delete 와 동일 봉쇄) — realpath 로
         # 트리 밖을 가리키는 링크 차단. 반신뢰 external 컨테이너가 심은 심링크로 read/du 가 밖으로 새는 것 방지.
         ckpt_names = [n for n in ckpt_names if _is_under(os.path.join(commit_dir, n), commits_base)]
-        if not ckpt_names:
+        # 커밋 루트가 EVA 로더 계약을 만족하면 '최종' 행으로 함께 노출 — SDS VLM 트레이너가 실
+        # 산출물(projector.bin + LoRA)을 런 루트에 쓰므로 서빙 가능한 단위는 per-step 이 아니라 이쪽.
+        root_servable = await asyncio.to_thread(_eva_servable_sync, commit_dir)
+        if not ckpt_names and not root_servable:
             continue
         # phase 태그 — 커밋 full row 의 fine_tuning_config(partner_metadata) 파싱.
         full = await db_model.get_commit_model(commit_id=c["id"])
@@ -2606,12 +2654,13 @@ async def list_external_checkpoints(model_id: int) -> dict:
         stage_label = _SDS_PHASE_TAG.get(phase or "", "LLM")
         # 메트릭: 최고 step 의 trainer_state.json(가장 완전한 log_history).
         log_history = []
-        ts_path = os.path.join(commit_dir, ckpt_names[-1], "trainer_state.json")
-        try:
-            ts = json.loads(await asyncio.to_thread(_read_text_capped, ts_path))
-            log_history = ts.get("log_history") or []
-        except Exception:
-            pass
+        if ckpt_names:
+            ts_path = os.path.join(commit_dir, ckpt_names[-1], "trainer_state.json")
+            try:
+                ts = json.loads(await asyncio.to_thread(_read_text_capped, ts_path))
+                log_history = ts.get("log_history") or []
+            except Exception:
+                pass
         for name in ckpt_names:
             step = int(name[len("checkpoint-"):])
             cdir = os.path.join(commit_dir, name)
@@ -2625,6 +2674,7 @@ async def list_external_checkpoints(model_id: int) -> dict:
                 "commit_id": c["id"],
                 "commit_name": commit_name,
                 "step": step,
+                "is_final": False,
                 "epoch": _ckpt_metric(log_history, step, "epoch"),
                 "loss": _ckpt_metric(log_history, step, "loss"),
                 "grad_norm": _ckpt_metric(log_history, step, "grad_norm"),
@@ -2637,7 +2687,35 @@ async def list_external_checkpoints(model_id: int) -> dict:
                 "is_served": bool(served and served.get("commit_name") == commit_name
                                   and int(served.get("step", -1)) == step),
             })
-    out.sort(key=lambda r: (0 if r["stage"] == "proj" else 1, r["step"]))
+        if root_servable:
+            # 최종 산출물 행 — 실제 서빙 단위. 메트릭은 마지막 step 기준(= 학습 종료 시점).
+            last_step = int(ckpt_names[-1][len("checkpoint-"):]) if ckpt_names else 0
+            try:
+                root_saved_at = int(await asyncio.to_thread(os.path.getmtime, commit_dir))
+            except OSError:
+                root_saved_at = None
+            root_bytes = await asyncio.to_thread(_cached_dir_size, commit_dir, _commit_root_size_bytes)
+            total_bytes += root_bytes
+            out.append({
+                "commit_id": c["id"],
+                "commit_name": commit_name,
+                "step": _EXTERNAL_FINAL_STEP,
+                "is_final": True,
+                "epoch": _ckpt_metric(log_history, last_step, "epoch"),
+                "loss": _ckpt_metric(log_history, last_step, "loss"),
+                "grad_norm": _ckpt_metric(log_history, last_step, "grad_norm"),
+                "size_bytes": root_bytes,
+                "saved_at": root_saved_at,
+                "stage": stage_key,
+                "stage_label": stage_label,
+                "is_best": bool(best and best.get("commit_name") == commit_name
+                                and int(best.get("step", -1)) == _EXTERNAL_FINAL_STEP),
+                "is_served": bool(served and served.get("commit_name") == commit_name
+                                  and int(served.get("step", -1)) == _EXTERNAL_FINAL_STEP),
+            })
+    # 최종 행은 같은 stage 그룹의 per-step 행 뒤로 — step 센티넬 0 이 맨 앞으로 오지 않게.
+    out.sort(key=lambda r: (0 if r["stage"] == "proj" else 1,
+                            1 if r.get("is_final") else 0, r["step"]))
     return {"list": out, "best": best, "served": served, "storage": {"used_bytes": total_bytes}}
 
 
@@ -2656,13 +2734,19 @@ async def set_external_best_checkpoint(model_id: int, commit_id: int, step: int)
     workspace_info = await db_model.get_workspace_model(workspace_id=model_info["workspace_id"])
     model_root = _external_model_root(workspace_info["main_storage_name"], workspace_info["name"], model_info["name"])
     commits_base = os.path.realpath(os.path.join(model_root, "commit_models"))
-    target = os.path.join(model_root, "commit_models", commit_name, "checkpoint-{}".format(int(step)))
+    target = _external_ckpt_dir(model_root, commit_name, int(step))
     if not _is_under(target, commits_base):
         raise Exception("Error: invalid checkpoint path")
     # 삭제와 동일 락으로 직렬화 — 마커 write 와 delete 의 best-check 사이 TOCTOU 방지.
     async with _external_model_lock(model_id):
         if not await asyncio.to_thread(os.path.isdir, target):
             raise Exception("Error: checkpoint not found")
+        # 최종(커밋 루트)은 로더 계약을 만족할 때만 best 로 허용 — 목록은 이미 그런 커밋만 '최종'
+        # 행으로 내리지만, API 직접 호출로 계약 불만족 커밋이 best 가 되면 이후 서빙이 혼란스럽게 실패.
+        if (int(step) == _EXTERNAL_FINAL_STEP
+                and not await asyncio.to_thread(_eva_servable_sync, target)):
+            raise Exception("Error: 이 커밋에는 서빙 가능한 학습 산출물(projector.bin + "
+                            "adapter_config.json)이 없습니다")
         await asyncio.to_thread(_write_external_best, model_root, commit_name, int(step))
     return {"commit_name": commit_name, "step": int(step)}
 
@@ -2670,10 +2754,12 @@ async def set_external_best_checkpoint(model_id: int, commit_id: int, step: int)
 async def serve_external_best_checkpoint(model_id: int) -> dict:
     """P2: 현재 best 로 지정된 SDS 체크포인트를 실행 중 infer pod 에 in-pod 로드해 서빙 전환.
     컨테이너 /deploy 는 checkpoint_name 을 EVA_CHECKPOINTS_ROOT(=commit_models RO 마운트) 기준
-    상대경로로 os.path.join 하므로 `<commit>/checkpoint-<step>` 하위경로 서빙이 가능하다(컨테이너 무변경).
+    상대경로로 os.path.join 하므로 커밋 루트도 `<commit>/checkpoint-<step>` 하위경로도 지목 가능하다
+    (컨테이너 무변경). 다만 **로드 가능 여부는 경로가 아니라 아티팩트가 정한다**.
     비자명:
-    - phase 게이트: projector 단계는 언어모델 LoRA 가 없어 서빙 시 base+projector 만 조용히 로드됨
-      → 컨테이너에 게이트가 없으므로 여기서 거부.
+    - 서빙 단위 = projector.bin + adapter_config.json 을 모두 가진 디렉터리(_EVA_SERVABLE_FILES).
+      SDS VLM 트레이너가 이 둘을 런 루트(= 커밋 루트)에 쓰므로 per-step 디렉터리는 대개 서빙 불가
+      → 계약 불만족이면 같은 커밋의 루트로 폴백한다(그래도 불만족이면 거부).
     - ETRIAdapter.deploy 는 payload 를 envelope 로 감싸지 않음(start_job 과 비대칭) → 호출측이
       full envelope `{workspace_id, project_id, params:{checkpoint_name}}` 를 직접 구성.
     - 재로드 동기 1~5분 → deploy timeout 상향(600s).
@@ -2711,27 +2797,36 @@ async def serve_external_best_checkpoint(model_id: int) -> dict:
                 raise Exception("Error: invalid commit name")
 
             # 경로 봉쇄 + 실재 확인(checkpoint_name 이 파트너 HTTP 로 흐르므로 방어).
-            target = os.path.join(model_root, "commit_models", commit_name, "checkpoint-{}".format(step))
+            target = _external_ckpt_dir(model_root, commit_name, step)
             if not _is_under(target, commits_base):
                 raise Exception("Error: invalid checkpoint path")
             if not await asyncio.to_thread(os.path.isdir, target):
                 raise Exception("Error: 서빙할 체크포인트가 존재하지 않습니다")
 
             # 서빙 게이트(fail-closed·아티팩트 기반) — phase 필드는 구커밋/미기록 시 None 이라 신뢰 불가.
-            # 컨테이너 _load_checkpoint 의 has_lora 판정과 동일하게 adapter_config.json 존재를 요구:
-            # 없으면 언어모델 LoRA 미포함(프로젝터 단계 등) → 서빙 시 base+projector 만 조용히 로드됨.
-            if not await asyncio.to_thread(os.path.exists, os.path.join(target, "adapter_config.json")):
-                raise Exception("Error: 이 체크포인트에는 언어모델 LoRA(adapter_config.json)가 없어 "
-                                "서빙할 수 없습니다(프로젝터 단계 등). 언어모델 단계 체크포인트를 best 로 지정하세요")
+            # 컨테이너 _load_checkpoint 계약 전체를 요구한다: projector.bin 이 없으면 FileNotFoundError,
+            # adapter_config.json 이 없으면 base+projector 만 조용히 로드 → 둘 다 있어야 서빙 단위.
+            # per-step 이 계약 불만족이면(=SDS VLM 트레이너의 기본 레이아웃) 같은 커밋의 루트로 폴백.
+            serve_step = int(step)
+            if not await asyncio.to_thread(_eva_servable_sync, target):
+                root_dir = _external_ckpt_dir(model_root, commit_name, _EXTERNAL_FINAL_STEP)
+                if not _is_under(root_dir, commits_base):
+                    raise Exception("Error: invalid checkpoint path")
+                if not await asyncio.to_thread(_eva_servable_sync, root_dir):
+                    raise Exception("Error: 이 커밋에는 서빙 가능한 학습 산출물(projector.bin + "
+                                    "adapter_config.json)이 없습니다. 언어모델(LoRA) 단계 커밋의 "
+                                    "'최종' 체크포인트를 best 로 지정하세요")
+                target, serve_step = root_dir, _EXTERNAL_FINAL_STEP
 
             # deploy '전에' served 를 대상으로 선기록(예약) — delete 의 served 가드가 in-flight
             # 타깃을 보호하도록. 실패 롤백용으로 이전값 보관. (여기까지 model lock 하 = delete/set-best 와 원자.)
             prev_served = await asyncio.to_thread(_read_external_served, model_root)
-            await asyncio.to_thread(_write_external_served, model_root, commit_name, step)
+            await asyncio.to_thread(_write_external_served, model_root, commit_name, serve_step)
 
         # full envelope 구성(etri_vlm.deploy 는 payload 를 그대로 파트너로 전달). deploy 는 model
         # lock 밖 — 600s 동안 delete/set-best 를 블록하지 않되, 위 served 예약이 타깃을 보호한다.
-        checkpoint_name = "{}/checkpoint-{}".format(commit_name, step)
+        checkpoint_name = (commit_name if serve_step == _EXTERNAL_FINAL_STEP
+                           else "{}/checkpoint-{}".format(commit_name, serve_step))
         envelope = {
             "workspace_id": str(model_info["workspace_id"]),
             "project_id": str(model_id),
@@ -2759,7 +2854,7 @@ async def serve_external_best_checkpoint(model_id: int) -> dict:
             if "404" in _msg:
                 raise Exception("Error: 실행 중인 추론(infer) pod 를 찾을 수 없습니다. 먼저 이 모델을 배포하세요")
             raise Exception("Error: 서빙 전환 실패: {}".format(_msg[:200]))
-    return {"commit_name": commit_name, "step": step, "checkpoint_name": checkpoint_name, "result": raw}
+    return {"commit_name": commit_name, "step": serve_step, "checkpoint_name": checkpoint_name, "result": raw}
 
 
 async def delete_external_checkpoint(model_id: int, commit_id: int, step: int) -> bool:
@@ -2777,7 +2872,10 @@ async def delete_external_checkpoint(model_id: int, commit_id: int, step: int) -
     workspace_info = await db_model.get_workspace_model(workspace_id=model_info["workspace_id"])
     model_root = _external_model_root(workspace_info["main_storage_name"], workspace_info["name"], model_info["name"])
     commits_base = os.path.realpath(os.path.join(model_root, "commit_models"))
-    target = os.path.join(model_root, "commit_models", commit_name, "checkpoint-{}".format(int(step)))
+    # 최종(커밋 루트)은 삭제 대상이 아니다 — rm 하면 커밋 자체가 날아간다(버전 삭제로 처리).
+    if int(step) == _EXTERNAL_FINAL_STEP:
+        raise Exception("Error: 최종 산출물은 개별 삭제할 수 없습니다. 커밋(버전) 삭제를 사용하세요")
+    target = _external_ckpt_dir(model_root, commit_name, int(step))
     if not _is_under(target, commits_base):
         raise Exception("Error: invalid checkpoint path")
     # best-check ~ rm 을 모델 락으로 원자화 — 동시 set-best 가 이 체크포인트를 best 로 만든 뒤
