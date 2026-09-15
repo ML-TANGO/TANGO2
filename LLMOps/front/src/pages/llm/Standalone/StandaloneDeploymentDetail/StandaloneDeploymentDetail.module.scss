@@ -117,26 +117,6 @@
   background: $mono200;
 }
 
-/* 이미지/코드 생성 카드 — 스크립트 아래 전폭 + 버튼 가로 배치 */
-.gen-card {
-  grid-column: 1 / -1;
-}
-
-.gen-actions {
-  display: flex;
-  gap: 12px;
-  margin-top: 8px;
-  flex-wrap: wrap;
-}
-
-.hint {
-  margin: 4px 0 0;
-  color: $mono205;
-  font-family: SpoqaM;
-  font-size: 12px;
-  line-height: 1.5;
-}
-
 /* 런타임 엔진 2행×3열 + 커스텀(전폭) */
 .engine-grid {
   display: grid;

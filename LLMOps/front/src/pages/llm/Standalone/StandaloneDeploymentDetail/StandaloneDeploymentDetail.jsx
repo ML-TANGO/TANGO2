@@ -2,8 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { useHistory, useRouteMatch } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
-import { ButtonV2 } from '@jonathan/ui-react';
-
 import Tab from '@src/components/molecules/Tab';
 import DeployDetailHeader from '@src/components/pageContents/llm/DeployDetail/DeployDetailHeader';
 import { getModel, getQuantizeLineage } from '@src/apis/llm/model';
@@ -76,7 +74,7 @@ function Row({ k, v }) {
 // standalone(오프라인 번들) 배포 상세 — 3탭(정보/배포/스크립트), Playground 셸 미러.
 //   정보: 배포 정보 요약.
 //   배포: 2열 [모델·런타임(6+커스텀)] | 파라미터 (인스턴스/API/디바이스 열 없음).
-//   스크립트: 배포 실행 스크립트 + 이미지/코드 생성(오프라인 번들). 모니터링 탭 대체.
+//   스크립트: 배포 실행 스크립트(복사). 모니터링 탭 대체.
 export default function StandaloneDeploymentDetail() {
   const { t } = useTranslation();
   const history = useHistory();
@@ -408,27 +406,6 @@ export default function StandaloneDeploymentDetail() {
               </button>
             </div>
             <pre className={cx('script')}>{runScript}</pre>
-          </section>
-
-          <section className={cx('card', 'gen-card')}>
-            <h3 className={cx('card-title')}>{t('standalone.bundle.title')}</h3>
-            <p className={cx('hint')}>{t('standalone.bundle.desc')}</p>
-            <div className={cx('gen-actions')}>
-              <ButtonV2
-                label={t('standalone.bundle.build')}
-                type='outline'
-                size='m'
-                disabled={!selectedLineage}
-              />
-              <ButtonV2
-                label={t('standalone.bundle.download')}
-                colorType='skyblue'
-                disabled={!selectedLineage}
-              />
-            </div>
-            {!selectedLineage && (
-              <p className={cx('hint')}>{t('standalone.bundle.hint')}</p>
-            )}
           </section>
         </div>
       )}
