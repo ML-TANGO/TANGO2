@@ -285,7 +285,12 @@ function NodeTable({
       selector: 'condition',
       cell: (row) => {
         if (row._rowType === 'edge') {
-          const on = row.conn_status === 'online';
+          // 연결 배지도 신선도를 본다. pull-only 워커의 conn_status 는 "마지막 폴링이
+          // 성공했다" 는 뜻으로 저장돼 고정되므로(주기 폴러 없음), 그것만 보면 전원이
+          // 꺼진 디바이스가 계속 attached 로 보인다 — 같은 행의 배포상태는 '미상' 인데
+          // 연결만 '접속됨' 이라 말하는 모순이 생긴다. 표시 전용이며 조작 게이트
+          // (canOperate/stoppable)는 여전히 conn_status 기반으로 둔다.
+          const on = row.conn_status === 'online' && !row.contact_stale;
           return (
             <Badge
               size='lg'
@@ -348,7 +353,14 @@ function NodeTable({
               {isEdge && row.deploy_model && (
                 <span style={{ opacity: 0.6, marginLeft: 6 }}>
                   · {row.deploy_model}
-                  {row.deploy_state ? ` (${row.deploy_state})` : ''}
+                  {/* deploy_stale = 배포상태를 관측한 지 오래됐거나 한 번도 관측한
+                      적이 없다. 저장된 deploy_state 는 그 시점의 값일 뿐 라이브 상태의
+                      증거가 아니므로 '미상' 으로 축약한다. */}
+                  {row.deploy_stale
+                    ? ` (${t('edge.detail.stateUnknown')})`
+                    : row.deploy_state
+                      ? ` (${row.deploy_state})`
+                      : ''}
                 </span>
               )}
             </div>

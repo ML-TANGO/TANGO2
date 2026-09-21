@@ -36,6 +36,15 @@ const Section = ({ title, children }) => (
   </div>
 );
 
+// 배포 상태별 배지 색. error 는 비동기 배포 도입으로 실제 도달 가능해졌으므로
+// 회색이 아니라 경고색으로 구분한다.
+const DEPLOY_STATE_TONE = {
+  running: 'green',
+  deploying: 'blue',
+  error: 'red',
+  stopped: 'gray',
+};
+
 const EdgeWorkerDetail = ({ worker }) => {
   const { t } = useTranslation();
   const w = worker || {};
@@ -90,16 +99,31 @@ const EdgeWorkerDetail = ({ worker }) => {
           <Row label={t('model.label')}>{dash(w.deploy_model)}</Row>
           <Row label='Version'>{dash(w.deploy_version)}</Row>
           <Row label='State'>
-            {w.deploy_state ? (
+            {/* deploy_stale = 배포상태를 관측한 지 오래됐거나(임계 초과) 한 번도
+                관측한 적이 없다. 둘 다 "모른다" 이므로 '미상' 으로 축약한다 —
+                deploy_state 가 비었다고 '미배포' 라 말하면 관측하지 않은 것을
+                관측한 것처럼 주장하게 된다. */}
+            {w.deploy_stale ? (
               <Badge
                 size='sm'
-                label={w.deploy_state}
-                type={w.deploy_state === 'running' ? 'green' : 'gray'}
+                label={t('edge.detail.stateUnknown')}
+                type='gray'
+              />
+            ) : w.deploy_state ? (
+              <Badge
+                size='sm'
+                label={t(`edge.state.${w.deploy_state}`, w.deploy_state)}
+                type={DEPLOY_STATE_TONE[w.deploy_state] || 'gray'}
               />
             ) : (
               '-'
             )}
           </Row>
+          {/* 실패 사유는 디바이스가 /metrics 로만 알려준다. 상태만 'error' 로 보여주면
+              무엇이 잘못됐는지(수신 실패·디스크 부족·docker 오류) 알 길이 없다. */}
+          {!w.deploy_stale && w.deploy_state === 'error' && w.deploy_error ? (
+            <Row label={t('edge.detail.deployError')}>{w.deploy_error}</Row>
+          ) : null}
         </Section>
 
         <Section title={t('edge.detail.token')}>

@@ -188,8 +188,10 @@ function AdminNodeContent() {
   const k8sTotal = nodeList.length;
   const k8sOnline = nodeList.filter((n) => n.status === 'Ready').length;
   const edgeTotal = edgeWorkers.length;
+  // 집계도 신선도를 본다 — pull-only 워커는 주기 폴러가 없어 conn_status 가 마지막
+  // 폴링 성공 시점에 고정되므로, 그것만 세면 꺼진 디바이스가 영구히 online 으로 잡힌다.
   const edgeOnline = edgeWorkers.filter(
-    (w) => w.conn_status === 'online',
+    (w) => w.conn_status === 'online' && !w.contact_stale,
   ).length;
   const gpuTotal = nodeInfo?.usage?.gpu?.total ?? 0;
   const gpuUsed = nodeInfo?.usage?.gpu?.used ?? 0;
@@ -211,6 +213,10 @@ function AdminNodeContent() {
     deploy_model: w.deploy_model,
     deploy_version: w.deploy_version,
     deploy_state: w.deploy_state,
+    // 신선도 두 축(BE 파생) — 연결(contact)과 배포상태(deploy)를 구분해 전달한다.
+    // 통합표가 끊긴 디바이스를 attached 로, 옛 관측을 running 으로 단정하지 않도록.
+    contact_stale: w.contact_stale,
+    deploy_stale: w.deploy_stale,
     cpu_cores: w.cpu_cores,
     mem_total: w.mem_total,
     gpu_info: w.gpu_info,

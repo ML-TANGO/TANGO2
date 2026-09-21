@@ -1,6 +1,9 @@
 from fastapi import APIRouter, Query, Header, HTTPException, Path
+from fastapi.responses import Response, StreamingResponse
 from starlette.concurrency import run_in_threadpool
 from typing import Optional
+import os
+import re
 
 from edge import model
 from edge import edge_service
@@ -144,6 +147,110 @@ async def device_heartbeat(body: model.HeartbeatModel,
     except Exception as e:
         traceback.print_exc()
         return response(status=0, message=str(e), result=None)
+
+
+# GGUF 는 수 GB 라 전송이 끊기면 처음부터 다시 받는 비용이 크다. 이 런타임의
+# Starlette(0.27) FileResponse 는 Range 를 구현하지 않으므로(실측), 이어받기에 실제로
+# 필요한 최소형 `bytes=<start>-` 만 직접 처리하고 그 외 형식은 전체 전송으로 떨어뜨린다.
+# 자릿수 상한을 둔다 — 인증 뒤 경로이긴 하나 무제한 int 변환은 방어해 둔다.
+_RANGE_RE = re.compile(r"^bytes=(\d{1,20})-$")
+_CHUNK = 1024 * 1024
+
+
+def _artifact_response(path: str, range_header: Optional[str], device_id: str):
+    """전체/부분 모두 직접 스트리밍한다.
+
+    ⚠️ 정리(cleanup)를 제너레이터 수명에 의존하지 않는다. 클라이언트가 먼저 끊으면
+    그 finally 가 실행되지 않는다(실측). 그래서 '반납해야 하는 자원' 을 만들지 않고,
+    보낼 양을 **시작 시점에 선반영**한다(동시 연결로 예산을 우회하지 못하게).
+
+    ⚠️ 이 함수는 NFS 위의 수 GB 파일을 stat·open 한다. 반드시 스레드풀에서 호출할 것
+    — 이벤트루프에서 돌면 NFS 가 느려질 때 같은 프로세스의 모든 요청(heartbeat·노드·
+    스토리지 API)이 함께 멈춘다.
+    """
+    try:
+        size = os.path.getsize(path)
+        start = 0
+        if range_header:
+            m = _RANGE_RE.match(range_header.strip())
+            if m:
+                start = int(m.group(1))
+                if start >= size:
+                    raise HTTPException(status_code=416, detail="range not satisfiable")
+        ok, budget_err = edge_service.artifact_budget_reserve(device_id, size - start)
+        if not ok:
+            raise HTTPException(status_code=429, detail=budget_err)
+        fh = open(path, "rb")          # 여기서 열어 TOCTOU(해석 후 삭제)를 응답 전에 드러낸다
+    except HTTPException:
+        raise
+    except OSError:
+        raise HTTPException(status_code=404, detail="artifact unavailable")
+
+    def _iter():
+        try:
+            fh.seek(start)
+            while True:
+                chunk = fh.read(_CHUNK)
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            fh.close()
+
+    headers = {"Accept-Ranges": "bytes",
+               "Content-Length": str(size - start),
+               "Content-Disposition": f'attachment; filename="{os.path.basename(path)}"'}
+    if start:
+        headers["Content-Range"] = f"bytes {start}-{size - 1}/{size}"
+    return StreamingResponse(_iter(), status_code=206 if start else 200,
+                             media_type="application/octet-stream", headers=headers)
+
+
+def _artifact_auth(device_id, authorization):
+    """device-facing 공통 게이트 → 절대경로. 실패는 HTTPException 으로 올린다."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing bearer token")
+    token = authorization[len("Bearer "):]
+    path, code, err = edge_service.resolve_device_artifact(device_id, token)
+    if path is None:
+        raise HTTPException(status_code=code, detail=err)
+    return path
+
+
+@edge.head('/devices/{device_id}/artifact')
+async def device_artifact_head(
+        device_id: str = Path(..., max_length=128, pattern=r"^[A-Za-z0-9._\-]+$"),
+        authorization: str = Header(default=None)):
+    # 에이전트는 이미 받아 둔 파일을 건너뛰려고 HEAD 로 크기를 먼저 묻는다. GET 만
+    # 등록하면 405 가 돌아가 크기 확인이 실패하고, 그러면 매 배포마다 수 GB 를 다시
+    # 받는다(스킵·이어받기가 통째로 무력화된다).
+    path = await run_in_threadpool(_artifact_auth, device_id, authorization)
+    ok, budget_err = edge_service.artifact_budget_check(device_id)
+    if not ok:
+        raise HTTPException(status_code=429, detail=budget_err)
+    try:
+        size = await run_in_threadpool(os.path.getsize, path)   # NFS stat → 스레드풀
+    except OSError:
+        raise HTTPException(status_code=404, detail="artifact unavailable")
+    return Response(status_code=200, headers={
+        "Accept-Ranges": "bytes",
+        "Content-Length": str(size),
+        "Content-Disposition": f'attachment; filename="{os.path.basename(path)}"',
+    })
+
+
+@edge.get('/devices/{device_id}/artifact')
+async def device_artifact(device_id: str = Path(..., max_length=128, pattern=r"^[A-Za-z0-9._\-]+$"),
+                          authorization: str = Header(default=None),
+                          range: str = Header(default=None)):
+    # 계약 v1 — 디바이스가 배포 지시의 model_url 로 GGUF 를 받아간다. 인증은 heartbeat
+    # 와 **같은** 디바이스 Bearer 토큰이고(경로도 같은 /edge/devices/* 라 Kong
+    # ALLOWED_PATH 에 이미 포함 → 게이트웨이 변경 0), 무엇을 줄지는 서버가 워커의
+    # deploy_lineage_id 로 정한다. 응답 본문이 파일이라 공통 envelope 를 쓰지 않는다.
+    path = await run_in_threadpool(_artifact_auth, device_id, authorization)
+    # 예산 선반영과 파일 stat·open 이 모두 이 안에서 일어난다 — NFS 블로킹을
+    # 이벤트루프에 올리지 않도록 스레드풀로 넘긴다.
+    return await run_in_threadpool(_artifact_response, path, range, device_id)
 
 
 @edge.delete('/workers/{worker_id}')

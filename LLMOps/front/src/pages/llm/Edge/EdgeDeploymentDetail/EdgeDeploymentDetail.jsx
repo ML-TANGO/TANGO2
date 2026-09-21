@@ -217,6 +217,9 @@ export default function EdgeDeploymentDetail() {
       model_name: selectedModel?.name,
       model_version: selectedLineage.quantization_type,
       gguf_path: selectedLineage.gguf_path,
+      // 계약 v1 — BE 가 이 id 로 아티팩트 경로를 DB 에서 해석해 디바이스가 받아갈
+      // model_url 을 발급한다(위 gguf_path 문자열은 표시·하위호환용).
+      lineage_id: selectedLineage.id,
     });
     setDeploying(false);
     if (status === STATUS_SUCCESS) {
@@ -310,6 +313,17 @@ export default function EdgeDeploymentDetail() {
     }
   }, [worker]);
   const canOperate = isOnline && hasRemoteUrl;
+  // deploy_stale = 배포상태를 관측(/ops 응답·/metrics 폴링)한 지 오래됐거나 한 번도
+  // 관측한 적이 없다. 그 사이 컨테이너가 죽었는지 살았는지 플랫폼은 알 수 없고, 알 수
+  // 없다는 것이 온디바이스에서는 정상 상태다 — running 으로도 '미배포' 로도 단정하지
+  // 않고 '상태 미상' 으로 축약한다. fallback('미배포')은 **관측이 신선한데** 배포가
+  // 없을 때만 쓴다: "찾아봤고 아무것도 없었다" 라는 실제 근거가 있는 경우다.
+  //   ⚠️ 표시만 바꾼다. stoppable/canOperate 같은 조작 게이트는 건드리지 않는다 —
+  //     stale 을 조작 차단에 쓰면 끊긴 배포를 정리할 경로가 UI 에서 사라진다.
+  const deployStateText = (fallback) =>
+    worker?.deploy_stale
+      ? t('edge.detail.stateUnknown')
+      : worker?.deploy_state || fallback;
   // deploy 가 202(async)를 받으면 deploy_state 는 deploying 으로 남는다. 그 상태를
   // 중지 대상에서 빼면 끊긴 배포를 끌 수단이 없어지고("중지할 배포가 없습니다" 라는
   // 거짓 안내까지 붙는다) 워커를 지워도 디바이스에 컨테이너가 유령으로 남는다 —
@@ -604,7 +618,7 @@ export default function EdgeDeploymentDetail() {
               </h3>
               <Row
                 k={t('status.label')}
-                v={worker?.deploy_state || t('edge.detail.notDeployed')}
+                v={deployStateText(t('edge.detail.notDeployed'))}
               />
               {/* `''` 는 stop·refresh 가 "배포 없음" 을 **명시적으로** 새긴 값이고
                   null/undefined 는 "정보 없음" 이다. 둘을 falsy 로 뭉개면 빈 문자열이
@@ -682,7 +696,7 @@ export default function EdgeDeploymentDetail() {
             />
             <Row
               k={t('edge.monitor.deployStatus')}
-              v={worker?.deploy_state || '-'}
+              v={deployStateText('-')}
             />
             <Row k={t('cpuCores.label')} v={worker?.cpu_cores ?? '-'} />
             <Row k={t('edge.monitor.memory')} v={worker?.mem_total ?? '-'} />

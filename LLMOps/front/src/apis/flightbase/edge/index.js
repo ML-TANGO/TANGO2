@@ -44,7 +44,9 @@ export const stopEdgeWorker = async (workerId) => {
 
 // SP-6 / 3.10 — 양자화 패키지(GGUF)를 Edge 워커에 remoteManager /ops 로 배포.
 export const deployEdgeWorker = async (workerId, body) => {
-  // body: { image, model_name?, model_version?, gguf_path?, params? }
+  // body: { image, model_name?, model_version?, gguf_path?, lineage_id?, params? }
+  // lineage_id 가 있으면 BE 가 아티팩트 다운로드 URL(model_url)을 발급해 디바이스가
+  // 모델 파일을 직접 받아간다(계약 v1). 없으면 종전대로 문자열만 전달.
   return await callApi({
     url: `edge/workers/${workerId}/deploy`,
     method: 'post',

@@ -170,6 +170,20 @@ CREATE TABLE IF NOT EXISTS `edge_worker` (
     -- heartbeat 수신 시각(디바이스 푸시만 갱신). 30초 throttle 기준 — last_seen 은
     -- refresh/deploy 도 쓰므로 그 값에 걸면 UI 새로고침이 heartbeat 를 429 로 튕긴다.
     `last_heartbeat_at`  DATETIME DEFAULT NULL,
+    -- 배포상태(deploy_state/deploy_model)를 마지막으로 **관측**한 시각. last_seen 과
+    -- 분리한다 — last_seen 은 heartbeat 도 올리는 '연결 증거' 인데, heartbeat 는
+    -- 컨테이너를 보지 않는다(/metrics 만 docker ps 를 본다). 둘을 한 값으로 쓰면
+    -- 컨테이너가 죽었는데 에이전트만 살아 heartbeat 를 보내는 디바이스가 화면에서
+    -- 계속 'running' 으로 신선하게 보인다. 배포상태의 신선도는 이 컬럼이 답한다.
+    `deploy_observed_at` DATETIME DEFAULT NULL,
+    -- 이 워커가 내려받도록 인가된 아티팩트(jonathan_llm.quantize_lineage.id). 디바이스
+    -- 아티팩트 다운로드는 이 값이 가리키는 파일 하나만 허용한다(임의 경로 요청 차단).
+    -- 배포를 지시한 경로에서만 새기며, stop 은 지우지 않는다 — 에이전트 재시작 후
+    -- 같은 아티팩트를 다시 받아야 컨테이너가 복구된다(권한 확대가 아니다).
+    `deploy_lineage_id`  INT(11) DEFAULT NULL,
+    -- 비동기 배포 실패 사유(디바이스 /metrics 의 last_deploy_error). 상태만 error 로
+    -- 새기면 화면이 '왜' 를 말할 수 없어 사유 문자열을 함께 보존한다.
+    `deploy_error`       VARCHAR(512) DEFAULT NULL,
     `create_datetime`    DATETIME DEFAULT CURRENT_TIMESTAMP,
     `update_datetime`    DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY(`id`),

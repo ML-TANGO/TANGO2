@@ -19,6 +19,11 @@ class DeployEdgeModel(BaseModel):
     model_version: Optional[str] = Field(default=None, max_length=64)
     # SP-4 포팅 패키지 GGUF 경로(워크스페이스 NFS 상대경로). remoteManager 로 전달.
     gguf_path: Optional[str] = Field(default=None, max_length=512, pattern=r"^[A-Za-z0-9._/\-]+$")
+    # SP-4 양자화 산출물 id(quantize_lineage.id). 이 값이 있으면 BE 가 **DB 에서**
+    # 경로·워크스페이스를 해석해 아티팩트 URL 을 발급한다 — 클라이언트가 준 gguf_path
+    # 문자열은 신뢰 체인에서 빠진다(gguf_path 는 하위호환 표시용으로만 남는다).
+    # 없으면 종전대로 문자열만 전달(디바이스에 파일이 이미 있다고 가정).
+    lineage_id: Optional[int] = Field(default=None, ge=1)
     params: Optional[dict] = None
 
     @field_validator("gguf_path")

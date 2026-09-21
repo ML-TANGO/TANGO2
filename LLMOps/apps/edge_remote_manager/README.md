@@ -14,6 +14,7 @@
 ```bash
 export MODEL_DIR=/opt/edge/models          # gguf 등 모델 파일 위치(컨테이너에 /models 로 마운트)
 export GPU=auto                             # auto|on|off
+export OPS_TOKEN="<플랫폼과 공유하는 /ops 인증 토큰>"   # 미설정 시 무인증(사설망 전용)
 # (선택) heartbeat 활성화 — 플랫폼에서 워커 등록 후 발급받은 토큰
 export PLATFORM_HEARTBEAT_URL="http://<platform-host>/api/edge/devices/<device_id>/heartbeat"
 export DEVICE_ID="edge-xxxxxxxx"
@@ -24,15 +25,20 @@ export DEVICE_TOKEN="<발급받은 raw token>"
 ## 플랫폼 등록 (관리자)
 1. Admin → 노드/엣지 등록: `remote_manager_url = http://<device-host>:8600` (**경로 없이**; 플랫폼 SSRF 가드가 `/ops`,`/metrics` 를 붙임).
 2. 워커 토큰 발급 → raw token 을 위 `DEVICE_TOKEN` 에 넣고 에이전트 재기동(또는 heartbeat 설정).
-3. 배포 실행 → 플랫폼이 `/ops` 로 `{op:deploy,image,model,version,gguf_path,params}` 전송 → 에이전트가 pull+run.
+3. 배포 실행 → 플랫폼이 `/ops` 로 `{op:deploy,image,model,version,gguf_path,model_url,params}` 전송 →
+   에이전트가 `model_url` 에서 모델 파일을 받고(`DEVICE_TOKEN` 인증, Range 이어받기) pull+run.
 
 ## 계약
-- `POST /ops` `{op:"deploy",image,model,version,gguf_path,params}` → `docker pull` + `docker run`(교체) → `{"status":"running"}` (실패 `{"status":"error","detail":...}`). `op:"stop"` → 컨테이너 제거 → `{"status":"stopped"}`. **실패는 반드시 `{"status":"error","detail":...}` 로 보고한다**(docker 부재 · `docker rm` 비0 종료 · 타임아웃). 이미 없는 컨테이너(`No such container`)는 목표 상태가 충족된 것이므로 성공으로 본다. 플랫폼이 이 응답으로 `deploy_state` 를 확정하므로, 실패를 `stopped` 로 보고하면 컨테이너가 살아 있는데 화면이 "중지됨" 이라 말하는 거짓이 된다.
+- `POST /ops` `{op:"deploy",image,model,version,gguf_path,model_url,params}` → (model_url 이 있으면) 모델 수신 + `docker pull` + `docker run`(교체).
+  **`model_url` 이 있으면 `202 {"status":"deploying"}` 로 즉시 답하고 백그라운드로 진행**하며, 없으면 종전대로 동기 `{"status":"running"}`. 진행 중 재요청은 `409`. (실패 `{"status":"error","detail":...}`). `op:"stop"` → 컨테이너 제거 → `{"status":"stopped"}`. **실패는 반드시 `{"status":"error","detail":...}` 로 보고한다**(docker 부재 · `docker rm` 비0 종료 · 타임아웃). 이미 없는 컨테이너(`No such container`)는 목표 상태가 충족된 것이므로 성공으로 본다. 플랫폼이 이 응답으로 `deploy_state` 를 확정하므로, 실패를 `stopped` 로 보고하면 컨테이너가 살아 있는데 화면이 "중지됨" 이라 말하는 거짓이 된다.
   - `params` 옵션: `port`(호스트/컨테이너 포트), `env`(dict), `docker_args`(list, 추가 플래그), `cmd`(list, 컨테이너 실행 인자). 모델 파일은 `MODEL_DIR` 를 `/models` 로 마운트하고 `MODEL_PATH=/models/<gguf_path>` env 주입.
-- `GET /metrics` → `{containers:[{name,image,state,model,version}],container_count,node_cpu_total,memory_total,gpu}`.
+- `GET /metrics` → `{contract_version,deploy_in_progress,last_deploy_error,containers:[{name,image,state,model,version}],container_count,node_cpu_total,memory_total,gpu}`.
+- `op:"stop"` 은 컨테이너 제거뿐 아니라 **진행 중 비동기 배포를 무효화**하고 `last_deploy_error` 를 해제한다(안 그러면 유령 재기동·상태 되돌림).
+- 계약 명세 정본과 적합성 검사기는 `LLMOps/examples/edge-agent/` 에 있다(외부 배포용).
 
 ## ⚠️ 보안
-- `/ops`·`/metrics` 는 **무인증**(플랫폼↔remoteManager 계약). **신뢰 사설망/방화벽 안**에서만 노출. 공용 인터넷 금지.
+- `/ops`·`/metrics` 는 `OPS_TOKEN` 이 설정되면 **Bearer 검증**한다(계약 v1). 운영에서는 반드시 설정할 것.
+  설정하지 않으면 무인증으로 열리며 그 상태는 **신뢰 사설망/방화벽 안 전용**이다. 공용 인터넷 금지.
 - heartbeat 는 Bearer 토큰(sha256 해시 대조, 90일 TTL). 토큰은 발급 1회만 노출되니 안전 보관.
 - 호스트 docker 를 제어하므로 컨테이너 안이 아니라 **호스트 프로세스(systemd/nohup)** 로 실행.
 

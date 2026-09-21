@@ -14,10 +14,13 @@ const cx = classNames.bind(style);
 const NODES_PATH = '/admin/nodes';
 
 // 기관 디바이스가 호출 (Edge → Cloud). 스키마는 기술 규약이라 리터럴 유지.
+// ⚠️ 이 상수들은 실제 구현(apps/fb_resource/src/edge, apps/edge_remote_manager)과
+//    examples/edge-agent/README.md 의 계약 v1 을 그대로 옮긴 것이다. 셋이 어긋나면
+//    기관이 구현한 에이전트가 연동에 실패한다 — 계약을 바꾸면 세 곳을 함께 고칠 것.
 const EDGE_TO_CLOUD = [
   {
     method: 'post',
-    path: 'https://api.gaip.acryl.ai/edge/devices/{device_id}/heartbeat',
+    path: '{platform}/api/edge/devices/{device_id}/heartbeat',
     descKey: 'edgeApi.heartbeat.desc',
     schema: `{
   "timestamp": ISO8601,
@@ -33,60 +36,76 @@ const EDGE_TO_CLOUD = [
   "inference_latency_p99_ms": float,
   "last_error": string | null
 }
-// Header: Authorization: Bearer {edge_token}`,
+// Header: Authorization: Bearer {device_token}
+// 200 정상 · 401 토큰 오류 · 429 최소 간격(30초) 미만`,
   },
   {
+    method: 'get',
+    path: '{platform}/api/edge/devices/{device_id}/artifact',
+    descKey: 'edgeApi.artifact.desc',
+    schema: `// Header: Authorization: Bearer {device_token}   // heartbeat 와 같은 토큰
+// Header: Range: bytes={받은 바이트}-            // 이어받기(선택)
+// HEAD 도 같은 인증으로 지원 — Content-Length 로 크기만 확인
+
+200 / 206  파일 바이트 (Accept-Ranges: bytes)
+401        토큰 없음 · 불일치 · 만료
+404        이 디바이스에 인가된 아티팩트 없음
+416        Range 가 파일 크기를 넘음
+429        디바이스별 전송량 한도 초과 — 잠시 후 재시도`,
+  },
+];
+
+// 기관 디바이스가 노출 의무 (Cloud → Edge, 플랫폼이 호출).
+const CLOUD_TO_EDGE = [
+  {
     method: 'post',
-    path: 'https://api.gaip.acryl.ai/edge/{node_id}/inference-event',
-    descKey: 'edgeApi.inferenceEvent.desc',
-    schema: `{
-  "request_id": uuid,
-  "model_id": string,
-  "latency_ms": float,
-  "input_tokens": int,
-  "output_tokens": int,
-  "status": "ok" | "error" | "timeout"
+    path: '{remote_manager_url}/ops',
+    descKey: 'edgeApi.ops.desc',
+    schema: `// Header: Authorization: Bearer {ops_token}   // 설정 시 검증 의무
+// 배포
+{ "op":"deploy", "image": string, "model": string, "version": string,
+  "gguf_path": string,        // 저장할 파일명 (lineage-<id>-<이름>.gguf)
+  "model_url": string,        // 이 URL 에서 모델을 받아온 뒤 기동
+  "params": { "port": int, "env": {}, "docker_args": [], "cmd": [] } }
+  → 202 {"status":"deploying","contract_version":"1.0"}   // model_url 있음: 즉시 응답 후 백그라운드
+  → 200 {"status":"running","contract_version":"1.0"}     // model_url 없음: 동기 처리
+  → 409 {"status":"error","detail":"deploy already in progress"}
+  →     {"status":"error","detail": string}               // 실패는 반드시 error 로
+
+// 중지 — 진행 중인 비동기 배포도 함께 무효화하고 last_deploy_error 를 해제할 것
+{ "op":"stop" }
+  → {"status":"stopped","contract_version":"1.0"}
+  →  {"status":"error","detail": string}`,
+  },
+  {
+    method: 'get',
+    path: '{remote_manager_url}/metrics',
+    descKey: 'edgeApi.metrics.desc',
+    schema: `// Header: Authorization: Bearer {ops_token}
+{
+  "contract_version": "1.0",
+  "deploy_in_progress": bool,      // 비동기 배포 진행 중
+  "last_deploy_error": string|null,// 직전 비동기 배포 실패 사유(성공 시 null)
+  "containers": [
+    { "name": string, "image": string, "state": "running"|"stopped",
+      "model": string, "version": string }
+  ],
+  "container_count": int,
+  "node_cpu_total": int,           // 코어 수
+  "memory_total": int,             // GB
+  "gpu": string                    // 없으면 "none"
 }`,
   },
 ];
 
-// 기관 디바이스가 노출 의무 (Cloud → Edge, Playground/플랫폼이 호출).
-const CLOUD_TO_EDGE = [
-  {
-    method: 'post',
-    path: '{edge_endpoint}/inference',
-    descKey: 'edgeApi.inference.desc',
-    schema: `// Request
-{ "image": base64 string, "prompt": string,
-  "max_tokens": int (default 512), "temperature": float (default 0.7) }
-// Response
-{ "response": string, "latency_ms": float, "tokens_per_sec": float }`,
-  },
-  {
-    method: 'get',
-    path: '{edge_endpoint}/health',
-    descKey: 'edgeApi.health.desc',
-    schema: `{ "status": "healthy" | "degraded" | "unhealthy",
-  "model_loaded": string, "uptime_sec": int, "version": string }`,
-  },
-  {
-    method: 'put',
-    path: '{edge_endpoint}/model',
-    descKey: 'edgeApi.otaModel.desc',
-    schema: `{ "model_id": string,
-  "download_url": string,          // registry.jonathan.acryl.ai/...
-  "checksum": sha256,
-  "rollback_on_failure": bool (default true) }`,
-  },
-];
-
 const SECURITY_KEYS = [
-  'edgeApi.security.tls',
-  'edgeApi.security.token',
+  'edgeApi.security.tokens',
+  'edgeApi.security.opsToken',
+  'edgeApi.security.transport',
   'edgeApi.security.rate',
-  'edgeApi.security.checksum',
+  'edgeApi.security.filename',
   'edgeApi.security.network',
-  'edgeApi.security.logs',
+  'edgeApi.security.contract',
 ];
 
 // 기관 발송용 OpenAPI 3.0 (요약). 규약 변경 빈도 낮아 FE 번들 정적 문자열로 유지(P3, spec §7).
@@ -94,30 +113,59 @@ const OPENAPI_YAML = `openapi: 3.0.3
 info:
   title: GenAI Platform Edge Device API
   version: "1.0"
-  description: Edge device integration contract (heartbeat push + inference/health/OTA).
-servers:
-  - url: https://api.gaip.acryl.ai
+  description: >-
+    Edge device integration contract v1 — device pushes heartbeat and pulls the
+    model artifact; the platform drives deployment through the device agent.
 paths:
-  /edge/devices/{device_id}/heartbeat:
+  /api/edge/devices/{device_id}/heartbeat:
     post:
-      summary: Resource/status heartbeat (device -> cloud, every 30s)
-      security: [{ bearerAuth: [] }]
+      summary: Resource/status heartbeat (device -> platform, >= 30s apart)
+      security: [{ deviceToken: [] }]
       parameters:
         - { name: device_id, in: path, required: true, schema: { type: string } }
-      responses: { "200": { description: accepted }, "401": { description: invalid token } }
-  /edge/{node_id}/inference-event:
+      responses:
+        "200": { description: accepted }
+        "401": { description: invalid or expired token }
+        "429": { description: sent sooner than the 30s minimum }
+  /api/edge/devices/{device_id}/artifact:
+    get:
+      summary: Download the model artifact authorized for this device
+      security: [{ deviceToken: [] }]
+      parameters:
+        - { name: device_id, in: path, required: true, schema: { type: string } }
+        - { name: Range, in: header, required: false, schema: { type: string } }
+      responses:
+        "200": { description: full file }
+        "206": { description: partial content (resume) }
+        "401": { description: invalid or expired token }
+        "404": { description: no artifact authorized for this device }
+        "416": { description: range beyond end of file }
+        "429": { description: per-device transfer budget exceeded }
+    head:
+      summary: Artifact size probe (Content-Length)
+      security: [{ deviceToken: [] }]
+      responses:
+        "200": { description: headers only }
+        "401": { description: invalid or expired token }
+        "404": { description: no artifact authorized for this device }
+        "429": { description: per-device transfer budget exceeded }
+  "{remote_manager_url}/ops":
     post:
-      summary: Inference event log (optional)
-      security: [{ bearerAuth: [] }]
-  "{edge_endpoint}/inference":
-    post: { summary: "Inference (cloud -> edge, institution-hosted)" }
-  "{edge_endpoint}/health":
-    get: { summary: "Health check (cloud -> edge)" }
-  "{edge_endpoint}/model":
-    put: { summary: "OTA model replace (cloud -> edge, sha256 verified)" }
+      summary: Deploy or stop a container (platform -> device)
+      security: [{ opsToken: [] }]
+      responses:
+        "200": { description: running (synchronous deploy) }
+        "202": { description: deploying (model_url given, running in background) }
+        "409": { description: a deploy is already in progress }
+  "{remote_manager_url}/metrics":
+    get:
+      summary: Real container state and node resources (platform -> device)
+      security: [{ opsToken: [] }]
+      responses: { "200": { description: metrics } }
 components:
   securitySchemes:
-    bearerAuth: { type: http, scheme: bearer }
+    deviceToken: { type: http, scheme: bearer, description: per-device token issued by the platform }
+    opsToken: { type: http, scheme: bearer, description: shared token proving the caller is the platform }
 `;
 
 /**
