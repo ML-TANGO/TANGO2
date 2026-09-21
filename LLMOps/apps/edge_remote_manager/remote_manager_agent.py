@@ -12,7 +12,8 @@
    동작하므로 그 경우엔 신뢰 사설망/방화벽 안에서만 노출할 것. 호스트의 docker 를 관리하므로
    디바이스에서 host 프로세스로 실행(systemd/nohup). 컨테이너 안에서 X.
 설정(env): AGENT_PORT(8600) DOCKER_BIN(docker) MODEL_DIR(/opt/edge/models) CONTAINER_NAME(edge-serve)
-           GPU(auto|on|off) PLATFORM_HEARTBEAT_URL DEVICE_ID DEVICE_TOKEN HEARTBEAT_INTERVAL(35)
+           GPU(auto|on|off|runtime|gpus — Jetson 은 자동 판별) PLATFORM_HEARTBEAT_URL
+           DEVICE_ID DEVICE_TOKEN HEARTBEAT_INTERVAL(35)
            OPS_TOKEN(플랫폼→디바이스 /ops·/metrics 인증)
 """
 import hmac
@@ -71,16 +72,61 @@ def _docker_available():
     return shutil.which(DOCKER) is not None or os.path.isabs(DOCKER)
 
 
+def _is_tegra():
+    """Jetson(Tegra) 인가. 데스크톱 NVIDIA 와 컨테이너 GPU 접근 방식이 다르다.
+
+    ⚠️ `nvidia-smi` 유무로 판단하면 안 된다 — Jetson 은 그 도구를 기본 제공하지 않고
+    tegrastats 를 쓴다. 그래서 `nvidia-smi` 기준으로는 Orin 이 'GPU 없음' 으로 잡히고,
+    GPU=auto 가 조용히 CPU 로 컨테이너를 띄운다(오류 없이 느려지기만 한다).
+    """
+    if os.path.exists("/etc/nv_tegra_release"):
+        return True
+    try:
+        with open("/proc/device-tree/model", "rb") as f:
+            model = f.read().decode("utf-8", "ignore").lower()
+        return "jetson" in model or "tegra" in model or "orin" in model
+    except Exception:
+        return False
+
+
+def _docker_runtimes():
+    """docker 에 등록된 런타임 집합. 판별 실패 시 빈 집합."""
+    try:
+        r = _docker(["info", "--format", "{{json .Runtimes}}"], timeout=15)
+        if r.returncode == 0:
+            return set(json.loads(r.stdout or "{}").keys())
+    except Exception:
+        pass
+    return set()
+
+
 def _gpu_available():
-    return shutil.which("nvidia-smi") is not None
+    # Jetson 은 GPU 가 SoC 에 내장돼 있어 별도 탐지가 필요 없다.
+    return _is_tegra() or shutil.which("nvidia-smi") is not None
 
 
 def _gpu_flags():
+    """컨테이너 GPU 접근 인자. JetPack 버전에 따라 방식이 갈려 런타임에 판별한다.
+
+    · `--runtime nvidia` — JetPack/L4T 의 표준. nvidia-container-runtime 이 등록돼 있을 때.
+    · `--gpus all`       — 데스크톱 NVIDIA + nvidia-container-toolkit. JetPack 6 의 최신
+                           toolkit 에서도 동작하지만 구버전 L4T 에서는 실패한다.
+    GPU 환경변수로 강제할 수 있다: off | on(자동 선택) | runtime | gpus
+    """
     if USE_GPU == "off":
         return []
-    if USE_GPU == "on":
+    if USE_GPU == "runtime":
+        return ["--runtime", "nvidia"]
+    if USE_GPU == "gpus":
         return ["--gpus", "all"]
-    return ["--gpus", "all"] if _gpu_available() else []  # auto
+    if USE_GPU != "on" and not _gpu_available():      # auto 에서 GPU 없음
+        return []
+    # on / auto(+GPU 있음) — 환경에 맞는 방식을 고른다.
+    if _is_tegra():
+        # nvidia 런타임이 등록돼 있으면 그쪽이 가장 넓게 동작한다. 없으면 최신 toolkit
+        # 이 깔린 JetPack 6 일 수 있으므로 --gpus 로 떨어진다.
+        return ["--runtime", "nvidia"] if "nvidia" in _docker_runtimes() else ["--gpus", "all"]
+    return ["--gpus", "all"]
 
 
 def _mem_total_gb():
@@ -97,6 +143,14 @@ def _mem_total_gb():
 def _gpu_info():
     if not _gpu_available():
         return "none"
+    if _is_tegra():
+        # Jetson 은 nvidia-smi 가 없으므로 디바이스 트리의 모델명을 쓴다.
+        try:
+            with open("/proc/device-tree/model", "rb") as f:
+                name = f.read().decode("utf-8", "ignore").strip("\x00").strip()
+            return (name or "NVIDIA Jetson")[:256]
+        except Exception:
+            return "NVIDIA Jetson"
     try:
         r = subprocess.run(["nvidia-smi", "-L"], capture_output=True, text=True, timeout=10)
         names = [ln.split(":", 1)[1].split("(")[0].strip()
@@ -198,6 +252,24 @@ def _download_model(url, filename, gen=None):
         return False, f"cannot finalize download: {type(e).__name__}"
     _sweep_stale_parts(dest, part)
     return True, "downloaded"
+
+
+def _sweep_old_artifacts(current):
+    """이전 배포의 아티팩트 정리 — 디바이스당 컨테이너는 1개라 옛 모델은 쓰이지 않는다.
+
+    플랫폼이 산출물마다 고유한 `lineage-<id>-…` 이름을 보내므로 지우지 않으면 계속
+    쌓인다. Jetson 계열은 저장공간이 넉넉하지 않아 2.5GB 급 몇 개면 찬다.
+    ⚠️ **우리가 받은 파일(`lineage-` 접두)만** 지운다 — 운영자가 직접 넣어 둔 모델
+    (model_url 없이 쓰는 기존 경로)을 삭제하면 안 된다.
+    """
+    import glob
+    for f in glob.glob(os.path.join(MODEL_DIR, "lineage-*")):
+        if os.path.basename(f) == current:
+            continue
+        try:
+            os.remove(f)
+        except Exception:
+            pass
 
 
 def _sweep_stale_parts(dest, keep):
@@ -343,6 +415,8 @@ def _deploy(body, gen=None):
         detail = (res.stderr or pull.stderr or "docker run failed").strip()[:500]
         return {"status": "error", "detail": detail}
 
+    if gguf:
+        _sweep_old_artifacts(os.path.basename(gguf))
     with _lock:
         _last_deploy.update({"image": image, "model": body.get("model"), "version": body.get("version")})
         _progress["error"] = None

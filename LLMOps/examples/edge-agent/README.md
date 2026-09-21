@@ -56,7 +56,7 @@
 2. 파일은 `MODEL_DIR` 아래 `gguf_path` 의 파일명으로 저장한다.
 3. `docker pull` → 기존 컨테이너 교체(`rm -f`) → `docker run`.
    `MODEL_DIR` 을 컨테이너의 `/models` 로 마운트하고 `MODEL_PATH=/models/<파일명>` 을 주입한다.
-   GPU 가 있으면 `--gpus all`.
+   GPU 가 있으면 GPU 인자를 붙인다 — 환경에 따라 `--gpus all` 또는 `--runtime nvidia` (§6-1).
 4. 응답 — **`model_url` 이 있으면 비동기로 답한다.**
 
 | 경우 | 응답 |
@@ -183,7 +183,7 @@ Authorization: Bearer <DEVICE_TOKEN>
 | `AGENT_PORT` | 8600 | 수신 포트 |
 | `MODEL_DIR` | `/opt/edge/models` | 모델 파일 위치(컨테이너에 `/models` 로 마운트) |
 | `CONTAINER_NAME` | `edge-serve` | 관리 대상 컨테이너 이름 |
-| `GPU` | `auto` | `auto` \| `on` \| `off` |
+| `GPU` | `auto` | `auto` \| `on` \| `off` \| `runtime` \| `gpus` (§6-1) |
 | `OPS_TOKEN` | (없음) | 플랫폼→디바이스 인증. **운영에서는 반드시 설정** |
 | `DEVICE_TOKEN` | (없음) | 플랫폼이 발급. 아티팩트 수신·heartbeat 인증 |
 | `DEVICE_ID` | (없음) | 플랫폼이 발급한 디바이스 식별자 |
@@ -194,6 +194,31 @@ Authorization: Bearer <DEVICE_TOKEN>
 > **신뢰 사설망 전용**이다. 이 엔드포인트는 호스트에서 컨테이너를 실행할 수 있으므로
 > 공용 네트워크에 노출하면 안 된다. 에이전트는 호스트의 docker 를 제어하므로 컨테이너
 > 안이 아니라 **호스트 프로세스**(systemd 등)로 실행한다.
+
+### 6-1. GPU 접근 방식 (Jetson 주의)
+
+컨테이너에 GPU 를 붙이는 방법이 플랫폼마다 다릅니다.
+
+| 환경 | 인자 |
+|---|---|
+| 데스크톱/서버 NVIDIA + nvidia-container-toolkit | `--gpus all` |
+| Jetson(JetPack/L4T) + nvidia-container-runtime | `--runtime nvidia` |
+| Jetson + 최신 toolkit(JetPack 6 계열) | `--gpus all` 도 동작 |
+
+참조 구현은 `GPU=auto` 에서 이를 **런타임에 판별**합니다 — Jetson 여부를
+`/etc/nv_tegra_release` 또는 `/proc/device-tree/model` 로 보고, Jetson 이면 docker 에
+`nvidia` 런타임이 등록돼 있는지에 따라 위 둘 중 하나를 고릅니다.
+
+> ⚠️ **`nvidia-smi` 유무로 GPU 를 판단하지 마세요.** Jetson 은 그 도구를 기본 제공하지
+> 않습니다(`tegrastats` 를 씁니다). 그걸 기준으로 삼으면 Orin 이 'GPU 없음' 으로 잡혀
+> **오류 없이 CPU 로 서빙**하게 됩니다 — 가장 발견하기 어려운 실패입니다.
+
+대상 JetPack 버전이 확정됐다면 자동 판별에 맡기지 말고 `GPU=runtime` 또는 `GPU=gpus`
+로 못박는 편이 안전합니다. 서빙 이미지도 **arm64(L4T) 빌드**여야 합니다.
+
+받은 아티팩트는 `lineage-<id>-…` 이름으로 저장되며, 새 배포가 성공하면 참조 구현이
+이전 `lineage-*` 파일을 정리합니다(저장공간이 제한적인 장비 대비). 운영자가 직접 넣어
+둔 모델 파일은 건드리지 않습니다.
 
 ## 7. 적합성 검사
 

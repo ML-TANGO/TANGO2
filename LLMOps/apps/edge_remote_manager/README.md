@@ -8,12 +8,14 @@
 ## 요구사항
 - Docker 설치 + 실행 권한(에이전트 실행 사용자가 `docker` 사용 가능해야 함)
 - Python 3.8+
-- (GPU 사용 시) NVIDIA driver + nvidia-container-toolkit (`--gpus all`)
+- (GPU 사용 시) 데스크톱/서버: NVIDIA driver + nvidia-container-toolkit (`--gpus all`)
+  · **Jetson(JetPack/L4T)**: nvidia-container-runtime (`--runtime nvidia`). `GPU=auto` 가
+  Tegra 를 판별해 자동 선택하며 `GPU=runtime|gpus` 로 못박을 수 있다. 이미지는 arm64
 
 ## 실행
 ```bash
 export MODEL_DIR=/opt/edge/models          # gguf 등 모델 파일 위치(컨테이너에 /models 로 마운트)
-export GPU=auto                             # auto|on|off
+export GPU=auto                             # auto|on|off|runtime|gpus (Jetson 자동 판별)
 export OPS_TOKEN="<플랫폼과 공유하는 /ops 인증 토큰>"   # 미설정 시 무인증(사설망 전용)
 # (선택) heartbeat 활성화 — 플랫폼에서 워커 등록 후 발급받은 토큰
 export PLATFORM_HEARTBEAT_URL="http://<platform-host>/api/edge/devices/<device_id>/heartbeat"
