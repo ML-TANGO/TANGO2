@@ -4,9 +4,14 @@
 
 ## 전제 조건
 
-- **Kubernetes**: v1.24+
+- **Kubernetes**: v1.34.x 권장 (검증 v1.34.0)
 - **helm**, **kubectl** 사용 가능
 - 설치 권한(ClusterRole/CRD 설치 등) 보유
+- **metrics-server** 설치 완료 (`kubectl top nodes` 가 수치를 출력)
+
+> 📌 **클러스터가 아직 없다면** [CLUSTER-SETUP.md](./CLUSTER-SETUP.md) 를 먼저 수행하십시오.
+> containerd·CNI(Calico)·kubeadm·metrics-server 설치와 노드 라벨·taint 설정까지 다룹니다.
+> 이 문서는 클러스터가 준비된 상태에서 시작합니다.
 
 ## 값 파일(values) 준비
 
@@ -87,7 +92,8 @@ cp ~/.kube/config GenAI_Platform/devops/fb_common_app/helm/file/kube/config
 11. **(Optional) GPU Operators** (`gaip_gpu_operators`) — NVIDIA GPU 노드가 있는 경우
 12. **Platform Apps** (`devops/run.sh`)
 13. **LLM Apps(선택)** (`devops/run_llm.sh`)
-14. **외부 컨테이너 manifest 등록** — 아래 [외부 컨테이너 manifest 등록](#외부-컨테이너-manifest-등록-필수) 참고. **자동화되어 있지 않으므로 반드시 수동 수행**합니다.
+14. **외부 컨테이너 manifest 확인** — 표준 판본은 앱 기동 시 자동 등록됩니다.
+    아래 [외부 컨테이너 manifest 등록](#외부-컨테이너-manifest-등록) 참고.
 
 ### 권장 설치 흐름 (`run_step1/2/3` 스크립트 사용)
 
@@ -256,38 +262,54 @@ cd GenAI_Platform/devops
 ./run.sh install -f ./values_<서버명>.yaml
 ```
 
-### 2) LLM Apps (llm_model, llm_playground, llm_evaluation)
+### 2) LLM Apps (llm_model, llm_playground, llm_evaluation, llm_data_pipeline)
 
-`devops/run_llm.sh`는 `llm_model/helm`, `llm_playground/helm`, `llm_evaluation/helm`을 설치합니다.
+`devops/run_llm.sh`는 `llm_model/helm`, `llm_playground/helm`, `llm_evaluation/helm`,
+`llm_data_pipeline/helm` 을 설치합니다.
 
 ```bash
 cd GenAI_Platform/devops
 ./run_llm.sh install -f ./values_<서버명>.yaml
 ```
 
-## 외부 컨테이너 manifest 등록 (필수)
+## 외부 컨테이너 manifest 등록
 
-**이 단계는 자동화되어 있지 않습니다.** `fb_external_container` 차트에는 seed Job도
-post-install hook도 없으므로, 앱 설치 후 manifest를 직접 등록해야 합니다.
-등록하지 않으면 아래 기능들이 "manifest not found"로 실패합니다.
+**표준 판본은 부팅 시 자동 등록되므로 별도 작업이 필요 없습니다.**
+`apps/fb_external_container/manifests/` 안의 YAML 을 `fb_external_container` 가
+기동하면서 시드합니다(`src/manifest/seed.py`, MariaDB 연결이 붙는 시점에 실행).
+이미 있는 `(name, version)` 은 건너뛰므로 재시작마다 돌아도 안전하고,
+같은 `service_family` 두 짝은 자동으로 pair 등록됩니다.
 
-| manifest name | version | 원본 파일 | 이 manifest가 없으면 |
-|---|---|---|---|
-| `mock-convert` | `1.0.0` | `apps/convert/manifest.yaml` | 양자화·포팅(변환) |
-| `evaluate-selfmetric` | `1.0.0` | `apps/evaluate/manifest.yaml` | 자동평가(BLEU/ROUGE/perplexity) |
-| `evaluate-benchmark-mock` | `0.2.0` | `apps/evaluate_benchmark_mock/manifest.yaml` | 벤치마크 평가 |
-| `fewshot-prompt-optimizer` | `1.0.0` | `Data_Augmentation/fewshot_prompting/manifest.yaml` | 프롬프트 최적화 |
-| `eva-vlm-train` / `eva-vlm-infer` | `1.1.0` | `apps/fb_external_container/manifests/` | SDS 도메인 VLM 학습·추론 (**부팅 시 자동 시드**) |
+기동 로그에서 결과를 확인할 수 있습니다.
 
-이름/버전 기본값은 `apps/fb_utils/settings.py`의 `*_MANIFEST_NAME` / `*_MANIFEST_VERSION`
-상수이며, 다른 버전을 쓰려면 해당 환경변수로 flip 합니다 (예: `SDS_MANIFEST_VERSION`).
+```bash
+kubectl logs -n jonathan-system deploy/jfb-app-external-container | grep "manifest seed"
+# 예: manifest seed: {'seeded': 9, 'paired': 1, 'skipped': 0, 'invalid': 0}
+```
 
-`apps/fb_external_container/manifests/` 안의 YAML은 **부팅 시 자동 등록**됩니다
-(`src/manifest/seed.py`, MariaDB 연결이 붙는 시점에 실행). 이미 있는 `(name, version)`은
-건너뛰므로 재시작마다 돌아도 안전하고, 같은 `service_family` 두 짝은 자동으로 pair 등록됩니다.
-파일을 추가한 뒤 `kubectl rollout restart deploy/jfb-app-external-container` 만 하면 됩니다.
-레포에 없는 판본(내부 패치 이미지 등)을 쓰는 인스턴스는 `EXTERNAL_MANIFEST_SEED_DIR` 로
-다른 디렉터리를 가리키거나, 아래 수동 등록을 씁니다.
+자동 시드되는 판본은 다음과 같습니다.
+
+| manifest name | version | 이 manifest가 없으면 |
+|---|---|---|
+| `convert-llamacpp` | `1.0.0` | 양자화·포팅(변환) |
+| `evaluate-selfmetric` | `1.0.0` | 자동평가(BLEU/ROUGE/perplexity) |
+| `evaluate-benchmark-mock` | `0.2.0` | 벤치마크 평가 |
+| `evaluate-logickor` / `evaluate-logickor-judge` | `0.1.0` / `0.2.5` | LogicKor 평가 |
+| `evaluate-intent` | `0.2.4` | 의도분류 평가 |
+| `fewshot-prompt-optimizer` | `1.0.0` | 프롬프트 최적화 |
+| `eva-vlm-train` / `eva-vlm-infer` | `1.1.0` | SDS 도메인 VLM 학습·추론 |
+
+플랫폼이 어느 manifest 에 바인딩할지는 `apps/fb_utils/settings.py` 의
+`*_MANIFEST_NAME` / `*_MANIFEST_VERSION` 상수가 정하며, 환경변수로 덮을 수 있습니다.
+`llm_model` 차트는 `CONVERT_MANIFEST_NAME=convert-llamacpp` 와
+`SDS_MANIFEST_NAME=eva-vlm-train` 을 템플릿에서 명시 지정합니다
+(`devops/llm_model/helm/templates/deployment.yaml`). SDS 학습 manifest 버전은
+values 의 `global.jfb.sds_manifest_version` 으로 바꿉니다(기본 `1.1.0`).
+
+**수동 등록이 필요한 경우** — 레포에 없는 판본(내부 패치 이미지 등)을 쓰는 인스턴스뿐입니다.
+`EXTERNAL_MANIFEST_SEED_DIR` 로 다른 시드 디렉터리를 가리키거나, 아래 절차로 직접 등록합니다.
+시드 디렉터리에 YAML 을 추가한 뒤에는
+`kubectl rollout restart deploy/jfb-app-external-container` 만 하면 됩니다.
 
 ### 모델 가중치 사전 스테이징 (외부 컨테이너 학습에 필수)
 
