@@ -27,8 +27,9 @@ const MASK = '••••••••••••••••••••';
  * 증명하는 값이라 1회만 노출하지만, 이 키는 **전 디바이스 공통**이라 조회를 허용한다 —
  * 1회 표시로 만들면 디바이스를 한 대 추가할 때마다 전체를 재발급해야 한다.
  *
- * 재발급은 무중단이다: 기존 키가 prev 로 내려가 아직 교체하지 않은 디바이스가 계속
- * 동작하고, 전부 교체한 뒤 [옛 키 폐기] 로 닫는다.
+ * 재발급은 하드 컷오버다: 그 순간부터 플랫폼은 새 키만 보내므로, 아직 교체하지 않은
+ * 디바이스는 /ops·/metrics 가 401 이 된다. 작업 창을 잡고 차례로 교체한 뒤
+ * [옛 키 폐기] 로 보관 중인 직전 키를 지운다.
  */
 const EdgeOpsToken = () => {
   const { t } = useTranslation();
@@ -140,7 +141,7 @@ const EdgeOpsToken = () => {
         <div className={cx('hint')}>{t('edge.opsToken.notConfigured')}</div>
       )}
 
-      {/* 회전 중에는 옛 키도 아직 통과한다 — 교체가 끝나면 닫아야 한다. */}
+      {/* 직전 키가 남아 있다 = 교체 작업이 끝나지 않았다는 표시. 인증에는 쓰이지 않는다. */}
       {info.rotating ? (
         <div className={cx('hint', 'warn')}>{t('edge.opsToken.rotatingHint')}</div>
       ) : null}

@@ -238,10 +238,13 @@ def _worker_deploy_lock(worker_id):
 
 
 # ── ops 토큰 (플랫폼이 디바이스에 자신을 증명하는 공유 키) ────────────────────
-# 저장소는 K8s Secret 하나. 키 2개를 둬서 **무중단 회전**을 만든다.
-#   ops-token       현재 키 — 플랫폼이 부착한다
-#   ops-token-prev  직전 키 — 회전 중에만 존재. 아직 교체되지 않은 디바이스가 이 값을
-#                   갖고 있으므로, 에이전트는 둘 중 하나와 맞으면 통과시킨다(계약 1.1).
+# 저장소는 K8s Secret 하나. 키 2개를 둔다.
+#   ops-token       현재 키 — 플랫폼은 **항상 이 값만** 부착한다(_ops_headers 참조).
+#   ops-token-prev  직전 키 — 재발급 시 보관만 한다. 플랫폼은 이 값을 보내지 않는다.
+# 재발급은 하드 컷오버다: 그 순간부터 새 키만 나가므로, 아직 교체하지 않은 디바이스는
+# 401 로 거부된다(옛 키로 재시도하지 않는다 — 유출된 키의 수명을 늘리지 않기 위함).
+# 디바이스측 OPS_TOKEN_PREV 는 그 반대 구간을 덮는다: 디바이스를 새 키로 바꾼 직후
+# 아래 캐시(TTL) 때문에 플랫폼이 잠시 옛 키를 보낼 수 있는 창.
 # ⚠️ DB 에 두지 않는다. 디바이스 토큰의 '해시만 저장' 불변식과 별개로, 이 값은 보내야
 #    하므로 평문 보관이 불가피하고 DB 덤프·백업에 섞이면 안 된다.
 OPS_SECRET_NAME = "jfb-edge-ops-token"
@@ -323,7 +326,7 @@ def get_ops_token() -> dict:
 
 
 def rotate_ops_token() -> dict:
-    """새 키 발급. 기존 키는 prev 로 내려 **아직 교체되지 않은 디바이스를 살려 둔다**."""
+    """새 키 발급. 기존 키는 prev 로 내려 보관만 한다(플랫폼은 새 키만 사용 — 하드 컷오버)."""
     data = _ops_secret(force=True)
     cur = (data.get(OPS_KEY) or "").strip() or os.environ.get("EDGE_OPS_TOKEN", "").strip()
     new = secrets.token_urlsafe(32)

@@ -62,7 +62,8 @@ const CLOUD_TO_EDGE = [
     path: '{remote_manager_url}/ops',
     descKey: 'edgeApi.ops.desc',
     schema: `// Header: Authorization: Bearer {ops_token}   // 설정 시 검증 의무
-//   회전 중에는 직전 키(OPS_TOKEN_PREV)도 허용해야 한다 — 무중단 교체(계약 1.1)
+//   직전 키(OPS_TOKEN_PREV)도 함께 허용할 것 — 교체 직후 플랫폼이 잠시 옛 키를
+//   보낼 수 있다. 재발급 자체는 하드 컷오버다(플랫폼은 새 키만 보낸다, 계약 1.1)
 // 배포
 { "op":"deploy", "image": string, "model": string, "version": string,
   "gguf_path": string,        // 저장할 파일명 (lineage-<id>-<이름>.gguf)
@@ -172,7 +173,7 @@ paths:
 components:
   securitySchemes:
     deviceToken: { type: http, scheme: bearer, description: per-device token issued by the platform }
-    opsToken: { type: http, scheme: bearer, description: shared token proving the caller is the platform (previous key also accepted during rotation) }
+    opsToken: { type: http, scheme: bearer, description: shared token proving the caller is the platform; the agent must also accept the previous key to absorb cache skew right after a device is re-keyed }
 `;
 
 /**

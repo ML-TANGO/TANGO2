@@ -281,7 +281,8 @@ async def get_ops_token():
 @edge.post('/ops-token/rotate')
 @admin_access_check()
 async def rotate_ops_token():
-    # 기존 키는 prev 로 내려간다 — 아직 교체하지 않은 디바이스가 계속 동작한다(무중단).
+    # 재발급 즉시 플랫폼은 새 키만 보낸다. 교체 전 디바이스는 401 이 된다(하드 컷오버).
+    # prev 는 보관용일 뿐 인증에 쓰이지 않는다.
     try:
         return response(status=1, result=await run_in_threadpool(edge_service.rotate_ops_token))
     except Exception as e:

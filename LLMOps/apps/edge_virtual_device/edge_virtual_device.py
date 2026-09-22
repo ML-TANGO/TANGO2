@@ -31,7 +31,7 @@ app = FastAPI()
 
 CONTRACT_VERSION = "1.1"
 OPS_TOKEN = os.environ.get("OPS_TOKEN", "")
-# 회전 중 옛 키. 플랫폼이 새 키를 발급한 직후에도 아직 교체되지 않은 이 디바이스가
+# 직전 키. 이 디바이스를 새 키로 바꾼 직후 플랫폼이 잠시 옛 키를 보낼 수 있으므로,
 # 계속 동작하도록, 둘 중 하나와 맞으면 통과시킨다(계약 1.1 — 하위호환 추가).
 OPS_TOKEN_PREV = os.environ.get("OPS_TOKEN_PREV", "")
 MODEL_DIR = os.environ.get("MODEL_DIR", "/tmp/edge-virtual-models")

@@ -172,7 +172,8 @@ def _authorized(req):
     if not auth.startswith("Bearer "):
         return False
     got = auth[len("Bearer "):]
-    # 두 키 모두 허용 — 무중단 회전 창(§계약 1.1). 상수시간 비교를 유지한다.
+    # 두 키 모두 허용 — 키 교체 직후 플랫폼이 잠시 옛 키를 보낼 수 있는 구간을
+    # 덮는다(§계약 1.1). 상수시간 비교를 유지한다.
     if hmac.compare_digest(got, OPS_TOKEN):
         return True
     return bool(OPS_TOKEN_PREV) and hmac.compare_digest(got, OPS_TOKEN_PREV)
