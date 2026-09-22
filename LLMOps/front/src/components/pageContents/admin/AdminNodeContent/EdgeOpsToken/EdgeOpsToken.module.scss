@@ -1,0 +1,24 @@
+.panel {
+  border: 1px solid var(--color-gray-200, #e5e7eb);
+  border-radius: 6px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+.head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.title { font-weight: 600; font-size: 14px; }
+.badge {
+  font-size: 11px; padding: 2px 8px; border-radius: 10px;
+  &.rotating { background: #fff4e5; color: #b26a00; }
+}
+.row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.value {
+  flex: 0 1 auto; min-width: 260px; padding: 6px 10px;
+  background: var(--color-gray-50, #f6f7f9); border-radius: 4px;
+  font-family: 'Courier New', monospace; font-size: 13px; word-break: break-all;
+}
+.hint {
+  font-size: 12px; color: var(--color-gray-600, #6b7280); line-height: 1.6;
+  &.warn { color: #b26a00; }
+}
+.cmd { margin-left: 6px; font-family: 'Courier New', monospace; }
+.actions { display: flex; gap: 8px; margin-top: 12px; }

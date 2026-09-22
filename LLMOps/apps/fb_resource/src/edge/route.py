@@ -264,6 +264,43 @@ async def delete_worker(worker_id: int):
         return response(status=0, message=str(e), result=None)
 
 
+# ── ops 토큰 (플랫폼 ↔ 디바이스 공유 키) ─────────────────────────────────────
+# 전 디바이스 공통 값이라 admin 전용이다. 디바이스별 토큰(/workers/{id}/token)과 달리
+# **조회를 허용**한다 — 1회 표시 방식이면 디바이스를 추가할 때마다 전체 재발급이 된다.
+
+@edge.get('/ops-token')
+@admin_access_check()
+async def get_ops_token():
+    try:
+        return response(status=1, result=await run_in_threadpool(edge_service.get_ops_token))
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+
+@edge.post('/ops-token/rotate')
+@admin_access_check()
+async def rotate_ops_token():
+    # 기존 키는 prev 로 내려간다 — 아직 교체하지 않은 디바이스가 계속 동작한다(무중단).
+    try:
+        return response(status=1, result=await run_in_threadpool(edge_service.rotate_ops_token))
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+
+@edge.post('/ops-token/retire-prev')
+@admin_access_check()
+async def retire_prev_ops_token():
+    # 옛 키 폐기. 이 시점부터 교체하지 않은 디바이스는 401 이 된다.
+    try:
+        return response(status=1,
+                        result=await run_in_threadpool(edge_service.retire_prev_ops_token))
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+
 # ── 커스텀 레이블 (노드 + 엣지워커 공용) ──────────────────────────────────────
 
 @edge.post('/labels')

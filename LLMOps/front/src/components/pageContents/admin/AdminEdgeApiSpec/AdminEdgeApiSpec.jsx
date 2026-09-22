@@ -62,19 +62,20 @@ const CLOUD_TO_EDGE = [
     path: '{remote_manager_url}/ops',
     descKey: 'edgeApi.ops.desc',
     schema: `// Header: Authorization: Bearer {ops_token}   // 설정 시 검증 의무
+//   회전 중에는 직전 키(OPS_TOKEN_PREV)도 허용해야 한다 — 무중단 교체(계약 1.1)
 // 배포
 { "op":"deploy", "image": string, "model": string, "version": string,
   "gguf_path": string,        // 저장할 파일명 (lineage-<id>-<이름>.gguf)
   "model_url": string,        // 이 URL 에서 모델을 받아온 뒤 기동
   "params": { "port": int, "env": {}, "docker_args": [], "cmd": [] } }
-  → 202 {"status":"deploying","contract_version":"1.0"}   // model_url 있음: 즉시 응답 후 백그라운드
-  → 200 {"status":"running","contract_version":"1.0"}     // model_url 없음: 동기 처리
+  → 202 {"status":"deploying","contract_version":"1.1"}   // model_url 있음: 즉시 응답 후 백그라운드
+  → 200 {"status":"running","contract_version":"1.1"}     // model_url 없음: 동기 처리
   → 409 {"status":"error","detail":"deploy already in progress"}
   →     {"status":"error","detail": string}               // 실패는 반드시 error 로
 
 // 중지 — 진행 중인 비동기 배포도 함께 무효화하고 last_deploy_error 를 해제할 것
 { "op":"stop" }
-  → {"status":"stopped","contract_version":"1.0"}
+  → {"status":"stopped","contract_version":"1.1"}
   →  {"status":"error","detail": string}`,
   },
   {
@@ -83,7 +84,7 @@ const CLOUD_TO_EDGE = [
     descKey: 'edgeApi.metrics.desc',
     schema: `// Header: Authorization: Bearer {ops_token}
 {
-  "contract_version": "1.0",
+  "contract_version": "1.1",
   "deploy_in_progress": bool,      // 비동기 배포 진행 중
   "last_deploy_error": string|null,// 직전 비동기 배포 실패 사유(성공 시 null)
   "containers": [
@@ -112,7 +113,7 @@ const SECURITY_KEYS = [
 const OPENAPI_YAML = `openapi: 3.0.3
 info:
   title: GenAI Platform Edge Device API
-  version: "1.0"
+  version: "1.1"
   description: >-
     Edge device integration contract v1 — device pushes heartbeat and pulls the
     model artifact; the platform drives deployment through the device agent.
@@ -165,7 +166,7 @@ paths:
 components:
   securitySchemes:
     deviceToken: { type: http, scheme: bearer, description: per-device token issued by the platform }
-    opsToken: { type: http, scheme: bearer, description: shared token proving the caller is the platform }
+    opsToken: { type: http, scheme: bearer, description: shared token proving the caller is the platform (previous key also accepted during rotation) }
 `;
 
 /**

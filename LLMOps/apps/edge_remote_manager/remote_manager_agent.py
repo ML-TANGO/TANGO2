@@ -14,7 +14,7 @@
 설정(env): AGENT_PORT(8600) DOCKER_BIN(docker) MODEL_DIR(/opt/edge/models) CONTAINER_NAME(edge-serve)
            GPU(auto|on|off|runtime|gpus — Jetson 은 자동 판별) PLATFORM_HEARTBEAT_URL
            DEVICE_ID DEVICE_TOKEN HEARTBEAT_INTERVAL(35)
-           OPS_TOKEN(플랫폼→디바이스 /ops·/metrics 인증)
+           OPS_TOKEN / OPS_TOKEN_PREV(플랫폼→디바이스 인증. 회전 중 두 키 허용)
 """
 import hmac
 import json
@@ -44,8 +44,11 @@ HB_INTERVAL = max(31, int(os.environ.get("HEARTBEAT_INTERVAL", "35")))  # 플랫
 # 비어 있으면 검증하지 않는다 — 토큰을 배포하기 전 설치본이 즉시 죽지 않게 하는 폴백이며,
 # 그 상태는 신뢰 사설망 전용이다.
 OPS_TOKEN = os.environ.get("OPS_TOKEN", "")
+# 회전 중 옛 키. 플랫폼이 새 키를 발급한 직후에도 아직 교체되지 않은 이 디바이스가
+# 계속 동작하도록, 둘 중 하나와 맞으면 통과시킨다(계약 1.1 — 하위호환 추가).
+OPS_TOKEN_PREV = os.environ.get("OPS_TOKEN_PREV", "")
 # 계약 버전. 필드 추가는 하위호환(minor), 제거·의미변경은 major 로 올린다.
-CONTRACT_VERSION = "1.0"
+CONTRACT_VERSION = "1.1"
 DOWNLOAD_TIMEOUT = 60          # 청크 간 유휴 상한(전체 전송 시간 아님)
 DOWNLOAD_CHUNK = 1024 * 1024
 
@@ -168,7 +171,11 @@ def _authorized(req):
     auth = req.headers.get("authorization") or ""
     if not auth.startswith("Bearer "):
         return False
-    return hmac.compare_digest(auth[len("Bearer "):], OPS_TOKEN)
+    got = auth[len("Bearer "):]
+    # 두 키 모두 허용 — 무중단 회전 창(§계약 1.1). 상수시간 비교를 유지한다.
+    if hmac.compare_digest(got, OPS_TOKEN):
+        return True
+    return bool(OPS_TOKEN_PREV) and hmac.compare_digest(got, OPS_TOKEN_PREV)
 
 
 def _unauthorized():

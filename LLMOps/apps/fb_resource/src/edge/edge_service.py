@@ -20,7 +20,7 @@ import time
 
 import requests
 
-from utils import PATH
+from utils import PATH, settings
 from utils.msa_db import db_edge, db_workspace
 
 REMOTE_MANAGER_TIMEOUT = 5  # sec
@@ -237,11 +237,114 @@ def _worker_deploy_lock(worker_id):
         return _deploy_locks.setdefault(worker_id, threading.Lock())
 
 
+# ── ops 토큰 (플랫폼이 디바이스에 자신을 증명하는 공유 키) ────────────────────
+# 저장소는 K8s Secret 하나. 키 2개를 둬서 **무중단 회전**을 만든다.
+#   ops-token       현재 키 — 플랫폼이 부착한다
+#   ops-token-prev  직전 키 — 회전 중에만 존재. 아직 교체되지 않은 디바이스가 이 값을
+#                   갖고 있으므로, 에이전트는 둘 중 하나와 맞으면 통과시킨다(계약 1.1).
+# ⚠️ DB 에 두지 않는다. 디바이스 토큰의 '해시만 저장' 불변식과 별개로, 이 값은 보내야
+#    하므로 평문 보관이 불가피하고 DB 덤프·백업에 섞이면 안 된다.
+OPS_SECRET_NAME = "jfb-edge-ops-token"
+OPS_KEY = "ops-token"
+OPS_KEY_PREV = "ops-token-prev"
+# /ops·/metrics 는 화면 새로고침마다 불린다. 매번 kube-apiserver 를 두드리지 않도록
+# 짧게 캐시한다 — 재발급 반영이 이 시간만큼 늦어지는 대신 API 부하가 없다.
+_OPS_CACHE_TTL_SEC = 20
+_ops_cache = {"at": 0.0, "value": None}
+_ops_cache_lock = threading.Lock()
+
+
+def _secret_read(namespace, name):
+    """K8s Secret 읽기. ⚠️ kube 모듈은 **함수 안에서** import 한다 — 모듈 최상단에 두면
+    aiohttp·paramiko 등 무거운 의존 체인이 딸려와, 이 파일을 import 하는 것만으로
+    테스트 환경이 앱 전체 의존성을 요구하게 된다(실측으로 기존 스위트가 깨졌다)."""
+    from utils import kube
+    return kube.read_secret(namespace, name)
+
+
+def _secret_write(namespace, name, string_data):
+    from utils import kube
+    return kube.create_or_replace_secret(namespace, name, string_data)
+
+
+def _ops_secret(force: bool = False):
+    """Secret 에서 {ops-token, ops-token-prev} 를 읽는다(TTL 캐시). 실패 시 {}."""
+    now = time.monotonic()
+    with _ops_cache_lock:
+        if not force and _ops_cache["value"] is not None \
+                and (now - _ops_cache["at"]) < _OPS_CACHE_TTL_SEC:
+            return _ops_cache["value"]
+    try:
+        data = _secret_read(settings.SYSTEM_NAMESPACE, OPS_SECRET_NAME) or {}
+    except Exception:
+        # K8s API 에 못 닿는 설치(에어갭·권한 제한)도 있다 — env 폴백이 살아 있으므로
+        # 여기서 죽이지 않는다.
+        traceback.print_exc()
+        data = {}
+    with _ops_cache_lock:
+        _ops_cache.update({"at": now, "value": data})
+    return data
+
+
+def _ops_token_current() -> str:
+    """플랫폼이 부착할 현재 키. Secret 우선, 없으면 파드 env 폴백."""
+    tok = (_ops_secret().get(OPS_KEY) or "").strip()
+    return tok or os.environ.get("EDGE_OPS_TOKEN", "").strip()
+
+
 def _ops_headers():
-    """플랫폼 → 디바이스 인증 헤더(계약 v1). 토큰이 없으면 빈 dict — 검증하지 않는
-    구버전 에이전트와의 하위호환. `/ops` 와 `/metrics` 가 같은 게이트를 쓴다."""
-    token = os.environ.get("EDGE_OPS_TOKEN", "")
+    """플랫폼 → 디바이스 인증 헤더. 토큰이 없으면 빈 dict — 검증하지 않는 구버전
+    에이전트와의 하위호환. `/ops` 와 `/metrics` 가 같은 게이트를 쓴다."""
+    token = _ops_token_current()
     return {"Authorization": f"Bearer {token}"} if token else {}
+
+
+def get_ops_token() -> dict:
+    """관리자 조회 — 평문을 그대로 돌려준다.
+
+    디바이스 토큰과 달리 **조회를 허용**한다. 전 디바이스 공통 값이라 1회 표시 방식이면
+    디바이스를 한 대 추가할 때마다 전체를 재발급해야 한다(운영 불가).
+    """
+    data = _ops_secret(force=True)
+    cur = (data.get(OPS_KEY) or "").strip()
+    prev = (data.get(OPS_KEY_PREV) or "").strip()
+    env_only = not cur and bool(os.environ.get("EDGE_OPS_TOKEN", "").strip())
+    return {
+        "configured": bool(cur) or env_only,
+        "token": cur or os.environ.get("EDGE_OPS_TOKEN", "").strip(),
+        # 회전 중이면 옛 키가 아직 살아 있다 — 화면이 "교체 진행 중" 을 말할 근거.
+        "rotating": bool(prev),
+        "prev_token": prev,
+        # Secret 이 아니라 파드 env 로만 설정된 설치는 UI 로 회전할 수 없다.
+        "managed": not env_only,
+        "secret_name": OPS_SECRET_NAME,
+        "namespace": settings.SYSTEM_NAMESPACE,
+    }
+
+
+def rotate_ops_token() -> dict:
+    """새 키 발급. 기존 키는 prev 로 내려 **아직 교체되지 않은 디바이스를 살려 둔다**."""
+    data = _ops_secret(force=True)
+    cur = (data.get(OPS_KEY) or "").strip() or os.environ.get("EDGE_OPS_TOKEN", "").strip()
+    new = secrets.token_urlsafe(32)
+    body = {OPS_KEY: new}
+    if cur:
+        body[OPS_KEY_PREV] = cur
+    _secret_write(settings.SYSTEM_NAMESPACE, OPS_SECRET_NAME, body)
+    _ops_secret(force=True)
+    return {"token": new, "rotating": bool(cur),
+            "message": "새 키가 발급됐습니다. 모든 디바이스를 교체한 뒤 옛 키를 폐기하세요."}
+
+
+def retire_prev_ops_token() -> dict:
+    """옛 키 폐기 — 이 시점부터 교체하지 않은 디바이스는 401 이 된다."""
+    data = _ops_secret(force=True)
+    cur = (data.get(OPS_KEY) or "").strip()
+    if not cur:
+        raise Exception("현재 키가 없어 폐기할 수 없습니다")
+    _secret_write(settings.SYSTEM_NAMESPACE, OPS_SECRET_NAME, {OPS_KEY: cur})
+    _ops_secret(force=True)
+    return {"retired": True}
 
 
 def _poll_remote_manager(url: str):

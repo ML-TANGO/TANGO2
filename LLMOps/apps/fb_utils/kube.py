@@ -169,6 +169,25 @@ def create_or_replace_secret(namespace, name, string_data: dict):
             raise
 
 
+def read_secret(namespace, name):
+    """Opaque Secret 을 평문 dict 로 읽는다(없으면 None). 값은 base64 디코딩해 돌려준다."""
+    import base64
+    v1 = client.CoreV1Api()
+    try:
+        sec = v1.read_namespaced_secret(name=name, namespace=namespace)
+    except ApiException as e:
+        if e.status == 404:
+            return None
+        raise
+    out = {}
+    for k, v in (sec.data or {}).items():
+        try:
+            out[k] = base64.b64decode(v).decode("utf-8")
+        except Exception:
+            out[k] = ""
+    return out
+
+
 def delete_secret(namespace, name):
     """Secret 삭제(없으면 무시). 토큰 Secret 정리용."""
     v1 = client.CoreV1Api()

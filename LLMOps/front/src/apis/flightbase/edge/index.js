@@ -54,6 +54,23 @@ export const deployEdgeWorker = async (workerId, body) => {
   });
 };
 
+// ops 토큰 — 플랫폼이 디바이스의 /ops·/metrics 를 부를 때 제시하는 공유 키(admin).
+// 디바이스별 토큰과 달리 **조회를 허용**한다. 전 디바이스 공통 값이라 1회 표시 방식이면
+// 디바이스를 한 대 추가할 때마다 전체를 재발급해야 한다.
+export const getEdgeOpsToken = async () => {
+  return await callApi({ url: 'edge/ops-token', method: 'get' });
+};
+
+// 재발급 — 기존 키는 prev 로 내려가 아직 교체되지 않은 디바이스가 계속 동작한다(무중단).
+export const rotateEdgeOpsToken = async () => {
+  return await callApi({ url: 'edge/ops-token/rotate', method: 'post' });
+};
+
+// 옛 키 폐기 — 이 시점부터 교체하지 않은 디바이스는 401 이 된다.
+export const retireEdgeOpsTokenPrev = async () => {
+  return await callApi({ url: 'edge/ops-token/retire-prev', method: 'post' });
+};
+
 // SP-8 P4b — 커스텀 레이블 조회(노드 + 엣지워커 공용). target_type/target_id 없이 호출
 // 하면 전체. K8s 노드 레이블은 target_type='node', target_id=hostname 으로 저장/조회.
 export const getEdgeLabels = async (targetType, targetId) => {

@@ -17,6 +17,7 @@
 export MODEL_DIR=/opt/edge/models          # gguf 등 모델 파일 위치(컨테이너에 /models 로 마운트)
 export GPU=auto                             # auto|on|off|runtime|gpus (Jetson 자동 판별)
 export OPS_TOKEN="<플랫폼과 공유하는 /ops 인증 토큰>"   # 미설정 시 무인증(사설망 전용)
+export OPS_TOKEN_PREV="<회전 중 직전 키>"               # 선택 — 둘 다 허용(무중단 회전)
 # (선택) heartbeat 활성화 — 플랫폼에서 워커 등록 후 발급받은 토큰
 export PLATFORM_HEARTBEAT_URL="http://<platform-host>/api/edge/devices/<device_id>/heartbeat"
 export DEVICE_ID="edge-xxxxxxxx"
@@ -39,7 +40,8 @@ export DEVICE_TOKEN="<발급받은 raw token>"
 - 계약 명세 정본과 적합성 검사기는 `LLMOps/examples/edge-agent/` 에 있다(외부 배포용).
 
 ## ⚠️ 보안
-- `/ops`·`/metrics` 는 `OPS_TOKEN` 이 설정되면 **Bearer 검증**한다(계약 v1). 운영에서는 반드시 설정할 것.
+- `/ops`·`/metrics` 는 `OPS_TOKEN` 이 설정되면 **Bearer 검증**한다(계약 1.1). 회전 중에는
+  `OPS_TOKEN_PREV` 도 함께 허용해 아직 교체되지 않은 상태에서도 끊기지 않는다. 운영에서는 반드시 설정할 것.
   설정하지 않으면 무인증으로 열리며 그 상태는 **신뢰 사설망/방화벽 안 전용**이다. 공용 인터넷 금지.
 - heartbeat 는 Bearer 토큰(sha256 해시 대조, 90일 TTL). 토큰은 발급 1회만 노출되니 안전 보관.
 - 호스트 docker 를 제어하므로 컨테이너 안이 아니라 **호스트 프로세스(systemd/nohup)** 로 실행.

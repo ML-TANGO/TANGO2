@@ -160,6 +160,12 @@ def check_metrics(base, token):
     ver = str(body.get("contract_version") or "")
     check("contract_version 이 있고 major 가 1 이다",
           ver.split(".")[0] == str(CONTRACT_MAJOR), f"contract_version={ver!r}")
+    # minor 는 하위호환 추가분 — 1.1 부터 회전 창(OPS_TOKEN_PREV)을 지원한다.
+    try:
+        minor = int(ver.split(".")[1])
+    except (IndexError, ValueError):
+        minor = -1
+    check("minor 를 읽을 수 있다(회전 창 지원 여부 판단)", minor >= 0, f"contract_version={ver!r}")
     for key, typ in (("containers", list), ("container_count", int),
                      ("node_cpu_total", int)):
         check(f"{key} 필드가 {typ.__name__} 이다", isinstance(body.get(key), typ),
@@ -186,6 +192,24 @@ def check_auth(base, token):
     check("토큰 없는 /ops 는 401", st == 401, f"status={st}")
     st, _ = call(f"{base}/metrics", token=token + "x")
     check("틀린 토큰의 /metrics 는 401", st == 401, f"status={st}")
+
+
+def check_rotation_window(base, token, prev):
+    """회전 중에는 두 키가 모두 통과해야 한다(계약 1.1).
+
+    이게 없으면 플랫폼이 키를 재발급하는 순간 아직 교체되지 않은 디바이스가 전부 401 이
+    되어, 무중단 회전이 성립하지 않는다.
+    """
+    print("\n[2-1] 회전 창 — 새 키와 직전 키가 모두 통과하는가")
+    if not prev:
+        print("  [SKIP] --ops-token-prev 미지정")
+        return
+    st, _ = call(f"{base}/metrics", token=token)
+    check("현재 키로 /metrics 통과", st == 200, f"status={st}")
+    st, _ = call(f"{base}/metrics", token=prev)
+    check("직전 키로도 /metrics 통과", st == 200, f"status={st}")
+    st, _ = call(f"{base}/metrics", token=(prev or "x") + "-nope")
+    check("무관한 키는 여전히 401", st == 401, f"status={st}")
 
 
 def check_bad_op(base, token):
@@ -311,6 +335,8 @@ def main():
     ap = argparse.ArgumentParser(description="Edge agent 계약 v1 적합성 검사")
     ap.add_argument("--url", required=True, help="에이전트 주소 (예: http://localhost:8600)")
     ap.add_argument("--ops-token", default="", help="플랫폼→디바이스 인증 토큰(OPS_TOKEN)")
+    ap.add_argument("--ops-token-prev", default="",
+                    help="회전 중 직전 토큰(OPS_TOKEN_PREV). 주면 회전 창 검사를 수행")
     ap.add_argument("--image", default="", help="배포까지 검사할 때 쓸 컨테이너 이미지")
     ap.add_argument("--callback-host", default="",
                     help="에이전트가 이 스크립트로 되돌아올 주소(기본: 자동 판별)")
@@ -331,6 +357,7 @@ def main():
 
     check_metrics(base, token)
     check_auth(base, token)
+    check_rotation_window(base, token, args.ops_token_prev)
     check_bad_op(base, token)
     check_stop_idempotent(base, token)
     if args.image:

@@ -14,7 +14,7 @@ spec:
             name: {{ .Values.global.jfb.name.resource }}-svc
             port:
               number: 80
-        path: /api/(storage|gpu|networks|nodes|pod|resources|records|edge/workers|edge/labels)(.*)
+        path: /api/(storage|gpu|networks|nodes|pod|resources|records|edge/workers|edge/labels|edge/ops-token)(.*)
         pathType: Prefix
 ---
 # SP-8 §5.3 — 디바이스-facing heartbeat 전용 라우트. 위 admin 라우트(세션/key-auth)와

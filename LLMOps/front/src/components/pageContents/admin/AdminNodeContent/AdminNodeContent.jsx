@@ -13,6 +13,7 @@ import { loadModalComponent } from '@src/modal';
 import CPUAllocationStatus from './CPUServerTab/CPUAllocationStatus';
 import RamUsageStatus from './CPUServerTab/RamUsageStatus';
 import GPUAllocationStatus from './GPUServerTab/GPUAllocationStatus';
+import EdgeOpsToken from './EdgeOpsToken';
 import InstanceDetail from './InstanceDetail';
 import NodeTable from './NodeTable';
 
@@ -330,6 +331,8 @@ function AdminNodeContent() {
             />
           </>
         )}
+        {/* 플랫폼 ↔ 디바이스 공유 키. 디바이스 등록·토큰 발급과 같은 맥락이라 여기 둔다. */}
+        <EdgeOpsToken />
         <div
           style={{
             display: 'flex',

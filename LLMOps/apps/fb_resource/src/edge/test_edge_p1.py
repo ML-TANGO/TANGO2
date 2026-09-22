@@ -1141,3 +1141,73 @@ def test_legacy_deploy_skips_capability_probe(monkeypatch, tmp_path):
     monkeypatch.setattr(edge_service, "_poll_remote_manager", _boom)
     edge_service.deploy_edge_worker(1, model.DeployEdgeModel(image="img:1"))
     assert "model_url" not in sent
+
+
+# ── ops 토큰 관리(UI) ────────────────────────────────────────────────────────
+
+def _ops_secret_stub(monkeypatch, initial=None):
+    """K8s Secret 을 in-memory 로 대체. 실제 클러스터 없이 회전 규율을 검증한다."""
+    store = {"data": dict(initial or {})}
+    monkeypatch.setattr(edge_service, "_secret_read",
+                        lambda ns, name: dict(store["data"]) if store["data"] else None)
+    monkeypatch.setattr(edge_service, "_secret_write",
+                        lambda ns, name, string_data: store.update(data=dict(string_data)))
+    monkeypatch.setattr(edge_service, "_ops_cache", {"at": 0.0, "value": None})
+    monkeypatch.delenv("EDGE_OPS_TOKEN", raising=False)
+    return store
+
+
+def test_ops_token_read_exposes_plaintext(monkeypatch):
+    """전 디바이스 공통 값이라 조회를 허용한다 — 1회 표시면 디바이스 추가마다 전체 재발급."""
+    _ops_secret_stub(monkeypatch, {"ops-token": "CUR"})
+    r = edge_service.get_ops_token()
+    assert r["configured"] and r["token"] == "CUR"
+    assert r["rotating"] is False and r["managed"] is True
+
+
+def test_rotate_keeps_previous_key_alive(monkeypatch):
+    """회전의 핵심 — 새 키를 내면서 옛 키를 prev 로 남겨 미교체 디바이스를 살린다."""
+    store = _ops_secret_stub(monkeypatch, {"ops-token": "OLD"})
+    res = edge_service.rotate_ops_token()
+    assert res["token"] != "OLD" and res["rotating"] is True
+    assert store["data"]["ops-token-prev"] == "OLD"
+    r = edge_service.get_ops_token()
+    assert r["rotating"] is True and r["prev_token"] == "OLD"
+
+
+def test_platform_uses_new_key_after_rotation(monkeypatch):
+    """플랫폼은 회전 즉시 새 키로 호출한다(파드 재시작 불필요)."""
+    _ops_secret_stub(monkeypatch, {"ops-token": "OLD"})
+    new = edge_service.rotate_ops_token()["token"]
+    assert edge_service._ops_headers() == {"Authorization": f"Bearer {new}"}
+
+
+def test_retire_prev_drops_old_key(monkeypatch):
+    store = _ops_secret_stub(monkeypatch, {"ops-token": "CUR", "ops-token-prev": "OLD"})
+    edge_service.retire_prev_ops_token()
+    assert "ops-token-prev" not in store["data"] and store["data"]["ops-token"] == "CUR"
+    assert edge_service.get_ops_token()["rotating"] is False
+
+
+def test_env_only_install_is_reported_unmanaged(monkeypatch):
+    """Secret 없이 파드 env 로만 설정된 설치는 UI 로 회전할 수 없다 — 화면이 알아야 한다."""
+    _ops_secret_stub(monkeypatch, {})
+    monkeypatch.setenv("EDGE_OPS_TOKEN", "FROM-ENV")
+    r = edge_service.get_ops_token()
+    assert r["configured"] is True and r["token"] == "FROM-ENV" and r["managed"] is False
+
+
+def test_ops_headers_falls_back_to_env(monkeypatch):
+    """K8s API 에 못 닿는 설치도 동작해야 한다."""
+    _ops_secret_stub(monkeypatch, {})
+    monkeypatch.setenv("EDGE_OPS_TOKEN", "FROM-ENV")
+    assert edge_service._ops_headers() == {"Authorization": "Bearer FROM-ENV"}
+
+
+def test_ops_secret_failure_does_not_break_deploy(monkeypatch):
+    """Secret 조회 실패가 배포 전체를 죽이면 안 된다(폴백으로 흘러야 한다)."""
+    def _boom(ns, name): raise RuntimeError("kube unreachable")
+    monkeypatch.setattr(edge_service, "_secret_read", _boom)
+    monkeypatch.setattr(edge_service, "_ops_cache", {"at": 0.0, "value": None})
+    monkeypatch.delenv("EDGE_OPS_TOKEN", raising=False)
+    assert edge_service._ops_headers() == {}      # 헤더 없이 진행(구버전 호환 경로)
