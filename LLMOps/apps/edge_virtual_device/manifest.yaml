@@ -31,6 +31,15 @@ spec:
           env:
             - name: PYTHONPATH
               value: /app/vdev
+            # 계약 v1 — 플랫폼이 /ops·/metrics 를 부를 때 제시하는 공유 토큰. 실 디바이스의
+            # OPS_TOKEN 과 같은 역할이며, 플랫폼(fb_resource)이 쓰는 Secret 과 **같은 값**을
+            # 봐야 한다. Secret 이 없으면 값이 비고 무인증으로 동작한다(기존과 동일).
+            - name: OPS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: jfb-edge-ops-token
+                  key: ops-token
+                  optional: true
           command:
             - python3
             - -m
