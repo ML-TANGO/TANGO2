@@ -8,10 +8,18 @@
           /ops·/metrics 는 OPS_TOKEN 설정 시 Bearer 검증(실 에이전트와 동일 게이트).
 model_url 이 오면 실 에이전트처럼 **실제로 받아서** MODEL_DIR 에 쓴다 — 받는 시늉만 하면
 다운로드 경로가 하네스에서 검증되지 않는다(계약이 깨져도 e2e 가 통과해 버린다).
+
+받은 파일이 진짜 GGUF 면 거기서 멈추지 않고 **llama-server 를 실제로 띄운다**. 파일 수신까지만
+보고 배포 성공이라 부르면 못 뜨는 모델도 running 으로 보고된다 — 실장비에서만 터지는 종류의
+거짓이다. 실장비의 remoteManager 는 `docker run` 으로 서빙 컨테이너를 띄우고, 우리는 같은
+바이너리(/app/llama-server)를 subprocess 로 띄운다(플랫폼 서빙 playground_llamacpp.py 와 동일).
+GGUF 가 아니면(conformance 하네스의 더미 아티팩트) 엔진을 건너뛰고 기존 mock 응답을 유지한다 —
+계약 검사는 엔진이 아니라 규약을 보는 것이므로 더미 파일로도 통과해야 한다.
 """
 import hmac
 import json
 import os
+import subprocess
 import threading
 import time
 import urllib.request
@@ -21,10 +29,28 @@ from fastapi.responses import JSONResponse
 
 app = FastAPI()
 
-CONTRACT_VERSION = "1.0"
+CONTRACT_VERSION = "1.1"
 OPS_TOKEN = os.environ.get("OPS_TOKEN", "")
+# 회전 중 옛 키. 플랫폼이 새 키를 발급한 직후에도 아직 교체되지 않은 이 디바이스가
+# 계속 동작하도록, 둘 중 하나와 맞으면 통과시킨다(계약 1.1 — 하위호환 추가).
+OPS_TOKEN_PREV = os.environ.get("OPS_TOKEN_PREV", "")
 MODEL_DIR = os.environ.get("MODEL_DIR", "/tmp/edge-virtual-models")
 DOWNLOAD_TIMEOUT = 60
+
+# ===== 서빙 엔진(llama.cpp) =====
+# 플랫폼 서빙(playground_llamacpp.py)과 같은 바이너리·같은 규약. ENGINE=off 면 기존처럼
+# 파일 수신까지만 하고 mock 응답을 준다(엔진 없는 환경에서 계약 검사만 돌릴 때).
+LLAMA_SERVER_BIN = os.environ.get("LLAMA_SERVER_BIN", "/app/llama-server")
+ENGINE = os.environ.get("ENGINE", "auto")           # auto | off
+ENGINE_PORT = int(os.environ.get("ENGINE_PORT", "8081"))
+ENGINE_THREADS = os.environ.get("ENGINE_THREADS", "8")
+ENGINE_CTX = os.environ.get("ENGINE_CTX", "2048")
+# CPU 빌드로 2.5GB q4 를 여는 데 수십 초가 걸린다. 배포는 이미 비동기(202)라 그동안
+# deploy_in_progress 가 true 로 남는다 — 실장비의 `docker run` 대기와 같은 자리.
+ENGINE_START_TIMEOUT = int(os.environ.get("ENGINE_START_TIMEOUT", "300"))
+ENGINE_INFER_TIMEOUT = int(os.environ.get("ENGINE_INFER_TIMEOUT", "300"))
+ENGINE_URL = f"http://127.0.0.1:{ENGINE_PORT}"
+ENGINE_LOG = os.path.join(MODEL_DIR, "llama-server.log")
 
 _lock = threading.Lock()
 # 실 에이전트와 동일 — model_url 배포는 202 로 답하고 백그라운드로 받는다.
@@ -38,6 +64,100 @@ _state = {
     "hb_count": 0,
     "hb_last_status": None,
 }
+# 실제로 떠 있는 서빙 프로세스. proc 이 None 이면 엔진 없이 mock 응답으로 동작한다.
+_engine = {"proc": None, "model": None, "path": None}
+
+
+def _is_gguf(path):
+    """GGUF 매직('GGUF') 확인. conformance 의 더미 아티팩트를 엔진에 물리지 않기 위한 게이트."""
+    try:
+        with open(path, "rb") as f:
+            return f.read(4) == b"GGUF"
+    except OSError:
+        return False
+
+
+def _engine_alive():
+    p = _engine["proc"]
+    return p is not None and p.poll() is None
+
+
+def _engine_stop():
+    """실장비의 `docker rm -f` 자리. 멈췄다고 말하려면 실제로 죽여야 한다."""
+    p = _engine["proc"]
+    _engine["proc"] = _engine["model"] = _engine["path"] = None
+    if p is None or p.poll() is not None:
+        return
+    p.terminate()
+    try:
+        p.wait(timeout=20)
+    except subprocess.TimeoutExpired:
+        p.kill()
+        p.wait(timeout=10)
+
+
+def _engine_ready():
+    """실제 1토큰 추론이 되는지로 준비 완료를 판정한다.
+
+    /health 는 HTTP 서버가 바인드되면 바로 200 {"status":"ok"} 를 준다 — 모델 슬롯이
+    아직 준비되기 전이다. 그걸 준비 완료로 보면 배포 직후 첫 추론이 503 "Loading model"
+    로 떨어진다(2026-09-22 실측). 뜬 것과 답하는 것은 다르므로, 답하는 쪽으로 판정한다.
+    """
+    try:
+        with urllib.request.urlopen(f"{ENGINE_URL}/health", timeout=3) as r:
+            if r.status != 200:
+                return False
+    except Exception:
+        return False
+    try:
+        _engine_proxy("/v1/chat/completions",
+                      {"messages": [{"role": "user", "content": "ping"}], "max_tokens": 1},
+                      timeout=30)
+        return True
+    except Exception:
+        return False
+
+
+def _engine_log_tail(n=400):
+    try:
+        with open(ENGINE_LOG, "rb") as f:
+            return f.read()[-n:].decode("utf-8", "replace").replace("\n", " | ")
+    except OSError:
+        return "(no log)"
+
+
+def _engine_start(path, model):
+    """llama-server 를 띄우고 /health 가 200 이 될 때까지 기다린다. 실패하면 예외."""
+    _engine_stop()
+    # 기동 실패 사유를 남긴다 — rc 만 보고하면 왜 안 떴는지 알 길이 없다.
+    log = open(ENGINE_LOG, "ab", buffering=0)
+    proc = subprocess.Popen(
+        [LLAMA_SERVER_BIN, "-m", path, "--host", "127.0.0.1", "--port", str(ENGINE_PORT),
+         "-t", ENGINE_THREADS, "-c", ENGINE_CTX],
+        stdout=log, stderr=log,
+    )
+    _engine["proc"] = proc
+    deadline = time.time() + ENGINE_START_TIMEOUT
+    while time.time() < deadline:
+        if proc.poll() is not None:
+            _engine["proc"] = None
+            raise RuntimeError(
+                f"llama-server exited rc={proc.returncode}: {_engine_log_tail()}")
+        if _engine_ready():
+            _engine["model"], _engine["path"] = model, path
+            return
+        time.sleep(2)
+    _engine_stop()
+    raise RuntimeError(f"llama-server health timeout ({ENGINE_START_TIMEOUT}s)")
+
+
+def _engine_proxy(route, payload, timeout=None):
+    """엔진에 그대로 넘기고 그대로 돌려준다 — 하네스가 응답을 꾸미면 실모델 검증이 안 된다."""
+    req = urllib.request.Request(
+        f"{ENGINE_URL}{route}", data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"}, method="POST")
+    with urllib.request.urlopen(req, timeout=timeout or ENGINE_INFER_TIMEOUT) as r:
+        return json.loads(r.read().decode("utf-8"))
 
 
 @app.get("/")
@@ -49,6 +169,9 @@ def root():
             "device_id": _state["device_id"],
             "hb_count": _state["hb_count"],
             "hb_last_status": _state["hb_last_status"],
+            # 계약 밖 — 하네스 관찰용. 엔진이 실제로 떠 있는지 한 눈에.
+            "engine": {"alive": _engine_alive(), "model": _engine["model"],
+                       "path": _engine["path"], "url": ENGINE_URL},
         }
 
 
@@ -56,7 +179,12 @@ def _authorized(req):
     if not OPS_TOKEN:
         return True
     auth = req.headers.get("authorization") or ""
-    return auth.startswith("Bearer ") and hmac.compare_digest(auth[len("Bearer "):], OPS_TOKEN)
+    if not auth.startswith("Bearer "):
+        return False
+    got = auth[len("Bearer "):]
+    if hmac.compare_digest(got, OPS_TOKEN):
+        return True
+    return bool(OPS_TOKEN_PREV) and hmac.compare_digest(got, OPS_TOKEN_PREV)
 
 
 def _unauthorized():
@@ -101,7 +229,21 @@ def _deploy_async(body, gen):
             superseded = _progress["gen"] != gen
         if superseded:
             return            # stop 이 끼어들었다 — 배포를 기록하지 않는다
-        _record_deploy(body, {"path": path, "size": size})
+        # 진짜 GGUF 면 엔진을 띄운다. 여기서 실패하면 배포 실패다 — 파일만 받아 놓고
+        # running 이라 보고하는 것이 실장비에서 터지는 바로 그 거짓이다.
+        if ENGINE != "off" and _is_gguf(path) and os.path.exists(LLAMA_SERVER_BIN):
+            try:
+                _engine_start(path, body.get("model"))
+            except Exception as e:
+                raise RuntimeError(f"engine start failed: {type(e).__name__}: {e}")
+            with _lock:
+                superseded = _progress["gen"] != gen
+            if superseded:
+                _engine_stop()    # 로딩 중 stop 이 왔다 — 띄운 것을 도로 내린다
+                return
+        _record_deploy(body, {"path": path, "size": size, "engine": _engine_alive()})
+    except RuntimeError as e:
+        err = str(e)
     except Exception as e:
         err = f"download failed: {type(e).__name__}: {e}"
     with _lock:
@@ -127,6 +269,7 @@ async def ops(req: Request):
             _progress["in_progress"] = False
             _progress["error"] = None
             _state["deploy"] = None
+        _engine_stop()          # 락 밖에서 — 프로세스 종료 대기가 heartbeat 를 막지 않도록
         return {"status": "stopped", "contract_version": CONTRACT_VERSION}
     if body.get("op") == "deploy":
         with _lock:
@@ -145,8 +288,16 @@ async def ops(req: Request):
             threading.Thread(target=_deploy_async, args=(body, gen), daemon=True).start()
             return JSONResponse(status_code=202, content={
                 "status": "deploying", "contract_version": CONTRACT_VERSION})
+        # model_url 없는 배포(디바이스에 파일이 이미 있다고 가정하는 구형 경로)로
+        # 교체될 때 이전 엔진을 내리지 않으면, 죽지 않은 llama-server 가 메모리를 물고
+        # 남는데 /metrics 는 새 배포를 running 이라 보고한다 — 실제로 도는 모델과
+        # 화면이 어긋난다(2026-09-22 재현).
+        _engine_stop()
         _record_deploy(body, None)
-    return {"status": "running", "contract_version": CONTRACT_VERSION}
+        return {"status": "running", "contract_version": CONTRACT_VERSION}
+    # 계약: 모르는 op 는 error 로 답한다. running 을 돌려주면 플랫폼이 오타난 op 를
+    # 성공으로 기록한다(참조 에이전트 remote_manager_agent.py:372 와 동일 응답).
+    return {"status": "error", "detail": f"unknown op: {body.get('op')}"}
 
 
 @app.get("/metrics")
@@ -158,10 +309,13 @@ def metrics(req: Request):
         dev = _state["device_id"] or "edge-virtual"
     containers = []
     if d:
+        # 엔진을 띄운 배포라면 상태는 실제 프로세스에서 읽는다. 엔진 없이 받은 배포
+        # (더미 아티팩트·model_url 없는 배포)는 기존대로 running.
+        engine_backed = bool((d.get("artifact") or {}).get("engine"))
         containers = [{
             "name": dev,
             "image": d.get("image"),
-            "state": "running",
+            "state": "running" if (not engine_backed or _engine_alive()) else "stopped",
             "model": d.get("model"),
             "version": d.get("version"),
         }]
@@ -185,12 +339,36 @@ def _deployed_model():
         return (_state["deploy"] or {}).get("model") or "unknown"
 
 
+def _engine_backed():
+    """지금 기록된 배포가 엔진을 띄운 배포인가."""
+    with _lock:
+        return bool(((_state["deploy"] or {}).get("artifact") or {}).get("engine"))
+
+
+def _engine_gone():
+    """엔진을 띄웠어야 하는데 죽어 있다 — 모의 응답으로 때우면 안 되는 상태."""
+    return JSONResponse(status_code=503, content={
+        "status": "error",
+        "detail": "serving engine is not running (deployed with a model but the engine died)",
+    })
+
+
 # 배포된 서빙 컨테이너를 흉내내는 mock 추론 엔드포인트(가상 디바이스 — 실제 모델 아님).
 #   실장비에선 remoteManager 가 띄운 llama.cpp 서버가 이 역할을 실제로 수행.
 @app.post("/v1/chat/completions")
 async def chat_completions(req: Request):
     body = await req.json()
     model = _deployed_model()
+    # 엔진을 띄운 배포였으면 엔진 응답만 정답이다. 엔진이 죽었는데 모의 응답으로 때우면
+    # /metrics 는 stopped 라 정직한데 추론만 200 으로 거짓을 돌려주게 된다 — 이 하네스를
+    # 실모델로 바꾼 이유가 바로 그 거짓을 없애는 것이었다.
+    if _engine_alive():
+        try:
+            return _engine_proxy("/v1/chat/completions", body)   # 실모델 응답 그대로
+        except Exception:
+            return _engine_gone()          # 요청 중 엔진이 죽었다
+    if _engine_backed():
+        return _engine_gone()
     msgs = body.get("messages") or []
     prompt = next((m.get("content", "") for m in reversed(msgs) if m.get("role") == "user"), "")
     reply = f"[edge-mock:{model}] 요청 '{prompt[:80]}' 에 대한 모의 응답 (가상 디바이스, 실제 모델 아님)"
@@ -210,6 +388,13 @@ async def chat_completions(req: Request):
 async def completion(req: Request):
     body = await req.json()
     model = _deployed_model()
+    if _engine_alive():
+        try:
+            return _engine_proxy("/completion", body)
+        except Exception:
+            return _engine_gone()
+    if _engine_backed():
+        return _engine_gone()
     prompt = body.get("prompt", "")
     return {"content": f"[edge-mock:{model}] {prompt[:80]} …(모의 응답)", "model": model, "stop": True}
 
