@@ -76,7 +76,10 @@ const CLOUD_TO_EDGE = [
 // 중지 — 진행 중인 비동기 배포도 함께 무효화하고 last_deploy_error 를 해제할 것
 { "op":"stop" }
   → {"status":"stopped","contract_version":"1.1"}
-  →  {"status":"error","detail": string}`,
+  →  {"status":"error","detail": string}
+
+// deploy·stop 이 아닌 op 는 오류로 답할 것 (적합성 검사 항목)
+  →  {"status":"error","detail":"unknown op: <받은 값>"}`,
   },
   {
     method: 'get',
@@ -85,7 +88,10 @@ const CLOUD_TO_EDGE = [
     schema: `// Header: Authorization: Bearer {ops_token}
 {
   "contract_version": "1.1",
-  "deploy_in_progress": bool,      // 비동기 배포 진행 중
+  "deploy_in_progress": bool,      // 비동기 배포 진행 중.
+                                   // 컨테이너가 실제로 응답 가능해진 뒤에 false 로 내릴 것
+                                   // (docker run 반환·포트 바인드만으로 내리면 화면은
+                                   //  실행 중인데 추론은 아직 실패한다)
   "last_deploy_error": string|null,// 직전 비동기 배포 실패 사유(성공 시 null)
   "containers": [
     { "name": string, "image": string, "state": "running"|"stopped",

@@ -61,8 +61,12 @@
 
 | 경우 | 응답 |
 |---|---|
-| `model_url` 있음 (모델 수신 필요) | `202` + `{"status":"deploying","contract_version":"1.0"}` 를 **즉시** 반환하고, 수신·기동은 백그라운드로 진행 |
-| `model_url` 없음 (파일이 이미 있음) | `200` + `{"status":"running","contract_version":"1.0"}` |
+| `model_url` 있음 (모델 수신 필요) | `202` + `{"status":"deploying","contract_version":"1.1"}` 를 **즉시** 반환하고, 수신·기동은 백그라운드로 진행 |
+| `model_url` 없음 (파일이 이미 있음) | `200` + `{"status":"running","contract_version":"1.1"}` |
+
+> `model_url` 이 없는 배포도 **기존 컨테이너를 먼저 내린 뒤** 새로 띄울 것. 내리지 않으면
+> 이전 모델이 계속 돌아가는데 `/metrics` 는 새 배포를 보고해, 실제로 서빙 중인 모델과
+> 화면이 어긋난다. 위 3번(`rm -f` → `run`)은 이 경로에도 그대로 적용된다.
 | 이미 배포가 진행 중 | `409` + `{"status":"error","detail":"deploy already in progress"}` (동기·비동기 **모든** deploy에 적용) |
 
 > 수 GB 파일을 받는 동안 응답을 붙들고 있으면 플랫폼의 호출(수 초 예산)이 타임아웃난다.
@@ -74,7 +78,7 @@
 ```json
 { "op": "stop" }
 ```
-컨테이너를 제거하고 `{"status":"stopped","contract_version":"1.0"}`.
+컨테이너를 제거하고 `{"status":"stopped","contract_version":"1.1"}`.
 **이미 없으면 성공이다**(목표 상태가 이미 충족됨). 멱등해야 한다.
 
 `stop` 이 해야 할 일이 하나 더 있다:
@@ -88,6 +92,15 @@
 >
 > 또한 `stop` 성공 시 `last_deploy_error` 를 **`null` 로 되돌릴 것.** 남겨 두면 플랫폼이
 > 확정한 `stopped` 를 다음 폴링이 `error` 로 되돌린다.
+
+**모르는 `op`**
+
+`deploy`·`stop` 이 아닌 `op` 는 오류로 답한다:
+```json
+{ "status": "error", "detail": "unknown op: <받은 값>" }
+```
+`running` 을 돌려주면 플랫폼이 오타 난 명령을 성공으로 기록한다. 적합성 검사기가
+채점하는 항목이다(§7).
 
 **오류 보고 규약 (가장 중요)**
 
@@ -105,7 +118,7 @@
 
 ```json
 {
-  "contract_version": "1.0",
+  "contract_version": "1.1",
   "deploy_in_progress": false,
   "last_deploy_error": null,
   "containers": [
@@ -126,6 +139,12 @@
 > (화면은 정상인데 모델이 없는 상태). 이 값을 반드시 보고하세요.
 
 - `deploy_in_progress` — 비동기 배포(모델 수신·기동)가 진행 중이면 `true`.
+  **`false` 로 내리는 시점은 컨테이너가 실제로 요청에 답할 수 있게 된 뒤다.** `docker run`
+  이 반환했다거나 포트가 열렸다는 것만으로 내리면, 플랫폼이 "실행 중" 으로 표시하는 동안
+  모델은 아직 로딩 중이고 그 사이 추론 요청은 실패한다. 서빙 컨테이너의 헬스 엔드포인트가
+  200 을 준다고 곧바로 준비 완료는 아니다 — llama.cpp 계열은 HTTP 서버가 바인드되면
+  `/health` 가 먼저 `200` 을 주고 모델 슬롯은 그 뒤에 준비된다(실측). 확실한 판정은
+  **1토큰짜리 실제 추론 요청이 성공하는지** 보는 것이다.
 - `last_deploy_error` — 직전 비동기 배포가 실패했으면 사유 문자열, 아니면 `null`.
   **성공한 배포는 이 값을 반드시 `null` 로 되돌린다**(옛 실패가 영구히 남으면 정상
   배포가 계속 실패로 보인다).
