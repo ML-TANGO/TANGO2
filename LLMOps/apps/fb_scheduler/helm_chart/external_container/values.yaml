@@ -82,6 +82,13 @@ securityContext:
   readOnlyRootFilesystem: true
   dropAllCapabilities: true
 
+# Network isolation (manifest spec.network.isolate, opt-in). true → templates/networkpolicy.yaml
+# denies all egress and admits ingress only from the BFF pod in ingress_namespace on .Values.port;
+# pod.yaml also drops the SA token automount and the RW /model mount.
+network:
+  isolate: false
+  ingress_namespace: ""
+
 # Ingress — sync mode only. async/batch keep service ClusterIP internal-only.
 ingress:
   enabled: false

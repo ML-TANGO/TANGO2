@@ -31,6 +31,7 @@ from typing import Any, Optional
 import httpx
 
 from adapter import get_adapter_class
+from config import _PLATFORM_NAMESPACE as PLATFORM_NAMESPACE
 from exceptions import ValidationError
 from manifest.schema import ExternalContainerManifest
 from normalize import (
@@ -248,6 +249,11 @@ def _build_pod_info_dict(
         # 백스톱으로 사용 — in-memory 감독자(poll task)가 죽어도 kubelet 이 시한 초과
         # pod 를 강제 종료(리부트 없이). infer(서빙)엔 chart 에서 미부여.
         "timeout_seconds": _resolve_timeout(manifest),
+        # 네트워크 격리(opt-in, schema.Network.isolate). ingress 는 이 BFF 가 폴링하는
+        # 경로만 열어야 하므로 BFF 자신의 네임스페이스를 함께 넘긴다 — 서빙/개발 인스턴스가
+        # 한 클러스터에 있어 네임스페이스가 인스턴스마다 다르다(config._PLATFORM_NAMESPACE).
+        "network": {"isolate": bool(spec.network.isolate),
+                    "ingress_namespace": PLATFORM_NAMESPACE},
         # securityContext / ingress / labels / env / secrets / jf_env defer
         # to chart defaults; SP-Ext.3 fills partner-defined env/secrets from
         # the persisted manifest. Ingress is enabled for sync (user-facing).

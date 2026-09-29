@@ -98,6 +98,11 @@ metadata:
     {{- end }}
 spec:
   restartPolicy: Never
+  {{- if .Values.network.isolate }}
+  # 격리 파드는 K8s API 에 닿을 이유가 없다 — 기본 SA 토큰을 마운트하지 않는다
+  # (egress 차단과 별개로, 정책이 풀려도 토큰이 없도록 두 겹으로 둔다).
+  automountServiceAccountToken: false
+  {{- end }}
   {{- if .Values.node_name }}
   nodeName: {{ .Values.node_name }}
   {{- end }}
@@ -280,7 +285,9 @@ spec:
       readOnly: true
     {{- end }}
     # /model — RW workspace model checkpoint (train/batch only)
-    {{- if and .Values.inputs.base_model.name (ne .Values.job_type "infer") }}
+    # 격리 파드(network.isolate)에는 붙이지 않는다 — 모델 생성 코드를 실행하는 파드가
+    # 모델의 latest_checkpoint 에 쓸 수 있게 되면 안 된다. 가중치는 아래 RO 경로로 읽는다.
+    {{- if and .Values.inputs.base_model.name (ne .Values.job_type "infer") (not .Values.network.isolate) }}
     - name: jf-main
       mountPath: /model
       subPath: models/{{ .Values.inputs.base_model.name }}/latest_checkpoint

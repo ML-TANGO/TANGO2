@@ -35,7 +35,9 @@ rules:
   resources: ["pods"]
   verbs: ["*"]
 - apiGroups: ["extensions", "networking.k8s.io"]
-  resources: ["ingresses"]
+  # networkpolicies — 외부컨테이너 잡 차트(helm_chart/external_container)가 network.isolate
+  # 매니페스트에 NetworkPolicy 를 렌더한다. 없으면 helm install 이 forbidden 으로 실패한다.
+  resources: ["ingresses", "networkpolicies"]
   verbs: ["*"]
 - apiGroups: [""]
   resources: ["namespaces"]

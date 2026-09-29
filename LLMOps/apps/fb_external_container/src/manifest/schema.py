@@ -169,6 +169,13 @@ class Secrets(_StrictBase):
 
 class Network(_StrictBase):
     egress_whitelist: List[str] = Field(default_factory=list)
+    # 잡 파드 네트워크 격리(opt-in). true 면 차트가 NetworkPolicy 로 egress 를 전면 차단하고
+    # ingress 는 이 BFF 에서 spec.port 로만 받으며, SA 토큰과 /model(RW) 마운트를 뺀다.
+    # 기본 false 인 이유: egress_whitelist 는 v1 에서 신고용(advisory)이라 기존 매니페스트의
+    # `[]` 를 "차단"으로 해석하면 배포 위임(generate_base_url) 모드 채점기가 shim 을 못 불러
+    # 전부 깨진다. 모델 생성 코드를 실행하는 채점기(evaluate-lmeval-code) 같이 밖으로 나갈
+    # 이유가 없는 컨테이너만 켠다.
+    isolate: bool = False
 
 
 # ── Capabilities ──────────────────────────────────────────────────────────

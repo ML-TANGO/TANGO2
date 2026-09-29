@@ -368,6 +368,14 @@ class ExternalSecurityContext(BaseModel):
     dropAllCapabilities: bool = True
 
 
+class ExternalNetwork(BaseModel):
+    # 매니페스트 spec.network.isolate(opt-in). true 면 차트가 NetworkPolicy(egress 전면 차단,
+    # ingress 는 ingress_namespace 의 BFF 파드에서만)를 렌더하고 SA 토큰·/model 마운트를 뺀다.
+    # 구버전 external_container 가 이 키 없이 보내면 기본값(비격리)이라 동작이 바뀌지 않는다.
+    isolate: bool = False
+    ingress_namespace: str = ""
+
+
 class ExternalIngress(BaseModel):
     enabled: bool = False
     className: str = "jonathan-kong"
@@ -447,6 +455,9 @@ class ExternalPodInfo(BaseModel):
 
     # SP-1 v2 §7.1 hardening
     securityContext: ExternalSecurityContext = Field(default_factory=ExternalSecurityContext)
+
+    # 네트워크 격리(opt-in) — templates/networkpolicy.yaml·pod.yaml 이 읽는다.
+    network: ExternalNetwork = Field(default_factory=ExternalNetwork)
 
     # Sync-only Kong ingress
     ingress: ExternalIngress = Field(default_factory=ExternalIngress)
