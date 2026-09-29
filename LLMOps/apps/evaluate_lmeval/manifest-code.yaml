@@ -1,0 +1,77 @@
+# evaluate-lmeval-code — HumanEval 전용 채점기(모델 생성 코드 실행, 격리 파드). 이미지는 evaluate-lmeval 과 같다.
+# 설계: LLMOps/docs/2026-09-28-lmeval-benchmark-scorer-design.md
+# 계약 전문: ../../examples/hello-plugin/external-container-spec.md
+# ⚠️ 이 파일을 고치면 fb_external_container/manifests/evaluate-lmeval-code.yaml 사본도 함께
+#    고치고 version 을 올린다(부팅 시드는 새 (name, version) 만 등록한다).
+apiVersion: tango.acryl.ai/v1
+kind: ExternalContainer
+
+metadata:
+  name: evaluate-lmeval-code
+  version: "0.1.2"
+  vendor: "Acryl (platform-owned)"
+  contact: "platform@acryl.ai"
+  description: |
+    HumanEval(pass@1)을 lm-evaluation-harness 0.4.12 로 채점한다 — 모델이 생성한 함수 본문에
+    테스트를 붙여 **실제로 실행**해 통과 여부를 잰다(HF evaluate code_eval: 프로세스 분리·위험
+    함수 비활성·타임아웃). 그 실행을 evaluate-lmeval 과 같은 파드에 두지 않으려고 매니페스트를
+    나눴다 — 이 매니페스트만 env 로 코드 실행을 켜고, 이 파드는 코드 벤치마크만 받는다.
+    network.isolate 로 egress 전면 차단·SA 토큰 없음·/model 미마운트(읽기는 커밋 RO 마운트뿐).
+
+spec:
+  # 🔴 로컬 적재 이미지(build.sh). 신규 서버는 PUSH=1 로 docker.io 에 올려야 pull 된다.
+  image: "docker.io/acrylaaai/evaluate-lmeval:0.1.2"
+
+  env:
+    HF_HUB_OFFLINE: "1"
+    HF_DATASETS_OFFLINE: "1"
+    HF_EVALUATE_OFFLINE: "1"
+    TRANSFORMERS_OFFLINE: "1"
+    LMEVAL_MANIFEST_NAME: "evaluate-lmeval-code"
+    # 코드 실행 허용 — 이 두 값은 이 매니페스트에만 있다(evaluate-lmeval 은 거절한다).
+    HF_ALLOW_CODE_EVAL: "1"
+    LMEVAL_ALLOW_CODE_EXEC: "1"
+
+  job_type: evaluate
+  execution_mode: async
+  port: 8000
+
+  resources:
+    cpu: "4"
+    memory: "64Gi"            # LoRA 커밋 병합(8B bf16 ≈ 32GB 를 CPU 에 두 번 올린다) + vLLM 호스트 메모리
+    gpu: 1
+    gpu_memory: "80Gi"
+
+  inputs:
+    params:
+      required: false         # benchmarks(=humaneval) / checkpoint_name / limit
+    dataset:
+      required: true          # evaluate 계약상 필수. 내용은 읽지 않는다(문항은 이미지에 있다).
+
+  outputs:
+    metrics: true             # /output/metrics.json (lmeval.benchmarks[<id>] 에 서브태스크·설정)
+    artifacts: false
+
+  secrets:
+    required: []              # 가중치는 마운트, 문항은 이미지 — 토큰 불필요.
+
+  network:
+    egress_whitelist: []
+    isolate: true             # 모델 생성 코드를 실행한다 — egress 전면 차단·SA 토큰 없음·/model 미마운트
+
+  endpoints:
+    info: "/info"
+    health: "/health"
+    live: "/live"
+    run: "/run"
+    jobs: "/jobs/{id}"
+    cancel: "/jobs/{id}/cancel"
+
+  # HumanEval 164문항 — 3B 실측 64초(생성 + 실행).
+  # ⚠️ llm_evaluation STALE_RUNNING_MAX_HOURS × 3600 이 이 값보다 커야 한다(테스트가 강제).
+  capabilities:
+    estimated_startup_seconds: 180
+    estimated_duration_seconds: 600
+    timeout_seconds: 7200
+
+  workspace_scope: per-workspace

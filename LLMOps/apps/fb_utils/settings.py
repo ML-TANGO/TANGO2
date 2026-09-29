@@ -237,12 +237,17 @@ PROMPT_OPT_MANIFEST_VERSION = os.getenv('PROMPT_OPT_MANIFEST_VERSION', '1.0.0')
 EVALUATE_MANIFEST_NAME = os.getenv('EVALUATE_MANIFEST_NAME', 'evaluate-selfmetric')
 EVALUATE_MANIFEST_VERSION = os.getenv('EVALUATE_MANIFEST_VERSION', '1.0.0')
 
-# benchmark(벤치마크 평가, llm_evaluation P1) job 이 사용할 외부 컨테이너 manifest.
-# 기본=mock(evaluate-benchmark-mock, P1a) — 오케스트레이션/FE e2e 테스트용. 정식 벤치마크
-# 컨테이너(고려대 plugin / 실측) 도착 시 동일 계약(job_type=evaluate)이라 env 만 교체하면
-# 플랫폼 코드 변경 없이 전환된다. (기본 메트릭은 evaluate-selfmetric 으로 라우팅 가능.)
-BENCHMARK_MANIFEST_NAME = os.getenv('BENCHMARK_MANIFEST_NAME', 'evaluate-benchmark-mock')
-BENCHMARK_MANIFEST_VERSION = os.getenv('BENCHMARK_MANIFEST_VERSION', '0.2.0')
+# benchmark(벤치마크 평가, llm_evaluation) job 이 사용할 외부 컨테이너 manifest.
+# 기본 = evaluate-lmeval(lm-evaluation-harness 실채점, GPU 1장, 로컬 가중치 — 2026-09-28).
+# 그 전의 기본이던 evaluate-benchmark-mock(해시 점수) 0.2.0 은 롤백용으로 등록돼 있다 — env
+# 로 되돌릴 수 있지만 mock 은 모르는 id(arc_easy 등 신규 9 종·custom)를 걸러 버리므로 FE
+# 카탈로그도 함께 되돌려야 한다. ⚠️ 로컬 가중치 경로(llm_evaluation LOCAL_WEIGHTS_MANIFEST_KEYS)
+# 라 mock 으로 되돌려도 체크포인트를 마운트한다(mock 은 무시한다 — 해가 없다).
+BENCHMARK_MANIFEST_NAME = os.getenv('BENCHMARK_MANIFEST_NAME', 'evaluate-lmeval')
+BENCHMARK_MANIFEST_VERSION = os.getenv('BENCHMARK_MANIFEST_VERSION', '0.1.2')
+# humaneval 전용 — 모델 생성 코드를 실행해 채점하는 격리 매니페스트(같은 이미지, 코드 실행 on).
+BENCHMARK_CODE_MANIFEST_NAME = os.getenv('BENCHMARK_CODE_MANIFEST_NAME', 'evaluate-lmeval-code')
+BENCHMARK_CODE_MANIFEST_VERSION = os.getenv('BENCHMARK_CODE_MANIFEST_VERSION', '0.1.2')
 
 # LogicKor 실채점 컨테이너 — mock 과 달리 실제 심판 점수를 산출한다. 벤치마크 'logickor'
 # 를 고른 런만 이 manifest 로 라우팅된다(service.run_benchmark 의

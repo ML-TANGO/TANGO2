@@ -1,0 +1,603 @@
+{
+ "results": {
+  "kmmlu_direct_biology": {
+   "name": "kmmlu_direct_biology",
+   "alias": "kmmlu_direct_biology",
+   "sample_len": 20,
+   "exact_match,none": 0.35,
+   "exact_match_stderr,none": 0.10942433098048311
+  },
+  "kmmlu_direct_chemical_engineering": {
+   "name": "kmmlu_direct_chemical_engineering",
+   "alias": "kmmlu_direct_chemical_engineering",
+   "sample_len": 20,
+   "exact_match,none": 0.3,
+   "exact_match_stderr,none": 0.10513149660756933
+  },
+  "kmmlu_direct_chemistry": {
+   "name": "kmmlu_direct_chemistry",
+   "alias": "kmmlu_direct_chemistry",
+   "sample_len": 20,
+   "exact_match,none": 0.2,
+   "exact_match_stderr,none": 0.09176629354822471
+  },
+  "kmmlu_direct_civil_engineering": {
+   "name": "kmmlu_direct_civil_engineering",
+   "alias": "kmmlu_direct_civil_engineering",
+   "sample_len": 20,
+   "exact_match,none": 0.25,
+   "exact_match_stderr,none": 0.09933992677987828
+  },
+  "kmmlu_direct_computer_science": {
+   "name": "kmmlu_direct_computer_science",
+   "alias": "kmmlu_direct_computer_science",
+   "sample_len": 20,
+   "exact_match,none": 0.5,
+   "exact_match_stderr,none": 0.11470786693528086
+  },
+  "kmmlu_direct_ecology": {
+   "name": "kmmlu_direct_ecology",
+   "alias": "kmmlu_direct_ecology",
+   "sample_len": 20,
+   "exact_match,none": 0.45,
+   "exact_match_stderr,none": 0.11413288653790232
+  },
+  "kmmlu_direct_electrical_engineering": {
+   "name": "kmmlu_direct_electrical_engineering",
+   "alias": "kmmlu_direct_electrical_engineering",
+   "sample_len": 20,
+   "exact_match,none": 0.2,
+   "exact_match_stderr,none": 0.09176629354822471
+  },
+  "kmmlu_direct_information_technology": {
+   "name": "kmmlu_direct_information_technology",
+   "alias": "kmmlu_direct_information_technology",
+   "sample_len": 20,
+   "exact_match,none": 0.4,
+   "exact_match_stderr,none": 0.11239029738980327
+  },
+  "kmmlu_direct_materials_engineering": {
+   "name": "kmmlu_direct_materials_engineering",
+   "alias": "kmmlu_direct_materials_engineering",
+   "sample_len": 20,
+   "exact_match,none": 0.3,
+   "exact_match_stderr,none": 0.10513149660756933
+  },
+  "kmmlu_direct_math": {
+   "name": "kmmlu_direct_math",
+   "alias": "kmmlu_direct_math",
+   "sample_len": 20,
+   "exact_match,none": 0.35,
+   "exact_match_stderr,none": 0.10942433098048308
+  },
+  "kmmlu_direct_mechanical_engineering": {
+   "name": "kmmlu_direct_mechanical_engineering",
+   "alias": "kmmlu_direct_mechanical_engineering",
+   "sample_len": 20,
+   "exact_match,none": 0.4,
+   "exact_match_stderr,none": 0.11239029738980327
+  },
+  "kmmlu_direct_agricultural_sciences": {
+   "name": "kmmlu_direct_agricultural_sciences",
+   "alias": "kmmlu_direct_agricultural_sciences",
+   "sample_len": 20,
+   "exact_match,none": 0.4,
+   "exact_match_stderr,none": 0.11239029738980327
+  },
+  "kmmlu_direct_construction": {
+   "name": "kmmlu_direct_construction",
+   "alias": "kmmlu_direct_construction",
+   "sample_len": 20,
+   "exact_match,none": 0.25,
+   "exact_match_stderr,none": 0.09933992677987828
+  },
+  "kmmlu_direct_fashion": {
+   "name": "kmmlu_direct_fashion",
+   "alias": "kmmlu_direct_fashion",
+   "sample_len": 20,
+   "exact_match,none": 0.15,
+   "exact_match_stderr,none": 0.08191780219091252
+  },
+  "kmmlu_direct_food_processing": {
+   "name": "kmmlu_direct_food_processing",
+   "alias": "kmmlu_direct_food_processing",
+   "sample_len": 20,
+   "exact_match,none": 0.45,
+   "exact_match_stderr,none": 0.11413288653790232
+  },
+  "kmmlu_direct_health": {
+   "name": "kmmlu_direct_health",
+   "alias": "kmmlu_direct_health",
+   "sample_len": 20,
+   "exact_match,none": 0.4,
+   "exact_match_stderr,none": 0.11239029738980327
+  },
+  "kmmlu_direct_interior_architecture_and_design": {
+   "name": "kmmlu_direct_interior_architecture_and_design",
+   "alias": "kmmlu_direct_interior_architecture_and_design",
+   "sample_len": 20,
+   "exact_match,none": 0.45,
+   "exact_match_stderr,none": 0.11413288653790232
+  },
+  "kmmlu_direct_marketing": {
+   "name": "kmmlu_direct_marketing",
+   "alias": "kmmlu_direct_marketing",
+   "sample_len": 20,
+   "exact_match,none": 0.4,
+   "exact_match_stderr,none": 0.11239029738980327
+  },
+  "kmmlu_direct_patent": {
+   "name": "kmmlu_direct_patent",
+   "alias": "kmmlu_direct_patent",
+   "sample_len": 20,
+   "exact_match,none": 0.3,
+   "exact_match_stderr,none": 0.10513149660756935
+  },
+  "kmmlu_direct_public_safety": {
+   "name": "kmmlu_direct_public_safety",
+   "alias": "kmmlu_direct_public_safety",
+   "sample_len": 20,
+   "exact_match,none": 0.15,
+   "exact_match_stderr,none": 0.0819178021909125
+  },
+  "kmmlu_direct_real_estate": {
+   "name": "kmmlu_direct_real_estate",
+   "alias": "kmmlu_direct_real_estate",
+   "sample_len": 20,
+   "exact_match,none": 0.25,
+   "exact_match_stderr,none": 0.09933992677987828
+  },
+  "kmmlu_direct_refrigerating_machinery": {
+   "name": "kmmlu_direct_refrigerating_machinery",
+   "alias": "kmmlu_direct_refrigerating_machinery",
+   "sample_len": 20,
+   "exact_match,none": 0.3,
+   "exact_match_stderr,none": 0.10513149660756935
+  },
+  "kmmlu_direct_aviation_engineering_and_maintenance": {
+   "name": "kmmlu_direct_aviation_engineering_and_maintenance",
+   "alias": "kmmlu_direct_aviation_engineering_and_maintenance",
+   "sample_len": 20,
+   "exact_match,none": 0.1,
+   "exact_match_stderr,none": 0.06882472016116853
+  },
+  "kmmlu_direct_electronics_engineering": {
+   "name": "kmmlu_direct_electronics_engineering",
+   "alias": "kmmlu_direct_electronics_engineering",
+   "sample_len": 20,
+   "exact_match,none": 0.2,
+   "exact_match_stderr,none": 0.0917662935482247
+  },
+  "kmmlu_direct_energy_management": {
+   "name": "kmmlu_direct_energy_management",
+   "alias": "kmmlu_direct_energy_management",
+   "sample_len": 20,
+   "exact_match,none": 0.05,
+   "exact_match_stderr,none": 0.049999999999999975
+  },
+  "kmmlu_direct_environmental_science": {
+   "name": "kmmlu_direct_environmental_science",
+   "alias": "kmmlu_direct_environmental_science",
+   "sample_len": 20,
+   "exact_match,none": 0.1,
+   "exact_match_stderr,none": 0.06882472016116853
+  },
+  "kmmlu_direct_gas_technology_and_engineering": {
+   "name": "kmmlu_direct_gas_technology_and_engineering",
+   "alias": "kmmlu_direct_gas_technology_and_engineering",
+   "sample_len": 20,
+   "exact_match,none": 0.25,
+   "exact_match_stderr,none": 0.09933992677987828
+  },
+  "kmmlu_direct_geomatics": {
+   "name": "kmmlu_direct_geomatics",
+   "alias": "kmmlu_direct_geomatics",
+   "sample_len": 20,
+   "exact_match,none": 0.2,
+   "exact_match_stderr,none": 0.0917662935482247
+  },
+  "kmmlu_direct_industrial_engineer": {
+   "name": "kmmlu_direct_industrial_engineer",
+   "alias": "kmmlu_direct_industrial_engineer",
+   "sample_len": 20,
+   "exact_match,none": 0.4,
+   "exact_match_stderr,none": 0.11239029738980327
+  },
+  "kmmlu_direct_machine_design_and_manufacturing": {
+   "name": "kmmlu_direct_machine_design_and_manufacturing",
+   "alias": "kmmlu_direct_machine_design_and_manufacturing",
+   "sample_len": 20,
+   "exact_match,none": 0.35,
+   "exact_match_stderr,none": 0.10942433098048308
+  },
+  "kmmlu_direct_maritime_engineering": {
+   "name": "kmmlu_direct_maritime_engineering",
+   "alias": "kmmlu_direct_maritime_engineering",
+   "sample_len": 20,
+   "exact_match,none": 0.15,
+   "exact_match_stderr,none": 0.0819178021909125
+  },
+  "kmmlu_direct_nondestructive_testing": {
+   "name": "kmmlu_direct_nondestructive_testing",
+   "alias": "kmmlu_direct_nondestructive_testing",
+   "sample_len": 20,
+   "exact_match,none": 0.1,
+   "exact_match_stderr,none": 0.06882472016116853
+  },
+  "kmmlu_direct_railway_and_automotive_engineering": {
+   "name": "kmmlu_direct_railway_and_automotive_engineering",
+   "alias": "kmmlu_direct_railway_and_automotive_engineering",
+   "sample_len": 20,
+   "exact_match,none": 0.3,
+   "exact_match_stderr,none": 0.10513149660756935
+  },
+  "kmmlu_direct_telecommunications_and_wireless_technology": {
+   "name": "kmmlu_direct_telecommunications_and_wireless_technology",
+   "alias": "kmmlu_direct_telecommunications_and_wireless_technology",
+   "sample_len": 20,
+   "exact_match,none": 0.3,
+   "exact_match_stderr,none": 0.10513149660756935
+  },
+  "kmmlu_direct_accounting": {
+   "name": "kmmlu_direct_accounting",
+   "alias": "kmmlu_direct_accounting",
+   "sample_len": 20,
+   "exact_match,none": 0.45,
+   "exact_match_stderr,none": 0.11413288653790232
+  },
+  "kmmlu_direct_criminal_law": {
+   "name": "kmmlu_direct_criminal_law",
+   "alias": "kmmlu_direct_criminal_law",
+   "sample_len": 20,
+   "exact_match,none": 0.25,
+   "exact_match_stderr,none": 0.09933992677987828
+  },
+  "kmmlu_direct_economics": {
+   "name": "kmmlu_direct_economics",
+   "alias": "kmmlu_direct_economics",
+   "sample_len": 20,
+   "exact_match,none": 0.45,
+   "exact_match_stderr,none": 0.11413288653790232
+  },
+  "kmmlu_direct_education": {
+   "name": "kmmlu_direct_education",
+   "alias": "kmmlu_direct_education",
+   "sample_len": 20,
+   "exact_match,none": 0.4,
+   "exact_match_stderr,none": 0.11239029738980327
+  },
+  "kmmlu_direct_korean_history": {
+   "name": "kmmlu_direct_korean_history",
+   "alias": "kmmlu_direct_korean_history",
+   "sample_len": 20,
+   "exact_match,none": 0.35,
+   "exact_match_stderr,none": 0.1094243309804831
+  },
+  "kmmlu_direct_law": {
+   "name": "kmmlu_direct_law",
+   "alias": "kmmlu_direct_law",
+   "sample_len": 20,
+   "exact_match,none": 0.2,
+   "exact_match_stderr,none": 0.0917662935482247
+  },
+  "kmmlu_direct_management": {
+   "name": "kmmlu_direct_management",
+   "alias": "kmmlu_direct_management",
+   "sample_len": 20,
+   "exact_match,none": 0.35,
+   "exact_match_stderr,none": 0.1094243309804831
+  },
+  "kmmlu_direct_political_science_and_sociology": {
+   "name": "kmmlu_direct_political_science_and_sociology",
+   "alias": "kmmlu_direct_political_science_and_sociology",
+   "sample_len": 20,
+   "exact_match,none": 0.45,
+   "exact_match_stderr,none": 0.11413288653790232
+  },
+  "kmmlu_direct_psychology": {
+   "name": "kmmlu_direct_psychology",
+   "alias": "kmmlu_direct_psychology",
+   "sample_len": 20,
+   "exact_match,none": 0.25,
+   "exact_match_stderr,none": 0.09933992677987828
+  },
+  "kmmlu_direct_social_welfare": {
+   "name": "kmmlu_direct_social_welfare",
+   "alias": "kmmlu_direct_social_welfare",
+   "sample_len": 20,
+   "exact_match,none": 0.35,
+   "exact_match_stderr,none": 0.10942433098048308
+  },
+  "kmmlu_direct_taxation": {
+   "name": "kmmlu_direct_taxation",
+   "alias": "kmmlu_direct_taxation",
+   "sample_len": 20,
+   "exact_match,none": 0.3,
+   "exact_match_stderr,none": 0.10513149660756933
+  },
+  "kmmlu_direct_stem": {
+   "alias": "kmmlu_direct_stem",
+   "name": "kmmlu_direct_stem",
+   "sample_len": 220,
+   "exact_match,none": 0.33636363636363636,
+   "exact_match_stderr,none": 0.032039557976618574,
+   "sample_count": {
+    "exact_match,none": 220
+   }
+  },
+  "kmmlu_direct_other": {
+   "alias": "kmmlu_direct_other",
+   "name": "kmmlu_direct_other",
+   "sample_len": 220,
+   "exact_match,none": 0.3181818181818182,
+   "exact_match_stderr,none": 0.031388070365785725,
+   "sample_count": {
+    "exact_match,none": 220
+   }
+  },
+  "kmmlu_direct_applied_science": {
+   "alias": "kmmlu_direct_applied_science",
+   "name": "kmmlu_direct_applied_science",
+   "sample_len": 240,
+   "exact_match,none": 0.20833333333333334,
+   "exact_match_stderr,none": 0.025932886840516627,
+   "sample_count": {
+    "exact_match,none": 240
+   }
+  },
+  "kmmlu_direct_humss": {
+   "alias": "kmmlu_direct_humss",
+   "name": "kmmlu_direct_humss",
+   "sample_len": 220,
+   "exact_match,none": 0.34545454545454546,
+   "exact_match_stderr,none": 0.03237718118797544,
+   "sample_count": {
+    "exact_match,none": 220
+   }
+  },
+  "kmmlu_direct": {
+   "alias": "kmmlu_direct",
+   "name": "kmmlu_direct",
+   "sample_len": 900,
+   "exact_match,none": 0.3,
+   "exact_match_stderr,none": 0.015187799898503569,
+   "sample_count": {
+    "exact_match,none": 900
+   }
+  }
+ },
+ "groups": {
+  "kmmlu_direct_stem": {
+   "alias": "kmmlu_direct_stem",
+   "name": "kmmlu_direct_stem",
+   "sample_len": 220,
+   "exact_match,none": 0.33636363636363636,
+   "exact_match_stderr,none": 0.032039557976618574,
+   "sample_count": {
+    "exact_match,none": 220
+   }
+  },
+  "kmmlu_direct_other": {
+   "alias": "kmmlu_direct_other",
+   "name": "kmmlu_direct_other",
+   "sample_len": 220,
+   "exact_match,none": 0.3181818181818182,
+   "exact_match_stderr,none": 0.031388070365785725,
+   "sample_count": {
+    "exact_match,none": 220
+   }
+  },
+  "kmmlu_direct_applied_science": {
+   "alias": "kmmlu_direct_applied_science",
+   "name": "kmmlu_direct_applied_science",
+   "sample_len": 240,
+   "exact_match,none": 0.20833333333333334,
+   "exact_match_stderr,none": 0.025932886840516627,
+   "sample_count": {
+    "exact_match,none": 240
+   }
+  },
+  "kmmlu_direct_humss": {
+   "alias": "kmmlu_direct_humss",
+   "name": "kmmlu_direct_humss",
+   "sample_len": 220,
+   "exact_match,none": 0.34545454545454546,
+   "exact_match_stderr,none": 0.03237718118797544,
+   "sample_count": {
+    "exact_match,none": 220
+   }
+  },
+  "kmmlu_direct": {
+   "alias": "kmmlu_direct",
+   "name": "kmmlu_direct",
+   "sample_len": 900,
+   "exact_match,none": 0.3,
+   "exact_match_stderr,none": 0.015187799898503569,
+   "sample_count": {
+    "exact_match,none": 900
+   }
+  }
+ },
+ "n-samples": {
+  "kmmlu_direct_biology": {
+   "original": 1000,
+   "effective": 20
+  },
+  "kmmlu_direct_chemical_engineering": {
+   "original": 1000,
+   "effective": 20
+  },
+  "kmmlu_direct_chemistry": {
+   "original": 600,
+   "effective": 20
+  },
+  "kmmlu_direct_civil_engineering": {
+   "original": 1000,
+   "effective": 20
+  },
+  "kmmlu_direct_computer_science": {
+   "original": 1000,
+   "effective": 20
+  },
+  "kmmlu_direct_ecology": {
+   "original": 1000,
+   "effective": 20
+  },
+  "kmmlu_direct_electrical_engineering": {
+   "original": 1000,
+   "effective": 20
+  },
+  "kmmlu_direct_information_technology": {
+   "original": 1000,
+   "effective": 20
+  },
+  "kmmlu_direct_materials_engineering": {
+   "original": 1000,
+   "effective": 20
+  },
+  "kmmlu_direct_math": {
+   "original": 300,
+   "effective": 20
+  },
+  "kmmlu_direct_mechanical_engineering": {
+   "original": 1000,
+   "effective": 20
+  },
+  "kmmlu_direct_agricultural_sciences": {
+   "original": 1000,
+   "effective": 20
+  },
+  "kmmlu_direct_construction": {
+   "original": 1000,
+   "effective": 20
+  },
+  "kmmlu_direct_fashion": {
+   "original": 1000,
+   "effective": 20
+  },
+  "kmmlu_direct_food_processing": {
+   "original": 1000,
+   "effective": 20
+  },
+  "kmmlu_direct_health": {
+   "original": 100,
+   "effective": 20
+  },
+  "kmmlu_direct_interior_architecture_and_design": {
+   "original": 1000,
+   "effective": 20
+  },
+  "kmmlu_direct_marketing": {
+   "original": 1000,
+   "effective": 20
+  },
+  "kmmlu_direct_patent": {
+   "original": 100,
+   "effective": 20
+  },
+  "kmmlu_direct_public_safety": {
+   "original": 1000,
+   "effective": 20
+  },
+  "kmmlu_direct_real_estate": {
+   "original": 200,
+   "effective": 20
+  },
+  "kmmlu_direct_refrigerating_machinery": {
+   "original": 1000,
+   "effective": 20
+  },
+  "kmmlu_direct_aviation_engineering_and_maintenance": {
+   "original": 1000,
+   "effective": 20
+  },
+  "kmmlu_direct_electronics_engineering": {
+   "original": 1000,
+   "effective": 20
+  },
+  "kmmlu_direct_energy_management": {
+   "original": 1000,
+   "effective": 20
+  },
+  "kmmlu_direct_environmental_science": {
+   "original": 1000,
+   "effective": 20
+  },
+  "kmmlu_direct_gas_technology_and_engineering": {
+   "original": 1000,
+   "effective": 20
+  },
+  "kmmlu_direct_geomatics": {
+   "original": 1000,
+   "effective": 20
+  },
+  "kmmlu_direct_industrial_engineer": {
+   "original": 1000,
+   "effective": 20
+  },
+  "kmmlu_direct_machine_design_and_manufacturing": {
+   "original": 1000,
+   "effective": 20
+  },
+  "kmmlu_direct_maritime_engineering": {
+   "original": 600,
+   "effective": 20
+  },
+  "kmmlu_direct_nondestructive_testing": {
+   "original": 1000,
+   "effective": 20
+  },
+  "kmmlu_direct_railway_and_automotive_engineering": {
+   "original": 1000,
+   "effective": 20
+  },
+  "kmmlu_direct_telecommunications_and_wireless_technology": {
+   "original": 1000,
+   "effective": 20
+  },
+  "kmmlu_direct_accounting": {
+   "original": 100,
+   "effective": 20
+  },
+  "kmmlu_direct_criminal_law": {
+   "original": 200,
+   "effective": 20
+  },
+  "kmmlu_direct_economics": {
+   "original": 130,
+   "effective": 20
+  },
+  "kmmlu_direct_education": {
+   "original": 100,
+   "effective": 20
+  },
+  "kmmlu_direct_korean_history": {
+   "original": 100,
+   "effective": 20
+  },
+  "kmmlu_direct_law": {
+   "original": 1000,
+   "effective": 20
+  },
+  "kmmlu_direct_management": {
+   "original": 1000,
+   "effective": 20
+  },
+  "kmmlu_direct_political_science_and_sociology": {
+   "original": 300,
+   "effective": 20
+  },
+  "kmmlu_direct_psychology": {
+   "original": 1000,
+   "effective": 20
+  },
+  "kmmlu_direct_social_welfare": {
+   "original": 1000,
+   "effective": 20
+  },
+  "kmmlu_direct_taxation": {
+   "original": 200,
+   "effective": 20
+  }
+ }
+}

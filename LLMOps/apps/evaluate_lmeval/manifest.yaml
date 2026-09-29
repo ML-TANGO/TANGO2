@@ -1,0 +1,79 @@
+# evaluate-lmeval — lm-evaluation-harness 벤치마크 실채점(GPU, vLLM). evaluate-benchmark-mock 대체.
+# 설계: LLMOps/docs/2026-09-28-lmeval-benchmark-scorer-design.md
+# 계약 전문: ../../examples/hello-plugin/external-container-spec.md
+# ⚠️ 이 파일을 고치면 fb_external_container/manifests/evaluate-lmeval.yaml 사본도 함께
+#    고치고 version 을 올린다(부팅 시드는 새 (name, version) 만 등록한다).
+apiVersion: tango.acryl.ai/v1
+kind: ExternalContainer
+
+metadata:
+  name: evaluate-lmeval
+  version: "0.1.2"
+  vendor: "Acryl (platform-owned)"
+  contact: "platform@acryl.ai"
+  description: |
+    lm-evaluation-harness 0.4.12 로 표준 벤치마크를 실제 채점한다 — ARC(Challenge/Easy)·
+    KoBEST·MMLU·KMMLU(+Direct)·HAE-RAE·HellaSwag·WinoGrande·PIQA·OpenBookQA·GSM8K·
+    TruthfulQA(MC2/gen)·BoolQ·SQuADv2·DROP 17종 + 런 데이터셋으로 생성해 F1/EM/BLEU/ROUGE
+    를 내는 custom. HumanEval(코드 실행)은 evaluate-lmeval-code 가 따로 맡는다.
+
+    가중치는 BE 가 고른 배포가 서빙 중인 커밋 이름(checkpoint_name)으로 받아 GPU 한 장에
+    올린다(LoRA 커밋은 서빙과 같이 병합). 배포 위임이 아닌 이유는 객관식 채점에 보기별
+    로그확률이 필요한데 배포 shim 이 logprobs 를 전달하지 못하기 때문이다. 엔진 vLLM,
+    chat template 미적용(리더보드 관례), 점수는 0~100 으로 환산해 싣는다.
+    DROP 은 upstream 정답 템플릿 버그 수정본(drop_tango)이라 공개 lm-eval 수치와 비교할 수 없다.
+
+spec:
+  # 🔴 로컬 적재 이미지(build.sh). 신규 서버는 PUSH=1 로 docker.io 에 올려야 pull 된다.
+  image: "docker.io/acrylaaai/evaluate-lmeval:0.1.2"
+
+  env:
+    HF_HUB_OFFLINE: "1"
+    HF_DATASETS_OFFLINE: "1"
+    HF_EVALUATE_OFFLINE: "1"
+    TRANSFORMERS_OFFLINE: "1"
+    LMEVAL_MANIFEST_NAME: "evaluate-lmeval"
+
+  job_type: evaluate
+  execution_mode: async
+  port: 8000
+
+  resources:
+    cpu: "4"
+    memory: "64Gi"            # LoRA 커밋 병합(8B bf16 ≈ 32GB 를 CPU 에 두 번 올린다) + vLLM 호스트 메모리
+    gpu: 1
+    gpu_memory: "80Gi"
+
+  inputs:
+    params:
+      required: false         # benchmarks / checkpoint_name / limit / datasets / max_new_tokens
+    dataset:
+      required: true          # evaluate 계약상 필수. custom 만 내용을 읽는다(나머지는 문항이 이미지에 있다).
+
+  outputs:
+    metrics: true             # /output/metrics.json (lmeval.benchmarks[<id>] 에 서브태스크·설정)
+    artifacts: true           # /output/custom_samples.jsonl (custom 의 입력/예측/정답/점수)
+
+  secrets:
+    required: []              # 가중치는 마운트, 문항은 이미지 — 토큰 불필요.
+
+  network:
+    egress_whitelist: []
+    isolate: true             # 로컬 모드라 나갈 곳이 없다 — egress 전면 차단·SA 토큰 없음·/model 미마운트
+
+  endpoints:
+    info: "/info"
+    health: "/health"
+    live: "/live"
+    run: "/run"
+    jobs: "/jobs/{id}"
+    cancel: "/jobs/{id}/cancel"
+
+  # 3B 실측(A100 80GB): KMMLU 전체 65분·MMLU 31분·HellaSwag 27분이 가장 무겁다(8B 는 2~3 배).
+  # ⚠️ llm_evaluation STALE_RUNNING_MAX_HOURS × 3600 이 이 값보다 커야 한다(테스트가 강제).
+  capabilities:
+    estimated_startup_seconds: 180
+    estimated_duration_seconds: 3600
+    timeout_seconds: 36000
+
+  workspace_scope: per-workspace

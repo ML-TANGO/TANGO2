@@ -1,0 +1,99 @@
+{
+ "results": {
+  "haerae_general_knowledge": {
+   "name": "haerae_general_knowledge",
+   "alias": "haerae_general_knowledge",
+   "sample_len": 20,
+   "acc,none": 0.6,
+   "acc_stderr,none": 0.11239029738980327,
+   "acc_norm,none": 0.6,
+   "acc_norm_stderr,none": 0.11239029738980327
+  },
+  "haerae_history": {
+   "name": "haerae_history",
+   "alias": "haerae_history",
+   "sample_len": 20,
+   "acc,none": 0.45,
+   "acc_stderr,none": 0.11413288653790232,
+   "acc_norm,none": 0.45,
+   "acc_norm_stderr,none": 0.11413288653790232
+  },
+  "haerae_loan_word": {
+   "name": "haerae_loan_word",
+   "alias": "haerae_loan_word",
+   "sample_len": 20,
+   "acc,none": 0.45,
+   "acc_stderr,none": 0.11413288653790232,
+   "acc_norm,none": 0.45,
+   "acc_norm_stderr,none": 0.11413288653790232
+  },
+  "haerae_rare_word": {
+   "name": "haerae_rare_word",
+   "alias": "haerae_rare_word",
+   "sample_len": 20,
+   "acc,none": 0.35,
+   "acc_stderr,none": 0.10942433098048311,
+   "acc_norm,none": 0.35,
+   "acc_norm_stderr,none": 0.10942433098048311
+  },
+  "haerae_standard_nomenclature": {
+   "name": "haerae_standard_nomenclature",
+   "alias": "haerae_standard_nomenclature",
+   "sample_len": 20,
+   "acc,none": 0.7,
+   "acc_stderr,none": 0.10513149660756935,
+   "acc_norm,none": 0.7,
+   "acc_norm_stderr,none": 0.10513149660756935
+  },
+  "haerae": {
+   "alias": "haerae",
+   "name": "haerae",
+   "sample_len": 100,
+   "acc,none": 0.51,
+   "acc_stderr,none": 0.04968320694793744,
+   "acc_norm,none": 0.51,
+   "acc_norm_stderr,none": 0.04968320694793744,
+   "sample_count": {
+    "acc,none": 100,
+    "acc_norm,none": 100
+   }
+  }
+ },
+ "groups": {
+  "haerae": {
+   "alias": "haerae",
+   "name": "haerae",
+   "sample_len": 100,
+   "acc,none": 0.51,
+   "acc_stderr,none": 0.04968320694793744,
+   "acc_norm,none": 0.51,
+   "acc_norm_stderr,none": 0.04968320694793744,
+   "sample_count": {
+    "acc,none": 100,
+    "acc_norm,none": 100
+   }
+  }
+ },
+ "n-samples": {
+  "haerae_general_knowledge": {
+   "original": 176,
+   "effective": 20
+  },
+  "haerae_history": {
+   "original": 188,
+   "effective": 20
+  },
+  "haerae_loan_word": {
+   "original": 169,
+   "effective": 20
+  },
+  "haerae_rare_word": {
+   "original": 405,
+   "effective": 20
+  },
+  "haerae_standard_nomenclature": {
+   "original": 153,
+   "effective": 20
+  }
+ }
+}

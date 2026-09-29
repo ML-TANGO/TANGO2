@@ -1,0 +1,32 @@
+{
+ "results": {
+  "squadv2": {
+   "name": "squadv2",
+   "alias": "squadv2",
+   "sample_len": 20,
+   "exact,none": 15.0,
+   "exact_stderr,none": "N/A",
+   "f1,none": 27.98879551820728,
+   "f1_stderr,none": "N/A",
+   "HasAns_exact,none": 30.0,
+   "HasAns_exact_stderr,none": "N/A",
+   "HasAns_f1,none": 55.97759103641456,
+   "HasAns_f1_stderr,none": "N/A",
+   "NoAns_exact,none": 0.0,
+   "NoAns_exact_stderr,none": "N/A",
+   "NoAns_f1,none": 0.0,
+   "NoAns_f1_stderr,none": "N/A",
+   "best_exact,none": 50.0,
+   "best_exact_stderr,none": "N/A",
+   "best_f1,none": 56.19047619047619,
+   "best_f1_stderr,none": "N/A"
+  }
+ },
+ "groups": {},
+ "n-samples": {
+  "squadv2": {
+   "original": 11873,
+   "effective": 20
+  }
+ }
+}

@@ -1,0 +1,20 @@
+{
+ "results": {
+  "drop_tango": {
+   "name": "drop_tango",
+   "alias": "drop_tango",
+   "sample_len": 5,
+   "em,none": 0.4,
+   "em_stderr,none": 0.24494897427831783,
+   "f1,none": 0.4,
+   "f1_stderr,none": 0.24494897427831783
+  }
+ },
+ "groups": {},
+ "n-samples": {
+  "drop_tango": {
+   "original": 9536,
+   "effective": 5
+  }
+ }
+}
