@@ -1006,6 +1006,23 @@ async def list_stale_running_eval_results(source_model_id : int, max_age_hours :
     return res or []
 
 
+async def list_running_eval_results(limit : int = 50) -> list:
+    """lazy 완료 후보 — 모든 모델의 status='running' 런(최신순, 상한 limit). 벤치마크 완료는
+    결과 조회(get_eval_result)가 metrics.json 을 보고 마감하는데, 아무도 결과를 조회하지 않으면
+    끝난 런이 running 에 남는다 — llm_evaluation 의 백그라운드 마감 루프가 이 목록을 훑는다.
+    expert 세션(사람이 오래 채점)·inference 생성 런은 결과 파일로 마감하지 않으므로 뺀다."""
+    sql = """
+        SELECT job_str_id, source_model_id, metric_set
+        FROM eval_result
+        WHERE status = 'running'
+          AND (metric_set IS NULL OR metric_set NOT IN ('expert', 'inference'))
+        ORDER BY id DESC
+        LIMIT %s
+    """
+    res = await select_query(sql, params=(int(limit),), fetch_type=FetchType.ALL)
+    return res or []
+
+
 async def fail_stale_eval_results(source_model_id : int, max_age_hours : int) -> bool:
     """방치된 running 런을 failed 로 마감(lazy 스윕, list 조회 시 호출). 컨테이너 크래시/폴러
     재시작으로 완료 콜백이 유실돼 running 에 고착된 런을 정리한다. eval_result 엔 updated_at 이

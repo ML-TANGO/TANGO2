@@ -431,6 +431,13 @@ MAX_RECONCILE_PER_VIEW = 8
 # NFS 파일 읽기라 외부 호출보다 싸지만 목록 렌더가 런 수에 비례해 느려지지 않게 둔다.
 MAX_PROGRESS_PER_VIEW = 20
 
+# 백그라운드 마감 루프(service.finalize_finished_runs_loop) — 결과 화면을 아무도 열지 않아도 끝난 런
+# (metrics.json 이 생긴 running 런)을 completed 로 마감한다. 간격마다 최신순 EVAL_FINALIZE_BATCH 건만
+# 파일 존재를 본다(컨테이너 호출 없음 — NFS stat 뿐). 레플리카가 여럿이어도 마감은 WHERE status='running'
+# 가드라 중복 실행이 무해하다.
+EVAL_FINALIZE_INTERVAL_SECONDS = 60
+EVAL_FINALIZE_BATCH = 50
+
 # reconcile 조회 1건의 타임아웃. 이 값 x MAX_RECONCILE_PER_VIEW 가 목록 조회에 실릴 수
 # 있는 최대 대기이므로 짧게 잡는다. 되묻기는 best-effort 라 놓쳐도 다음 폴링이 잡는다 —
 # 반면 여기서 오래 붙들면 게이트웨이 타임아웃을 넘겨 목록 자체가 안 뜬다.

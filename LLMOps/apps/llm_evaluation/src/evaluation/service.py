@@ -87,6 +87,8 @@ from evaluation.constants import (
     SDS_SAMPLE_DIR_GLOB,
     MAX_RECONCILE_PER_VIEW,
     MAX_PROGRESS_PER_VIEW,
+    EVAL_FINALIZE_BATCH,
+    EVAL_FINALIZE_INTERVAL_SECONDS,
     RECONCILE_TIMEOUT_SECONDS,
     STALE_RUNNING_MAX_HOURS,
 )
@@ -1575,8 +1577,11 @@ async def get_project(project_id: int) -> dict:
     if not project:
         raise Exception(f"eval project {project_id} not found")
     rows = await db_model.list_eval_results_by_project(eval_project_id=project_id)
-    # running 으로 남은 런은 조회 시점에 컨테이너에 되물어 정리한다. 목록/헤더는 DB 상태를
-    # 그대로 보여주므로, 결과 뷰를 열지 않으면 죽은 런이 '진행중'으로 계속 남는다.
+    # running 으로 남은 런은 조회 시점에 정리한다. 목록/헤더는 DB 상태를 그대로 보여주므로,
+    # 결과 뷰를 열지 않으면 끝난 런·죽은 런이 '진행중'으로 계속 남는다. 정리는 결과 조회와 **같은
+    # 마감**(_settle_running_run → get_eval_result)이다 — metrics.json 이 있으면 completed, 없으면
+    # 컨테이너에 되물어 failed/cancelled. 종전엔 되묻기만 해서 컨테이너가 completed 라고 답한 런이
+    # 결과 화면을 열기 전까지 '실행 중'으로 남았다(파드는 정리돼 사라져 죽은 것처럼 보였다).
     # 상한(MAX_RECONCILE_PER_VIEW)을 두는 이유는 목록 렌더가 외부 호출 수에 비례해
     # 느려지지 않게 하려는 것. best-effort — 실패해도 목록 조회는 그대로 진행한다.
     targets = [r for r in rows
@@ -1587,8 +1592,8 @@ async def get_project(project_id: int) -> dict:
         # 넘길 수 있다. 서로 독립된 조회라 동시에 던지고 한 번만 기다린다 —
         # 최대 대기가 호출 수와 무관하게 RECONCILE_TIMEOUT_SECONDS 로 고정된다.
         settled = await asyncio.gather(
-            *(_reconcile_running_eval(model_id=int(r["source_model_id"]),
-                                      job_id=str(r["job_str_id"]))
+            *(_settle_running_run(model_id=int(r["source_model_id"]),
+                                  job_id=str(r["job_str_id"]))
               for r in targets),
             return_exceptions=True)
         for r, new_status in zip(targets, settled):
@@ -1616,6 +1621,55 @@ async def get_project(project_id: int) -> dict:
             # 실행(묶음) — 정답 대조 화면이 "한 번의 실행 = 카드 1장" 으로 런을 묶는 근거.
             # 묶음에 없는 런(단건 실행·묶음 기록 이전의 런)은 화면이 카드 한 장씩으로 세운다.
             "batches": await _project_batches(project_id)}
+
+
+async def _settle_running_run(model_id: int, job_id: str) -> str:
+    """running 런 하나를 결과 조회와 같은 경로로 마감하고 화면에 실을 상태를 돌려준다.
+    get_eval_result 가 metrics.json 이 있으면 completed 로 마감하고, 없으면 DB 상태 → 컨테이너
+    되묻기(_reconcile_running_eval)로 failed/cancelled 를 반영한다. 조회 실패는 호출부(gather)가 거른다."""
+    res = await get_eval_result(model_id=model_id, job_id=job_id)
+    if res.get("ready"):
+        return "completed"
+    return str(res.get("status") or "running")
+
+
+async def finalize_finished_runs_once() -> int:
+    """백그라운드 마감 한 바퀴 — metrics.json 이 생긴 running 런을 completed 로 마감하고 그 수를 돌려준다.
+
+    벤치마크 완료는 lazy(결과 조회 시 metrics.json 을 보고 마감)라, 아무도 결과를 조회하지 않으면 끝난
+    런이 running 에 남는다 — 프로젝트 목록의 상태·비교·Best 가 그 동안 틀린다. 이 루프가 조회 없이도
+    맞춘다. 파일이 있는 런만 get_eval_result 로 마감한다(컨테이너 호출·실패 판정은 하지 않는다 — 그건
+    조회 경로의 되묻기와 나이 기반 스윕 몫이다). 한 런의 실패가 나머지를 막지 않는다."""
+    rows = await db_model.list_running_eval_results(limit=EVAL_FINALIZE_BATCH)
+    bases = {}          # model_id → jobs 디렉토리(모델당 DB 조회 한 번)
+    finalized = 0
+    for r in rows:
+        try:
+            model_id = int(r["source_model_id"])
+            job_id = str(r["job_str_id"])
+            if model_id not in bases:
+                bases[model_id] = await _eval_jobs_base(model_id)
+            output_dir = await _eval_output_dir(model_id, job_id, jobs_base=bases[model_id])
+            if not os.path.isfile(os.path.join(output_dir, "metrics.json")):
+                continue
+            res = await get_eval_result(model_id=model_id, job_id=job_id)
+            if res.get("ready"):
+                finalized += 1
+        except Exception:
+            traceback.print_exc()
+    return finalized
+
+
+async def finalize_finished_runs_loop() -> None:
+    """finalize_finished_runs_once 를 EVAL_FINALIZE_INTERVAL_SECONDS 마다 — 서비스 기동 시 시작(main)."""
+    while True:
+        try:
+            n = await finalize_finished_runs_once()
+            if n:
+                print(f"[eval] background finalize: {n} finished run(s) → completed", flush=True)
+        except Exception:
+            traceback.print_exc()
+        await asyncio.sleep(EVAL_FINALIZE_INTERVAL_SECONDS)
 
 
 async def _attach_run_progress(runs: list) -> None:

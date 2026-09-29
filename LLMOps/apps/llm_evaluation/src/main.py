@@ -5,12 +5,14 @@
 위임하며, fb_external_container 런치 + eval_result 영속화(fb_utils.llm_db)를 재사용한다.
 llm_playground/llm_model 과 동일한 FastAPI 팩토리 패턴.
 """
+import asyncio
 import logging
 
 import uvicorn
 from fastapi import FastAPI
 
 from evaluation.route import evaluations
+from evaluation.service import finalize_finished_runs_loop
 from utils.resource import CustomResponse, CustomMiddleWare
 
 
@@ -27,6 +29,21 @@ def initialize_app():
     )
     api.include_router(evaluations)
     app.mount("/api", api)
+
+    # 끝난 평가 런의 백그라운드 마감(결과 화면을 아무도 열지 않아도 metrics.json 이 생긴 런을
+    # completed 로) — 루프 한 바퀴의 실패는 루프 안에서 삼키므로 서비스 기동을 막지 않는다.
+    finalize_task = {}
+
+    @app.on_event("startup")
+    async def start_finalize_loop():
+        finalize_task["task"] = asyncio.create_task(finalize_finished_runs_loop())
+
+    @app.on_event("shutdown")
+    async def stop_finalize_loop():
+        task = finalize_task.get("task")
+        if task:
+            task.cancel()
+
     return app
 
 
