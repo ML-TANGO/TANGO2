@@ -19,14 +19,17 @@ import { moveRovingFocus } from '@src/utils/a11y';
 import {
   BENCHMARK_CATEGORIES,
   BENCHMARK_MAP,
+  DATASET_FREE_BENCHMARK_IDS,
   FORMAT_TRAIN_BENCHMARK_IDS,
   GENERATION_METRICS,
+  LMEVAL_BENCHMARK_IDS,
   REFERENCE_BENCHMARKS,
   categoryCount,
   defaultMetricFor,
   recordedMetricsFor,
 } from './benchmarks';
 import { metricLabel } from './benchmarkMetrics';
+import { minRunCount } from './batchSummary';
 
 import classNames from 'classnames/bind';
 import style from './BenchmarkEvaluation.module.scss';
@@ -41,6 +44,10 @@ const cx = classNames.bind(style);
 //   · 지표는 고를 것이 없다 — 채점기가 한 번에 내는 지표를 전부 기록한다. 그래서 선택
 //     드롭다운을 없애고 "무엇이 기록되는지"만 레일에서 통보한다.
 // onRun({ modelId, datasetId, benchmarks, inferencePlaygroundId }) 로 상위가 실행한다.
+//
+// **lm-eval 채점 벤치마크는 여러 개를 함께 고를 수 있다** — 상위가 묶음 실행으로 보내고 서버가
+// 고른 GPU 수만큼의 런으로 나눠 담는다(런마다 GPU 1장에서 차례로 채점, 설계 §14). 그 밖의
+// 채점기(MixATIS)는 포맷 학습처럼 벤치마크에 매인 설정이 있어 하나만 고른다.
 //
 // **심판 설정은 여기 없다.** 정답 대조는 정답이 데이터에 있어 기계가 대조한다 — 심판 LLM 이
 // 개입할 자리가 없고, 심판 배포·내장 심판·프롬프트 전략·심판 출력 상한은 전부 LLM 심사
@@ -75,14 +82,24 @@ const BenchmarkRunConfig = ({
   const [modelId, setModelId] = useState('');
   const [datasetId, setDatasetId] = useState('');
 
-  const [picked, setPicked] = useState(''); // 벤치마크 id — 라디오(하나)
+  // 고른 벤치마크 id 들. lm-eval 끼리는 여러 개, 그 밖의 채점기는 하나만(pickBenchmark).
+  // 하나일 때만 쓰는 화면(포맷 학습·기록 지표·생성 지표)은 picked 로 읽는다.
+  const [picks, setPicks] = useState([]);
+  const picked = picks.length === 1 ? picks[0] : '';
+  const multi = picks.length > 1;
   const [category, setCategory] = useState('all');
   const [query, setQuery] = useState('');
   const [withGeneration, setWithGeneration] = useState(false);
+  // lm-eval 채점기의 태스크당 문항 상한(빠른 점검). 빈 문자열 = 전체 문항. 입력 칸 그대로의
+  // 문자열로 들고 있다가 실행 시점에 정수로 바꾼다(빈 칸과 0 을 구분해야 한다).
+  const [sampleLimit, setSampleLimit] = useState('');
   // 평가 전 형식 학습을 돌릴지. 지원 벤치마크를 고르면 **켠 상태로 시작**한다 — 형식을
   // 배우지 않은 가중치의 점수는 0 이라 그것이 기본값이어야 한다. 끄는 것은 "형식 미학습
   // 상태를 일부러 재 본다"는 진단 선택이다.
   const [formatTrain, setFormatTrain] = useState(false);
+  // lm-eval 묶음이 쓸 GPU 수(= 런 수). null = 자동(가장 빠른 쪽 — min(벤치마크 수, 빈 GPU)).
+  // 고른 값은 범위가 바뀌면(선택·가용량) 그 안으로 당긴다.
+  const [gpuCountPick, setGpuCountPick] = useState(null);
   // 플랫폼 GPU 풀 — null=아직 모름(미조회/로딩), false=조회 실패. 포맷 학습이 켜져
   // 있을 때만 묻는다(꺼져 있으면 이 런은 GPU 를 쓰지 않는다).
   const [gpu, setGpu] = useState(null);
@@ -124,17 +141,55 @@ const BenchmarkRunConfig = ({
   const supportsFormatTrain =
     !!picked && FORMAT_TRAIN_BENCHMARK_IDS.includes(picked);
   const generationMetrics = picked ? GENERATION_METRICS[picked] : null;
+  // lm-eval 채점기로 가는 벤치마크 — 배포에 생성을 위임하지 못해(로그확률) 배포가 서빙 중인
+  // 커밋을 채점기가 자기 GPU 에 올린다. 그래서 포맷 학습과 **같은 조건**이 걸린다: GPU 1장을
+  // 실제로 쓰고, 체크포인트가 없는 배포(HF 직배포)는 고를 수 없다(BE 도 같은 경계로 거절한다).
+  const localWeights =
+    picks.length > 0 && picks.every((id) => LMEVAL_BENCHMARK_IDS.includes(id));
+  const usesLocalGpu = formatTrain || localWeights;
+  // 데이터셋은 고른 벤치마크 중 하나라도 **데이터셋을 읽을 때만** 필요하다 — 문항이 채점기에
+  // 내장된 벤치마크만이면 싣지 않는다(BE 도 같은 판정으로 거절·허용한다).
+  const datasetRequired = picks.some(
+    (id) => !DATASET_FREE_BENCHMARK_IDS.includes(id),
+  );
+  const datasetNotNeeded = picks.length > 0 && !datasetRequired;
+  const anyExecutesCode = picks.some((id) => BENCHMARK_MAP[id]?.executesCode);
+  const anyUsesDataset = picks.some((id) => BENCHMARK_MAP[id]?.usesDataset);
+  const sampleLimitValue = sampleLimit === '' ? null : Number(sampleLimit);
+  const sampleLimitInvalid =
+    localWeights &&
+    sampleLimitValue !== null &&
+    !(
+      Number.isInteger(sampleLimitValue) &&
+      sampleLimitValue >= 1 &&
+      sampleLimitValue <= 100000
+    );
 
   // 라디오 그룹(카드형) 참조 — 키보드 조작은 공용 moveRovingFocus 가 담당한다.
   const listGroupRef = useRef(null);
 
-  const pickBenchmark = (id) => {
-    const next = picked === id ? '' : id;
-    setPicked(next);
+  const isLmeval = (id) => LMEVAL_BENCHMARK_IDS.includes(id);
+
+  // 선택 규칙 — lm-eval 끼리는 켜고 끈다(여러 개). lm-eval 이 아닌 것을 고르거나, 그런 것이
+  // 골라져 있는 상태에서 무엇을 고르면 그 하나로 바꾼다(섞으면 서버가 거절한다).
+  const applyPicks = (next) => {
+    setPicks(next);
+    const single = next.length === 1 ? next[0] : '';
     setWithGeneration(false);
     // 포맷 학습은 벤치마크에 매인 설정이다 — 벤치마크를 바꾸면 그 벤치마크의 기본값으로
     // 되돌린다. 남겨 두면 지원하지 않는 벤치마크에 켜진 채로 실행돼 BE 가 거절한다.
-    setFormatTrain(FORMAT_TRAIN_BENCHMARK_IDS.includes(next));
+    setFormatTrain(FORMAT_TRAIN_BENCHMARK_IDS.includes(single));
+    // 문항 상한은 lm-eval 묶음에 매인 설정이다 — lm-eval 이 아닌 벤치마크로 옮겨 가면 BE 가
+    // 거절한다. lm-eval 끼리 더하고 빼는 동안에는 입력을 유지한다.
+    if (!next.length || !next.every(isLmeval)) setSampleLimit('');
+  };
+
+  const pickBenchmark = (id) => {
+    if (picks.includes(id)) {
+      applyPicks(picks.filter((x) => x !== id));
+      return;
+    }
+    applyPicks(isLmeval(id) && picks.every(isLmeval) ? [...picks, id] : [id]);
   };
 
   // 출력을 가져올 배포 후보 — **고른 모델을 서빙 중인 running 배포**만 BE 가 내려 준다.
@@ -180,8 +235,9 @@ const BenchmarkRunConfig = ({
   // failed 로 떨어져 이력만 남는다. 켤 때마다 현황을 다시 물어 최신값으로 판단한다.
   // 조회 실패는 false 로 두고 **실행을 막지 않는다** — 조회가 죽었다고 멀쩡한 클러스터에서
   // 실행까지 막으면 더 나쁘다(막는 것은 '가용 0' 을 실제로 확인했을 때뿐).
+  // lm-eval 채점 벤치마크도 같은 이유로 묻는다 — 채점기가 체크포인트를 GPU 1장에 올린다.
   useEffect(() => {
-    if (!formatTrain) {
+    if (!usesLocalGpu) {
       setGpu(null);
       return undefined;
     }
@@ -195,7 +251,7 @@ const BenchmarkRunConfig = ({
     return () => {
       cancelled = true;
     };
-  }, [formatTrain, workspaceId]);
+  }, [usesLocalGpu, workspaceId]);
 
   // NewStyleModalFrame 의 Esc 는 Redux 모달을 닫는다 — 로컬 조건부 렌더 경로라 직접 건다
   // (ExpertInferenceModal 과 같은 처리).
@@ -225,6 +281,17 @@ const BenchmarkRunConfig = ({
     [picked, withGeneration],
   );
 
+  // 보이는(필터·검색 통과) lm-eval 벤치마크 — "보이는 항목 모두 선택" 의 대상.
+  const visibleLmevalIds = visible.filter((b) => isLmeval(b.id)).map((b) => b.id);
+  // Tab 으로 들어올 때 포커스를 받을 항목 — 골라 둔 것 중 보이는 첫 항목, 없으면 첫 항목.
+  const focusTarget =
+    picks.find((id) => visible.some((v) => v.id === id)) || visible[0]?.id;
+  const selectVisible = () => {
+    // lm-eval 이 아닌 것이 골라져 있으면 섞을 수 없으므로 그 선택을 버리고 시작한다.
+    const base = picks.every(isLmeval) ? picks : [];
+    applyPicks([...new Set([...base, ...visibleLmevalIds])]);
+  };
+
   // 배포가 어느 커밋을 올렸는지는 목록이 이미 들고 온다(BE get_running_deployments 의
   // commit_id) — 되묻지 않는다. HF 모델을 직접 올린 배포는 플랫폼 커밋이 없어 null 이다.
   const hasCheckpoint = (d) => !!d?.commit_id;
@@ -235,7 +302,8 @@ const BenchmarkRunConfig = ({
         // 포맷 학습은 **이 배포가 올린 체크포인트를 학습**한다 — 커밋이 없는 배포로는
         // 성립하지 않는다. 고르게 두고 실행 시점에 422 를 주는 대신 고를 수 없게 하고,
         // 왜 못 고르는지를 이름 옆에 붙인다(비활성만 하면 이유가 화면에 없다).
-        const blocked = formatTrain && !hasCheckpoint(d);
+        // lm-eval 채점도 그 배포의 체크포인트를 올려 채점하므로 같은 조건이다.
+        const blocked = usesLocalGpu && !hasCheckpoint(d);
         return {
           label: blocked
             ? `${d.name} — ${t('evaluation.bench.deployNoCheckpoint')}`
@@ -244,7 +312,7 @@ const BenchmarkRunConfig = ({
           isDisable: blocked,
         };
       }),
-    [deployments, formatTrain, t],
+    [deployments, usesLocalGpu, t],
   );
   const selectedDeployment =
     deploymentOptions.find((item) => item.value === playgroundId) || null;
@@ -258,10 +326,10 @@ const BenchmarkRunConfig = ({
   // 목록에서 비활성인 값이 선택으로 남아 실행까지 실려 나간다(모델 변경 시 비우는 것과
   // 같은 취지). 선택이 비면 아래 blockReason 이 사유를 세운다.
   useEffect(() => {
-    if (!formatTrain || !playgroundId) return;
+    if (!usesLocalGpu || !playgroundId) return;
     const current = (deployments ?? []).find((d) => d.id === playgroundId);
     if (current && !hasCheckpoint(current)) setPlaygroundId('');
-  }, [formatTrain, playgroundId, deployments]);
+  }, [usesLocalGpu, playgroundId, deployments]);
 
   const categoryOptions = BENCHMARK_CATEGORIES.map((item) => ({
     label: `${t(item.labelKey)} (${categoryCount(item.id)})`,
@@ -287,15 +355,39 @@ const BenchmarkRunConfig = ({
   // 실제 게이트는 클러스터 풀이다. 반대로 클러스터에 여유가 있어도 워크스페이스 몫이 0
   // 이면 사용자에게는 없는 것과 같다. 가용 0 을 **확인했을 때만** 막는다 — null(로딩)/
   // false(조회 실패)는 '모름' 이라 막지 않는다(확신 없이 막으면 멀쩡한 클러스터가 봉쇄된다).
-  const gpuWsBlocked = !!(formatTrain && gpuWs && gpuWs.free === 0);
-  const gpuClusterBlocked = !!(formatTrain && gpu && gpu.free === 0);
+  // 묶음이면 필요한 장수(needGpu)보다 적을 때 막는다 — 외부 잡은 빈 GPU 가 없으면 대기하지
+  // 않고 즉시 실패하므로, 넘치는 묶음은 일부만 뜨고 나머지는 실패 런으로 남는다.
+  const gpuFreeKnown = Math.min(
+    gpuWs ? gpuWs.free : Infinity,
+    gpu ? gpu.free : Infinity,
+  );
+  // lm-eval 은 고른 GPU 수만큼 런이 뜬다(런마다 1장). 최소 = 한 런에 함께 못 담는 묶음 수
+  // (HumanEval·사용자 데이터셋은 따로 — minRunCount, BE plan_benchmark_runs 와 같은 규칙),
+  // 최대 = 벤치마크 수(그 이상은 쓰지 않는다)와 지금 빈 장수 중 작은 쪽. 가용량을 모르면 벤치마크 수.
+  const minRuns = localWeights ? Math.max(1, minRunCount(picks)) : 1;
+  const maxRuns = localWeights
+    ? Math.max(
+        minRuns,
+        Math.min(
+          picks.length,
+          Number.isFinite(gpuFreeKnown) ? gpuFreeKnown : picks.length,
+        ),
+      )
+    : 1;
+  const gpuCount = localWeights
+    ? Math.min(maxRuns, Math.max(minRuns, gpuCountPick ?? maxRuns))
+    : 0;
+  // 이 실행이 잡을 GPU — 포맷 학습은 1장, lm-eval 은 고른 수, 위임 채점은 0.
+  const needGpu = formatTrain ? 1 : gpuCount;
+  const gpuWsBlocked = !!(usesLocalGpu && gpuWs && gpuWs.free < needGpu);
+  const gpuClusterBlocked = !!(usesLocalGpu && gpu && gpu.free < needGpu);
   const gpuBlocked = gpuWsBlocked || gpuClusterBlocked;
 
   const blockReason = !modelId
     ? t('evaluation.run.needModel')
-    : !datasetId
+    : !datasetId && datasetRequired
       ? t('evaluation.run.needDataset')
-      : !picked
+      : !picks.length
         ? t('evaluation.bench.needBenchmark')
         : !sourceReady
           ? // 포맷 학습이 켜져 있으면 배포는 출력이 아니라 **학습할 체크포인트**의 출처다
@@ -303,30 +395,48 @@ const BenchmarkRunConfig = ({
             t(
               formatTrain
                 ? 'evaluation.bench.needCheckpointDeploy'
-                : 'evaluation.bench.needDeployment',
+                : localWeights
+                  ? 'evaluation.bench.needScoreCheckpointDeploy'
+                  : 'evaluation.bench.needDeployment',
             )
           : gpuBlocked
             ? // 왜 막혔는지가 다르다 — 내 몫이 없는 것과 클러스터가 다 찬 것은 사용자가
               // 할 일이 다르다(전자는 쿼터 증설, 후자는 다른 작업이 끝나기를 기다림).
-              t(
-                gpuWsBlocked
-                  ? 'evaluation.bench.gpuNone'
-                  : 'evaluation.bench.gpuNoneCluster',
-              )
-            : null;
+              // 묶음은 "몇 장이 모자라나"가 할 일을 정한다(선택을 줄이거나 기다림).
+              needGpu > 1 && gpuFreeKnown > 0
+              ? t('evaluation.bench.gpuShort', {
+                  need: needGpu,
+                  free: gpuFreeKnown,
+                })
+              : t(
+                  gpuWsBlocked
+                    ? 'evaluation.bench.gpuNone'
+                    : 'evaluation.bench.gpuNoneCluster',
+                )
+            : sampleLimitInvalid
+              ? t('evaluation.bench.sampleLimitInvalid')
+              : null;
 
   const summary =
     blockReason ||
-    t(
-      formatTrain
-        ? 'evaluation.bench.runSummaryFormat'
-        : 'evaluation.bench.runSummary',
-      {
-        benchmark: benchmark?.label,
-        deployment: deployment?.name || '-',
-        count: recorded.length,
-      },
-    );
+    (multi
+      ? t('evaluation.bench.runSummaryBatch', {
+          deployment: deployment?.name || '-',
+          count: picks.length,
+          gpus: gpuCount,
+        })
+      : t(
+          formatTrain
+            ? 'evaluation.bench.runSummaryFormat'
+            : localWeights
+              ? 'evaluation.bench.runSummaryLocal'
+              : 'evaluation.bench.runSummary',
+          {
+            benchmark: benchmark?.label,
+            deployment: deployment?.name || '-',
+            count: recorded.length,
+          },
+        ));
 
   const handleRun = () => {
     if (blockReason || running) return null;
@@ -334,19 +444,47 @@ const BenchmarkRunConfig = ({
     // 그래도 실어 보내는 이유는 화면과 서버가 서로 다른 시점에 배포돼도 런이 깨지지 않게
     // 하기 위해서다 — 옛 서버는 metric 을 요구하고, 새 서버는 무시한다.
     return onRun({
-      // 이 런이 평가할 대상 — 상위가 model_id / dataset_ids 로 싣는다.
+      // 이 런이 평가할 대상 — 상위가 model_id / dataset_ids 로 싣는다. 데이터셋은 읽는
+      // 벤치마크가 있을 때만 싣는다(골라 뒀어도 안 쓰면 결과 머리에 찍히지 않게).
       modelId,
-      datasetId,
-      benchmarks: [{ benchmark: picked, metric: defaultMetricFor(picked) }],
+      datasetId: datasetRequired ? datasetId : '',
+      // lm-eval 이면 상위가 묶음 실행으로 보낸다(서버가 gpuCount 개 런으로 나눠 담는다).
+      benchmarks: picks.map((id) => ({
+        benchmark: id,
+        metric: defaultMetricFor(id),
+      })),
       // 배포 — 필수다. 포맷 학습이 꺼져 있으면 컨테이너가 이 배포의 답변을 채점만 하고,
       // 켜져 있으면 이 배포가 서빙 중인 체크포인트를 학습해 컨테이너가 직접 생성·채점한다
       // (둘은 배타 — BE 가 같은 배타를 강제한다).
       inferencePlaygroundId: playgroundId,
       formatTrain,
+      ...(localWeights ? { gpuCount } : {}),
+      // 문항 상한 — lm-eval 채점 벤치마크에서 채웠을 때만 싣는다(다른 채점기는 BE 가 거절한다).
+      ...(localWeights && sampleLimitValue
+        ? { sampleLimit: sampleLimitValue }
+        : {}),
     });
   };
 
   const modalTitle = t('evaluation.project.detail.newRun');
+
+  // GPU 현황 한 줄 — 로컬 GPU 를 쓰는 런(포맷 학습 · lm-eval 채점)에서 각자의 절 아래에 세운다.
+  // 가용 0 이면 실행을 막으므로 왜 막혔는지가 같은 자리에 보여야 한다. 조회 중/실패는 숫자를
+  // 지어내지 않는다.
+  const gpuHint =
+    usesLocalGpu && gpu !== null ? (
+      <p className={cx('run-hint', gpuBlocked && 'err')}>
+        {gpu === false
+          ? t('evaluation.bench.gpuUnknown')
+          : t('evaluation.bench.gpuStat', {
+              // 워크스페이스 몫이 있으면 그것으로, 없으면(쿼터 미설정 등)
+              // 클러스터 값으로 폴백한다 — 숫자를 비우지는 않는다.
+              total: gpuWs ? gpuWs.hard : gpu.total,
+              used: gpuWs ? gpuWs.used : gpu.in_use + gpu.reserved,
+              free: gpuWs ? gpuWs.free : gpu.free,
+            })}
+      </p>
+    ) : null;
 
   return (
     <div
@@ -378,7 +516,8 @@ const BenchmarkRunConfig = ({
                 <span className={cx('req')}>*</span>
               </h3>
               <p className={cx('run-prose')}>
-                {t('evaluation.bench.referenceDesc')}
+                {t('evaluation.bench.referenceDesc')}{' '}
+                {t('evaluation.bench.multiHint')}
               </p>
             </div>
 
@@ -417,34 +556,76 @@ const BenchmarkRunConfig = ({
               </div>
             </div>
 
+            {/* 선택 막대 — 몇 개를 골랐나 + 보이는 lm-eval 전부/해제. 카테고리 필터와 함께
+                쓰면 "한국어 지식 전부" 같은 묶음을 한 번에 만든다. */}
+            <div className={cx('pick-bar')}>
+              <Badge
+                label={t('evaluation.bench.pickedCount', {
+                  count: picks.length,
+                })}
+                type={picks.length ? 'blue' : 'gray'}
+                size='sm'
+              />
+              {visibleLmevalIds.length > 1 && (
+                <button
+                  type='button'
+                  className={cx('pick-bar-btn')}
+                  onClick={selectVisible}
+                >
+                  {t('evaluation.bench.selectVisible', {
+                    count: visibleLmevalIds.length,
+                  })}
+                </button>
+              )}
+              {picks.length > 0 && (
+                <button
+                  type='button'
+                  className={cx('pick-bar-btn')}
+                  onClick={() => applyPicks([])}
+                >
+                  {t('evaluation.bench.clearSelection')}
+                </button>
+              )}
+            </div>
+
+            {/* 모든 항목이 체크박스다 — lm-eval 이 아닌 항목(MixATIS)은 켜면 다른 선택을
+                비우는 배타 항목이라 표식만 둥글게 그린다. role='radio' 를 쓰지 않는 이유:
+                radio 는 radiogroup 조상이 필요한데(ARIA) 이 격자는 두 종류를 함께 담는
+                group 이다. 방향키는 **포커스만** 옮긴다(체크박스를 방향키로 켜고 끄면
+                훑어보는 것만으로 선택이 바뀐다). 켜고 끄는 것은 Space/Enter(버튼 기본). */}
             <div
               ref={listGroupRef}
               className={cx('benchmark-grid')}
-              role='radiogroup'
+              role='group'
               aria-label={t('evaluation.bench.selectBenchTitle')}
-              onKeyDown={moveRovingFocus(
-                listGroupRef,
-                visible.map((b) => b.id),
-                picked,
-                pickBenchmark,
-              )}
+              onKeyDown={(e) =>
+                moveRovingFocus(
+                  listGroupRef,
+                  visible.map((b) => b.id),
+                  e.target?.dataset?.value,
+                  () => {},
+                )(e)
+              }
             >
               {visible.map((b) => {
-                const on = picked === b.id;
+                const on = picks.includes(b.id);
                 return (
                   <button
                     key={b.id}
                     type='button'
-                    role='radio'
+                    role='checkbox'
                     aria-checked={on}
                     data-value={b.id}
-                    tabIndex={
-                      on || (!picked && b.id === visible[0]?.id) ? 0 : -1
-                    }
+                    tabIndex={b.id === focusTarget ? 0 : -1}
                     className={cx('benchmark-option', on && 'selected')}
                     onClick={() => pickBenchmark(b.id)}
                   >
-                    <span className={cx('pick-radio')} aria-hidden='true' />
+                    <span
+                      className={cx(
+                        isLmeval(b.id) ? 'pick-check' : 'pick-radio',
+                      )}
+                      aria-hidden='true'
+                    />
                     <span className={cx('option-body')}>
                       <span className={cx('bo-name')}>
                         {b.label}
@@ -504,15 +685,20 @@ const BenchmarkRunConfig = ({
                     />
                   )}
                 </div>
-                {/* 데이터셋은 **필수**다 — 드롭 목업은 '미입력 시 벤치마크 기본 데이터'로
-                    그렸지만 blockReason 이 !datasetId 로 막고 BE 도 dataset_ids 를 요구한다.
-                    선택으로 표시하면 채울 수 없는 조건으로 버튼이 죽어 있게 된다. */}
+                {/* 데이터셋은 고른 벤치마크가 **읽을 때만** 필수다(custom·MixATIS). 문항이
+                    채점기에 내장된 lm-eval 벤치마크만 골랐으면 칸 대신 "필요 없음" 을 세운다 —
+                    목업의 '미입력 시 벤치마크 기본 데이터' 와 같은 뜻이고, BE 도 같은 판정으로
+                    데이터셋 없는 런을 허용한다(DATASET_FREE_BENCHMARK_IDS). */}
                 <div className={cx('run-field')}>
                   <span className={cx('run-label')}>
                     {t('evaluation.selectDatasets')}
-                    <span className={cx('req')}>*</span>
+                    {datasetRequired && <span className={cx('req')}>*</span>}
                   </span>
-                  {(datasetOptions || []).length === 0 ? (
+                  {datasetNotNeeded ? (
+                    <p className={cx('run-hint')}>
+                      {t('evaluation.bench.datasetNotNeeded')}
+                    </p>
+                  ) : (datasetOptions || []).length === 0 ? (
                     <p className={cx('run-hint', 'err')}>
                       {t('evaluation.noDatasets')}
                     </p>
@@ -557,19 +743,7 @@ const BenchmarkRunConfig = ({
                   </p>
                   {/* GPU 현황 — 켰을 때만. 가용 0 이면 실행을 막으므로 왜 막혔는지가
                       같은 자리에 보여야 한다. 조회 중/실패는 숫자를 지어내지 않는다. */}
-                  {formatTrain && gpu !== null && (
-                    <p className={cx('run-hint', gpuBlocked && 'err')}>
-                      {gpu === false
-                        ? t('evaluation.bench.gpuUnknown')
-                        : t('evaluation.bench.gpuStat', {
-                            // 워크스페이스 몫이 있으면 그것으로, 없으면(쿼터 미설정 등)
-                            // 클러스터 값으로 폴백한다 — 숫자를 비우지는 않는다.
-                            total: gpuWs ? gpuWs.hard : gpu.total,
-                            used: gpuWs ? gpuWs.used : gpu.in_use + gpu.reserved,
-                            free: gpuWs ? gpuWs.free : gpu.free,
-                          })}
-                    </p>
-                  )}
+                  {formatTrain && gpuHint}
                 </div>
               )}
 
@@ -583,7 +757,9 @@ const BenchmarkRunConfig = ({
                   {t(
                     formatTrain
                       ? 'evaluation.bench.checkpointSourceTitle'
-                      : 'evaluation.run.sourceTitle',
+                      : localWeights
+                        ? 'evaluation.bench.scoreCheckpointTitle'
+                        : 'evaluation.run.sourceTitle',
                   )}
                   <span className={cx('req')}>*</span>
                 </p>
@@ -639,7 +815,7 @@ const BenchmarkRunConfig = ({
                 {/* 후보는 있는데 **전부 체크포인트가 없는** 경우 — 드롭다운이 통째로
                     비활성이라 이유를 여기서 말하지 않으면 막힌 곳을 알 수 없다. 나머지
                     형식 관련 설명은 포맷 학습 절의 한 줄이 대신한다. */}
-                {formatTrain &&
+                {usesLocalGpu &&
                   deploymentOptions.length > 0 &&
                   checkpointDeployCount === 0 && (
                     <p className={cx('run-hint', 'err')}>
@@ -647,6 +823,126 @@ const BenchmarkRunConfig = ({
                     </p>
                   )}
               </div>
+
+              {/* ②-b lm-eval 채점 — 채점 방식 안내 + 문항 상한(빠른 점검). 상한을 준 점수는
+                  분모가 달라 결과 화면이 '빠른 점검' 으로 구분해 세운다. */}
+              {localWeights && (
+                <div className={cx('run-sec')}>
+                  <p className={cx('run-sec-title')}>
+                    {t('evaluation.bench.sampleLimitTitle')}
+                  </p>
+                  <div className={cx('run-field')}>
+                    <InputText
+                      size='medium'
+                      value={sampleLimit}
+                      placeholder={t('evaluation.bench.sampleLimitPlaceholder')}
+                      closeIcon='/images/icon/close-c.svg'
+                      disableLeftIcon
+                      disableClearBtn={false}
+                      onChange={(e) =>
+                        setSampleLimit(
+                          e.target.value.replace(/\D/g, '').slice(0, 6),
+                        )
+                      }
+                      onClear={() => setSampleLimit('')}
+                    />
+                  </div>
+                  <p className={cx('run-hint', sampleLimitInvalid && 'err')}>
+                    {t(
+                      sampleLimitInvalid
+                        ? 'evaluation.bench.sampleLimitInvalid'
+                        : 'evaluation.bench.sampleLimitNote',
+                    )}
+                  </p>
+                  <p className={cx('run-note')}>
+                    {t('evaluation.bench.lmevalNote')}
+                  </p>
+                  {anyExecutesCode && (
+                    <p className={cx('run-hint')}>
+                      {t('evaluation.bench.codeExecNote')}
+                    </p>
+                  )}
+                  {anyUsesDataset && (
+                    <p className={cx('run-hint')}>
+                      {t('evaluation.bench.customDatasetNote')}
+                    </p>
+                  )}
+                  {gpuHint}
+                </div>
+              )}
+
+              {/* ③-a 묶음 — GPU 수(= 런 수)를 고르고, 각 벤치마크의 대표 지표를 통보한다. 런 하나의
+                  전 지표는 결과 화면에 있다(여기서 N개 벤치마크 지표를 다 늘어놓으면 레일이 목록이
+                  된다). 어느 벤치마크가 어느 런에 드는지는 서버가 예상 시간으로 정한다. */}
+              {multi && (
+                <div className={cx('run-sec')}>
+                  <p className={cx('run-sec-title')}>
+                    {t('evaluation.bench.batchTitle')}
+                    <Badge
+                      label={String(picks.length)}
+                      type='blue'
+                      size='sm'
+                    />
+                  </p>
+                  {localWeights && (
+                    <>
+                      <div className={cx('gpu-count')}>
+                        <span className={cx('gpu-count-label')}>
+                          {t('evaluation.bench.gpuCountTitle')}
+                        </span>
+                        <button
+                          type='button'
+                          className={cx('gpu-count-btn')}
+                          aria-label={t('evaluation.bench.gpuCountDec')}
+                          disabled={gpuCount <= minRuns}
+                          onClick={() => setGpuCountPick(gpuCount - 1)}
+                        >
+                          −
+                        </button>
+                        <span className={cx('gpu-count-value')} aria-live='polite'>
+                          {t('evaluation.bench.gpuCountValue', {
+                            count: gpuCount,
+                          })}
+                        </span>
+                        <button
+                          type='button'
+                          className={cx('gpu-count-btn')}
+                          aria-label={t('evaluation.bench.gpuCountInc')}
+                          disabled={gpuCount >= maxRuns}
+                          onClick={() => setGpuCountPick(gpuCount + 1)}
+                        >
+                          +
+                        </button>
+                      </div>
+                      <p className={cx('run-hint')}>
+                        {t('evaluation.bench.gpuCountNote', {
+                          count: picks.length,
+                          gpus: gpuCount,
+                        })}
+                      </p>
+                      {minRuns > 1 && (
+                        <p className={cx('run-hint')}>
+                          {t('evaluation.bench.gpuCountMin', { min: minRuns })}
+                        </p>
+                      )}
+                    </>
+                  )}
+                  <ul className={cx('metric-plan')}>
+                    {picks.map((id) => (
+                      <li key={id}>
+                        {BENCHMARK_MAP[id]?.label || id}
+                        <span className={cx('plan-metric')}>
+                          {metricLabel(t, defaultMetricFor(id)) ||
+                            defaultMetricFor(id)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className={cx('run-note')}>
+                    {t('evaluation.bench.batchNote')}
+                  </p>
+                </div>
+              )}
 
               {/* ③ 기록될 지표 — 통보만 한다. 한 번의 채점에서 나오는 지표는 전부 남는다. */}
               {benchmark && (

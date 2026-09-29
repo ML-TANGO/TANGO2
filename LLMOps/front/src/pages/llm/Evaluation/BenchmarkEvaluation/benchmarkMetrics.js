@@ -1,4 +1,5 @@
-// 메트릭 정본(점수 함수) — id = llm_evaluation BE constants.METRIC_IDS + evaluate-benchmark-mock 일치.
+// 메트릭 정본(점수 함수) — id = llm_evaluation BE constants.METRIC_IDS + 채점 컨테이너 일치
+// (BE 테스트 test_benchmark_catalog.py 가 METRIC_IDS ⊆ 이 목록을 대조한다).
 // 벤치마크(ARC·MMLU…) 와 분리된 "채점 방식"만 담는다. 벤치마크 카탈로그는 benchmarks.js.
 //   descKey = 지표 정의 문구의 i18n 키 — 데이터 모듈이라 t() 를 부를 수 없으므로 키만 담고
 //   렌더하는 쪽(결과 화면의 지표 정의 열·점수 카드)에서 읽는다. 문자열을 박아 두면 영어
@@ -48,6 +49,18 @@ export const METRICS = [
     id: 'spice',
     label: 'SPICE',
     descKey: 'evaluation.bench.metricDef.spice',
+  },
+  // lm-eval 생성형 태스크의 정확 일치(KMMLU-Direct·SQuADv2·DROP)와 코드 통과율(HumanEval).
+  // 채점기가 둘 다 0~100 으로 환산해 싣으므로 공용 기본 척도(100)를 그대로 쓴다.
+  {
+    id: 'exact_match',
+    label: 'Exact Match',
+    descKey: 'evaluation.bench.metricDef.exact_match',
+  },
+  {
+    id: 'pass_at_1',
+    label: 'pass@1',
+    descKey: 'evaluation.bench.metricDef.pass_at_1',
   },
   // 심판 점수(1~10) — LogicKor 전용. 정답이 없는 생성형 벤치마크라 정답률 계열을 쓸 수
   // 없고 심판 LLM 의 점수가 유일한 채점 축이다. 셋의 차이는 "대표값을 어느 축으로 잡나"

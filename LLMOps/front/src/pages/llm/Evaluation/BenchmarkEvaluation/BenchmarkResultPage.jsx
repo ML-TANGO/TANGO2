@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
-import { Redirect, useHistory, useRouteMatch } from 'react-router-dom';
+import {
+  Redirect,
+  useHistory,
+  useLocation,
+  useRouteMatch,
+} from 'react-router-dom';
 
 import { Badge, ButtonV2, Loading } from '@jonathan/ui-react';
 
@@ -17,7 +22,7 @@ import { openModal } from '@src/store/modules/modal';
 import { addNineHours, errorToastMessage } from '@src/utils';
 
 import BenchmarkResultView from './BenchmarkResultView';
-import { BENCHMARK_LABEL } from './benchmarks';
+import { BENCHMARK_LABEL, BENCHMARK_MAP } from './benchmarks';
 import { metricLabel } from './benchmarkMetrics';
 
 import classNames from 'classnames/bind';
@@ -39,20 +44,26 @@ const STATUS_LABEL_KEY = {
   running: 'evaluation.project.status.running',
   completed: 'evaluation.project.status.completed',
   failed: 'evaluation.failed',
-  cancelled: 'evaluation.project.status.created',
+  // 취소는 '생성됨' 이 아니다 — 도중에 멈춘 런도 끝난 벤치마크 결과를 보여 주므로 구분해 세운다.
+  cancelled: 'evaluation.batch.cancelled',
 };
 
 // 벤치마크 런 결과 = 프로젝트 상세 안의 한 구획이 아니라 **독립 페이지**다.
 // 런 하나를 깊게 읽는 화면이라 프로젝트 헤더·정보 카드·실행 목록이 위에 겹쳐 있으면
 // 화면의 절반을 배경이 차지한다. 뒤로가기 헤더 규약은 배포 상세(DeployDetailHeader)와
 // 같은 것을 쓴다 — 같은 깊이의 화면이 같은 방식으로 돌아가야 한다.
-// 라우트: /user/workspace/:id/evaluation/project/:projectId/run/:runId
+// 라우트: /user/workspace/:id/evaluation/project/:projectId/run/:runId[?benchmark=<id>]
+//   benchmark — 한 런이 여러 벤치마크를 담을 때(묶음 실행이 GPU 수만큼 런을 나눈다, 설계 §14)
+//   실행 요약에서 누른 벤치마크. 주면 그 벤치마크만 보인다(종전처럼 "벤치마크 하나"의 세부 화면).
 const BenchmarkResultPage = () => {
   const { t } = useTranslation();
   const dispatch = useDispatch();
   const history = useHistory();
   const match = useRouteMatch();
+  const location = useLocation();
   const { id: workspaceId, projectId, runId } = match.params;
+  const focusBenchmark =
+    new URLSearchParams(location.search).get('benchmark') || null;
 
   const [project, setProject] = useState(null); // null=로딩
   const [runs, setRuns] = useState([]);
@@ -96,6 +107,14 @@ const BenchmarkResultPage = () => {
   //    남았다 — 목록(ProjectDetail.benchRows)이 이미 전 토큰을 펼치는 것과 같은 규약으로
   //    맞춘다. 콜론 없는 옛 토큰은 지표 id 뿐이라 지표 라벨로 폴백한다.
   const configured = useMemo(() => {
+    // 좁혀 보는 중이면 그 벤치마크 하나 — metric_set 은 255자에서 잘려 목록에 없을 수도 있다.
+    if (focusBenchmark) {
+      const rec = BENCHMARK_MAP[focusBenchmark]?.recommended;
+      return {
+        label: BENCHMARK_LABEL[focusBenchmark] || focusBenchmark,
+        metricLabel: rec ? metricLabel(t, rec) || rec : null,
+      };
+    }
     const raw = run?.metric_set;
     if (!raw) return null;
     const tokens = String(raw)
@@ -117,7 +136,7 @@ const BenchmarkResultPage = () => {
       metricLabel: uniq(metrics).join(' · ') || null,
     };
     // 지표 이름이 로케일을 타므로 t 가 의존성이다.
-  }, [run, t]);
+  }, [run, t, focusBenchmark]);
 
   // 결과 폴링 경로의 model_id 는 **authZ 바인딩**이다(BE 가 source_model_id 로 잠근다).
   //   프로젝트가 다중 모델이 된 뒤로는 프로젝트 모델이 이 런의 모델과 다를 수 있어,
@@ -144,7 +163,20 @@ const BenchmarkResultPage = () => {
 
   // '다시 실행' 은 이 페이지가 아니라 프로젝트 상세의 실행 모달이 소유한다 —
   // 실행 설정은 프로젝트(모델·데이터셋)를 전제로 하므로 그쪽이 제자리다.
-  const goBack = () => history.push(projectPath);
+  // 실행 요약(BenchmarkBatchPage)에서 벤치마크를 눌러 들어왔으면 뒤로가기는 그 요약이다 —
+  // 요약 → 세부 → 요약 을 오가며 벤치마크를 하나씩 읽는 흐름이다. 직접 링크면 프로젝트로.
+  const backTo = location.state?.from || null;
+  // 런 전체 보기 — 쿼리만 걷고 돌아갈 곳(state)은 그대로 둔다.
+  const showAll = useCallback(
+    () =>
+      history.replace({
+        pathname: location.pathname,
+        search: '',
+        state: location.state,
+      }),
+    [history, location.pathname, location.state],
+  );
+  const goBack = () => history.push(backTo || projectPath);
   const runAgain = () =>
     history.push({ pathname: projectPath, state: { openRunConfig: true } });
 
@@ -194,17 +226,21 @@ const BenchmarkResultPage = () => {
               type={STATUS_BADGE_TYPE[runStatus] || 'gray'}
               size='lg'
             />
-            {meta?.real && (
+            {/* 문항 상한을 준 빠른 점검 — 전체 측정과 나란히 비교하면 안 되는 점수다. */}
+            {meta?.quickLimit != null && (
               <Badge
-                label={t('evaluation.bench.badgeReal')}
-                type='blue'
+                label={t('evaluation.bench.quickCheckShort')}
+                type='yellow'
                 size='lg'
               />
             )}
-            {meta?.mock && <Badge label='mock' type='gray' size='lg' />}
           </span>
         }
-        backLabel={project.name || t('evaluation.run.backToRuns')}
+        backLabel={
+          (backTo && location.state?.fromLabel) ||
+          project.name ||
+          t('evaluation.run.backToRuns')
+        }
         onBack={goBack}
         right={
           <>
@@ -254,6 +290,8 @@ const BenchmarkResultPage = () => {
           jobId={runId}
           onComplete={fetchProject}
           onMeta={setMeta}
+          focusBenchmark={focusBenchmark}
+          onShowAll={showAll}
         />
       )}
     </div>

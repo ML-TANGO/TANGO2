@@ -109,6 +109,63 @@
   box-shadow: inset 0 0 0 4.5px $primary-color, inset 0 0 0 1px $primary-color;
 }
 
+// 체크 표식 — lm-eval 벤치마크는 여러 개를 함께 고른다(라디오와 모양으로 구분한다).
+.pick-check {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  margin-top: 1px;
+  border-radius: 4px;
+  background-color: $mono200;
+  box-shadow: inset 0 0 0 1px $mono203;
+}
+
+.benchmark-option.selected .pick-check {
+  background-color: $primary-color;
+  box-shadow: none;
+
+  // 체크 모양 — 테두리 두 변을 돌려 그린다(아이콘 자산 없이).
+  &::after {
+    position: absolute;
+    top: 3px;
+    left: 5.5px;
+    width: 4px;
+    height: 7px;
+    border: solid $mono200;
+    border-width: 0 2px 2px 0;
+    content: '';
+    transform: rotate(45deg);
+  }
+}
+
+// 선택 막대 — 선택 수 + 보이는 항목 전부/해제.
+.pick-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.pick-bar-btn {
+  padding: 0;
+  border: none;
+  background: none;
+  color: $primary-color;
+  cursor: pointer;
+  font-size: 12.5px;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &:focus-visible {
+    border-radius: 2px;
+    outline: 2px solid $primary-color;
+    outline-offset: 2px;
+  }
+}
+
 .option-body {
   min-width: 0;
 }
@@ -149,6 +206,13 @@
   padding: 0;
   gap: 5px;
   list-style: none;
+
+  // 묶음 목록의 대표 지표(벤치마크 이름 옆, 한 단계 약하게).
+  .plan-metric {
+    margin-left: auto;
+    color: $mono204;
+    font-size: 11.5px;
+  }
 
   li {
     display: flex;
@@ -508,6 +572,16 @@
 .result-table {
   overflow: hidden;
   border-radius: 8px;
+
+  // 표가 fixedHeaderScrollHeight(320·360px)보다 길면 **본문이 스크롤**한다(KMMLU 서브태스크 45·MMLU 57행).
+  // react-data-table-component 6.x 는 fixedHeader 면 본문(.rdt_TableBody)에 max-height + overflow-y: auto
+  // 를 건다(머리 행은 그 위에 그대로 남는다). 그런데 공용 BorderTable 스타일이
+  // `.bordertable .rdt_Table .rdt_TableBody { overflow: visible !important }` 로 그 스크롤을 꺼, 높이 제한만
+  // 남은 본문에서 넘친 행이 위 overflow: hidden 에 잘려 표가 도중에 끊겼다. 공용 규칙은 다른 화면의 드롭다운
+  // 셀 때문에 그대로 두고 이 화면의 표만 되살린다 — 선택자는 공용 규칙(클래스 3개)보다 구체적이어야 이긴다.
+  :global(.bordertable .rdt_Table .rdt_TableBody) {
+    overflow-y: auto !important;
+  }
 }
 
 .table-label {
@@ -577,6 +651,36 @@
   }
 }
 
+/* ── lm-eval 채점 상세 ────────────────────────────────────────────────────────
+   벤치마크마다 요약 칩(.provenance 재사용) → 전 지표 표 → 서브태스크(접힘) → 경고. */
+.lmeval-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  & + & {
+    margin-top: 16px;
+  }
+}
+
+.lmeval-detail-title {
+  margin: 0;
+  color: $normal-text-color;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.lmeval-sub-title {
+  margin: 4px 0 0;
+  color: $sub-text-color;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.lmeval-subtasks > summary {
+  cursor: pointer;
+}
+
 // ── 결과 페이지 ───────────────────────────────────────────────────────────────
 // 런 하나를 깊게 읽는 독립 페이지. 헤더는 배포 상세와 같은 규약(DeployDetailHeader)을 쓴다.
 .result-page {
@@ -618,4 +722,502 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+/* ── 벤치마크 실행(묶음) 결과 요약 — ETRI 결과 화면 구성(BenchmarkBatchPage) ─────────────
+   ① 진행 상황 → ② 요약 카드 4장 → ③ 벤치마크별 점수 + 레이더 → ④ 생성형 지표 → ⑤ 전체 지표.
+   그룹 색 슬롯(g-0~3) = BENCHMARK_GROUPS 순서: 영어 core · 한국어 · 생성형 · 커스텀. */
+$batch-mono: 'Menlo', 'Consolas', 'Monaco', monospace;
+
+// 구역 사이 간격 — ETRI 화면처럼 카드가 한 칸씩 떨어져 쌓인다.
+.batch-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 16px; // 머리 메타 줄과 첫 카드 사이(설명 줄을 뺀 자리)
+}
+
+.batch-card {
+  padding: 18px 20px;
+  border: 1px solid $card-border-color;
+  border-radius: 8px;
+  background-color: $mono200;
+}
+
+.batch-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.batch-progress-label {
+  flex: none;
+  color: $normal-text-color;
+  font-size: 12.5px;
+}
+
+.batch-bar {
+  flex: 1;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 4px;
+  background-color: $mono202;
+
+  i {
+    display: block;
+    height: 100%;
+    border-radius: 4px;
+    background-color: $primary-color;
+    transition: width 0.3s ease;
+  }
+}
+
+.batch-progress-pct {
+  flex: none;
+  min-width: 40px;
+  color: $sub-text-color;
+  font-family: $batch-mono;
+  font-size: 12px;
+  text-align: right;
+}
+
+.batch-stages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.batch-stage {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border: 1px solid $mono203;
+  border-radius: 12px;
+  background: $mono200;
+  color: $normal-text-color;
+  cursor: pointer;
+  font-size: 12px;
+  gap: 6px;
+
+  &:hover {
+    border-color: $primary-color;
+  }
+
+  &:focus-visible {
+    outline: 2px solid $primary-color;
+    outline-offset: 2px;
+  }
+}
+
+.batch-stage-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: $blue104; // 진행 중
+}
+
+.batch-stage.st-completed .batch-stage-dot {
+  background-color: $lime603;
+}
+
+.batch-stage.st-failed .batch-stage-dot,
+.batch-stage.st-cancelled .batch-stage-dot {
+  background-color: $red502;
+}
+
+// 대기 — 같은 런의 앞 벤치마크를 채점하는 중(런 하나가 벤치마크를 차례로 채점한다).
+.batch-stage.st-pending .batch-stage-dot {
+  background-color: $mono203;
+}
+
+// ② 요약 카드 4장 — 값이 주인공이다(ETRI scard: 라벨 · 큰 값 · 부연).
+.batch-cards4 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+
+  @media (max-width: 960px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.batch-sum {
+  display: flex;
+  flex-direction: column;
+  padding: 14px 16px;
+  border: 1px solid $card-border-color;
+  border-top-width: 3px;
+  border-radius: 8px;
+  background-color: $mono200;
+  gap: 4px;
+
+  &.g-0 {
+    border-top-color: $blue104;
+  }
+
+  &.g-1 {
+    border-top-color: $lime603;
+  }
+
+  &.g-2 {
+    border-top-color: $orange403;
+  }
+
+  &.g-3 {
+    border-top-color: $yellow304;
+  }
+
+  &.overall {
+    border-top-color: $blue107;
+  }
+}
+
+.batch-sum-k {
+  color: $sub-text-color;
+  font-size: 12px;
+}
+
+.batch-sum-v {
+  color: $normal-text-color;
+  font-family: SpoqaB;
+  font-size: 26px;
+  line-height: 1.15;
+}
+
+.batch-sum-s {
+  color: $sub-text-color;
+  font-size: 11.5px;
+}
+
+// ③ 벤치마크별 점수 + 레이더(2단)
+.batch-two {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 16px;
+
+  @media (max-width: 1100px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.batch-legend {
+  display: flex;
+  flex-wrap: wrap;
+  color: $sub-text-color;
+  font-size: 12px;
+  gap: 4px 14px;
+
+  span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+}
+
+.batch-sw {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.batch-benchlist {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.batch-brow {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+  gap: 6px;
+  text-align: left;
+
+  &:hover {
+    background-color: $hover-bg-color;
+  }
+
+  &:focus-visible {
+    outline: 2px solid $primary-color;
+    outline-offset: 1px;
+  }
+
+  &.error .batch-bval {
+    color: $red502;
+  }
+}
+
+.batch-bt {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.batch-bname {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  color: $normal-text-color;
+  font-family: SpoqaB;
+  font-size: 13px;
+  gap: 8px;
+}
+
+.batch-bmeta {
+  color: $sub-text-color;
+  font-family: Spoqa, sans-serif;
+  font-size: 11.5px;
+  font-weight: normal;
+}
+
+.batch-bval {
+  flex: none;
+  color: $normal-text-color;
+  font-family: $batch-mono;
+  font-size: 13px;
+}
+
+.batch-bline {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background-color: $mono202;
+
+  i {
+    display: block;
+    height: 100%;
+    border-radius: 3px;
+  }
+}
+
+// 그룹 색 슬롯 — 요약 카드 윗줄·막대·범례가 같은 색을 쓴다.
+.batch-bline .g-0,
+.batch-sw.g-0 {
+  background-color: $blue104;
+}
+
+.batch-bline .g-1,
+.batch-sw.g-1 {
+  background-color: $lime603;
+}
+
+.batch-bline .g-2,
+.batch-sw.g-2 {
+  background-color: $orange403;
+}
+
+.batch-bline .g-3,
+.batch-sw.g-3 {
+  background-color: $yellow304;
+}
+
+.batch-empty {
+  margin: 0;
+  color: $sub-text-color;
+  font-size: 12.5px;
+}
+
+// ④·⑤ 표
+.batch-tablewrap {
+  overflow-x: auto;
+}
+
+.batch-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+
+  th,
+  td {
+    padding: 8px 10px;
+    border-bottom: 1px solid $mono202;
+    color: $normal-text-color;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  th {
+    color: $sub-text-color;
+    font-weight: normal;
+  }
+
+  .num {
+    font-family: $batch-mono;
+    text-align: right;
+  }
+
+  th.num {
+    font-family: inherit;
+  }
+
+  .mono {
+    font-family: $batch-mono;
+    font-size: 11.5px;
+  }
+
+  // 태스크 목록(KoBEST 5종 등)은 줄을 바꿔 표가 가로로 넘치지 않게 한다.
+  td.wrap {
+    min-width: 160px;
+    max-width: 280px;
+    white-space: normal;
+    word-break: break-word;
+  }
+
+  tr.clickable {
+    cursor: pointer;
+
+    &:hover td {
+      background-color: $hover-bg-color;
+    }
+  }
+
+  // 벤치마크가 바뀌는 줄 — 병합된 표처럼 읽히도록 윗선을 진하게.
+  tr.first td {
+    border-top: 1px solid $mono203;
+  }
+}
+
+.batch-pill {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background-color: $blue101;
+  color: $blue105;
+  font-size: 11px;
+
+  &.st-completed {
+    background-color: $lime601;
+    color: $lime604;
+  }
+
+  &.st-failed,
+  &.st-cancelled {
+    background-color: $mono202;
+    color: $red502;
+  }
+
+  &.st-pending {
+    background-color: $mono202;
+    color: $mono204;
+  }
+}
+
+// 표 안 벤치마크 이름 — 키보드로 세부 결과를 여는 버튼(행 클릭은 마우스용). 글자처럼 보인다.
+.batch-cell-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: $primary-color;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &:focus-visible {
+    border-radius: 2px;
+    outline: 2px solid $primary-color;
+    outline-offset: 2px;
+  }
+}
+
+// 런치조차 못 한 벤치마크 — 열 곳이 없다(사유는 title 로).
+.batch-stage:disabled,
+.batch-brow:disabled {
+  cursor: default;
+  opacity: 0.7;
+
+  &:hover {
+    border-color: $mono203;
+    background: none;
+  }
+}
+
+// 세부 화면 머리 — 좁혀 보는 중(런 하나가 여러 벤치마크를 담는다)·중간 결과를 한 줄로 알린다.
+.focus-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background-color: $blue101;
+  color: $blue105;
+  font-size: 13px;
+  line-height: 20px;
+
+  span {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .warn {
+    color: $red502;
+  }
+}
+
+// 채점기가 남긴 실패 사유 — 원문 그대로(줄바꿈 유지, 가로로 넘치지 않게).
+.focus-error {
+  margin: 8px 0 0;
+  color: $mono204;
+  font-family: $batch-mono;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+// 실행 설정 — 묶음이 쓸 GPU 수(= 런 수) 스테퍼.
+.gpu-count {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 4px 0 6px;
+}
+
+.gpu-count-label {
+  margin-right: auto;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.gpu-count-btn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid $mono203;
+  border-radius: 6px;
+  background-color: $mono200;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    border-color: $primary-color;
+    color: $primary-color;
+  }
+
+  &:focus-visible {
+    outline: 2px solid $primary-color;
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+}
+
+.gpu-count-value {
+  min-width: 56px;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
 }

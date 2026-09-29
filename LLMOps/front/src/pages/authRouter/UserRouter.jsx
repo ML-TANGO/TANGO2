@@ -207,6 +207,11 @@ const BenchmarkResultPage = lazy(
       '@src/pages/llm/Evaluation/BenchmarkEvaluation/BenchmarkResultPage'
     ),
 );
+// 벤치마크 실행(묶음) 결과 요약 — ETRI 결과 화면 구성. 한 번의 실행 = 카드 1장이 여는 화면.
+const BenchmarkBatchPage = lazy(
+  () =>
+    import('@src/pages/llm/Evaluation/BenchmarkEvaluation/BenchmarkBatchPage'),
+);
 const EvalCrossCompare = lazy(
   () => import('@src/pages/llm/Evaluation/EvalCrossCompare/EvalCrossCompare'),
 );
@@ -856,6 +861,17 @@ const routeArrAll = [
     activeIcon: IconModelActive,
     platform: 'flightbase',
     render: (props) => <BenchmarkResultPage {...props} />,
+  },
+  {
+    // 벤치마크 실행(묶음) 결과 요약(독립 페이지). ⚠️ 위와 같은 이유로 ProjectDetail **앞에**.
+    name: 'BenchmarkBatchPage',
+    path: '/user/workspace/:id/evaluation/project/:projectId/batch/:batchKey',
+    exact: true,
+    disabled: true,
+    icon: IconModel,
+    activeIcon: IconModelActive,
+    platform: 'flightbase',
+    render: (props) => <BenchmarkBatchPage {...props} />,
   },
   {
     // 평가 프로젝트 상세(목록에서 진입, run 실행·전문가 채점·비교). detail=사이드nav 비노출.

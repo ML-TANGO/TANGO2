@@ -92,6 +92,24 @@ export const runBenchmark = async (body) => {
   return await callApi({ url: 'evaluations/benchmark', method: 'post', body });
 };
 
+// 여러 벤치마크 한 번에 — 서버가 벤치마크마다 런 하나로 펼친다(lm-eval 채점 벤치마크만).
+// 응답 result.runs = [{ benchmark, job_id } | { benchmark, error }] — 부분 실패를 숨기지 않는다.
+export const runBenchmarkBatch = async (body) => {
+  return await callApi({
+    url: 'evaluations/benchmark/batch',
+    method: 'post',
+    body,
+  });
+};
+
+// 실행(묶음) 삭제 — 결과 카드 1장 = 실행 한 번. 멤버 런까지 지운다(다른 프로젝트 것은 not-found).
+export const deleteRunBatch = async (projectId, batchId) => {
+  return await callApi({
+    url: `evaluations/projects/${projectId}/batches/${batchId}`,
+    method: 'delete',
+  });
+};
+
 // 평가 추론 러너(generate) 런 생성 래퍼(runEvalInference)는 지웠다 — 평가 실행이 이미
 //   "출력을 만들 배포"를 고르므로 출력을 미리 만들어 두는 별도의 생성 런이 의미를 잃었고,
 //   프로젝트 상세에서 그 진입점을 없애며 호출자가 0 이 됐다.

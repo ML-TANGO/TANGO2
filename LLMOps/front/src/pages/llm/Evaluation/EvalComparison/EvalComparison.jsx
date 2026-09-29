@@ -93,6 +93,18 @@ const EvalComparison = ({ comparison, showModel = false, onDelete }) => {
             {isBest && (
               <Badge label={t('evaluate.best.badge')} type='green' size='sm' />
             )}
+            {/* 해시 mock 채점기의 가짜 점수 — BE 가 best 후보에서 이미 뺐다. */}
+            {run.mock && v !== undefined && (
+              <Badge label='mock' type='gray' size='sm' />
+            )}
+            {/* 빠른 확인(앞 N문항) — BE 가 best 후보에서 이미 뺐다. */}
+            {run.sample_limit != null && v !== undefined && (
+              <Badge
+                label={t('evaluation.bench.quickCheckShort')}
+                type='yellow'
+                size='sm'
+              />
+            )}
           </span>
         );
       },

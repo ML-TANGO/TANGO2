@@ -9,7 +9,11 @@
 // ⚠️ BE 의 `best` 는 **모델 무관 전역 best**(지표별 run id 하나)다. 행렬이 필요로 하는
 // "모델별 best" 는 BE 가 주지 않으므로 여기서 runs 를 model_id 로 그룹핑해 직접 뽑는다.
 
-import { BENCHMARK_LABEL } from '../BenchmarkEvaluation/benchmarks';
+import {
+  BENCHMARK_CATEGORIES,
+  BENCHMARK_LABEL,
+  BENCHMARK_MAP,
+} from '../BenchmarkEvaluation/benchmarks';
 import {
   METRIC_MAP,
   metricLabel,
@@ -49,12 +53,25 @@ export const EXPERT_METRIC_LABEL_KEYS = {
  * 벤치마크 런의 metric_key 는 벤치마크 id(`logickor`)로 와서 척도·라벨을 갖고 있지 않다.
  * 실제 채점 축은 `metric_set`("logickor:judge_overall")의 뒷부분에 있으므로 그걸 쓴다.
  * self-metric(`bleu`)처럼 키 자체가 지표 id 면 그대로 쓰고, 어느 쪽도 아니면 null.
+ * 한 런이 여러 벤치마크를 담으면(묶음 실행이 GPU 수만큼 런을 나눈다, 설계 §14) metric_set 이
+ * "arc:accuracy,piqa:acc_norm" 이다 — metricKey 와 같은 벤치마크의 토큰을 고른다. metric_set 은
+ * 255자에서 잘려 토큰이 없을 수 있어, 그때는 카탈로그의 대표 지표로 되돌아간다.
  */
 export const metricIdOf = (run, metricKey) => {
-  const set = typeof run?.metric_set === 'string' ? run.metric_set : '';
-  const suffix = set.includes(':') ? set.slice(set.indexOf(':') + 1) : set;
-  if (suffix && METRIC_MAP[suffix]) return suffix;
-  return METRIC_MAP[metricKey] ? metricKey : null;
+  const tokens = (typeof run?.metric_set === 'string' ? run.metric_set : '')
+    .split(',')
+    .map((token) => token.trim())
+    .filter(Boolean);
+  const tailOf = (token) =>
+    token && token.includes(':') ? token.slice(token.indexOf(':') + 1) : null;
+  const own = tailOf(tokens.find((token) => token.split(':')[0] === metricKey));
+  if (own && METRIC_MAP[own]) return own;
+  // 옛 단일 토큰 런 — 키와 벤치마크 이름이 달라도 그 런의 축은 하나뿐이다(종전 규칙).
+  const single = tokens.length === 1 ? tailOf(tokens[0]) || tokens[0] : null;
+  if (single && METRIC_MAP[single]) return single;
+  if (METRIC_MAP[metricKey]) return metricKey;
+  const rec = BENCHMARK_MAP[metricKey]?.recommended;
+  return rec && METRIC_MAP[rec] ? rec : null;
 };
 
 // 행 척도 배지. 표시는 원 척도로 두므로(단위 통일 X) 이 배지가 "가로로만 비교하라"는 표식이다.
@@ -93,20 +110,110 @@ const isScored = (run, metricKey) => {
   return typeof v === 'number' && Number.isFinite(v);
 };
 
+// 순위(Best·행 최고값)에 들지 않는 런 — 점수는 보이되 다른 런과 겨루지 않는다
+// (BE build_eval_comparison 의 best 후보 규칙과 같다).
+//   mock          — 해시 mock 채점기의 가짜 점수.
+//   sample_limit  — 태스크당 앞 N문항만 잰 빠른 확인. 분모가 달라 전체 측정과 비교할 수 없다.
+export const isUnranked = (run) => !!run?.mock || run?.sample_limit != null;
+
 const pickBetter = (a, b, direction) =>
   direction === 'min' ? Math.min(a, b) : Math.max(a, b);
 
+// ── 평가 대상(열) = 모델 × 출처 ─────────────────────────────────────────────
+// 같은 모델이라도 체크포인트가 다르면 다른 가중치다 — 한 열로 합치면 ckpt3 의 MMLU 와 ckpt1 의
+// ARC 가 한 모델의 성적표로 섞인다. 그래서 열은 "어떤 가중치가 이 점수를 냈나" 단위로 가른다:
+//   ckpt:<이름>        — 채점기가 그 체크포인트를 직접 올린 런(lm-eval·포맷 학습)
+//   dep:<배포>@<커밋>  — 배포에 생성을 맡긴 런. 커밋은 **완료 시점에 굳힌** 서빙 커밋
+//                        (BE source_commit)이다 — 배포는 나중에 다른 커밋으로 다시 올라갈 수
+//                        있어 배포 이름만으로 묶으면 한 열에 두 가중치가 섞인다. 굳히기 이전의
+//                        옛 런은 커밋을 모르므로 dep:<배포> 로 따로 선다(추측해서 합치지 않는다).
+//                        생성 경로(배포의 샘플링 설정)가 달라 체크포인트 열과도 합치지 않는다.
+//   unknown           — 둘 다 없는 옛 런(mock 등).
+export const sourceKeyOf = (run) => {
+  if (run?.checkpoint) return `ckpt:${run.checkpoint}`;
+  if (run?.source_mode === 'deployment' && run?.source_deployment)
+    return run.source_commit
+      ? `dep:${run.source_deployment}@${run.source_commit}`
+      : `dep:${run.source_deployment}`;
+  return 'unknown';
+};
+
+// 한 모델 안의 열 순서 — 기본 가중치(첫 커밋 source_model, evaluate_lmeval checkpoint.SOURCE_MODEL)
+// 를 맨 앞에 세운다. 색 실선은 그 모델의 첫 열에 붙으므로 "기준 가중치 = 실선" 이 된다.
+const SOURCE_ORDER = { ckpt: 0, dep: 1, unknown: 2 };
+const sourceRank = (key) =>
+  key === 'ckpt:source_model'
+    ? -1
+    : (SOURCE_ORDER[String(key).split(':')[0]] ?? 3);
+
+export const subjectKeyOf = (run) => `${run?.model_id}|${sourceKeyOf(run)}`;
+
+// 열 머리 라벨 — 키를 되쪼개지 않고 런의 필드에서 만든다(배포·커밋 이름에 구분자가 섞여도 안전).
+const sourceLabelOfRun = (run, t) => {
+  if (run?.checkpoint) return String(run.checkpoint);
+  if (run?.source_mode === 'deployment' && run?.source_deployment) {
+    const via = t('evaluation.compare.viaDeployment', {
+      name: run.source_deployment,
+    });
+    return run.source_commit ? `${via} · ${run.source_commit}` : via;
+  }
+  return t('evaluation.compare.sourceUnknown');
+};
+
 /**
- * `{ models, metric_keys, runs }` → `{ models, rows }`.
+ * 고른 모델들의 런에서 평가 대상(열)을 뽑는다 — 모델 순서를 따르고, 한 모델 안에서는
+ * 체크포인트 → 배포 → 출처 미상 순, 같은 종류는 이름순. 런이 하나도 없는 모델도 열 하나를
+ * 세운다(전부 '실행 안 함' 으로 보이는 것이 그 모델의 사실이다).
+ */
+export const buildSubjects = (models, runs, t) =>
+  models.flatMap((m, modelIndex) => {
+    // id 는 문자열로 맞춰 비교한다 — 셀 키(subjectKeyOf)는 템플릿 문자열이라 타입이 섞여도
+    // 같아지는데, 여기서만 엄격 비교하면 그 모델의 열이 자리표시(none)로 바뀌고 점수가 사라진다.
+    const labels = new Map(); // 출처 키 → 라벨(그 키의 첫 런에서)
+    runs
+      .filter((r) => String(r.model_id) === String(m.id))
+      .forEach((r) => {
+        const key = sourceKeyOf(r);
+        if (!labels.has(key)) labels.set(key, sourceLabelOfRun(r, t));
+      });
+    const keys = [...labels.keys()].sort(
+      (a, b) => sourceRank(a) - sourceRank(b) || String(a).localeCompare(b),
+    );
+    if (!keys.length) {
+      return [
+        {
+          key: `${m.id}|none`,
+          modelId: m.id,
+          modelName: m.name,
+          modelIndex,
+          sourceKey: null,
+          sourceLabel: null,
+          nthOfModel: 0,
+        },
+      ];
+    }
+    return keys.map((sourceKey, nthOfModel) => ({
+      key: `${m.id}|${sourceKey}`,
+      modelId: m.id,
+      modelName: m.name,
+      modelIndex,
+      sourceKey,
+      sourceLabel: labels.get(sourceKey),
+      nthOfModel,
+    }));
+  });
+
+/**
+ * `{ models, metric_keys, runs }` → `{ models, subjects, rows }`.
  *
  * rows[i] = {
  *   key, metricId, title, subLabel, scaleLabel, direction, rowBest,
- *   cells: { [modelId]: { run, value, isBest, delta, barPercent } | null },
+ *   cells: { [subjectKey]: { run, value, isBest, delta, barPercent } | null },
  *   runs: [...]            // 이 지표에 기여한 전 런(펼침용)
  * }
  *
- * 셀은 그 모델의 **최고 런**이며 후보는 completed 로 한정한다 — BE 가 전역 best 를 고르는
- * 기준과 같게 두어야 같은 데이터에서 두 화면이 다른 승자를 말하지 않는다.
+ * 셀은 그 평가 대상(모델 × 출처)의 **최고 런**이며 후보는 completed 로 한정한다 — BE 가 전역
+ * best 를 고르는 기준과 같게 두어야 같은 데이터에서 두 화면이 다른 승자를 말하지 않는다.
  */
 export const buildMatrix = (comparison, t) => {
   const models = Array.isArray(comparison?.models) ? comparison.models : [];
@@ -114,64 +221,79 @@ export const buildMatrix = (comparison, t) => {
     ? comparison.metric_keys
     : [];
   const allRuns = Array.isArray(comparison?.runs) ? comparison.runs : [];
-  const modelOrder = new Map(models.map((m, i) => [m.id, i]));
+  const subjects = buildSubjects(models, allRuns, t);
+  const subjectOrder = new Map(subjects.map((s, i) => [s.key, i]));
 
   const rows = metricKeys.map((key) => {
     const direction = directionOf(key);
     const contributing = allRuns.filter((r) => isScored(r, key));
 
-    // 모델별 최고 런(completed 한정). 동점이면 먼저 온 런을 유지한다 —
+    // 평가 대상별 최고 런(completed 한정). 동점이면 먼저 온 런을 유지한다 —
     // BE 가 runs 를 최신순으로 주므로 최신 런이 남는다.
-    const bestByModel = new Map();
+    // 순위에 들지 않는 런(mock·빠른 확인)은 순위에 드는 런이 하나라도 있으면 그 대상의
+    // 대표가 되지 못한다(BE build_eval_comparison 이 best 후보에서 빼는 것과 같은 규칙).
+    const bestBySubject = new Map();
     contributing.forEach((run) => {
       if (run.status !== 'completed') return;
-      const prev = bestByModel.get(run.model_id);
-      if (!prev) {
-        bestByModel.set(run.model_id, run);
+      const sk = subjectKeyOf(run);
+      const prev = bestBySubject.get(sk);
+      if (!prev || (isUnranked(prev) && !isUnranked(run))) {
+        bestBySubject.set(sk, run);
         return;
       }
+      if (isUnranked(run) && !isUnranked(prev)) return;
       const value = run.metrics[key];
       const prevValue = prev.metrics[key];
       const better =
         direction === 'min' ? value < prevValue : value > prevValue;
-      if (better) bestByModel.set(run.model_id, run);
+      if (better) bestBySubject.set(sk, run);
     });
 
     const metricId = metricIdOf(
-      bestByModel.values().next().value || contributing[0],
+      bestBySubject.values().next().value || contributing[0],
       key,
     );
 
-    const cellValues = [...bestByModel.values()].map((r) => r.metrics[key]);
+    // 행 최고값은 순위에 드는 런에서만 뽑는다 — mock·빠른 확인뿐이면 최고값도 없다.
+    const cellValues = [...bestBySubject.values()]
+      .filter((r) => !isUnranked(r))
+      .map((r) => r.metrics[key]);
     const rowBest = cellValues.length
       ? cellValues.reduce((acc, v) => pickBetter(acc, v, direction))
       : null;
 
     const cells = {};
-    models.forEach((m) => {
-      const run = bestByModel.get(m.id);
+    subjects.forEach((s) => {
+      const run = bestBySubject.get(s.key);
       if (!run) {
-        cells[m.id] = null;
+        cells[s.key] = null;
         return;
       }
       const value = run.metrics[key];
-      cells[m.id] = {
+      const unranked = isUnranked(run);
+      cells[s.key] = {
         run,
         value,
-        isBest: value === rowBest,
+        isBest: !unranked && value === rowBest,
+        // 순위에 들지 않는 런은 최고값과 견주지 않는다 — 20문항 점수 옆에 "+55" 나 막대를
+        // 그리면 분모가 다른 두 점수를 비교하는 셈이다(점수와 배지만 보인다).
         delta:
-          value === rowBest ? null : deltaLabelOf(metricId, value, rowBest),
-        barPercent: barPercentOf(value, rowBest, direction),
+          unranked || value === rowBest
+            ? null
+            : deltaLabelOf(metricId, value, rowBest),
+        barPercent: unranked ? 0 : barPercentOf(value, rowBest, direction),
       };
     });
 
-    // 펼침 목록 — 모델 열 순서로 묶고, 같은 모델 안에서는 우수한 점수부터.
+    // 펼침 목록 — 평가 대상 열 순서로 묶고, 같은 대상 안에서는 우수한 점수부터.
     const drawerRuns = [...contributing].sort((a, b) => {
-      const oa = modelOrder.has(a.model_id)
-        ? modelOrder.get(a.model_id)
+      const ka = subjectKeyOf(a);
+      const kb = subjectKeyOf(b);
+      const oa = subjectOrder.has(ka)
+        ? subjectOrder.get(ka)
         : Number.MAX_SAFE_INTEGER;
-      const ob = modelOrder.has(b.model_id)
-        ? modelOrder.get(b.model_id)
+      const ob = subjectOrder.has(kb)
+        ? subjectOrder.get(kb)
         : Number.MAX_SAFE_INTEGER;
       if (oa !== ob) return oa - ob;
       const va = a.metrics[key];
@@ -193,7 +315,112 @@ export const buildMatrix = (comparison, t) => {
     };
   });
 
-  return { models, rows };
+  return { models, subjects, rows };
+};
+
+// ── 평가 대상 요약(스코어카드) ─────────────────────────────────────────────
+// ETRI 대시보드의 "영어 core / 한국어 / 생성형 평균" 에 해당하는 요약이다. 다만 그 도구의
+// "종합"(전체 대표지표 평균)은 따르지 않는다 — 정답률·F1·BLEU 를 한 평균에 섞는다.
+//   · 평균에 넣는 것은 정답 대조 벤치마크의 **0~100 정답률 계열** 대표 지표뿐이다.
+//     BLEU/ROUGE·perplexity·심판 점수(0~10)·MixATIS(0~1)·사용자 데이터셋(custom)은 뺀다.
+//   · 순위에 들지 않는 런(mock·빠른 확인)도 뺀다 — 분모가 다르거나 점수가 가짜다.
+//   · 평균은 **카드에 오른 모든 대상이 잰 벤치마크**로만 낸다. 대상마다 잰 벤치마크가 다르면
+//     평균이 서로 다른 문항 집합을 재 비교가 거짓이 된다.
+export const AVERAGE_METRIC_IDS = new Set([
+  'accuracy',
+  'acc_norm',
+  'f1',
+  'exact_match',
+  'pass_at_1',
+]);
+
+const mean = (values) =>
+  values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
+
+/**
+ * buildMatrix 결과 → `{ cards, sharedCount, totalCount, categoryIds }`.
+ *
+ * cards[i] = { subject, measured, overall, categories: { [categoryId]: number }, unrankedOnly }
+ *   measured     — 이 대상이 전체 측정으로 잰 평균 가능 벤치마크 수(커버리지)
+ *   overall      — 공통 벤치마크 평균(공통이 없으면 null)
+ *   unrankedOnly — 순위 제외 점수(빠른 점검·mock)만 있는 대상(평균·공통 계산에서 빠진다)
+ * sharedCount — 모든 카드가 잰 벤치마크 수, totalCount — 누구든 잰 평균 가능 벤치마크 수
+ * categoryIds — 공통 벤치마크에 있는 카테고리(카탈로그 순서)
+ */
+export const buildScorecards = (matrix) => {
+  const subjects = matrix?.subjects || [];
+  const averageRows = (matrix?.rows || []).filter((row) => {
+    const bench = BENCHMARK_MAP[row.key];
+    return (
+      bench &&
+      bench.evalType === 'reference' &&
+      bench.category !== 'custom' &&
+      AVERAGE_METRIC_IDS.has(row.metricId) &&
+      scaleMaxFor(row.metricId) === 100
+    );
+  });
+  const ranked = (row, subject) => {
+    const cell = row.cells[subject.key];
+    return cell && !isUnranked(cell.run) ? cell : null;
+  };
+  const scoredSubjects = subjects.filter((s) =>
+    averageRows.some((row) => ranked(row, s)),
+  );
+  const measuredRows = averageRows.filter((row) =>
+    scoredSubjects.some((s) => ranked(row, s)),
+  );
+  const sharedRows = measuredRows.filter((row) =>
+    scoredSubjects.every((s) => ranked(row, s)),
+  );
+  const categoryIds = BENCHMARK_CATEGORIES.map((c) => c.id).filter((id) =>
+    sharedRows.some((row) => BENCHMARK_MAP[row.key].category === id),
+  );
+
+  const scoreCard = (subject) => {
+    const categories = {};
+    categoryIds.forEach((id) => {
+      categories[id] = mean(
+        sharedRows
+          .filter((row) => BENCHMARK_MAP[row.key].category === id)
+          .map((row) => ranked(row, subject).value),
+      );
+    });
+    return {
+      subject,
+      measured: measuredRows.filter((row) => ranked(row, subject)).length,
+      overall: mean(sharedRows.map((row) => ranked(row, subject).value)),
+      categories,
+      unrankedOnly: false,
+    };
+  };
+
+  // 순위 제외 점수(빠른 점검·mock)만 있는 대상도 카드는 세운다 — 빼 버리면 "고른 모델에 비교할
+  // 전체 측정이 없다"는 사실이 가려지고, 남은 한 대상의 평균이 비교 결과처럼 읽힌다(codex 리뷰).
+  // 평균·공통 벤치마크 계산에는 넣지 않는다(넣으면 mock 만 있는 옛 이력이 요약을 늘 비운다).
+  const cards = subjects
+    .filter(
+      (s) =>
+        scoredSubjects.includes(s) ||
+        averageRows.some((row) => row.cells[s.key]),
+    )
+    .map((subject) =>
+      scoredSubjects.includes(subject)
+        ? scoreCard(subject)
+        : {
+            subject,
+            measured: 0,
+            overall: null,
+            categories: {},
+            unrankedOnly: true,
+          },
+    );
+
+  return {
+    cards,
+    sharedCount: sharedRows.length,
+    totalCount: measuredRows.length,
+    categoryIds,
+  };
 };
 
 // ── 런 축(열=런) ─────────────────────────────────────────────────────────
@@ -277,8 +504,10 @@ export const buildRunMatrix = (comparison, t) => {
     // 척도·라벨은 그 지표를 실제로 잰 런에서 되짚는다(안 잰 런엔 metric_set 이 없다).
     const metricId = metricIdOf(scored[0], key);
 
-    const rowBest = scored.length
-      ? scored
+    // 행 최고값은 순위에 드는 런에서만 — mock·빠른 확인 점수가 Best 가 되면 전체 측정 런이 뒤처져 보인다.
+    const realScored = scored.filter((r) => !isUnranked(r));
+    const rowBest = realScored.length
+      ? realScored
           .map((r) => r.metrics[key])
           .reduce((acc, v) => pickBetter(acc, v, direction))
       : null;
@@ -290,13 +519,18 @@ export const buildRunMatrix = (comparison, t) => {
         return;
       }
       const value = run.metrics[key];
+      const unranked = isUnranked(run);
       cells[run.id] = {
         run,
         value,
-        isBest: value === rowBest,
+        isBest: !unranked && value === rowBest,
+        // 순위에 들지 않는 런은 최고값과 견주지 않는다 — 20문항 점수 옆에 "+55" 나 막대를
+        // 그리면 분모가 다른 두 점수를 비교하는 셈이다(점수와 배지만 보인다).
         delta:
-          value === rowBest ? null : deltaLabelOf(metricId, value, rowBest),
-        barPercent: barPercentOf(value, rowBest, direction),
+          unranked || value === rowBest
+            ? null
+            : deltaLabelOf(metricId, value, rowBest),
+        barPercent: unranked ? 0 : barPercentOf(value, rowBest, direction),
       };
     });
 

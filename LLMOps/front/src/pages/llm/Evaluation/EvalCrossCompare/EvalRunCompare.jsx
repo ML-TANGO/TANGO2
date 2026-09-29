@@ -198,6 +198,16 @@ const EvalRunCompare = ({ workspaceId }) => {
       <div className={cx('cell', cell.isBest && 'is-best')}>
         <span className={cx('cell-value')}>
           {formatMetricValue(row.metricId, cell.value)}
+          {/* 해시 mock 채점기의 가짜 점수 — 실측과 같은 id 로 이력에 남아 있다. */}
+          {cell.run?.mock && <Badge label='mock' type='gray' size='sm' />}
+          {/* 태스크당 앞 N문항만 잰 빠른 확인 — 순위에서 빠진다(isUnranked). */}
+          {cell.run?.sample_limit != null && (
+            <Badge
+              label={t('evaluation.bench.quickCheckShort')}
+              type='yellow'
+              size='sm'
+            />
+          )}
         </span>
         <span className={cx('cell-delta', cell.isBest && 'best')}>
           {cell.isBest ? t('evaluate.best.badge') : cell.delta}

@@ -9,13 +9,16 @@ import EmptyBox from '@src/components/molecules/EmptyBox';
 import GuideBox from '@src/components/molecules/GuideBox';
 import Tab from '@src/components/molecules/Tab';
 
-import { formatMetricValue } from '../BenchmarkEvaluation/benchmarkMetrics';
+import { BENCHMARK_CATEGORIES } from '../BenchmarkEvaluation/benchmarks';
+import { fmt, formatMetricValue } from '../BenchmarkEvaluation/benchmarkMetrics';
 import EvalRunCompare from './EvalRunCompare';
+import ScoreRadar from './ScoreRadar';
 import {
   EXPERT_METRIC_LABEL_KEYS,
   STATUS_BADGE_TYPE,
   SWATCH_COUNT,
   buildMatrix,
+  buildScorecards,
 } from './compareMatrix';
 
 import { getEvalCompare } from '@src/apis/llm/evaluation';
@@ -28,6 +31,11 @@ import classNames from 'classnames/bind';
 import style from './EvalCrossCompare.module.scss';
 
 const cx = classNames.bind(style);
+
+// 요약 카드·레이더의 카테고리 이름 — 카탈로그 카테고리 id → i18n 키.
+const CATEGORY_LABEL_KEY = Object.fromEntries(
+  BENCHMARK_CATEGORIES.map((c) => [c.id, c.labelKey]),
+);
 
 const MAX_MODELS = 6; // llm_evaluation MAX_COMPARE_MODELS 와 일치(초과 시 BE 422 회피).
 
@@ -148,16 +156,24 @@ const EvalCrossCompare = () => {
 
   // 모델 색은 목록 순서로 고정한다 — 선택을 바꿔도 같은 모델이 같은 색을 유지해야
   // 칩·열 머리·펼침 목록의 점이 서로를 가리킬 수 있다.
-  const swatchOf = useMemo(() => {
+  const swatchIndexOf = useMemo(() => {
     const map = {};
     models.forEach((m, i) => {
-      map[m.id] = `sw-${i % SWATCH_COUNT}`;
+      map[m.id] = i % SWATCH_COUNT;
     });
     return map;
   }, [models]);
+  const swatchOf = useMemo(() => {
+    const map = {};
+    Object.entries(swatchIndexOf).forEach(([id, i]) => {
+      map[id] = `sw-${i}`;
+    });
+    return map;
+  }, [swatchIndexOf]);
 
-  // t 는 행 제목·부제(지표 이름)를 만드는 데 쓰이므로 의존성이다.
+  // t 는 행 제목·부제(지표 이름)와 평가 대상의 출처 라벨을 만드는 데 쓰이므로 의존성이다.
   const matrix = useMemo(() => buildMatrix(comparison, t), [comparison, t]);
+  const scorecards = useMemo(() => buildScorecards(matrix), [matrix]);
 
   const rowTitle = (row) =>
     EXPERT_METRIC_LABEL_KEYS[row.key]
@@ -176,8 +192,8 @@ const EvalCrossCompare = () => {
     return '-';
   };
 
-  const renderCell = (row, model) => {
-    const cell = row.cells[model.id];
+  const renderCell = (row, subject) => {
+    const cell = row.cells[subject.key];
     if (!cell) {
       return (
         <div className={cx('cell', 'empty')}>
@@ -189,13 +205,23 @@ const EvalCrossCompare = () => {
       <div className={cx('cell', cell.isBest && 'is-best')}>
         <span className={cx('cell-value')}>
           {formatMetricValue(row.metricId, cell.value)}
+          {/* 해시 mock 채점기의 가짜 점수 — 실측과 같은 id 로 이력에 남아 있다. */}
+          {cell.run?.mock && <Badge label='mock' type='gray' size='sm' />}
+          {/* 태스크당 앞 N문항만 잰 빠른 확인 — 순위에서 빠진다(isUnranked). */}
+          {cell.run?.sample_limit != null && (
+            <Badge
+              label={t('evaluation.bench.quickCheckShort')}
+              type='yellow'
+              size='sm'
+            />
+          )}
         </span>
         <span className={cx('cell-delta', cell.isBest && 'best')}>
           {cell.isBest ? t('evaluate.best.badge') : cell.delta}
         </span>
         <span className={cx('cell-bar')}>
           <i
-            className={cx('cell-bar-fill', swatchOf[model.id])}
+            className={cx('cell-bar-fill', swatchOf[subject.modelId])}
             style={{ width: `${cell.barPercent}%` }}
           />
         </span>
@@ -292,8 +318,122 @@ const EvalCrossCompare = () => {
     </th>
   );
 
+  // 평가 대상 요약 — 카드(공통 벤치마크 평균·카테고리 평균·커버리지) + 카테고리가 3개 이상이면
+  // 레이더. 계산 규칙은 buildScorecards 주석(정답률 계열만·순위 제외 런 제외·공통 벤치마크만).
+  const renderSummary = () => {
+    const { cards, sharedCount, totalCount, categoryIds } = scorecards;
+    // 평균을 가진 카드 — 순위 제외 점수만 있는 카드(unrankedOnly)는 사실만 알리고 그림에서 뺀다.
+    const rankedCards = cards.filter((card) => !card.unrankedOnly);
+    const categoryLabel = (id) =>
+      CATEGORY_LABEL_KEY[id] ? t(CATEGORY_LABEL_KEY[id]) : id;
+    return (
+      <div className={cx('summary')}>
+        <h4 className={cx('summary-title')}>
+          {t('evaluation.compare.summaryTitle')}
+        </h4>
+        {cards.length === 0 ? (
+          <p className={cx('summary-empty')}>
+            {t('evaluation.compare.summaryEmpty')}
+          </p>
+        ) : (
+          <>
+            {rankedCards.length === 0 && (
+              <p className={cx('summary-empty')}>
+                {t('evaluation.compare.summaryEmpty')}
+              </p>
+            )}
+            {rankedCards.length > 1 && sharedCount === 0 && (
+              <p className={cx('summary-empty')}>
+                {t('evaluation.compare.summaryNoCommon')}
+              </p>
+            )}
+            <div className={cx('summary-body')}>
+              <div className={cx('summary-cards')}>
+                {cards.map((card) => (
+                  <div key={card.subject.key} className={cx('summary-card')}>
+                    <div className={cx('summary-card-head')}>
+                      <i
+                        className={cx(
+                          'model-rule',
+                          swatchOf[card.subject.modelId],
+                          card.subject.nthOfModel > 0 && 'dashed',
+                        )}
+                      />
+                      <span className={cx('summary-model')}>
+                        {card.subject.modelName}
+                      </span>
+                      <span
+                        className={cx('summary-source')}
+                        title={card.subject.sourceLabel || ''}
+                      >
+                        {card.subject.sourceLabel}
+                      </span>
+                    </div>
+                    <div className={cx('summary-overall')}>
+                      <span className={cx('summary-value')}>
+                        {fmt(card.overall)}
+                      </span>
+                      <span className={cx('summary-caption')}>
+                        {card.unrankedOnly
+                          ? t('evaluation.compare.summaryUnrankedOnly')
+                          : t('evaluation.compare.summaryAvg', {
+                              count: sharedCount,
+                            })}
+                      </span>
+                    </div>
+                    {!card.unrankedOnly && categoryIds.length > 0 && (
+                      <ul className={cx('summary-cats')}>
+                        {categoryIds.map((id) => (
+                          <li key={id}>
+                            <span>{categoryLabel(id)}</span>
+                            <span className={cx('summary-cat-value')}>
+                              {fmt(card.categories[id])}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {!card.unrankedOnly && (
+                      <span className={cx('summary-coverage')}>
+                        {t('evaluation.compare.summaryMeasured', {
+                          measured: card.measured,
+                          total: totalCount,
+                        })}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {categoryIds.length >= 3 && sharedCount > 0 && (
+                <ScoreRadar
+                  title={t('evaluation.compare.radarTitle')}
+                  axes={categoryIds.map((id) => ({
+                    id,
+                    label: categoryLabel(id),
+                  }))}
+                  series={rankedCards.map((card) => ({
+                    key: card.subject.key,
+                    label: card.subject.sourceLabel
+                      ? `${card.subject.modelName} · ${card.subject.sourceLabel}`
+                      : card.subject.modelName,
+                    colorIndex: swatchIndexOf[card.subject.modelId] ?? 0,
+                    dashed: card.subject.nthOfModel > 0,
+                    values: card.categories,
+                  }))}
+                />
+              )}
+            </div>
+            <p className={cx('summary-note')}>
+              {t('evaluation.compare.summaryNote')}
+            </p>
+          </>
+        )}
+      </div>
+    );
+  };
+
   const renderMatrix = () => {
-    if (!matrix.models.length || !matrix.rows.length) {
+    if (!matrix.subjects.length || !matrix.rows.length) {
       return (
         <EmptyBox
           text='evaluate.empty'
@@ -311,11 +451,29 @@ const EvalCrossCompare = () => {
                 <th scope='col' className={cx('metric-head')}>
                   {t('evaluation.compare.colMetric')}
                 </th>
-                {matrix.models.map((m) => (
-                  <th key={m.id} scope='col' className={cx('model-head')}>
+                {/* 열 = 평가 대상(모델 × 출처). 색은 모델, 아래 줄은 체크포인트/배포 —
+                    같은 모델의 두 번째 이후 체크포인트는 점선 막대로 구분한다. */}
+                {matrix.subjects.map((s) => (
+                  <th key={s.key} scope='col' className={cx('model-head')}>
                     <span className={cx('model-head-inner')}>
-                      <i className={cx('model-rule', swatchOf[m.id])} />
-                      <span className={cx('model-head-name')}>{m.name}</span>
+                      <i
+                        className={cx(
+                          'model-rule',
+                          swatchOf[s.modelId],
+                          s.nthOfModel > 0 && 'dashed',
+                        )}
+                      />
+                      <span className={cx('model-head-name')}>
+                        {s.modelName}
+                      </span>
+                      {s.sourceLabel && (
+                        <span
+                          className={cx('model-head-source')}
+                          title={s.sourceLabel}
+                        >
+                          {s.sourceLabel}
+                        </span>
+                      )}
                     </span>
                   </th>
                 ))}
@@ -327,13 +485,13 @@ const EvalCrossCompare = () => {
                 return [
                   <tr key={row.key}>
                     {renderRowHead(row, open)}
-                    {matrix.models.map((m) => (
-                      <td key={m.id} className={cx('model-cell')}>
-                        {renderCell(row, m)}
+                    {matrix.subjects.map((s) => (
+                      <td key={s.key} className={cx('model-cell')}>
+                        {renderCell(row, s)}
                       </td>
                     ))}
                   </tr>,
-                  open && renderDrawer(row, matrix.models.length + 1),
+                  open && renderDrawer(row, matrix.subjects.length + 1),
                 ];
               })}
             </tbody>
@@ -443,7 +601,10 @@ const EvalCrossCompare = () => {
                 <span>{t('evaluation.compare.loading')}</span>
               </div>
             ) : (
-              renderMatrix()
+              <>
+                {matrix.rows.length > 0 && renderSummary()}
+                {renderMatrix()}
+              </>
             )}
           </section>
         </>

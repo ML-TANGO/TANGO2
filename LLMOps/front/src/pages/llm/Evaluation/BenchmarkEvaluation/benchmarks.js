@@ -1,4 +1,6 @@
-// 벤치마크 정본 — id = llm_evaluation BE constants.BENCHMARK_IDS + evaluate-benchmark-mock 컨테이너와 일치.
+// 벤치마크 정본 — id = llm_evaluation BE constants.BENCHMARK_IDS + 채점 컨테이너(evaluate_lmeval
+// registry.py · LogicKor · MixATIS)와 일치. BE 테스트(llm_evaluation/tests/test_benchmark_catalog.py)가
+// 이 파일의 id·recommended 를 읽어 대조한다 — 형식(4칸 들여쓴 `id: '...'`)을 바꾸면 그 테스트도 고친다.
 // 메트릭 카탈로그는 benchmarkMetrics.js(점수 함수 — 벤치마크 이름과 분리).
 // category id = 카테고리 사이드바 필터.
 //
@@ -21,93 +23,267 @@ export const BENCHMARK_CATEGORIES = [
   { id: 'math', labelKey: 'evaluation.bench.cat.math' },
   { id: 'safety', labelKey: 'evaluation.bench.cat.safety' },
   { id: 'code', labelKey: 'evaluation.bench.cat.code' },
+  { id: 'reading', labelKey: 'evaluation.bench.cat.reading' },
+  { id: 'custom', labelKey: 'evaluation.bench.cat.custom' },
+];
+
+// ETRI 결과 화면(Evaluation/lmeval 대시보드)의 벤치마크 묶음 — 요약 카드·막대 색의 축이다.
+// category(레이더 역량 축)와는 다른 축이다: 이건 "어느 벤치마크 계열인가"(영어 표준·한국어·생성형·
+// 사용자 데이터)이고, category 는 "무슨 능력을 재나"(지식·추론·상식…)다. ETRI 는 KoBEST·KMMLU·
+// HAE-RAE 를 한국어로 묶고 SQuADv2·TruthfulQA-gen·DROP 을 생성형으로 묶는다 — 그대로 따른다.
+// HumanEval(코드 생성)은 ETRI 목록에 없어 생성형에, MixATIS 는 도메인 과제라 사용자(커스텀)에 둔다.
+export const BENCHMARK_GROUPS = [
+  { id: 'core_en', labelKey: 'evaluation.batch.group.core_en', color: 0 },
+  { id: 'korean', labelKey: 'evaluation.batch.group.korean', color: 1 },
+  { id: 'generative', labelKey: 'evaluation.batch.group.generative', color: 2 },
+  { id: 'custom', labelKey: 'evaluation.batch.group.custom', color: 3 },
 ];
 
 // recommended = 생략 시 채택할 기본 메트릭(BE constants.BENCHMARK_RECOMMENDED_METRIC 와 일치).
-// metrics = 이 벤치마크에서 고를 수 있는 메트릭 드롭다운 후보(benchmarkMetrics.js id).
+// metrics = 이 벤치마크의 채점기가 실제로 내는 축(BE constants.BENCHMARK_ALLOWED_METRICS 와 일치).
+// scorer: 'lmeval' = lm-evaluation-harness 채점기(evaluate-lmeval / -code)로 가는 벤치마크. 이
+//   채점기는 배포에 생성을 위임하지 못해(객관식은 보기별 로그확률이 필요한데 배포 shim 이 주지
+//   않는다) **고른 배포가 서빙 중인 커밋을 자기 GPU 한 장에 올려** 채점한다 — 실행 화면이 GPU
+//   현황·체크포인트 필수·문항 상한(sample_limit)을 세우는 조건이다.
 export const BENCHMARKS = [
   {
     id: 'arc',
     label: 'ARC',
     descKey: 'evaluation.bench.benchDesc.arc',
     category: 'reasoning',
+    group: 'core_en',
     evalType: 'reference',
     recommended: 'accuracy',
-    metrics: ['accuracy', 'acc_norm', 'f1'],
+    metrics: ['accuracy', 'acc_norm'],
+    scorer: 'lmeval',
+    real: true,
   },
   {
     id: 'kobest',
     label: 'KoBEST',
     descKey: 'evaluation.bench.benchDesc.kobest',
     category: 'knowledge',
+    group: 'korean',
     evalType: 'reference',
     recommended: 'f1',
-    metrics: ['f1', 'accuracy', 'acc_norm'],
+    metrics: ['f1', 'accuracy'],
+    scorer: 'lmeval',
+    real: true,
   },
   {
     id: 'mmlu',
     label: 'MMLU',
     descKey: 'evaluation.bench.benchDesc.mmlu',
     category: 'knowledge',
+    group: 'core_en',
     evalType: 'reference',
     recommended: 'accuracy',
-    metrics: ['accuracy', 'acc_norm'],
+    metrics: ['accuracy'],
+    scorer: 'lmeval',
+    real: true,
   },
   {
     id: 'hellaswag',
     label: 'HellaSwag',
     descKey: 'evaluation.bench.benchDesc.hellaswag',
     category: 'commonsense',
+    group: 'core_en',
     evalType: 'reference',
     recommended: 'acc_norm',
     metrics: ['acc_norm', 'accuracy'],
+    scorer: 'lmeval',
+    real: true,
   },
   {
     id: 'winogrande',
     label: 'WinoGrande',
     descKey: 'evaluation.bench.benchDesc.winogrande',
     category: 'commonsense',
+    group: 'core_en',
     evalType: 'reference',
     recommended: 'accuracy',
-    metrics: ['accuracy', 'acc_norm'],
+    metrics: ['accuracy'],
+    scorer: 'lmeval',
+    real: true,
   },
   {
     id: 'gsm8k',
     label: 'GSM8K',
     descKey: 'evaluation.bench.benchDesc.gsm8k',
     category: 'math',
+    group: 'core_en',
     evalType: 'reference',
     recommended: 'accuracy',
-    metrics: ['accuracy', 'f1'],
+    metrics: ['accuracy'],
+    scorer: 'lmeval',
+    real: true,
   },
   {
     id: 'truthfulqa',
     label: 'TruthfulQA',
     descKey: 'evaluation.bench.benchDesc.truthfulqa',
     category: 'safety',
+    group: 'core_en',
     evalType: 'reference',
     recommended: 'accuracy',
-    metrics: ['accuracy', 'f1', 'bleu', 'rouge'],
+    metrics: ['accuracy'],
+    scorer: 'lmeval',
+    real: true,
   },
   {
     id: 'boolq',
     label: 'BoolQ',
     descKey: 'evaluation.bench.benchDesc.boolq',
     category: 'safety',
+    group: 'core_en',
     evalType: 'reference',
     recommended: 'accuracy',
-    metrics: ['accuracy', 'f1'],
+    metrics: ['accuracy'],
+    scorer: 'lmeval',
+    real: true,
   },
   {
     id: 'humaneval',
     label: 'HumanEval',
     descKey: 'evaluation.bench.benchDesc.humaneval',
     category: 'code',
+    group: 'generative',
+    evalType: 'reference',
+    // 코드 통과율(pass@1). 모델이 생성한 코드를 실제로 실행해 채점하므로 BE 가 격리된 전용
+    // 채점기(evaluate-lmeval-code)로 보내고, 다른 벤치마크와 한 런에 섞지 않는다.
+    recommended: 'pass_at_1',
+    metrics: ['pass_at_1'],
+    scorer: 'lmeval',
+    real: true,
+    executesCode: true,
+  },
+  // ── lm-eval 로 추가된 표준 벤치마크(2026-09-28) ──
+  {
+    id: 'arc_easy',
+    label: 'ARC-Easy',
+    descKey: 'evaluation.bench.benchDesc.arc_easy',
+    category: 'reasoning',
+    group: 'core_en',
+    evalType: 'reference',
+    recommended: 'acc_norm',
+    metrics: ['acc_norm', 'accuracy'],
+    scorer: 'lmeval',
+    real: true,
+  },
+  {
+    id: 'piqa',
+    label: 'PIQA',
+    descKey: 'evaluation.bench.benchDesc.piqa',
+    category: 'commonsense',
+    group: 'core_en',
+    evalType: 'reference',
+    recommended: 'acc_norm',
+    metrics: ['acc_norm', 'accuracy'],
+    scorer: 'lmeval',
+    real: true,
+  },
+  {
+    id: 'openbookqa',
+    label: 'OpenBookQA',
+    descKey: 'evaluation.bench.benchDesc.openbookqa',
+    category: 'knowledge',
+    group: 'core_en',
+    evalType: 'reference',
+    recommended: 'acc_norm',
+    metrics: ['acc_norm', 'accuracy'],
+    scorer: 'lmeval',
+    real: true,
+  },
+  {
+    id: 'kmmlu',
+    label: 'KMMLU',
+    descKey: 'evaluation.bench.benchDesc.kmmlu',
+    category: 'knowledge',
+    group: 'korean',
     evalType: 'reference',
     recommended: 'accuracy',
     metrics: ['accuracy'],
+    scorer: 'lmeval',
+    real: true,
   },
-  // 실채점 벤치마크 — 위 9개(해시 mock)와 달리 실제 점수가 나온다.
+  {
+    id: 'kmmlu_direct',
+    label: 'KMMLU (Direct)',
+    descKey: 'evaluation.bench.benchDesc.kmmlu_direct',
+    category: 'knowledge',
+    group: 'korean',
+    evalType: 'reference',
+    recommended: 'exact_match',
+    metrics: ['exact_match'],
+    scorer: 'lmeval',
+    real: true,
+  },
+  {
+    id: 'haerae',
+    label: 'HAE-RAE Bench',
+    descKey: 'evaluation.bench.benchDesc.haerae',
+    category: 'knowledge',
+    group: 'korean',
+    evalType: 'reference',
+    recommended: 'acc_norm',
+    metrics: ['acc_norm', 'accuracy'],
+    scorer: 'lmeval',
+    real: true,
+  },
+  {
+    id: 'squadv2',
+    label: 'SQuAD v2',
+    descKey: 'evaluation.bench.benchDesc.squadv2',
+    category: 'reading',
+    group: 'generative',
+    evalType: 'reference',
+    recommended: 'f1',
+    metrics: ['f1', 'exact_match'],
+    scorer: 'lmeval',
+    real: true,
+  },
+  {
+    id: 'truthfulqa_gen',
+    label: 'TruthfulQA (gen)',
+    descKey: 'evaluation.bench.benchDesc.truthfulqa_gen',
+    category: 'safety',
+    group: 'generative',
+    evalType: 'reference',
+    recommended: 'bleu',
+    metrics: ['bleu', 'rouge'],
+    scorer: 'lmeval',
+    real: true,
+  },
+  {
+    // upstream lm-eval drop 의 정답 템플릿 버그를 고친 수정본(drop_tango)으로 채점한다 —
+    // 공개된 lm-eval DROP 수치와 직접 비교할 수 없다(설명 문구에 밝힌다).
+    id: 'drop',
+    label: 'DROP',
+    descKey: 'evaluation.bench.benchDesc.drop',
+    category: 'reading',
+    group: 'generative',
+    evalType: 'reference',
+    recommended: 'f1',
+    metrics: ['f1', 'exact_match'],
+    scorer: 'lmeval',
+    real: true,
+  },
+  {
+    // 표준 문항이 아니라 **런에서 고른 데이터셋**(입력-정답 쌍)으로 생성한 뒤 채점한다.
+    // 다른 벤치마크는 데이터셋 선택을 읽지 않는다(문항이 채점기 이미지에 있다) — 이것만 읽는다.
+    id: 'custom',
+    label: 'Custom Dataset',
+    descKey: 'evaluation.bench.benchDesc.custom',
+    category: 'custom',
+    group: 'custom',
+    evalType: 'reference',
+    recommended: 'f1',
+    metrics: ['f1', 'exact_match', 'bleu', 'rouge'],
+    scorer: 'lmeval',
+    real: true,
+    usesDataset: true,
+  },
+  // 전용 채점기 벤치마크 — 위(lm-eval)와 채점 컨테이너가 다르다(배포에 생성을 위임한다).
   // 42문항 × 6영역 × 2턴을 심판 LLM 이 1~10 점으로 채점. 정답(reference)이 없어
   // accuracy/f1 계열은 계산 자체가 불가하고, 고를 수 있는 건 "어느 축을 대표값으로
   // 쓸지"(전체/1턴/2턴)뿐이다. 영역별 점수는 항상 함께 산출돼 결과 상세에 표시된다.
@@ -116,6 +292,7 @@ export const BENCHMARKS = [
     label: 'LogicKor',
     descKey: 'evaluation.bench.benchDesc.logickor',
     category: 'reasoning',
+    group: 'korean',
     evalType: 'judge',
     recommended: 'judge_overall',
     metrics: ['judge_overall', 'judge_single', 'judge_multi'],
@@ -129,6 +306,7 @@ export const BENCHMARKS = [
     label: 'MixATIS',
     descKey: 'evaluation.bench.benchDesc.mixatis',
     category: 'reasoning',
+    group: 'custom',
     evalType: 'reference',
     recommended: 'joint_acc',
     metrics: ['joint_acc', 'intent_acc', 'intent_f1', 'slot_f1'],
@@ -160,6 +338,21 @@ export const REFERENCE_BENCHMARKS = BENCHMARKS.filter(
 export const JUDGE_BENCHMARKS = BENCHMARKS.filter(
   (b) => b.evalType === 'judge',
 );
+
+// lm-eval 채점기로 가는 벤치마크 — 로컬 가중치(GPU 1장)·체크포인트 필수·문항 상한 옵션.
+// BE constants.LOCAL_WEIGHTS_MANIFEST_KEYS 로 라우팅되는 집합과 같아야 한다(sample_limit 을
+// 그 밖의 채점기에 보내면 BE 가 거절한다).
+export const LMEVAL_BENCHMARK_IDS = BENCHMARKS.filter(
+  (b) => b.scorer === 'lmeval',
+).map((b) => b.id);
+
+// 런 데이터셋을 **읽지 않는** 벤치마크 — 문항이 채점 이미지에 구워져 있다. 이것만 고른 런은
+// 데이터셋을 싣지 않는다(결과 머리에 채점에 안 쓴 데이터셋이 찍히지 않게). custom 은
+// 데이터셋이 곧 평가 문항이라 빠진다. BE constants.DATASET_FREE_BENCHMARK_IDS 와 같은 집합이어야
+// 한다(tests/test_benchmark_catalog.py 가 scorer·usesDataset 플래그로 대조한다).
+export const DATASET_FREE_BENCHMARK_IDS = BENCHMARKS.filter(
+  (b) => b.scorer === 'lmeval' && !b.usesDataset,
+).map((b) => b.id);
 
 // 체크포인트 없이는 채점기가 기동 직후 거부하는 벤치마크. 실행 전에 화면에서 걸러
 // 값비싼 GPU 파드가 떴다가 죽는 것을 막는다(BE 도 같은 경계를 강제한다).
@@ -204,12 +397,11 @@ export const FORMAT_TRAIN_BENCHMARK_IDS = BENCHMARKS.filter(
   (b) => b.supportsFormatTrain,
 ).map((b) => b.id);
 
-// 추론을 한 번 더 돌려야 나오는 "생성 지표". 나머지는 한 번의 채점에서 전부 나오므로
-// 고를 것이 없지만, 이 둘만은 비용(추론 1회)이 붙어 옵트인으로 둔다.
-// 키 = 벤치마크 id, 값 = 그 벤치마크의 metrics 중 생성 경로가 필요한 메트릭 id.
-export const GENERATION_METRICS = {
-  truthfulqa: ['bleu', 'rouge'],
-};
+// 추론을 한 번 더 돌려야 나오는 "생성 지표"(옵트인). 키 = 벤치마크 id, 값 = 그 벤치마크의
+// metrics 중 생성 경로가 필요한 메트릭 id.
+// 2026-09-28 부터 비어 있다 — TruthfulQA 의 BLEU/ROUGE 는 별도 벤치마크(truthfulqa_gen)가
+// 되어 한 런이 한 채점 경로만 돈다. 옵트인 체크박스는 BE 에 전달된 적이 없었다(요청에 없음).
+export const GENERATION_METRICS = {};
 
 // 이 런이 기록할 지표 목록. 채점기가 한 번에 계산해 내는 지표는 전부 기록되므로
 // 사용자가 고를 것이 없다 — 화면은 "무엇이 기록되는지"만 통보한다.

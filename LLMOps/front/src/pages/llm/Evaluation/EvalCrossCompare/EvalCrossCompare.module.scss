@@ -470,6 +470,267 @@ $mono-font: 'Menlo', 'Consolas', 'Monaco', monospace;
   font-size: 11px;
 }
 
+/* ── 평가 대상 열 머리 — 모델 이름 아래 출처(체크포인트/배포) ─────── */
+.model-head-source {
+  max-width: 160px;
+  overflow: hidden;
+  color: $sub-text-color;
+  font-family: $mono-font;
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// 같은 모델의 두 번째 이후 평가 대상 — 색은 모델, 점선은 "다른 체크포인트".
+.model-rule.dashed {
+  height: 0;
+  border-top: 3px dashed;
+  border-radius: 0;
+  background-color: transparent !important;
+}
+
+.model-rule.dashed.sw-0 {
+  border-color: $blue104;
+}
+
+.model-rule.dashed.sw-1 {
+  border-color: $lime603;
+}
+
+.model-rule.dashed.sw-2 {
+  border-color: $orange403;
+}
+
+.model-rule.dashed.sw-3 {
+  border-color: $blue108;
+}
+
+.model-rule.dashed.sw-4 {
+  border-color: $red502;
+}
+
+.model-rule.dashed.sw-5 {
+  border-color: $yellow304;
+}
+
+/* ── 평가 대상 요약(스코어카드) ─────────────────────────────── */
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid $card-border-color;
+  border-radius: 8px;
+  background-color: $mono200;
+}
+
+.summary-title {
+  margin: 0;
+  color: $normal-text-color;
+  font-family: SpoqaB;
+  font-size: 14px;
+}
+
+.summary-empty,
+.summary-note {
+  margin: 0;
+  color: $sub-text-color;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.summary-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.summary-cards {
+  display: grid;
+  flex: 1 1 420px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.summary-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid $mono202;
+  border-radius: 8px;
+  background-color: $background-color;
+}
+
+.summary-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.summary-model {
+  color: $normal-text-color;
+  font-family: SpoqaB;
+  font-size: 13px;
+}
+
+.summary-source {
+  min-width: 0;
+  overflow: hidden;
+  color: $sub-text-color;
+  font-family: $mono-font;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.summary-overall {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.summary-value {
+  color: $primary-color;
+  font-family: SpoqaB;
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.summary-caption,
+.summary-coverage {
+  color: $sub-text-color;
+  font-size: 11.5px;
+}
+
+.summary-cats {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  gap: 3px;
+  list-style: none;
+
+  li {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    color: $normal-text-color;
+    font-size: 12px;
+  }
+}
+
+.summary-cat-value {
+  font-family: $mono-font;
+}
+
+/* ── 레이더(카테고리 평균) ──────────────────────────────────── */
+.radar {
+  display: flex;
+  flex: 0 1 320px;
+  flex-direction: column;
+  align-items: center;
+  margin: 0;
+  gap: 6px;
+}
+
+.radar-svg {
+  width: 100%;
+  max-width: 300px;
+  height: auto;
+  overflow: visible;
+}
+
+.radar-ring {
+  fill: none;
+  stroke: $mono202;
+}
+
+.radar-axis {
+  stroke: $mono202;
+}
+
+.radar-label {
+  fill: $sub-text-color;
+  font-size: 11px;
+}
+
+.radar-series {
+  fill-opacity: 0.12;
+  stroke-width: 2;
+
+  &.dashed {
+    stroke-dasharray: 5 4;
+  }
+}
+
+.radar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 12px;
+  color: $sub-text-color;
+  font-size: 11.5px;
+}
+
+.radar-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+// 범례 표식 — 선 색은 rs-* 의 color(currentColor), 점선은 다른 체크포인트.
+.radar-swatch {
+  width: 16px;
+  height: 0;
+  border-top: 2px solid;
+
+  &.dashed {
+    border-top-style: dashed;
+  }
+}
+
+// 레이더 색 슬롯 — .sw-* 와 같은 순서·같은 색(SVG 는 background 대신 stroke/fill 을 쓴다).
+.rs-0 {
+  color: $blue104;
+  fill: $blue104;
+  stroke: $blue104;
+}
+
+.rs-1 {
+  color: $lime603;
+  fill: $lime603;
+  stroke: $lime603;
+}
+
+.rs-2 {
+  color: $orange403;
+  fill: $orange403;
+  stroke: $orange403;
+}
+
+.rs-3 {
+  color: $blue108;
+  fill: $blue108;
+  stroke: $blue108;
+}
+
+.rs-4 {
+  color: $red502;
+  fill: $red502;
+  stroke: $red502;
+}
+
+.rs-5 {
+  color: $yellow304;
+  fill: $yellow304;
+  stroke: $yellow304;
+}
+
 /* ── 모델 색 슬롯 ─────────────────────────────────────────
    MAX_MODELS(6) 와 개수를 맞춘다. 색은 color.scss 에 정의된 것만 쓴다. */
 .sw-0 {

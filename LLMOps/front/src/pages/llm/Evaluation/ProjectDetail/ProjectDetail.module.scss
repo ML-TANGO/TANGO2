@@ -421,3 +421,17 @@
   align-items: center;
   gap: 4px;
 }
+
+// 정답 대조 실행 카드의 '열기' — 키보드로 카드를 여는 진짜 버튼(모양은 기존 .run-open 글자).
+.run-open-btn {
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+
+  &:focus-visible {
+    border-radius: 2px;
+    outline: 2px solid $primary-color;
+    outline-offset: 2px;
+  }
+}

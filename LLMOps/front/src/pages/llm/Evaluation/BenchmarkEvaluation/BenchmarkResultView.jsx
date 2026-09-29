@@ -12,7 +12,8 @@ import { STATUS_SUCCESS } from '@src/network';
 
 import { errorToastMessage } from '@src/utils';
 
-import { BENCHMARK_LABEL, BENCHMARK_MAP } from './benchmarks';
+import { focusMetrics } from './batchSummary';
+import { BENCHMARK_LABEL } from './benchmarks';
 import {
   barWidth,
   fmt,
@@ -23,26 +24,14 @@ import {
 } from './benchmarkMetrics';
 import LogicKorRadar from './LogicKorRadar';
 import { diffText, diffTone, fmt2, judgeVerdict } from './logickorResult';
+import { POLL_DEADLINE_MS, pollIntervalMs } from './resultPolling';
 
 import classNames from 'classnames/bind';
 import style from './BenchmarkEvaluation.module.scss';
 
 const cx = classNames.bind(style);
 
-// 폴링 예산은 "시도 횟수"가 아니라 "경과 시간"으로 잡는다. 벤치마크 런은 채점기에 따라
-// 소요가 두 자릿수 배 차이 난다 — mock 은 10초(evaluate_benchmark_mock)인데 LogicKor
-// 실채점은 기동에만 240초, 생성+심판까지 3600초다(evaluate_logickor_judge manifest
-// capabilities). 40회×3초=120초 고정 예산은 LogicKor 런이 기동을 마치기도 전에 끊겨서
-// 성공한 런조차 화면에서는 늘 '대기 시간 초과'로 보였다.
-// 간격은 초반 촘촘 → 후반 성글게(backoff) 둔다. mock 의 응답성은 그대로 두면서 장시간
-// 런의 요청 수만 줄인다(4시간 완주 시 약 500회).
-const POLL_DEADLINE_MS = 4 * 60 * 60 * 1000; // 컨테이너 timeout_seconds(14400) 와 정렬
-
-const pollIntervalMs = (elapsedMs) => {
-  if (elapsedMs < 60 * 1000) return 3000; // 첫 1분 — mock 완주·기동 실패를 즉시 반영
-  if (elapsedMs < 5 * 60 * 1000) return 10 * 1000; // ~5분 — 실채점 컨테이너 기동 구간
-  return 30 * 1000; // 이후 — 생성·심판 구간(수십 분)
-};
+// 폴링 예산(경과 시간 기준)·간격(backoff)은 실행 요약 화면과 공용이다 — resultPolling.js.
 
 // MixATIS 막대 순서 = 느슨 → 엄격. 의도만 / 항목 단위 부분점수 / 슬롯 쌍 / 둘 다 완전일치.
 // 이 순서로 놓아야 "어디서부터 무너지는지"가 한눈에 읽힌다.
@@ -52,19 +41,34 @@ const MIXATIS_ORDER = ['intent_acc', 'intent_f1', 'slot_f1', 'joint_acc'];
 //   ① 지표 카드(전 지표, 대표만 강조) → ② 그래프 → ③ 표 → ④ 채점 구성(provenance).
 // 채우는 내용만 벤치마크 성격에 따라 갈린다. 골격을 고정하는 이유는, 벤치마크마다 다른
 // 화면을 주면 "이 숫자가 저 숫자와 같은 자리인가"를 매번 다시 배워야 하기 때문이다.
-const BenchmarkResultView = ({ modelId, jobId, onComplete, onMeta }) => {
+// focusBenchmark — 한 런이 여러 벤치마크를 담을 때(묶음 실행이 GPU 수만큼 런을 나눈다, 설계 §14)
+//   실행 요약에서 누른 벤치마크 하나만 보이게 좁힌다(batchSummary.focusMetrics). onShowAll 이 있으면
+//   "런 전체 보기" 로 풀 수 있다. 결과 JSON 이 아직 없어도 채점기가 끝난 벤치마크의 점수를 중간
+//   결과(progress.partial_metrics)로 남기므로, 도는 런·도중에 멈춘 런에서도 끝난 것은 보여 준다.
+const BenchmarkResultView = ({
+  modelId,
+  jobId,
+  onComplete,
+  onMeta,
+  focusBenchmark = null,
+  onShowAll,
+}) => {
   const { t } = useTranslation();
-  const [results, setResults] = useState(null);
+  // 런 전체의 결과 JSON(완료) 또는 중간 결과. 화면은 아래 results(좁힌 것)를 그린다.
+  const [fullResults, setFullResults] = useState(null);
+  // 중간 결과를 보이는 중인가 — 'running'(다른 벤치마크 채점 중) | 'stopped'(런이 도중에 멈춤).
+  const [partialMode, setPartialMode] = useState(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
-  const pollRef = useRef({ alive: true, timer: null });
   const completedRef = useRef(false);
 
   useEffect(() => {
-    const ref = pollRef.current;
-    ref.alive = true;
+    // effect 마다 제 상태를 둔다 — 공유 ref 를 쓰면 런 A → B 로 바뀔 때 A 의 늦은 응답이 되살아난
+    // alive 를 보고 B 화면에 A 의 결과를 그린다(codex 리뷰, 실행 요약 화면과 같은 처방).
+    const ref = { alive: true, timer: null };
     completedRef.current = false;
-    setResults(null);
+    setFullResults(null);
+    setPartialMode(null);
     setFailed(false);
     setLoading(true);
 
@@ -79,19 +83,35 @@ const BenchmarkResultView = ({ modelId, jobId, onComplete, onMeta }) => {
           return;
         }
         const result = res.result || {};
+        const partial = result.progress?.partial_metrics;
+        const hasPartial =
+          !!partial && Object.keys(partial.averages || {}).length > 0;
         if (result.status === 'failed' || result.status === 'cancelled') {
           setLoading(false);
-          setFailed(true);
+          // 도중에 멈춘 런이라도 끝난 벤치마크 점수는 남아 있다 — 있으면 그것을 보인다.
+          if (hasPartial) {
+            setFullResults(partial);
+            setPartialMode('stopped');
+          } else {
+            setFailed(true);
+          }
           return;
         }
         if (result.ready) {
-          setResults(result.metrics);
+          setFullResults(result.metrics);
+          setPartialMode(null);
           setLoading(false);
           if (!completedRef.current) {
             completedRef.current = true;
             onComplete?.();
           }
           return;
+        }
+        // 아직 도는 런 — 끝난 벤치마크가 있으면 먼저 보이고 폴링은 계속한다.
+        if (hasPartial) {
+          setFullResults(partial);
+          setPartialMode('running');
+          setLoading(false);
         }
         const elapsed = Date.now() - startedAt;
         if (elapsed >= POLL_DEADLINE_MS) {
@@ -109,6 +129,43 @@ const BenchmarkResultView = ({ modelId, jobId, onComplete, onMeta }) => {
       if (ref.timer) clearTimeout(ref.timer);
     };
   }, [modelId, jobId, t, onComplete]);
+
+  // 화면이 그리는 결과 — 누른 벤치마크 하나로 좁힌다(그 벤치마크가 결과에 없으면 런 전체).
+  const results = useMemo(
+    () => focusMetrics(fullResults, focusBenchmark),
+    [fullResults, focusBenchmark],
+  );
+  // 누른 벤치마크를 채점기가 실패로 기록했나(런의 나머지 벤치마크는 점수가 있다).
+  const focusFailure = useMemo(
+    () =>
+      focusBenchmark
+        ? (fullResults?.failed_benchmarks || []).find(
+            (f) => f?.benchmark === focusBenchmark,
+          ) || null
+        : null,
+    [fullResults, focusBenchmark],
+  );
+  // 누른 벤치마크의 점수가 결과에 있나. 없으면 좁힐 수 없다 — 같은 런의 다른 벤치마크 결과로
+  // 채우면 "MMLU" 링크 아래 ARC 점수가 뜬다(codex 리뷰).
+  const focusPresent = useMemo(
+    () =>
+      !!(
+        focusBenchmark &&
+        fullResults &&
+        (focusBenchmark in (fullResults.averages || {}) ||
+          focusBenchmark in (fullResults.lmeval?.benchmarks || {}))
+      ),
+    [fullResults, focusBenchmark],
+  );
+  // 이 런이 담은 벤치마크 수(채점된 것 + 실패한 것) — 좁혀 보는 중인지 알리는 줄에 쓴다.
+  const runBenchmarkCount = useMemo(
+    () =>
+      new Set([
+        ...Object.keys(fullResults?.averages || {}),
+        ...(fullResults?.failed_benchmarks || []).map((f) => f?.benchmark),
+      ]).size,
+    [fullResults],
+  );
 
   // LogicKor 상세 — 영역(6) × 턴(2) 격자. 벤치마크 계약(results[])은 대표 스칼라 1개만
   // 담으므로, 영역별 강약점은 채점기가 metrics JSON 의 'logickor' 키에 따로 실어 보낸다.
@@ -134,6 +191,67 @@ const BenchmarkResultView = ({ modelId, jobId, onComplete, onMeta }) => {
     return detail;
   }, [results]);
 
+  // lm-eval 상세 — 채점기(evaluate-lmeval)가 벤치마크마다 설정·전 지표·서브태스크를
+  // metrics.lmeval.benchmarks[<id>] 에 실어 보낸다. 서브태스크를 results[] 에 넣지 않는 이유는
+  // 결과 행 키가 `${benchmark}:${metric}` 라 겹치기 때문이다(채점기 scoring.py 주석).
+  const lmeval = useMemo(() => {
+    const detail = results?.lmeval;
+    if (!detail || typeof detail.benchmarks !== 'object' || !detail.benchmarks)
+      return null;
+    const benchmarks = Object.entries(detail.benchmarks).map(([id, d]) => ({
+      ...d,
+      id,
+      metrics: Array.isArray(d?.metrics) ? d.metrics : [],
+      subtasks: Array.isArray(d?.subtasks) ? d.subtasks : [],
+      warnings: Array.isArray(d?.warnings) ? d.warnings : [],
+    }));
+    return benchmarks.length ? { ...detail, benchmarks } : null;
+  }, [results]);
+
+  // lm-eval 원 지표명(acc·acc_norm·exact_match…) 표. 값은 채점기가 이미 0~100 으로 환산해
+  // 싣는다(스케일 명시표) — 여기서는 다시 환산하지 않는다.
+  const lmevalMetricColumns = useMemo(
+    () => [
+      {
+        name: t('evaluation.bench.colLmMetric'),
+        selector: 'metric',
+        sortable: false,
+        cell: (row) =>
+          row.filter && row.filter !== 'none'
+            ? `${row.metric} · ${row.filter}`
+            : row.metric,
+      },
+      {
+        name: t('evaluation.bench.score'),
+        selector: 'score',
+        sortable: false,
+        cell: (row) => (
+          <span className={cx('table-score')}>{fmt2(row.score)}</span>
+        ),
+      },
+      {
+        name: t('evaluation.bench.colStderr'),
+        selector: 'stderr',
+        sortable: false,
+        cell: (row) => (row.stderr == null ? '-' : `± ${fmt2(row.stderr)}`),
+      },
+    ],
+    [t],
+  );
+
+  const lmevalSubtaskColumns = useMemo(
+    () => [
+      {
+        name: t('evaluation.bench.colTask'),
+        selector: 'task',
+        sortable: false,
+        cell: (row) => row.task,
+      },
+      ...lmevalMetricColumns.slice(1),
+    ],
+    [t, lmevalMetricColumns],
+  );
+
   // 이 런이 잰 벤치마크 **전부**. 실채점은 상세 키가 곧 신원이고, 표준은 결과 행이 들고
   // 있다 — 그 행이 여러 벤치마크일 수 있으므로(API·레거시 런) 첫 행만 보면 제목과 본문이
   // 어긋난다. 점수 카드·표가 results.results 를 전부 순회하는 것과 축을 맞춘다.
@@ -152,11 +270,8 @@ const BenchmarkResultView = ({ modelId, jobId, onComplete, onMeta }) => {
       benchmarkId: benchmarkIds[0] ?? null,
       benchmarkLabel:
         benchmarkIds.map((id) => BENCHMARK_LABEL[id] || id).join(' · ') || null,
-      // 섞인 런에 '실채점' 배지가 붙으면 mock 점수까지 실채점으로 읽힌다 — 전부일 때만.
-      real:
-        benchmarkIds.length > 0 &&
-        benchmarkIds.every((id) => !!BENCHMARK_MAP[id]?.real),
-      mock: !!results.mock,
+      // 문항 상한을 준 빠른 점검 — 분모가 달라 전체 측정과 나란히 비교하면 안 된다.
+      quickLimit: results.lmeval?.limit ?? null,
       manifestName: results._meta?.name || null,
     });
   }, [results, benchmarkIds, onMeta]);
@@ -451,6 +566,35 @@ const BenchmarkResultView = ({ modelId, jobId, onComplete, onMeta }) => {
         value: results.checkpoint.name,
       });
     }
+    // LoRA 커밋은 채점기가 서빙 파드와 같은 방식으로 기반 가중치 위에 병합해 올린다 —
+    // 점수가 "어댑터 단독"이 아니라 "기반 + 어댑터"의 값임을 밝힌다.
+    if (results.checkpoint?.format === 'lora') {
+      items.push({
+        key: 'weights',
+        label: t('evaluation.bench.provWeights'),
+        value: t('evaluation.bench.provLoraMerged', {
+          base: results.checkpoint.base || '-',
+        }),
+      });
+    }
+    if (lmeval) {
+      items.push({
+        key: 'engine',
+        label: t('evaluation.bench.provEngine'),
+        value: t('evaluation.bench.provEngineValue', {
+          vllm: lmeval.vllm_version || '-',
+          lmeval: lmeval.lm_eval_version || '-',
+        }),
+      });
+      if (lmeval.limit != null) {
+        items.push({
+          key: 'limit',
+          label: t('evaluation.bench.provSampleLimit'),
+          value: t('evaluation.bench.quickCheck', { limit: lmeval.limit }),
+          warn: true,
+        });
+      }
+    }
     const judge = results.judge || {};
     if (judge.model) {
       items.push({
@@ -552,8 +696,88 @@ const BenchmarkResultView = ({ modelId, jobId, onComplete, onMeta }) => {
       });
     }
     return items;
-  }, [results, logickor, logickorScaleMax, mixatis, t]);
+  }, [results, logickor, logickorScaleMax, mixatis, lmeval, t]);
 
+  // 좁혀 보는 중 · 중간 결과 — 무엇을 보고 있는지 머리에 한 줄로 알린다.
+  const focusBar =
+    (focusPresent && runBenchmarkCount > 1) || partialMode ? (
+      <div className={cx('focus-bar')}>
+        {focusPresent && runBenchmarkCount > 1 && (
+          <span>
+            {t('evaluation.bench.focusNote', {
+              count: runBenchmarkCount,
+              benchmark: BENCHMARK_LABEL[focusBenchmark] || focusBenchmark,
+            })}
+            {onShowAll && (
+              <button
+                type='button'
+                className={cx('batch-cell-link')}
+                onClick={onShowAll}
+              >
+                {t('evaluation.bench.focusShowAll')}
+              </button>
+            )}
+          </span>
+        )}
+        {partialMode && (
+          <span className={cx(partialMode === 'stopped' && 'warn')}>
+            {t(
+              partialMode === 'stopped'
+                ? 'evaluation.bench.partialStopped'
+                : 'evaluation.bench.partialRunning',
+            )}
+          </span>
+        )}
+      </div>
+    ) : null;
+
+  // 누른 벤치마크가 아직(또는 끝내) 점수가 없다 — 중간 결과만 있는 런에서 다른 벤치마크 결과로
+  // 채우지 않고 그 벤치마크의 처지를 말한다. 완료된 런에서 결과에 없는 id 면(잘못된 링크) 좁히지
+  // 않고 런 전체를 보인다(focusMetrics 가 원본을 돌려준다).
+  if (focusBenchmark && partialMode && !focusPresent && !focusFailure) {
+    return (
+      <div className={cx('benchmark-result')}>
+        {focusBar}
+        <section className={cx('result-section')}>
+          <p className={cx('run-hint')}>
+            {t(
+              partialMode === 'stopped'
+                ? 'evaluation.bench.focusStopped'
+                : 'evaluation.bench.focusPending',
+              {
+                benchmark: BENCHMARK_LABEL[focusBenchmark] || focusBenchmark,
+              },
+            )}
+          </p>
+          {onShowAll && (
+            <button
+              type='button'
+              className={cx('batch-cell-link')}
+              onClick={onShowAll}
+            >
+              {t('evaluation.bench.focusShowAll')}
+            </button>
+          )}
+        </section>
+      </div>
+    );
+  }
+  // 누른 벤치마크를 채점기가 실패로 기록 — 런의 다른 벤치마크 점수로 대신 채우지 않는다.
+  if (focusFailure) {
+    return (
+      <div className={cx('benchmark-result')}>
+        {focusBar}
+        <section className={cx('result-section')}>
+          <p className={cx('run-hint', 'err')}>
+            {t('evaluation.bench.benchmarkFailed', {
+              benchmark: BENCHMARK_LABEL[focusBenchmark] || focusBenchmark,
+            })}
+          </p>
+          <p className={cx('focus-error')}>{focusFailure.error}</p>
+        </section>
+      </div>
+    );
+  }
   if (failed) {
     return (
       <div className={cx('benchmark-result')}>
@@ -590,6 +814,7 @@ const BenchmarkResultView = ({ modelId, jobId, onComplete, onMeta }) => {
 
   return (
     <div className={cx('benchmark-result')}>
+      {focusBar}
       {/* ① 지표 카드 — 전 지표, 대표만 강조 */}
       <section className={cx('result-section')}>
         <div className={cx('result-section-head')}>
@@ -754,6 +979,176 @@ const BenchmarkResultView = ({ modelId, jobId, onComplete, onMeta }) => {
           </p>
         )}
       </section>
+
+      {/* ③-b lm-eval 채점 상세 — 벤치마크마다 설정 요약 · 전 지표(원 지표명·표준오차) ·
+          서브태스크(MMLU 57 · KMMLU 45 … 는 접어 둔다) · 경고. */}
+      {lmeval && (
+        <section className={cx('result-section')}>
+          <div className={cx('result-section-head')}>
+            <h3 className={cx('result-section-title')}>
+              {t('evaluation.bench.lmevalDetailTitle')}
+            </h3>
+            {lmeval.limit != null && (
+              <Badge
+                label={t('evaluation.bench.quickCheck', {
+                  limit: lmeval.limit,
+                })}
+                type='yellow'
+                size='sm'
+              />
+            )}
+          </div>
+          {lmeval.benchmarks.map((detail) => {
+            const summary = [
+              detail.tasks?.length > 0 && {
+                key: 'tasks',
+                label: t('evaluation.bench.lmevalTasks'),
+                value: detail.tasks.join(', '),
+              },
+              detail.tasks?.length > 0 && {
+                key: 'fewshot',
+                label: t('evaluation.bench.lmevalFewshot'),
+                value: String(detail.num_fewshot ?? 0),
+              },
+              detail.n != null && {
+                key: 'n',
+                label: t('evaluation.bench.lmevalItems'),
+                value: String(detail.n),
+              },
+              detail.elapsed_sec != null && {
+                key: 'elapsed',
+                label: t('evaluation.bench.lmevalElapsed'),
+                value: t('evaluation.bench.lmevalElapsedValue', {
+                  minutes: (Number(detail.elapsed_sec) / 60).toFixed(1),
+                }),
+              },
+              // custom — 런 데이터셋으로 생성·채점한 경우의 근거.
+              detail.dataset && {
+                key: 'dataset',
+                label: t('evaluation.bench.customDataset'),
+                value: detail.dataset,
+              },
+              detail.korean != null && {
+                key: 'tokenize',
+                label: t('evaluation.bench.customTokenize'),
+                value: t(
+                  detail.korean
+                    ? 'evaluation.bench.customTokenizeKo'
+                    : 'evaluation.bench.customTokenizeWs',
+                ),
+              },
+              detail.id === 'custom' && {
+                key: 'chat',
+                label: t('evaluation.bench.customChatTemplate'),
+                value: t(
+                  detail.chat_template
+                    ? 'evaluation.bench.customChatOn'
+                    : 'evaluation.bench.customChatOff',
+                ),
+              },
+              // 0 이 아니면 평균을 조용히 끌어내린 양이다 — 경고 톤으로 세운다.
+              Number(detail.skipped_rows) > 0 && {
+                key: 'skipped',
+                label: t('evaluation.bench.customSkipped'),
+                value: String(detail.skipped_rows),
+                warn: true,
+              },
+              Number(detail.truncated_prompts) > 0 && {
+                key: 'truncated',
+                label: t('evaluation.bench.customTruncated'),
+                value: String(detail.truncated_prompts),
+                warn: true,
+              },
+              Number(detail.empty_predictions) > 0 && {
+                key: 'empty',
+                label: t('evaluation.bench.customEmpty'),
+                value: String(detail.empty_predictions),
+                warn: true,
+              },
+            ].filter(Boolean);
+            return (
+              <div key={detail.id} className={cx('lmeval-detail')}>
+                <p className={cx('lmeval-detail-title')}>
+                  {BENCHMARK_LABEL[detail.id] || detail.id}
+                </p>
+                <ul className={cx('provenance')}>
+                  {summary.map((item) => (
+                    <li
+                      key={item.key}
+                      className={cx('provenance-item', item.warn && 'warn')}
+                    >
+                      <span className={cx('provenance-label')}>
+                        {item.label}
+                      </span>
+                      <span className={cx('provenance-value')}>
+                        {item.value}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                {detail.metrics.length > 0 && (
+                  <>
+                    <p className={cx('lmeval-sub-title')}>
+                      {t('evaluation.bench.lmevalMetricsTitle')}
+                    </p>
+                    <div className={cx('result-table')}>
+                      <BorderTable
+                        columns={lmevalMetricColumns}
+                        data={detail.metrics.map((m) => ({
+                          ...m,
+                          id: `${m.metric}:${m.filter}`,
+                        }))}
+                        loading={false}
+                        selectableRows={false}
+                        hideSearchBox
+                        hideButtons
+                        fixedHeader
+                        fixedHeaderScrollHeight='320px'
+                      />
+                    </div>
+                  </>
+                )}
+                {detail.subtasks.length > 0 && (
+                  <details className={cx('lmeval-subtasks')}>
+                    <summary className={cx('lmeval-sub-title')}>
+                      {t('evaluation.bench.lmevalSubtasksTitle', {
+                        count: detail.subtasks.length,
+                      })}
+                    </summary>
+                    <div className={cx('result-table')}>
+                      <BorderTable
+                        columns={lmevalSubtaskColumns}
+                        data={detail.subtasks.map((s) => ({
+                          ...s,
+                          id: `${s.task}:${s.metric}:${s.filter}`,
+                        }))}
+                        loading={false}
+                        selectableRows={false}
+                        hideSearchBox
+                        hideButtons
+                        fixedHeader
+                        fixedHeaderScrollHeight='360px'
+                      />
+                    </div>
+                  </details>
+                )}
+                {detail.warnings.length > 0 && (
+                  <ul className={cx('provenance')}>
+                    {detail.warnings.map((w) => (
+                      <li key={w} className={cx('provenance-item', 'warn')}>
+                        <span className={cx('provenance-label')}>
+                          {t('evaluation.bench.lmevalWarnings')}
+                        </span>
+                        <span className={cx('provenance-value')}>{w}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            );
+          })}
+        </section>
+      )}
 
       {/* ④ 채점 구성 */}
       {provenance.length > 0 && (

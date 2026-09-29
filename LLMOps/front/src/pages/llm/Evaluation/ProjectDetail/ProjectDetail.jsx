@@ -16,14 +16,24 @@ import BenchmarkRunConfig from '../BenchmarkEvaluation/BenchmarkRunConfig';
 import {
   BENCHMARK_LABEL,
   BENCHMARK_MAP,
+  LMEVAL_BENCHMARK_IDS,
   defaultMetricFor,
 } from '../BenchmarkEvaluation/benchmarks';
 import {
+  RUN_KEY_PREFIX,
+  batchSummaryOf,
+  benchmarkEntriesOf,
+  buildRunGroups,
+  entryProgressOf,
+} from '../BenchmarkEvaluation/batchSummary';
+import {
+  fmt,
   formatMetricValue,
   metricLabel,
   normalizedScore,
 } from '../BenchmarkEvaluation/benchmarkMetrics';
 import EvalComparison from '../EvalComparison/EvalComparison';
+import { isUnranked } from '../EvalCrossCompare/compareMatrix';
 import ExpertInferenceModal from '../ExpertEvaluation/ExpertInferenceModal';
 import ExpertRunView from '../ExpertEvaluation/ExpertRunView';
 import JudgeResultView from '../JudgeEvaluation/JudgeResultView';
@@ -40,8 +50,10 @@ import {
   getEvalDatasets,
   getEvalProject,
   listEvalProjects,
+  deleteRunBatch,
   markEvalStatus,
   runBenchmark,
+  runBenchmarkBatch,
   startExpert,
   updateEvalProject,
 } from '@src/apis/llm/evaluation';
@@ -49,7 +61,11 @@ import { startPath } from '@src/store/modules/breadCrumb';
 import { openConfirm } from '@src/store/modules/confirm';
 import { callApi, STATUS_SUCCESS } from '@src/network';
 
-import { addNineHours, errorToastMessage } from '@src/utils';
+import {
+  addNineHours,
+  errorToastMessage,
+  successToastMessage,
+} from '@src/utils';
 
 import classNames from 'classnames/bind';
 import style from './ProjectDetail.module.scss';
@@ -70,7 +86,19 @@ const TYPE_KEYS = {
 
 // 실행 목록을 펼친 표로 그리는 유형 — 런이 (무엇을 잰 런인가, 점수) 축을 갖는 유형이다.
 // expert 는 그 축이 없어(사람이 샘플을 훑는 세션) 카드 목록을 유지한다.
-const RUN_TABLE_TYPES = ['reference', 'judge'];
+// 정답 대조는 2026-09-29 부터 **실행 카드**다 — 한 번의 실행(여러 벤치마크)이 카드 한 장이고,
+// 카드를 열면 ETRI 결과 화면 구성의 요약(BenchmarkBatchPage)이 뜬다(사용자 결정). 런을 가로로
+// 견주는 표는 '실행 비교' 탭(EvalComparison)이 맡는다.
+const RUN_TABLE_TYPES = ['judge'];
+// 실행 카드 상태 → 배지(partial = 끝났는데 일부 벤치마크만 성공).
+const GROUP_BADGE = {
+  running: { type: 'blue', key: 'evaluation.project.status.running' },
+  completed: { type: 'green', key: 'evaluation.project.status.completed' },
+  partial: { type: 'yellow', key: 'evaluation.batch.statusPartial' },
+  failed: { type: 'red', key: 'evaluation.failed' },
+};
+// 카드 제목에 늘어놓는 벤치마크 수 상한 — 넘으면 '외 n개'.
+const GROUP_TITLE_MAX = 4;
 const STATUS_KEYS = {
   created: 'evaluation.project.status.created',
   running: 'evaluation.project.status.running',
@@ -139,6 +167,8 @@ const ProjectDetail = () => {
   const [descDraft, setDescDraft] = useState('');
   const [savingDesc, setSavingDesc] = useState(false);
   const [runsData, setRunsData] = useState(null); // { metric_keys, best, runs }
+  // 실행(묶음) 기록 — 정답 대조 카드 1장 = 실행 한 번(BE project.batches).
+  const [batches, setBatches] = useState([]);
   const [notFound, setNotFound] = useState(false);
   const [modelMap, setModelMap] = useState({}); // model_id에서 name으로 매핑
   const [datasetMap, setDatasetMap] = useState({}); // dataset_id에서 name으로 매핑
@@ -161,6 +191,7 @@ const ProjectDetail = () => {
     if (res.status === STATUS_SUCCESS && res.result?.project) {
       setProject(res.result.project);
       setRunsData(res.result.runs || { metric_keys: [], best: {}, runs: [] });
+      setBatches(res.result.batches || []);
     } else {
       setNotFound(true);
       errorToastMessage(res.error, res.message);
@@ -362,6 +393,8 @@ const ProjectDetail = () => {
     benchRows.forEach((row) => {
       if (!row.benchmark || row.run.status !== 'completed' || row.score == null)
         return;
+      // mock 가짜 점수·빠른 확인(앞 N문항) 점수는 Best 후보가 아니다(BE build_eval_comparison 과 같은 규칙).
+      if (isUnranked(row.run)) return;
       const list = (groups[row.pair] = groups[row.pair] || []);
       // 한 런이 같은 쌍으로 두 번 들어오면(중복 CSV 토큰) 자기 자신을 비교 대상으로 세어
       // 단독 값에 Best 가 붙는다. 그룹은 **런 단위로** 유일해야 한다.
@@ -471,6 +504,97 @@ const ProjectDetail = () => {
     [dispatch, project, fetchProject],
   );
 
+  // ── 정답 대조 실행 카드 — 한 번의 실행 = 카드 1장(batchSummary.buildRunGroups) ─────────
+  const runGroups = useMemo(
+    () =>
+      project?.eval_type === 'reference' ? buildRunGroups(runs, batches) : [],
+    [project?.eval_type, runs, batches],
+  );
+
+  const openGroup = (group) => history.push(`${url}/batch/${group.key}`);
+
+  // 실행 중지 — 도는 멤버 런을 모두 멈춘다(기록은 남긴다). 단건 중지와 같은 확인 모달·같은 API.
+  const handleStopGroup = useCallback(
+    (group, e) => {
+      e.stopPropagation();
+      const targets = group.members.filter(
+        (run) => run.status === 'running' && run.job_id,
+      );
+      if (!targets.length) return;
+      dispatch(
+        openConfirm({
+          title: 'evaluation.run.stop.title',
+          content: 'evaluation.run.stop.message',
+          testid: 'eval-batch-stop-modal',
+          submit: {
+            text: 'evaluation.run.stop.confirm',
+            func: async () => {
+              const settled = await Promise.all(
+                targets.map((run) =>
+                  markEvalStatus(
+                    run.model_id ?? project.model_id,
+                    run.job_id,
+                    'cancelled',
+                  ),
+                ),
+              );
+              const failed = settled.find((r) => r.status !== STATUS_SUCCESS);
+              if (failed) errorToastMessage(failed.error, failed.message);
+              await fetchProject();
+            },
+          },
+          cancel: { text: 'cancel.label' },
+        }),
+      );
+    },
+    [dispatch, project, fetchProject],
+  );
+
+  // 실행 삭제 — 기록된 실행은 묶음째(BE 가 멤버 런까지 지운다), 기록 없는 단건은 종전 단건 삭제.
+  //   도는 멤버는 먼저 취소해 GPU 를 돌려준다(단건 삭제와 같은 best-effort).
+  const handleDeleteGroup = useCallback(
+    (group, e) => {
+      if (!group.batchId) {
+        handleDeleteRun(group.members[0], e);
+        return;
+      }
+      e.stopPropagation();
+      dispatch(
+        openConfirm({
+          title: 'evaluation.batch.deleteTitle',
+          content: t('evaluation.batch.deleteMessage', {
+            count: group.members.length,
+          }),
+          testid: 'eval-batch-delete-modal',
+          submit: {
+            text: 'delete.label',
+            func: async () => {
+              await Promise.all(
+                group.members
+                  .filter((run) => run.status === 'running')
+                  .map((run) =>
+                    markEvalStatus(
+                      run.model_id ?? project.model_id,
+                      run.job_id,
+                      'cancelled',
+                    ),
+                  ),
+              );
+              const res = await deleteRunBatch(projectId, group.batchId);
+              if (res.status !== STATUS_SUCCESS) {
+                errorToastMessage(res.error, res.message);
+                return;
+              }
+              await fetchProject();
+            },
+          },
+          cancel: { text: 'cancel.label' },
+        }),
+      );
+    },
+    [dispatch, project, projectId, fetchProject, handleDeleteRun, t],
+  );
+
   // 실행 목록의 앞 두 열은 **유형마다 뜻이 다르다**. 나머지(점수·모델·출처·실행 일자·
   // 상태·동작)는 유형과 무관하게 같은 것을 담으므로 공유한다.
   //   정답 대조 — 무엇을 잰 런인가(벤치마크) / 어느 축으로 읽나(지표). 점수는 0~1 · %.
@@ -567,6 +691,16 @@ const ProjectDetail = () => {
             <span className={cx('cell-score', isBest && 'best')}>
               {formatMetricValue(row.metric, row.score)}
               {isBest && <Badge label='Best' type='green' size='sm' />}
+              {/* 실채점기로 교체되기 전 해시 mock 점수 — 같은 벤치마크 id 로 이력에 남아 있다. */}
+              {row.run.mock && <Badge label='mock' type='gray' size='sm' />}
+              {/* 태스크당 앞 N문항만 잰 빠른 확인 — 전체 측정과 Best 를 겨루지 않는다. */}
+              {row.run.sample_limit != null && (
+                <Badge
+                  label={t('evaluation.bench.quickCheckShort')}
+                  type='yellow'
+                  size='sm'
+                />
+              )}
             </span>
           );
         },
@@ -796,14 +930,37 @@ const ProjectDetail = () => {
     inferencePlaygroundId,
     judgePlaygroundId,
     formatTrain,
+    sampleLimit,
+    gpuCount,
   }) => {
     if (starting) return;
+    // 데이터셋은 벤치마크가 읽을 때만 온다 — 문항이 채점기에 내장된 벤치마크만이면 비어 있다.
+    const datasetIds = datasetId ? [Number(datasetId)] : [];
+    // 정답 대조의 lm-eval 실행은 벤치마크가 하나여도 묶음 API 로 보낸다 — 그래야 실행 한 번이
+    // 카드 한 장(실행 기록)으로 남는다. MixATIS(포맷 학습)·LLM 심사는 종전 단건 경로다.
+    const lmevalOnly = benchmarks.every((b) =>
+      LMEVAL_BENCHMARK_IDS.includes(b.benchmark),
+    );
+    if (
+      benchmarks.length > 1 ||
+      (project.eval_type === 'reference' && lmevalOnly && !formatTrain)
+    ) {
+      await runBatch({
+        modelId,
+        datasetIds,
+        benchmarks,
+        inferencePlaygroundId,
+        sampleLimit,
+        gpuCount,
+      });
+      return;
+    }
     setStarting(true);
     const res = await runBenchmark({
       project_id: Number(projectId),
       // 이 런이 평가할 모델·데이터셋 — 프로젝트가 아니라 **런**이 소유한다.
       model_id: Number(modelId),
-      dataset_ids: [Number(datasetId)],
+      dataset_ids: datasetIds,
       benchmarks,
       // 출력은 언제나 빌린 배포가 만든다 — 컨테이너는 채점만 한다. 화면이 이 값을 필수로
       //   받으므로 다른 출처를 함께 싣지 않는다(BE 우선순위 inference_job_id >
@@ -818,6 +975,9 @@ const ProjectDetail = () => {
       //   정하게 되는데, 그 기본값이 화면의 스위치와 갈리면 사용자가 본 설정과 실제로
       //   돈 설정이 달라진다.
       ...(formatTrain === undefined ? {} : { format_train: !!formatTrain }),
+      // 문항 상한(lm-eval 채점 벤치마크의 빠른 점검) — 실행 화면이 채웠을 때만 온다. 다른
+      //   채점기(LogicKor·MixATIS)에는 화면이 싣지 않는다(BE 가 사유와 함께 거절한다).
+      ...(sampleLimit ? { sample_limit: Number(sampleLimit) } : {}),
     });
     setStarting(false);
     if (res.status !== STATUS_SUCCESS || !res.result?.job_id) {
@@ -832,11 +992,74 @@ const ProjectDetail = () => {
       model_id: Number(modelId),
     });
     // 결과 화면의 깊이는 유형마다 다르다 — 정답 대조는 독립 페이지, 심사는 상세 안.
+    // 정답 대조는 실행 카드가 여는 요약으로 간다(기록 없는 단건 = 'r-<jobId>'), 심사는 상세 안.
     history.push(
       project.eval_type === 'reference'
-        ? `${url}/run/${res.result.job_id}`
+        ? `${url}/batch/${RUN_KEY_PREFIX}${res.result.job_id}`
         : `${runsPath}/${res.result.job_id}`,
     );
+  };
+
+  // 여러 벤치마크 한 번에 — 서버가 고른 GPU 수(gpuCount)만큼의 런으로 나눠 담는다(lm-eval 채점
+  // 벤치마크만, 설계 §14). 일부 런만 떴으면 무엇이 안 떴는지를 토스트로 그대로 알린다(이미 뜬
+  // 런은 되돌릴 수 없으니 숨기지 않는다).
+  const runBatch = async ({
+    modelId,
+    datasetIds,
+    benchmarks,
+    inferencePlaygroundId,
+    sampleLimit,
+    gpuCount,
+  }) => {
+    setStarting(true);
+    const res = await runBenchmarkBatch({
+      project_id: Number(projectId),
+      model_id: Number(modelId),
+      dataset_ids: datasetIds,
+      benchmarks,
+      inference_playground_id: inferencePlaygroundId,
+      ...(sampleLimit ? { sample_limit: Number(sampleLimit) } : {}),
+      ...(gpuCount ? { gpu_count: Number(gpuCount) } : {}),
+    });
+    setStarting(false);
+    if (res.status !== STATUS_SUCCESS || !res.result) {
+      // 런치 전 거절(GPU 부족·데이터셋 누락 등) — 아무것도 뜨지 않았으니 모달을 그대로 둔다.
+      errorToastMessage(res.error, res.message);
+      return;
+    }
+    const { runs: launched = [], failed = 0 } = res.result;
+    const okCount = launched.length - failed;
+    if (okCount > 0) setShowRunConfig(false);
+    if (failed === 0) {
+      successToastMessage(
+        null,
+        t('evaluation.bench.batchStarted', { count: okCount }),
+      );
+    } else {
+      // 런 하나가 벤치마크 여러 개를 담는다 — 안 뜬 런의 벤치마크를 전부 이름으로 세운다.
+      const failedList = launched
+        .filter((r) => r.error)
+        .map(
+          (r) =>
+            `${(r.benchmarks || [])
+              .map((id) => BENCHMARK_LABEL[id] || id)
+              .join(' · ')} (${r.error})`,
+        )
+        .join(', ');
+      errorToastMessage(
+        null,
+        t('evaluation.bench.batchPartial', {
+          ok: okCount,
+          total: launched.length,
+          failed: failedList,
+        }),
+      );
+    }
+    await fetchProject();
+    // 뜬 런이 있으면 그 실행의 요약으로 — 결과 화면이 여러 벤치마크를 한 화면에 모아 보여 준다.
+    if (okCount > 0 && res.result.batch_id != null) {
+      history.push(`${url}/batch/${res.result.batch_id}`);
+    }
   };
 
   const openRun = (run) => {
@@ -960,6 +1183,124 @@ const ProjectDetail = () => {
   // 헤더에는 배지를 달지 않는다 — 모델·배포 상세 헤더와 같은 규약이다. 유형은 이미 제목
   // 옆 부제에 평문으로 있고, 상태는 표의 행마다 있다. 프로젝트 status 는 런들의 롤업이라
   // 헤더에 한 낱말로 박으면 "완료"인 프로젝트에서 새 런이 도는 순간 거짓이 된다.
+  // 정답 대조 실행 카드 목록 — 전문가 평가 카드와 같은 모양(run-list/run-row). 카드를 누르면 그
+  // 실행의 결과 요약(ETRI 구성, BenchmarkBatchPage)이 열린다.
+  const renderRunGroups = () => {
+    if (!runGroups.length) {
+      return (
+        <EmptyBox
+          text='evaluation.project.detail.noRuns'
+          isBox
+          customStyle={{ height: '120px' }}
+        />
+      );
+    }
+    return (
+      <div className={cx('run-list')}>
+        {runGroups.map((group) => {
+          const entries = benchmarkEntriesOf(group.members);
+          const overall = batchSummaryOf(entries).cards.find(
+            (card) => card.id === 'overall',
+          );
+          // 카드의 진행은 벤치마크 단위 — 런 하나가 여러 벤치마크를 담아 "런 1/4" 로는 몇 개의
+          // 점수가 나왔는지 알 수 없다. 런치조차 못 한 벤치마크도 분모에 넣는다.
+          const benchProgress = entryProgressOf([
+            ...entries,
+            ...group.launchFailures.map(() => ({ status: 'failed' })),
+          ]);
+          const labels = entries.map((entry) => entry.label);
+          const title =
+            labels.length > GROUP_TITLE_MAX
+              ? `${labels.slice(0, GROUP_TITLE_MAX).join(' · ')} ${t(
+                  'evaluation.batch.cardMore',
+                  { count: labels.length - GROUP_TITLE_MAX },
+                )}`
+              : labels.join(' · ');
+          // 상태도 벤치마크 단위 — 런이 다 끝났어도 그 안의 벤치마크 하나가 실패했으면 '일부 실패'.
+          const badge =
+            GROUP_BADGE[benchProgress.status] || GROUP_BADGE.running;
+          return (
+            // 카드 전체 클릭은 마우스용(전문가 카드와 같다), 키보드는 '열기' 버튼으로 연다 —
+            // role=button 카드 안에 중지·삭제 버튼을 두면 상호작용 요소가 중첩된다.
+            <div
+              key={group.key}
+              className={cx('run-row')}
+              onClick={() => openGroup(group)}
+            >
+              <div className={cx('run-main')}>
+                <span className={cx('run-dataset')}>{title}</span>
+                <span className={cx('run-config')}>
+                  {[
+                    group.modelName,
+                    group.checkpoint,
+                    t('evaluation.batch.benchCount', { count: entries.length }),
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
+              </div>
+              <div className={cx('run-side')}>
+                {overall?.value != null && (
+                  <span className={cx('run-metrics')}>
+                    {`${t('evaluation.batch.card.overall')} ${fmt(overall.value)}`}
+                  </span>
+                )}
+                {group.sampleLimit != null && (
+                  <Badge
+                    label={t('evaluation.bench.quickCheckShort')}
+                    type='yellow'
+                    size='sm'
+                  />
+                )}
+                {entries.some((entry) => entry.mock) && (
+                  <Badge label='mock' type='gray' size='sm' />
+                )}
+                <Badge
+                  label={
+                    benchProgress.status === 'running'
+                      ? `${t(badge.key)} ${benchProgress.counts.completed}/${benchProgress.total}`
+                      : t(badge.key)
+                  }
+                  type={badge.type}
+                  size='sm'
+                />
+                <span className={cx('run-date')}>
+                  {fmtDate(group.createDatetime)}
+                </span>
+                <button
+                  type='button'
+                  className={cx('run-open', 'run-open-btn')}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openGroup(group);
+                  }}
+                >
+                  {t('evaluation.project.detail.open')}
+                </button>
+                {group.counts.running > 0 && (
+                  <ButtonV2
+                    type='clear'
+                    colorType='blue'
+                    size='s'
+                    label={t('evaluation.run.stop.action')}
+                    onClick={(event) => handleStopGroup(group, event)}
+                  />
+                )}
+                <ButtonV2
+                  type='clear'
+                  colorType='red'
+                  size='s'
+                  label={t('delete.label')}
+                  onClick={(event) => handleDeleteGroup(group, event)}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   const topButtonList = (
     <div className={cx('top-actions')}>
       {/* SimpleNav 의 topButtonList 슬롯과 같은 자리라 하우스와 같은 size='l' 을 쓴다. */}
@@ -1213,13 +1554,24 @@ const ProjectDetail = () => {
                 <h3 className={cx('runs-title')}>
                   {t('evaluation.project.detail.runsTitle')}
                 </h3>
-                <Badge label={String(runs.length)} type='blue' size='sm' />
+                {/* 정답 대조는 카드(실행) 수 — 벤치마크 런 수가 아니다. */}
+                <Badge
+                  label={String(
+                    project.eval_type === 'reference'
+                      ? runGroups.length
+                      : runs.length,
+                  )}
+                  type='blue'
+                  size='sm'
+                />
               </div>
 
               {/* 정답 대조·LLM 심사는 펼친 표 — 헤더를 누른 순서가 정렬 레벨이고, 범주형이
                   선두면 그룹 경계선이 그어진다. 앞 두 열의 뜻만 유형별로 갈린다(leadColumns).
                   expert 는 한 런에 그 축이 없어(사람이 샘플을 훑는 세션) 카드 목록을 유지한다. */}
-              {RUN_TABLE_TYPES.includes(project.eval_type) ? (
+              {project.eval_type === 'reference' ? (
+                renderRunGroups()
+              ) : RUN_TABLE_TYPES.includes(project.eval_type) ? (
                 <MultiSortTable
                   columns={benchColumns}
                   rows={benchRows}
