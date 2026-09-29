@@ -369,6 +369,37 @@ CREATE TABLE IF NOT EXISTS `eval_expert_rating_history` (
     CONSTRAINT FOREIGN KEY (`job_str_id`) REFERENCES `jonathan_llm`.`eval_result` (`job_str_id`) ON UPDATE CASCADE ON DELETE CASCADE
 );
 
+-- 벤치마크 실행(묶음) — "한 번의 실행 = 결과 카드 1장" 의 단위(2026-09-29). 벤치마크마다 런(eval_result)
+-- 이 하나씩이고, 함께 실행한 런들을 이 행이 묶는다. 멤버는 매핑 테이블로 두어 런을 지우면
+-- FK CASCADE 로 멤버십도 함께 사라진다(멤버가 0 이 된 묶음은 목록에서 빠진다).
+-- 체크포인트·문항 상한은 묶음 전체에 한 값이다(run_benchmark_batch 가 체크포인트를 한 번만 푼다).
+-- ⚠️ 라이브 DB 는 수동 적용(llm_db 마이그레이션 러너 없음) — 아래 두 CREATE 를 그대로 실행한다.
+CREATE TABLE IF NOT EXISTS `eval_run_batch` (
+    `id`                INT(11) NOT NULL AUTO_INCREMENT,
+    `eval_project_id`   INT(11) NOT NULL,
+    `workspace_id`      INT(11) NOT NULL,
+    `source_model_id`   INT(11) NOT NULL,
+    `checkpoint`        VARCHAR(255),
+    `sample_limit`      INT(11),
+    `launch_failures`   JSON,          -- 런치에 실패한 벤치마크 [{benchmark, error}] — 요청한 전부가 카드에 보이게
+    `create_datetime`   DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(`id`),
+    KEY `idx_run_batch_project` (`eval_project_id`),
+    CONSTRAINT FOREIGN KEY (`eval_project_id`) REFERENCES `jonathan_llm`.`eval_project` (`id`) ON UPDATE CASCADE ON DELETE CASCADE,
+    CONSTRAINT FOREIGN KEY (`source_model_id`) REFERENCES `jonathan_llm`.`model` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS `eval_run_batch_member` (
+    `batch_id`          INT(11) NOT NULL,
+    `job_str_id`        VARCHAR(128) NOT NULL,
+    `position`          INT(11) NOT NULL DEFAULT 0,   -- 고른 순서(결과 화면의 벤치마크 순서)
+    `benchmarks`        JSON,                         -- 이 런이 담은 벤치마크 id 목록(한 런 = 여러 벤치마크, metric_set 은 255자에서 잘린다)
+    PRIMARY KEY(`batch_id`, `job_str_id`),
+    UNIQUE KEY `uq_run_batch_member_job` (`job_str_id`),
+    CONSTRAINT FOREIGN KEY (`batch_id`) REFERENCES `jonathan_llm`.`eval_run_batch` (`id`) ON UPDATE CASCADE ON DELETE CASCADE,
+    CONSTRAINT FOREIGN KEY (`job_str_id`) REFERENCES `jonathan_llm`.`eval_result` (`job_str_id`) ON UPDATE CASCADE ON DELETE CASCADE
+);
+
 -- 프롬프트 최적화(fewshot-prompt-optimizer) 결과 영속.
 -- apps/fb_utils/llm_db/schema.sql 미러 (fresh-install 정합 — 라이브 DB 에는
 -- apps/llm_playground/migrations/001_prompt_optimization.sql 로 수동 적용됨).

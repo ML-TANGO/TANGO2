@@ -877,6 +877,117 @@ async def delete_eval_result(job_str_id : str, source_model_id : int = None) -> 
     return True
 
 
+# ── 벤치마크 실행(묶음) — "한 번의 실행 = 결과 카드 1장"(2026-09-29) ──────────────────
+# 벤치마크마다 eval_result 가 하나씩이고 eval_run_batch 가 그것들을 묶는다(schema.sql).
+# 멤버는 eval_run_batch_member 매핑이라 런을 지우면 FK CASCADE 로 멤버십이 함께 사라진다.
+
+async def insert_eval_run_batch(eval_project_id : int, workspace_id : int,
+                                source_model_id : int, checkpoint : str = None,
+                                sample_limit : int = None, job_ids : list = None,
+                                launch_failures : list = None,
+                                job_benchmarks : dict = None) -> int:
+    """실행 1건(묶음) 기록 → batch id. 멤버는 고른 순서(position)로 넣는다.
+    job_benchmarks = {job_id: [벤치마크 id…]} — 한 런이 담은 벤치마크(런 하나가 여러 벤치마크를
+    채점한다. eval_result.metric_set 은 255자에서 잘려 목록의 정본이 될 수 없다).
+    두 번의 커밋이라 원자적이지 않다 — 멤버 삽입이 실패하면 방금 만든 묶음 행을 지우고 예외를
+    다시 올린다(멤버 0 인 묶음 행이 쌓이지 않게. 목록은 INNER JOIN 이라 어차피 보이지 않는다)."""
+    # 런치에 실패한 벤치마크도 함께 남긴다 — 빼면 3개를 요청한 실행이 나중에 "2/2 완료"로 읽힌다.
+    batch_id = await commit_query(query="""
+        INSERT INTO eval_run_batch
+            (eval_project_id, workspace_id, source_model_id, checkpoint, sample_limit,
+             launch_failures)
+        VALUES (%s, %s, %s, %s, %s, %s)
+    """, params=(eval_project_id, workspace_id, source_model_id, checkpoint, sample_limit,
+                  json.dumps(launch_failures, ensure_ascii=False) if launch_failures else None))
+    if job_ids:
+        try:
+            benches = job_benchmarks or {}
+            await commit_query(query="""
+                INSERT INTO eval_run_batch_member (batch_id, job_str_id, position, benchmarks)
+                VALUES (%s, %s, %s, %s)
+            """, params=[(batch_id, job_id, i,
+                          json.dumps(benches[job_id]) if benches.get(job_id) else None)
+                         for i, job_id in enumerate(job_ids)],
+                execute="many")
+        except Exception:
+            await commit_query(query="DELETE FROM eval_run_batch WHERE id = %s",
+                               params=(batch_id,))
+            raise
+    return batch_id
+
+
+def _batch_rows_to_dicts(rows) -> list:
+    """(batch 컬럼 + job_str_id·benchmarks) 조인 행 → batch 별 {…, job_ids:[고른 순서],
+    job_benchmarks:{job_id: [...]}, launch_failures:[…]}.
+    LEFT JOIN 행(멤버 없음)은 job_str_id 가 NULL — job_ids 에 넣지 않는다."""
+    out, index = [], {}
+    for row in rows or []:
+        bid = row["id"]
+        if bid not in index:
+            index[bid] = {k: row[k] for k in ("id", "eval_project_id", "workspace_id",
+                                                "source_model_id", "checkpoint",
+                                                "sample_limit", "create_datetime")}
+            failures = row.get("launch_failures")
+            if isinstance(failures, str):
+                try:
+                    failures = json.loads(failures)
+                except (TypeError, json.JSONDecodeError):
+                    failures = None
+            index[bid]["launch_failures"] = failures if isinstance(failures, list) else []
+            index[bid]["job_ids"] = []
+            index[bid]["job_benchmarks"] = {}
+            out.append(index[bid])
+        if row.get("job_str_id"):
+            index[bid]["job_ids"].append(row["job_str_id"])
+            benches = row.get("benchmarks")
+            if isinstance(benches, str):
+                try:
+                    benches = json.loads(benches)
+                except (TypeError, json.JSONDecodeError):
+                    benches = None
+            if isinstance(benches, list) and all(isinstance(b, str) for b in benches):
+                index[bid]["job_benchmarks"][row["job_str_id"]] = benches
+    return out
+
+
+async def list_eval_run_batches(eval_project_id : int) -> list:
+    """프로젝트의 실행(묶음) 목록(최신순) — 멤버가 한 개 이상 남은 묶음만(INNER JOIN)."""
+    rows = await select_query("""
+        SELECT b.id, b.eval_project_id, b.workspace_id, b.source_model_id, b.checkpoint,
+               b.sample_limit, b.launch_failures,
+               DATE_FORMAT(b.create_datetime, %s) AS create_datetime, m.job_str_id,
+               m.benchmarks
+        FROM eval_run_batch AS b
+        JOIN eval_run_batch_member AS m ON m.batch_id = b.id
+        WHERE b.eval_project_id = %s
+        ORDER BY b.id DESC, m.position ASC
+    """, params=(TYPE.TIME_DATE_FORMAT_SQL, eval_project_id), fetch_type=FetchType.ALL)
+    return _batch_rows_to_dicts(rows)
+
+
+async def get_eval_run_batch(batch_id : int):
+    """실행(묶음) 1건 + 멤버 job_ids(없으면 None). 멤버가 0 이어도 묶음 행을 돌려준다(LEFT JOIN) —
+    멤버를 다 지운 뒤 묶음 행 삭제만 실패한 경우에도 다시 지울 수 있어야 한다(목록은 INNER JOIN)."""
+    rows = await select_query("""
+        SELECT b.id, b.eval_project_id, b.workspace_id, b.source_model_id, b.checkpoint,
+               b.sample_limit, b.launch_failures,
+               DATE_FORMAT(b.create_datetime, %s) AS create_datetime, m.job_str_id,
+               m.benchmarks
+        FROM eval_run_batch AS b
+        LEFT JOIN eval_run_batch_member AS m ON m.batch_id = b.id
+        WHERE b.id = %s
+        ORDER BY m.position ASC
+    """, params=(TYPE.TIME_DATE_FORMAT_SQL, batch_id), fetch_type=FetchType.ALL)
+    batches = _batch_rows_to_dicts(rows)
+    return batches[0] if batches else None
+
+
+async def delete_eval_run_batch(batch_id : int) -> bool:
+    """실행(묶음) 행 삭제 — 멤버 매핑은 FK CASCADE. 멤버 런(eval_result)은 호출부가 먼저 지운다."""
+    await commit_query(query="DELETE FROM eval_run_batch WHERE id = %s", params=(batch_id,))
+    return True
+
+
 async def list_stale_running_eval_results(source_model_id : int, max_age_hours : int) -> list:
     """스윕 후보(방치된 running 벤치마크/judge 런) 의 job_str_id 목록. fail_stale_eval_results
     로 마감하기 *전에* 호출부가 각 후보에 lazy 완료(metrics.json 재확인)를 한 번 시도하기 위한
@@ -971,6 +1082,34 @@ def _eval_run_source(metrics) -> tuple:
     return None, None, None, None
 
 
+def _eval_run_source_commit(metrics):
+    """위임 런이 **완료 시점에 굳혀 둔** 서빙 커밋(`_platform_source.commit`) → str, 없으면 None.
+
+    비교표가 위임 런을 "배포 × 그때 서빙하던 커밋" 으로 가르는 근거다 — 배포는 나중에 다른
+    커밋으로 다시 올라갈 수 있어 배포 이름만으로 묶으면 한 열에 두 가중치의 점수가 섞인다.
+    굳히기 이전에 끝난 옛 런은 None 이다. 지금 배포의 커밋으로 채우지 않는다(그때와 다를 수 있다)."""
+    if not isinstance(metrics, dict):
+        return None
+    generate = metrics.get("generate")
+    if not (isinstance(generate, dict) and generate.get("mode") == "remote"):
+        return None
+    frozen = metrics.get("_platform_source")
+    commit = frozen.get("commit") if isinstance(frozen, dict) else None
+    return str(commit) if commit else None
+
+
+def _eval_run_sample_limit(metrics):
+    """빠른 확인 런의 문항 상한(태스크당 앞 N문항) → int, 전체 측정·비 lm-eval 런은 None.
+
+    lm-eval 채점기(evaluate-lmeval)가 metrics.lmeval.limit 에 싣는다. 컨테이너가 쓴 값이지만
+    결과 JSON 은 외부 산출물이라 1 이상 정수만 믿는다(bool 은 int 의 하위형이라 따로 뺀다)."""
+    lmeval = metrics.get("lmeval") if isinstance(metrics, dict) else None
+    limit = lmeval.get("limit") if isinstance(lmeval, dict) else None
+    if isinstance(limit, int) and not isinstance(limit, bool) and limit >= 1:
+        return limit
+    return None
+
+
 def _eval_run_judge(metrics) -> tuple:
     """심사(judge) 런의 심판 출처를 metrics 원본에서 판정 → (judge_model, judge_deployment).
 
@@ -1042,6 +1181,9 @@ def build_eval_comparison(rows: list) -> dict:
             "source_model": (frozen_model if source_mode == "deployment"
                              else r.get("model_name")),
             "source_deployment": frozen_deployment,
+            # 위임 런이 완료 시점에 굳힌 서빙 커밋(additive, 2026-09-29) — 화면이 "배포 × 커밋"
+            # 으로 열을 가른다. 굳히기 이전 런은 None(추측하지 않는다).
+            "source_commit": _eval_run_source_commit(metrics),
             # 심판 출처 — source_deployment 와 대칭인 additive 필드(2026-08-27). LLM 심사
             # 런은 "누가 채점했나"가 점수의 일부라 목록에서 보여야 하는데, metrics.judge 는
             # nested JSON 이라 평탄화된 표에서 쓸 수 없었다. 화면은
@@ -1050,13 +1192,23 @@ def build_eval_comparison(rows: list) -> dict:
             # self-metric)은 둘 다 None 이고 '-' 가 정상이다.
             "judge_model": judge_model,
             "judge_deployment": judge_deployment,
+            # 해시 mock 채점기(evaluate-benchmark-mock)가 낸 가짜 점수인가(additive, 2026-09-28).
+            # 실채점기로 교체된 뒤에도 같은 벤치마크 id 로 이력에 남아 있어, 표시하지 않으면
+            # 비교표에서 실측 점수와 구분 없이 나란히 선다.
+            "mock": bool(isinstance(metrics, dict) and metrics.get("mock")),
+            # 빠른 확인(태스크당 앞 N문항) 런의 N — 분모가 달라 전체 측정과 나란히 비교하면
+            # 안 되는 점수다(additive, 2026-09-28). 화면은 배지를 달고 순위에서 뺀다.
+            "sample_limit": _eval_run_sample_limit(metrics),
             "metrics": clean,
         })
     best = {}
     for key in metric_keys:
         direction = _EVAL_METRIC_DIRECTION.get(str(key).lower(), "max")
+        # mock 런은 최고값 후보에서 뺀다 — 해시 점수(52~95)가 실측 점수를 제치고 '최고'가 된다.
+        # 빠른 확인 런도 뺀다 — 20문항 점수가 전체 측정 점수를 이기면 '최고'가 거짓이 된다.
         candidates = [(run["id"], run["metrics"][key]) for run in runs
-                      if run["status"] == "completed" and key in run["metrics"]]
+                      if run["status"] == "completed" and key in run["metrics"]
+                      and not run["mock"] and run["sample_limit"] is None]
         if not candidates:
             continue
         best[key] = (min if direction == "min" else max)(candidates, key=lambda x: x[1])[0]

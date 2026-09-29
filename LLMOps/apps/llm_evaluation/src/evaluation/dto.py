@@ -5,6 +5,8 @@ from pydantic import BaseModel, Field, field_validator
 
 from evaluation.constants import (
     BENCHMARK_IDS,
+    BENCHMARK_SAMPLE_LIMIT_MAX,
+    BENCHMARK_SAMPLE_LIMIT_MIN,
     EVAL_PROJECT_DESCRIPTION_MAX,
     EVAL_TYPES,
     EXPERT_SAMPLE_SET_COUNT,
@@ -151,6 +153,13 @@ class BenchmarkRunBody(RunModelSelection):
     여기서 막지 않는 이유는 프로젝트 유형이 바디에 없고 DB 조회로만 알 수 있어서다."""
 
     project_id: int = Field(..., ge=1, description="평가 프로젝트 id(유형 게이트·run 묶음)")
+    # 데이터셋은 **선택**이다 — RunModelSelection 의 "필수 1개"를 이 바디에서만 푼다. 문항이
+    # 채점 이미지에 구워진 lm-eval 표준 벤치마크는 런 데이터셋을 읽지 않는다. 데이터셋을 읽는
+    # 채점기(custom·MixATIS·LogicKor)에서 비우면 service 가 사유와 함께 거절한다
+    # (constants.DATASET_FREE_BENCHMARK_IDS). 상한 1개는 그대로다.
+    dataset_ids: List[int] = Field(
+        default_factory=list, max_length=1,
+        description="이 런이 평가할 데이터셋 id — 0~1개(문항 내장 벤치마크는 비워도 된다)")
     # 두 shape 를 다 받는다: ["logickor"] 와 [{"benchmark": "logickor"}].
     # 이유는 하위호환이 아니라 **배포 순서 분리**다 — 화면(FE)과 서버가 서로 다른 시점에
     # 나가도 어느 쪽이 먼저든 런이 깨지지 않아야 한다. 옛 요청의 metric 키는 조용히 버린다:
@@ -219,6 +228,12 @@ class BenchmarkRunBody(RunModelSelection):
     judge_max_output_tokens: Optional[int] = Field(
         default=None, ge=LOGICKOR_JUDGE_MAX_OUTPUT_MIN, le=LOGICKOR_JUDGE_MAX_OUTPUT_MAX,
         description="심판 1회 출력 상한 토큰(미지정 시 컨테이너 기본 1024)")
+    # lm-eval 채점기(evaluate-lmeval / -code) 실행 옵션 — 태스크당 문항 상한(빠른 점검).
+    # 미지정이면 전체 문항. 다른 채점기에 주면 service 가 거절한다(조용히 무시하면 "빠르게
+    # 쟀다"고 믿는 전체 측정 런이 되거나 그 반대가 된다).
+    sample_limit: Optional[int] = Field(
+        default=None, ge=BENCHMARK_SAMPLE_LIMIT_MIN, le=BENCHMARK_SAMPLE_LIMIT_MAX,
+        description="태스크당 문항 상한(lm-eval 채점기 전용, 미지정 시 전체)")
 
     @field_validator("commit_id")
     @classmethod
@@ -248,19 +263,60 @@ class BenchmarkRunBody(RunModelSelection):
     @field_validator("benchmarks")
     @classmethod
     def _dedup_benchmarks(cls, v):
-        # 같은 벤치마크 중복 지정 거부(런당 벤치마크 1행 — 결과 averages 키 충돌 방지).
-        # str/객체 두 shape 를 모두 받으므로 여기서 id 를 뽑아 비교한다.
-        if v is None:
-            return v
-        seen = set()
-        for item in v:
-            bid = item if isinstance(item, str) else item.benchmark
-            if bid not in BENCHMARK_IDS:
-                raise ValueError(f"unknown benchmark: {bid}")
-            if bid in seen:
-                raise ValueError(f"duplicate benchmark: {bid}")
-            seen.add(bid)
+        return _check_benchmark_list(v)
+
+
+def _check_benchmark_list(v):
+    """벤치마크 목록 공용 검증 — 모르는 id·중복 지정 거부(런당 벤치마크 1행 — 결과 averages
+    키 충돌 방지, 묶음 실행이면 같은 벤치마크 런 두 개). str/객체 두 shape 를 모두 받으므로
+    여기서 id 를 뽑아 비교한다."""
+    if v is None:
         return v
+    seen = set()
+    for item in v:
+        bid = item if isinstance(item, str) else item.benchmark
+        if bid not in BENCHMARK_IDS:
+            raise ValueError(f"unknown benchmark: {bid}")
+        if bid in seen:
+            raise ValueError(f"duplicate benchmark: {bid}")
+        seen.add(bid)
+    return v
+
+
+class BenchmarkBatchRunBody(BaseModel):
+    """여러 벤치마크를 한 번에 — 서버가 **GPU 수만큼의 런**으로 나눠 띄운다
+    (service.run_benchmark_batch · plan_benchmark_runs, 설계 §14).
+
+    lm-eval 채점 벤치마크만 받는다(위임 채점기는 service 가 거절). 그래서 이 바디에는 심판·포맷
+    학습·LogicKor 실행 옵션이 **없고**, 모르는 필드는 조용히 버리지 않고 422 로 거절한다 —
+    format_train 이나 judge_playground_id 를 실어 보낸 요청이 그 설정 없이 돌면 사용자는
+    "그 설정으로 쟀다"고 믿는 점수를 받는다."""
+
+    model_config = {"protected_namespaces": (), "extra": "forbid"}
+
+    project_id: int = Field(..., ge=1, description="평가 프로젝트 id(유형 게이트·run 묶음)")
+    model_id: int = Field(..., ge=1, description="이 묶음이 평가할 모델 id")
+    dataset_ids: List[int] = Field(
+        default_factory=list, max_length=1,
+        description="평가 데이터셋 id — 0~1개(custom 을 넣을 때만 필요)")
+    benchmarks: List[Union[str, BenchmarkSelection]] = Field(
+        ..., min_length=1, max_length=MAX_BENCHMARK_ITEMS,
+        description="실행할 벤치마크 목록 — gpu_count 개 런에 나눠 담는다")
+    gpu_count: Optional[int] = Field(
+        default=None, ge=1, le=MAX_BENCHMARK_ITEMS,
+        description="이 실행이 쓸 GPU 장수 = 런 수(런마다 GPU 1장, 그 안에서 벤치마크를 직렬 "
+                    "채점). 생략하면 벤치마크마다 런 하나")
+    inference_playground_id: Optional[int] = Field(
+        default=None, ge=1,
+        description="체크포인트를 풀 running 배포 id(필수 — 이 배포가 서빙 중인 커밋을 잰다)")
+    sample_limit: Optional[int] = Field(
+        default=None, ge=BENCHMARK_SAMPLE_LIMIT_MIN, le=BENCHMARK_SAMPLE_LIMIT_MAX,
+        description="태스크당 문항 상한(묶음 전체에 적용, 미지정 시 전체)")
+
+    @field_validator("benchmarks")
+    @classmethod
+    def _dedup_benchmarks(cls, v):
+        return _check_benchmark_list(v)
 
 
 class ExpertStartBody(RunModelSelection):

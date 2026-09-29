@@ -26,8 +26,9 @@ from urllib.parse import urlparse
 
 import httpx
 
-from utils import PATH, settings
+from utils import PATH, gpu_pool, settings
 from utils.llm_db import db_model, db_playground
+from utils.redis import get_redis_client
 
 from external.proxy import ExternalContainerClient, ExternalContainerError
 from evaluation.constants import (
@@ -35,11 +36,20 @@ from evaluation.constants import (
     BENCHMARK_EVAL_TYPES,
     BENCHMARK_IDS,
     BENCHMARK_RECOMMENDED_METRIC,
+    DATASET_FREE_BENCHMARK_IDS,
     DEFAULT_BENCHMARK_IDS,
     JUDGE_BENCHMARK_IDS,
     REFERENCE_BENCHMARK_IDS,
     REAL_BENCHMARK_MANIFEST_KEY,
     FORMAT_TRAIN_MANIFEST_KEYS,
+    LOCAL_WEIGHTS_MANIFEST_KEYS,
+    LMEVAL_EST_DEFAULT_SECONDS,
+    LMEVAL_EST_SECONDS,
+    LMEVAL_RUN_TIMEOUT_SECONDS,
+    LMEVAL_STARTUP_SECONDS,
+    LMEVAL_WORST_SLOWDOWN,
+    BENCHMARK_SAMPLE_LIMIT_MAX,
+    BENCHMARK_SAMPLE_LIMIT_MIN,
     EVAL_DEPLOY_MAX_POLLS,
     EVAL_INFER_RUN_SECONDS,
     EVAL_PROJECT_DESCRIPTION_MAX,
@@ -76,6 +86,7 @@ from evaluation.constants import (
     SDS_GEN_SYSTEM_PROMPT,
     SDS_SAMPLE_DIR_GLOB,
     MAX_RECONCILE_PER_VIEW,
+    MAX_PROGRESS_PER_VIEW,
     RECONCILE_TIMEOUT_SECONDS,
     STALE_RUNNING_MAX_HOURS,
 )
@@ -90,8 +101,15 @@ async def run_benchmark(project_id: int, model_id: int, dataset_ids: List[int],
                         inference_playground_id: Optional[int] = None,
                         judge_playground_id: Optional[int] = None,
                         format_train: Optional[bool] = None,
-                        run_options: Optional[dict] = None) -> dict:
+                        run_options: Optional[dict] = None,
+                        pinned_checkpoint: Optional[str] = None) -> dict:
     """벤치마크 평가 런 — 이 런이 고른 model/dataset 으로 evaluate 컨테이너 런치.
+
+    pinned_checkpoint 는 **내부 전용**(묶음 실행 run_benchmark_batch)이다 — 묶음이 한 번 푼
+    체크포인트를 lm-eval 런마다 그대로 쓴다. 라우트는 받지 않는다(요청이 가중치를 고르면
+    "고른 체크포인트"와 "배포가 서빙 중인 가중치"가 어긋날 수 있다 — commit_id 폐기 사유).
+    dataset_ids 는 비어도 된다 — 고른 벤치마크가 전부 런 데이터셋을 읽지 않을 때
+    (DATASET_FREE_BENCHMARK_IDS) 마운트 없이 시작한다.
     model_id·dataset_ids 는 **요청이 준다**(2026-08-24 — 프로젝트 잠금 해제). 둘 다
     프로젝트의 워크스페이스에 속하는지 여기서 검증한다(생성 시점에서 옮겨온 검증).
     benchmarks = 채점할 벤치마크 id 목록(생략 시 기본 집합). **메트릭은 요청이 고르지
@@ -129,7 +147,7 @@ async def run_benchmark(project_id: int, model_id: int, dataset_ids: List[int],
     joint_acc 0.0), 그 학습은 로컬 모델에 얹는 LoRA 라 원격 배포에는 붙일 통로가 없다.
     컨테이너도 generate_base_url 이 있으면 학습을 스스로 건너뛴다 → 두 경로는 **배타**다.
     체크포인트 이름은 요청이 아니라 **고른 배포가 서빙 중인 커밋**에서 푼다
-    (_resolve_format_checkpoint) — commit_id 를 요청 필드로 되살리면 "고른 체크포인트"와
+    (_resolve_deployment_checkpoint) — commit_id 를 요청 필드로 되살리면 "고른 체크포인트"와
     "실제로 점수를 낸 가중치"가 다시 어긋날 수 있고, 그것이 그 필드를 폐기한 이유다.
     이 경로의 런은 결과 화면에서 `source_mode='checkpoint'` 로 읽힌다(fb_utils
     `_eval_run_source` 가 metrics.checkpoint.name 을 그대로 쓴다 — 추가 배선 없음).
@@ -155,7 +173,8 @@ async def run_benchmark(project_id: int, model_id: int, dataset_ids: List[int],
     project = await _load_project_for_run(project_id, BENCHMARK_EVAL_TYPES)
     project_type = str(project.get("eval_type") or "")
     model_id = int(model_id)
-    dataset_ids = _run_dataset_ids(dataset_ids)
+    # 빈 목록은 "데이터셋을 쓰지 않는 런" — 허용 여부는 벤치마크를 정규화한 뒤 판정한다.
+    dataset_ids = _run_dataset_ids(dataset_ids) if dataset_ids else []
     model_info, workspace_id = await _resolve_run_model(project, model_id)
     model_name = model_info["name"]
     if not _SAFE_SEGMENT_RE.match(model_name):
@@ -236,6 +255,15 @@ async def run_benchmark(project_id: int, model_id: int, dataset_ids: List[int],
             f"{project_type} 프로젝트에는 {project_type} 유형 벤치마크만 채점할 수 "
             f"있습니다 — {detail} (지정 가능: {', '.join(allowed)})")
 
+    # 데이터셋 없이 가도 되는 건 문항이 이미지에 있는 벤치마크뿐이다. 데이터셋을 읽는 채점기를
+    # 데이터셋 없이 띄우면 GPU 를 잡은 뒤에야 죽는다(custom) — 런치 전에 사유와 함께 막는다.
+    if not datasets:
+        needs = [p["benchmark"] for p in pairs
+                 if p["benchmark"] not in DATASET_FREE_BENCHMARK_IDS]
+        if needs:
+            raise Exception(
+                f"{', '.join(needs)} 는 평가 데이터셋이 필요합니다 — 데이터셋을 고르세요")
+
     # 채점 컨테이너 라우팅 — 벤치마크마다 필요한 런타임이 달라(LogicKor 는 심판 LLM +
     # transformers 5.5.4 핀) 한 이미지가 전부 채점할 수 없다. 한 런 = 컨테이너 하나이므로
     # 서로 다른 채점기의 벤치마크를 섞으면 조용히 일부만 채점된다(mock 은 모르는 id 를
@@ -270,25 +298,37 @@ async def run_benchmark(project_id: int, model_id: int, dataset_ids: List[int],
 
     # eval_result.metric_set(VARCHAR 255) = "benchmark:metric" CSV — 런 설정 요약 + 재개 소스
     # (기존 flat metric CSV 대체). 전체 결과(점수)는 metrics JSON 에 별도 영속.
-    metric_csv = ",".join(f"{p['benchmark']}:{p['metric']}" for p in pairs)[:255]
+    # 넘치면 **토큰 단위로** 자른다 — 글자 수로 자르면 "truthfulqa_ge" 처럼 없는 벤치마크 id 가
+    # 남는다. 한 런이 담은 전체 목록은 묶음 기록(eval_run_batch_member.benchmarks)과 결과
+    # metrics 에 있다(런 하나가 여러 벤치마크를 담는 묶음 실행, 설계 §14).
+    metric_csv = ""
+    for p in pairs:
+        token = f"{p['benchmark']}:{p['metric']}"
+        joined = f"{metric_csv},{token}" if metric_csv else token
+        if len(joined) > 255:
+            break
+        metric_csv = joined
     ds_names = [str(d["name"]) for d in datasets]
     # eval_result.dataset_name 은 VARCHAR(255). 멀티 데이터셋 CSV 가 넘으면 요약형으로
     # 저장(런 자체는 진행 — 전체 목록은 반환 dict 의 datasets 로 보존). dataset_ids 상한
     # (MAX_BENCHMARK_DATASETS)은 dto 에서 강제.
-    dataset_name_csv = ",".join(ds_names)
-    if len(dataset_name_csv) > 255:
+    # 데이터셋 없는 런은 NULL — 빈 문자열을 남기면 목록이 '데이터셋 ""' 을 이름처럼 다룬다.
+    dataset_name_csv = ",".join(ds_names) or None
+    if dataset_name_csv and len(dataset_name_csv) > 255:
         dataset_name_csv = f"{ds_names[0]} +{len(ds_names) - 1} more"[:255]
 
-    # reserved _dataset = 첫 데이터셋(마운트·validator 충족). 전체 이름은 params.datasets.
-    primary = datasets[0]
     params = {
         "_base_model": {"name": model_name},
-        "_dataset": {"name": primary["name"], "access": primary["access"]},
         "datasets": ds_names,
         "benchmarks": pairs,
         "benchmark_set": benchmark_set,
         "metric_map": metric_map,
     }
+    # reserved _dataset = 첫 데이터셋(마운트). 전체 이름은 params.datasets. 없으면 싣지 않는다 —
+    # BFF 는 빈 값으로 두고 차트는 이름이 있을 때만 /dataset 을 마운트한다(pod.yaml).
+    if datasets:
+        primary = datasets[0]
+        params["_dataset"] = {"name": primary["name"], "access": primary["access"]}
 
     # 실행 옵션은 **LogicKor 채점기 전용**이다 — 전략·심판 모델·심판 컨텍스트는 그 컨테이너의
     # 계약이고, 다른 실채점 벤치마크(MixATIS 는 심판 LLM 자체가 없다)에는 대응물이 없다.
@@ -328,6 +368,23 @@ async def run_benchmark(project_id: int, model_id: int, dataset_ids: List[int],
             # 모르는 값을 그대로 통과시키므로, 컨테이너 프리셋 표에 없는 심판도 로드된다
             # (심판 추가에 이미지 재빌드가 필요 없는 이유).
             params["judge_model"] = LOGICKOR_JUDGE_HF_ID[judge_model]
+
+    # 태스크당 문항 상한 — lm-eval 채점기 전용 옵션. 다른 채점기에 오면 조용히 버리지 않고
+    # 거절한다(버리면 "빠르게 쟀다"고 믿는 전체 측정 런이 된다 — 심판 배타 검증과 같은 취지).
+    sample_limit = (run_options or {}).get("sample_limit")
+    if sample_limit is not None:
+        if manifest_key not in LOCAL_WEIGHTS_MANIFEST_KEYS:
+            raise Exception(
+                "sample_limit 은 lm-eval 채점 벤치마크 전용입니다 — "
+                f"{', '.join(benchmark_set)} 에는 문항 상한 옵션이 없습니다")
+        try:
+            sample_limit = int(sample_limit)
+        except (TypeError, ValueError):
+            raise Exception("sample_limit must be an integer")
+        if not BENCHMARK_SAMPLE_LIMIT_MIN <= sample_limit <= BENCHMARK_SAMPLE_LIMIT_MAX:
+            raise Exception(f"sample_limit must be between {BENCHMARK_SAMPLE_LIMIT_MIN} "
+                            f"and {BENCHMARK_SAMPLE_LIMIT_MAX}")
+        params["limit"] = sample_limit
 
     # ── 원격 심판(D) — 심판을 컨테이너 안 vLLM 이 아니라 떠 있는 배포에 위임 ────────
     # 컨테이너에 넘기는 것은 사용자가 준 URL 이 아니라 **배포 id 로 서버가 조립한 URL** 이다
@@ -369,12 +426,23 @@ async def run_benchmark(project_id: int, model_id: int, dataset_ids: List[int],
     # (evaluate_intent app.py:376). 그 조합은 "학습을 켰는데 학습이 안 된" 런이 된다.
     generate_remote = None
     checkpoint_name = None
+    # lm-eval 채점기는 위임 자체가 불가능하다(보기별 로그확률이 필요한데 shim 이 logprobs 를
+    # 주지 못한다 — constants.LOCAL_WEIGHTS_MANIFEST_KEYS). 포맷 학습과 같은 방식으로 배포가
+    # 서빙 중인 커밋을 풀어 컨테이너가 로컬에 올린다.
+    local_weights = manifest_key in LOCAL_WEIGHTS_MANIFEST_KEYS
     if format_train_on:
         # 배포는 이 경로에서 **생성을 하지 않는다** — 어느 커밋을 마운트할지만 말해 준다.
-        checkpoint_name = await _resolve_format_checkpoint(
-            inference_playground_id, model_id=model_id, workspace_id=workspace_id)
+        checkpoint_name = await _resolve_deployment_checkpoint(
+            inference_playground_id, model_id=model_id, workspace_id=workspace_id,
+            purpose="포맷 학습", off_hint="포맷 학습을 끄세요")
         params["checkpoint_name"] = checkpoint_name
         params["train"] = True
+    elif local_weights:
+        # 묶음 실행이 이미 푼 체크포인트가 있으면 그대로 쓴다 — 한 묶음이 한 가중치를 잰다.
+        checkpoint_name = pinned_checkpoint or await _resolve_deployment_checkpoint(
+            inference_playground_id, model_id=model_id, workspace_id=workspace_id,
+            purpose="lm-eval 벤치마크 채점", off_hint=None)
+        params["checkpoint_name"] = checkpoint_name
     else:
         generate_remote = await _resolve_remote_generator(
             inference_playground_id, model_id=model_id, workspace_id=workspace_id)
@@ -396,7 +464,7 @@ async def run_benchmark(project_id: int, model_id: int, dataset_ids: List[int],
     # 확신이 없으면 None 을 넘겨 매니페스트 기본값을 그대로 쓴다.
     # 부수 효과가 아니라 목적 중 하나다: 위임 런이 쓰지도 않을 GPU 를 예약하던 것을 없앤다.
     #   포맷 학습  : 켜져 있으면 로컬에 모델을 올려 학습·생성한다 → 위임이 아니다.
-    fully_delegated = (not format_train_on) and (
+    fully_delegated = (not format_train_on) and (not local_weights) and (
         judge_remote is not None if manifest_key == "LOGICKOR" else True)
     gpu_count = 0 if fully_delegated else None
 
@@ -424,7 +492,7 @@ async def run_benchmark(project_id: int, model_id: int, dataset_ids: List[int],
     try:
         await db_model.insert_eval_result(
             source_model_id=model_id, workspace_id=workspace_id,
-            job_str_id=job_id, dataset_id=dataset_ids[0],
+            job_str_id=job_id, dataset_id=dataset_ids[0] if dataset_ids else None,
             dataset_name=dataset_name_csv, metric_set=metric_csv,
             eval_project_id=project_id)
         await db_model.update_eval_project_status(project_id, PROJECT_STATUS_RUNNING)
@@ -442,7 +510,7 @@ async def run_benchmark(project_id: int, model_id: int, dataset_ids: List[int],
         # 생성이 배포에서 일어났나. 포맷 학습 런은 채점기가 로컬에서 생성하므로 False 다 —
         # 그 런에서 배포는 '어느 커밋인가'만 말해 준 것이고, 그 사실을 True 로 남기면
         # 나중에 출처를 되짚을 때 배포가 답을 만든 것으로 읽힌다.
-        "used_deployment": not format_train_on,
+        "used_deployment": not (format_train_on or local_weights),
         # 포맷 학습 런에서도 남긴다 — 체크포인트를 어느 배포에서 풀었는지의 기록이다.
         "inference_playground_id": inference_playground_id,
         # 포맷 학습을 돌렸나 + 무엇을 학습했나. 실제 레시피(예제 수·에폭·스텝)는 컨테이너가
@@ -461,10 +529,199 @@ async def run_benchmark(project_id: int, model_id: int, dataset_ids: List[int],
     }
 
 
-async def _eval_output_dir(model_id: int, job_id: str) -> str:
-    """evaluate job 결과 디렉토리(jobs/<job_id>/output) 안전 해석(llm_model 동형)."""
-    if not job_id or not _JOB_ID_RE.match(job_id):
-        raise ValueError(f"invalid job_id: {job_id!r}")
+async def _gpu_free_count(workspace_id: int) -> Optional[int]:
+    """지금 잡을 수 있는 GPU 장수 — 클러스터 풀과 워크스페이스 몫 중 빡빡한 쪽. 모르면 None.
+
+    화면(BenchmarkRunConfig)이 쓰는 것과 같은 계산(utils.gpu_pool.snapshot)이다 — 둘이 다르게
+    세면 화면은 되는데 서버가 거절하거나 그 반대가 된다. 조회 실패는 '모름'이라 막지 않는다
+    (확신 없이 막으면 멀쩡한 클러스터가 봉쇄된다 — 최종 판정은 스케줄러의 원자적 claim).
+    Redis 클라이언트가 동기라 **클라이언트 획득까지** 스레드로 돌린다 — get_redis_client() 는
+    ping 실패 시 time.sleep 으로 재시도하므로(fb_utils/redis.py) 루프 위에서 부르면 그동안 워커의
+    다른 요청이 전부 멈춘다."""
+    try:
+        snap = await asyncio.to_thread(
+            lambda: gpu_pool.snapshot(get_redis_client(), workspace_id))
+    except Exception:
+        traceback.print_exc()
+        return None
+    counts = [snap.get("free"), (snap.get("workspace") or {}).get("free")]
+    counts = [int(c) for c in counts if isinstance(c, int) and not isinstance(c, bool)]
+    return min(counts) if counts else None
+
+
+def _est_seconds(benchmark: str) -> int:
+    return LMEVAL_EST_SECONDS.get(benchmark, LMEVAL_EST_DEFAULT_SECONDS)
+
+
+def plan_benchmark_runs(ids: List[str], gpu_count: int) -> List[List[str]]:
+    """묶음 실행의 분배 — 벤치마크 목록을 GPU 수(= 런 수, 런마다 GPU 1장)만큼의 런으로 나눈다.
+
+    한 런은 GPU 한 장에서 벤치마크를 **직렬로** 채점한다(모델은 한 번만 올린다). 다른 것과 한 런에
+    못 싣는 것이 둘 있다:
+      - 코드 실행 벤치마크(HumanEval) — 격리 매니페스트(BENCHMARK_CODE)라 다른 채점기와 한 잡이
+        될 수 없다(run_benchmark 의 채점기 혼재 거절).
+      - 런 데이터셋을 읽는 벤치마크(custom) — 데이터셋은 그것을 읽는 런에만 싣는다. ARC 와 한 런에
+        담으면 그 런의 결과가 "ARC 를 그 데이터셋으로 쟀다"고 말한다.
+    나머지(문항이 이미지에 구워진 lm-eval 벤치마크)는 남은 GPU 수만큼의 런에 **예상 시간 기준으로
+    고르게** 나눈다(LPT — 무거운 것부터 지금 가장 가벼운 런에). 개수로 나누면 KMMLU(65분)와
+    MMLU(31분)가 한 런에 몰려 벽시계가 그 런 하나로 늘어난다. 런 안의 순서는 요청 순서다.
+
+    GPU 수가 벤치마크 수보다 많으면 벤치마크마다 런 하나가 된다(남는 GPU 는 쓰지 않는다)."""
+    code = [b for b in ids if REAL_BENCHMARK_MANIFEST_KEY.get(b) == "BENCHMARK_CODE"]
+    reads_dataset = [b for b in ids
+                     if b not in code and b not in DATASET_FREE_BENCHMARK_IDS]
+    plain = [b for b in ids if b not in code and b not in reads_dataset]
+    fixed = [group for group in (code, reads_dataset) if group]
+    need = len(fixed) + (1 if plain else 0)
+    if gpu_count < need:
+        raise Exception(
+            f"GPU {gpu_count}장으로는 나눌 수 없습니다 — HumanEval(코드 실행)·사용자 데이터셋 평가는 "
+            f"다른 벤치마크와 한 런에 담을 수 없어 GPU 가 최소 {need}장 필요합니다")
+    n_plain = min(gpu_count - len(fixed), len(plain))
+    bins: List[List[str]] = [[] for _ in range(n_plain)]
+    loads = [0] * n_plain
+    # sorted 는 안정 정렬 — 예상 시간이 같으면 요청 순서대로 배치된다(같은 요청 = 같은 분배).
+    for b in sorted(plain, key=lambda x: -_est_seconds(x)):
+        k = loads.index(min(loads))
+        bins[k].append(b)
+        loads[k] += _est_seconds(b)
+    order = {b: i for i, b in enumerate(ids)}
+    runs = [sorted(group, key=order.__getitem__) for group in bins + fixed]
+    runs.sort(key=lambda group: order[group[0]])
+    # 한 런이 파드 타임아웃을 넘으면 도중에 죽고 남은 벤치마크는 채점되지 않는다. 추정은 3B 기준이라
+    # 최악 배수(8B)를 곱해 본다 — 모델 크기를 모르므로 보수적으로 막는다.
+    for group in runs:
+        worst = (LMEVAL_STARTUP_SECONDS + sum(_est_seconds(b) for b in group)) \
+            * LMEVAL_WORST_SLOWDOWN
+        if worst > LMEVAL_RUN_TIMEOUT_SECONDS:
+            raise Exception(
+                f"GPU {gpu_count}장에 나누면 한 런({', '.join(group)})이 큰 모델에서 "
+                f"약 {worst / 3600:.1f}시간 걸려 런 제한 시간({LMEVAL_RUN_TIMEOUT_SECONDS // 3600}"
+                f"시간)을 넘을 수 있습니다 — GPU 수를 늘리세요")
+    return runs
+
+
+async def run_benchmark_batch(project_id: int, model_id: int, benchmarks: List[str],
+                              inference_playground_id: Optional[int],
+                              dataset_ids: Optional[List[int]] = None,
+                              run_options: Optional[dict] = None,
+                              gpu_count: Optional[int] = None) -> dict:
+    """여러 벤치마크를 한 번에 — **GPU 수만큼의 런**으로 나눠 띄운다(설계 §14).
+
+    gpu_count = 이 실행이 쓸 GPU 장수 = 런 수(런마다 GPU 1장, 그 안에서 벤치마크를 직렬 채점).
+    분배는 plan_benchmark_runs. 생략하면 벤치마크마다 런 하나(§12.2 의 종전 동작)다.
+    왜 나누는가: 벤치마크마다 런이면 20개를 고른 실행이 빈 GPU 20장을 요구해 거절된다 — 외부 잡은
+    대기열이 없다. 한 런에 여러 벤치마크를 담아도 **한 벤치마크의 실패가 런을 버리지 않는다** —
+    채점기(evaluate-lmeval 0.1.1)가 벤치마크 단위로 실패를 격리하고 끝난 점수를 progress.json 에
+    남긴다(파드가 도중에 죽어도 그때까지의 점수가 보인다).
+
+    받는 것은 로컬 가중치 채점기(lm-eval)뿐이다 — 위임 채점기(MixATIS·LogicKor)는 포맷 학습·
+    심판 설정이 벤치마크마다 따로라 묶음의 공통 설정으로 표현할 수 없다.
+
+    체크포인트는 **여기서 한 번만** 푼다 — 런마다 풀면 묶음 도중 배포가 커밋을 바꿨을 때 한 묶음
+    안에서 서로 다른 가중치를 재고, 화면은 그걸 한 줄로 요약한다.
+
+    런치 전에 막는 것(부분 실행을 남기지 않기 위해): 모르는 id, 위임 채점기, 데이터셋 누락,
+    프로젝트 유형, 분배 불가(GPU 수 부족·런 제한 시간 초과), **가용 GPU 부족** — 외부 잡은 빈 GPU 가
+    없으면 대기하지 않고 즉시 실패한다(fb_scheduler external_run `GpuAllocationError`). 런치 도중
+    실패(경합으로 GPU 를 뺏김 등)는 거기서 멈추지 않고 런별 error 로 돌려준다 — 이미 뜬 런을 되돌릴
+    방법이 없으므로 무엇이 떴고 무엇이 안 떴는지를 정확히 알리는 편이 낫다."""
+    if not inference_playground_id:
+        raise Exception(
+            "벤치마크 출력은 실행 중인 배포에서 가져옵니다 — 평가할 모델을 서빙하는 "
+            "배포를 먼저 시작한 뒤 지정하세요(inference_playground_id)")
+    ids = []
+    for raw in benchmarks or []:
+        b = str(raw or "").strip()
+        if b not in BENCHMARK_IDS:
+            raise Exception(f"unknown benchmark: {b!r}")
+        if b not in ids:
+            ids.append(b)
+    if not ids:
+        raise Exception("실행할 벤치마크를 하나 이상 고르세요")
+    if len(ids) > MAX_BENCHMARK_ITEMS:
+        raise Exception(f"한 번에 실행할 수 있는 벤치마크는 최대 {MAX_BENCHMARK_ITEMS}개입니다"
+                        f"(요청 {len(ids)}개)")
+    delegated = [b for b in ids
+                 if REAL_BENCHMARK_MANIFEST_KEY.get(b, "BENCHMARK")
+                 not in LOCAL_WEIGHTS_MANIFEST_KEYS]
+    if delegated:
+        raise Exception(
+            "여러 벤치마크 한 번에 실행은 lm-eval 채점 벤치마크만 됩니다 — "
+            f"{', '.join(delegated)} 는 따로 실행하세요")
+    if not dataset_ids:
+        needs = [b for b in ids if b not in DATASET_FREE_BENCHMARK_IDS]
+        if needs:
+            raise Exception(
+                f"{', '.join(needs)} 는 평가 데이터셋이 필요합니다 — 데이터셋을 고르세요")
+    plan = plan_benchmark_runs(ids, int(gpu_count) if gpu_count else len(ids))
+
+    project = await _load_project_for_run(project_id, BENCHMARK_EVAL_TYPES)
+    project_type = str(project.get("eval_type") or "")
+    wrong = [b for b in ids if BENCHMARK_EVAL_TYPE.get(b) != project_type]
+    if wrong:
+        raise Exception(
+            f"{project_type} 프로젝트에는 {project_type} 유형 벤치마크만 채점할 수 "
+            f"있습니다 — {', '.join(wrong)}")
+    model_id = int(model_id)
+    _, workspace_id = await _resolve_run_model(project, model_id)
+
+    free = await _gpu_free_count(workspace_id)
+    if free is not None and free < len(plan):
+        raise Exception(
+            f"런 {len(plan)}개를 동시에 띄우려면 GPU {len(plan)}장이 필요합니다 — "
+            f"지금 잡을 수 있는 GPU 는 {free}장입니다. GPU 수를 줄이거나 실행 중인 작업이 "
+            f"끝난 뒤 다시 시도하세요")
+
+    checkpoint = await _resolve_deployment_checkpoint(
+        inference_playground_id, model_id=model_id, workspace_id=workspace_id,
+        purpose="lm-eval 벤치마크 채점", off_hint=None)
+
+    runs = []
+    for group in plan:
+        try:
+            # 데이터셋은 그것을 읽는 런에만 싣는다 — 분배가 데이터셋을 읽는 벤치마크를 따로 떼어
+            # 두므로(plan_benchmark_runs) ARC 런에 custom 의 데이터셋이 남지 않는다.
+            reads = any(b not in DATASET_FREE_BENCHMARK_IDS for b in group)
+            res = await run_benchmark(
+                project_id=project_id, model_id=model_id,
+                dataset_ids=list(dataset_ids or []) if reads else [],
+                benchmarks=group,
+                inference_playground_id=inference_playground_id,
+                run_options=run_options, pinned_checkpoint=checkpoint)
+            runs.append({"benchmarks": group, "job_id": res["job_id"],
+                         "manifest_name": res["manifest_name"]})
+        except Exception as e:
+            traceback.print_exc()
+            runs.append({"benchmarks": group, "error": str(e)})
+    launched = [r for r in runs if r.get("job_id")]
+    # 실행(묶음) 기록 — 결과 카드 1장. 뜬 런만 멤버가 되고, 런마다 담은 벤치마크를 함께 남긴다 —
+    # eval_result.metric_set(VARCHAR 255)은 17개를 담으면 잘려(272자) 화면이 목록을 거기서 읽을 수
+    # 없다. 기록 실패가 런치를 무르지 않는다(이미 뜬 런은 되돌릴 수 없다) — 그때 런들은 화면에서
+    # 카드 한 장씩으로 보인다(insert_eval_result 의 DB 가드와 같은 취지).
+    # 런치에 실패한 런의 벤치마크도 벤치마크마다 남긴다 — 빼면 요청한 12개 중 9개만 뜬 실행이
+    # 나중에 "9/9 완료"로 읽힌다. 메시지는 짧게 자른다(화면 표시용 — 전체는 서버 로그에 있다).
+    launch_failures = [{"benchmark": b, "error": str(r["error"])[:300]}
+                       for r in runs if r.get("error") for b in r["benchmarks"]]
+    batch_id = None
+    if launched:
+        try:
+            batch_id = await db_model.insert_eval_run_batch(
+                eval_project_id=project_id, workspace_id=workspace_id,
+                source_model_id=model_id, checkpoint=checkpoint,
+                sample_limit=(run_options or {}).get("sample_limit"),
+                job_ids=[r["job_id"] for r in launched],
+                job_benchmarks={r["job_id"]: r["benchmarks"] for r in launched},
+                launch_failures=launch_failures)
+        except Exception:
+            traceback.print_exc()
+    return {"project_id": project_id, "model_id": model_id, "checkpoint": checkpoint,
+            "inference_playground_id": inference_playground_id, "batch_id": batch_id,
+            "runs": runs, "launched": len(launched), "failed": len(runs) - len(launched)}
+
+
+async def _eval_jobs_base(model_id: int) -> str:
+    """모델의 워크스페이스 jobs 디렉토리(realpath). 여러 런을 한 번에 볼 때 모델당 한 번만 푼다."""
     model_info = await db_model.get_model(model_id=model_id)
     if not model_info:
         raise Exception(f"model {model_id} not found")
@@ -474,7 +731,15 @@ async def _eval_output_dir(model_id: int, job_id: str) -> str:
     main_root = PATH.JF_MAIN_STORAGE_PATH.format(
         STORAGE_NAME=ws["main_storage_name"], WORKSPACE_NAME=ws["name"],
     )
-    jobs_base = os.path.realpath(os.path.join(main_root, "jobs"))
+    return os.path.realpath(os.path.join(main_root, "jobs"))
+
+
+async def _eval_output_dir(model_id: int, job_id: str, jobs_base: Optional[str] = None) -> str:
+    """evaluate job 결과 디렉토리(jobs/<job_id>/output) 안전 해석(llm_model 동형).
+    jobs_base 를 주면(_eval_jobs_base 로 미리 푼 값) DB 를 다시 조회하지 않는다."""
+    if not job_id or not _JOB_ID_RE.match(job_id):
+        raise ValueError(f"invalid job_id: {job_id!r}")
+    jobs_base = jobs_base or await _eval_jobs_base(model_id)
     output_dir = os.path.join(jobs_base, job_id, "output")
     if os.path.commonpath([os.path.realpath(output_dir), jobs_base]) != jobs_base:
         raise ValueError("output path escapes jobs base")
@@ -569,10 +834,70 @@ def _strip_internal_paths(metrics: dict) -> None:
     train = metrics.get("train")
     if isinstance(train, dict):
         train.pop("adapter_dir", None)
+    # 채점기가 벤치마크별 실패 사유로 남긴 예외 문자열(evaluate-lmeval 0.1.1 failed_benchmarks)에도
+    # 컨테이너 경로가 섞인다(가중치 병합·데이터셋 로드 예외) — 같은 규약으로 가린다(보안 리뷰 LOW).
+    for failure in metrics.get("failed_benchmarks") or []:
+        if isinstance(failure, dict) and failure.get("error"):
+            failure["error"] = _redact_paths(str(failure["error"]))
+
+
+# 절대 경로(/models/…, /tmp/lmeval-merged …) — 앞이 글자·숫자·점이면 경로가 아니다("N/A", "1/3").
+_ABS_PATH_RE = re.compile(r"(?<![\w.])/(?:[\w.\-]+/)*[\w.\-]+")
+
+
+def _redact_paths(text: str) -> str:
+    return _ABS_PATH_RE.sub("<path>", text)
+
+
+_PROGRESS_STATUSES = ("pending", "running", "done", "failed")
+
+
+def _read_progress(output_dir: str) -> Optional[dict]:
+    """채점기가 남긴 벤치마크별 진행(progress.json, evaluate-lmeval 0.1.1+) → 화면용 요약.
+
+    한 런이 여러 벤치마크를 직렬로 채점하므로 런 상태 하나로는 "무엇이 끝났나"를 말할 수 없다.
+    끝난 벤치마크의 점수(partial)도 여기 있다 — 파드가 도중에 죽거나 취소돼 metrics.json 이
+    없는 런에서도 그때까지 낸 점수를 보여 줄 수 있다. 런 마감(completed)은 여전히 metrics.json
+    으로만 한다(partial 은 영속하지 않는다 — 비교·Best 는 끝까지 채점한 런만 쓴다).
+    없거나 읽을 수 없으면 None(0.1.0 이하 채점기·위임 채점기는 이 파일을 쓰지 않는다)."""
+    out_real = os.path.realpath(output_dir)
+    path = os.path.join(output_dir, "progress.json")
+    try:
+        if os.path.commonpath([os.path.realpath(path), out_real]) != out_real:
+            return None
+        if not os.path.isfile(path) or os.path.getsize(path) > 1 * 1024 * 1024:
+            return None
+        with open(path, encoding="utf-8") as f:
+            raw = json.load(f)
+    except (OSError, ValueError):
+        return None
+    rows = raw.get("benchmarks") if isinstance(raw, dict) else None
+    if not isinstance(rows, list):
+        return None
+    benchmarks = []
+    for row in rows:
+        if not isinstance(row, dict) or row.get("status") not in _PROGRESS_STATUSES:
+            continue
+        score = row.get("score")
+        benchmarks.append({
+            "benchmark": str(row.get("benchmark") or ""),
+            "status": row["status"],
+            "score": score if isinstance(score, (int, float))
+            and not isinstance(score, bool) else None,
+            "elapsed_sec": row.get("elapsed_sec"),
+            "error": _redact_paths(str(row["error"])[:500]) if row.get("error") else None,
+        })
+    partial = raw.get("partial")
+    if isinstance(partial, dict):
+        _strip_internal_paths(partial)
+    else:
+        partial = None
+    return {"benchmarks": benchmarks, "partial_metrics": partial}
 
 
 async def get_eval_result(model_id: int, job_id: str) -> dict:
-    """평가 job metrics.json 읽기 + 완료 시 eval_result lazy 마감(idempotent)."""
+    """평가 job metrics.json 읽기 + 완료 시 eval_result lazy 마감(idempotent).
+    metrics.json 이 아직 없으면 채점기의 벤치마크별 진행(progress, 있을 때만)을 함께 싣는다."""
     output_dir = await _eval_output_dir(model_id, job_id)
     out_real = os.path.realpath(output_dir)
     metrics_path = os.path.join(output_dir, "metrics.json")
@@ -591,7 +916,8 @@ async def get_eval_result(model_id: int, job_id: str) -> dict:
         # status==failed/cancelled 를 받으면 폴링을 멈추므로, 신호만 만들어 주면 된다.
         if db_status == "running":
             db_status = await _reconcile_running_eval(model_id, job_id)
-        return {"job_id": job_id, "metrics": None, "ready": False, "status": db_status}
+        return {"job_id": job_id, "metrics": None, "ready": False, "status": db_status,
+                "progress": _read_progress(output_dir)}
     try:
         if os.path.getsize(metrics_path) > 1 * 1024 * 1024:
             raise ValueError(f"metrics.json too large for job {job_id}")
@@ -715,12 +1041,17 @@ async def _deployment_source(playground_id: int) -> Optional[dict]:
                 model = None
         model = model if isinstance(model, dict) else {}
         served = _playground_json_field(model.get("model_huggingface_id"))
+        # 가중치 식별자 — HF 직접 배포는 HF id 가 곧 가중치이고, 플랫폼 커밋 배포는 커밋 이름이다.
+        # 비교표가 위임 런을 "배포 × 그때 서빙하던 커밋" 으로 가르는 근거(배포는 나중에 다른
+        # 커밋으로 다시 올라갈 수 있다).
+        weights = served
         if not served:
             commit_id = _playground_json_field(model.get("model_allm_commit_id"))
             if commit_id and commit_id.isdigit():
                 commit = await db_model.get_commit_model(commit_id=int(commit_id))
                 served = _playground_json_field((commit or {}).get("model_name"))
-        return {"name": row.get("name"), "model": served,
+                weights = _playground_json_field((commit or {}).get("name"))
+        return {"name": row.get("name"), "model": served, "commit": weights or None,
                 "workspace_id": row.get("workspace_id")}
     except Exception:
         traceback.print_exc()
@@ -755,7 +1086,8 @@ async def _frozen_deployment(section, run_ws) -> Optional[dict]:
     except (TypeError, ValueError):
         return None
     return {k: v for k, v in (("deployment", source.get("name")),
-                              ("model", source.get("model"))) if v} or None
+                              ("model", source.get("model")),
+                              ("commit", source.get("commit"))) if v} or None
 
 
 async def _freeze_run_source(metrics: dict, model_id: int, job_id: str) -> None:
@@ -1277,9 +1609,83 @@ async def get_project(project_id: int) -> dict:
         rows, workspace_id=int(project["workspace_id"]))
     # 목록 표시 보강(제목·진행중 전문가 부분집계) — 비교표 shape 는 그대로 두고 additive.
     await _attach_expert_run_view(comparison.get("runs") or [], rows)
+    await _attach_run_progress(comparison.get("runs") or [])
     return {"project": {**project, "dataset_ids": _parse_dataset_ids(project.get("dataset_ids")),
                         "status": derived_status},
-            "runs": comparison}
+            "runs": comparison,
+            # 실행(묶음) — 정답 대조 화면이 "한 번의 실행 = 카드 1장" 으로 런을 묶는 근거.
+            # 묶음에 없는 런(단건 실행·묶음 기록 이전의 런)은 화면이 카드 한 장씩으로 세운다.
+            "batches": await _project_batches(project_id)}
+
+
+async def _attach_run_progress(runs: list) -> None:
+    """끝나지 않은 벤치마크 런 행에 채점기 진행(벤치마크별 상태·점수)을 싣는다(additive, in-place).
+
+    실행 카드 목록은 결과를 폴링하지 않는다 — 이것이 없으면 도중에 멈춘 런이 카드에서는 "실패"로만
+    보이고 끝난 벤치마크의 점수는 요약 화면에서만 보여, 같은 실행을 두 화면이 다르게 말한다.
+    점수 요약(benchmarks)만 싣는다 — lm-eval 상세(partial_metrics)는 결과 조회(get_eval_result)가
+    준다. 진행 기록이 없는 런(0.1.0 이하·위임 채점기)은 손대지 않는다. 전부 best-effort."""
+    targets = [r for r in runs
+               if r.get("status") != "completed" and r.get("job_id")
+               and r.get("metric_set") not in ("inference", "expert")]
+    targets.sort(key=lambda r: str(r.get("create_datetime") or ""), reverse=True)
+    bases = {}          # model_id → jobs 디렉토리(모델당 DB 조회 한 번)
+    for r in targets[:MAX_PROGRESS_PER_VIEW]:
+        try:
+            model_id = int(r["model_id"])
+            if model_id not in bases:
+                bases[model_id] = await _eval_jobs_base(model_id)
+            output_dir = await _eval_output_dir(model_id, str(r["job_id"]),
+                                                jobs_base=bases[model_id])
+        except Exception:
+            continue
+        progress = _read_progress(output_dir)
+        if progress:
+            r["progress"] = {"benchmarks": progress["benchmarks"]}
+
+
+async def _project_batches(project_id: int) -> list:
+    """프로젝트의 실행(묶음) 목록. 조회 실패는 빈 목록 — 테이블이 아직 없는 DB(수동 마이그레이션
+    전)에서도 프로젝트 화면은 떠야 한다(그때는 런마다 카드 한 장으로 보인다)."""
+    try:
+        batches = await db_model.list_eval_run_batches(eval_project_id=project_id)
+    except Exception:
+        traceback.print_exc()
+        return []
+    return [{"id": b["id"], "create_datetime": b.get("create_datetime"),
+             "model_id": b.get("source_model_id"), "checkpoint": b.get("checkpoint"),
+             "sample_limit": b.get("sample_limit"), "job_ids": b.get("job_ids") or [],
+             # 런마다 담은 벤치마크({job_id: [...]}) — 한 런이 여러 벤치마크를 채점한다(§14).
+             # 기록 이전 멤버는 비어 있다(화면이 metric_set 으로 되돌아간다).
+             "job_benchmarks": b.get("job_benchmarks") or {},
+             "launch_failures": b.get("launch_failures") or []}
+            for b in batches]
+
+
+async def delete_run_batch(project_id: int, batch_id: int) -> dict:
+    """실행(묶음) 삭제 — 멤버 런을 지우고 묶음 행을 지운다(카드 한 장 = 실행 한 번이 지워지는 단위).
+    다른 프로젝트의 묶음은 not-found 로 돌려준다(프로젝트 경계 — 삭제는 경로의 프로젝트 안에서만).
+    멤버 런 삭제는 단건 삭제(delete_eval_run)와 같은 경로를 탄다 — source_model_id 바인딩 포함."""
+    batch = await db_model.get_eval_run_batch(int(batch_id))
+    if not batch or int(batch.get("eval_project_id") or 0) != int(project_id):
+        return {"batch_id": batch_id, "deleted": False, "reason": "not-found"}
+    model_id = int(batch["source_model_id"])
+    for job_id in batch.get("job_ids") or []:
+        # 도는 멤버는 행을 지우기 전에 컨테이너까지 취소한다(mark_eval_status) — 행만 지우면 잡이
+        # GPU 를 쥔 채 계속 돈다. 화면은 먼저 취소하지만 API 를 직접 부르는 경로도 같아야 한다.
+        # 취소는 best-effort(단건 삭제 화면 흐름과 같다) — 실패해도 삭제는 진행한다.
+        row = await db_model.get_eval_result_by_job(job_str_id=job_id,
+                                                    source_model_id=model_id)
+        if row and row.get("status") == "running":
+            try:
+                await mark_eval_status(model_id, job_id, "cancelled")
+            except Exception:
+                traceback.print_exc()
+        # 반환값(deleted/not-found)은 보지 않는다 — 한 묶음의 멤버는 전부 같은 모델이고(묶음 실행이
+        # 한 model_id 로 띄운다), 따로 지워진 멤버는 FK CASCADE 로 이미 목록에서 빠져 있다.
+        await delete_eval_run(model_id, job_id)
+    await db_model.delete_eval_run_batch(int(batch_id))
+    return {"batch_id": int(batch_id), "deleted": True, "runs": len(batch.get("job_ids") or [])}
 
 
 async def update_project(project_id: int, description: Optional[str] = None) -> dict:
@@ -1890,9 +2296,11 @@ def _playground_shim_base_url(playground_id: int) -> str:
             f"/api/playgrounds/{int(playground_id)}/openai/v1")
 
 
-async def _resolve_format_checkpoint(inference_playground_id: int, model_id: int,
-                                     workspace_id: int) -> str:
-    """포맷 학습 런이 마운트할 체크포인트 **이름**을 고른 배포에서 역으로 푼다.
+async def _resolve_deployment_checkpoint(inference_playground_id: int, model_id: int,
+                                         workspace_id: int, purpose: str,
+                                         off_hint: Optional[str]) -> str:
+    """로컬 가중치 런(포맷 학습 · lm-eval 채점)이 마운트할 체크포인트 **이름**을 고른 배포에서
+    역으로 푼다. purpose 는 오류 문구의 주어, off_hint 는 "이 옵션을 끄면 된다" 안내(없으면 생략).
 
     왜 요청이 아니라 배포에서 푸나 — `commit_id` 는 요청 필드로 폐기됐다
     (dto.`_reject_commit_id`). 폐기 사유가 "사용자가 고른 체크포인트"와 "실제로 점수를 낸
@@ -1927,18 +2335,18 @@ async def _resolve_format_checkpoint(inference_playground_id: int, model_id: int
         model_matches = False
     if not model_matches:
         raise Exception(
-            f"배포 {pid} 가 평가 대상 모델을 서빙하는지 확인하지 못했습니다 — 포맷 학습은 "
-            "그 배포의 체크포인트를 학습해 점수를 내므로, 확인되지 않으면 다른 모델의 "
+            f"배포 {pid} 가 평가 대상 모델을 서빙하는지 확인하지 못했습니다 — {purpose}은 "
+            "그 배포의 체크포인트로 점수를 내므로, 확인되지 않으면 다른 모델의 "
             "가중치를 이 프로젝트 모델의 점수로 기록하게 됩니다. 평가 대상 모델의 "
-            "체크포인트를 올린 배포를 고르거나 포맷 학습을 끄세요")
+            "체크포인트를 올린 배포를 고르세요" + (f"(또는 {off_hint})" if off_hint else ""))
 
     name = str(model.get("model_allm_commit_name") or "").strip()
     if not name:
-        # HF 모델을 직접 올린 배포는 플랫폼 커밋이 없다 — 학습할 대상이 없다.
+        # HF 모델을 직접 올린 배포는 플랫폼 커밋이 없다 — 올릴 가중치를 특정할 수 없다.
         raise Exception(
-            f"배포 {pid} 에는 학습할 체크포인트가 없습니다 — 포맷 학습은 플랫폼 커밋을 "
-            "올린 배포에서만 할 수 있습니다(HF 모델을 직접 올린 배포에는 커밋이 없습니다). "
-            "체크포인트를 올린 배포를 고르거나 포맷 학습을 끄세요")
+            f"배포 {pid} 에는 {purpose}에 쓸 체크포인트가 없습니다 — 플랫폼 커밋을 올린 "
+            "배포에서만 할 수 있습니다(HF 모델을 직접 올린 배포에는 커밋이 없습니다). "
+            "체크포인트를 올린 배포를 고르세요" + (f"(또는 {off_hint})" if off_hint else ""))
     if not _SAFE_SEGMENT_RE.match(name):
         # 이 이름은 컨테이너 안에서 마운트 경로 한 조각이 된다 — 경계에서 막는다.
         raise Exception(

@@ -1,16 +1,28 @@
 """llm_evaluation 공용 상수."""
 
-# mock 채점 벤치마크(9) — evaluate-benchmark-mock 컨테이너가 해시 점수로 채점하는 집합.
-# ⚠️ 실채점이 아니다. 정식 채점기가 붙는 대로 이 집합에서 빠져 나간다.
-MOCK_BENCHMARK_IDS = (
+# lm-eval 채점 벤치마크 — 기본 채점기(manifest key "BENCHMARK" = evaluate-lmeval)가
+# lm-evaluation-harness 로 실제 채점하는 집합(+ 런 데이터셋 생성 평가 custom).
+# 2026-09-28 이전에는 evaluate-benchmark-mock 이 해시 점수를 내던 9 종이었다 — 기존 id 는
+# 이력·비교표가 averages 의 키로 쓰므로 그대로 두고 lm-eval 태스크로 매핑했다
+# (컨테이너 apps/evaluate_lmeval/registry.py 가 id ↔ 태스크 정본이다).
+# ⚠️ humaneval 은 여기 없다 — 모델 생성 코드를 실행해 채점하므로 격리된 전용 채점기
+#    (BENCHMARK_CODE)로 간다. 아래 REAL_BENCHMARK_MANIFEST_KEY 참고.
+LMEVAL_BENCHMARK_IDS = (
     "arc", "kobest", "mmlu", "hellaswag", "winogrande",
-    "gsm8k", "truthfulqa", "boolq", "humaneval",
+    "gsm8k", "truthfulqa", "boolq",
+    "arc_easy", "piqa", "openbookqa", "kmmlu", "kmmlu_direct", "haerae",
+    "squadv2", "truthfulqa_gen", "drop",
+    "custom",
 )
 
 # 실채점 벤치마크 → 전용 채점 컨테이너. 벤치마크마다 필요한 런타임이 달라(LogicKor 는
 # 심판 LLM + transformers 5.5.4 핀) 한 컨테이너가 전부 채점할 수 없다. 한 런은 컨테이너
 # 하나로 가므로 서로 다른 채점기의 벤치마크를 한 런에 섞을 수 없다(service 가 거부).
+# 여기 없는 벤치마크(LMEVAL_BENCHMARK_IDS)는 기본 키 "BENCHMARK" 로 간다.
 REAL_BENCHMARK_MANIFEST_KEY = {
+    # 모델 생성 코드를 실행해 채점한다(pass@1). evaluate-lmeval 과 같은 이미지지만 코드 실행을
+    # 켠 매니페스트(evaluate-lmeval-code)로 분리해 단독 런·격리 파드에서만 돈다.
+    "humaneval": "BENCHMARK_CODE",
     "logickor": "LOGICKOR",
     # MixATIS 다중의도·슬롯. LogicKor 와 달리 심판 LLM 이 없고 정답(BIO 태그 + 의도 라벨)이
     # 데이터에 있어 지표가 결정론적이다 — 같은 체크포인트면 항상 같은 값이 나온다.
@@ -38,12 +50,29 @@ CHECKPOINT_REQUIRED_MANIFEST_KEYS = ("MIXATIS",)
 #    generate_base_url 을 싣지 않고 checkpoint_name 을 대신 넘긴다(run_benchmark).
 # ⚠️ 그 결과 이 경로는 위 CHECKPOINT_REQUIRED_MANIFEST_KEYS 를 **다시 살린다** — 체크포인트
 #    없이는 학습할 대상이 없다. 다만 요청은 commit_id 를 받지 않으므로(dto tombstone) 이름은
-#    고른 배포가 서빙 중인 커밋에서 역으로 푼다(_resolve_format_checkpoint).
+#    고른 배포가 서빙 중인 커밋에서 역으로 푼다(_resolve_deployment_checkpoint).
 FORMAT_TRAIN_MANIFEST_KEYS = ("MIXATIS",)
 
-# 벤치마크 정본(10) — id = FE benchmarks.js + 채점 컨테이너와 일치. 벤치마크
+# 배포 위임이 **구조적으로 불가능한** 채점기 — 생성 경로를 로컬 가중치로 되돌린다.
+# lm-eval 객관식 태스크는 보기별 로그확률로 채점하는데, 배포 shim(llm_playground
+# openai_chat_completions)은 비스트리밍 chat/completions 만 있고 logprobs·stop·max_tokens 를
+# 전달하지 못한다(서빙 파드는 배포 시점 SamplingParams 하나로 돈다). 그래서 이 채점기로 가는
+# 런은 포맷 학습 경로와 같은 방식으로 **고른 배포가 서빙 중인 커밋 이름**을 풀어
+# checkpoint_name 으로 넘기고, 컨테이너가 그 가중치를 GPU 한 장에 올린다
+# (service._resolve_deployment_checkpoint). 배포가 가중치의 정본이라는 불변식은 그대로다.
+LOCAL_WEIGHTS_MANIFEST_KEYS = ("BENCHMARK", "BENCHMARK_CODE")
+
+# 런 데이터셋을 **읽지 않는** 벤치마크 — 문항이 채점 이미지에 구워져 있다(evaluate_lmeval
+# prepare_tasks). 이것만으로 된 런은 데이터셋 없이 시작한다(마운트 없음, eval_result.dataset_id
+# NULL). 데이터셋 선택을 요구하면 결과 머리에 채점에 쓰지 않은 데이터셋 이름이 찍힌다.
+# custom 은 데이터셋이 곧 평가 문항이라 빠진다. MixATIS·LogicKor 는 이 판정 밖이라
+# 종전대로 데이터셋을 요구한다(보수적 기본값 — 풀려면 채점기 쪽 사실을 먼저 확인한다).
+DATASET_FREE_BENCHMARK_IDS = tuple(
+    b for b in LMEVAL_BENCHMARK_IDS if b != "custom") + ("humaneval",)
+
+# 벤치마크 정본(21) — id = FE benchmarks.js + 채점 컨테이너와 일치(tests/test_benchmark_catalog.py). 벤치마크
 # = 표준 평가 태스크(ARC·MMLU…). "벤치마크 선택 → 벤치마크별 메트릭" 2단계의 1단계 후보다.
-BENCHMARK_IDS = MOCK_BENCHMARK_IDS + tuple(REAL_BENCHMARK_MANIFEST_KEY)
+BENCHMARK_IDS = LMEVAL_BENCHMARK_IDS + tuple(REAL_BENCHMARK_MANIFEST_KEY)
 
 # 벤치마크 → 평가 유형(EVAL_TYPES). 위의 mock/real 과는 **다른 축**이다: mock/real 은
 # "어느 채점 컨테이너로 보내는가"(배선), 이건 "점수를 누가 매기는가"(사용자에게 보이는 축).
@@ -57,6 +86,11 @@ BENCHMARK_EVAL_TYPE = {
     "hellaswag": "reference", "winogrande": "reference", "gsm8k": "reference",
     "truthfulqa": "reference", "boolq": "reference", "humaneval": "reference",
     "mixatis": "reference",
+    "arc_easy": "reference", "piqa": "reference", "openbookqa": "reference",
+    "kmmlu": "reference", "kmmlu_direct": "reference", "haerae": "reference",
+    "squadv2": "reference", "truthfulqa_gen": "reference", "drop": "reference",
+    # 런 데이터셋의 정답과 생성 결과를 대조한다(F1/EM/BLEU/ROUGE).
+    "custom": "reference",
     # 정답이 없다(references=null) — 심판 LLM 점수가 유일한 채점 축이다.
     "logickor": "judge",
 }
@@ -76,13 +110,15 @@ JUDGE_BENCHMARK_IDS = tuple(
 # 표의 값에서 파생해 유형을 늘릴 때 두 곳을 고치지 않게 한다.
 BENCHMARK_EVAL_TYPES = tuple(dict.fromkeys(BENCHMARK_EVAL_TYPE.values()))
 
-# 요청에서 benchmarks 를 생략했을 때 채점할 기본 집합. 전체(BENCHMARK_IDS)가 아니라
-# mock 집합만 쓴다 — 실채점 벤치마크는 각자 다른 컨테이너로 가야 하므로 "전체 한 번에"가
-# 성립하지 않는다. 실채점 벤치마크는 사용자가 명시적으로 골라야 한다.
-# ⚠️ 이 집합은 전부 reference 유형이다(mock 9종). 그래서 judge 프로젝트가 벤치마크를
-#    생략하면 기본값을 쓸 수 없고, service 가 명시를 요구하며 거절한다 — 조용히 다른
-#    축을 채점해 버리지 않도록.
-DEFAULT_BENCHMARK_IDS = MOCK_BENCHMARK_IDS
+# 요청에서 benchmarks 를 생략했을 때 채점할 기본 집합 — mock 시절의 기존 id 중 기본
+# 채점기(BENCHMARK)로 가는 8 종. FE 는 언제나 벤치마크를 하나 골라 보내므로 이 기본값은
+# 서비스 직접 호출 경로에서만 쓰인다.
+# ⚠️ humaneval 을 넣으면 안 된다 — 다른 채점기(BENCHMARK_CODE)라 기본 집합 자체가 채점기
+#    혼재 거부에 걸린다. custom 도 뺀다(데이터셋에 정답이 없으면 실패한다).
+# ⚠️ 전부 reference 유형이다. judge 프로젝트가 벤치마크를 생략하면 기본값을 쓸 수 없고,
+#    service 가 명시를 요구하며 거절한다 — 조용히 다른 축을 채점해 버리지 않도록.
+DEFAULT_BENCHMARK_IDS = ("arc", "kobest", "mmlu", "hellaswag", "winogrande",
+                         "gsm8k", "truthfulqa", "boolq")
 
 # 메트릭 정본(11) — 벤치마크와 분리된 채점 방식. id = FE benchmarkMetrics.js + 채점기 일치.
 # judge_* 3종은 LogicKor 전용 심판 점수(1~10). LogicKor 는 정답이 없어(references=null)
@@ -95,13 +131,21 @@ METRIC_IDS = (
     # accuracy·f1 로는 어느 축인지 구분이 안 된다. 넷은 항상 함께 산출되고 metric 은
     # results[].score 에 실릴 대표 축만 고른다(judge_* 3종과 같은 규약).
     "intent_acc", "intent_f1", "slot_f1", "joint_acc",
+    # lm-eval 생성형 태스크의 정확 일치(kmmlu_direct)와 코드 통과율(humaneval pass@1).
+    # 둘 다 0~100 으로 싣는다.
+    "exact_match", "pass_at_1",
 )
 
 # 벤치마크별 권장 메트릭(생략 시 채택) — FE 기본 선택·채점기 기본값과 공유(단일 소스).
 BENCHMARK_RECOMMENDED_METRIC = {
     "arc": "accuracy", "kobest": "f1", "mmlu": "accuracy", "hellaswag": "acc_norm",
     "winogrande": "accuracy", "gsm8k": "accuracy", "truthfulqa": "accuracy",
-    "boolq": "accuracy", "humaneval": "accuracy",
+    "boolq": "accuracy",
+    # 코드 통과율은 정확도가 아니다 — mock 시절 accuracy 였던 것을 pass@1 로 바로잡는다.
+    "humaneval": "pass_at_1",
+    "arc_easy": "acc_norm", "piqa": "acc_norm", "openbookqa": "acc_norm",
+    "kmmlu": "accuracy", "kmmlu_direct": "exact_match", "haerae": "acc_norm",
+    "squadv2": "f1", "truthfulqa_gen": "bleu", "drop": "f1", "custom": "f1",
     "logickor": "judge_overall",
     # Joint = 의도집합 AND 슬롯집합 완전일치. 태스크의 최종 난이도 지표라 대표축으로 둔다.
     "mixatis": "joint_acc",
@@ -114,21 +158,55 @@ BENCHMARK_RECOMMENDED_METRIC = {
 # 남겨 두는 이유: 어떤 축이 실제로 산출되는지의 문서이자 FE 표시 목록(benchmarks.js 의
 # 벤치마크별 metrics)의 정본 대조표다 — 결과 화면이 없는 축을 그리지 않도록.
 BENCHMARK_ALLOWED_METRICS = {
-    "arc": ("accuracy", "acc_norm", "f1"),
-    "kobest": ("f1", "accuracy", "acc_norm"),
-    "mmlu": ("accuracy", "acc_norm"),
+    # lm-eval 이 실제로 내는 축(2026-09-28 교체 — mock 시절 표는 해시 채점기 기준이었다).
+    "arc": ("accuracy", "acc_norm"),
+    "kobest": ("f1", "accuracy"),
+    "mmlu": ("accuracy",),
     "hellaswag": ("acc_norm", "accuracy"),
-    "winogrande": ("accuracy", "acc_norm"),
-    "gsm8k": ("accuracy", "f1"),
-    "truthfulqa": ("accuracy", "f1", "bleu", "rouge"),
-    "boolq": ("accuracy", "f1"),
-    "humaneval": ("accuracy",),
+    "winogrande": ("accuracy",),
+    "gsm8k": ("accuracy",),
+    "truthfulqa": ("accuracy",),
+    "boolq": ("accuracy",),
+    "humaneval": ("pass_at_1",),
+    "arc_easy": ("acc_norm", "accuracy"),
+    "piqa": ("acc_norm", "accuracy"),
+    "openbookqa": ("acc_norm", "accuracy"),
+    "kmmlu": ("accuracy",),
+    "kmmlu_direct": ("exact_match",),
+    "haerae": ("acc_norm", "accuracy"),
+    "squadv2": ("f1", "exact_match"),
+    "truthfulqa_gen": ("bleu", "rouge"),
+    "drop": ("f1", "exact_match"),
+    "custom": ("f1", "exact_match", "bleu", "rouge"),
     "logickor": ("judge_overall", "judge_single", "judge_multi"),
     "mixatis": ("joint_acc", "intent_acc", "intent_f1", "slot_f1"),
 }
 
 # 한 벤치마크 런이 다룰 벤치마크 상한 — metric_set 요약 컬럼(VARCHAR 255) 초과·과도 태스크 방지.
 MAX_BENCHMARK_ITEMS = 20
+
+# ── 묶음 실행 분배(GPU 수만큼 런을 나눠 벤치마크를 담는다 — service.plan_benchmark_runs) ──
+# 벤치마크별 예상 채점 시간(초) — P0 실측(3B, A100 80GB, 전체 문항, 설계 §11 #4). 절대값이 아니라
+# **런끼리 짐을 고르게 나누는 무게**로 쓴다(한 런에 KMMLU 와 MMLU 가 같이 들면 벽시계가 길어진다).
+# 표에 없는 벤치마크는 실측 80초 미만이었다(기본값). custom 은 데이터셋 크기에 달려 추정이 없다.
+LMEVAL_EST_SECONDS = {
+    "kmmlu": 3884, "mmlu": 1886, "hellaswag": 1632, "kmmlu_direct": 583, "drop": 493,
+    "truthfulqa_gen": 459, "kobest": 244, "arc": 241, "squadv2": 196,
+}
+LMEVAL_EST_DEFAULT_SECONDS = 80
+# 런 하나의 고정비 — 가중치 병합·vLLM 기동. evaluate-lmeval 매니페스트 estimated_startup_seconds 와
+# 같다. 런 타임아웃도 그 매니페스트의 timeout_seconds 다(tests/test_benchmark_catalog.py 가 대조한다).
+LMEVAL_STARTUP_SECONDS = 180
+LMEVAL_RUN_TIMEOUT_SECONDS = 36000
+# 위 추정은 3B 기준이다 — 8B 는 2~3 배(P0). 모델 크기를 알 수 없으므로 최악 배수를 곱한 추정이
+# 타임아웃을 넘는 분배는 런치 전에 거절한다(넘치면 파드가 도중에 죽고 남은 벤치마크는 실패한다).
+LMEVAL_WORST_SLOWDOWN = 3
+
+# 로컬 가중치 채점기(LOCAL_WEIGHTS_MANIFEST_KEYS)의 태스크당 문항 상한(빠른 점검용). 비우면
+# 전체. 준 점수는 분모가 달라 전체 측정과 나란히 비교하면 안 되므로 컨테이너가
+# metrics.lmeval.limit 에 새기고 FE 가 구분해 보인다.
+BENCHMARK_SAMPLE_LIMIT_MIN = 1
+BENCHMARK_SAMPLE_LIMIT_MAX = 100000
 
 # ── 벤치마크 생성을 '빌린 배포'로 돌릴 때(inference_playground_id) ──────────────
 # 예전에는 이 서비스가 HTTP 핸들러 안에서 인라인으로 생성한 뒤 params.samples 로 넘겼고,
@@ -337,14 +415,21 @@ PROJECT_STATUS_COMPLETED = "completed"
 # 'running' 으로 방치된 벤치마크 런을 실패로 간주하는 나이 임계(시간). 컨테이너
 # 파드 크래시나 폴러 재시작으로 완료 콜백이 유실되면 런이 running 에 영구 고착되는데,
 # eval_result 엔 updated_at 이 없어(create_datetime 만) 나이는 생성시각 기준으로 잰다.
-# 벤치마크 채점은 분 단위라 6h 면 정상 런엔 절대 안 걸린다.
+# ⚠️ 이 값(시간) × 3600 은 벤치마크 채점기 매니페스트의 최대 timeout_seconds + 기동보다
+#    커야 한다 — 스윕은 컨테이너에 묻지 않고 나이만으로 failed 로 만들고 되돌릴 수 없다.
+#    evaluate-lmeval 은 KMMLU 전체가 8B 에서 3 시간 가까이 걸려 timeout 이 10 시간이다
+#    (tests/test_benchmark_catalog.py 가 이 불변식을 매니페스트와 대조한다).
 # 사람이 시간에 걸쳐 채점하는 expert(metric_set='expert') 세션은 정당히 오래 running
 # 이므로 스윕에서 제외한다.
-STALE_RUNNING_MAX_HOURS = 6
+STALE_RUNNING_MAX_HOURS = 12
 
 # 한 화면 조회에서 컨테이너에 되물을 running 런 수 상한. 목록 렌더가 외부 호출 수에
 # 비례해 느려지는 것을 막는다(running 런은 통상 0~1건이라 실제로 걸릴 일은 드물다).
 MAX_RECONCILE_PER_VIEW = 8
+
+# 한 화면 조회에서 채점기 진행 기록(progress.json)을 읽어 실을 끝나지 않은 런 수 상한(최신순).
+# NFS 파일 읽기라 외부 호출보다 싸지만 목록 렌더가 런 수에 비례해 느려지지 않게 둔다.
+MAX_PROGRESS_PER_VIEW = 20
 
 # reconcile 조회 1건의 타임아웃. 이 값 x MAX_RECONCILE_PER_VIEW 가 목록 조회에 실릴 수
 # 있는 최대 대기이므로 짧게 잡는다. 되묻기는 best-effort 라 놓쳐도 다음 폴링이 잡는다 —

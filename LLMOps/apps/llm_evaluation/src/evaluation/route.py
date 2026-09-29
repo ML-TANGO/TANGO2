@@ -113,6 +113,7 @@ async def run_benchmark(body: dto.BenchmarkRunBody):
             ("judge_model", body.judge_model),
             ("judge_model_len", body.judge_model_len),
             ("judge_max_output_tokens", body.judge_max_output_tokens),
+            ("sample_limit", body.sample_limit),
         ) if v is not None}
         res = await svc.run_benchmark(
             project_id=body.project_id,
@@ -124,6 +125,40 @@ async def run_benchmark(body: dto.BenchmarkRunBody):
             # 학습→평가를 한 잡에서 돈다(둘은 배타 — dto.format_train 참고).
             format_train=body.format_train,
             run_options=run_options or None)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+
+@evaluations.post("/benchmark/batch", summary="여러 벤치마크 한 번에 실행(GPU 수만큼 런으로 나눔)",
+                  tags=TAG)
+async def run_benchmark_batch(body: dto.BenchmarkBatchRunBody):
+    """lm-eval 채점 벤치마크 여러 개를 한 요청으로 — 서버가 GPU 수(gpu_count)만큼의 런으로 나눠
+    담고 체크포인트는 한 번만 푼다. 응답 runs 는 런별 {benchmarks, job_id | error}(부분 실패를
+    숨기지 않는다)."""
+    try:
+        benchmarks = [b if isinstance(b, str) else b.benchmark for b in body.benchmarks]
+        run_options = ({"sample_limit": body.sample_limit}
+                       if body.sample_limit is not None else None)
+        res = await svc.run_benchmark_batch(
+            project_id=body.project_id, model_id=body.model_id,
+            benchmarks=benchmarks,
+            inference_playground_id=body.inference_playground_id,
+            dataset_ids=body.dataset_ids, run_options=run_options,
+            gpu_count=body.gpu_count)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+
+@evaluations.delete("/projects/{project_id}/batches/{batch_id}",
+                    summary="벤치마크 실행(묶음) 삭제 — 멤버 런 포함", tags=TAG)
+async def delete_run_batch(project_id: int, batch_id: int):
+    """정답 대조 결과 카드 1장 = 실행 한 번. 멤버 런을 지우고 묶음을 지운다(다른 프로젝트 것은 not-found)."""
+    try:
+        res = await svc.delete_run_batch(project_id=project_id, batch_id=batch_id)
         return response(status=1, result=res)
     except Exception as e:
         traceback.print_exc()
