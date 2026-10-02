@@ -45,7 +45,7 @@ const LANGUAGES = ['ko', 'en', 'ko + en'];
  * 보여준다(`RunPanel`).
  */
 export default function GeneratePage() {
-  const { wsId, dsId } = useDatasetNav();
+  const { wsId, dsId, go } = useDatasetNav();
 
   const [meta, setMeta] = useState(null);
   const [flow, setFlow] = useState(null);
@@ -122,6 +122,17 @@ export default function GeneratePage() {
   const nodes = flow?.nodes || [];
   const { node, index } = findStageNode(nodes, 'generate');
   const running = node?.latest_run?.status === 'running';
+
+  // 실행 중이면 흐름만 10초마다 다시 읽는다(캔버스와 같은 주기). 전체 생성은 수십 분 걸려,
+  // 안 읽으면 끝나도 '심사로 →' 가 안 뜬다. load 전체를 부르면 저장 안 한 프롬프트가 덮인다.
+  useEffect(() => {
+    if (!running) return undefined;
+    const t = setInterval(async () => {
+      const fl = await getFlow(dsId);
+      if (fl.status === STATUS_SUCCESS) setFlow(fl.result);
+    }, 10000);
+    return () => clearInterval(t);
+  }, [running, dsId]);
 
   // 칩이 켜졌는지는 프롬프트 본문에 그 문장이 들어 있는지로 본다.
   const isOn = (c) => c.locked || prompt.includes(c.text);
@@ -218,6 +229,19 @@ export default function GeneratePage() {
             >
               {running ? '생성중…' : '전체 생성'}
             </Btn>
+            {/* 노드는 자동으로 이어 돌지 않는다 — 생성이 끝나면 다음 단계를 바로 보여준다.
+                마지막이 미리보기여도 띄운다: 심사는 최근 **전체** 생성을 입력으로 쓰고, 그것이
+                없으면 심사 실행이 '먼저 실행해야 하는 단계가 있습니다' 로 이유를 알려준다. */}
+            {node?.latest_run?.status === 'done' && (
+              <Btn
+                size='md'
+                fill='outline'
+                onClick={() => go('/flow/gate')}
+                disabled={busy}
+              >
+                심사로 →
+              </Btn>
+            )}
           </span>
         }
       />
