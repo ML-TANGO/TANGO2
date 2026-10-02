@@ -4,9 +4,10 @@ import { useHistory, useParams } from 'react-router-dom';
 
 import BorderTable from '@src/components/molecules/BorderTable';
 
-import { listDatasets } from '@src/apis/llm/dataset';
+import { deleteDataset, listDatasets } from '@src/apis/llm/dataset';
 import { loadModalComponent } from '@src/modal';
 import { STATUS_SUCCESS } from '@src/network';
+import { openConfirm } from '@src/store/modules/confirm';
 import { openModal } from '@src/store/modules/modal';
 import { errorToastMessage } from '@src/utils';
 
@@ -70,6 +71,35 @@ export default function DatasetListPage() {
   };
 
   const open = (d) => history.push(`${dsBase(wsId, d.id)}/flow`);
+
+  // 무엇이 지워지고 무엇이 남는지를 확인 창에 적는다 — 작업 데이터셋이 함께 사라지는
+  // 줄 알고 망설이거나, 반대로 남는 줄 모르고 스토리지를 찾아 헤매지 않게.
+  // 실행 중이면 BE 가 이유와 함께 거절한다(잡 중지 경로가 없어 고아 파드를 막는다).
+  const remove = (d) => {
+    const work = d.work_dataset_name ? ` '${d.work_dataset_name}'` : '';
+    dispatch(
+      openConfirm({
+        title: '파이프라인 삭제',
+        content:
+          `'${d.name}' 파이프라인을 삭제합니다. 노드 설정 · 실행 기록 · 심사 · 검수 결과가 함께 ` +
+          '지워지고, 이 파이프라인이 띄운 모델 서빙은 내려갑니다.\n\n' +
+          `작업 데이터셋${work}은 데이터 메뉴에 남습니다 — 릴리스한 학습셋을 쓰는 곳이 있을 수 ` +
+          '있어 지우지 않습니다. 실행 중인 단계가 있으면 삭제되지 않습니다.',
+        submit: {
+          text: 'delete.label',
+          func: async () => {
+            const res = await deleteDataset(d.id);
+            // 실패해도 목록은 다시 읽는다 — 모델 서빙을 내리느라 프록시 시간(60초)을 넘기면
+            // 화면은 실패를 받지만 BE 는 삭제를 끝내므로, 안 읽으면 지워진 행이 남아 보인다.
+            if (res.status !== STATUS_SUCCESS)
+              errorToastMessage(res.error, res.message);
+            load();
+          },
+        },
+        cancel: { text: 'cancel.label' },
+      }),
+    );
+  };
 
   const rows = query
     ? datasets.filter((d) =>
@@ -183,9 +213,14 @@ export default function DatasetListPage() {
       sortable: false,
       right: true,
       cell: (d) => (
-        <Btn size='sm' fill='outline' tone='gray' onClick={() => open(d)}>
-          열기
-        </Btn>
+        <span className={style.toolbar}>
+          <Btn size='sm' fill='outline' tone='gray' onClick={() => open(d)}>
+            열기
+          </Btn>
+          <Btn size='sm' fill='outline' tone='danger' onClick={() => remove(d)}>
+            삭제
+          </Btn>
+        </span>
       ),
     },
   ];
