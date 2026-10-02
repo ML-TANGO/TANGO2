@@ -321,10 +321,37 @@ async def save_sds_ais(dataset_id: int, body: dto.StageConfigBody):
         return _fail(e)
 
 
+@data_pipelines.put("/datasets/{dataset_id}/stages/sds_ais_clean", summary="AIS 행 정제 설정 저장", tags=TAG)
+async def save_sds_ais_clean(dataset_id: int, body: dto.StageConfigBody):
+    try:
+        res = await svc.save_stage(dataset_id, "sds_ais_clean", body.model_dump())
+        return response(status=1, result=res)
+    except Exception as e:
+        return _fail(e)
+
+
+@data_pipelines.put("/datasets/{dataset_id}/stages/sds_ais_scene", summary="AIS 씬 구조화 설정 저장", tags=TAG)
+async def save_sds_ais_scene(dataset_id: int, body: dto.StageConfigBody):
+    try:
+        res = await svc.save_stage(dataset_id, "sds_ais_scene", body.model_dump())
+        return response(status=1, result=res)
+    except Exception as e:
+        return _fail(e)
+
+
 @data_pipelines.put("/datasets/{dataset_id}/stages/sds_join", summary="조인 설정 저장", tags=TAG)
 async def save_sds_join(dataset_id: int, body: dto.StageConfigBody):
     try:
         res = await svc.save_stage(dataset_id, "sds_join", body.model_dump())
+        return response(status=1, result=res)
+    except Exception as e:
+        return _fail(e)
+
+
+@data_pipelines.put("/datasets/{dataset_id}/stages/sds_colreg", summary="COLREG 계산 설정 저장", tags=TAG)
+async def save_sds_colreg(dataset_id: int, body: dto.StageConfigBody):
+    try:
+        res = await svc.save_stage(dataset_id, "sds_colreg", body.model_dump())
         return response(status=1, result=res)
     except Exception as e:
         return _fail(e)
