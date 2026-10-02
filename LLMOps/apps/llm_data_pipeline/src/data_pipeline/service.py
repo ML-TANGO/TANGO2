@@ -213,10 +213,50 @@ async def update_dataset(dataset_id, name, description, state):
     return await get_dataset(dataset_id)
 
 
+async def _refuse_if_running(dataset_id):
+    running = await db.list_running_runs_of(dataset_id)
+    if running:
+        stages = ", ".join(sorted({r.get("stage") or "?" for r in running}))
+        raise Conflict(f"실행 중인 단계가 있습니다({stages}) — 끝난 뒤 삭제하세요")
+
+
 async def delete_dataset(dataset_id):
-    await get_dataset(dataset_id)
+    """파이프라인 삭제. 자식 행은 FK CASCADE 로 함께 지워진다.
+
+    행 밖에 사는 것 두 가지는 지우기 전에 정리한다:
+      1. 도는 잡 — 실행 행만 사라지고 파드는 작업 데이터셋에 계속 쓴다. 이 파이프라인엔
+         잡 중지 경로가 없으므로 끝날 때까지 삭제를 막는다. 서빙을 내리는 동안 새 실행이
+         시작될 수 있어 지우기 직전에 한 번 더 본다.
+      2. 모델 서빙 — llm_dp_serving 행이 CASCADE 로 사라지면 playground 배포는 남는데,
+         회수 루프(reconcile_servings_once)는 행을 보고 돌기 때문에 그 GPU 를 영영 놓지
+         않는다. 그래서 행이 남아 있을 때 release_serving 으로 먼저 내린다. 내리기는 최선
+         노력(_teardown_playground 가 실패를 삼킨다)이라, 배포가 아직 running 이면 행을
+         지우지 않고 거절한다 — 남은 행이 재시도의 근거가 된다.
+         사용자는 회수 루프와 같이 파이프라인 생성자로 둔다(요청자가 아니라).
+
+    작업 데이터셋(dp-{id}-…)은 남긴다 — 릴리스한 학습셋을 파인튜닝이 쓰고 있을 수 있다.
+    """
+    ds = await get_dataset(dataset_id)
+    await _refuse_if_running(dataset_id)
+    await release_serving(dataset_id)
+
+    user = ds.get("create_user") or ""
+    still = []
+    for row in await db.list_servings(dataset_id):
+        if not row.get("playground_id"):
+            continue
+        try:
+            if await _playground_status(row["playground_id"], user) == "running":
+                still.append(row["role"])
+        except Exception:  # noqa: BLE001 - 조회가 안 되면 이미 사라진 것으로 본다(_teardown_playground 와 같은 판정)
+            pass
+    if still:
+        raise Conflict(f"모델 서빙({', '.join(still)})을 내리지 못했습니다 — 잠시 후 다시 삭제하세요")
+
+    await _refuse_if_running(dataset_id)
     await db.delete_dataset(dataset_id)
-    return {"dataset_id": dataset_id, "deleted": True}
+    return {"dataset_id": dataset_id, "deleted": True,
+            "work_dataset_name": ds.get("work_dataset_name")}
 
 
 # ── 업로드(asset) ───────────────────────────────────────────────────────────

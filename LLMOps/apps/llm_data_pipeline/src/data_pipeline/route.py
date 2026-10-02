@@ -94,7 +94,8 @@ async def update_dataset(dataset_id: int, body: dto.DatasetUpdateBody):
 
 @data_pipelines.delete("/datasets/{dataset_id}", summary="데이터셋 삭제", tags=TAG)
 async def delete_dataset(dataset_id: int):
-    """자식 행(asset·node·record·review·version)은 FK CASCADE 로 함께 정리된다."""
+    """자식 행(asset·node·record·review·version·run·serving)은 FK CASCADE 로 함께 정리된다.
+    실행 중이거나 모델 서빙을 못 내렸으면 거절, 서빙은 지우기 전에 내린다(svc.delete_dataset)."""
     try:
         return response(status=1, result=await svc.delete_dataset(dataset_id))
     except Exception as e:

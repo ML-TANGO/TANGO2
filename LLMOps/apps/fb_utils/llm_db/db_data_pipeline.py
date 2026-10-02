@@ -34,7 +34,7 @@ async def list_datasets(workspace_id=None):
     """
     sql = """
         SELECT d.id, d.workspace_id, d.name, d.description, d.state, d.preset,
-               d.create_user,
+               d.create_user, d.work_dataset_name,
                DATE_FORMAT(d.create_datetime, %s) AS create_datetime,
                DATE_FORMAT(d.update_datetime, %s) AS update_datetime,
                (SELECT COUNT(*) FROM jonathan_llm.llm_dp_asset a
@@ -646,6 +646,17 @@ async def list_running_runs(limit=200):
         LIMIT %s
     """
     return await select_query(sql, params=[limit]) or []
+
+
+async def list_running_runs_of(dataset_id):
+    """이 데이터셋에서 도는 실행 전부. 삭제 차단용 — list_running_runs 는 전역 상위
+    LIMIT 건이라 다른 데이터셋 실행이 많으면 이 데이터셋 것이 잘린다."""
+    sql = """
+        SELECT id, run_id, node_index, stage
+        FROM jonathan_llm.llm_dp_run
+        WHERE dataset_id = %s AND status = 'running'
+    """
+    return await select_query(sql, params=[dataset_id]) or []
 
 
 async def finish_run(run_pk, status, in_count=None, out_count=None, dropped_count=None,
