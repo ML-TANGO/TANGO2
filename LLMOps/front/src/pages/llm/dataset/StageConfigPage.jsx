@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 
 import {
   getFlow,
@@ -24,11 +24,23 @@ import { findStageNode, upstreamRunOf } from './lib/stage';
 import common from './styles/common.module.scss';
 import style from './pages.module.scss';
 
+// 단계 → 화면 제목 · 기능 배지(이 기능이 무엇을 하는가). 모르는 단계는 노드 이름으로 그린다.
+const STAGE_VIEW = {
+  preprocess: { title: '전처리', tag: '변환' },
+  filter: { title: '필터', tag: '제외' },
+  sds_video: { title: '항해 영상', tag: '추출' },
+  sds_ais: { title: 'AIS 로그', tag: '변환' },
+  sds_ais_clean: { title: 'AIS 행 정제', tag: '제외' },
+  sds_ais_scene: { title: 'AIS 씬 구조화', tag: '변환' },
+  sds_join: { title: '조인', tag: '결합' },
+  sds_colreg: { title: 'COLREG 계산', tag: '계산' },
+};
+
 /**
- * 전처리 · 필터 공용 화면.
+ * 전처리 · 필터 · 해양 COLREG 단계 공용 화면.
  *
- * 두 단계는 레이아웃이 같고 기능 목록과 결과만 다르다. 화면을 둘로 나누면 같은 코드를
- * 두 벌 고치게 되므로 하나로 두고 stage 로 갈라 쓴다.
+ * 단계들은 레이아웃이 같고 기능 목록과 결과만 다르다. 화면을 단계마다 나누면 같은 코드를
+ * 여러 벌 고치게 되므로 하나로 두고 stage 로 갈라 쓴다.
  *
  * 기능 목록(무엇을 켤 수 있는지)과 파라미터 범위는 **서버가 정본**이다(`library`).
  * FE 가 목록을 들고 있으면 노드 스크립트에 기능이 추가돼도 화면에 안 나타난다.
@@ -39,10 +51,11 @@ import style from './pages.module.scss';
 export default function StageConfigPage({ stage: stageProp }) {
   const { wsId, dsId } = useDatasetNav();
   const location = useLocation();
+  const { stage: stageParam } = useParams();
   const stage =
     stageProp ||
+    stageParam ||
     (location.pathname.endsWith('/filter') ? 'filter' : 'preprocess');
-  const isFilter = stage === 'filter';
 
   const [library, setLibrary] = useState([]);
   const [enabled, setEnabled] = useState({});
@@ -67,9 +80,17 @@ export default function StageConfigPage({ stage: stageProp }) {
     setSources(cfg.sources || []);
     // 저장된 값이 없는 기능은 라이브러리 기본값으로 채운다. 빈 칸으로 두면 슬라이더가
     // 0 에서 시작해 사용자가 만진 적 없는 값이 저장된다.
+    // on/off 를 한 번도 저장하지 않은 노드는 BE `_runnable_steps` 와 같은 규칙으로 표시
+    // 이름(steps)에서 되짚는다 — 전부 꺼진 채로 보여주면 실제로는 켜져 도는 기능이 화면에서
+    // 사라지고, 그 상태로 저장하면 실행이 바뀐다(조인 · 영상 노드는 기본 config 가 없다).
+    const savedOn = cfg.enabled || {};
+    const hasSaved = Object.keys(savedOn).length > 0;
+    const shown = new Set(
+      (st.result?.steps || []).map((s) => (Array.isArray(s) ? s[0] : s)),
+    );
     setEnabled(
       Object.fromEntries(
-        lib.map((s) => [s.key, cfg.enabled?.[s.key] ?? false]),
+        lib.map((s) => [s.key, hasSaved ? !!savedOn[s.key] : shown.has(s.key)]),
       ),
     );
     setParams(
@@ -91,6 +112,7 @@ export default function StageConfigPage({ stage: stageProp }) {
 
   const nodes = flow?.nodes || [];
   const { node, index } = findStageNode(nodes, stage);
+  const view = STAGE_VIEW[stage] || { title: node?.name || stage, tag: '변환' };
   const running = node?.latest_run?.status === 'running';
 
   const cur = library[selected] || null;
@@ -156,7 +178,7 @@ export default function StageConfigPage({ stage: stageProp }) {
     return (
       <div className={style.page}>
         <PageHeader
-          title={isFilter ? '필터' : '전처리'}
+          title={view.title}
           back={{ to: `${dsBase(wsId, dsId)}/flow`, label: '파이프라인' }}
         />
         <div className={common['card-pad']}>
@@ -169,7 +191,7 @@ export default function StageConfigPage({ stage: stageProp }) {
   return (
     <div className={style.page}>
       <PageHeader
-        title={isFilter ? '필터' : '전처리'}
+        title={view.title}
         back={{ to: `${dsBase(wsId, dsId)}/flow`, label: '파이프라인' }}
       />
 
@@ -208,12 +230,12 @@ export default function StageConfigPage({ stage: stageProp }) {
                     <span
                       className={[
                         style['step-tag'],
-                        isFilter ? style['step-tag-del'] : '',
+                        view.tag === '제외' ? style['step-tag-del'] : '',
                       ].join(' ')}
                     >
                       {/* 배지는 이 기능이 무엇을 하는지(제외 / 변환)를 말한다.
                           켜짐 여부는 바로 옆 체크박스가 이미 말하고 있다. */}
-                      {isFilter ? '제외' : '변환'}
+                      {view.tag}
                     </span>
                   </span>
                   <span className={style['step-desc']}>{s.desc}</span>

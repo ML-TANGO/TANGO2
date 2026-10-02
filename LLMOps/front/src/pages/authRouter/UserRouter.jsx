@@ -436,6 +436,19 @@ const routeArrAll = [
     render: (props) => <DatasetStageConfigPage stage='filter' {...props} />,
   },
   {
+    // 해양 COLREG 단계(원천 · AIS 행 정제 · 씬 구조화 · 조인 · COLREG 계산). 화면은
+    // 전처리 · 필터와 같고 기능 목록만 서버에서 받는다 — StageConfigPage 가 :stage 를 읽는다.
+    name: '단계 설정',
+    path: '/user/workspace/:id/datasets/pipeline/:dsId/flow/stage/:stage',
+    exact: true,
+    disabled: true,
+    group: datasetGroup,
+    icon: IconPreProcess,
+    activeIcon: IconPreProcessActive,
+    platform: 'flightbase',
+    render: (props) => <DatasetStageConfigPage {...props} />,
+  },
+  {
     name: '생성',
     path: '/user/workspace/:id/datasets/pipeline/:dsId/flow/generate',
     exact: true,

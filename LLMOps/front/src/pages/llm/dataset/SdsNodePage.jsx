@@ -21,7 +21,8 @@ import common from './styles/common.module.scss';
 import style from './pages.module.scss';
 
 /**
- * 노드 상세 — 전용 설정 화면이 없는 노드(해양 COLREG 원천 · 조인 · 계산 등)가 온다.
+ * 노드 상세 — 설정 화면이 없는 노드(조립 · 내보내기 등)가 온다. 해양 COLREG 원천 · 조인 ·
+ * 계산은 기능 목록이 있어 단계 설정 화면(StageConfigPage)으로 간다.
  *
  * 노드마다 화면을 따로 만들지 않는다. 무엇을 하는 노드든 사람이 확인하려는 것은 같다 —
  * 어떤 설정으로, 몇 건이 들어와, 몇 건이 남고, 무엇이 왜 빠졌는가.

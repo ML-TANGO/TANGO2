@@ -71,19 +71,38 @@ const TONE = {
 // BE `_node_warning` 이 돌려주는 값과 짝. 여기서 갈라지면 경고가 조용히 사라진다.
 const STATE_BY_WARN = { normal: '정상', warn: '주의', danger: '위험' };
 
-// 노드 종류 → 설정 화면 경로.
+// 노드 종류 → 전용 화면 경로. 생성 · 심사는 화면 구성이 달라 따로 있다.
 const ROUTE_BY_KIND = {
   data: '/flow',
-  prep: '/flow/preprocess',
-  filter: '/flow/filter',
   synth: '/flow/generate',
   gen: '/flow/generate',
   gate: '/flow/gate',
 };
 
-/** 노드 상세 화면 경로. 전용 화면이 없는 종류는 노드 화면으로 보낸다. */
-function routeOfNode(node, idx) {
-  return ROUTE_BY_KIND[node.kind] || `/flow/node/${idx}`;
+// 기능 목록(library)으로 그리는 공용 설정 화면(StageConfigPage)을 쓰는 단계.
+// kind 로 고르면 안 된다 — 해양 프리셋은 'AIS 행 정제'(filter) · 'AIS 씬 구조화'(prep) 가
+// 영상 갈래와 kind 가 같아, 영상 필터 · 전처리 화면이 열리고 거기서 저장하면 영상 노드
+// 설정이 덮인다. 전처리 · 필터는 기존 경로를 유지한다.
+const ROUTE_BY_STAGE = {
+  preprocess: '/flow/preprocess',
+  filter: '/flow/filter',
+};
+const LIBRARY_STAGES = new Set([
+  'sds_video',
+  'sds_ais',
+  'sds_ais_clean',
+  'sds_ais_scene',
+  'sds_join',
+  'sds_colreg',
+]);
+
+/** 노드 상세 화면 경로. 설정 화면이 없는 노드(조립 등)는 노드 화면으로 보낸다. */
+function routeOfNode(node, idx, nodes) {
+  if (ROUTE_BY_KIND[node.kind]) return ROUTE_BY_KIND[node.kind];
+  const stage = configStageOfNode(node, nodes);
+  if (ROUTE_BY_STAGE[stage]) return ROUTE_BY_STAGE[stage];
+  if (LIBRARY_STAGES.has(stage)) return `/flow/stage/${stage}`;
+  return `/flow/node/${idx}`;
 }
 
 /** 실행 시각 한 줄. 아직 안 돌았으면 그 사실을 적는다(빈칸이면 고장으로 읽힌다). */
@@ -316,7 +335,7 @@ export default function PipelinePage() {
       source: sources[i],
       inT: n.input_type,
       outT: n.output_type,
-      to: routeOfNode(n, i),
+      to: routeOfNode(n, i, nodes),
       state,
       warn: n.warning || '',
       dot: t.dot,
