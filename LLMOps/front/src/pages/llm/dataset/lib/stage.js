@@ -42,7 +42,10 @@ export function stageOfNode(node, nodes) {
  */
 export function configStageOfNode(node, nodes) {
   if (!node) return null;
-  if (node.stage) return node.stage;
+  // 필드가 **있으면** null 도 정본이다 — BE 는 단계당 노드 하나만 잡으므로 같은 kind 의
+  // 두 번째 노드는 null 이 온다. 이걸 kind 로 다시 추정하면 첫 노드의 설정 화면이 열리고
+  // 저장 · 실행이 그 노드에 가서 덮는다.
+  if ('stage' in node) return node.stage;
   if (node.kind === 'data') return 'data';
   if (node.kind !== 'src') return STAGE_BY_KIND[node.kind] || null;
   if (node.name === '항해 영상') return 'sds_video';
