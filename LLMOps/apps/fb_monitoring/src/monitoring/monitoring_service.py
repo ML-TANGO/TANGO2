@@ -107,6 +107,13 @@ REDIS_NODE_STATUS = "kube_node_spec_unschedulable"
 REDIS_NODE_INFO="kube_node_info"
 NODE_ROLE_INFO="kube_node_role"
 REDIS_GPU_INFO="DCGM_FI_DEV_FB_FREE"
+# GPU 등록용 **총** VRAM(MiB). node_gpu.gpu_memory 는 한 번 넣고 갱신하지 않는 '장당 용량'이다
+# (관리자 인스턴스 VRAM 표시 · 자동 배포의 '이 모델이 올라가는가' 판단이 읽는다). FB_FREE 만 넣으면
+# 등록 순간 다른 파드가 쓰던 장이 그때의 여유분으로 굳는다 — 서빙에서 A100 80GB 6장이 7GB 로
+# 기록돼 16GB 모델 배포가 거절됐다. 같은 수집 샘플의 두 지표라 라벨이 같아 그대로 더해진다
+# (__name__ 만 빠짐). 이 설치의 DCGM 수집 목록엔 FB_TOTAL · FB_RESERVED 가 없어 합계 =
+# 예약분을 뺀 '사용 가능 총량'이다(A100 80GB 에서 81151 MiB) — VRAM 판정에는 이 값이 맞다.
+REDIS_GPU_MEM_TOTAL="DCGM_FI_DEV_FB_FREE + DCGM_FI_DEV_FB_USED"
 REDIS_CPU_UAGE="instance:node_cpu:ratio"
 REDIS_CPU_INFO="count(node_cpu_info) by(instance,model_name)"
 REDIS_MEM_TOTAL="node_memory_MemTotal_bytes"
@@ -1220,7 +1227,7 @@ def init_node_info():
             node_list=prom.custom_query(query=REDIS_NODE_INFO)
             if node_list :
                 node_role_list_df=MetricSnapshotDataFrame(prom.custom_query(query=NODE_ROLE_INFO))
-                node_gpu_info_df=MetricSnapshotDataFrame(prom.custom_query(query=REDIS_GPU_INFO))
+                node_gpu_info_df=MetricSnapshotDataFrame(prom.custom_query(query=REDIS_GPU_MEM_TOTAL))
                 node_cpu_info_df=MetricSnapshotDataFrame(prom.custom_query(query=REDIS_CPU_INFO))
                 for node in node_list:
                     if not node_db.get_node(node_name=node['metric']['node']):
@@ -1296,7 +1303,7 @@ def init_node_resource_info():
         if node_list is not None:
             with prometheus_connection(url) as prom:
                  
-                node_gpu_info_df=MetricSnapshotDataFrame(prom.custom_query(query=REDIS_GPU_INFO)) # Hostname
+                node_gpu_info_df=MetricSnapshotDataFrame(prom.custom_query(query=REDIS_GPU_MEM_TOTAL)) # Hostname
                 for node in node_list:
                     if node_db.get_node_cpu(node_id=node['id']) is None:
                         node_cpu_info_df=MetricSnapshotDataFrame(prom.custom_query(query=REDIS_CPU_INFO)) #instance ex) ip:settings.JF_NODE_EXPORTER_PORT
@@ -1321,7 +1328,11 @@ def init_node_resource_info():
                             else:
                                 gpu_resource_group_id = gpu_resource_group['id']
                             # print(gpu_resource_group_id)
-                            node_db.insert_node_gpu(node_id=node['id'], resource_group_id=gpu_resource_group_id,gpu_memory=gpu['value'], gpu_uuid=uuid)
+                            # init_node_info 와 같은 가드 — FREE + USED 는 한쪽만 NaN 이어도 NaN 이다.
+                            gpu_memory = gpu['value']
+                            if math.isnan(gpu_memory):
+                                gpu_memory = 0
+                            node_db.insert_node_gpu(node_id=node['id'], resource_group_id=gpu_resource_group_id,gpu_memory=gpu_memory, gpu_uuid=uuid)
                     
                     if node_db.get_node_ram(node_id=node['id']) is None:
                         node_ram_info_df=MetricSnapshotDataFrame(prom.custom_query(query=REDIS_MEM_TOTAL)) #instance ex) ip:settings.JF_NODE_EXPORTER_PORT
