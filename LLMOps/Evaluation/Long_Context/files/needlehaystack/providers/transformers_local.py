@@ -68,25 +68,34 @@ class TransformersProvider:
 
 def _build_transformers(config: ModelConfig) -> TransformersProvider:
     import torch
-    from transformers import AutoModelForImageTextToText, AutoProcessor
+    from transformers import AutoModelForCausalLM, AutoModelForImageTextToText, AutoTokenizer
 
     extras = config.request.model_dump(exclude={"model", "max_tokens", "temperature", "stream"})
     device = str(extras.get("device", "cuda"))
     dtype = _dtype(str(extras.get("dtype", "bfloat16")), torch)
     trust_remote_code = bool(extras.get("trust_remote_code", True))
-    processor = AutoProcessor.from_pretrained(config.request.model, trust_remote_code=trust_remote_code)
-    model = AutoModelForImageTextToText.from_pretrained(
-        config.request.model,
-        dtype=dtype,
-        trust_remote_code=trust_remote_code,
-    ).to(device)
+    tokenizer_path = str(extras.get("tokenizer_path") or config.request.model)
+    # Only the tokenizer is used; AutoProcessor would also require image/audio
+    # preprocessor configs, which adapter directories usually don't have.
+    processor = AutoTokenizer.from_pretrained(tokenizer_path, trust_remote_code=trust_remote_code)
+    # `device: auto` spreads the model across all visible GPUs.
+    load_kwargs = {"dtype": dtype, "trust_remote_code": trust_remote_code, "device_map": device}
+    try:
+        model = AutoModelForImageTextToText.from_pretrained(config.request.model, **load_kwargs)
+    except ValueError:
+        # Text-only checkpoints (Llama, Qwen, ...) have no image-text class.
+        model = AutoModelForCausalLM.from_pretrained(config.request.model, **load_kwargs)
+    if extras.get("adapter_path"):
+        from peft import PeftModel
+
+        model = PeftModel.from_pretrained(model, str(extras["adapter_path"]))
     model.eval()
     return TransformersProvider(
         id=config.id,
         request_model=config.request.model,
         processor=processor,
         model=model,
-        device=device,
+        device=str(model.device),
         max_tokens=config.request.max_tokens or 128,
         do_sample=bool(extras.get("do_sample", False)),
     )

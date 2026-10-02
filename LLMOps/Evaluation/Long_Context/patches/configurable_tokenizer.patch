@@ -1,0 +1,41 @@
+diff --git a/needlehaystack/core/tokens.py b/needlehaystack/core/tokens.py
+index ee1be00..fb7f886 100644
+--- a/needlehaystack/core/tokens.py
++++ b/needlehaystack/core/tokens.py
+@@ -10,10 +10,34 @@ slightly from what their internal tokenizer would report.
+ 
+ from __future__ import annotations
+ 
++import os
++
+ import tiktoken
+ 
+-_ENCODING_NAME = "cl100k_base"
+-_encoding = tiktoken.get_encoding(_ENCODING_NAME)
++
++class _HFEncoding:
++    """Hugging Face tokenizer with tiktoken's `encode`/`decode` interface."""
++
++    def __init__(self, name: str) -> None:
++        from transformers import AutoTokenizer
++
++        self._tok = AutoTokenizer.from_pretrained(name, model_max_length=10**9)
++
++    def encode(self, text: str) -> list[int]:
++        return self._tok.encode(text, add_special_tokens=False)
++
++    def decode(self, tokens: list[int]) -> str:
++        return self._tok.decode(tokens, clean_up_tokenization_spaces=False)
++
++
++# `NIAH_TOKENIZER=<HF tokenizer id or path>` measures lengths in that
++# tokenizer's tokens instead of the default `cl100k_base`.
++_ENCODING_NAME = os.environ.get("NIAH_TOKENIZER") or "cl100k_base"
++_encoding = (
++    _HFEncoding(_ENCODING_NAME)
++    if _ENCODING_NAME != "cl100k_base"
++    else tiktoken.get_encoding(_ENCODING_NAME)
++)
+ 
+ 
+ def encoding_name() -> str:
