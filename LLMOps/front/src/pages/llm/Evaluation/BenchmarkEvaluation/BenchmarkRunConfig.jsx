@@ -20,7 +20,9 @@ import {
   BENCHMARK_CATEGORIES,
   BENCHMARK_MAP,
   DATASET_FREE_BENCHMARK_IDS,
+  DEFAULT_FORMAT_TRAIN_RECIPE,
   FORMAT_TRAIN_BENCHMARK_IDS,
+  FORMAT_TRAIN_RECIPES,
   GENERATION_METRICS,
   LMEVAL_BENCHMARK_IDS,
   REFERENCE_BENCHMARKS,
@@ -97,6 +99,11 @@ const BenchmarkRunConfig = ({
   // 배우지 않은 가중치의 점수는 0 이라 그것이 기본값이어야 한다. 끄는 것은 "형식 미학습
   // 상태를 일부러 재 본다"는 진단 선택이다.
   const [formatTrain, setFormatTrain] = useState(false);
+  // 포맷 학습 레시피(학습량·정밀도) — 기본 full(연구자 실험과 같은 조건). 학습을 켰을 때만 실린다.
+  const [formatTrainRecipe, setFormatTrainRecipe] = useState(
+    DEFAULT_FORMAT_TRAIN_RECIPE,
+  );
+  const recipeGroupRef = useRef(null);
   // lm-eval 묶음이 쓸 GPU 수(= 런 수). null = 자동(가장 빠른 쪽 — min(벤치마크 수, 빈 GPU)).
   // 고른 값은 범위가 바뀌면(선택·가용량) 그 안으로 당긴다.
   const [gpuCountPick, setGpuCountPick] = useState(null);
@@ -179,6 +186,7 @@ const BenchmarkRunConfig = ({
     // 포맷 학습은 벤치마크에 매인 설정이다 — 벤치마크를 바꾸면 그 벤치마크의 기본값으로
     // 되돌린다. 남겨 두면 지원하지 않는 벤치마크에 켜진 채로 실행돼 BE 가 거절한다.
     setFormatTrain(FORMAT_TRAIN_BENCHMARK_IDS.includes(single));
+    setFormatTrainRecipe(DEFAULT_FORMAT_TRAIN_RECIPE);
     // 문항 상한은 lm-eval 묶음에 매인 설정이다 — lm-eval 이 아닌 벤치마크로 옮겨 가면 BE 가
     // 거절한다. lm-eval 끼리 더하고 빼는 동안에는 입력을 유지한다.
     if (!next.length || !next.every(isLmeval)) setSampleLimit('');
@@ -435,6 +443,10 @@ const BenchmarkRunConfig = ({
             benchmark: benchmark?.label,
             deployment: deployment?.name || '-',
             count: recorded.length,
+            recipe: t(
+              FORMAT_TRAIN_RECIPES.find((r) => r.id === formatTrainRecipe)
+                ?.labelKey || '',
+            ),
           },
         ));
 
@@ -458,6 +470,8 @@ const BenchmarkRunConfig = ({
       // (둘은 배타 — BE 가 같은 배타를 강제한다).
       inferencePlaygroundId: playgroundId,
       formatTrain,
+      // 레시피는 학습을 켰을 때만 싣는다(끈 런에 실리면 BE 가 거절한다).
+      ...(formatTrain ? { formatTrainRecipe } : {}),
       ...(localWeights ? { gpuCount } : {}),
       // 문항 상한 — lm-eval 채점 벤치마크에서 채웠을 때만 싣는다(다른 채점기는 BE 가 거절한다).
       ...(localWeights && sampleLimitValue
@@ -741,6 +755,52 @@ const BenchmarkRunConfig = ({
                         : 'evaluation.bench.formatTrainOffNote',
                     )}
                   </p>
+                  {/* 레시피 — 켰을 때만. 학습량이 수십 배 달라 점수도 비교할 수 없으므로
+                      무엇으로 잴지를 고르게 한다(기본 full). 카드 모양은 벤치마크 목록과
+                      같은 표식(pick-radio)을 쓴다. */}
+                  {formatTrain && (
+                    <div
+                      ref={recipeGroupRef}
+                      className={cx('recipe-list')}
+                      role='radiogroup'
+                      aria-label={t('evaluation.bench.recipeTitle')}
+                      onKeyDown={moveRovingFocus(
+                        recipeGroupRef,
+                        FORMAT_TRAIN_RECIPES.map((r) => r.id),
+                        formatTrainRecipe,
+                        setFormatTrainRecipe,
+                      )}
+                    >
+                      {FORMAT_TRAIN_RECIPES.map((r) => {
+                        const on = formatTrainRecipe === r.id;
+                        return (
+                          <button
+                            key={r.id}
+                            type='button'
+                            role='radio'
+                            aria-checked={on}
+                            data-value={r.id}
+                            tabIndex={on ? 0 : -1}
+                            className={cx('benchmark-option', on && 'selected')}
+                            onClick={() => setFormatTrainRecipe(r.id)}
+                          >
+                            <span
+                              className={cx('pick-radio')}
+                              aria-hidden='true'
+                            />
+                            <span className={cx('option-body')}>
+                              <span className={cx('bo-name')}>
+                                {t(r.labelKey)}
+                              </span>
+                              <span className={cx('bo-desc')}>
+                                {t(r.descKey)}
+                              </span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                   {/* GPU 현황 — 켰을 때만. 가용 0 이면 실행을 막으므로 왜 막혔는지가
                       같은 자리에 보여야 한다. 조회 중/실패는 숫자를 지어내지 않는다. */}
                   {formatTrain && gpuHint}

@@ -241,6 +241,13 @@
   gap: 6px;
 }
 
+// 포맷 학습 레시피 — 카드는 벤치마크 옵션(.benchmark-option)을 그대로 쓰고 세로로만 쌓는다.
+.recipe-list {
+  display: grid;
+  margin-top: 8px;
+  gap: 6px;
+}
+
 @media (max-width: 920px) {
   .run-config {
     grid-template-columns: 1fr;

@@ -923,6 +923,7 @@ const ProjectDetail = () => {
   //   formatTrain = 평가 전 형식(출력 규약) 학습 여부. 정답 대조의 MixATIS 에서만 채워
   //     온다 — 켜면 inferencePlaygroundId 는 '출력을 만들 배포'가 아니라 '학습할
   //     체크포인트의 출처'가 된다(서버가 그 배타를 강제한다).
+  //   formatTrainRecipe = 포맷 학습 레시피(full | quick). formatTrain 이 켜졌을 때만 온다.
   const handleBenchmarkRun = async ({
     modelId,
     datasetId,
@@ -930,6 +931,7 @@ const ProjectDetail = () => {
     inferencePlaygroundId,
     judgePlaygroundId,
     formatTrain,
+    formatTrainRecipe,
     sampleLimit,
     gpuCount,
   }) => {
@@ -975,6 +977,10 @@ const ProjectDetail = () => {
       //   정하게 되는데, 그 기본값이 화면의 스위치와 갈리면 사용자가 본 설정과 실제로
       //   돈 설정이 달라진다.
       ...(formatTrain === undefined ? {} : { format_train: !!formatTrain }),
+      // 포맷 학습 레시피(full=연구자 실험과 같은 학습량 / quick=형식만) — 학습을 켰을 때만 온다.
+      ...(formatTrain && formatTrainRecipe
+        ? { format_train_recipe: formatTrainRecipe }
+        : {}),
       // 문항 상한(lm-eval 채점 벤치마크의 빠른 점검) — 실행 화면이 채웠을 때만 온다. 다른
       //   채점기(LogicKor·MixATIS)에는 화면이 싣지 않는다(BE 가 사유와 함께 거절한다).
       ...(sampleLimit ? { sample_limit: Number(sampleLimit) } : {}),

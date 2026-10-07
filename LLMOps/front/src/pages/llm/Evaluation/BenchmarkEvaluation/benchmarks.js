@@ -397,6 +397,24 @@ export const FORMAT_TRAIN_BENCHMARK_IDS = BENCHMARKS.filter(
   (b) => b.supportsFormatTrain,
 ).map((b) => b.id);
 
+// 포맷 학습 레시피 — id 는 BE constants.FORMAT_TRAIN_RECIPES 의 키와 같아야 한다(dto 가
+// 모르는 값을 422 로 거절한다). 학습량·정밀도 값 자체는 서버가 갖고 화면은 고르기만 한다.
+// full 이 기본인 이유: 원 실험(ETRI full, Joint 67%)과 비교할 수 있는 쪽이 기본이어야 한다 —
+// quick 은 학습량이 약 26 배 적어 그 수치와 나란히 놓으면 성능 결함으로 오독된다.
+export const FORMAT_TRAIN_RECIPES = [
+  {
+    id: 'full',
+    labelKey: 'evaluation.bench.recipeFull',
+    descKey: 'evaluation.bench.recipeFullDesc',
+  },
+  {
+    id: 'quick',
+    labelKey: 'evaluation.bench.recipeQuick',
+    descKey: 'evaluation.bench.recipeQuickDesc',
+  },
+];
+export const DEFAULT_FORMAT_TRAIN_RECIPE = 'full';
+
 // 추론을 한 번 더 돌려야 나오는 "생성 지표"(옵트인). 키 = 벤치마크 id, 값 = 그 벤치마크의
 // metrics 중 생성 경로가 필요한 메트릭 id.
 // 2026-09-28 부터 비어 있다 — TruthfulQA 의 BLEU/ROUGE 는 별도 벤치마크(truthfulqa_gen)가
