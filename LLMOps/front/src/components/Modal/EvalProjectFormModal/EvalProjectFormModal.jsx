@@ -14,7 +14,7 @@ import style from './EvalProjectFormModal.module.scss';
 
 const cx = classNames.bind(style);
 
-// 평가 유형 3종 — 축은 **누가 채점하나**다. 유형이 이후 실행 화면(무엇을 묻는지)과
+// 평가 유형 4종 — 축은 **누가 채점하나**다. 유형이 이후 실행 화면(무엇을 묻는지)과
 // 유형은 점수의 척도(0~1 정답률 / 1~10 심판 점수 / 1~5 별점)를 통째로 결정하고 생성 후
 // 불변이다 — 그래서 "무엇으로 채점하는지"가 읽혀야 하는데, 그 설명은 **고른 유형 하나만**
 // 힌트 줄로 보여 주면 충분하다. 컨트롤은 AddModel·DockerImageFormModal 과 같은
@@ -35,13 +35,19 @@ const TYPE_OPTIONS = [
     label: 'evaluation.project.type.expert',
     desc: 'evaluation.project.typeDesc.expert',
   },
+  // MixATIS — 정답 대조로 채점하지만 형식 학습이 전제라 정답 대조에서 떼어 냈다.
+  {
+    value: 'intent',
+    label: 'evaluation.project.type.intent',
+    desc: 'evaluation.project.typeDesc.intent',
+  },
 ];
 
 const TYPE_VALUES = TYPE_OPTIONS.map((option) => option.value);
 
 // 새 평가 프로젝트 생성 모달(프레젠테이셔널) — 학습/배포 모달과 동일한 프레임/필드 규격.
 //   NewStyleModalFrame(664px·resize·minimize) + InputBoxWithLabel + 디자인시스템 컴포넌트.
-//   필드: 이름(InputText) → 평가유형(Radio 가로 3종). **모델·데이터셋은 여기서 고르지 않는다** —
+//   필드: 이름(InputText) → 평가유형(Radio 가로 4종). **모델·데이터셋은 여기서 고르지 않는다** —
 //   런을 실행하는 자리(실행 모달)에서 고른다. 한 프로젝트가 여러 모델·데이터셋의 런을
 //   담을 수 있어야 비교가 성립하기 때문이다.
 //   설명(선택)은 목록 카드의 본문 슬롯으로 그대로 나간다 — 모델·배포 카드가 description 을

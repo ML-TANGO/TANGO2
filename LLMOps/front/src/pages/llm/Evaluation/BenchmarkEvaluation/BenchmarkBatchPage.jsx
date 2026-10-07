@@ -15,7 +15,11 @@ import { startPath } from '@src/store/modules/breadCrumb';
 import { addNineHours } from '@src/utils';
 
 import ScoreRadar from '../EvalCrossCompare/ScoreRadar';
-import { BENCHMARK_CATEGORIES, BENCHMARK_GROUPS } from './benchmarks';
+import {
+  BENCHMARK_CATEGORIES,
+  BENCHMARK_GROUPS,
+  BENCHMARK_RESULT_EVAL_TYPES,
+} from './benchmarks';
 import { formatMetricValue, metricLabel } from './benchmarkMetrics';
 import {
   GENERATIVE_COLUMNS,
@@ -259,7 +263,8 @@ const BenchmarkBatchPage = () => {
   }
 
   // 이 화면은 정답 대조 프로젝트의 것이다(ProjectDetail 이 다른 유형에서는 이리로 보내지 않는다).
-  if (project.eval_type !== 'reference') return <Redirect to={projectPath} />;
+  if (!BENCHMARK_RESULT_EVAL_TYPES.includes(project.eval_type))
+    return <Redirect to={projectPath} />;
 
   if (!group) {
     return (

@@ -22,7 +22,11 @@ import { openModal } from '@src/store/modules/modal';
 import { addNineHours, errorToastMessage } from '@src/utils';
 
 import BenchmarkResultView from './BenchmarkResultView';
-import { BENCHMARK_LABEL, BENCHMARK_MAP } from './benchmarks';
+import {
+  BENCHMARK_LABEL,
+  BENCHMARK_MAP,
+  BENCHMARK_RESULT_EVAL_TYPES,
+} from './benchmarks';
 import { metricLabel } from './benchmarkMetrics';
 
 import classNames from 'classnames/bind';
@@ -211,7 +215,7 @@ const BenchmarkResultPage = () => {
   // 이 페이지는 **정답 대조** 런의 독립 결과 화면이다 — 다른 유형의 런 URL 을 직접 열거나
   // 북마크로 들어오면 프로젝트 상세 안의 제 화면으로 되돌린다. ProjectDetail 의
   // runs/:jobId 가드가 정답 대조를 이리로 넘기는 것과 짝이 되는 반대 방향 가드다.
-  if (project.eval_type !== 'reference') {
+  if (!BENCHMARK_RESULT_EVAL_TYPES.includes(project.eval_type)) {
     return <Redirect to={`${projectPath}/${runId}`} />;
   }
 

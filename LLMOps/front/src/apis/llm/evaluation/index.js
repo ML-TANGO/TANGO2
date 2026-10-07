@@ -9,7 +9,7 @@ import { callApi, downloadBlob } from '@src/network';
 // 프로젝트의 목적이라 생성 시점에 잠글 수 없다. 옛 프로젝트는 project.model_id /
 // dataset_ids 를 그대로 갖고 있고(표시용), 새 프로젝트는 null/빈 값이다.
 
-// 프로젝트 생성(대기 상태, run 0개). body: { name, eval_type: 'reference'|'judge'|'expert',
+// 프로젝트 생성(대기 상태, run 0개). body: { name, eval_type: 'reference'|'judge'|'expert'|'intent',
 //   description?, workspace_id } — workspace_id 는 라우트 파라미터에서 온다(모델을 안 받으므로
 //   서버가 model_id 로 도출할 수 없다). description 은 선택·최대 5000자(VARCHAR(5000) nullable)
 //   이며 목록/단건 조회 양쪽 응답에 그대로 실려 온다(카드용 별도 조회 불필요).

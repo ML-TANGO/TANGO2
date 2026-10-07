@@ -24,6 +24,7 @@ import {
   FORMAT_TRAIN_BENCHMARK_IDS,
   FORMAT_TRAIN_RECIPES,
   GENERATION_METRICS,
+  INTENT_BENCHMARKS,
   LMEVAL_BENCHMARK_IDS,
   REFERENCE_BENCHMARKS,
   categoryCount,
@@ -53,8 +54,9 @@ const cx = classNames.bind(style);
 //
 // **심판 설정은 여기 없다.** 정답 대조는 정답이 데이터에 있어 기계가 대조한다 — 심판 LLM 이
 // 개입할 자리가 없고, 심판 배포·내장 심판·프롬프트 전략·심판 출력 상한은 전부 LLM 심사
-// 실행 화면(JudgeRunConfig)의 것이다. 여기서 고를 수 있는 벤치마크도 REFERENCE_BENCHMARKS
-// 로 좁혀, 화면에서만 고를 수 있고 서버에서 거부되는 조합이 생기지 않게 한다.
+// 실행 화면(JudgeRunConfig)의 것이다. 여기서 고를 수 있는 벤치마크도 프로젝트 유형의 목록
+// (RUN_VIEWS — 정답 대조 REFERENCE_BENCHMARKS / 의도·슬롯 평가 INTENT_BENCHMARKS)으로 좁혀,
+// 화면에서만 고를 수 있고 서버에서 거부되는 조합이 생기지 않게 한다.
 //
 // **출력은 기본적으로 배포에서 가져온다** — 평가 컨테이너는 채점만 하고, 답변 생성은 이미 떠
 // 있는 배포(inference_playground_id)에 요청한다. 컨테이너가 체크포인트를 직접 올려
@@ -69,6 +71,23 @@ const cx = classNames.bind(style);
 // 출처' 로 바뀌고, 체크포인트가 없는 배포(HF 모델 직접 배포)는 고를 수 없게 된다.
 // BE 도 같은 배타·같은 경계를 강제한다(constants.FORMAT_TRAIN_MANIFEST_KEYS).
 
+// 프로젝트 유형별로 갈리는 것 — 후보 목록과 머리말뿐이고 나머지 화면은 같다. 의도/슬롯 평가는
+// 후보가 MixATIS 하나라 lm-eval 다중 선택 안내를 붙이지 않는다.
+const RUN_VIEWS = {
+  reference: {
+    candidates: REFERENCE_BENCHMARKS,
+    titleKey: 'evaluation.bench.referenceTitle',
+    descKey: 'evaluation.bench.referenceDesc',
+    multiHint: true,
+  },
+  intent: {
+    candidates: INTENT_BENCHMARKS,
+    titleKey: 'evaluation.bench.intentTitle',
+    descKey: 'evaluation.bench.intentDesc',
+    multiHint: false,
+  },
+};
+
 const BenchmarkRunConfig = ({
   workspaceId,
   modelOptions,
@@ -76,8 +95,15 @@ const BenchmarkRunConfig = ({
   running,
   onRun,
   onClose,
+  // 프로젝트 유형 — 'reference'(정답 대조) | 'intent'(의도/슬롯 평가). 같은 화면을 쓴다.
+  evalType = 'reference',
 }) => {
   const { t } = useTranslation();
+  const view = RUN_VIEWS[evalType] || RUN_VIEWS.reference;
+  const { candidates } = view;
+  // 후보가 하나뿐이면(의도/슬롯 평가 = MixATIS) 고른 상태로 시작한다 — 모델·데이터셋이
+  // 하나일 때 미리 고르는 것과 같은 규약. 벤치마크에 매인 기본값(포맷 학습)도 함께 맞춘다.
+  const onlyCandidate = candidates.length === 1 ? candidates[0].id : '';
 
   // 이 런이 평가할 대상 — 모델·데이터셋(단일). 프로젝트 상속이 아니라 런의 선택이다.
   //   목록은 상위(ProjectDetail)가 이미 조회한 것을 그대로 받는다(중복 조회 X).
@@ -86,7 +112,9 @@ const BenchmarkRunConfig = ({
 
   // 고른 벤치마크 id 들. lm-eval 끼리는 여러 개, 그 밖의 채점기는 하나만(pickBenchmark).
   // 하나일 때만 쓰는 화면(포맷 학습·기록 지표·생성 지표)은 picked 로 읽는다.
-  const [picks, setPicks] = useState([]);
+  const [picks, setPicks] = useState(() =>
+    onlyCandidate ? [onlyCandidate] : [],
+  );
   const picked = picks.length === 1 ? picks[0] : '';
   const multi = picks.length > 1;
   const [category, setCategory] = useState('all');
@@ -98,7 +126,9 @@ const BenchmarkRunConfig = ({
   // 평가 전 형식 학습을 돌릴지. 지원 벤치마크를 고르면 **켠 상태로 시작**한다 — 형식을
   // 배우지 않은 가중치의 점수는 0 이라 그것이 기본값이어야 한다. 끄는 것은 "형식 미학습
   // 상태를 일부러 재 본다"는 진단 선택이다.
-  const [formatTrain, setFormatTrain] = useState(false);
+  const [formatTrain, setFormatTrain] = useState(() =>
+    FORMAT_TRAIN_BENCHMARK_IDS.includes(onlyCandidate),
+  );
   // 포맷 학습 레시피(학습량·정밀도) — 기본 full(연구자 실험과 같은 조건). 학습을 켰을 때만 실린다.
   const [formatTrainRecipe, setFormatTrainRecipe] = useState(
     DEFAULT_FORMAT_TRAIN_RECIPE,
@@ -275,14 +305,14 @@ const BenchmarkRunConfig = ({
   // 화면에 뜬 문구와 다른 것을 검색하게 된다(영어 로케일에서 한국어로만 걸리는 식).
   const visible = useMemo(() => {
     const term = query.trim().toLowerCase();
-    return REFERENCE_BENCHMARKS.filter(
+    return candidates.filter(
       (b) =>
         (category === 'all' || b.category === category) &&
         (term === '' ||
           b.label.toLowerCase().includes(term) ||
           t(b.descKey).toLowerCase().includes(term)),
     );
-  }, [category, query, t]);
+  }, [candidates, category, query, t]);
 
   const recorded = useMemo(
     () => (picked ? recordedMetricsFor(picked, withGeneration) : []),
@@ -340,7 +370,7 @@ const BenchmarkRunConfig = ({
   }, [usesLocalGpu, playgroundId, deployments]);
 
   const categoryOptions = BENCHMARK_CATEGORIES.map((item) => ({
-    label: `${t(item.labelKey)} (${categoryCount(item.id)})`,
+    label: `${t(item.labelKey)} (${categoryCount(item.id, candidates)})`,
     value: item.id,
   }));
   const selectedCategory =
@@ -526,12 +556,12 @@ const BenchmarkRunConfig = ({
           <div className={cx('run-main')}>
             <div className={cx('run-heading')}>
               <h3 className={cx('run-sec-title')}>
-                {t('evaluation.bench.referenceTitle')}
+                {t(view.titleKey)}
                 <span className={cx('req')}>*</span>
               </h3>
               <p className={cx('run-prose')}>
-                {t('evaluation.bench.referenceDesc')}{' '}
-                {t('evaluation.bench.multiHint')}
+                {t(view.descKey)}
+                {view.multiHint && ` ${t('evaluation.bench.multiHint')}`}
               </p>
             </div>
 

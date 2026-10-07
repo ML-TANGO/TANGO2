@@ -26,6 +26,7 @@ const TYPE_KEYS = {
   reference: 'evaluation.project.type.reference',
   judge: 'evaluation.project.type.judge',
   expert: 'evaluation.project.type.expert',
+  intent: 'evaluation.project.type.intent',
 };
 
 // 카드 메타행 상태 배지의 라벨/색. 라벨은 배지에 들어갈 **짧은 말**이어야 한다 —

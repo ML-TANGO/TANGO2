@@ -16,6 +16,7 @@ import BenchmarkRunConfig from '../BenchmarkEvaluation/BenchmarkRunConfig';
 import {
   BENCHMARK_LABEL,
   BENCHMARK_MAP,
+  BENCHMARK_RESULT_EVAL_TYPES,
   LMEVAL_BENCHMARK_IDS,
   defaultMetricFor,
 } from '../BenchmarkEvaluation/benchmarks';
@@ -82,6 +83,7 @@ const TYPE_KEYS = {
   reference: 'evaluation.project.type.reference',
   judge: 'evaluation.project.type.judge',
   expert: 'evaluation.project.type.expert',
+  intent: 'evaluation.project.type.intent',
 };
 
 // 실행 목록을 펼친 표로 그리는 유형 — 런이 (무엇을 잰 런인가, 점수) 축을 갖는 유형이다.
@@ -507,7 +509,9 @@ const ProjectDetail = () => {
   // ── 정답 대조 실행 카드 — 한 번의 실행 = 카드 1장(batchSummary.buildRunGroups) ─────────
   const runGroups = useMemo(
     () =>
-      project?.eval_type === 'reference' ? buildRunGroups(runs, batches) : [],
+      BENCHMARK_RESULT_EVAL_TYPES.includes(project?.eval_type)
+        ? buildRunGroups(runs, batches)
+        : [],
     [project?.eval_type, runs, batches],
   );
 
@@ -1000,7 +1004,7 @@ const ProjectDetail = () => {
     // 결과 화면의 깊이는 유형마다 다르다 — 정답 대조는 독립 페이지, 심사는 상세 안.
     // 정답 대조는 실행 카드가 여는 요약으로 간다(기록 없는 단건 = 'r-<jobId>'), 심사는 상세 안.
     history.push(
-      project.eval_type === 'reference'
+      BENCHMARK_RESULT_EVAL_TYPES.includes(project.eval_type)
         ? `${url}/batch/${RUN_KEY_PREFIX}${res.result.job_id}`
         : `${runsPath}/${res.result.job_id}`,
     );
@@ -1071,7 +1075,7 @@ const ProjectDetail = () => {
   const openRun = (run) => {
     if (!run?.job_id) return;
     // 정답 대조 결과는 프로젝트 상세 안이 아니라 독립 페이지다(런 하나를 깊게 읽는 화면).
-    if (project.eval_type === 'reference') {
+    if (BENCHMARK_RESULT_EVAL_TYPES.includes(project.eval_type)) {
       history.push(`${url}/run/${run.job_id}`);
       return;
     }
@@ -1526,7 +1530,7 @@ const ProjectDetail = () => {
               const runModelId = currentRun?.model_id ?? project.model_id;
 
               // 정답 대조 결과는 독립 페이지로 옮겼다. 이 경로로 들어온 옛 링크는 그리로 넘긴다.
-              if (project.eval_type === 'reference') {
+              if (BENCHMARK_RESULT_EVAL_TYPES.includes(project.eval_type)) {
                 return <Redirect to={`${url}/run/${jobId}`} />;
               }
               if (runModelId == null) {
@@ -1563,7 +1567,7 @@ const ProjectDetail = () => {
                 {/* 정답 대조는 카드(실행) 수 — 벤치마크 런 수가 아니다. */}
                 <Badge
                   label={String(
-                    project.eval_type === 'reference'
+                    BENCHMARK_RESULT_EVAL_TYPES.includes(project.eval_type)
                       ? runGroups.length
                       : runs.length,
                   )}
@@ -1575,7 +1579,7 @@ const ProjectDetail = () => {
               {/* 정답 대조·LLM 심사는 펼친 표 — 헤더를 누른 순서가 정렬 레벨이고, 범주형이
                   선두면 그룹 경계선이 그어진다. 앞 두 열의 뜻만 유형별로 갈린다(leadColumns).
                   expert 는 한 런에 그 축이 없어(사람이 샘플을 훑는 세션) 카드 목록을 유지한다. */}
-              {project.eval_type === 'reference' ? (
+              {BENCHMARK_RESULT_EVAL_TYPES.includes(project.eval_type) ? (
                 renderRunGroups()
               ) : RUN_TABLE_TYPES.includes(project.eval_type) ? (
                 <MultiSortTable
@@ -1733,17 +1737,22 @@ const ProjectDetail = () => {
 
         {/* 실행 설정 — 단일 화면 모달. 목록에서 벗어나지 않고 설정→실행이 끝난다.
             두 유형은 같은 계약(handleBenchmarkRun)으로 나가고 화면 문법도 같다 —
-            갈리는 것은 좌측에서 고르는 것(벤치마크 / 심사 세트)과 심판 절의 유무뿐이다. */}
-        {showRunConfig && project.eval_type === 'reference' && (
-          <BenchmarkRunConfig
-            workspaceId={workspaceId}
-            modelOptions={modelOptions}
-            datasetOptions={datasetOptions}
-            running={starting}
-            onRun={handleBenchmarkRun}
-            onClose={() => setShowRunConfig(false)}
-          />
-        )}
+            갈리는 것은 좌측에서 고르는 것(벤치마크 / 심사 세트)과 심판 절의 유무뿐이다.
+            의도/슬롯 평가는 정답 대조 화면을 그 유형의 후보(MixATIS)로 연다. */}
+        {showRunConfig &&
+          BENCHMARK_RESULT_EVAL_TYPES.includes(project.eval_type) && (
+            <BenchmarkRunConfig
+              // 선택 초기값을 프로젝트 유형에서 한 번만 정하므로 프로젝트가 바뀌면 새로 띄운다.
+              key={project.id}
+              workspaceId={workspaceId}
+              modelOptions={modelOptions}
+              datasetOptions={datasetOptions}
+              running={starting}
+              onRun={handleBenchmarkRun}
+              onClose={() => setShowRunConfig(false)}
+              evalType={project.eval_type}
+            />
+          )}
         {showRunConfig && project.eval_type === 'judge' && (
           <JudgeRunConfig
             workspaceId={workspaceId}

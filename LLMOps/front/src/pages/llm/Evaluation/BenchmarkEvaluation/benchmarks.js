@@ -307,7 +307,9 @@ export const BENCHMARKS = [
     descKey: 'evaluation.bench.benchDesc.mixatis',
     category: 'reasoning',
     group: 'custom',
-    evalType: 'reference',
+    // 정답 대조로 채점하지만 '의도/슬롯 평가' 라는 별도 유형이다 — 형식 학습이 전제이고
+    // 지표·척도가 다른 정답 대조 벤치마크와 나란히 놓이지 않는다(BE BENCHMARK_EVAL_TYPE).
+    evalType: 'intent',
     recommended: 'joint_acc',
     metrics: ['joint_acc', 'intent_acc', 'intent_f1', 'slot_f1'],
     real: true,
@@ -338,6 +340,16 @@ export const REFERENCE_BENCHMARKS = BENCHMARKS.filter(
 export const JUDGE_BENCHMARKS = BENCHMARKS.filter(
   (b) => b.evalType === 'judge',
 );
+
+// 의도/슬롯 평가 화면의 후보 — 정답 대조와 같은 실행 화면(BenchmarkRunConfig)을 이 목록으로 연다.
+export const INTENT_BENCHMARKS = BENCHMARKS.filter(
+  (b) => b.evalType === 'intent',
+);
+
+// 정답 대조와 **같은 결과 동선**(실행 카드 → 실행 요약 → 독립 결과 페이지)을 쓰는 프로젝트 유형.
+// 의도/슬롯 평가는 정답 대조에서 떨어져 나온 유형이라 화면은 그대로 쓴다. 평균·레이더처럼
+// 정답 대조 벤치마크끼리만 묶는 계산은 이 목록이 아니라 evalType === 'reference' 로 거른다.
+export const BENCHMARK_RESULT_EVAL_TYPES = ['reference', 'intent'];
 
 // lm-eval 채점기로 가는 벤치마크 — 로컬 가중치(GPU 1장)·체크포인트 필수·문항 상한 옵션.
 // BE constants.LOCAL_WEIGHTS_MANIFEST_KEYS 로 라우팅되는 집합과 같아야 한다(sample_limit 을
@@ -372,11 +384,9 @@ export const BENCHMARK_LABEL = Object.fromEntries(
 // 카테고리 필터는 **정답 대조 그리드에만** 걸리므로 세는 대상도 그 목록으로 좁힌다 —
 // 전 벤치마크를 세면 그리드에 없는 심사 벤치마크(LogicKor)까지 잡혀 '전체 (11)' 인데
 // 10개만 보이고, LogicKor 도 category:'reasoning' 이라 '추론 (3)' 인데 2개만 보이는
-// 어긋남이 생긴다.
-export const categoryCount = (categoryId) =>
-  REFERENCE_BENCHMARKS.filter(
-    (b) => categoryId === 'all' || b.category === categoryId,
-  ).length;
+// 어긋남이 생긴다. 실행 화면이 다른 후보(의도/슬롯 평가)로 열리면 그 목록을 넘긴다.
+export const categoryCount = (categoryId, list = REFERENCE_BENCHMARKS) =>
+  list.filter((b) => categoryId === 'all' || b.category === categoryId).length;
 
 // 벤치마크의 기본(권장) 메트릭. metrics 후보에 recommended 가 없으면 첫 후보로 폴백.
 export const defaultMetricFor = (benchmarkId) => {
