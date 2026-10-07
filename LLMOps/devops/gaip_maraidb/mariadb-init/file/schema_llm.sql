@@ -285,6 +285,7 @@ CREATE TABLE IF NOT EXISTS `quantize_lineage` (
 --   라이브 DB 는 apps/llm_evaluation/migrations/002_eval_project_model_nullable.sql 로 적용.
 -- 2026-08-27: eval_type 3분할 — 'reference'(정답 대조) | 'judge'(LLM 심사) | 'expert'
 --   (전문가). 구 'benchmark' 를 채점 주체 기준으로 쪼갠 것이며 컬럼 타입은 그대로다.
+-- 2026-10: 'intent'(의도/슬롯 평가 — MixATIS) 추가. 컬럼 타입 그대로, 기존 행은 그대로.
 --   ⚠️ 데이터 마이그레이션 없음 — 기존 런/프로젝트는 전부 지우고 새로 뽑는다.
 --   ⚠️ model_id 의 FK 는 **ON DELETE SET NULL** 이다(2026-08-27 리뷰 HIGH). 잠금이
 --   박혀 있던 시절에는 프로젝트=한 모델이라 CASCADE 가 맞았지만, 이제 한 프로젝트에

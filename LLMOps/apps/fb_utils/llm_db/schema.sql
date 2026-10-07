@@ -114,6 +114,7 @@ CREATE TABLE IF NOT EXISTS `quantize_lineage` (
 --   (전문가). 구 'benchmark' 안에 채점 주체가 다른 둘(정답이 데이터에 있는 결정론적 채점
 --   과 심판 LLM 채점)이 섞여 있어 결과 화면에서 구분이 불가능했다. 정본은 llm_evaluation
 --   constants.EVAL_TYPES 이고, 컬럼은 VARCHAR(20) 그대로라 스키마 변경이 없다.
+-- 2026-10: 'intent'(의도/슬롯 평가 — MixATIS) 추가. 역시 컬럼 변경 없음, 기존 행은 그대로.
 --   ⚠️ 데이터 마이그레이션은 만들지 않았다 — 기존 런/프로젝트는 전부 지우고 새로 뽑는다.
 --   ⚠️ model_id 의 FK 는 **ON DELETE SET NULL** 이다(2026-08-27 리뷰 HIGH). 잠금이
 --   박혀 있던 시절에는 프로젝트=한 모델이라 CASCADE 가 맞았지만, 이제 한 프로젝트에

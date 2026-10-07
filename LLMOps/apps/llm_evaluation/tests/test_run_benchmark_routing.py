@@ -33,10 +33,10 @@ class _FakeClient:
 @pytest.fixture
 def wired(monkeypatch):
     _FakeClient.calls = []
-    seen = {"deploy_ckpt": [], "remote_gen": []}
+    seen = {"deploy_ckpt": [], "remote_gen": [], "eval_type": "reference"}
 
     async def load_project(project_id, types):
-        return {"eval_type": "reference"}
+        return {"eval_type": seen["eval_type"]}
 
     async def run_model(project, model_id):
         return {"name": "llama"}, 2
@@ -68,6 +68,13 @@ def wired(monkeypatch):
     return seen
 
 
+@pytest.fixture
+def intent(wired):
+    # MixATIS 는 의도/슬롯 평가 프로젝트에서만 돈다(constants.BENCHMARK_EVAL_TYPE).
+    wired["eval_type"] = "intent"
+    return wired
+
+
 def _run(benchmarks, **kw):
     return asyncio.run(S.run_benchmark(project_id=1, model_id=7, dataset_ids=[3],
                                        benchmarks=benchmarks, inference_playground_id=11, **kw))
@@ -96,13 +103,13 @@ def test_humaneval_cannot_share_a_run(wired):
     assert _FakeClient.calls == []
 
 
-def test_sample_limit_rejected_for_other_scorers(wired):
+def test_sample_limit_rejected_for_other_scorers(wired, intent):
     with pytest.raises(Exception, match="sample_limit"):
         _run(["mixatis"], run_options={"sample_limit": 5})
     assert _FakeClient.calls == []
 
 
-def test_format_train_defaults_to_full_recipe(wired):
+def test_format_train_defaults_to_full_recipe(wired, intent):
     # 기본 = ETRI full 과 같은 학습량·정밀도(train 전체 × 3 에폭 × 4bit) — 빠른 점검이 아니다.
     res = _run(["mixatis"], format_train=True)
     params = _FakeClient.calls[-1]["params"]
@@ -112,14 +119,14 @@ def test_format_train_defaults_to_full_recipe(wired):
     assert res["format_train_recipe"] == "full"
 
 
-def test_format_train_quick_recipe(wired):
+def test_format_train_quick_recipe(wired, intent):
     res = _run(["mixatis"], format_train=True, run_options={"format_train_recipe": "quick"})
     params = _FakeClient.calls[-1]["params"]
     assert (params["train_examples"], params["train_epochs"], params["use_4bit"]) == (3000, 1.0, False)
     assert res["format_train_recipe"] == "quick"
 
 
-def test_format_train_recipe_rejected_without_format_train(wired):
+def test_format_train_recipe_rejected_without_format_train(wired, intent):
     # 학습을 안 하는 런에 레시피가 실려 오면 "그 레시피로 쟀다"고 믿는 점수가 남는다.
     with pytest.raises(Exception, match="format_train_recipe"):
         _run(["mixatis"], run_options={"format_train_recipe": "full"})
@@ -135,13 +142,50 @@ def test_run_body_rejects_unknown_format_train_recipe():
                            format_train_recipe="huge")
 
 
-def test_delegated_scorers_still_delegate(wired):
+def test_delegated_scorers_still_delegate(wired, intent):
     res = _run(["mixatis"])
     call = _FakeClient.calls[-1]
     assert call["params"]["generate_base_url"] == "http://shim/v1"
     assert "checkpoint_name" not in call["params"]
     assert call["gpu_count"] == 0                           # 완전 위임
     assert res["used_deployment"] is True and wired["deploy_ckpt"] == []
+
+
+# ── 평가 유형 경계 — MixATIS 는 의도/슬롯 평가(intent) 프로젝트 전용 ─────────────────────
+
+@pytest.mark.parametrize("project_type", ["reference", "judge"])
+def test_mixatis_rejected_outside_intent_project(wired, project_type):
+    # 분리 전에 만든 정답 대조 프로젝트에서 다시 돌리는 경우 — 어디서 돌려야 하는지까지 안내한다.
+    wired["eval_type"] = project_type
+    with pytest.raises(Exception, match=r"mixatis=intent .*'의도/슬롯 평가' 프로젝트를 만들어"):
+        _run(["mixatis"], format_train=True)
+    assert _FakeClient.calls == []
+
+
+def test_every_benchmark_project_type_has_a_catalog():
+    # 벤치마크 런을 받는 유형 = 표에서 파생(expert 제외) — 유형마다 '지정 가능' 목록이 있어야 한다.
+    assert set(S.BENCHMARK_EVAL_TYPES) == {"reference", "judge", "intent"}
+    assert set(S.BENCHMARK_IDS_BY_EVAL_TYPE) == set(S.EVAL_TYPES) - {"expert"}
+    assert set(S.EVAL_TYPE_LABELS) == set(S.EVAL_TYPES)
+
+
+def test_reference_benchmark_rejected_in_intent_project(wired, intent):
+    with pytest.raises(Exception, match=r"arc=reference .*지정 가능: mixatis"):
+        _run(["arc"])
+    assert _FakeClient.calls == []
+
+
+def test_intent_project_must_name_its_benchmark(wired, intent):
+    # 기본 집합은 정답 대조 벤치마크라 생략을 받으면 고른 적 없는 축이 이력에 남는다.
+    with pytest.raises(Exception, match="지정 가능: mixatis"):
+        _run([])
+    assert _FakeClient.calls == []
+
+
+def test_project_body_accepts_intent_type():
+    from evaluation import dto as D
+    body = D.EvalProjectCreateBody(name="p", workspace_id=2, eval_type="intent")
+    assert body.eval_type == "intent"
 
 
 # ── 데이터셋 선택화 — lm-eval 표준 벤치마크는 이미지에 구운 문항만 쓴다 ─────────────────
@@ -165,8 +209,9 @@ def test_lmeval_run_without_dataset_mounts_nothing(wired, monkeypatch):
     assert res["dataset_ids"] == [] and res["datasets"] == []
 
 
-@pytest.mark.parametrize("benchmark", ["custom", "mixatis"])
-def test_dataset_still_required_where_the_scorer_reads_it(wired, benchmark):
+@pytest.mark.parametrize("benchmark, project_type", [("custom", "reference"), ("mixatis", "intent")])
+def test_dataset_still_required_where_the_scorer_reads_it(wired, benchmark, project_type):
+    wired["eval_type"] = project_type
     with pytest.raises(Exception, match="데이터셋"):
         _run_no_dataset([benchmark])
     assert _FakeClient.calls == []
@@ -461,6 +506,13 @@ def test_batch_with_gpu_count_packs_benchmarks_into_that_many_runs(wired, gpu, m
     # 런마다 담은 벤치마크가 기록에 남는다 — metric_set 은 255자에서 잘려 목록의 정본이 못 된다.
     assert recorded[0]["job_benchmarks"] == {r["job_id"]: r["benchmarks"] for r in res["runs"]}
     assert res["launched"] == 2 and res["failed"] == 0
+
+
+def test_batch_type_gate_says_what_the_project_takes(wired, intent, gpu):
+    # 묶음 경로도 단건과 같은 거절 문구(지정 가능 목록 + 어느 유형에서 돌릴지)를 낸다.
+    with pytest.raises(Exception, match=r"arc=reference .*지정 가능: mixatis.*'정답 대조' 프로젝트"):
+        _batch(["arc"])
+    assert _FakeClient.calls == []
 
 
 def test_batch_gpu_check_counts_runs_not_benchmarks(wired, gpu):

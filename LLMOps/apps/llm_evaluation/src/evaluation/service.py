@@ -35,11 +35,11 @@ from evaluation.constants import (
     BENCHMARK_EVAL_TYPE,
     BENCHMARK_EVAL_TYPES,
     BENCHMARK_IDS,
+    BENCHMARK_IDS_BY_EVAL_TYPE,
     BENCHMARK_RECOMMENDED_METRIC,
+    EVAL_TYPE_LABELS,
     DATASET_FREE_BENCHMARK_IDS,
     DEFAULT_BENCHMARK_IDS,
-    JUDGE_BENCHMARK_IDS,
-    REFERENCE_BENCHMARK_IDS,
     REAL_BENCHMARK_MANIFEST_KEY,
     DEFAULT_FORMAT_TRAIN_RECIPE,
     FORMAT_TRAIN_MANIFEST_KEYS,
@@ -172,7 +172,7 @@ async def run_benchmark(project_id: int, model_id: int, dataset_ids: List[int],
         raise Exception(
             "벤치마크 출력은 실행 중인 배포에서 가져옵니다 — 평가할 모델을 서빙하는 "
             "배포를 먼저 시작한 뒤 지정하세요(inference_playground_id)")
-    # 벤치마크 런을 시작할 수 있는 유형은 둘(reference/judge)이다. 어느 쪽인지는 아래에서
+    # 벤치마크 런을 시작할 수 있는 유형은 셋(reference/judge/intent)이다. 어느 쪽인지는 아래에서
     # 벤치마크 목록과 대조해 좁힌다 — 여기서는 expert 프로젝트의 진입만 막는다.
     project = await _load_project_for_run(project_id, BENCHMARK_EVAL_TYPES)
     project_type = str(project.get("eval_type") or "")
@@ -228,7 +228,7 @@ async def run_benchmark(project_id: int, model_id: int, dataset_ids: List[int],
             raise Exception(
                 f"{project_type} 프로젝트는 채점할 벤치마크를 명시해야 합니다 — "
                 f"기본 집합은 정답 대조(reference) 벤치마크뿐입니다"
-                f"(지정 가능: {', '.join(JUDGE_BENCHMARK_IDS)})")
+                f"(지정 가능: {', '.join(BENCHMARK_IDS_BY_EVAL_TYPE.get(project_type, ()))})")
         pairs = [{"benchmark": b, "metric": BENCHMARK_RECOMMENDED_METRIC[b]}
                  for b in DEFAULT_BENCHMARK_IDS]
     # 상한은 **자르지 않고 거절한다**. 순서가 중요하다 — 예전에는 여기서 조용히 잘랐고
@@ -246,18 +246,12 @@ async def run_benchmark(project_id: int, model_id: int, dataset_ids: List[int],
 
     # 유형 게이트(벤치마크 축) — 채점기 혼재 거부(아래)와 같은 취지지만 막는 것이 다르다.
     # 저쪽은 "한 런에 두 컨테이너를 못 쓴다"는 실행 제약이고, 이쪽은 "이 프로젝트가 무엇을
-    # 재는 곳인가"라는 의미의 경계다 — reference 와 judge 는 같은 컨테이너로 갈 수도 있지만
-    # (둘 다 real 채점기) 점수의 의미가 다르므로 한 프로젝트에 섞이면 안 된다.
+    # 재는 곳인가"라는 의미의 경계다 — reference·judge·intent 는 같은 컨테이너로 갈 수도 있지만
+    # (모두 real 채점기) 점수의 의미가 다르므로 한 프로젝트에 섞이면 안 된다.
     wrong = [p["benchmark"] for p in pairs
              if BENCHMARK_EVAL_TYPE.get(p["benchmark"]) != project_type]
     if wrong:
-        allowed = (JUDGE_BENCHMARK_IDS if project_type == "judge"
-                   else REFERENCE_BENCHMARK_IDS)
-        detail = ", ".join(
-            f"{b}={BENCHMARK_EVAL_TYPE.get(b) or 'unknown'}" for b in wrong)
-        raise Exception(
-            f"{project_type} 프로젝트에는 {project_type} 유형 벤치마크만 채점할 수 "
-            f"있습니다 — {detail} (지정 가능: {', '.join(allowed)})")
+        raise _wrong_type_error(project_type, wrong)
 
     # 데이터셋 없이 가도 되는 건 문항이 이미지에 있는 벤치마크뿐이다. 데이터셋을 읽는 채점기를
     # 데이터셋 없이 띄우면 GPU 를 잡은 뒤에야 죽는다(custom) — 런치 전에 사유와 함께 막는다.
@@ -674,9 +668,7 @@ async def run_benchmark_batch(project_id: int, model_id: int, benchmarks: List[s
     project_type = str(project.get("eval_type") or "")
     wrong = [b for b in ids if BENCHMARK_EVAL_TYPE.get(b) != project_type]
     if wrong:
-        raise Exception(
-            f"{project_type} 프로젝트에는 {project_type} 유형 벤치마크만 채점할 수 "
-            f"있습니다 — {', '.join(wrong)}")
+        raise _wrong_type_error(project_type, wrong)
     model_id = int(model_id)
     _, workspace_id = await _resolve_run_model(project, model_id)
 
@@ -1404,13 +1396,32 @@ def _derive_project_status(statuses) -> str:
     return PROJECT_STATUS_COMPLETED
 
 
+def _wrong_type_error(project_type: str, wrong: List[str]) -> Exception:
+    """벤치마크 유형 게이트의 거절 — 단건(run_benchmark)·묶음(run_benchmark_batch) 공용.
+
+    무엇이 틀렸고(벤치마크=유형) 이 프로젝트에서 무엇을 고를 수 있는지에 더해, 그 벤치마크는
+    **어느 유형의 프로젝트에서** 돌려야 하는지까지 말한다. 의도/슬롯 평가를 정답 대조에서 떼어 낸
+    뒤(2026-10) 옛 정답 대조 프로젝트에서 MixATIS 를 다시 돌리려는 경우가 대표적이다.
+    """
+    detail = ", ".join(f"{b}={BENCHMARK_EVAL_TYPE.get(b) or 'unknown'}" for b in wrong)
+    allowed = ", ".join(BENCHMARK_IDS_BY_EVAL_TYPE.get(project_type, ())) or "-"
+    homes = dict.fromkeys(BENCHMARK_EVAL_TYPE[b] for b in wrong if b in BENCHMARK_EVAL_TYPE)
+    hint = "".join(
+        f" · {', '.join(b for b in wrong if BENCHMARK_EVAL_TYPE.get(b) == home)} 는 "
+        f"'{EVAL_TYPE_LABELS.get(home, home)}' 프로젝트를 만들어 실행하세요"
+        for home in homes)
+    return Exception(
+        f"{project_type} 프로젝트에는 {project_type} 유형 벤치마크만 채점할 수 "
+        f"있습니다 — {detail} (지정 가능: {allowed}){hint}")
+
+
 async def _load_project_for_run(project_id: int, eval_type=None):
     """run-start 공통 — 프로젝트 로드 + 유형 게이트. eval_type 지정 시 프로젝트 유형과 다른
     run 생성 거부(expert 프로젝트에 벤치마크 run 등 교차유형 차단). eval_type=None 이면
     게이트 생략(추론 러너 generate 는 type-agnostic — 유형 무관 output 생성).
 
-    eval_type 은 단일 유형 문자열 또는 **허용 유형 집합**이다. 벤치마크 런은 reference 와
-    judge 가 한 함수를 공유하므로(run_benchmark) 여기서는 둘 다 통과시키고, 어느 쪽인지는
+    eval_type 은 단일 유형 문자열 또는 **허용 유형 집합**이다. 벤치마크 런은 reference·judge·
+    intent 가 한 함수를 공유하므로(run_benchmark) 여기서는 셋 다 통과시키고, 어느 쪽인지는
     호출부가 고른 벤치마크와 대조해 좁힌다 — 이 함수는 벤치마크 목록을 모른다.
 
     ⚠️ 2026-08-24 부터 **데이터셋을 프로젝트에서 꺼내지 않는다** — 모델·데이터셋은 런이

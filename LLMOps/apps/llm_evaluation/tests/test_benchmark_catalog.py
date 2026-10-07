@@ -100,6 +100,14 @@ def test_fe_catalog_matches_be():
         assert rec == C.BENCHMARK_RECOMMENDED_METRIC[bid], bid
 
 
+def test_fe_eval_type_matches_be():
+    # 벤치마크의 평가 유형 = 어느 프로젝트의 실행 화면에 뜨나(FE) = 어느 프로젝트에서 서버가 받나(BE).
+    # 갈리면 화면에서 고를 수 있는데 실행하면 유형 게이트에 거절된다.
+    fe = {bid: re.search(r"^\s{4}evalType: '([a-z]+)'", chunk, re.M).group(1)
+          for bid, chunk in _fe_entries().items()}
+    assert fe == C.BENCHMARK_EVAL_TYPE
+
+
 def test_fe_metric_catalog_covers_be_metrics():
     text = (FE_DIR / "benchmarkMetrics.js").read_text(encoding="utf-8")
     fe_ids = set(re.findall(r"^\s{4}id: '([a-z0-9_]+)'", text, re.M))

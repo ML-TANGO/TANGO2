@@ -92,8 +92,8 @@ BENCHMARK_IDS = LMEVAL_BENCHMARK_IDS + tuple(REAL_BENCHMARK_MANIFEST_KEY)
 
 # 벤치마크 → 평가 유형(EVAL_TYPES). 위의 mock/real 과는 **다른 축**이다: mock/real 은
 # "어느 채점 컨테이너로 보내는가"(배선), 이건 "점수를 누가 매기는가"(사용자에게 보이는 축).
-# 두 축이 교차한다 — mixatis 는 전용 컨테이너(real)로 가지만 정답이 데이터에 있어
-# reference 고, logickor 는 같은 real 이면서 심판 LLM 이 점수를 낸다. 하나로 합치면 새
+# 두 축이 교차한다 — mixatis 는 전용 컨테이너(real)로 가고 정답과 대조하지만 형식 학습이
+# 전제라 intent 로 따로 두고, logickor 는 같은 real 이면서 심판 LLM 이 점수를 낸다. 하나로 합치면 새
 # 채점기가 붙을 때마다 사용자에게 보이는 유형이 흔들린다.
 # ⚠️ FE benchmarks.js 의 벤치마크 목록과 같은 집합이어야 한다.
 # ⚠️ MT-Bench 는 채점기가 없어 여기에도, FE 에도 없다(있으면 고를 수는 있는데 못 돌린다).
@@ -101,7 +101,9 @@ BENCHMARK_EVAL_TYPE = {
     "arc": "reference", "kobest": "reference", "mmlu": "reference",
     "hellaswag": "reference", "winogrande": "reference", "gsm8k": "reference",
     "truthfulqa": "reference", "boolq": "reference", "humaneval": "reference",
-    "mixatis": "reference",
+    # 정답 대조로 채점하지만 별도 유형이다 — 출력 형식 학습이 먼저 필요하고(수 시간 GPU),
+    # 점수 척도(0~1)·의도/슬롯 지표가 다른 정답 대조 벤치마크와 나란히 놓이지 않는다.
+    "mixatis": "intent",
     "arc_easy": "reference", "piqa": "reference", "openbookqa": "reference",
     "kmmlu": "reference", "kmmlu_direct": "reference", "haerae": "reference",
     "squadv2": "reference", "truthfulqa_gen": "reference", "drop": "reference",
@@ -119,8 +121,16 @@ REFERENCE_BENCHMARK_IDS = tuple(
     b for b in BENCHMARK_IDS if BENCHMARK_EVAL_TYPE[b] == "reference")
 JUDGE_BENCHMARK_IDS = tuple(
     b for b in BENCHMARK_IDS if BENCHMARK_EVAL_TYPE[b] == "judge")
+INTENT_BENCHMARK_IDS = tuple(
+    b for b in BENCHMARK_IDS if BENCHMARK_EVAL_TYPE[b] == "intent")
+# 유형 → 그 유형 프로젝트에서 채점할 수 있는 벤치마크(거절 메시지의 '지정 가능' 목록).
+BENCHMARK_IDS_BY_EVAL_TYPE = {
+    "reference": REFERENCE_BENCHMARK_IDS,
+    "judge": JUDGE_BENCHMARK_IDS,
+    "intent": INTENT_BENCHMARK_IDS,
+}
 
-# 벤치마크 런(run_benchmark)을 시작할 수 있는 프로젝트 유형. reference 와 judge 는 런치
+# 벤치마크 런(run_benchmark)을 시작할 수 있는 프로젝트 유형. reference·judge·intent 는 런치
 # 경로가 같고(같은 외부 컨테이너) 다른 것은 채점 주체뿐이라 한 함수를 공유한다 — 그래서
 # 프로젝트 유형만으로는 무엇을 채점하는지가 정해지지 않고, 벤치마크 목록과 대조해야 한다.
 # 표의 값에서 파생해 유형을 늘릴 때 두 곳을 고치지 않게 한다.
@@ -131,7 +141,7 @@ BENCHMARK_EVAL_TYPES = tuple(dict.fromkeys(BENCHMARK_EVAL_TYPE.values()))
 # 서비스 직접 호출 경로에서만 쓰인다.
 # ⚠️ humaneval 을 넣으면 안 된다 — 다른 채점기(BENCHMARK_CODE)라 기본 집합 자체가 채점기
 #    혼재 거부에 걸린다. custom 도 뺀다(데이터셋에 정답이 없으면 실패한다).
-# ⚠️ 전부 reference 유형이다. judge 프로젝트가 벤치마크를 생략하면 기본값을 쓸 수 없고,
+# ⚠️ 전부 reference 유형이다. judge·intent 프로젝트가 벤치마크를 생략하면 기본값을 쓸 수 없고,
 #    service 가 명시를 요구하며 거절한다 — 조용히 다른 축을 채점해 버리지 않도록.
 DEFAULT_BENCHMARK_IDS = ("arc", "kobest", "mmlu", "hellaswag", "winogrande",
                          "gsm8k", "truthfulqa", "boolq")
@@ -412,9 +422,17 @@ MAX_COMPARE_RUNS = 20
 #   reference = 정답 대조 평가(구 benchmark) — REFERENCE_BENCHMARK_IDS
 #   judge     = LLM 심사(표준 심사 벤치마크 전용) — JUDGE_BENCHMARK_IDS
 #   expert    = 전문가 평가(사람이 채점, 변경 없음)
+#   intent    = 의도/슬롯 평가(MixATIS — 형식 학습 후 정답 대조, 2026-10 정답 대조에서 분리)
+#               — INTENT_BENCHMARK_IDS. 분리 전 reference 프로젝트에 남은 MixATIS 런은 그대로 둔다.
 # ⚠️ 옛 값 'benchmark' 로 오는 요청은 dto 가 안내와 함께 422 로 거절한다(pydantic 기본
 #    extra=ignore 로 조용히 무시되면 사용자가 고른 적 없는 유형의 프로젝트가 생긴다).
-EVAL_TYPES = ("reference", "judge", "expert")
+EVAL_TYPES = ("reference", "judge", "expert", "intent")
+# 거절 메시지에 쓰는 유형 이름 — FE i18n(evaluation.project.type.*)의 한국어 라벨과 같다.
+# 오류 토스트는 서버 문구를 그대로 띄우므로 사용자가 고를 수 있는 이름으로 안내해야 한다.
+EVAL_TYPE_LABELS = {
+    "reference": "정답 대조", "judge": "LLM 심사", "expert": "전문가 검수",
+    "intent": "의도/슬롯 평가",
+}
 
 # 프로젝트 설명 상한 — eval_project.description 의 VARCHAR(5000) 과 **같은 값**이어야
 # 한다. 상수로 뽑는 이유는 dto(경계 422)와 service(방어 검증) 두 곳이 같은 숫자를 봐야
