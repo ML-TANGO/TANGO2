@@ -1246,6 +1246,30 @@ vllm serve ~/llava_hf_merged \
 - `llama.cpp` 에서 사용하는 GGUF 포맷으로 변환합니다.
 - `llama.cpp` 는 $HOME 경로에 미리 설치되어 있다고 가정합니다.
 - 비전 프로젝터의 변환 결과(`mmproj.gguf`)는 이 스크립트가 직접 생성하고, LLM 본체(`llm.gguf`)는 llama.cpp 의 `convert_hf_to_gguf.py` 로 별도 변환합니다.
+- `mmproj.gguf` 는 학습 경로와 같은 계산이 되도록 다음과 같이 기록됩니다.
+  - CLIP 블록은 `vision_feature_layer=-2` 에 해당하는 23개만 담습니다.
+  - `post_layernorm` 은 담지 않습니다. 학습은 `hidden_states[-2]` 를 LayerNorm 없이 사용합니다.
+  - `clip.use_gelu` 는 CLIP 의 `hidden_act` 를 따릅니다. OpenAI CLIP 은 `quick_gelu` 이므로 `false` 로 기록됩니다.
+
+**Step 0 — llama.cpp 소스 패치 (CLIP 계열 필수)**
+
+- llama.cpp 의 LLaVA 그래프(`tools/mtmd/models/llava.cpp`)는 CLS 토큰을 패치 뒤에 붙인 다음 위치 임베딩 0..576 을 순서대로 더합니다.
+- HF CLIP 은 CLS 를 맨 앞(위치 0)에 둡니다. 따라서 패치 없이 실행하면 패치마다 위치 임베딩이 한 칸씩 어긋나고, 프로젝터 입력의 마지막 행에 CLS 가 섞입니다.
+- 이 차이는 GGUF 변환으로 보정할 수 없으므로 빌드 전에 한 줄을 고칩니다. 확인한 커밋은 `c479922ac` (2026-10-06) 입니다.
+
+```bash
+cd ~/llama.cpp
+sed -i 's/inp = ggml_concat(ctx0, inp, model.class_embedding, 1);/inp = ggml_concat(ctx0, model.class_embedding, inp, 1);/' \
+  tools/mtmd/models/llava.cpp
+git diff --stat   # tools/mtmd/models/llava.cpp | 2 +-
+```
+
+- 검증 결과(검증셋 앞 20건, greedy, PyTorch BF16 기준, BF16 GGUF)는 다음과 같습니다.
+
+| 조건 | 출력 완전 일치 | 문자 유사도 평균 / 최소 |
+|---|---|---|
+| 패치 전 | 3/20 | 0.935 / 0.817 |
+| 패치 후 | 7/20 | 0.982 / 0.913 |
 
 **Step 1 — mmproj.gguf + merged_llm 생성**
 
@@ -1282,11 +1306,28 @@ python ~/llama.cpp/convert_hf_to_gguf.py \
 ```
 gguf_output/
 ├── merged_llm/          # 중간 산출물 — LoRA 병합된 LLM (HF 포맷)
-├── mmproj.gguf          # CLIP + mlp2x_gelu projector (~1.3 GB)
-└── llm.gguf             # LLM 본체 (bf16 ~15 GB, 또는 양자화)
+├── mmproj.gguf          # CLIP + mlp2x_gelu projector (~1.25 GB)
+└── llm.gguf             # LLM 본체 (bf16 ~16 GB, q8_0 ~8.7 GB)
 ```
 
+- 양자화는 `--outtype q8_0` 으로 바로 만들 수 있습니다.
+
 **Step 3 — llama-mtmd-cli 실행**
+
+- 학습은 `CLIPImageProcessor` 로 짧은 변을 336 으로 줄인 뒤 가운데 336×336 을 잘라 씁니다.
+- llama.cpp 는 비율을 유지한 채 회색 여백을 채워 336×336 으로 만듭니다. 1920×1080 영상에서는 두 방식이 보는 영역이 다릅니다.
+- llama.cpp 는 336×336 입력을 리사이즈 없이 그대로 사용하므로, 아래처럼 미리 잘라 둔 이미지를 넘기면 학습과 같은 픽셀이 들어갑니다.
+
+```python
+import numpy as np
+from PIL import Image
+from transformers import CLIPImageProcessor
+
+proc = CLIPImageProcessor.from_pretrained("openai/clip-vit-large-patch14-336")
+arr = proc(images=Image.open("frame_1.png").convert("RGB"),
+           do_rescale=False, do_normalize=False, return_tensors="np").pixel_values[0]
+Image.fromarray(np.round(arr).astype(np.uint8).transpose(1, 2, 0)).save("frame_1_336.png")
+```
 
 - VRAM 여유가 충분한 경우에는 CLIP 을 포함한 전체 모델을 GPU에 올려서 실행합니다.
 - `-c` 인자를 전달하지 않으면 기본값 115k 로 동작합니다.
@@ -1319,5 +1360,52 @@ gguf_output/
 |---------------------------------|-------------------------|
 | `proj.0.weight` / `proj.0.bias` | `mm.0.weight` / `.bias` |
 | `proj.2.weight` / `proj.2.bias` | `mm.2.weight` / `.bias` |
+
+**llama-server 로 서빙할 때**
+
+- `/completion` 의 `prompt` 에 `{"prompt_string": ..., "multimodal_data": [base64 이미지]}` 를 넘깁니다.
+- 프롬프트 안의 `<image>` 는 서버의 미디어 마커로 바꿉니다. 마커는 서버를 띄울 때마다 무작위로 정해지므로 `/props` 의 `media_marker` 값을 읽어 씁니다.
+- 학습과 같은 프롬프트는 체크포인트 토크나이저의 `apply_chat_template(..., add_generation_prompt=True)` 로 만듭니다.
+
+### 13-3. Jetson AGX Orin 실행
+
+- 확인 환경은 Jetson AGX Orin 32GB, L4T R36.5.2 (JetPack 6.2), CUDA 12.6, 전원 모드 MAXN 입니다.
+- 기본 JetPack 이미지에는 `nvcc` 가 없어 llama.cpp 가 CPU 전용으로 빌드됩니다. `cuda-nvcc-12-6` 을 설치한 뒤 CUDA 로 빌드합니다.
+- `sudo` 를 쓸 수 없으면 apt 패키지를 내려받아 사용자 디렉토리에 풀어 쓸 수 있습니다.
+
+```bash
+# (sudo 가능) sudo apt install cuda-nvcc-12-6 libcublas-dev-12-6
+# (sudo 불가) 사용자 디렉토리에 풀기
+mkdir -p ~/cuda-local/debs && cd ~/cuda-local/debs
+apt-get download cuda-nvcc-12-6 cuda-crt-12-6 cuda-nvvm-12-6 libcublas-dev-12-6 \
+                 cuda-cccl-12-6 cuda-driver-dev-12-6 cuda-cudart-dev-12-6
+for d in *.deb; do dpkg -x $d ~/cuda-local/root; done
+C=~/cuda-local/root/usr/local/cuda-12.6
+for f in /usr/local/cuda-12.6/targets/aarch64-linux/lib/*; do
+  [ -e $C/targets/aarch64-linux/lib/$(basename $f) ] || ln -s $f $C/targets/aarch64-linux/lib/
+done
+
+# Step 0 의 패치를 적용한 llama.cpp 에서
+PATH=$C/bin:$PATH cmake -B build-cuda -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=87 \
+  -DCMAKE_CUDA_COMPILER=$C/bin/nvcc -DCUDAToolkit_ROOT=$C -DCMAKE_BUILD_TYPE=Release -DLLAMA_CURL=OFF
+cmake --build build-cuda -j6 --target llama-server llama-mtmd-cli
+./build-cuda/bin/llama-server --list-devices   # CUDA0: Orin 이 보여야 함
+```
+
+```bash
+./build-cuda/bin/llama-server \
+  -m ~/models/eva_sds_ko_9k/llm-q8_0.gguf --mmproj ~/models/eva_sds_ko_9k/mmproj.gguf \
+  -c 4096 -ngl 99 -np 1 --host 127.0.0.1 --port 8080
+```
+
+- 실측값(`clip_qwen3_proj_lora_marine_sds_ko_9k`, Q8_0, 검증셋 앞 20건 순차 요청)은 다음과 같습니다.
+
+| 항목 | 값 |
+|---|---|
+| 프롬프트 처리 (이미지 576 토큰 포함 약 800~900 토큰) | 평균 1.08 s (0.92~1.84 s) |
+| 생성 속도 | 평균 18.70 tok/s (18.65~18.74) |
+| 요청당 전체 시간 (평균 291 토큰 생성) | 평균 16.7 s (14.8~18.2 s) |
+| 메모리 사용 최대 (tegrastats RAM) | 16.6 GB |
+| PyTorch BF16 대비 출력 완전 일치 / 문자 유사도 평균 | 2/20 / 0.964 |
 
 ---

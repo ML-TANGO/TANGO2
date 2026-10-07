@@ -62,8 +62,10 @@ CLIP_GLOBAL_MAP = {
     "vision_model.embeddings.position_embedding.weight":    "v.position_embd.weight",
     "vision_model.pre_layrnorm.weight":                     "v.pre_ln.weight",
     "vision_model.pre_layrnorm.bias":                       "v.pre_ln.bias",
-    "vision_model.post_layernorm.weight":                   "v.post_ln.weight",
-    "vision_model.post_layernorm.bias":                     "v.post_ln.bias",
+    # post_layernorm 은 넣지 않는다. 학습은 hidden_states[-2] 를 LN 없이 쓰는데,
+    # llava 그래프(tools/mtmd/models/llava.cpp)는 v.post_ln 이 있으면 마지막
+    # 블록 출력에 LN 을 적용한 뒤 프로젝터로 넘긴다. 공식
+    # convert_image_encoder_to_gguf.py 도 llava 프로젝터일 때 이 텐서를 뺀다.
 }
 
 CLIP_LAYER_MAP = {
@@ -255,7 +257,10 @@ def build_mmproj(proj_state: dict, clip_name: str, vlm_cfg: dict, output_path: s
 
     print(f"[mmproj] CLIP 로드: {clip_name}")
     clip = CLIPVisionModel.from_pretrained(clip_name, torch_dtype=torch.float32)
-    clip_sd = clip.state_dict()
+    # transformers 5.x 의 CLIPVisionModel.state_dict() 는 "vision_model." 접두사
+    # 없이 "embeddings.*", "encoder.layers.*" 를 내놓는다. 4.x 와 같은 키로 맞춘다.
+    clip_sd = {(k if k.startswith("vision_model.") else f"vision_model.{k}"): v
+               for k, v in clip.state_dict().items()}
 
     clip_cfg   = AutoConfig.from_pretrained(clip_name).vision_config
     num_layers = clip_cfg.num_hidden_layers   # 24
@@ -288,7 +293,9 @@ def build_mmproj(proj_state: dict, clip_name: str, vlm_cfg: dict, output_path: s
     writer.add_uint32("clip.vision.attention.head_count",   heads)
     writer.add_uint32("clip.vision.projection_dim",         llm_hidden)
     writer.add_float32("clip.vision.attention.layer_norm_epsilon", eps)
-    writer.add_bool("clip.use_gelu",                        True)
+    # CLIP 블록 FFN 활성화. OpenAI CLIP 은 quick_gelu 이며, clip.cpp 는
+    # use_gelu=false 일 때 quick_gelu 를 쓴다. 프로젝터의 GELU 와는 무관하다.
+    writer.add_bool("clip.use_gelu",                        clip_cfg.hidden_act == "gelu")
     # OpenAI CLIP ViT normalization params (required by clip.cpp ASSERT)
     writer.add_array("clip.vision.image_mean", [0.48145466, 0.4578275, 0.40821073])
     writer.add_array("clip.vision.image_std",  [0.26862954, 0.26130258, 0.27577711])
@@ -299,19 +306,18 @@ def build_mmproj(proj_state: dict, clip_name: str, vlm_cfg: dict, output_path: s
         # 별도 permute/transpose 불필요 (공식 convert_image_encoder_to_gguf.py 와 동일)
         return t.float().contiguous().numpy()
 
+    # 키가 없을 때 건너뛰지 않는다. 건너뛰면 CLIP 이 빠진 mmproj 가 오류 없이
+    # 만들어진다 (transformers 버전에 따라 키 이름이 바뀐 적이 있다).
     # 전역 텐서
     for hf_key, gguf_name in CLIP_GLOBAL_MAP.items():
-        if hf_key in clip_sd:
-            writer.add_tensor(gguf_name, to_numpy(clip_sd[hf_key]))
+        writer.add_tensor(gguf_name, to_numpy(clip_sd[hf_key]))
 
-    # 레이어별 텐서
-    for i in range(block_count + 1):
+    # 레이어별 텐서. clip.cpp 는 block_count 개 블록만 읽는다.
+    for i in range(block_count):
         prefix = f"vision_model.encoder.layers.{i}."
         for suffix, gguf_suffix in CLIP_LAYER_MAP.items():
-            hf_key = prefix + suffix
-            if hf_key in clip_sd:
-                writer.add_tensor(f"v.blk.{i}.{gguf_suffix}",
-                                  to_numpy(clip_sd[hf_key]))
+            writer.add_tensor(f"v.blk.{i}.{gguf_suffix}",
+                              to_numpy(clip_sd[prefix + suffix]))
 
     # Projector
     for src, dst in PROJ_KEY_MAP.items():
@@ -362,6 +368,19 @@ def merge_lora_and_save(ckpt_dir: str, llm_path: str, output_dir: str,
     base = AutoModelForCausalLM.from_pretrained(
         llm_path, torch_dtype=dtype, device_map="cpu"
     )
+    # 학습 때 <image> 토큰을 더하며 resize_token_embeddings(len(tokenizer)) 를
+    # 거친 체크포인트는 어댑터에 그 크기의 embed_tokens / lm_head 가 저장된다.
+    # (Qwen3 는 151936 → 151670) 기반 모델을 먼저 같은 크기로 맞춘다.
+    from safetensors import safe_open
+    with safe_open(os.path.join(ckpt_dir, "adapter_model.safetensors"),
+                   framework="pt", device="cpu") as f:
+        emb_keys = [k for k in f.keys() if k.endswith("embed_tokens.weight")]
+        if emb_keys:
+            n_vocab = f.get_slice(emb_keys[0]).get_shape()[0]
+            if n_vocab != base.get_input_embeddings().weight.shape[0]:
+                print(f"[merge] 어휘 크기 조정: "
+                      f"{base.get_input_embeddings().weight.shape[0]} → {n_vocab}")
+                base.resize_token_embeddings(n_vocab)
     print("[merge] LoRA 병합 중...")
     model = PeftModel.from_pretrained(base, ckpt_dir, device_map="cpu")
     merged = model.merge_and_unload()
