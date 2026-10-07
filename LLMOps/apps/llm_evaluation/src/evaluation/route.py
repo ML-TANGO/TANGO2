@@ -114,6 +114,7 @@ async def run_benchmark(body: dto.BenchmarkRunBody):
             ("judge_model_len", body.judge_model_len),
             ("judge_max_output_tokens", body.judge_max_output_tokens),
             ("sample_limit", body.sample_limit),
+            ("format_train_recipe", body.format_train_recipe),
         ) if v is not None}
         res = await svc.run_benchmark(
             project_id=body.project_id,

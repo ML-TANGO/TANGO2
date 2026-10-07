@@ -115,9 +115,17 @@ def test_seed_copy_matches_canonical(name, canonical):
     assert seed == (APPS / "evaluate_lmeval" / canonical).read_text(encoding="utf-8")
 
 
+def test_mixatis_seed_copy_carries_canonical_body():
+    # MixATIS 시드 사본은 lm-eval 과 달리 머리에 안내 주석이 붙는다 — 본문은 정본 그대로여야 한다
+    # (한쪽만 버전·timeout 을 올리면 시드가 옛 값을 등록한다).
+    seed = (MANIFEST_DIR / "evaluate-intent.yaml").read_text(encoding="utf-8")
+    assert seed.endswith((APPS / "evaluate_intent" / "manifest.yaml").read_text(encoding="utf-8"))
+
+
 def test_settings_defaults_point_at_registered_manifests():
     text = (APPS / "fb_utils" / "settings.py").read_text(encoding="utf-8")
-    for key, manifest in (("BENCHMARK", "evaluate-lmeval"), ("BENCHMARK_CODE", "evaluate-lmeval-code")):
+    for key, manifest in (("BENCHMARK", "evaluate-lmeval"), ("BENCHMARK_CODE", "evaluate-lmeval-code"),
+                          ("MIXATIS", "evaluate-intent")):
         name = re.search(rf"^{key}_MANIFEST_NAME = os.getenv\('{key}_MANIFEST_NAME', '([^']+)'\)", text, re.M)
         ver = re.search(rf"^{key}_MANIFEST_VERSION = os.getenv\('{key}_MANIFEST_VERSION', '([^']+)'\)", text, re.M)
         m = _manifest(manifest)["metadata"]

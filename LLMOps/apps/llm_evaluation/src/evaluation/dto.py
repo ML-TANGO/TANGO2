@@ -12,6 +12,7 @@ from evaluation.constants import (
     EXPERT_SAMPLE_SET_COUNT,
     EXPERT_SCORE_MAX,
     EXPERT_SCORE_MIN,
+    FORMAT_TRAIN_RECIPES,
     LOGICKOR_JUDGE_MAX_OUTPUT_MAX,
     LOGICKOR_JUDGE_MAX_OUTPUT_MIN,
     LOGICKOR_JUDGE_MODEL_IDS,
@@ -210,6 +211,11 @@ class BenchmarkRunBody(RunModelSelection):
     format_train: Optional[bool] = Field(
         default=None,
         description="평가 전 형식(출력 규약) 학습 수행 — MixATIS 전용, 배포 위임과 배타")
+    # 포맷 학습 레시피 — 미지정이면 서버 기본(full). format_train 이 켜졌을 때만 받는다
+    # (service 가 맥락을 검증한다 — 학습 안 하는 런에 실려 오면 거절).
+    format_train_recipe: Optional[str] = Field(
+        default=None,
+        description=f"포맷 학습 레시피 {list(FORMAT_TRAIN_RECIPES)} (미지정 시 full)")
     # ── 실채점 컨테이너 실행 옵션(전부 선택 — 미지정이면 컨테이너 기본값) ──────────
     # 자유형식 dict passthrough 로 두지 않는 이유: 이 값들은 그대로 vLLM 기동 인자와
     # 모델 식별자가 되므로, 어떤 키가 컨테이너에 도달할 수 있는지를 서버가 알고 있어야
@@ -258,6 +264,13 @@ class BenchmarkRunBody(RunModelSelection):
     def _validate_strategy(cls, v):
         if v is not None and v not in LOGICKOR_STRATEGIES:
             raise ValueError(f"unknown strategy: {v}")
+        return v
+
+    @field_validator("format_train_recipe")
+    @classmethod
+    def _validate_format_train_recipe(cls, v):
+        if v is not None and v not in FORMAT_TRAIN_RECIPES:
+            raise ValueError(f"unknown format_train_recipe: {v}")
         return v
 
     @field_validator("benchmarks")

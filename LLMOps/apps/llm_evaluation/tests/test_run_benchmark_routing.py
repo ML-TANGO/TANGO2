@@ -102,6 +102,39 @@ def test_sample_limit_rejected_for_other_scorers(wired):
     assert _FakeClient.calls == []
 
 
+def test_format_train_defaults_to_full_recipe(wired):
+    # 기본 = ETRI full 과 같은 학습량·정밀도(train 전체 × 3 에폭 × 4bit) — 빠른 점검이 아니다.
+    res = _run(["mixatis"], format_train=True)
+    params = _FakeClient.calls[-1]["params"]
+    assert params["checkpoint_name"] == "source_model" and params["train"] is True
+    assert (params["train_examples"], params["train_epochs"], params["use_4bit"]) == (0, 3.0, True)
+    assert "generate_base_url" not in params
+    assert res["format_train_recipe"] == "full"
+
+
+def test_format_train_quick_recipe(wired):
+    res = _run(["mixatis"], format_train=True, run_options={"format_train_recipe": "quick"})
+    params = _FakeClient.calls[-1]["params"]
+    assert (params["train_examples"], params["train_epochs"], params["use_4bit"]) == (3000, 1.0, False)
+    assert res["format_train_recipe"] == "quick"
+
+
+def test_format_train_recipe_rejected_without_format_train(wired):
+    # 학습을 안 하는 런에 레시피가 실려 오면 "그 레시피로 쟀다"고 믿는 점수가 남는다.
+    with pytest.raises(Exception, match="format_train_recipe"):
+        _run(["mixatis"], run_options={"format_train_recipe": "full"})
+    assert _FakeClient.calls == []
+
+
+def test_run_body_rejects_unknown_format_train_recipe():
+    from pydantic import ValidationError
+    from evaluation import dto as D
+    with pytest.raises(ValidationError):
+        D.BenchmarkRunBody(project_id=1, model_id=7, benchmarks=["mixatis"],
+                           inference_playground_id=11, format_train=True,
+                           format_train_recipe="huge")
+
+
 def test_delegated_scorers_still_delegate(wired):
     res = _run(["mixatis"])
     call = _FakeClient.calls[-1]
@@ -238,6 +271,7 @@ def test_single_run_body_accepts_no_dataset():
 
 @pytest.mark.parametrize("extra", [
     {"format_train": True},                      # 묶음에 없는 설정 — 조용히 버리지 않는다
+    {"format_train_recipe": "full"},
     {"judge_playground_id": 3},
     {"benchmarks": ["arc", "arc"]},              # 중복
     {"benchmarks": ["arc", "nope"]},             # 모르는 id

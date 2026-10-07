@@ -53,6 +53,22 @@ CHECKPOINT_REQUIRED_MANIFEST_KEYS = ("MIXATIS",)
 #    고른 배포가 서빙 중인 커밋에서 역으로 푼다(_resolve_deployment_checkpoint).
 FORMAT_TRAIN_MANIFEST_KEYS = ("MIXATIS",)
 
+# 포맷 학습 레시피 — 값은 evaluate-intent 학습 파라미터로 params 에 그대로 실린다
+# (train.py `train_examples`(0=train split 전체)·`train_epochs`, `use_4bit` 은 학습·평가 양쪽).
+#   full  : ETRI Intent_web `run_experiment.sh full` 과 같은 학습량·정밀도 — 발화 13,162
+#           (예제 26,324) × 3 에폭 × QLoRA 4bit. README 의 Joint 67.03% 가 이 조건의 값이다.
+#   quick : 형식만 잡는 경량 점검 — 발화 1,500 × 1 에폭 × bf16(컨테이너 기본값, joint 0.4855 실측).
+# 기본이 full 인 이유: 원 실험 수치와 비교할 수 있는 쪽이 기본이어야 한다 — quick 은 학습량이
+# 약 26 배 적어(188 vs 4,936 스텝) 그 수치와 나란히 놓으면 성능 결함으로 오독된다.
+# ⚠️ full 은 GPU 1장을 수 시간 잡는다 → 매니페스트 timeout 을 그에 맞춰 둔다(evaluate-intent 0.2.5).
+# ⚠️ ETRI 와 같은 것은 학습량·정밀도까지다. 유효 배치는 16 으로 같지만 분할(컨테이너 8×2 /
+#    ETRI 2×8)과 옵티마이저(adamw_torch / paged_adamw_8bit)는 다르다 — 수치가 완전히 같지는 않다.
+FORMAT_TRAIN_RECIPES = {
+    "full": {"train_examples": 0, "train_epochs": 3.0, "use_4bit": True},
+    "quick": {"train_examples": 3000, "train_epochs": 1.0, "use_4bit": False},
+}
+DEFAULT_FORMAT_TRAIN_RECIPE = "full"
+
 # 배포 위임이 **구조적으로 불가능한** 채점기 — 생성 경로를 로컬 가중치로 되돌린다.
 # lm-eval 객관식 태스크는 보기별 로그확률로 채점하는데, 배포 shim(llm_playground
 # openai_chat_completions)은 비스트리밍 chat/completions 만 있고 logprobs·stop·max_tokens 를

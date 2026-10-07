@@ -41,7 +41,9 @@ from evaluation.constants import (
     JUDGE_BENCHMARK_IDS,
     REFERENCE_BENCHMARK_IDS,
     REAL_BENCHMARK_MANIFEST_KEY,
+    DEFAULT_FORMAT_TRAIN_RECIPE,
     FORMAT_TRAIN_MANIFEST_KEYS,
+    FORMAT_TRAIN_RECIPES,
     LOCAL_WEIGHTS_MANIFEST_KEYS,
     LMEVAL_EST_DEFAULT_SECONDS,
     LMEVAL_EST_SECONDS,
@@ -297,6 +299,12 @@ async def run_benchmark(project_id: int, model_id: int, dataset_ids: List[int],
         raise Exception(
             "포맷 학습은 출력 형식을 학습해야 채점되는 벤치마크에서만 쓸 수 있습니다 — "
             f"{', '.join(benchmark_set)} 에는 학습 단계가 없습니다")
+    # 레시피도 같은 취지로 — 학습을 안 하는 런에 실려 오면 거절한다(값 자체는 dto 가 검증).
+    format_train_recipe = (run_options or {}).get("format_train_recipe")
+    if format_train_recipe is not None and not format_train_on:
+        raise Exception("format_train_recipe 는 포맷 학습을 켠 런에서만 쓸 수 있습니다")
+    if format_train_on:
+        format_train_recipe = format_train_recipe or DEFAULT_FORMAT_TRAIN_RECIPE
 
     # eval_result.metric_set(VARCHAR 255) = "benchmark:metric" CSV — 런 설정 요약 + 재개 소스
     # (기존 flat metric CSV 대체). 전체 결과(점수)는 metrics JSON 에 별도 영속.
@@ -439,6 +447,9 @@ async def run_benchmark(project_id: int, model_id: int, dataset_ids: List[int],
             purpose="포맷 학습", off_hint="포맷 학습을 끄세요")
         params["checkpoint_name"] = checkpoint_name
         params["train"] = True
+        # 레시피(학습량·정밀도)를 명시해 싣는다 — 컨테이너 기본값은 quick 이라 비워 두면
+        # 화면이 고른 것과 다른 레시피로 돈다(constants.FORMAT_TRAIN_RECIPES).
+        params.update(FORMAT_TRAIN_RECIPES[format_train_recipe])
     elif local_weights:
         # 묶음 실행이 이미 푼 체크포인트가 있으면 그대로 쓴다 — 한 묶음이 한 가중치를 잰다.
         checkpoint_name = pinned_checkpoint or await _resolve_deployment_checkpoint(
@@ -518,6 +529,7 @@ async def run_benchmark(project_id: int, model_id: int, dataset_ids: List[int],
         # 포맷 학습을 돌렸나 + 무엇을 학습했나. 실제 레시피(예제 수·에폭·스텝)는 컨테이너가
         # metrics.train 에 새기고, 여기에는 런 생성 시점에 우리가 정한 것만 싣는다.
         "format_train": format_train_on,
+        "format_train_recipe": format_train_recipe,
         "checkpoint": checkpoint_name,
         # 인라인 생성이 사라져 **항상 None** 이다(생성은 컨테이너 안에서 일어나므로 건수·
         # 빈 출력은 런 결과 metrics.generate 에 컨테이너가 새긴다). 키 자체는 남긴다 —

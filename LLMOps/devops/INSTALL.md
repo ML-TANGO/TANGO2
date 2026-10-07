@@ -295,7 +295,7 @@ kubectl logs -n jonathan-system deploy/jfb-app-external-container | grep "manife
 | `evaluate-selfmetric` | `1.0.0` | 자동평가(BLEU/ROUGE/perplexity) |
 | `evaluate-benchmark-mock` | `0.2.0` | 벤치마크 평가 |
 | `evaluate-logickor` / `evaluate-logickor-judge` | `0.1.0` / `0.2.5` | LogicKor 평가 |
-| `evaluate-intent` | `0.2.4` | 의도분류 평가 |
+| `evaluate-intent` | `0.2.5` | 의도분류 평가 |
 | `fewshot-prompt-optimizer` | `1.0.0` | 프롬프트 최적화 |
 | `eva-vlm-train` / `eva-vlm-infer` | `1.1.0` | SDS 도메인 VLM 학습·추론 |
 

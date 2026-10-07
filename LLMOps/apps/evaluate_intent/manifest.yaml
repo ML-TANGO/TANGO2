@@ -7,7 +7,7 @@ kind: ExternalContainer
 
 metadata:
   name: evaluate-intent
-  version: "0.2.4"
+  version: "0.2.5"
   vendor: "Acryl (platform-owned)"
   contact: "platform@acryl.ai"
   description: |
@@ -28,6 +28,12 @@ metadata:
     0.2.4: generate_base_url 을 주면 모델을 올리지 않고 이미 떠 있는 배포에 생성을 위임한다
     (체크포인트 불필요, GPU 점유 0). 그 경로에서는 학습 단계를 돌리지 않는다 — LoRA 를 원격
     배포에 얹을 방법이 없기 때문이다(점수는 배포된 모델 그대로의 값).
+
+    0.2.5(매니페스트만 — 이미지는 0.2.4 그대로): 플랫폼이 포맷 학습 레시피를 고른다.
+    기본 full = train split 전체(train_examples 0) × 3 에폭 × use_4bit — ETRI
+    `run_experiment.sh full`(README Joint 67.03%)과 같은 학습량·정밀도(배치 분할·옵티마이저는
+    이 컨테이너 기본을 따른다). quick = 위 1500 발화
+    1 에폭 bf16. full 은 GPU 1장을 수 시간 쓰므로 timeout 을 그에 맞춰 올렸다(아래 capabilities).
 
     지표 정의·프롬프트·학습 semantics 는 ETRI 원본 모듈을 그대로 import 해서 쓴다(재구현 없음).
     심판 LLM 이 없어 채점은 **결정론적**이다 — 같은 체크포인트·같은 시드면 같은 값이 나온다
@@ -93,6 +99,9 @@ spec:
       # use_4bit              : QLoRA 4bit 로 로드(기본 false=bf16). 학습·평가 양쪽에 적용.
       # split                 : 평가 split(기본 test).
       # ── 학습 단계(0.2.0) ────────────────────────────────────────────────────
+      # 아래 기본값은 컨테이너 기본(= quick)이다. 플랫폼은 레시피(full/quick)를 골라
+      # train_examples·train_epochs·use_4bit 을 **항상 명시해** 보낸다(0.2.5, constants
+      # FORMAT_TRAIN_RECIPES) — 기본값에 기대지 않는다.
       # train                 : 평가 전 LoRA 학습 수행(**기본 true**). false = zero-shot.
       #                         generate_base_url 을 주면 이 값과 무관하게 건너뛴다(위 참고).
       # train_examples        : 학습 SFT 예제 수(기본 3000 = 발화 1500 x 2문항).
@@ -139,7 +148,15 @@ spec:
     estimated_startup_seconds: 120
     # 828 발화 × 2 생성 = 1656 회. vLLM 이 아니라 transformers generate(greedy) 라
     # 배치 16 기준 A100 한 장에서 20~40분.
-    estimated_duration_seconds: 2700
-    timeout_seconds: 10800
+    # 0.2.5: 플랫폼 기본 레시피가 full(26,324 예제 × 3 에폭 ÷ 유효 배치 16(8×2) = 4,936 스텝,
+    # 4bit)이라 학습만 수 시간이다. 실측은 bf16 3,000 예제 188 스텝 630 초(3.35 s/스텝)뿐이고
+    # 4bit 속도는 **미실측**이다 — 추정은 4bit ≈ bf16 × 1.5 를 가정했다(학습 ~6.9h + 평가).
+    # 상한은 4bit 가 2 배 느린 경우(학습 ~9.2h + 평가)까지 받도록 11h 로 둔다.
+    # ⚠️ timeout 은 llm_evaluation 의 방치 런 정리(STALE_RUNNING_MAX_HOURS=12h, 런 생성 시각
+    #    기준)보다 짧아야 한다 — 파드가 도는 중에 런이 failed 로 마감되면 안 된다
+    #    (activeDeadline = timeout + 600 = 11.2h). external 잡은 대기열 없이 즉시 claim 하므로
+    #    생성~기동 사이가 짧다. 첫 full 런의 실측으로 이 두 값을 다시 맞춘다.
+    estimated_duration_seconds: 27000
+    timeout_seconds: 39600
 
   workspace_scope: per-workspace
