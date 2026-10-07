@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EVA 항행 지원 데모</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <span class="logo">EVA</span>
+    <div>
+      <h1>선박 항행 지원 비전-언어 모델</h1>
+      <p class="sub">카메라 영상과 AIS 데이터를 함께 읽고, 해상 상황을 설명하고 COLREG에 따른 조언을 만듭니다</p>
+    </div>
+  </div>
+  <div id="status" class="status"><span class="dot"></span><span class="label">모델 상태 확인 중</span></div>
+</header>
+
+<nav id="scenarios" class="scenarios" aria-label="시나리오"></nav>
+
+<main class="layout">
+  <section class="stage">
+    <div class="video-wrap">
+      <video id="video" muted playsinline preload="auto"></video>
+      <div id="overlay" class="overlay">
+        <div class="ov-head"><span class="ov-tag">AI 분석</span><span id="ov-time" class="ov-time"></span></div>
+        <div id="ov-body" class="ov-body"></div>
+        <div id="ov-foot" class="ov-foot" hidden></div>
+      </div>
+      <div class="video-note">아래 수치표와 상자는 시뮬레이터가 영상에 그린 정답 라벨입니다</div>
+    </div>
+
+    <div class="controls">
+      <button id="play" class="btn icon" aria-label="재생">▶</button>
+      <span id="clock" class="clock">0.0 / 30.0초</span>
+      <div class="modes" role="group" aria-label="분석 결과 표시 방식">
+        <button class="btn chip on" data-mode="pre">미리 계산된 결과</button>
+        <button class="btn chip" data-mode="rt">실시간 추론</button>
+      </div>
+      <div class="speeds">
+        <button class="btn chip" data-rate="0.5">0.5×</button>
+        <button class="btn chip on" data-rate="1">1×</button>
+      </div>
+    </div>
+    <div class="timeline-wrap">
+      <canvas id="timeline" height="64"></canvas>
+      <div class="legend">
+        <span><i class="sw line"></i>주변 선박 중 가장 작은 CPA (예상 최근접 거리, NM)</span>
+        <span id="lg-pre"><i class="sw dot"></i>AI 분석 시점</span>
+        <span id="lg-rt" hidden><i class="sw dot"></i><i class="sw span"></i>실시간 추론: 분석한 장면(점) → 결과가 나온 시점(막대 끝)</span>
+        <span><i class="sw warn"></i>0.5NM 주의선</span>
+      </div>
+    </div>
+
+    <section class="how">
+      <h2>어떻게 동작하나요?</h2>
+      <ol class="steps">
+        <li><b>입력</b><span>카메라 영상 한 장면과 그 순간의 AIS(선박 위치·속력·침로·CPA)</span></li>
+        <li><b>시각 인코딩</b><span>CLIP ViT-L/14가 이미지를 576개의 시각 토큰으로 바꿉니다</span></li>
+        <li><b>언어 모델</b><span>해양 데이터로 미세조정한 Qwen3-8B가 시각 토큰과 AIS 문장을 함께 읽습니다</span></li>
+        <li><b>출력</b><span>상황 묘사와 COLREG 조항에 근거한 항해 조언을 문장으로 생성합니다</span></li>
+      </ol>
+    </section>
+  </section>
+
+  <aside class="side">
+    <section class="card">
+      <div class="card-head"><h2>모델이 보는 입력</h2><span id="in-frame" class="muted"></span></div>
+      <div class="input-row">
+        <figure>
+          <img id="in-img" alt="모델 입력 이미지">
+          <figcaption>하단 표를 잘라낸 뒤 336×336으로 변환</figcaption>
+        </figure>
+        <div class="ais-summary">
+          <div class="kv"><span>자선 속력</span><b id="own-spd">–</b></div>
+          <div class="kv"><span>자선 침로</span><b id="own-hdg">–</b></div>
+          <div class="kv"><span>주변 선박</span><b id="n-targets">–</b></div>
+          <button id="show-ais" class="btn link">AIS 입력 문장 보기</button>
+        </div>
+      </div>
+      <pre id="ais-text" class="ais-text" hidden></pre>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>주변 선박</h2><span class="muted">자선 중심 · 북쪽 위</span></div>
+      <canvas id="radar" width="240" height="240"></canvas>
+      <table class="ships">
+        <thead><tr><th>선박</th><th>거리</th><th>속력</th><th>CPA</th><th>TCPA</th></tr></thead>
+        <tbody id="ship-rows"></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2 id="live-title">지금 이 장면 분석</h2><span class="muted">Jetson Orin 실시간</span></div>
+      <button id="analyze" class="btn primary">현재 장면 분석하기</button>
+      <div id="live" class="live" hidden>
+        <div id="live-text" class="live-text"></div>
+        <div class="metrics">
+          <div><span>첫 글자까지</span><b id="m-first">–</b></div>
+          <div><span>생성 속도</span><b id="m-speed">–</b></div>
+          <div><span>전체 시간</span><b id="m-total">–</b></div>
+        </div>
+      </div>
+    </section>
+  </aside>
+</main>
+
+<footer class="foot">
+  <span id="foot-model">모델: CLIP ViT-L/14-336 + Qwen3-8B (LoRA) · GGUF Q8_0 · llama.cpp</span>
+  <span id="foot-data"></span>
+</footer>
+<script src="/static/app.js"></script>
+</body>
+</html>
