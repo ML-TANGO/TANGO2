@@ -3416,6 +3416,7 @@
   "evaluation.compare.summaryMeasured": "벤치마크 {{total}}개 중 {{measured}}개 측정",
   "evaluation.compare.summaryUnrankedOnly": "빠른 점검·mock 점수만 있어 평균에서 뺐습니다",
   "evaluation.batch.title": "벤치마크 평가 결과",
+  "evaluation.batch.titleIntent": "의도/슬롯 평가 결과",
   "evaluation.batch.group.core_en": "영어 core",
   "evaluation.batch.group.korean": "한국어",
   "evaluation.batch.group.generative": "생성형",

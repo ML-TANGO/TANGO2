@@ -266,11 +266,19 @@ const BenchmarkBatchPage = () => {
   if (!BENCHMARK_RESULT_EVAL_TYPES.includes(project.eval_type))
     return <Redirect to={projectPath} />;
 
+  // 의도/슬롯 평가(MixATIS)는 한 실행이 벤치마크 하나라 요약 카드·그룹 범례·레이더·생성형 표·
+  // lm-eval 지표 상세(묶음용)가 늘 비거나 점수 카드와 겹친다 — 그 영역을 걷고 제목도 유형 이름으로
+  // 단다. 세부 결과는 점수 카드의 행을 눌러 연다. 정답 대조는 그대로다.
+  const isIntent = project.eval_type === 'intent';
+  const titleKey = isIntent
+    ? 'evaluation.batch.titleIntent'
+    : 'evaluation.batch.title';
+
   if (!group) {
     return (
       <div className={cx('result-page')}>
         <DeployDetailHeader
-          title={t('evaluation.batch.title')}
+          title={t(titleKey)}
           backLabel={project.name || t('evaluation.run.backToRuns')}
           onBack={goBack}
         />
@@ -314,7 +322,7 @@ const BenchmarkBatchPage = () => {
       <DeployDetailHeader
         title={
           <span className={cx('result-title')}>
-            {t('evaluation.batch.title')}
+            {t(titleKey)}
             <Badge label={t(badge.key)} type={badge.type} size='lg' />
             {quickLimit != null && (
               <Badge
@@ -397,43 +405,48 @@ const BenchmarkBatchPage = () => {
         </section>
 
         {/* ② 요약 카드 4장 — ETRI 와 같은 구성. 종합만 정답률 계열 대표 지표로 좁힌다. */}
-        <section className={cx('batch-cards4')}>
-          {summary.cards.map((card) => (
-            <div
-              key={card.id}
-              className={cx(
-                'batch-sum',
-                card.id === 'overall' ? 'overall' : `g-${GROUP_COLOR[card.id]}`,
-              )}
-            >
-              <span className={cx('batch-sum-k')}>{cardLabel(card.id)}</span>
-              <span className={cx('batch-sum-v')}>{f2(card.value)}</span>
-              <span className={cx('batch-sum-s')}>
-                {card.id === 'overall'
-                  ? t('evaluation.batch.cardOverallNote', { count: card.count })
-                  : t('evaluation.batch.cardCount', {
-                      count: card.count,
-                      total: card.total,
-                    })}
-              </span>
-            </div>
-          ))}
-        </section>
+        {!isIntent && (
+          <section className={cx('batch-cards4')}>
+            {summary.cards.map((card) => (
+              <div
+                key={card.id}
+                className={cx(
+                  'batch-sum',
+                  card.id === 'overall' ? 'overall' : `g-${GROUP_COLOR[card.id]}`,
+                )}
+              >
+                <span className={cx('batch-sum-k')}>{cardLabel(card.id)}</span>
+                <span className={cx('batch-sum-v')}>{f2(card.value)}</span>
+                <span className={cx('batch-sum-s')}>
+                  {card.id === 'overall'
+                    ? t('evaluation.batch.cardOverallNote', { count: card.count })
+                    : t('evaluation.batch.cardCount', {
+                        count: card.count,
+                        total: card.total,
+                      })}
+                </span>
+              </div>
+            ))}
+          </section>
+        )}
 
         {/* ③ 벤치마크별 점수 + 카테고리 레이더 */}
-        <section className={cx('batch-two')}>
+        <section className={cx('batch-two', isIntent && 'single')}>
           <div className={cx('result-section', 'batch-card')}>
             <h3 className={cx('result-section-title')}>
               {t('evaluation.batch.scoresTitle')}
             </h3>
-            <div className={cx('batch-legend')}>
-              {BENCHMARK_GROUPS.map((g) => (
-                <span key={g.id}>
-                  <i className={cx('batch-sw', `g-${g.color}`)} />
-                  {t(g.labelKey)}
-                </span>
-              ))}
-            </div>
+            {/* 그룹 색 범례 — 묶음(여러 그룹) 실행용. 의도/슬롯은 막대가 하나라 걷는다. */}
+            {!isIntent && (
+              <div className={cx('batch-legend')}>
+                {BENCHMARK_GROUPS.map((g) => (
+                  <span key={g.id}>
+                    <i className={cx('batch-sw', `g-${g.color}`)} />
+                    {t(g.labelKey)}
+                  </span>
+                ))}
+              </div>
+            )}
             <div className={cx('batch-benchlist')}>
               {entries.map((entry) => {
                 const pending = statusText(entry);
@@ -483,199 +496,205 @@ const BenchmarkBatchPage = () => {
             <p className={cx('run-note')}>{t('evaluation.batch.openHint')}</p>
           </div>
 
-          <div className={cx('result-section', 'batch-card')}>
-            <h3 className={cx('result-section-title')}>
-              {t('evaluation.batch.radarTitle')}
-            </h3>
-            {summary.radar.length >= 3 ? (
-              <ScoreRadar
-                title={t('evaluation.batch.radarTitle')}
-                axes={summary.radar.map((r) => ({
-                  id: r.id,
-                  label: CATEGORY_LABEL_KEY[r.id]
-                    ? t(CATEGORY_LABEL_KEY[r.id])
-                    : r.id,
-                }))}
-                series={[
-                  {
-                    key: 'batch',
-                    label: group.checkpoint
-                      ? `${group.modelName} · ${group.checkpoint}`
-                      : group.modelName,
-                    colorIndex: 0,
-                    dashed: false,
-                    values: Object.fromEntries(
-                      summary.radar.map((r) => [r.id, r.value]),
-                    ),
-                  },
-                ]}
-              />
-            ) : (
-              <p className={cx('batch-empty')}>
-                {t('evaluation.batch.radarNeedsThree')}
-              </p>
-            )}
-          </div>
+          {!isIntent && (
+            <div className={cx('result-section', 'batch-card')}>
+              <h3 className={cx('result-section-title')}>
+                {t('evaluation.batch.radarTitle')}
+              </h3>
+              {summary.radar.length >= 3 ? (
+                <ScoreRadar
+                  title={t('evaluation.batch.radarTitle')}
+                  axes={summary.radar.map((r) => ({
+                    id: r.id,
+                    label: CATEGORY_LABEL_KEY[r.id]
+                      ? t(CATEGORY_LABEL_KEY[r.id])
+                      : r.id,
+                  }))}
+                  series={[
+                    {
+                      key: 'batch',
+                      label: group.checkpoint
+                        ? `${group.modelName} · ${group.checkpoint}`
+                        : group.modelName,
+                      colorIndex: 0,
+                      dashed: false,
+                      values: Object.fromEntries(
+                        summary.radar.map((r) => [r.id, r.value]),
+                      ),
+                    },
+                  ]}
+                />
+              ) : (
+                <p className={cx('batch-empty')}>
+                  {t('evaluation.batch.radarNeedsThree')}
+                </p>
+              )}
+            </div>
+          )}
         </section>
 
         {/* ④ 생성형 지표 — 생성형·사용자 벤치마크의 F1/EM/BLEU/ROUGE(lm-eval 원 지표 이름으로 고른다). */}
-        <section className={cx('result-section', 'batch-card')}>
-          <h3 className={cx('result-section-title')}>
-            {t('evaluation.batch.generativeTitle')}
-          </h3>
-          {generativeRows.length === 0 ? (
-            <p className={cx('batch-empty')}>
-              {t('evaluation.batch.generativeEmpty')}
-            </p>
-          ) : (
+        {!isIntent && (
+          <section className={cx('result-section', 'batch-card')}>
+            <h3 className={cx('result-section-title')}>
+              {t('evaluation.batch.generativeTitle')}
+            </h3>
+            {generativeRows.length === 0 ? (
+              <p className={cx('batch-empty')}>
+                {t('evaluation.batch.generativeEmpty')}
+              </p>
+            ) : (
+              <div className={cx('batch-tablewrap')}>
+                <table className={cx('batch-tbl')}>
+                  <thead>
+                    <tr>
+                      <th scope='col'>{t('evaluation.batch.colBenchmark')}</th>
+                      {GENERATIVE_COLUMNS.map((col) => (
+                        <th key={col.id} scope='col' className={cx('num')}>
+                          {col.label}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {generativeRows.map((row) => (
+                      <tr
+                        key={row.entry.key}
+                        className={cx('clickable')}
+                        onClick={() => openBenchmark(row.entry)}
+                      >
+                        {/* 행 클릭은 마우스용, 키보드는 이름 버튼으로 연다. */}
+                        <td>
+                          <button
+                            type='button'
+                            className={cx('batch-cell-link')}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openBenchmark(row.entry);
+                            }}
+                          >
+                            {row.entry.label}
+                          </button>
+                        </td>
+                        {GENERATIVE_COLUMNS.map((col) => (
+                          <td key={col.id} className={cx('num')}>
+                            {f2(row.cells[col.id])}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* ⑤ 전체 지표 상세 — 벤치마크 × lm-eval 원 지표 한 줄씩. 행을 누르면 그 런의 세부 결과. */}
+        {!isIntent && (
+          <section className={cx('result-section', 'batch-card')}>
+            <h3 className={cx('result-section-title')}>
+              {t('evaluation.batch.detailTitle')}
+            </h3>
             <div className={cx('batch-tablewrap')}>
               <table className={cx('batch-tbl')}>
                 <thead>
                   <tr>
                     <th scope='col'>{t('evaluation.batch.colBenchmark')}</th>
-                    {GENERATIVE_COLUMNS.map((col) => (
-                      <th key={col.id} scope='col' className={cx('num')}>
-                        {col.label}
-                      </th>
-                    ))}
+                    <th scope='col'>{t('evaluation.batch.colTask')}</th>
+                    <th scope='col' className={cx('num')}>
+                      {t('evaluation.batch.colFewshot')}
+                    </th>
+                    <th scope='col'>{t('evaluation.batch.colMetric')}</th>
+                    <th scope='col' className={cx('num')}>
+                      {t('evaluation.batch.colValue')}
+                    </th>
+                    <th scope='col' className={cx('num')}>
+                      {t('evaluation.batch.colStderr')}
+                    </th>
+                    <th scope='col' className={cx('num')}>
+                      {t('evaluation.batch.colN')}
+                    </th>
+                    <th scope='col' className={cx('num')}>
+                      {t('evaluation.batch.colElapsed')}
+                    </th>
+                    <th scope='col'>{t('evaluation.batch.colStatus')}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {generativeRows.map((row) => (
-                    <tr
-                      key={row.entry.key}
-                      className={cx('clickable')}
-                      onClick={() => openBenchmark(row.entry)}
-                    >
-                      {/* 행 클릭은 마우스용, 키보드는 이름 버튼으로 연다. */}
-                      <td>
-                        <button
-                          type='button'
-                          className={cx('batch-cell-link')}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            openBenchmark(row.entry);
-                          }}
-                        >
-                          {row.entry.label}
-                        </button>
-                      </td>
-                      {GENERATIVE_COLUMNS.map((col) => (
-                        <td key={col.id} className={cx('num')}>
-                          {f2(row.cells[col.id])}
+                  {detailRows.map((row) => {
+                    const { entry } = row;
+                    return (
+                      <tr
+                        key={row.key}
+                        className={cx(
+                          entry.jobId && 'clickable',
+                          row.first && 'first',
+                        )}
+                        onClick={() => openBenchmark(entry)}
+                        title={reasonOf(entry)}
+                      >
+                        <td>
+                          {row.first &&
+                            (entry.jobId ? (
+                              <button
+                                type='button'
+                                className={cx('batch-cell-link')}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  openBenchmark(entry);
+                                }}
+                              >
+                                {entry.label}
+                              </button>
+                            ) : (
+                              entry.label
+                            ))}
                         </td>
-                      ))}
-                    </tr>
-                  ))}
+                        <td className={cx('mono', 'wrap')}>
+                          {row.first ? entry.tasks.join(', ') || '-' : ''}
+                        </td>
+                        <td className={cx('num')}>
+                          {row.first ? (entry.numFewshot ?? '-') : ''}
+                        </td>
+                        <td className={cx('mono')}>
+                          {row.lm
+                            ? `${row.metric}${row.filter ? ` · ${row.filter}` : ''}`
+                            : metricLabel(t, row.metric) || row.metric || '-'}
+                        </td>
+                        <td className={cx('num')}>
+                          {row.lm
+                            ? f2(row.score)
+                            : formatMetricValue(row.metric, row.score)}
+                        </td>
+                        <td className={cx('num')}>
+                          {row.stderr == null ? '-' : `± ${f2(row.stderr)}`}
+                        </td>
+                        <td className={cx('num')}>
+                          {row.first ? (entry.n ?? '-') : ''}
+                        </td>
+                        <td className={cx('num')}>
+                          {row.first ? (entry.elapsedSec ?? '-') : ''}
+                        </td>
+                        <td>
+                          {row.first && (
+                            <span
+                              className={cx('batch-pill', `st-${entry.status}`)}
+                            >
+                              {statusText(entry) ||
+                                t('evaluation.project.status.completed')}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
-          )}
-        </section>
-
-        {/* ⑤ 전체 지표 상세 — 벤치마크 × lm-eval 원 지표 한 줄씩. 행을 누르면 그 런의 세부 결과. */}
-        <section className={cx('result-section', 'batch-card')}>
-          <h3 className={cx('result-section-title')}>
-            {t('evaluation.batch.detailTitle')}
-          </h3>
-          <div className={cx('batch-tablewrap')}>
-            <table className={cx('batch-tbl')}>
-              <thead>
-                <tr>
-                  <th scope='col'>{t('evaluation.batch.colBenchmark')}</th>
-                  <th scope='col'>{t('evaluation.batch.colTask')}</th>
-                  <th scope='col' className={cx('num')}>
-                    {t('evaluation.batch.colFewshot')}
-                  </th>
-                  <th scope='col'>{t('evaluation.batch.colMetric')}</th>
-                  <th scope='col' className={cx('num')}>
-                    {t('evaluation.batch.colValue')}
-                  </th>
-                  <th scope='col' className={cx('num')}>
-                    {t('evaluation.batch.colStderr')}
-                  </th>
-                  <th scope='col' className={cx('num')}>
-                    {t('evaluation.batch.colN')}
-                  </th>
-                  <th scope='col' className={cx('num')}>
-                    {t('evaluation.batch.colElapsed')}
-                  </th>
-                  <th scope='col'>{t('evaluation.batch.colStatus')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {detailRows.map((row) => {
-                  const { entry } = row;
-                  return (
-                    <tr
-                      key={row.key}
-                      className={cx(
-                        entry.jobId && 'clickable',
-                        row.first && 'first',
-                      )}
-                      onClick={() => openBenchmark(entry)}
-                      title={reasonOf(entry)}
-                    >
-                      <td>
-                        {row.first &&
-                          (entry.jobId ? (
-                            <button
-                              type='button'
-                              className={cx('batch-cell-link')}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                openBenchmark(entry);
-                              }}
-                            >
-                              {entry.label}
-                            </button>
-                          ) : (
-                            entry.label
-                          ))}
-                      </td>
-                      <td className={cx('mono', 'wrap')}>
-                        {row.first ? entry.tasks.join(', ') || '-' : ''}
-                      </td>
-                      <td className={cx('num')}>
-                        {row.first ? (entry.numFewshot ?? '-') : ''}
-                      </td>
-                      <td className={cx('mono')}>
-                        {row.lm
-                          ? `${row.metric}${row.filter ? ` · ${row.filter}` : ''}`
-                          : metricLabel(t, row.metric) || row.metric || '-'}
-                      </td>
-                      <td className={cx('num')}>
-                        {row.lm
-                          ? f2(row.score)
-                          : formatMetricValue(row.metric, row.score)}
-                      </td>
-                      <td className={cx('num')}>
-                        {row.stderr == null ? '-' : `± ${f2(row.stderr)}`}
-                      </td>
-                      <td className={cx('num')}>
-                        {row.first ? (entry.n ?? '-') : ''}
-                      </td>
-                      <td className={cx('num')}>
-                        {row.first ? (entry.elapsedSec ?? '-') : ''}
-                      </td>
-                      <td>
-                        {row.first && (
-                          <span
-                            className={cx('batch-pill', `st-${entry.status}`)}
-                          >
-                            {statusText(entry) ||
-                              t('evaluation.project.status.completed')}
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <p className={cx('run-note')}>{t('evaluation.batch.summaryNote')}</p>
-        </section>
+            <p className={cx('run-note')}>{t('evaluation.batch.summaryNote')}</p>
+          </section>
+        )}
       </div>
     </div>
   );

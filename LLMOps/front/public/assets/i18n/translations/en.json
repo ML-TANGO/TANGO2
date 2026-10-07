@@ -3408,6 +3408,7 @@
   "evaluation.compare.summaryMeasured": "{{measured}} of {{total}} benchmarks measured",
   "evaluation.compare.summaryUnrankedOnly": "Only quick-check or mock scores — left out of the averages",
   "evaluation.batch.title": "Benchmark results",
+  "evaluation.batch.titleIntent": "Intent/slot results",
   "evaluation.batch.group.core_en": "English core",
   "evaluation.batch.group.korean": "Korean",
   "evaluation.batch.group.generative": "Generative",

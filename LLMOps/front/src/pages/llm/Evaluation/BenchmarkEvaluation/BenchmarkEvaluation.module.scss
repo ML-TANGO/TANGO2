@@ -902,6 +902,11 @@ $batch-mono: 'Menlo', 'Consolas', 'Monaco', monospace;
   grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
   gap: 16px;
 
+  // 레이더가 없는 실행(의도/슬롯 평가) — 점수 카드 하나가 전체 폭을 쓴다.
+  &.single {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   @media (max-width: 1100px) {
     grid-template-columns: minmax(0, 1fr);
   }
