@@ -44,7 +44,7 @@ LLAMA_QUANTIZE_BIN = os.environ.get("LLAMA_QUANTIZE_BIN", "/app/llama-quantize")
 CONVERT_HF_TO_GGUF = os.environ.get("CONVERT_HF_TO_GGUF", "/app/convert_hf_to_gguf.py")
 
 NAME    = "convert-llamacpp"
-VERSION = "1.1.2"
+VERSION = "1.1.3"
 
 # SDS(eva-vlm) 커밋 마운트(플랫폼 차트가 commit_models 를 RO 로 붙인다).
 CHECKPOINTS_ROOT = os.environ.get("CHECKPOINTS_ROOT", "/models/checkpoints")
@@ -503,6 +503,9 @@ async def _run_job(job_id: str, params: dict) -> None:
                 f.write(_INFERENCE_PY.format(model_path=json.dumps(gguf_name)))
             with open(os.path.join(JF_OUTPUT_PATH, "run.sh"), "w", encoding="utf-8") as f:
                 f.write(_RUN_SH)
+        # open() 은 0644 로 만든다 — 안내대로 ./run.sh 를 치면 Permission denied. zip 다운로드
+        # (zf.write)가 이 모드를 그대로 싣으므로 여기서 실행 비트를 줘야 디바이스까지 간다.
+        os.chmod(os.path.join(JF_OUTPUT_PATH, "run.sh"), 0o755)
         config = {"model_file": gguf_name, "quantization": qtype, "n_ctx": 2048,
                   "source_model": model_name, "pruned": do_prune}
         if is_eva:

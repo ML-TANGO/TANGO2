@@ -32,7 +32,7 @@ kind: ExternalContainer
 
 metadata:
   name: convert-llamacpp
-  version: "1.1.2"
+  version: "1.1.3"
   vendor: "Acryl (platform-owned)"
   contact: "platform@acryl.ai"
   description: |
@@ -43,7 +43,7 @@ metadata:
     SDS(eva-vlm) 커밋은 params.checkpoint_name 으로 받아 base 에 LoRA merge + mmproj(f16) 동봉.
 
 spec:
-  image: "docker.io/acrylaaai/convert-llamacpp:1.1.2"
+  image: "docker.io/acrylaaai/convert-llamacpp:1.1.3"
 
   # SDS(eva-vlm) merge 의 base(Llama-3.1-8B·CLIP-336)는 오프라인 HF 캐시(/hf-cache)에서만 읽는다.
   env:
