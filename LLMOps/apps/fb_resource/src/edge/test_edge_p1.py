@@ -1015,6 +1015,10 @@ def _deploy_capture(monkeypatch, tmp_path, ops_result=None):
     # 계약 v1 을 보고하는 에이전트가 기본값 — 개별 테스트가 필요하면 덮어쓴다.
     monkeypatch.setattr(edge_service, "_poll_remote_manager",
                         lambda url: {"contract_version": "1.0"})
+    # 배포 ↔ playground 표시 연결 — 기본은 엣지 배포 행이 있고 기록이 성공한다.
+    monkeypatch.setattr(db_edge, "get_edge_playground",
+                        lambda pid: {"id": pid, "workspace_id": 2, "deploy_type": "edge"})  # = lineage 워크스페이스
+    monkeypatch.setattr(db_edge, "update_edge_worker_playground", lambda wid, pid: True)
     return sent, persisted, grants, order
 
 
@@ -1114,6 +1118,84 @@ def test_deploy_without_lineage_keeps_legacy_payload(monkeypatch, tmp_path):
     assert "model_url" not in sent
     assert sent["gguf_path"] == "jobs/j1/output/m.gguf"
     assert grants == []          # lineage 배포가 아니면 인가를 건드리지 않는다
+
+
+def _capture_playground(monkeypatch, order):
+    bound = []
+
+    def _bind(wid, pid):
+        bound.append(pid)
+        order.append("playground")
+        return True
+    monkeypatch.setattr(db_edge, "update_edge_worker_playground", _bind)
+    return bound
+
+
+def test_deploy_records_playground_after_ops(monkeypatch, tmp_path):
+    """배포 목록 카드·상세 복원의 근거 — /ops 가 응답한 뒤에만 새긴다(인가와 달리 /ops 전이 아니다)."""
+    _sent, _persisted, _grants, order = _deploy_capture(monkeypatch, tmp_path)
+    bound = _capture_playground(monkeypatch, order)
+    edge_service.deploy_edge_worker(1, model.DeployEdgeModel(image="img:1", lineage_id=7, playground_id=35))
+    assert bound == [35]
+    assert order == ["grant", "ops", "playground"]
+
+
+def test_deploy_without_playground_clears_binding(monkeypatch, tmp_path):
+    """다른 경로(관리자 화면·API)로 재배포된 디바이스가 옛 배포 카드에 running 으로 남지 않게 비운다."""
+    _sent, _persisted, _grants, order = _deploy_capture(monkeypatch, tmp_path)
+    bound = _capture_playground(monkeypatch, order)
+    edge_service.deploy_edge_worker(1, model.DeployEdgeModel(image="img:1", lineage_id=7))
+    assert bound == [None]
+
+
+@pytest.mark.parametrize("row", [None, {"id": 35, "workspace_id": 2, "deploy_type": "cluster"}])
+def test_deploy_refuses_non_edge_playground_before_ops(monkeypatch, tmp_path, row):
+    sent, _persisted, grants, order = _deploy_capture(monkeypatch, tmp_path)
+    bound = _capture_playground(monkeypatch, order)
+    monkeypatch.setattr(db_edge, "get_edge_playground", lambda pid: row)
+    with pytest.raises(Exception, match="온디바이스"):
+        edge_service.deploy_edge_worker(1, model.DeployEdgeModel(image="img:1", lineage_id=7, playground_id=35))
+    assert sent == {} and grants == [] and bound == []
+
+
+def test_deploy_device_error_keeps_previous_binding(monkeypatch, tmp_path):
+    """거절은 교체가 아니다 — 옛 컨테이너가 살아 있을 수 있어 연결을 옮기면 다음 refresh 에서
+    그 컨테이너가 이 배포 카드에 running 으로 보인다(codex P2)."""
+    _sent, persisted, _grants, order = _deploy_capture(
+        monkeypatch, tmp_path, ops_result=({"status": "error", "detail": "pull failed"}, 200, None))
+    bound = _capture_playground(monkeypatch, order)
+    with pytest.raises(Exception, match="pull failed"):
+        edge_service.deploy_edge_worker(1, model.DeployEdgeModel(image="img:1", lineage_id=7, playground_id=35))
+    assert persisted["deploy_state"] == "error"
+    assert bound == []
+
+
+def test_deploy_refuses_playground_from_other_workspace(monkeypatch, tmp_path):
+    """다른 워크스페이스의 배포 카드에 내 디바이스·산출물을 새기지 못한다(리뷰 3-way 합의)."""
+    sent, _persisted, grants, order = _deploy_capture(monkeypatch, tmp_path)
+    bound = _capture_playground(monkeypatch, order)
+    monkeypatch.setattr(db_edge, "get_edge_playground",
+                        lambda pid: {"id": pid, "workspace_id": 9, "deploy_type": "edge"})
+    with pytest.raises(Exception, match="워크스페이스"):
+        edge_service.deploy_edge_worker(1, model.DeployEdgeModel(image="img:1", lineage_id=7, playground_id=35))
+    assert sent == {} and grants == [] and bound == []
+
+
+def test_deploy_dispatch_failure_leaves_binding_untouched(monkeypatch, tmp_path):
+    """지시가 디바이스에 닿지 못했으면 워커 상태도 바뀌지 않았다 — 연결도 그대로 둔다."""
+    _sent, _persisted, _grants, order = _deploy_capture(
+        monkeypatch, tmp_path, ops_result=(None, 0, "remoteManager unreachable"))
+    bound = _capture_playground(monkeypatch, order)
+    with pytest.raises(Exception, match="deploy failed"):
+        edge_service.deploy_edge_worker(1, model.DeployEdgeModel(image="img:1", lineage_id=7, playground_id=35))
+    assert bound == []
+
+
+def test_worker_view_keeps_playground_binding_but_hides_lineage_grant():
+    view = edge_service._worker_view({"id": 1, "device_id": "d", "deploy_lineage_id": 7,
+                                      "deploy_playground_id": 35, "conn_status": "online"})
+    assert view["deploy_playground_id"] == 35
+    assert "deploy_lineage_id" not in view
 
 
 def _refresh_capture(monkeypatch, metrics):

@@ -461,6 +461,8 @@ def _worker_view(w: dict) -> dict:
     # 어느 워크스페이스의 어떤 양자화 산출물이 어느 디바이스에 걸렸는지는 목록 조회
     # (인가 없음)로 흘리지 않는다 — lineage_id 를 추측해 배포에 넣는 공격의 정찰 정보다.
     w.pop("deploy_lineage_id", None)
+    # deploy_playground_id 는 남긴다 — 인가와 무관한 표시 정보다(배포 목록 카드 상태·상세 선택
+    # 복원). 이 값으로 받을 수 있는 아티팩트는 없다(다운로드는 lineage 인가 + 디바이스 토큰).
     # heartbeat 워커(토큰 발급됨)만 last_seen staleness 로 offline 파생. pull 전용
     # (remoteManager /metrics) 워커는 저장된 conn_status 유지 — 주기 폴러 부재로 인한
     # 오탐(→ SP-6 배포 셀렉터가 healthy 디바이스를 비활성화) 방지.
@@ -874,14 +876,32 @@ def deploy_edge_worker(worker_id: int, body) -> dict:
         return _deploy_edge_worker_locked(worker_id, body)
 
 
+def _record_deploy_playground(worker_id: int, playground_id) -> None:
+    """워커 ↔ 온디바이스 배포 연결(표시 정보)을 새긴다. 실패해도 배포 자체는 이미 디바이스에
+    나갔으므로 되돌리지 않고 남긴다 — 카드 상태가 틀릴 뿐 서빙에는 영향이 없다."""
+    if not db_edge.update_edge_worker_playground(worker_id, playground_id):
+        print(f"[edge] failed to persist deploy_playground_id={playground_id} for worker {worker_id}")
+
+
 def _deploy_edge_worker_locked(worker_id: int, body) -> dict:
     w = db_edge.get_edge_worker(worker_id=worker_id)
     if not w:
         raise Exception(f"edge worker {worker_id} not found")
+    # 표시용 연결(배포 목록 카드 상태·상세 재진입 복원) — 없는 배포나 엣지가 아닌 배포에는
+    # 새기지 않는다. /ops 전에 거절해 잘못된 요청이 디바이스까지 가지 않게 한다.
+    playground_id = getattr(body, "playground_id", None)
     # lineage_id 가 있으면 아티팩트를 **DB 로** 해석해 다운로드 URL 을 발급한다.
     # 해석 실패는 배포를 진행시키지 않는다 — 모델 없는 컨테이너를 띄우면 화면은
     # running 인데 서빙은 안 되는 조용한 실패가 된다(파일 부재를 여기서 드러낸다).
     lineage_id = getattr(body, "lineage_id", None)
+    if playground_id is not None:
+        pg = db_edge.get_edge_playground(playground_id)
+        if not pg or (pg.get("deploy_type") or "") != "edge":
+            raise Exception("playground_id 가 온디바이스(edge) 배포가 아닙니다")
+        # 다른 워크스페이스의 배포 카드에 내 디바이스·산출물을 새기지 못하게 묶는다(리뷰 3-way 합의).
+        lin = db_edge.get_quantize_lineage(lineage_id) if lineage_id is not None else None
+        if lin and str(lin.get("workspace_id")) != str(pg.get("workspace_id")):
+            raise Exception("배포(playground)와 양자화 산출물의 워크스페이스가 다릅니다")
     model_url = mmproj_url = mmproj_for_payload = None
     gguf_for_payload = body.gguf_path
     prev_lineage_id = w.get("deploy_lineage_id")
@@ -954,6 +974,8 @@ def _deploy_edge_worker_locked(worker_id: int, body) -> dict:
         if lineage_id is not None:
             # 배포가 거절됐으니 방금 연 다운로드 인가도 되돌린다.
             db_edge.update_edge_worker_lineage(worker_id, prev_lineage_id)
+        # 연결은 바꾸지 않는다 — 거절된 배포는 교체를 뜻하지 않아 옛 컨테이너가 살아 있을 수
+        # 있고, 연결을 옮기면 다음 refresh 에서 그 컨테이너가 이 배포 카드에 running 으로 보인다.
         raise Exception(f"deploy failed: {detail}")
     if rstate in ("running", "stopped", "deploying"):
         deploy_state = rstate
@@ -976,6 +998,9 @@ def _deploy_edge_worker_locked(worker_id: int, body) -> dict:
     )
     if not ok:
         raise Exception("failed to persist deploy status")
+    # 이 디바이스가 지금 서빙하는 배포 — playground 없이 배포했으면 비운다(다른 경로로 재배포된
+    # 디바이스가 옛 배포 카드에 running 으로 남지 않게).
+    _record_deploy_playground(worker_id, playground_id)
     return {
         "worker_id": worker_id,
         "device_id": w["device_id"],

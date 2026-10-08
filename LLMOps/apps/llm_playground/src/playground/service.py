@@ -1563,6 +1563,14 @@ async def get_playground(playground_id):
         # /deployments/{id}/api-publish 를 호출한다. deployment 파싱 블록에서 실제값을
         # 채우고, 배포 없으면 None 유지.
         result['info']['deployment_id'] = None
+        # 온디바이스(edge) 배포: 이 배포를 띄운 디바이스·모델({worker_id, model_id}) — 상세 재진입 시 선택 복원.
+        # 조회 실패가 상세 화면 전체를 막지 않게 None 으로 둔다(복원만 안 될 뿐이다).
+        if (item.get("deploy_type") or "") == deployment_envelope.TARGET_EDGE:
+            try:
+                result['info']['edge_target'] = await db.get_edge_deploy_target(playground_id=item["id"])
+            except Exception:
+                traceback.print_exc()
+                result['info']['edge_target'] = None
 
         # INFO - instance
         try:

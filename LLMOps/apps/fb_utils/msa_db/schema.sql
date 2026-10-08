@@ -188,6 +188,10 @@ CREATE TABLE IF NOT EXISTS `edge_worker` (
     -- 비동기 배포 실패 사유(디바이스 /metrics 의 last_deploy_error). 상태만 error 로
     -- 새기면 화면이 '왜' 를 말할 수 없어 사유 문자열을 함께 보존한다.
     `deploy_error`       VARCHAR(512) DEFAULT NULL,
+    -- 마지막으로 성공한 배포를 낸 온디바이스 배포(jonathan_llm.playground, deploy_type='edge').
+    -- 배포 목록 카드 상태와 상세 재진입 시 디바이스 선택 복원의 근거. 배포 성공 시에만 새기고
+    -- (playground 없이 배포하면 비운다) stop 은 지우지 않는다 — 카드가 '중지'를 정확히 보인다.
+    `deploy_playground_id` INT(11) DEFAULT NULL,
     `create_datetime`    DATETIME DEFAULT CURRENT_TIMESTAMP,
     `update_datetime`    DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY(`id`),

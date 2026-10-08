@@ -29,6 +29,7 @@ def ensure_edge_worker_schema():
         ("deploy_observed_at", "DATETIME DEFAULT NULL AFTER last_heartbeat_at"),
         ("deploy_lineage_id", "INT(11) DEFAULT NULL AFTER deploy_observed_at"),
         ("deploy_error", "VARCHAR(512) DEFAULT NULL AFTER deploy_lineage_id"),
+        ("deploy_playground_id", "INT(11) DEFAULT NULL AFTER deploy_error"),
     )
     # DDL 이 오래 걸릴 수 있는 자리다(Galera TOI · metadata lock 대기). 상한을 두지
     # 않으면 "never fatal" 과 무관하게 기동 자체가 붙잡힌다.
@@ -236,6 +237,37 @@ def update_edge_worker_lineage(worker_id, lineage_id):
     except Exception:
         traceback.print_exc()
         return False
+
+
+def update_edge_worker_playground(worker_id, playground_id):
+    """이 워커가 마지막으로 성공 배포한 온디바이스 배포(playground) — None 이면 비운다.
+    배포 목록 카드 상태·상세 선택 복원용 표시 정보다(아티팩트 인가와 무관)."""
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("UPDATE edge_worker SET deploy_playground_id=%s WHERE id=%s",
+                        (playground_id, worker_id))
+            conn.commit()
+            return True
+    except Exception:
+        traceback.print_exc()
+        return False
+
+
+def get_edge_playground(playground_id):
+    """온디바이스 배포 행 단건(id, workspace_id, deploy_type) — 배포 요청의 playground_id 검증용.
+    get_quantize_lineage 와 같은 크로스 스키마 읽기(소비자 쪽 db 모듈, 읽기 전용, 스키마명 리터럴)."""
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT id, workspace_id, deploy_type FROM jonathan_llm.playground WHERE id=%s",
+                (playground_id,),
+            )
+            return cur.fetchone()
+    except Exception:
+        traceback.print_exc()
+        return None
 
 
 def get_quantize_lineage(lineage_id):

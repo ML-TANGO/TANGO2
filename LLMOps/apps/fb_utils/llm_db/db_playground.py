@@ -180,6 +180,28 @@ async def get_playground_inference_target(playground_id):
         query=sql, params=(playground_id,), fetch_type=FetchType.ONE)
 
 
+async def get_edge_deploy_target(playground_id):
+    """온디바이스(edge) 배포를 띄운 디바이스와 그 모델 — 상세 재진입 시 선택 복원용.
+
+    연결(deploy_playground_id)은 fb_resource 가 배포 성공 시 edge_worker 에 새긴다 — 여기선 읽기만
+    한다(위 get_playground_url 의 msa_jfb.deployment 조인과 같은 크로스 스키마 읽기).
+    ⚠️ lineage id 는 내보내지 않는다 — 워커 목록이 다운로드 인가 정찰을 막으려 감추는 값이고,
+    상세 라우트엔 배포별 접근 검사가 없다. 모델은 배포와 같은 워크스페이스 산출물일 때만(아니면 NULL).
+    여러 디바이스면 running 을 먼저, 그다음 최근 관측 순. 연결된 워커가 없으면 None.
+    """
+    sql = """
+        SELECT w.id AS worker_id, l.source_model_id AS model_id
+        FROM msa_jfb.edge_worker w
+        JOIN jonathan_llm.playground p ON p.id = w.deploy_playground_id
+        LEFT JOIN jonathan_llm.quantize_lineage l
+               ON l.id = w.deploy_lineage_id AND l.workspace_id = p.workspace_id
+        WHERE w.deploy_playground_id = %s
+        ORDER BY (w.deploy_state = 'running') DESC, w.deploy_observed_at DESC, w.id DESC
+        LIMIT 1
+        """
+    return await select_query(query=sql, params=(playground_id,), fetch_type=FetchType.ONE)
+
+
 async def get_test_log_list(playground_id):
     sql = """
         SELECT pt.*

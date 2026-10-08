@@ -24,6 +24,9 @@ class DeployEdgeModel(BaseModel):
     # 문자열은 신뢰 체인에서 빠진다(gguf_path 는 하위호환 표시용으로만 남는다).
     # 없으면 종전대로 문자열만 전달(디바이스에 파일이 이미 있다고 가정).
     lineage_id: Optional[int] = Field(default=None, ge=1)
+    # 이 배포를 낸 온디바이스 배포(playground, deploy_type='edge') id. 성공 시 워커에 새겨
+    # 배포 목록 카드 상태·상세 재진입 선택 복원에 쓴다. 없으면 워커의 연결 표시를 비운다.
+    playground_id: Optional[int] = Field(default=None, ge=1)
     params: Optional[dict] = None
 
     @field_validator("gguf_path")
