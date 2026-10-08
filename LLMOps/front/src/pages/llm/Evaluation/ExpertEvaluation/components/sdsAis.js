@@ -42,13 +42,9 @@ export const aisColumnLabel = (t, cell) => {
   return key ? t(`evaluation.expert.ais.${key}`) : String(cell ?? '');
 };
 
-// tcpa 원본 단위는 **초**다 — 같은 값이 생성 프롬프트에도 "TCPA:307.87초" 로 실린다.
-// 헤더는 분으로 읽히므로 표시할 때 60 으로 나눈다. 안 나누면 307 을 307분(5시간)으로 읽어
-// 조우 임박 상황을 여유 있는 상황으로 오판한다 — 충돌회피 채점에서 제일 위험한 오독이다.
-// (원본 CSV 는 손대지 않는다. 표시 전용 변환.)
-const TCPA_SECONDS_PER_MINUTE = 60;
-
-// 표 셀 표시값. 0/1 코드·초 단위처럼 그대로 두면 오독되는 값만 바꾼다(원본 CSV 불변).
+// 표 셀 표시값. 0/1 코드처럼 그대로 두면 오독되는 값만 바꾼다(원본 CSV 불변).
+// tcpa 는 원본 단위(초) 그대로 둔다 — 헤더가 ETRI 표기 'TCPA(sec)' 라 변환하면 오히려 어긋난다.
+// (생성 프롬프트에도 같은 값이 "TCPA:307.87초" 로 실린다.)
 export const aisCellText = (t, cell, value) => {
   const col = normalize(cell);
   if (col === 'my_ship') {
@@ -57,12 +53,117 @@ export const aisCellText = (t, cell, value) => {
     if (code === 0) return t('evaluation.expert.ais.other');
     return value;
   }
-  if (col === 'tcpa') {
-    const seconds = toNumber(value);
-    if (!Number.isFinite(seconds)) return value;
-    return (seconds / TCPA_SECONDS_PER_MINUTE).toFixed(1);
-  }
   return value;
+};
+
+// ── CPA/TCPA 계산 — ETRI 제공 식(preprocess.py 의 local_xy·vel_xy 와 동일) ─────────────
+// 항해사는 충돌 위험을 CPA(최근접 거리, 0 에 가까우면 충돌)·TCPA(최근접점 도달 시간)로 판단한다.
+// sds_eval CSV 는 시뮬레이터가 cpa·tcpa 열을 싣지만 열이 없는 SDS 데이터셋이 있어, 그때만
+// 위경도·속력·침로로 계산해 같은 열 이름·단위(NM, 초)로 붙인다. 시뮬레이터 값과 대조 결과
+// 타선 491척 중앙값 차이 CPA 0.0016NM·TCPA 0.38초 — 같은 지표다. (원본 CSV 불변, 표시 전용.)
+const METERS_PER_NAUTICAL_MILE = 1852;
+const EARTH_RADIUS_M = 6371000;
+const MPS_PER_KNOT = 0.514444;
+
+const toRadians = (degrees) => (degrees * Math.PI) / 180;
+
+// 속력(kt)·침로(°, 북 기준 시계방향) → [동, 북] 속도(m/s).
+const velocityEastNorth = (knot, heading) => {
+  const speed = knot * MPS_PER_KNOT;
+  return [
+    speed * Math.sin(toRadians(heading)),
+    speed * Math.cos(toRadians(heading)),
+  ];
+};
+
+// TCPA(초). 양수면 앞으로 최근접점에 도달, 음수면 이미 지나 멀어지는 중. 상대속도 0 이면 0.
+export const computeTcpaSeconds = (posEast, posNorth, velEast, velNorth) => {
+  const speedSquared = velEast ** 2 + velNorth ** 2;
+  if (speedSquared <= 1e-9) return 0;
+  return -(posEast * velEast + posNorth * velNorth) / speedSquared;
+};
+
+// CPA(NM). TCPA 가 음수면(멀어지는 중) 현재 거리.
+export const computeCpaNauticalMiles = (
+  posEast,
+  posNorth,
+  velEast,
+  velNorth,
+) => {
+  const t = Math.max(
+    computeTcpaSeconds(posEast, posNorth, velEast, velNorth),
+    0,
+  );
+  return (
+    Math.hypot(posEast + velEast * t, posNorth + velNorth * t) /
+    METERS_PER_NAUTICAL_MILE
+  );
+};
+
+// csv_rows 에 cpa·tcpa 열이 없으면 자선 기준으로 계산해 붙인 새 배열을 돌려준다.
+// 열이 이미 있거나(CSV 값 우선) AIS 가 아니거나 자선이 정확히 1척이 아니면 원본 그대로 —
+// 기준선이 모호하면 틀린 CPA 를 내느니 안 보이는 쪽이 안전하다.
+// 자선 행은 시뮬레이터 CSV 와 같이 0 — 형식도 CSV 와 맞춘다(cpa 소수 4자리·tcpa 2자리).
+// 값이 비어 계산할 수 없는 타선은 '-' — 빈칸은 '위험 없음'으로 읽힐 수 있다.
+export const withCpaTcpa = (rows) => {
+  if (!Array.isArray(rows) || rows.length < 2 || !Array.isArray(rows[0])) {
+    return rows;
+  }
+  const head = rows[0].map(normalize);
+  if (head.includes('cpa') || head.includes('tcpa')) return rows;
+  const [iOwn, iLat, iLon, iKnot, iHeading] = [
+    'my_ship',
+    'latitude',
+    'longitude',
+    'knot',
+    'heading',
+  ].map((name) => head.indexOf(name));
+  if ([iOwn, iLat, iLon, iKnot, iHeading].some((i) => i < 0)) return rows;
+
+  const body = rows.slice(1);
+  const owns = body.filter(
+    (row) => Array.isArray(row) && toNumber(row[iOwn]) === 1,
+  );
+  if (owns.length !== 1) return rows;
+  const [own] = owns;
+  const [ownLat, ownLon, ownKnot, ownHeading] = [
+    iLat,
+    iLon,
+    iKnot,
+    iHeading,
+  ].map((i) => toNumber(own[i]));
+  if (![ownLat, ownLon, ownKnot, ownHeading].every(Number.isFinite))
+    return rows;
+  const [ownEast, ownNorth] = velocityEastNorth(ownKnot, ownHeading);
+
+  // 표는 헤더 위치로 셀을 읽는다 — 행을 헤더 길이에 맞춘 뒤(짧으면 채우고 길면 자름,
+  // 헤더 밖 셀은 원래도 표에 안 나온다) 새 열을 붙여야 값이 제 열에 온다.
+  const fitted = (row) =>
+    row.length >= head.length
+      ? row.slice(0, head.length)
+      : [...row, ...Array(head.length - row.length).fill('')];
+  const extended = body.map((row) => {
+    if (!Array.isArray(row)) return row;
+    if (toNumber(row[iOwn]) === 1) return [...fitted(row), '0.0000', '0.00'];
+    const [lat, lon, knot, heading] = [iLat, iLon, iKnot, iHeading].map((i) =>
+      toNumber(row[i]),
+    );
+    if (![lat, lon, knot, heading].every(Number.isFinite)) {
+      return [...fitted(row), '-', '-'];
+    }
+    const posEast =
+      toRadians(lon - ownLon) * Math.cos(toRadians(ownLat)) * EARTH_RADIUS_M;
+    const posNorth = toRadians(lat - ownLat) * EARTH_RADIUS_M;
+    const [targetEast, targetNorth] = velocityEastNorth(knot, heading);
+    const velEast = targetEast - ownEast;
+    const velNorth = targetNorth - ownNorth;
+    return [
+      ...fitted(row),
+      computeCpaNauticalMiles(posEast, posNorth, velEast, velNorth).toFixed(4),
+      computeTcpaSeconds(posEast, posNorth, velEast, velNorth).toFixed(2),
+    ];
+  });
+  return [[...rows[0], 'cpa', 'tcpa'], ...extended];
 };
 
 // csv_rows(2D: 헤더+행) → 이미지 위에 그릴 타선 박스. 좌표는 원본 이미지 픽셀(실측 1920×1080).

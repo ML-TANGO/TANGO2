@@ -1,6 +1,11 @@
 import BorderTable from '@src/components/molecules/BorderTable';
 
-import { aisCellText, aisColumnLabel, isBboxColumn } from './sdsAis';
+import {
+  aisCellText,
+  aisColumnLabel,
+  isBboxColumn,
+  withCpaTcpa,
+} from './sdsAis';
 
 import classNames from 'classnames/bind';
 import style from './ExpertReview.module.scss';
@@ -43,8 +48,11 @@ const parseCsv = (text) => {
 //   SDS(AIS) 표는 헤더를 한글·단위로 바꾸고 바운딩박스 좌표 열은 숨긴다 — 채점자가 읽을 값이
 //   아니고, 같은 정보를 이미지 위 박스·확대 크롭으로 본다(전문가 피드백). 열 규약은 sdsAis 참조.
 //   AIS 가 아닌 CSV 는 헤더 이름이 규약에 없어 원래 이름·전체 열 그대로 나온다.
+//   CPA·TCPA 열이 없는 SDS 데이터셋은 자선 기준으로 계산해 붙인다(withCpaTcpa, 표시 전용).
 const CsvTable = ({ rows, text, t }) => {
-  const data = Array.isArray(rows) && rows.length > 0 ? rows : parseCsv(text);
+  const data = withCpaTcpa(
+    Array.isArray(rows) && rows.length > 0 ? rows : parseCsv(text),
+  );
   if (!data || data.length === 0) return null;
   const [head, ...body] = data;
   // 원본 열 번호를 키로 유지 — 숨긴 열이 있어도 헤더/셀 짝이 어긋나지 않는다.
