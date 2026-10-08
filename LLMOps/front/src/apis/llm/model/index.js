@@ -88,11 +88,19 @@ export const serveExternalBestCheckpoint = async (modelId) => {
 
 // 양자화·포팅 (SP-4 / v0.4 3.9) — 학습 완료 모델 → GGUF convert job → 포팅 패키지.
 export const startQuantize = async (modelId, body) => {
-  // body: { target_quant: 'q4'|'q5'|'q6', target_device?: string }
+  // body: { target_quant: 'q4'|'q5'|'q6', target_device?: string, commit_id?: number(SDS) }
   return await callApi({
     url: `models/${modelId}/quantize`,
     method: 'post',
     body,
+  });
+};
+
+// SDS(외부 학습) 모델의 양자화 가능 커밋 — 모달 커밋 선택지. 내부 모델은 external=false.
+export const getQuantizeCommits = async (modelId) => {
+  return await callApi({
+    url: `models/${modelId}/quantize/commits`,
+    method: 'get',
   });
 };
 

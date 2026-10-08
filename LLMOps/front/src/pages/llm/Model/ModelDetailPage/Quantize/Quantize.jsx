@@ -516,6 +516,7 @@ const Quantize = memo(function Quantize({ navList, data, ...rest }) {
       </div>
 
       <QuantizeModal
+        modelId={modelId}
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         onConfirm={handleLaunch}

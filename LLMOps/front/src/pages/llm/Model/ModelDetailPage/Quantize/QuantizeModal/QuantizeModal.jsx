@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { ButtonV2 } from '@jonathan/ui-react';
 
-import { getQuantizeDevices } from '@src/apis/llm/model';
+import { getQuantizeCommits, getQuantizeDevices } from '@src/apis/llm/model';
 import { STATUS_SUCCESS } from '@src/network';
 
 import classNames from 'classnames/bind';
@@ -23,13 +23,19 @@ const CUSTOM = '__custom__';
 /**
  * 양자화 옵션 모달 (자체 오버레이 — Redux modal registry 비의존).
  * Q4/Q5/Q6 + 타겟 디바이스(권장 Q 배지·자동제안, 4.5) + 프루닝 토글(4.7 placeholder).
+ * SDS(외부 학습) 모델은 커밋을 고른다 — 커밋의 LoRA 를 base 에 merge 해 양자화하기 때문(기본 best→최신).
  */
-const QuantizeModal = ({ open, onClose, onConfirm, submitting }) => {
+const QuantizeModal = ({ modelId, open, onClose, onConfirm, submitting }) => {
   const { t } = useTranslation();
   const [quant, setQuant] = useState('q5');
   const [deviceKey, setDeviceKey] = useState(''); // '' = 미선택, CUSTOM = 직접입력
   const [customDevice, setCustomDevice] = useState('');
   const [devices, setDevices] = useState([]); // [{key,label,recommended,reason}]
+  // SDS 커밋 선택지 — external=false(내부 모델)면 선택 칸을 그리지 않는다.
+  const [commitInfo, setCommitInfo] = useState({ external: false, commits: [] });
+  const [commitId, setCommitId] = useState(null);
+  // 커밋 목록 조회 전에는 시작을 막는다 — 재진입 시 이전 선택이 제출되거나 선택 없이 시작되지 않게.
+  const [commitsLoaded, setCommitsLoaded] = useState(false);
 
   // 4.5 device→권장Q 매핑 로드 (BE authoritative)
   useEffect(() => {
@@ -45,7 +51,34 @@ const QuantizeModal = ({ open, onClose, onConfirm, submitting }) => {
     };
   }, [open]);
 
+  useEffect(() => {
+    if (!open || !modelId) return;
+    let alive = true;
+    setCommitInfo({ external: false, commits: [] });
+    setCommitId(null);
+    setCommitsLoaded(false);
+    (async () => {
+      const res = await getQuantizeCommits(modelId);
+      if (!alive) return;
+      // 조회 실패면 선택 칸 없이 진행 — BE 가 기본 커밋(best→최신)을 고른다.
+      if (res.status === STATUS_SUCCESS) {
+        setCommitInfo({
+          external: !!res.result?.external,
+          commits: res.result?.commits ?? [],
+        });
+        setCommitId(res.result?.default_commit_id ?? null);
+      }
+      setCommitsLoaded(true);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [open, modelId]);
+
   if (!open) return null;
+
+  const needsCommit = commitInfo.external;
+  const noCommit = needsCommit && !commitId;
 
   const selected = devices.find((d) => d.key === deviceKey);
 
@@ -60,7 +93,11 @@ const QuantizeModal = ({ open, onClose, onConfirm, submitting }) => {
     let target_device;
     if (deviceKey === CUSTOM) target_device = customDevice.trim() || undefined;
     else if (deviceKey) target_device = deviceKey;
-    onConfirm({ target_quant: quant, target_device });
+    onConfirm({
+      target_quant: quant,
+      target_device,
+      ...(needsCommit && commitId ? { commit_id: commitId } : {}),
+    });
   };
 
   return (
@@ -68,6 +105,40 @@ const QuantizeModal = ({ open, onClose, onConfirm, submitting }) => {
       <div className={cx('modal')} onClick={(e) => e.stopPropagation()}>
         <div className={cx('title')}>{t('quantize.modal.title')}</div>
         <div className={cx('subtitle')}>{t('quantize.modal.desc')}</div>
+
+        {needsCommit && (
+          <>
+            <div className={cx('section-label')}>
+              {t('quantize.commit.label')}
+            </div>
+            {noCommit ? (
+              <div className={cx('reco-reason')}>{t('quantize.commit.none')}</div>
+            ) : (
+              <select
+                className={cx('device-select')}
+                value={commitId ?? ''}
+                onChange={(e) => setCommitId(Number(e.target.value))}
+                disabled={submitting}
+              >
+                {commitInfo.commits.map((c) => (
+                  <option
+                    key={c.commit_id}
+                    value={c.commit_id}
+                    disabled={!c.quantizable}
+                  >
+                    {c.commit_name}
+                    {c.is_best ? ` (${t('quantize.commit.best')})` : ''}
+                    {c.quantizable && !c.has_lora
+                      ? ` (${t('quantize.commit.projectorOnly')})`
+                      : ''}
+                    {!c.quantizable && c.reason ? ` — ${c.reason}` : ''}
+                  </option>
+                ))}
+              </select>
+            )}
+            <div className={cx('reco-reason')}>{t('quantize.commit.hint')}</div>
+          </>
+        )}
 
         <div className={cx('section-label')}>{t('quantize.device.label')}</div>
         <select
@@ -148,7 +219,7 @@ const QuantizeModal = ({ open, onClose, onConfirm, submitting }) => {
             colorType='blue'
             label={t('quantize.start.label')}
             onClick={handleConfirm}
-            disabled={submitting}
+            disabled={submitting || noCommit || !commitsLoaded}
           />
         </div>
       </div>
