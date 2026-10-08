@@ -238,3 +238,14 @@
     color: #e0483e;
   }
 }
+
+// 이력 삭제 — 다운로드와 같은 텍스트 버튼, 파괴적 동작이라 빨강.
+.ln-del {
+  color: #e0483e;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+    text-decoration: none;
+  }
+}

@@ -6,7 +6,9 @@ import { ButtonV2 } from '@jonathan/ui-react';
 
 import { toast } from '@src/components/Toast';
 import { callApi, STATUS_SUCCESS } from '@src/network';
+import { errorToastMessage } from '@src/utils';
 import {
+  deleteQuantizeLineage,
   downloadQuantizeFile,
   downloadQuantizePackage,
   getQuantizeJob,
@@ -327,6 +329,34 @@ const Quantize = memo(function Quantize({ navList, data, ...rest }) {
     [modelId, titleName, t],
   );
 
+  // 이력 1건 + 포팅 패키지(스토리지) 삭제. 진행 중 job·엣지 배포 중 거절은 BE 가 사유로 돌려준다.
+  const [deletingId, setDeletingId] = useState(null);
+  const handleDeleteLineage = useCallback(
+    async (l) => {
+      if (!l?.job_id || deletingId !== null) return;
+      // eslint-disable-next-line no-alert
+      if (!window.confirm(t('quantize.delete.confirm'))) return;
+      setDeletingId(l.id);
+      try {
+        const res = await deleteQuantizeLineage(modelId, l.job_id);
+        if (res.status === STATUS_SUCCESS) {
+          toast.success(t('quantize.delete.done'));
+          // 지운 job 을 추적 중이었으면 패키지 카드·localStorage 도 비운다(없는 패키지 다운로드 방지).
+          if (job?.jobId === l.job_id) handleReset();
+          await fetchLineage();
+        } else {
+          errorToastMessage(
+            res.error,
+            res.message || t('quantize.delete.fail'),
+          );
+        }
+      } finally {
+        setDeletingId(null);
+      }
+    },
+    [modelId, job, deletingId, handleReset, fetchLineage, t],
+  );
+
   const isRunning = job && !TERMINAL.includes(status);
   const isFailed = status === 'failed' || status === 'cancelled';
 
@@ -483,6 +513,7 @@ const Quantize = memo(function Quantize({ navList, data, ...rest }) {
                   <th>{t('quantize.status.label')}</th>
                   <th>{t('createdAt.label')}</th>
                   <th>{t('download.label')}</th>
+                  <th>{t('delete.label')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -506,6 +537,18 @@ const Quantize = memo(function Quantize({ navList, data, ...rest }) {
                       ) : (
                         '-'
                       )}
+                    </td>
+                    <td>
+                      <button
+                        type='button'
+                        className={cx('file-dl', 'ln-del')}
+                        onClick={() => handleDeleteLineage(l)}
+                        disabled={deletingId !== null}
+                      >
+                        {deletingId === l.id
+                          ? t('quantize.delete.deleting')
+                          : t('delete.label')}
+                      </button>
                     </td>
                   </tr>
                 ))}

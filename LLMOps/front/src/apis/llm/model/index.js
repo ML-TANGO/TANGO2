@@ -152,6 +152,14 @@ export const markQuantizeLineage = async (modelId, jobId, status) => {
   });
 };
 
+// 양자화 이력 1건 + 포팅 패키지 삭제. 진행 중 job·엣지 배포 중이면 BE 가 사유와 함께 거절.
+export const deleteQuantizeLineage = async (modelId, jobId) => {
+  return await callApi({
+    url: `models/${modelId}/quantize/${jobId}`,
+    method: 'delete',
+  });
+};
+
 // ── SP-5 자동평가 (v0.4 3.8) ──
 // body: { dataset_id: number, metric_set?: string[], max_samples?: number }
 export const startEvaluate = async (modelId, body) => {
