@@ -256,8 +256,13 @@ def _build_pod_info_dict(
                     "ingress_namespace": PLATFORM_NAMESPACE},
         # securityContext / ingress / labels / env / secrets / jf_env defer
         # to chart defaults; SP-Ext.3 fills partner-defined env/secrets from
-        # the persisted manifest. Ingress is enabled for sync (user-facing).
-        "ingress": {"enabled": spec.execution_mode == "sync"},
+        # the persisted manifest.
+        # Kong ingress(/msa/{manifest.name}) 는 끈다: 비-/api 경로라 Kong 보안 루프가
+        # 인증을 붙이지 않아 누구나 /run 을 부를 수 있었고(2026-10-08 실측 200), 경로가
+        # manifest 단위라 같은 manifest 배포끼리 route 가 겹쳤다. 플랫폼은 이 경로를 쓰지
+        # 않는다 — BFF 는 ClusterIP 로 직접 부르고, 외부 호출은 D6 게시(키 인증)가 맡는다.
+        # 끄면 pod.yaml 의 --root-path args override 도 빠져 이미지 기본 CMD 로 뜬다.
+        "ingress": {"enabled": False},
         "labels": {
             "workspace_id": str(workspace_id),
             "job_id": job_id,
