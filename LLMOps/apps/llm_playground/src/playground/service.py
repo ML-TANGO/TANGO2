@@ -1161,6 +1161,11 @@ async def delete_playground(id_list):
             if playground_deployment_info is None:
                 continue
             playground_deployment_info = json.loads(playground_deployment_info)
+            # 외부(SDS) 게시도 배포별 합성 service 를 쓴다 — 이중과 같이 정리 실패 시 행을 남긴다.
+            _requires_composite_cleanup = (
+                _requires_composite_cleanup
+                or bool(playground_deployment_info.get(EXTERNAL_ANCHOR_KEY))
+            )
 
             playground_deployment_id = playground_deployment_info.get("deployment_playground_id")
             playground_embedding_id = playground_deployment_info.get("deployment_embedding_id")
@@ -1394,6 +1399,11 @@ async def get_playground_status(playground_id, _skip_dual=False):
                 result["init_deployment"] = True
             return result
 
+        # 외부 배포의 앵커 행만 남은 상태(중지) — 앵커는 helm 배포가 아니라 아래 워커 조회로
+        # 가지 않는다. 위 404 분기와 같이 '재배포 가능'(init_deployment=False)으로 돌려준다.
+        if playground_deployment_info.get(EXTERNAL_ANCHOR_KEY):
+            return result
+
         # deployment init
         # deployment_init = playground_deployment_info.get("deployment_init")
         deployment_init = True if playground_deployment_info.get("deployment_playground_id") is not None else None
@@ -1578,11 +1588,13 @@ async def get_playground(playground_id):
 
                     # 이중 게시 endpoint는 dataset 요청을 의도적으로 거부하므로, 상세 화면도
                     # 실제로 수락하는 question 계약만 광고한다. 단일 형식은 기존 그대로 둔다.
+                    # 외부(SDS) 단일 배포는 앵커 행이라 게시 진입점(external-session invoke)의
+                    # 계약을 광고한다. 이중이 우선(LLM2 가 SDS 여도 게시는 이중 합성 경로).
                     request_format = [{
                         "test_type": "question",
                         "session_id": "Optional[int]",
                         "test_question": "str"
-                    }] if _is_dual_detail else [{
+                    }] if _is_dual_detail else EXTERNAL_INVOKE_REQUEST_FORMAT if deployment_playground.get(EXTERNAL_ANCHOR_KEY) else [{
                         "test_type": "dataset",
                         "session_id": "Optional[int]",
                         "test_dataset_id": "int",
@@ -1594,7 +1606,8 @@ async def get_playground(playground_id):
                         "test_question": "str"
                     }]
                     result["info_request"]= {
-                        "url" : url,
+                        # 앵커 행엔 /deployment/{api_path} route 가 없다 — 외부 호출은 게시 엔드포인트로.
+                        "url" : None if deployment_playground.get(EXTERNAL_ANCHOR_KEY) else url,
                         "method" : "POST",
                         "format" : request_format
                     }
@@ -1927,7 +1940,10 @@ async def get_playground_deployment_monitoring(playground_id):
         playground_id = playground_deployment_info.get("deployment_playground_id")
         embedding_id = playground_deployment_info.get("deployment_embedding_id")
         reranker_id = playground_deployment_info.get("deployment_reranker_id")
-        
+        # 외부 배포의 앵커 행은 파드가 없다 — 모니터링 대상 배포로 내보내지 않는다(이전과 동일).
+        if playground_deployment_info.get(EXTERNAL_ANCHOR_KEY):
+            playground_id = None
+
         result["playground_id"] = playground_id
         result["embedding_id"] = embedding_id
         result["reranker_id"] = reranker_id
@@ -2347,12 +2363,23 @@ async def start_playground(user_name, playground_id,
                 if not external_job_id:
                     raise Exception(f"External /jobs returned no job_id: {job_resp}")
 
+                # 파드 없는 앵커 배포 행 — 외부 API 게시(D6)는 전부 deployment.id 기준
+                # (게시 테이블 FK·dep-<id> consumer·정리 루프)이고 상세의 인스턴스 정보도
+                # 이 행에서 나온다. 재시작에도 같은 행을 써서 게시 URL·키가 유지된다.
+                anchor_id = await _ensure_external_anchor(
+                    playground_id=playground_id, user_id=user_id,
+                    anchor_id=deployment_playground_id, instance_id=infer_instance_id,
+                    instance_count=playground_instance_count, gpu_count=gpu_count)
+
                 playground_deployment = json.dumps({
-                    "deployment_playground_id": None,
+                    "deployment_playground_id": anchor_id,
                     "deployment_embedding_id": None,
                     "deployment_reranker_id": None,
                     "deployment_run": playground_deployment_run,
                     "external_job_id": external_job_id,
+                    # deployment_playground_id 가 helm 배포가 아니라 앵커임을 표시 —
+                    # 내부 배포 전제 경로(중지 helm 정리·test_url·추론 URL)가 이 행을 건너뛴다.
+                    EXTERNAL_ANCHOR_KEY: True,
                 })
                 await db.update_playground(playground_id=playground_id, deployment=playground_deployment)
                 return True
@@ -2361,6 +2388,15 @@ async def start_playground(user_name, playground_id,
         # 배포 생성
         # =============================================================================
         run_embedding, run_reranker =  False, False
+        # 외부(SDS) → 내부 모델 전환: 앵커 행을 내부 배포로 재사용한다. 외부 게시 route 는
+        # 외부 진입점을 가리키므로 여기서 해제한다(내부 배포는 실행 후 다시 게시).
+        # 해제가 실패하면 전환하지 않는다 — URI 변환이 남은 게시 route 를 내부 배포가
+        # 재게시 때 재사용하면 게시 API 가 깨진다(삭제 경로의 '정리 실패 시 중단'과 같은 규약).
+        if deployment_playground_id and playground_deployment_info.get(EXTERNAL_ANCHOR_KEY):
+            try:
+                await _teardown_publish(deployment_playground_id)
+            except Exception as e:
+                raise Exception(f"외부(SDS) 게시 해제에 실패해 내부 배포로 전환하지 않았습니다 — 다시 시도하세요: {e}")
         # 플레이그라운드 배포
         if deployment_playground_id:
             # 재배포 — playground_id 전달로 serving_system 변경 시 image_id 재계산(엔진 전환 반영).
@@ -2411,6 +2447,77 @@ async def start_playground(user_name, playground_id,
     except Exception as e:
         traceback.print_exc()
         raise Exception(e)
+
+# 외부(SDS) 배포 앵커 ========================================================================
+# playground.deployment JSON 의 이 키가 True 면 deployment_playground_id 는 helm 배포가 아니라
+# 외부 배포의 앵커 행이다(파드·워커 없음). 중지에도 남겨 재시작 시 같은 행을 다시 쓴다.
+EXTERNAL_ANCHOR_KEY = "external_anchor"
+
+# 게시된 외부(SDS) 배포가 받는 요청 body — route 의 invoke_external_session 계약.
+# 상세 화면 'API 호출'의 요청 JSON 포맷으로 그대로 노출된다.
+EXTERNAL_INVOKE_REQUEST_FORMAT = [{
+    "session_id": "Optional[str]",
+    "external_payload": {
+        "image_base64": "str",
+        "ais_rows": "List[dict] (my_ship=1 행 1개 이상 필수)",
+        "output_type": "Optional[str]",
+        "max_new_tokens": "Optional[int]",
+        "custom_prompt": "Optional[str]",
+    },
+}]
+
+
+async def _ensure_external_anchor(playground_id, user_id, anchor_id, instance_id, instance_count, gpu_count):
+    """외부 배포의 앵커 행을 만들거나(최초) 자원 선택값으로 갱신한다(재시작). 앵커 id 반환.
+    실패는 비-치명 — 외부 잡은 이미 떴으므로 배포를 실패시키지 않고 기존 값을 돌려준다
+    (게시·인스턴스 정보만 빠진다). 인스턴스를 모르면 행을 만들 수 없어 그대로 둔다."""
+    if not instance_id:
+        return anchor_id
+    try:
+        if anchor_id:
+            await update_deployment(deployment_id=anchor_id, instance_id=instance_id,
+                                    instance_count=instance_count, gpu_count=gpu_count,
+                                    playground_id=playground_id)
+            return anchor_id
+        return await create_deployment(playground_id=playground_id, user_id=user_id,
+                                       deployment_type="playground", instance_id=instance_id,
+                                       instance_count=instance_count, gpu_count=gpu_count)
+    except Exception:
+        traceback.print_exc()
+        return anchor_id
+
+
+async def invoke_external_session(playground_id, external_payload, session_id=None):
+    """게시된 외부(SDS) 배포 추론 — Kong 게시 route 의 합성 진입점.
+    대상 잡은 요청이 아니라 저장된 배포 정보에서만 찾는다(재시작으로 잡 id 가 바뀌어도
+    게시 URL·키는 그대로). 앵커 배포만 받는다 — 내부 배포는 자기 게시 경로가 따로 있다."""
+    pg = await db.get_playground(playground_id=playground_id)
+    dep = json.loads((pg or {}).get("deployment") or "{}") or {}
+    if not dep.get(EXTERNAL_ANCHOR_KEY):
+        raise Exception("외부(SDS) 배포가 아닙니다")
+    if not dep.get("external_job_id"):
+        raise Exception("배포가 중지되어 있습니다 — 배포를 다시 시작하세요")
+    try:
+        return await playground_test(
+            playground_id=playground_id, test_type="question", test_dataset_id=None,
+            test_dataset_filename=None, test_question=None, session_id=session_id,
+            external_payload=external_payload)
+    except Exception as e:
+        # 협력기관 컨테이너의 오류 본문(내부 경로·스택)이 외부 호출자에게 나가지 않게 일반화한다.
+        # 입력 검증 메시지(image_base64·ais_rows)는 호출자가 고칠 정보라 그대로 둔다.
+        if str(e).startswith("External inference failed"):
+            traceback.print_exc()
+            raise Exception("추론 컨테이너 호출에 실패했습니다 — 잠시 후 다시 시도하세요")
+        raise
+
+
+async def _teardown_publish(deployment_id):
+    """게시(D6) route·키 + 합성 upstream service 정리(멱등). 실패는 호출자에게 전파한다."""
+    try:
+        await run_in_threadpool(deployment_api.teardown_deployment_api, deployment_id)
+    finally:
+        await run_in_threadpool(deployment_api.teardown_composite_service, deployment_id)
+
 
 # 배포 생성
 async def create_deployment(playground_id, user_id, deployment_type, instance_id, instance_count, gpu_count, rag_id=None):
@@ -2622,7 +2729,12 @@ async def stop_playground(playground_id, _dual_cascaded=False):
             playground_deployment_info = json.loads(playground_deployment_info)
 
             # External partner container 분기 — helm 없이 BFF cancel
+            # 앵커 행만 있고 잡이 없으면(이미 중지) 할 일이 없다. 아래 내부 경로로 내려가면
+            # 앵커를 helm 배포로 보고 게시(D6)까지 해제하므로 여기서 끝낸다 — 외부 게시는
+            # 중지·재시작에도 유지하고 삭제 때만 해제한다.
             external_job_id = playground_deployment_info.get("external_job_id")
+            if not external_job_id and playground_deployment_info.get(EXTERNAL_ANCHOR_KEY):
+                return partner_stopped
             if external_job_id:
                 try:
                     await cancel_infer_job(external_job_id)
@@ -2721,6 +2833,12 @@ async def get_test_options(playground_id):
 
         # dataset_list
         result["dataset_list"] = await db.get_datasets(workspace_id=workspace_id)
+
+        # 외부 배포의 앵커 행엔 /deployment/{api_path} route 가 없다 — test_url 을 비워
+        # 평가 서비스가 external 전용 경로(_infer_vlm_output)로 가게 둔다.
+        _pg = await db.get_playground(playground_id=playground_id)
+        if (json.loads((_pg or {}).get("deployment") or "{}") or {}).get(EXTERNAL_ANCHOR_KEY):
+            return result
 
         if settings.EXTERNAL_HOST_REDIRECT:
             api_address = settings.EXTERNAL_HOST
@@ -2952,7 +3070,7 @@ async def _playground_test_url(playground_id):
         raise Exception(f"playground {playground_id} has no deployment (not running)")
     dep = json.loads(dep)
     dpid = dep.get("deployment_playground_id")
-    if not dpid:
+    if not dpid or dep.get(EXTERNAL_ANCHOR_KEY):
         raise Exception(f"playground {playground_id} is not a running internal deployment")
     dinfo = db.get_deployment(deployment_id=dpid)
     api_path = (dinfo or {}).get("api_path")
@@ -3431,7 +3549,9 @@ async def playground_test(playground_id, test_type, test_dataset_id, test_datase
 
         # 중지 상태(external_job_id 정리됨 + internal 배포 없음)에서 테스트가 들어오면
         # 아래 internal 경로가 get_deployment(None) 을 타 모호한 AttributeError 를 낸다.
-        if not external_job_id and deployment_playground_id is None:
+        # 외부 배포의 앵커 행은 helm 배포가 아니다 — 잡이 없으면 중지 상태다.
+        if not external_job_id and (deployment_playground_id is None
+                                    or playground_deployment_info.get(EXTERNAL_ANCHOR_KEY)):
             raise Exception("Playground is not deployed — 배포를 먼저 시작하세요")
 
         # ── External partner container 분기 ─────────────────────────────

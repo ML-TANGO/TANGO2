@@ -3148,20 +3148,56 @@ def _resolve_dual_session_for_deployment(deployment_id):
         return parent_id if parent_dual.get("mode") == "dual" else None
 
 
+def _resolve_external_session_for_deployment(deployment_id):
+    """외부(SDS) 배포의 앵커 행이면 그 playground id, 아니면 None.
+    표시 키 external_anchor 는 llm_playground 가 외부 배포 시작 때 기록한다(EXTERNAL_ANCHOR_KEY)."""
+    with get_llm_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT p.id, p.deployment
+              FROM jonathan_llm.playground p
+             WHERE CAST(JSON_UNQUOTE(JSON_EXTRACT(
+                       p.deployment, '$.deployment_playground_id')) AS UNSIGNED)=%s
+             LIMIT 1
+            """,
+            (deployment_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        deployment = json.loads(row.get("deployment") or "{}") or {}
+        return row.get("id") if deployment.get("external_anchor") else None
+
+
 def publish_deployment_api(deployment_id, headers_user=None):
     dep = _get_deployment_or_404(deployment_id)  # authZ=인증만(route get_auth), 소유권 무관
     api_path = dep.get("api_path")
     if not api_path:
         raise Exception("Deployment has no api_path (not running or not exposed)")
+    is_playground = dep.get("llm") == TYPE.LLM_DEPLOYMENT_TYPE_TO_INT.get(TYPE.PLAYGROUND_MODEL)
     dual_playground_id = (
         _resolve_dual_session_for_deployment(deployment_id)
-        if dep.get("llm") == TYPE.LLM_DEPLOYMENT_TYPE_TO_INT.get(TYPE.PLAYGROUND_MODEL)
+        if is_playground
         else None
     )
-    composite_service_created = False
+    # 이중이 우선 — LLM2 가 외부(SDS)여도 이중 합성 경로로 게시해야 LLM1 체인을 지난다.
+    external_playground_id = (
+        _resolve_external_session_for_deployment(deployment_id)
+        if is_playground and not dual_playground_id
+        else None
+    )
     if dual_playground_id:
+        composite_uri = "/api/playgrounds/dual-session/{}/invoke".format(dual_playground_id)
+    elif external_playground_id:
+        composite_uri = "/api/playgrounds/external-session/{}/invoke".format(external_playground_id)
+    else:
+        composite_uri = None
+    composite_service_created = False
+    if composite_uri:
         # raw LLM2 service를 게시하면 LLM1 체인을 우회하므로 playground 오케스트레이터를
         # 배포별 service로 둔다. 배포별 이름이어야 unpublish/delete가 결정적으로 역연산 가능하다.
+        # 외부(SDS)는 앵커 행이라 내부 서빙 route 자체가 없어 같은 방식으로 playground 를 거친다.
         service_id, composite_service_created = kong_helper.get_or_create_service(
             deployment_api.composite_service_name(deployment_id),
             "http://{}".format(LLM_PLAYGROUND_DNS),
@@ -3188,14 +3224,11 @@ def publish_deployment_api(deployment_id, headers_user=None):
         # 전용 게시 route(같은 service) 생성 + 인증(key-auth) + 인가(acl=소유 consumer 만).
         ext_route_id, ext_created = kong_helper.create_route_on_service(
             service_id, ext_path, name=deployment_api.external_route_name(deployment_id))
-        if dual_playground_id:
+        if composite_uri:
             kong_helper.attach_plugin(
                 ext_route_id,
                 "request-transformer",
-                {"replace": {
-                    "uri": "/api/playgrounds/dual-session/{}/invoke".format(
-                        dual_playground_id)
-                }},
+                {"replace": {"uri": composite_uri}},
             )
         kong_helper.attach_key_auth_plugin(ext_route_id)       # 인증: 유효 키 필수(anonymous 없음)
         kong_helper.attach_acl_plugin(ext_route_id, consumer)  # 인가: 이 consumer 만(교차테넌트 차단)

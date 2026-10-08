@@ -276,6 +276,13 @@ class DualInvokeInput(BaseModel):
     external_payload: Optional[Dict[str, Any]] = None
 
 
+class ExternalInvokeInput(BaseModel):
+    """게시된 외부(SDS) 배포 API 요청 — 협력기관 /run params 를 external_payload 로 그대로 싣는다
+    (Playground /test 의 external 분기와 같은 필드). 검증은 그 분기가 한다."""
+    session_id: Optional[str] = None
+    external_payload: Dict[str, Any]
+
+
 
 class PlaygroundTestInput(BaseModel):
     playground_id: int

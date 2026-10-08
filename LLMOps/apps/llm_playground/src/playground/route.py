@@ -798,6 +798,20 @@ async def invoke_dual_session(playground_id: int, body: dto.DualInvokeInput):
         return response(status=0, message=str(e), result=None)
 
 
+@playgrounds.post("/external-session/{playground_id}/invoke", summary='게시 외부(SDS) 모델 추론', tags=TAG_TEST)
+async def invoke_external_session(playground_id: int, body: dto.ExternalInvokeInput):
+    """Kong 외부 게시용 진입점 — 추론 잡은 요청이 아니라 저장된 배포 정보에서만 찾는다."""
+    try:
+        res, message = await svc.invoke_external_session(
+            playground_id=playground_id,
+            external_payload=body.external_payload,
+            session_id=body.session_id)
+        return response(status=1, result=res, message=message)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+
 @playgrounds.post("/dual-batch", summary='추론 - 이중모델 데이터셋 일괄(4.3)', tags=TAG_TEST)
 async def dual_batch_test(body: dto.DualBatchInput, request: Request):
     """이중모델 세션의 데이터셋 일괄 추론 — N 샘플에 LLM1→LLM2 체인 + BLEU/ROUGE 채점.
