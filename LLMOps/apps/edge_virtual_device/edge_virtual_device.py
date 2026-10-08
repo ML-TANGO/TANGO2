@@ -3,6 +3,7 @@
 실장비 없이 엣지 배포 e2e 검증용 (테스트 전용, 외부 비노출).
 스펙: 엣지 가상 디바이스 E2E 설계 문서(내부)
 계약 v1: /ops POST {op,image,model,version,gguf_path,model_url,params} -> 200 {"status":"running"},
+          (1.2) VLM 패키지는 mmproj_path·mmproj_url 이 더 온다 → 비전 GGUF 도 받아 --mmproj 로 띄운다,
           /metrics GET -> {contract_version,containers,container_count,node_cpu_total,memory_total,gpu},
           heartbeat: 플랫폼 /api/edge/devices/{id}/heartbeat 로 Bearer 토큰 POST(>=30s 간격),
           /ops·/metrics 는 OPS_TOKEN 설정 시 Bearer 검증(실 에이전트와 동일 게이트).
@@ -29,7 +30,7 @@ from fastapi.responses import JSONResponse
 
 app = FastAPI()
 
-CONTRACT_VERSION = "1.1"
+CONTRACT_VERSION = "1.2"
 OPS_TOKEN = os.environ.get("OPS_TOKEN", "")
 # 직전 키. 이 디바이스를 새 키로 바꾼 직후 플랫폼이 잠시 옛 키를 보낼 수 있으므로,
 # 계속 동작하도록, 둘 중 하나와 맞으면 통과시킨다(계약 1.1 — 하위호환 추가).
@@ -126,16 +127,17 @@ def _engine_log_tail(n=400):
         return "(no log)"
 
 
-def _engine_start(path, model):
-    """llama-server 를 띄우고 /health 가 200 이 될 때까지 기다린다. 실패하면 예외."""
+def _engine_start(path, model, mmproj=None):
+    """llama-server 를 띄우고 /health 가 200 이 될 때까지 기다린다. 실패하면 예외.
+    mmproj 가 있으면(계약 1.2 VLM) --mmproj 로 붙여 /v1/chat/completions 가 image_url 을 받는다."""
     _engine_stop()
     # 기동 실패 사유를 남긴다 — rc 만 보고하면 왜 안 떴는지 알 길이 없다.
     log = open(ENGINE_LOG, "ab", buffering=0)
-    proc = subprocess.Popen(
-        [LLAMA_SERVER_BIN, "-m", path, "--host", "127.0.0.1", "--port", str(ENGINE_PORT),
-         "-t", ENGINE_THREADS, "-c", ENGINE_CTX],
-        stdout=log, stderr=log,
-    )
+    cmd = [LLAMA_SERVER_BIN, "-m", path, "--host", "127.0.0.1", "--port", str(ENGINE_PORT),
+           "-t", ENGINE_THREADS, "-c", ENGINE_CTX]
+    if mmproj:
+        cmd += ["--mmproj", mmproj]
+    proc = subprocess.Popen(cmd, stdout=log, stderr=log)
     _engine["proc"] = proc
     deadline = time.time() + ENGINE_START_TIMEOUT
     while time.time() < deadline:
@@ -214,6 +216,7 @@ def _record_deploy(body, artifact):
             "version": body.get("version"),
             "gguf_path": body.get("gguf_path"),
             "model_url": body.get("model_url"),
+            "mmproj_path": body.get("mmproj_path"),
             "artifact": artifact,       # e2e 가 '파일이 실제로 도착했나' 를 본다
             "params": body.get("params") or {},
         }
@@ -225,6 +228,18 @@ def _deploy_async(body, gen):
         with _lock:
             token = _state["token"]
         path, size = _pull_model(body["model_url"], os.path.basename(body["gguf_path"]), token)
+        mmproj = None
+        if body.get("mmproj_url"):
+            # 실 에이전트와 같다 — 비전 파일을 못 받으면 LLM 만 띄우지 않고 배포 실패.
+            with _lock:
+                superseded = _progress["gen"] != gen
+            if superseded:
+                return
+            try:
+                mmproj, _mm_size = _pull_model(
+                    body["mmproj_url"], os.path.basename(body["mmproj_path"]), token)
+            except Exception as e:
+                raise RuntimeError(f"mmproj download failed: {type(e).__name__}: {e}")
         with _lock:
             superseded = _progress["gen"] != gen
         if superseded:
@@ -233,7 +248,7 @@ def _deploy_async(body, gen):
         # running 이라 보고하는 것이 실장비에서 터지는 바로 그 거짓이다.
         if ENGINE != "off" and _is_gguf(path) and os.path.exists(LLAMA_SERVER_BIN):
             try:
-                _engine_start(path, body.get("model"))
+                _engine_start(path, body.get("model"), mmproj)
             except Exception as e:
                 raise RuntimeError(f"engine start failed: {type(e).__name__}: {e}")
             with _lock:
@@ -241,7 +256,8 @@ def _deploy_async(body, gen):
             if superseded:
                 _engine_stop()    # 로딩 중 stop 이 왔다 — 띄운 것을 도로 내린다
                 return
-        _record_deploy(body, {"path": path, "size": size, "engine": _engine_alive()})
+        _record_deploy(body, {"path": path, "size": size, "mmproj": mmproj,
+                              "engine": _engine_alive()})
     except RuntimeError as e:
         err = str(e)
     except Exception as e:
@@ -277,6 +293,8 @@ async def ops(req: Request):
                 return JSONResponse(status_code=409, content={
                     "status": "error", "detail": "deploy already in progress"})
         model_url = body.get("model_url")
+        if body.get("mmproj_url") and not (model_url and body.get("mmproj_path")):
+            return {"status": "error", "detail": "mmproj_url needs model_url and mmproj_path"}
         if model_url:
             if not body.get("gguf_path"):
                 return {"status": "error", "detail": "model_url given without gguf_path"}

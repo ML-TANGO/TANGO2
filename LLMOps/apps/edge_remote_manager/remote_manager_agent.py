@@ -11,6 +11,7 @@
 ⚠️ /ops·/metrics 는 OPS_TOKEN 이 설정되면 Bearer 검증한다(계약 v1). 설정하지 않으면 무인증으로
    동작하므로 그 경우엔 신뢰 사설망/방화벽 안에서만 노출할 것. 호스트의 docker 를 관리하므로
    디바이스에서 host 프로세스로 실행(systemd/nohup). 컨테이너 안에서 X.
+VLM 패키지(계약 1.2): mmproj_url 로 비전 GGUF 도 받아 MMPROJ_PATH=/models/<파일> 로 주입.
 설정(env): AGENT_PORT(8600) DOCKER_BIN(docker) MODEL_DIR(/opt/edge/models) CONTAINER_NAME(edge-serve)
            GPU(auto|on|off|runtime|gpus — Jetson 은 자동 판별) PLATFORM_HEARTBEAT_URL
            DEVICE_ID DEVICE_TOKEN HEARTBEAT_INTERVAL(35)
@@ -48,7 +49,8 @@ OPS_TOKEN = os.environ.get("OPS_TOKEN", "")
 # 계속 동작하도록, 둘 중 하나와 맞으면 통과시킨다(계약 1.1 — 하위호환 추가).
 OPS_TOKEN_PREV = os.environ.get("OPS_TOKEN_PREV", "")
 # 계약 버전. 필드 추가는 하위호환(minor), 제거·의미변경은 major 로 올린다.
-CONTRACT_VERSION = "1.1"
+# 1.2 — SDS(VLM) 패키지의 mmproj(비전) GGUF 를 함께 받는다(mmproj_url/mmproj_path → MMPROJ_PATH).
+CONTRACT_VERSION = "1.2"
 DOWNLOAD_TIMEOUT = 60          # 청크 간 유휴 상한(전체 전송 시간 아님)
 DOWNLOAD_CHUNK = 1024 * 1024
 
@@ -262,8 +264,9 @@ def _download_model(url, filename, gen=None):
     return True, "downloaded"
 
 
-def _sweep_old_artifacts(current):
+def _sweep_old_artifacts(keep):
     """이전 배포의 아티팩트 정리 — 디바이스당 컨테이너는 1개라 옛 모델은 쓰이지 않는다.
+    keep = 이번 배포가 쓰는 파일명 집합(모델 GGUF, VLM 이면 mmproj 까지).
 
     플랫폼이 산출물마다 고유한 `lineage-<id>-…` 이름을 보내므로 지우지 않으면 계속
     쌓인다. Jetson 계열은 저장공간이 넉넉하지 않아 2.5GB 급 몇 개면 찬다.
@@ -272,7 +275,7 @@ def _sweep_old_artifacts(current):
     """
     import glob
     for f in glob.glob(os.path.join(MODEL_DIR, "lineage-*")):
-        if os.path.basename(f) == current:
+        if os.path.basename(f) in keep:
             continue
         try:
             os.remove(f)
@@ -329,9 +332,9 @@ async def ops(req: Request):
             if _progress["in_progress"]:
                 return JSONResponse(status_code=409, content={
                     "status": "error", "detail": "deploy already in progress"})
-        # model_url 이 있으면 다운로드가 붙어 길어진다 → 202 로 즉시 답하고 백그라운드로.
-        # 없으면 종전대로 동기 처리한다(빠른 경로, 기존 계약 유지).
-        if body.get("model_url"):
+        # model_url(·mmproj_url) 이 있으면 다운로드가 붙어 길어진다 → 202 로 즉시 답하고
+        # 백그라운드로. 없으면 종전대로 동기 처리한다(빠른 경로, 기존 계약 유지).
+        if body.get("model_url") or body.get("mmproj_url"):
             with _lock:
                 _progress["gen"] += 1
                 gen = _progress["gen"]
@@ -394,6 +397,18 @@ def _deploy(body, gen=None):
         ok, detail = _download_model(model_url, os.path.basename(gguf), gen=gen)
         if not ok:
             return {"status": "error", "detail": detail}
+    # 계약 1.2 — VLM 패키지는 비전 파일(mmproj)이 함께 와야 이미지를 본다. 받지 못하면
+    # LLM 만 띄우지 않고 배포를 실패시킨다(이미지를 못 보는 running 은 조용한 거짓이다).
+    mmproj = body.get("mmproj_path")
+    mmproj_url = body.get("mmproj_url")
+    if mmproj_url:
+        if not mmproj:
+            return {"status": "error", "detail": "mmproj_url given without mmproj_path"}
+        if _superseded(gen):
+            return {"status": "error", "detail": "deploy superseded before mmproj download"}
+        ok, detail = _download_model(mmproj_url, os.path.basename(mmproj), gen=gen)
+        if not ok:
+            return {"status": "error", "detail": f"mmproj {detail}"}
     if _superseded(gen):
         return {"status": "error", "detail": "deploy superseded before pull"}
 
@@ -406,6 +421,8 @@ def _deploy(body, gen=None):
         run_args += ["-v", f"{MODEL_DIR}:/models"]
     if gguf:
         run_args += ["-e", f"MODEL_PATH=/models/{gguf}"]
+    if mmproj:
+        run_args += ["-e", f"MMPROJ_PATH=/models/{os.path.basename(mmproj)}"]
     for k, v in (params.get("env") or {}).items():
         run_args += ["-e", f"{k}={v}"]
     run_args += list(params.get("docker_args") or [])  # 이미지별 추가 플래그
@@ -424,7 +441,7 @@ def _deploy(body, gen=None):
         return {"status": "error", "detail": detail}
 
     if gguf:
-        _sweep_old_artifacts(os.path.basename(gguf))
+        _sweep_old_artifacts({os.path.basename(gguf)} | ({os.path.basename(mmproj)} if mmproj else set()))
     with _lock:
         _last_deploy.update({"image": image, "model": body.get("model"), "version": body.get("version")})
         _progress["error"] = None

@@ -60,8 +60,9 @@ spec:
               value: "auto"
             - name: ENGINE_THREADS
               value: "8"
+            # SDS(VLM) 패키지 = 이미지 576토큰 + AIS 표 + 생성 512 → 패키지 config.json n_ctx(4096)와 맞춘다.
             - name: ENGINE_CTX
-              value: "2048"
+              value: "4096"
           command:
             - python3
             - -m

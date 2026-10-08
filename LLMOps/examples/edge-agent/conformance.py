@@ -75,7 +75,8 @@ class _ArtifactHandler(BaseHTTPRequestHandler):
         if m:
             start = int(m.group(1))
         body = self.payload[start:]
-        self.__class__.hits.append({"range": rng, "start": start, "bytes": len(body)})
+        self.__class__.hits.append({"path": self.path, "range": rng, "start": start,
+                                    "bytes": len(body)})
         self.send_response(206 if start else 200)
         self.send_header("Content-Type", "application/octet-stream")
         self.send_header("Content-Length", str(len(body)))
@@ -150,6 +151,9 @@ def call(url, method="GET", body=None, token=None, timeout=900):
 
 
 # ── 검사 항목 ────────────────────────────────────────────────────────────────
+_AGENT = {"minor": -1}     # /metrics 가 보고한 minor — 1.2 이상이면 VLM(mmproj) 배포도 검사한다
+
+
 def check_metrics(base, token):
     print("\n[1] GET /metrics — 스키마와 계약 버전")
     st, body = call(f"{base}/metrics", token=token)
@@ -166,6 +170,7 @@ def check_metrics(base, token):
     except (IndexError, ValueError):
         minor = -1
     check("minor 를 읽을 수 있다(회전 창 지원 여부 판단)", minor >= 0, f"contract_version={ver!r}")
+    _AGENT["minor"] = minor
     for key, typ in (("containers", list), ("container_count", int),
                      ("node_cpu_total", int)):
         check(f"{key} 필드가 {typ.__name__} 이다", isinstance(body.get(key), typ),
@@ -285,6 +290,46 @@ def check_deploy(base, token, image, host_for_agent):
     srv.shutdown()
 
 
+def check_vlm_deploy(base, token, image, host_for_agent):
+    """계약 1.2 — VLM 패키지는 모델 GGUF 와 mmproj 를 **둘 다** 받아야 배포가 성립한다."""
+    print("\n[5-1] VLM 배포(1.2) — mmproj_url 도 받아 가는가")
+    if _AGENT["minor"] < 2:
+        print(f"  [SKIP] 에이전트 contract minor={_AGENT['minor']} (< 2) — 플랫폼은 VLM 패키지를 보내지 않는다")
+        return
+    srv, port, name = start_artifact_server(token=DEVICE_TOKEN)
+    mm_name = "mmproj-" + name
+    try:
+        st, body = call(f"{base}/ops", method="POST", token=token, body={
+            "op": "deploy", "image": image, "model": "conformance-vlm", "version": "v1",
+            # 플랫폼은 URL 에 lineage 쿼리를 붙인다 — 에이전트가 URL 을 그대로 써야 서버가 옛 배포의
+            # 늦은 요청을 가려낸다. 쿼리를 떼고 요청하면 아래 경로 비교가 실패한다.
+            "gguf_path": name, "model_url": f"http://{host_for_agent}:{port}/{name}?lineage=1",
+            "mmproj_path": mm_name, "mmproj_url": f"http://{host_for_agent}:{port}/{mm_name}?lineage=1",
+            "params": {"port": 18082}})
+        if not check("VLM 배포가 202 deploying 으로 시작된다", st == 202, f"status={st} body={str(body)[:160]}"):
+            return
+        names, last_error = [], None
+        for _ in range(DEPLOY_WAIT_SEC // 2):
+            time.sleep(2)
+            _st, m = call(f"{base}/metrics", token=token)
+            if not isinstance(m, dict):
+                continue
+            last_error = m.get("last_deploy_error")
+            names = [c.get("name") for c in (m.get("containers") or [])]
+            if last_error or names or not m.get("deploy_in_progress"):
+                break
+        paths = {h.get("path") for h in _ArtifactHandler.hits}
+        check("모델 GGUF 를 받아 갔다(URL 그대로)", f"/{name}?lineage=1" in paths, f"paths={sorted(paths)}")
+        check("mmproj 도 받아 갔다(URL 그대로)", f"/{mm_name}?lineage=1" in paths, f"paths={sorted(paths)}")
+        check("VLM 배포가 실패를 남기지 않았다", not last_error, str(last_error)[:200])
+        check("/metrics 가 기동된 컨테이너를 보고한다", bool(names), f"containers={names}")
+        print("  [NOTE] 컨테이너에 MMPROJ_PATH 가 들어갔는지·서빙 엔진이 --mmproj 로 떴는지는 컨테이너 안이라\n"
+              "         이 검사기로 볼 수 없다. 실제 서빙 이미지로 이미지 입력 추론(§2 VLM 패키지)을 직접 확인할 것.")
+        call(f"{base}/ops", method="POST", body={"op": "stop"}, token=token)
+    finally:
+        srv.shutdown()
+
+
 # 에이전트가 아티팩트를 받아올 때 쓰는 토큰. 실제 운용에선 플랫폼이 발급해 에이전트의
 # DEVICE_TOKEN 으로 들어가는 값이고, 이 검사에선 그 값을 그대로 넘겨받는다(지정하지
 # 않으면 임의값을 만들고, 에이전트에 같은 값을 넣어야 [5] 가 통과한다).
@@ -365,6 +410,7 @@ def main():
         host = args.callback_host or local_ip_for(
             base.split("//", 1)[-1].split(":")[0].split("/")[0])
         check_deploy(base, token, args.image, host)
+        check_vlm_deploy(base, token, args.image, host)
     else:
         print("\n[5] 배포 — [SKIP] --image 미지정")
 

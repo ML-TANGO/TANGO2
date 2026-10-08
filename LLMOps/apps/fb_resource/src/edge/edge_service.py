@@ -9,6 +9,7 @@ import hmac
 import ipaddress
 import json
 import os
+import re
 import secrets
 import socket
 import traceback
@@ -39,8 +40,14 @@ HEARTBEAT_MIN_INTERVAL_SEC = 30  # SP-8 §5.1 — 30초 미만 재호출 throttl
 # 그 finally 가 실행되지 않아 슬롯이 영구 누수됐다(실측: 정상 요청 1회 뒤 그 디바이스는
 # 계속 429). 막으려던 것보다 더 나쁜 고장이다. 소비량을 쌓았다가 시간이 지나면 저절로
 # 빠지는 예산 방식은 **누수가 원리적으로 불가능**하다 — 전송이 끊겨도 정리할 상태가 없다.
-ARTIFACT_BUDGET_BYTES = 20 * 1024 ** 3     # 창당 허용 전송량(2.5GB 모델 8회분)
+ARTIFACT_BUDGET_BYTES = 20 * 1024 ** 3     # 창당 허용 전송량(2.5GB 텍스트 모델 8회분 / 5.5GB VLM 패키지 3회분)
 ARTIFACT_BUDGET_WINDOW_SEC = 600
+# SDS(VLM) 패키지의 mmproj(비전) GGUF 를 함께 받는 계약(mmproj_url/mmproj_path, 1.2 에서 추가).
+# 이보다 낮은 에이전트는 모르는 필드를 조용히 무시하고 LLM 만 띄운다 → 이미지를 못 보는
+# 모델이 running 으로 보인다. 그래서 VLM 패키지는 이 버전 이상에만 보낸다.
+MMPROJ_MIN_CONTRACT = (1, 2)
+_MMPROJ_NAME_RE = re.compile(r"[A-Za-z0-9._\-]+\.gguf")      # fullmatch 로만 쓴다
+_METADATA_MAX_BYTES = 64 * 1024                               # 패키지 metadata.json 상한(실제 ~1KB)
 
 
 class ArtifactUnavailable(Exception):
@@ -652,8 +659,19 @@ def refresh_edge_worker(worker_id: int) -> dict:
     return _worker_view(db_edge.get_edge_worker(worker_id=worker_id))
 
 
-def _resolve_artifact(lineage_id: int) -> str:
-    """quantize_lineage.id → 아티팩트 절대경로. 경로는 **DB 에서만** 만든다.
+def _resolve_artifact(lineage_id: int, kind: str = "model") -> str:
+    """quantize_lineage.id → 아티팩트 절대경로(kind = model | mmproj). 실패 시 ArtifactUnavailable."""
+    model_path, mmproj_path = _resolve_package(lineage_id)
+    if kind == "mmproj":
+        if not mmproj_path:
+            print(f"[edge] artifact unavailable (lineage_id={lineage_id}): package has no mmproj")
+            raise ArtifactUnavailable("package has no mmproj")
+        return mmproj_path
+    return model_path
+
+
+def _resolve_package(lineage_id: int):
+    """quantize_lineage.id → (모델 GGUF 절대경로, mmproj 절대경로|None). 경로는 **DB 에서만** 만든다.
 
     클라이언트가 준 gguf_path 문자열을 신뢰 체인에서 빼기 위한 함수다. 상대경로는
     DB 값이지만 그래도 commonpath 로 jobs 베이스 이탈을 막는다(llm_model 의 커밋
@@ -687,16 +705,58 @@ def _resolve_artifact(lineage_id: int) -> str:
         raise _unavailable("path escapes jobs base")
     if not os.path.isfile(abs_path):
         raise _unavailable("file is missing on storage")
-    # SDS(VLM) 양자화 패키지는 mmproj(비전) GGUF 가 함께 있어야 동작한다 — 엣지는 아직 GGUF 1개만
-    # 전달하므로(remote_manager 계약) 보내면 이미지를 못 보는 모델이 된다. 지원 전까지 거절.
     try:
-        with open(os.path.join(os.path.dirname(abs_path), "metadata.json"), encoding="utf-8") as f:
-            package_meta = json.load(f) or {}
+        mmproj_path = _package_mmproj(abs_path)
+    except ArtifactUnavailable as e:
+        raise _unavailable(e.detail)
+    return abs_path, mmproj_path
+
+
+def _package_mmproj(model_path: str):
+    """SDS(VLM) 패키지면 같은 디렉터리의 mmproj(비전) GGUF 절대경로, 아니면 None.
+
+    convert 가 metadata.json 의 mmproj_file 에 파일명을 적는다. 패키지는 워크스페이스
+    스토리지에 있으므로 이름을 그대로 믿지 않는다 — 형식·같은 디렉터리·실재를 확인한다.
+    mmproj_file 이 적혀 있는데 파일이 없으면 None 이 아니라 거절이다(LLM 만 보내면
+    이미지를 못 보는 모델이 running 으로 뜬다).
+    """
+    pkg_dir = os.path.dirname(model_path)
+    meta_path = os.path.join(pkg_dir, "metadata.json")
+    if not os.path.exists(meta_path):
+        return None              # metadata 없는 옛 텍스트 패키지
+    # metadata 가 있는데 못 읽으면 텍스트로 간주하지 않는다 — VLM 패키지였다면 LLM 만 나간다.
+    try:
+        with open(meta_path, encoding="utf-8") as f:
+            raw = f.read(_METADATA_MAX_BYTES + 1)
+        if len(raw) > _METADATA_MAX_BYTES:
+            raise ArtifactUnavailable("package metadata is too large")
+        meta = json.loads(raw or "{}")
     except (OSError, ValueError):
-        package_meta = {}
-    if isinstance(package_meta, dict) and package_meta.get("mmproj_file"):
-        raise _unavailable("VLM package (mmproj) is not supported for edge deploy yet")
-    return abs_path
+        raise ArtifactUnavailable("package metadata is unreadable")
+    if not isinstance(meta, dict):
+        raise ArtifactUnavailable("package metadata is not an object")
+    # 텍스트 패키지는 키를 쓰지 않는다. 키가 있는데 0·false·"" 같은 값이면 손상으로 본다
+    # — 텍스트로 흘리면 VLM 의 LLM 만 1.1 에이전트에도 나간다.
+    name = meta.get("mmproj_file")
+    if name is None:
+        return None
+    if not isinstance(name, str) or not _MMPROJ_NAME_RE.fullmatch(name):
+        raise ArtifactUnavailable("invalid mmproj_file in package metadata")
+    path = os.path.realpath(os.path.join(pkg_dir, name))
+    if os.path.dirname(path) != os.path.realpath(pkg_dir) or not os.path.isfile(path):
+        raise ArtifactUnavailable("mmproj file is missing in package")
+    return path
+
+
+def _contract_at_least(version, need) -> bool:
+    """에이전트가 보고한 contract_version("1.2") 이 need((1, 2)) 이상인가. 해석 불가면 False."""
+    try:
+        parts = [int(p) for p in str(version or "").strip().split(".")[:2]]
+    except ValueError:
+        return False
+    if not parts:
+        return False
+    return tuple(parts + [0] * (2 - len(parts))) >= tuple(need)
 
 
 def _platform_public_base() -> str:
@@ -719,13 +779,23 @@ def _platform_public_base() -> str:
     return f"{proto}://{netloc}"
 
 
-def _artifact_url(device_id: str):
+def _artifact_url(device_id: str, kind: str = "model", lineage_id=None):
     """디바이스가 받아갈 아티팩트 URL. 경로에 파일을 담지 않는다 — 무엇을 줄지는
-    서버가 워커의 deploy_lineage_id 로 정하므로, 디바이스가 경로를 고를 여지가 없다."""
+    서버가 워커의 deploy_lineage_id 로 정하므로, 디바이스가 경로를 고를 여지가 없다.
+    kind=mmproj 는 같은 패키지의 비전 GGUF(…/artifact/mmproj).
+
+    lineage_id 를 쿼리로 묶는다. 인가는 배포마다 바뀌는데(다음 배포가 /ops 전에 새긴다),
+    이전 배포의 다운로드가 아직 돌고 있으면(409 로 거절된 재배포가 되돌리기 전, 또는
+    stop 뒤 아직 안 멈춘 스레드) 그 요청이 **새 lineage 의 파일**을 옛 이름으로 받아 간다.
+    URL 이 자기 lineage 를 들고 오면 서버가 불일치를 404 로 끊는다. 에이전트는 URL 을
+    그대로 쓰므로(계약) 쿼리 추가는 하위호환이다."""
     base = _platform_public_base()
     if not base:
         return None
-    return f"{base}/api/edge/devices/{device_id}/artifact"
+    url = f"{base}/api/edge/devices/{device_id}/artifact"
+    if kind == "mmproj":
+        url += "/mmproj"
+    return f"{url}?lineage={int(lineage_id)}" if lineage_id is not None else url
 
 
 # 디바이스별 전송량 예산. fb_resource 는 단일 레플리카라 in-process 로 충분하다 —
@@ -772,7 +842,7 @@ def artifact_budget_reserve(device_id: str, nbytes: int):
         return True, None
 
 
-def resolve_device_artifact(device_id: str, token: str):
+def resolve_device_artifact(device_id: str, token: str, kind: str = "model", want_lineage=None):
     """device-facing 다운로드 인가 → (절대경로|None, http_status, err).
 
     인증은 heartbeat 와 **같은 디바이스 토큰**이고, 인가는 배포 때 새긴
@@ -784,8 +854,11 @@ def resolve_device_artifact(device_id: str, token: str):
     lineage_id = (w or {}).get("deploy_lineage_id")
     if not lineage_id:
         return None, 404, "no artifact authorized for this device"
+    # URL 에 묶인 lineage 가 지금 인가와 다르면 옛 배포의 늦은 요청이다(_artifact_url 참조).
+    if want_lineage is not None and int(want_lineage) != int(lineage_id):
+        return None, 404, "no artifact authorized for this device"
     try:
-        return _resolve_artifact(lineage_id), 200, None
+        return _resolve_artifact(lineage_id, kind), 200, None
     except Exception as e:
         # ArtifactUnavailable 은 사유를 뭉갠 일반 문구다(상세는 서버 로그).
         return None, 404, str(e)
@@ -809,7 +882,7 @@ def _deploy_edge_worker_locked(worker_id: int, body) -> dict:
     # 해석 실패는 배포를 진행시키지 않는다 — 모델 없는 컨테이너를 띄우면 화면은
     # running 인데 서빙은 안 되는 조용한 실패가 된다(파일 부재를 여기서 드러낸다).
     lineage_id = getattr(body, "lineage_id", None)
-    model_url = None
+    model_url = mmproj_url = mmproj_for_payload = None
     gguf_for_payload = body.gguf_path
     prev_lineage_id = w.get("deploy_lineage_id")
     if lineage_id is not None:
@@ -820,8 +893,11 @@ def _deploy_edge_worker_locked(worker_id: int, body) -> dict:
         if not isinstance(probe, dict) or not str(probe.get("contract_version") or "").strip():
             raise Exception("디바이스 에이전트가 계약 버전(contract_version)을 보고하지 "
                             "않습니다 — 모델 수신을 지원하는 에이전트로 업그레이드가 필요합니다")
-        artifact_path = _resolve_artifact(lineage_id)   # 실패 시 예외 → 배포 거절
-        model_url = _artifact_url(w["device_id"])
+        artifact_path, mmproj_path = _resolve_package(lineage_id)   # 실패 시 예외 → 배포 거절
+        if mmproj_path and not _contract_at_least(probe.get("contract_version"), MMPROJ_MIN_CONTRACT):
+            raise Exception("이 패키지는 비전 파일(mmproj)이 함께 있어야 동작하는 VLM 모델입니다 — "
+                            "디바이스 에이전트를 계약 1.2 이상으로 업그레이드해야 합니다")
+        model_url = _artifact_url(w["device_id"], "model", lineage_id)
         if not model_url:
             # ⚠️ 여기서 조용히 구버전 폴백(gguf_path 문자열만 전송)으로 흐르면 안 된다.
             # 에이전트는 model_url 이 없으면 "파일이 이미 있다" 로 해석해 다운로드를
@@ -834,6 +910,10 @@ def _deploy_edge_worker_locked(worker_id: int, body) -> dict:
         # 방식으로 재양자화하면 basename 도 크기도 같아지는 일이 흔하다 → 옛 가중치를
         # 그대로 띄우게 된다. lineage id 를 이름에 넣으면 그 충돌이 원천적으로 없다.
         gguf_for_payload = f"lineage-{lineage_id}-{os.path.basename(artifact_path)}"
+        if mmproj_path:
+            # 같은 lineage 인가로 받아간다(디바이스는 둘 중 무엇도 고를 수 없다).
+            mmproj_url = _artifact_url(w["device_id"], "mmproj", lineage_id)
+            mmproj_for_payload = f"lineage-{lineage_id}-{os.path.basename(mmproj_path)}"
         # ⚠️ 인가는 `/ops` **전에** 새긴다. 에이전트는 202 를 돌려준 직후 곧바로
         # 아티팩트를 받으러 오므로, 저장이 뒤에 오면 콜백이 인가를 못 봐서 404 가 나거나
         # (더 나쁘게) **직전 배포의 인가를 보고 옛 모델을 받아간다**.
@@ -847,6 +927,8 @@ def _deploy_edge_worker_locked(worker_id: int, body) -> dict:
         "version": body.model_version,
         "gguf_path": gguf_for_payload,
         "model_url": model_url,
+        "mmproj_path": mmproj_for_payload,
+        "mmproj_url": mmproj_url,
         "params": body.params or {},
     }.items() if v is not None}
     result, code, err = _remote_ops(w["remote_manager_url"], payload)
@@ -902,6 +984,7 @@ def _deploy_edge_worker_locked(worker_id: int, body) -> dict:
         "image": body.image,
         "gguf_path": gguf_for_payload,
         "model_url": model_url,
+        "mmproj_path": mmproj_for_payload,
         "deploy_state": deploy_state,
         # 디바이스 원본 응답을 그대로 싣지 않는다 — 이 파일의 다른 디바이스 제공
         # 문자열은 모두 _sanitize 를 거친다(길이 상한 + 제어문자 제거).

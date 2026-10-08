@@ -1,4 +1,4 @@
-# 엣지 에이전트 연동 규약 v1 (contract_version 1.1)
+# 엣지 에이전트 연동 규약 v1 (contract_version 1.2)
 
 엣지 디바이스에서 동작하며 플랫폼의 배포 지시를 실제 컨테이너 실행으로 옮기는
 **에이전트**의 계약이다. 이 문서 하나와 옆의 `conformance.py` 만으로 구현·검증이
@@ -53,16 +53,33 @@
 에이전트가 할 일:
 1. `model_url` 이 있으면 **먼저 모델 파일을 받는다**(§3). 실패하면 배포를 진행하지 않고
    오류를 보고한다 — 모델 없이 컨테이너를 띄우면 화면은 정상인데 서빙이 안 된다.
-2. 파일은 `MODEL_DIR` 아래 `gguf_path` 의 파일명으로 저장한다.
+   `mmproj_url` 이 있으면(1.2, 아래 VLM 패키지) 그 파일도 받는다. 둘 중 하나라도 실패하면 배포 실패다.
+2. 파일은 `MODEL_DIR` 아래 `gguf_path`(·`mmproj_path`) 의 파일명으로 저장한다.
 3. `docker pull` → 기존 컨테이너 교체(`rm -f`) → `docker run`.
    `MODEL_DIR` 을 컨테이너의 `/models` 로 마운트하고 `MODEL_PATH=/models/<파일명>` 을 주입한다.
+   `mmproj_path` 가 있으면 `MMPROJ_PATH=/models/<mmproj 파일명>` 도 주입한다.
    GPU 가 있으면 GPU 인자를 붙인다 — 환경에 따라 `--gpus all` 또는 `--runtime nvidia` (§6-1).
 4. 응답 — **`model_url` 이 있으면 비동기로 답한다.**
 
+**VLM 패키지 (1.2)** — 이미지를 입력으로 받는 모델(예: SDS 해상 VLM)은 LLM GGUF 와 비전
+인코더 GGUF(mmproj) 두 파일이 함께 있어야 동작한다. 이때 플랫폼은 아래 두 필드를 더 보낸다.
+```json
+{
+  "mmproj_path": "lineage-14-mmproj-model.f16.gguf",
+  "mmproj_url": "http://<플랫폼>/api/edge/devices/<device_id>/artifact/mmproj"
+}
+```
+- 서빙 컨테이너는 `MMPROJ_PATH` 를 비전 파일로 써야 한다. llama.cpp `llama-server` 라면
+  `--mmproj $MMPROJ_PATH`(또는 `LLAMA_ARG_MMPROJ`)로 띄우면 OpenAI 호환 `/v1/chat/completions`
+  에서 `image_url`(base64 data URL) 입력을 받는다.
+- 플랫폼은 VLM 패키지를 **contract_version 1.2 이상**을 보고하는 에이전트에만 보낸다. 이 필드를
+  모르는 에이전트는 LLM 만 띄워 '이미지를 못 보는 모델' 이 정상처럼 보이기 때문이다.
+  텍스트 모델 배포는 1.0/1.1 에이전트에도 그대로 간다.
+
 | 경우 | 응답 |
 |---|---|
-| `model_url` 있음 (모델 수신 필요) | `202` + `{"status":"deploying","contract_version":"1.1"}` 를 **즉시** 반환하고, 수신·기동은 백그라운드로 진행 |
-| `model_url` 없음 (파일이 이미 있음) | `200` + `{"status":"running","contract_version":"1.1"}` |
+| `model_url` 있음 (모델 수신 필요) | `202` + `{"status":"deploying","contract_version":"1.2"}` 를 **즉시** 반환하고, 수신·기동은 백그라운드로 진행 |
+| `model_url` 없음 (파일이 이미 있음) | `200` + `{"status":"running","contract_version":"1.2"}` |
 
 > `model_url` 이 없는 배포도 **기존 컨테이너를 먼저 내린 뒤** 새로 띄울 것. 내리지 않으면
 > 이전 모델이 계속 돌아가는데 `/metrics` 는 새 배포를 보고해, 실제로 서빙 중인 모델과
@@ -78,7 +95,7 @@
 ```json
 { "op": "stop" }
 ```
-컨테이너를 제거하고 `{"status":"stopped","contract_version":"1.1"}`.
+컨테이너를 제거하고 `{"status":"stopped","contract_version":"1.2"}`.
 **이미 없으면 성공이다**(목표 상태가 이미 충족됨). 멱등해야 한다.
 
 `stop` 이 해야 할 일이 하나 더 있다:
@@ -118,7 +135,7 @@
 
 ```json
 {
-  "contract_version": "1.1",
+  "contract_version": "1.2",
   "deploy_in_progress": false,
   "last_deploy_error": null,
   "containers": [
@@ -153,6 +170,9 @@
 
 `model_url` 은 플랫폼이 발급하는 1:1 다운로드 주소다. 무엇을 주는지는 플랫폼이 정하므로
 경로를 바꿔 다른 파일을 요청할 수 없다.
+**URL 은 받은 그대로(쿼리 포함) 쓸 것.** 플랫폼은 `?lineage=<id>` 를 붙여 보내고, 그 배포가
+더 이상 인가된 배포가 아니면 404 를 준다 — 중지·재배포 직후 아직 돌던 옛 다운로드가 새 배포의
+파일을 옛 이름으로 받아 가는 것을 막는 장치다.
 
 ```
 GET <model_url>
@@ -171,6 +191,8 @@ Authorization: Bearer <DEVICE_TOKEN>
   파일을 이 이름 그대로 저장할 것.** "같은 이름 + 같은 크기면 이미 받은 것" 이라는 판단은
   이 규칙이 지켜질 때만 안전하다 — 같은 모델을 같은 방식으로 재양자화하면 원래 이름도
   크기도 같아지는 일이 흔해서, 이름을 임의로 줄이면 옛 가중치를 그대로 띄우게 된다.
+- `mmproj_url`(1.2)도 같은 규칙이다 — 같은 `DEVICE_TOKEN`, 같은 Range·HEAD 지원, 같은 전송량 한도.
+  파일명은 `mmproj_path` 그대로 저장하고, 옛 아티팩트를 정리할 때 이번 배포의 두 파일은 남긴다.
 - 이미 `.part` 가 전체 크기만큼 차 있으면 `Range` 로 더 요청하지 말고(서버가 416 을 준다)
   그대로 확정할 것. 그러지 않으면 운영자가 파일을 지울 때까지 재시도가 영구히 막힌다.
 
@@ -193,12 +215,13 @@ Authorization: Bearer <DEVICE_TOKEN>
 - **minor 상승** = 필드 추가. 기존 구현은 그대로 동작해야 한다(모르는 필드는 무시할 것).
 - **major 상승** = 필드 제거 또는 의미 변경. 구현 수정이 필요하다.
 
-응답에 모르는 필드가 오더라도 실패하지 말 것. 현재 버전은 **1.1** 이다.
+응답에 모르는 필드가 오더라도 실패하지 말 것. 현재 버전은 **1.2** 이다.
 
 | 버전 | 추가된 것 |
 |---|---|
 | 1.0 | 최초 — heartbeat · artifact · /ops · /metrics · ops 토큰 |
 | 1.1 | `OPS_TOKEN_PREV` 병행 허용(키 교체 구간 흡수, §6-2). 1.0 구현도 그대로 동작한다 |
+| 1.2 | VLM 패키지 — `mmproj_url`·`mmproj_path` 수신, `MMPROJ_PATH` 주입(§2). VLM 배포는 1.2 이상에만 간다. 텍스트 모델은 1.0/1.1 도 그대로 |
 
 ## 6. 설정(환경변수)
 

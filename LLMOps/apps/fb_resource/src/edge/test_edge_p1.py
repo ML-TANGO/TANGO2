@@ -4,6 +4,7 @@
     cd /app/src && python -m pytest edge/test_edge_p1.py -v
 CI 러너는 없음 — 수동/라이브 검증 보완용. 프로젝트 검증 패턴(함수단위 + 클러스터 e2e)에 맞춤.
 """
+import json
 import re
 from datetime import datetime, timedelta
 
@@ -777,14 +778,72 @@ def test_resolve_artifact_returns_absolute_path(monkeypatch, tmp_path):
     assert edge_service._resolve_artifact(7) == str(target.resolve())
 
 
-def test_resolve_artifact_rejects_vlm_package(monkeypatch, tmp_path):
-    """SDS(VLM) 패키지는 mmproj 없이 보내면 이미지를 못 보는 모델이 된다 — 엣지 계약이 GGUF 1개라 거절."""
+def _vlm_package(target, mmproj="mmproj-m.f16.gguf", create=True):
+    (target.parent / "metadata.json").write_text(
+        '{"model_file": "m.gguf", "mmproj_file": "%s"}' % mmproj, encoding="utf-8")
+    if create:
+        (target.parent / "mmproj-m.f16.gguf").write_bytes(b"GGUF")
+    return target.parent / "mmproj-m.f16.gguf"
+
+
+def test_resolve_package_returns_mmproj_for_vlm_package(monkeypatch, tmp_path):
+    """SDS(VLM) 패키지는 LLM GGUF 와 mmproj(비전) GGUF 를 함께 해석한다(계약 1.2)."""
+    target = _artifact_fixture(monkeypatch, tmp_path)
+    mm = _vlm_package(target)
+    assert edge_service._resolve_package(7) == (str(target.resolve()), str(mm.resolve()))
+    assert edge_service._resolve_artifact(7) == str(target.resolve())
+    assert edge_service._resolve_artifact(7, "mmproj") == str(mm.resolve())
+
+
+def test_resolve_artifact_mmproj_kind_unavailable_for_text_package(monkeypatch, tmp_path):
+    """텍스트 패키지에 mmproj 를 달라고 하면 줄 것이 없다."""
+    _artifact_fixture(monkeypatch, tmp_path)
+    with pytest.raises(edge_service.ArtifactUnavailable):
+        edge_service._resolve_artifact(7, "mmproj")
+
+
+def test_resolve_package_rejects_vlm_package_without_mmproj_file(monkeypatch, tmp_path):
+    """metadata 에 mmproj 가 적혀 있는데 파일이 없으면 LLM 만 보내지 않는다 — 이미지를 못 보는 모델이 된다."""
+    target = _artifact_fixture(monkeypatch, tmp_path)
+    _vlm_package(target, create=False)
+    with pytest.raises(edge_service.ArtifactUnavailable) as ei:
+        edge_service._resolve_package(7)
+    assert "mmproj" in ei.value.detail
+
+
+@pytest.mark.parametrize("name", ["../m.gguf", "/etc/passwd", "sub/m.gguf", "mmproj.bin", 5,
+                                  0, False, "", [], {}])
+def test_resolve_package_rejects_unsafe_mmproj_name(monkeypatch, tmp_path, name):
+    """패키지는 워크스페이스 스토리지에 있다 — metadata 의 파일명으로 디렉터리를 벗어나지 못한다."""
     target = _artifact_fixture(monkeypatch, tmp_path)
     (target.parent / "metadata.json").write_text(
-        '{"model_file": "m.gguf", "mmproj_file": "mmproj-m.f16.gguf"}', encoding="utf-8")
-    with pytest.raises(edge_service.ArtifactUnavailable) as ei:
-        edge_service._resolve_artifact(7)
-    assert "mmproj" in ei.value.detail
+        json.dumps({"model_file": "m.gguf", "mmproj_file": name}), encoding="utf-8")
+    with pytest.raises(edge_service.ArtifactUnavailable):
+        edge_service._resolve_package(7)
+
+
+@pytest.mark.parametrize("raw", ["not json", "{" * 10, "x" * (70 * 1024)])
+def test_resolve_package_rejects_unreadable_metadata(monkeypatch, tmp_path, raw):
+    """metadata 가 있는데 못 읽으면 텍스트로 간주하지 않는다 — VLM 이었다면 LLM 만 나간다."""
+    target = _artifact_fixture(monkeypatch, tmp_path)
+    (target.parent / "metadata.json").write_text(raw, encoding="utf-8")
+    with pytest.raises(edge_service.ArtifactUnavailable):
+        edge_service._resolve_package(7)
+
+
+def test_resolve_package_rejects_name_with_trailing_newline(monkeypatch, tmp_path):
+    target = _artifact_fixture(monkeypatch, tmp_path)
+    (target.parent / "metadata.json").write_text(
+        json.dumps({"mmproj_file": "mmproj-m.f16.gguf\n"}), encoding="utf-8")
+    with pytest.raises(edge_service.ArtifactUnavailable):
+        edge_service._resolve_package(7)
+
+
+@pytest.mark.parametrize("version,ok", [
+    ("1.2", True), ("1.10", True), ("2", True), ("1.1", False), ("1.0", False),
+    ("1", False), ("", False), (None, False), ("v1.2", False)])
+def test_contract_at_least(version, ok):
+    assert edge_service._contract_at_least(version, (1, 2)) is ok
 
 
 def test_resolve_artifact_accepts_text_package_metadata(monkeypatch, tmp_path):
@@ -844,6 +903,80 @@ def test_device_artifact_serves_only_the_authorized_lineage(monkeypatch, tmp_pat
     assert (path, code, err) == (str(target.resolve()), 200, None)
 
 
+def test_device_artifact_serves_mmproj_of_the_authorized_lineage(monkeypatch, tmp_path):
+    """mmproj 도 같은 lineage 인가로만 나간다 — 디바이스가 경로를 고를 수 없다."""
+    target = _artifact_fixture(monkeypatch, tmp_path)
+    mm = _vlm_package(target)
+    monkeypatch.setattr(edge_service, "verify_device_token", lambda d, t: True)
+    monkeypatch.setattr(db_edge, "get_edge_worker",
+                        lambda **kw: {"id": 1, "device_id": "edge-1", "deploy_lineage_id": 7})
+    path, code, err = edge_service.resolve_device_artifact("edge-1", "ok", "mmproj")
+    assert (path, code, err) == (str(mm.resolve()), 200, None)
+    path, code, _err = edge_service.resolve_device_artifact("edge-1", "ok", "mmproj", 7)
+    assert (path, code) == (str(mm.resolve()), 200)
+
+
+def test_device_artifact_rejects_url_of_a_superseded_lineage(monkeypatch, tmp_path):
+    """옛 배포의 늦은 요청(409 재배포의 되돌리기 전 · stop 뒤 남은 스레드)이 새 인가를 보고
+    **다른 lineage 의 파일**을 옛 이름으로 받아 가지 못하게, URL 의 lineage 가 다르면 끊는다."""
+    _artifact_fixture(monkeypatch, tmp_path)
+    monkeypatch.setattr(edge_service, "verify_device_token", lambda d, t: True)
+    monkeypatch.setattr(db_edge, "get_edge_worker",
+                        lambda **kw: {"id": 1, "device_id": "edge-1", "deploy_lineage_id": 8})
+    for kind in ("model", "mmproj"):
+        path, code, err = edge_service.resolve_device_artifact("edge-1", "ok", kind, 7)
+        assert (path, code) == (None, 404) and "authorized" in err
+
+
+def _load_route(monkeypatch):
+    """edge.route 를 실 DB·세션 없이 올린다 — 라우트가 쓰는 두 유틸만 대역으로 바꾼다."""
+    import importlib
+    import sys
+    import types
+    res = types.ModuleType("utils.resource")
+    res.response = lambda **kw: kw
+    acc = types.ModuleType("utils.access_check")
+    acc.admin_access_check = lambda *a, **k: (lambda f: f)
+    monkeypatch.setitem(sys.modules, "utils.resource", res)
+    monkeypatch.setitem(sys.modules, "utils.access_check", acc)
+    monkeypatch.delitem(sys.modules, "edge.route", raising=False)
+    return importlib.import_module("edge.route")
+
+
+def test_mmproj_routes_are_registered(monkeypatch):
+    route = _load_route(monkeypatch)
+    methods = {}
+    for r in route.edge.routes:
+        methods.setdefault(r.path, set()).update(r.methods)
+    assert {"GET", "HEAD"} <= methods["/edge/devices/{device_id}/artifact/mmproj"]
+    assert {"GET", "HEAD"} <= methods["/edge/devices/{device_id}/artifact"]
+
+
+def test_artifact_routes_pass_kind_through(monkeypatch, tmp_path):
+    """mmproj 라우트가 kind 를 잃으면 mmproj URL 로 LLM 바이트가 나간다 — 조용한 오배포."""
+    import asyncio
+    route = _load_route(monkeypatch)
+    files = {"model": tmp_path / "lineage-7-m.gguf", "mmproj": tmp_path / "lineage-7-mmproj-m.f16.gguf"}
+    files["model"].write_bytes(b"M" * 10)
+    files["mmproj"].write_bytes(b"P" * 3)
+    seen = []
+
+    def _resolve(device_id, token, kind="model", want_lineage=None):
+        seen.append((kind, want_lineage))
+        return str(files[kind]), 200, None
+    monkeypatch.setattr(edge_service, "resolve_device_artifact", _resolve)
+    monkeypatch.setattr(edge_service, "artifact_budget_check", lambda d: (True, None))
+    monkeypatch.setattr(edge_service, "artifact_budget_reserve", lambda d, n: (True, None))
+    head = asyncio.run(route.device_mmproj_head(device_id="edge-1", authorization="Bearer ok", lineage=7))
+    assert head.headers["content-length"] == "3"
+    got = asyncio.run(route.device_mmproj(device_id="edge-1", authorization="Bearer ok", range=None, lineage=7))
+    assert "mmproj-m.f16.gguf" in got.headers["content-disposition"]
+    got = asyncio.run(route.device_artifact(device_id="edge-1", authorization="Bearer ok", range=None,
+                                            lineage=None))
+    assert got.headers["content-length"] == "10"
+    assert seen == [("mmproj", 7), ("mmproj", 7), ("model", None)]
+
+
 def test_ops_headers_omitted_without_token(monkeypatch):
     """토큰 없는 설치에 헤더를 붙이면 구버전 에이전트와의 호환이 깨진다."""
     monkeypatch.delenv("EDGE_OPS_TOKEN", raising=False)
@@ -892,7 +1025,7 @@ def test_deploy_issues_model_url_and_lineage_scoped_name(monkeypatch, tmp_path):
     body = model.DeployEdgeModel(image="img:1", model_name="qwen",
                                  model_version="q4", lineage_id=7)
     res = edge_service.deploy_edge_worker(1, body)
-    assert sent["model_url"] == "http://plat:31080/api/edge/devices/edge-1/artifact"
+    assert sent["model_url"] == "http://plat:31080/api/edge/devices/edge-1/artifact?lineage=7"
     assert sent["gguf_path"] == "lineage-7-m.gguf"
     assert res["deploy_state"] == "deploying"      # 202 → 확정하지 않는다
     assert grants == [7]
@@ -925,6 +1058,52 @@ def test_deploy_refuses_when_public_base_missing(monkeypatch, tmp_path):
     with pytest.raises(Exception, match="공개 주소"):
         edge_service.deploy_edge_worker(1, model.DeployEdgeModel(image="img:1", lineage_id=7))
     assert sent == {} and grants == []      # /ops 도, 인가도 나가지 않았다
+
+
+def test_deploy_vlm_package_sends_mmproj_url_and_name(monkeypatch, tmp_path):
+    """계약 1.2 에이전트에는 mmproj 를 같은 lineage 이름 규칙으로 함께 보낸다."""
+    sent, _persisted, grants, _order = _deploy_capture(monkeypatch, tmp_path)
+    _vlm_package(tmp_path / "st" / "main" / "ws" / "jobs/j1/output/m.gguf")
+    monkeypatch.setattr(edge_service, "_poll_remote_manager",
+                        lambda url: {"contract_version": "1.2"})
+    res = edge_service.deploy_edge_worker(1, model.DeployEdgeModel(image="img:1", lineage_id=7))
+    assert sent["mmproj_url"] == "http://plat:31080/api/edge/devices/edge-1/artifact/mmproj?lineage=7"
+    assert sent["mmproj_path"] == "lineage-7-mmproj-m.f16.gguf"
+    assert sent["gguf_path"] == "lineage-7-m.gguf"
+    assert res["mmproj_path"] == "lineage-7-mmproj-m.f16.gguf"
+    assert grants == [7]
+
+
+def test_deploy_vlm_package_refused_for_pre_mmproj_agent(monkeypatch, tmp_path):
+    """1.2 미만 에이전트는 mmproj_url 을 모른다 — LLM 만 띄워 '이미지를 못 보는 running' 이 된다.
+    /ops 도, 다운로드 인가도 나가지 않아야 한다."""
+    sent, _persisted, grants, _order = _deploy_capture(monkeypatch, tmp_path)
+    _vlm_package(tmp_path / "st" / "main" / "ws" / "jobs/j1/output/m.gguf")
+    monkeypatch.setattr(edge_service, "_poll_remote_manager",
+                        lambda url: {"contract_version": "1.1"})
+    with pytest.raises(Exception, match="1.2"):
+        edge_service.deploy_edge_worker(1, model.DeployEdgeModel(image="img:1", lineage_id=7))
+    assert sent == {} and grants == []
+
+
+def test_deploy_vlm_rolls_back_grant_when_device_rejects(monkeypatch, tmp_path):
+    """디바이스가 mmproj 수신 실패 등으로 거절하면 방금 연 인가를 직전 값으로 되돌린다."""
+    _sent, persisted, grants, _order = _deploy_capture(
+        monkeypatch, tmp_path, ops_result=({"status": "error", "detail": "mmproj download failed"}, 200, None))
+    _vlm_package(tmp_path / "st" / "main" / "ws" / "jobs/j1/output/m.gguf")
+    monkeypatch.setattr(edge_service, "_poll_remote_manager",
+                        lambda url: {"contract_version": "1.2"})
+    with pytest.raises(Exception, match="mmproj download failed"):
+        edge_service.deploy_edge_worker(1, model.DeployEdgeModel(image="img:1", lineage_id=7))
+    assert grants == [7, 99]
+    assert persisted["deploy_state"] == "error"
+
+
+def test_deploy_text_package_omits_mmproj_fields(monkeypatch, tmp_path):
+    """텍스트 패키지는 종전 페이로드 그대로 — 1.1 에이전트에도 계속 배포된다."""
+    sent, _persisted, _grants, _order = _deploy_capture(monkeypatch, tmp_path)
+    edge_service.deploy_edge_worker(1, model.DeployEdgeModel(image="img:1", lineage_id=7))
+    assert "mmproj_url" not in sent and "mmproj_path" not in sent
 
 
 def test_deploy_without_lineage_keeps_legacy_payload(monkeypatch, tmp_path):
