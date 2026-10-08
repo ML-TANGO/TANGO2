@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useHistory, useRouteMatch } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
@@ -131,8 +131,16 @@ export default function EdgeDeploymentDetail() {
     setWorker(workers.find((x) => String(x.id) === String(targetId)) || null);
   }, [workers, targetId]);
 
+  // 재진입 복원은 배포(deployId)마다 한 번 — 라우터 v5 는 파라미터만 바뀌면 컴포넌트를
+  // 재사용하므로, 바뀔 때 옛 배포의 선택을 비우고 다시 복원한다.
+  const restoredRef = useRef(false);
+
   // 배포 프로젝트 메타 — playground 상세 조회('new' 생성 진입 시 미조회). 응답은 {info,...} 중첩.
   useEffect(() => {
+    restoredRef.current = false;
+    setProject(null);
+    setTargetId('');
+    setModelId('');
     if (!deployId || deployId === 'new') return undefined;
     let alive = true;
     (async () => {
@@ -143,6 +151,18 @@ export default function EdgeDeploymentDetail() {
       alive = false;
     };
   }, [deployId]);
+
+  // 재진입 복원 — 이 배포를 띄운 디바이스·모델(BE info.edge_target = {worker_id, model_id}). 없으면
+  // 디바이스 미선택으로 열려 '현재 배포 상태'·모니터링이 빈칸이 되고, 돌고 있는 배포를 멈춘 것처럼
+  // 보였다. 사용자가 이미 고른 값은 덮어쓰지 않는다. GGUF(산출물)는 복원하지 않는다 — lineage id 는
+  // BE 가 상세로 내보내지 않는다(다운로드 인가 정찰 방지). 재배포할 때만 다시 고르면 된다.
+  useEffect(() => {
+    const target = project?.edge_target;
+    if (restoredRef.current || !target) return;
+    restoredRef.current = true;
+    if (target.worker_id) setTargetId((cur) => cur || String(target.worker_id));
+    if (target.model_id) setModelId((cur) => cur || String(target.model_id));
+  }, [project]);
 
   // 배포 폼용 모델 목록
   useEffect(() => {
@@ -167,8 +187,14 @@ export default function EdgeDeploymentDetail() {
     (async () => {
       const { status, result } = await getQuantizeLineage(modelId);
       if (alive && status === STATUS_SUCCESS) {
-        setLineage(
-          (result?.lineage || []).filter((l) => l.status === 'completed'),
+        const completed = (result?.lineage || []).filter(
+          (l) => l.status === 'completed',
+        );
+        setLineage(completed);
+        // 목록에 없는 선택(복원된 값이 삭제된 산출물이거나 다른 모델의 것)은 비운다 — 남겨 두면
+        // 드롭다운은 빈칸인데 state 만 옛 id 를 들고 있게 된다.
+        setLineageId((cur) =>
+          completed.some((l) => String(l.id) === String(cur)) ? cur : '',
         );
       }
     })();
@@ -220,6 +246,10 @@ export default function EdgeDeploymentDetail() {
       // 계약 v1 — BE 가 이 id 로 아티팩트 경로를 DB 에서 해석해 디바이스가 받아갈
       // model_url 을 발급한다(위 gguf_path 문자열은 표시·하위호환용).
       lineage_id: selectedLineage.id,
+      // 이 배포(playground) — BE 가 성공 시 디바이스에 새겨 배포 목록 카드 상태·재진입 복원에 쓴다.
+      ...(/^\d+$/.test(String(deployId))
+        ? { playground_id: Number(deployId) }
+        : {}),
     });
     setDeploying(false);
     if (status === STATUS_SUCCESS) {

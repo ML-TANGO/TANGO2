@@ -1,4 +1,5 @@
 import { Suspense, useCallback, useEffect, useState } from 'react';
+import i18n from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { shallowEqual, useDispatch, useSelector } from 'react-redux';
 import { useHistory, useRouteMatch } from 'react-router-dom';
@@ -6,6 +7,7 @@ import { toast } from 'react-toastify';
 
 import CardTemplate from '@src/components/molecules/CardTemplate/CardTemplate';
 
+import { getEdgeWorkers, refreshEdgeWorker } from '@src/apis/flightbase/edge';
 import {
   deletePlayground,
   deletePlaygroundBookmark,
@@ -44,6 +46,61 @@ const detailPath = (wid, kind, id) => {
   return `/user/workspace/${wid}/llmplayground/${id}/llmplayground`;
 };
 
+// 온디바이스 배포 카드 상태. playground 행에는 클러스터 파드가 없어 BE status 는 늘 stop 이다 —
+//   실제 상태는 이 배포를 마지막으로 띄운 디바이스(edge_worker.deploy_playground_id)에 있다.
+//   연결·배포 신선도는 fb_resource 가 파생한 값(conn_status·deploy_stale)을 그대로 따른다
+//   (상세 화면 '상태 미상'과 같은 규칙). 디바이스가 여럿이면 가장 살아 있는 쪽을 보인다.
+const EDGE_STATE_TO_CARD = {
+  running: 'running',
+  deploying: 'installing',
+  error: 'error',
+};
+const EDGE_CARD_RANK = ['running', 'installing', 'error', 'unknown', 'stop'];
+
+const edgeCardState = (worker) => {
+  if (worker.conn_status !== 'online' || worker.deploy_stale) return 'unknown';
+  return EDGE_STATE_TO_CARD[worker.deploy_state] || 'stop';
+};
+
+const edgeCardStates = (workers) => {
+  const byPlayground = {};
+  (workers || []).forEach((w) => {
+    if (!w.deploy_playground_id) return;
+    const key = String(w.deploy_playground_id);
+    const state = edgeCardState(w);
+    const cur = byPlayground[key];
+    if (!cur || EDGE_CARD_RANK.indexOf(state) < EDGE_CARD_RANK.indexOf(cur))
+      byPlayground[key] = state;
+  });
+  return byPlayground;
+};
+
+// heartbeat 는 배포 관측 시각을 올리지 않아(/metrics 만 컨테이너를 본다), 상세 모니터링 탭을 아무도
+//   열지 않으면 5분 뒤 deploy_stale 이 된다. 그대로 그리면 돌고 있는 배포가 '상태 미상' 으로 보이므로,
+//   이 목록 카드에 연결된 워커 중 낡았거나 배포 중인 것만 상세 화면과 같은 refresh 로 다시 관측한다.
+//   실패하면 목록 값 그대로(→ 상태 미상) — 화면이 거짓 running 을 말하지 않는다.
+const freshEdgeWorkers = async (workers, playgroundIds) =>
+  Promise.all(
+    (workers || []).map(async (w) => {
+      const bound =
+        w.deploy_playground_id &&
+        playgroundIds.has(String(w.deploy_playground_id));
+      if (!bound || !(w.deploy_stale || w.deploy_state === 'deploying'))
+        return w;
+      const res = await refreshEdgeWorker(w.id);
+      return res.status === STATUS_SUCCESS && res.result ? res.result : w;
+    }),
+  );
+
+const edgeCardBadge = (state) =>
+  state === 'unknown'
+    ? {
+        status: 'stop',
+        statusBadgeLabel: i18n.t('edge.detail.stateUnknown'),
+        statusBadgeKind: 'pending',
+      }
+    : { status: state };
+
 const breadCrumbHandler = (dispatch) => {
   dispatch(
     startPath([
@@ -62,6 +119,20 @@ const breadCrumbHandler = (dispatch) => {
 const getPlaygroundInfo = async (workspace_id, setDeployItems) => {
   const { result, message, status, error } = await getPlayground(workspace_id);
   if (status === STATUS_SUCCESS) {
+    // 온디바이스 카드는 디바이스 상태로 그린다(위 edgeCardStates). 조회 실패면 BE status 그대로.
+    let edgeStates = {};
+    const edgeIds = new Set(
+      (result || [])
+        .filter((r) => r.deploy_type === 'edge')
+        .map((r) => String(r.id)),
+    );
+    if (edgeIds.size > 0) {
+      const workersRes = await getEdgeWorkers();
+      if (workersRes.status === STATUS_SUCCESS)
+        edgeStates = edgeCardStates(
+          await freshEdgeWorkers(workersRes.result, edgeIds),
+        );
+    }
     // 이중모델 세션은 SHOW_DUAL_DEPLOY 로 목록에서 감춘다 — 생성만 막으면 기존 세션이
     //   배포 목록에 남아 그대로 진입할 수 있다. 라우트는 살아 있어 플래그를 되돌리면 복구.
     const list = (result || [])
@@ -88,6 +159,9 @@ const getPlaygroundInfo = async (workspace_id, setDeployItems) => {
           isAccess: r.access,
           userList: r.users,
           status: r.status,
+          ...(kind === 'edge' && edgeStates[String(r.id)]
+            ? edgeCardBadge(edgeStates[String(r.id)])
+            : {}),
           // 이중모델 세션 판별(라우팅용) — mode==='dual' 이면 공용 배포 상세 shell로.
           mode: r.mode,
         };
