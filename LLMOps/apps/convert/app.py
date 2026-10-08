@@ -44,7 +44,10 @@ LLAMA_QUANTIZE_BIN = os.environ.get("LLAMA_QUANTIZE_BIN", "/app/llama-quantize")
 CONVERT_HF_TO_GGUF = os.environ.get("CONVERT_HF_TO_GGUF", "/app/convert_hf_to_gguf.py")
 
 NAME    = "convert-llamacpp"
-VERSION = "1.0.0"
+VERSION = "1.1.0"
+
+# SDS(eva-vlm) 커밋 마운트(플랫폼 차트가 commit_models 를 RO 로 붙인다).
+CHECKPOINTS_ROOT = os.environ.get("CHECKPOINTS_ROOT", "/models/checkpoints")
 
 # target_quant(q4/q5/q6) → llama-quantize 타입.
 _QUANT_TYPE = {"q4": "Q4_K_M", "q5": "Q5_K_M", "q6": "Q6_K", "q8": "Q8_0"}
@@ -183,6 +186,105 @@ python inference.py "$@"
 '''
 
 
+# SDS(eva-vlm) 패키지 — llama.cpp 멀티모달(llama-mtmd-cli) 추론. eva 컨테이너와 같은 입력
+# (이미지 + AIS 행 + 출력 유형) 을 같은 프롬프트로 조립한다(eva api/model_manager.py 대조).
+_VLM_INFERENCE_PY = '''\
+# 포팅 패키지 — SDS(eva-vlm) llama.cpp 멀티모달 추론 예시 (자동 생성, 코드 수정 UI 없음 / ⑬)
+# 사용: python inference.py <이미지> <AIS csv|json> [출력유형]
+#   필요: llama.cpp 의 llama-mtmd-cli (PATH 또는 LLAMA_MTMD_CLI 환경변수), pip install pillow
+import csv, json, os, subprocess, sys, tempfile
+from PIL import Image, ImageOps
+
+MODEL = {model_path}
+MMPROJ = {mmproj_path}
+PROMPTS = {prompts}
+DEFAULT_TYPE = {default_type}
+
+
+def load_rows(path):
+    if path.endswith(".json"):
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    with open(path, encoding="utf-8-sig") as f:
+        return list(csv.DictReader(f))
+
+
+def ais_text(rows, lang):
+    ko = lang == "ko"
+    lines = ["[선박 AIS 정보]" if ko else "[Vessel AIS Information]"]
+    for r in rows:
+        spd, hdg = f"{{float(r['knot']):.1f}}kt", f"{{float(r['heading']):.1f}}°"
+        lat, lon = f"{{float(r['latitude']):.6f}}", f"{{float(r['longitude']):.6f}}"
+        size = f"{{int(float(r['length']))}}m {{'×' if ko else 'x'}} {{int(float(r['width']))}}m"
+        draft = f"{{int(float(r['draft']))}}m"
+        if int(float(r["my_ship"])) == 1:
+            lines.append(f"- 자선 (ID:{{r['ship_id']}}) | 위도:{{lat}} 경도:{{lon}} | 속도:{{spd}} 방향:{{hdg}} | 선체:{{size}} 흘수:{{draft}}" if ko else
+                         f"- Own vessel (ID:{{r['ship_id']}}) | Lat:{{lat}} Lon:{{lon}} | Speed:{{spd}} Heading:{{hdg}} | Size:{{size}} Draft:{{draft}}")
+            continue
+        bbox = ""
+        if str(r.get("bbox_x", "")).strip() not in ("", "None"):
+            box = (f"x={{float(r['bbox_x']):.0f}} y={{float(r['bbox_y']):.0f}} "
+                   f"w={{float(r['bbox_width']):.0f}} h={{float(r['bbox_height']):.0f}}")
+            bbox = f" | 바운딩박스:[{{box}}]" if ko else f" | BoundingBox:[{{box}}]"
+        lines.append(f"- 주변선박 (ID:{{r['ship_id']}}) | 위도:{{lat}} 경도:{{lon}} | 속도:{{spd}} 방향:{{hdg}} | 선체:{{size}} 흘수:{{draft}}{{bbox}}" if ko else
+                     f"- Nearby vessel (ID:{{r['ship_id']}}) | Lat:{{lat}} Lon:{{lon}} | Speed:{{spd}} Heading:{{hdg}} | Size:{{size}} Draft:{{draft}}{{bbox}}")
+    return "\\n".join(lines)
+
+
+def square_crop(src, dst):
+    # 학습 전처리(짧은 변 맞춤 + 중앙 크롭) 와 같은 시야 — llama.cpp 는 정사각형 패딩을 하므로 미리 자른다.
+    im = ImageOps.exif_transpose(Image.open(src)).convert("RGB")  # eva 와 같은 EXIF 회전 보정
+    w, h = im.size
+    s = min(w, h)
+    im.crop(((w - s) // 2, (h - s) // 2, (w - s) // 2 + s, (h - s) // 2 + s)).save(dst)
+
+
+def main():
+    if len(sys.argv) < 3:
+        sys.exit("사용: python inference.py <이미지> <AIS csv|json> [출력유형]")
+    output_type = sys.argv[3] if len(sys.argv) > 3 else DEFAULT_TYPE
+    lang = "en" if "영문" in output_type else "ko"
+    question = PROMPTS.get(output_type) or sys.exit(f"알 수 없는 출력유형: {{output_type}} ({{', '.join(PROMPTS)}})")
+    prompt = ais_text(load_rows(sys.argv[2]), lang) + "\\n\\n" + question
+    with tempfile.TemporaryDirectory() as tmp:
+        image = os.path.join(tmp, "image.png")
+        square_crop(sys.argv[1], image)
+        cli = os.environ.get("LLAMA_MTMD_CLI", "llama-mtmd-cli")
+        subprocess.run([cli, "-m", MODEL, "--mmproj", MMPROJ, "--image", image,
+                        "-p", "<__media__>\\n" + prompt, "--jinja", "--temp", "0",
+                        "--repeat-penalty", "1.1", "-n", "512", "-c", "4096"], check=True)
+
+
+if __name__ == "__main__":
+    main()
+'''
+
+_VLM_RUN_SH = '''\
+#!/usr/bin/env bash
+# 타겟 디바이스에서 실행: llama.cpp(llama-mtmd-cli) 설치 + pip install pillow
+#   ./run.sh <이미지> <AIS csv|json> [출력유형]
+set -e
+python3 inference.py "$@"
+'''
+
+# eva-vlm 출력 유형 → 지시문 (eva api/model_manager.py PROMPT_MAP 과 동일).
+_EVA_PROMPTS = {
+    "영문 해상상황묘사":
+        "Based on the camera image and AIS data provided, describe the current maritime situation in detail.",
+    "한글 해상상황묘사":
+        "제공된 카메라 이미지와 AIS 데이터를 기반으로 현재 해상 상황을 상세히 묘사하시오.",
+    "영문 항해조력메시지":
+        "Based on the camera image and AIS data provided, provide navigational advice "
+        "for the own vessel in accordance with COLREG rules.",
+    "한글 항해조력메시지":
+        "제공된 카메라 이미지와 AIS 데이터를 기반으로 COLREG 규칙에 따른 "
+        "자선의 항해 조력 메시지를 제공하시오.",
+    "간결 항해조력메시지":
+        "제공된 카메라 이미지와 AIS 데이터를 기반으로 간결한 항해 조력 메시지를 제공하시오. "
+        "속도 조치, 방향 조치, 적용 근거(COLREG 조항)를 포함하시오.",
+}
+
+
 def _run(cmd: list, step: str) -> None:
     """blocking subprocess. 실패 시 stderr tail 을 담아 예외.
 
@@ -258,8 +360,13 @@ async def _run_job(job_id: str, params: dict) -> None:
             sparsity = 0.5
         sparsity = max(0.0, min(0.99, sparsity))
         qtype = _QUANT_TYPE.get(target_quant, "Q5_K_M")
+        # SDS(eva-vlm): /model 이 아니라 커밋(LoRA 어댑터 + projector)에서 merge·mmproj 를 만든다.
+        checkpoint_name = params.get("checkpoint_name")
+        is_eva = bool(checkpoint_name)
+        if is_eva and do_prune:
+            raise RuntimeError("SDS(eva-vlm) 양자화는 프루닝을 지원하지 않습니다")
 
-        if not _has_hf_weights(JF_MODEL_PATH):
+        if not is_eva and not _has_hf_weights(JF_MODEL_PATH):
             raise RuntimeError(
                 f"no HF weights at {JF_MODEL_PATH} (merged 모델 필요 — LoRA 어댑터만 있으면 merge 후 재시도)")
 
@@ -267,8 +374,11 @@ async def _run_job(job_id: str, params: dict) -> None:
         # 예측가능 /tmp 경로 대신 mkdtemp (심링크 레이스 방지).
         workdir = tempfile.mkdtemp(prefix=f"convert-{job_id}-")
 
-        steps = ["prune", "convert-to-gguf", "quantize", "package"] if do_prune \
-            else ["convert-to-gguf", "quantize", "package"]
+        steps = ["convert-to-gguf", "quantize", "package"]
+        if do_prune:
+            steps = ["prune"] + steps
+        if is_eva:
+            steps = ["materialize"] + steps
         total = len(steps)
         done = 0
 
@@ -296,6 +406,18 @@ async def _run_job(job_id: str, params: dict) -> None:
             model_src = pruned_dir
             _progress(f"prune (sparsity={sparsity})")
 
+        # 1') SDS(eva-vlm): base 에 LoRA merge → HF LLM, CLIP + projector → mmproj GGUF
+        eva_meta = None
+        if is_eva:
+            if _check_cancel("materialize"):
+                return
+            import eva_vlm
+
+            eva_meta = await asyncio.to_thread(
+                eva_vlm.prepare, CHECKPOINTS_ROOT, checkpoint_name, workdir)
+            model_src = eva_meta["llm_dir"]
+            _progress("materialize (LoRA merge + mmproj)")
+
         # 2) HF → f16 GGUF
         if _check_cancel("convert-to-gguf"):
             return
@@ -306,6 +428,9 @@ async def _run_job(job_id: str, params: dict) -> None:
             "convert_hf_to_gguf",
         )
         _progress("convert to f16 GGUF")
+        # SDS: merged HF(≈15GB)는 f16 GGUF 로 옮겨졌다 — 양자화 전에 지워 scratch(/tmp) 피크를 낮춘다.
+        if eva_meta:
+            shutil.rmtree(eva_meta["llm_dir"], ignore_errors=True)
 
         # 3) 타겟 양자화
         if _check_cancel("quantize"):
@@ -326,20 +451,49 @@ async def _run_job(job_id: str, params: dict) -> None:
         if _check_cancel("package"):
             return
         gguf_bytes = os.path.getsize(gguf_path)
-        with open(os.path.join(JF_OUTPUT_PATH, "inference.py"), "w", encoding="utf-8") as f:
-            f.write(_INFERENCE_PY.format(model_path=json.dumps(gguf_name)))
-        with open(os.path.join(JF_OUTPUT_PATH, "run.sh"), "w", encoding="utf-8") as f:
-            f.write(_RUN_SH)
+        # SDS(eva-vlm): 비전 인코더(mmproj)는 양자화하지 않고 f16 그대로 싣는다(용량 작고 정확도 민감).
+        # 파일명 'mmproj-' 접두는 llama.cpp 관례 — 플랫폼은 metadata.model_file 로 본체를 고른다.
+        mmproj_name = None
+        if is_eva:
+            mmproj_name = f"mmproj-{model_name}.f16.gguf"
+            mmproj_out = os.path.join(JF_OUTPUT_PATH, mmproj_name)
+            if os.path.commonpath([os.path.realpath(mmproj_out), out_real]) != out_real:
+                raise RuntimeError(f"mmproj path escapes output dir: {mmproj_name!r}")
+            shutil.copy2(eva_meta["mmproj_path"], mmproj_out)
+            with open(os.path.join(JF_OUTPUT_PATH, "inference.py"), "w", encoding="utf-8") as f:
+                f.write(_VLM_INFERENCE_PY.format(
+                    model_path=json.dumps(gguf_name), mmproj_path=json.dumps(mmproj_name),
+                    prompts=json.dumps(_EVA_PROMPTS, ensure_ascii=False, indent=4),
+                    default_type=json.dumps("한글 항해조력메시지", ensure_ascii=False)))
+            with open(os.path.join(JF_OUTPUT_PATH, "run.sh"), "w", encoding="utf-8") as f:
+                f.write(_VLM_RUN_SH)
+        else:
+            with open(os.path.join(JF_OUTPUT_PATH, "inference.py"), "w", encoding="utf-8") as f:
+                f.write(_INFERENCE_PY.format(model_path=json.dumps(gguf_name)))
+            with open(os.path.join(JF_OUTPUT_PATH, "run.sh"), "w", encoding="utf-8") as f:
+                f.write(_RUN_SH)
         config = {"model_file": gguf_name, "quantization": qtype, "n_ctx": 2048,
                   "source_model": model_name, "pruned": do_prune}
+        if is_eva:
+            config.update({"mmproj_file": mmproj_name, "n_ctx": 4096,
+                           "image_preprocess": "center-crop to square",
+                           "generation": {"temperature": 0, "repeat_penalty": 1.1, "max_new_tokens": 512}})
         with open(os.path.join(JF_OUTPUT_PATH, "config.json"), "w", encoding="utf-8") as f:
             json.dump(config, f, ensure_ascii=False, indent=2)
+        files = [gguf_name] + ([mmproj_name] if mmproj_name else []) + \
+            ["inference.py", "run.sh", "config.json", "metadata.json"]
         metadata = {
             "name": NAME, "version": VERSION, "job_id": job_id, "item_id": JF_ITEM_ID,
             "target_quant": target_quant, "quantize_type": qtype, "gguf_bytes": gguf_bytes,
             "pruned": do_prune, "prune_sparsity": sparsity if do_prune else None,
-            "files": [gguf_name, "inference.py", "run.sh", "config.json", "metadata.json"],
+            "model_file": gguf_name, "files": files,
         }
+        if is_eva:
+            metadata.update({
+                "source_format": "eva-vlm", "mmproj_file": mmproj_name,
+                "checkpoint": eva_meta["checkpoint"], "lora_merged": eva_meta["lora_merged"],
+                "base_llm": eva_meta["llm_repo"], "vision_model": eva_meta["vision_repo"],
+            })
         with open(os.path.join(JF_OUTPUT_PATH, "metadata.json"), "w", encoding="utf-8") as f:
             json.dump(metadata, f, ensure_ascii=False, indent=2)
         _progress("write package")
@@ -350,6 +504,7 @@ async def _run_job(job_id: str, params: dict) -> None:
             "target_quant": target_quant,
             "quantize_type": qtype,
             "pruned": do_prune,
+            "mmproj_file": mmproj_name,
             "package_files": metadata["files"],
             "output_dir": JF_OUTPUT_PATH,
         }

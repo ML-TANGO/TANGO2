@@ -777,6 +777,23 @@ def test_resolve_artifact_returns_absolute_path(monkeypatch, tmp_path):
     assert edge_service._resolve_artifact(7) == str(target.resolve())
 
 
+def test_resolve_artifact_rejects_vlm_package(monkeypatch, tmp_path):
+    """SDS(VLM) 패키지는 mmproj 없이 보내면 이미지를 못 보는 모델이 된다 — 엣지 계약이 GGUF 1개라 거절."""
+    target = _artifact_fixture(monkeypatch, tmp_path)
+    (target.parent / "metadata.json").write_text(
+        '{"model_file": "m.gguf", "mmproj_file": "mmproj-m.f16.gguf"}', encoding="utf-8")
+    with pytest.raises(edge_service.ArtifactUnavailable) as ei:
+        edge_service._resolve_artifact(7)
+    assert "mmproj" in ei.value.detail
+
+
+def test_resolve_artifact_accepts_text_package_metadata(monkeypatch, tmp_path):
+    """텍스트 패키지(metadata 에 mmproj 없음)는 그대로 배포된다."""
+    target = _artifact_fixture(monkeypatch, tmp_path)
+    (target.parent / "metadata.json").write_text('{"model_file": "m.gguf"}', encoding="utf-8")
+    assert edge_service._resolve_artifact(7) == str(target.resolve())
+
+
 def test_resolve_artifact_rejects_incomplete_lineage(monkeypatch, tmp_path):
     """완료되지 않은 양자화를 배포하면 반쪽 파일이 장비로 간다."""
     _artifact_fixture(monkeypatch, tmp_path, status="running")

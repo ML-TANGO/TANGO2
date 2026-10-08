@@ -732,6 +732,8 @@ class _QuantizeBody(BaseModel):
     target_quant: str = Field(..., pattern="^q[456]$")
     target_device: Optional[str] = Field(default=None, pattern=r"^[A-Za-z0-9_\- ]{1,64}$")
     prune: bool = False  # 4.7 placeholder — 실제 프루닝은 엣지 컨테이너 도착 시.
+    # SDS(외부 학습) 모델만 — 양자화할 커밋. 비우면 best 마커 커밋, 없으면 가능한 최신 커밋.
+    commit_id: Optional[int] = Field(default=None, ge=1)
 
 
 @model.get("/quantize/devices", summary='device → recommended quantization map', tags=TAG_MODEL)
@@ -748,8 +750,19 @@ async def quantize_model(model_id: int, body: _QuantizeBody):
             target_quant=body.target_quant,
             target_device=body.target_device,
             prune=body.prune,
+            commit_id=body.commit_id,
         )
         return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=str(e), result=None)
+
+
+@model.get("/{model_id}/quantize/commits", summary='quantizable commits (SDS external models)', tags=TAG_MODEL)
+async def quantize_commits(model_id: int):
+    # 양자화 모달 커밋 선택지 — SDS(외부 학습) 모델만 의미가 있다(내부 모델은 빈 목록).
+    try:
+        return response(status=1, result=await svc.list_quantize_commits(model_id=model_id))
     except Exception as e:
         traceback.print_exc()
         return response(status=0, message=str(e), result=None)

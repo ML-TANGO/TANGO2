@@ -3,3 +3,5 @@
 fastapi>=0.111.0,<1.0.0
 uvicorn[standard]>=0.29.0,<1.0.0
 pydantic>=2.0.0,<3.0.0
+# SDS(eva-vlm) LoRA merge — 어댑터 저장 버전(peft 0.18.1)과 맞춘다.
+peft==0.18.1

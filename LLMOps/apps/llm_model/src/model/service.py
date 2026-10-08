@@ -1742,9 +1742,86 @@ async def bind_external_job(model_id : int, external_job_id : str) -> bool:
     return True
 
 
+# SDS(eva-vlm) 양자화 단위 — convert 컨테이너(apps/convert/eva_vlm.py)가 커밋 루트에서
+# base 에 LoRA 를 merge 하고 CLIP+projector 로 mmproj 를 만든다. projector.bin·vlm_config.json 은
+# 필수, 어댑터는 선택(projector 단계 커밋은 base LLM 그대로). 서빙 단위(_EVA_SERVABLE_FILES)와 다르다.
+_EVA_QUANTIZABLE_FILES = ("projector.bin", "vlm_config.json")
+# convert 컨테이너(eva_vlm.resolve_checkpoint)와 같은 커밋명 규칙 — 여기서 먼저 걸러야 40Gi 파드를
+# 띄운 뒤에야 실패하는 일이 없다.
+_CONVERT_CKPT_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+def _is_eva_vlm_model(model_info: dict) -> bool:
+    """커밋 단위(LoRA+projector) 양자화 대상 — eva-vlm manifest 로 학습·서빙되는 external 모델만.
+    다른 external 모델(merged latest_checkpoint 를 가진 협력기관 모델 등)은 기존 /model 경로 그대로."""
+    return ((model_info.get("training_type") or "internal") == "external"
+            and "eva-vlm" in (model_info.get("external_manifest_name") or ""))
+
+
+def _eva_commit_status_sync(path: str):
+    """(양자화 가능, LoRA 포함, 사유). 어댑터가 있으면 가중치는 safetensors 여야 한다(.bin 은 거부)."""
+    if not all(os.path.isfile(os.path.join(path, f)) for f in _EVA_QUANTIZABLE_FILES):
+        return False, False, "vlm_config.json 또는 projector.bin 이 없는 커밋입니다"
+    has_adapter_cfg = os.path.isfile(os.path.join(path, "adapter_config.json"))
+    has_adapter = os.path.isfile(os.path.join(path, "adapter_model.safetensors"))
+    if has_adapter_cfg and not has_adapter:
+        return False, False, "adapter_model.safetensors 가 없는 커밋입니다"
+    return True, has_adapter_cfg, None
+
+
+async def _external_quantize_commits(model_id: int, model_info: dict):
+    """external 모델 커밋별 양자화 가능 여부 + 기본 선택(best 마커 커밋 → 가능한 최신 커밋)."""
+    workspace_info = await db_model.get_workspace_model(workspace_id=model_info["workspace_id"])
+    model_root = _external_model_root(
+        workspace_info["main_storage_name"], workspace_info["name"], model_info["name"])
+    commits_base = os.path.realpath(os.path.join(model_root, "commit_models"))
+    best = await asyncio.to_thread(_read_external_best, model_root)
+    rows = []
+    for c in (await db_model.get_commit_models(model_id=model_id)) or []:
+        name = c.get("name")
+        if not name or "/" in name or name in (".", ".."):
+            continue
+        commit_dir = os.path.join(commits_base, name)
+        if not _is_under(commit_dir, commits_base):
+            continue
+        if _CONVERT_CKPT_NAME_RE.match(name):
+            ok, has_lora, reason = await asyncio.to_thread(_eva_commit_status_sync, commit_dir)
+        else:
+            ok, has_lora, reason = False, False, "양자화할 수 없는 커밋 이름 형식입니다"
+        rows.append({
+            "commit_id": c["id"],
+            "commit_name": name,
+            "commit_datetime": c.get("commit_datetime"),
+            "quantizable": ok,
+            "has_lora": has_lora,
+            "reason": reason,
+            # best 가 중간 step(checkpoint-N)이면 커밋 루트(최종본)와 다른 모델이다 — 루트일 때만 best.
+            "is_best": bool(best and best.get("commit_name") == name
+                            and int(best.get("step", -1)) == _EXTERNAL_FINAL_STEP),
+        })
+    default = next((r["commit_id"] for r in rows if r["is_best"] and r["quantizable"]), None)
+    if default is None:
+        candidates = [r["commit_id"] for r in rows if r["quantizable"]]
+        default = max(candidates) if candidates else None
+    return rows, default
+
+
+async def list_quantize_commits(model_id: int) -> dict:
+    """양자화 모달의 커밋 선택지. SDS(external) 모델만 커밋을 고른다 — 내부 모델은
+    merged latest_checkpoint 하나라 선택지가 없다."""
+    model_info = await db_model.get_model(model_id=model_id)
+    if not model_info:
+        raise Exception(f"model {model_id} not found")
+    if not _is_eva_vlm_model(model_info):
+        return {"external": False, "commits": [], "default_commit_id": None}
+    rows, default = await _external_quantize_commits(model_id, model_info)
+    return {"external": True, "commits": rows, "default_commit_id": default}
+
+
 async def quantize_model(model_id : int, target_quant : str,
                          target_device : Optional[str] = None,
-                         prune : bool = False) -> dict:
+                         prune : bool = False,
+                         commit_id : Optional[int] = None) -> dict:
     """학습 완료 모델을 GGUF 로 양자화하는 convert job 을 띄운다 (SP-4 / 3.9).
 
     Why
@@ -1774,13 +1851,31 @@ async def quantize_model(model_id : int, target_quant : str,
     model_name = model_info["name"]
     workspace_id = int(model_info["workspace_id"])
 
+    # SDS(external): latest_checkpoint 가 비어 있다(커밋에 어댑터+projector 만). 고른 커밋을
+    # convert 가 /models/checkpoints/<커밋> 에서 merge·mmproj 하도록 이름만 넘긴다.
+    checkpoint_name = None
+    if _is_eva_vlm_model(model_info):
+        if prune:
+            raise Exception("SDS(외부 학습) 모델 양자화는 프루닝을 지원하지 않습니다")
+        rows, default = await _external_quantize_commits(model_id, model_info)
+        target = commit_id if commit_id is not None else default
+        chosen = next((r for r in rows if r["commit_id"] == target), None)
+        if not chosen:
+            raise Exception("양자화할 커밋을 찾을 수 없습니다 — 학습이 끝난 커밋이 있는지 확인하세요")
+        if not chosen["quantizable"]:
+            raise Exception(f"커밋 {chosen['commit_name']}: {chosen['reason']}")
+        checkpoint_name = chosen["commit_name"]
+
     # reserved key `_base_model` → lifecycle 가 /model = models/<name>/latest_checkpoint
-    # 마운트. target_quant/model_name 은 convert 컨테이너가 /input/params.json 으로 수신.
+    # 마운트(+ /models/checkpoints = commit_models RO). target_quant/model_name 은 convert
+    # 컨테이너가 /input/params.json 으로 수신.
     params = {
         "_base_model": {"name": model_name},
         "target_quant": target_quant,
         "model_name": model_name,
     }
+    if checkpoint_name:
+        params["checkpoint_name"] = checkpoint_name
     if target_device:
         params["target_device"] = target_device
     # 4.7 프루닝 placeholder — 실제 프루닝은 엣지 convert 컨테이너 도착 시. 지금은
@@ -1829,6 +1924,7 @@ async def quantize_model(model_id : int, target_quant : str,
         "target_quant": target_quant,
         "target_device": target_device,
         "prune": prune,
+        "checkpoint_name": checkpoint_name,
         "manifest_name": settings.CONVERT_MANIFEST_NAME,
         "manifest_version": settings.CONVERT_MANIFEST_VERSION,
         "job_id": job_id,
@@ -1863,6 +1959,29 @@ async def _quantize_output_dir(model_id: int, job_id: str) -> str:
     return output_dir
 
 
+def _package_model_gguf(output_dir: str):
+    """(본체 GGUF 이름, metadata). metadata.model_file 우선 — SDS 패키지는 mmproj GGUF 가 같이 있어
+    정렬 순서로 고르면 비전 파일을 본체로 오인한다. model_file 이 없는 구 패키지·미완료 출력은
+    'mmproj' 접두를 뺀 첫 GGUF. 심링크로 output 밖을 가리키는 파일은 고르지 않는다."""
+    meta = {}
+    try:
+        with open(os.path.join(output_dir, "metadata.json"), encoding="utf-8") as f:
+            meta = json.load(f) or {}
+    except (OSError, ValueError):
+        meta = {}
+    candidates = []
+    name = meta.get("model_file") if isinstance(meta, dict) else None
+    if isinstance(name, str) and name == os.path.basename(name) and name.endswith(".gguf"):
+        candidates.append(name)
+    candidates += [fn for fn in sorted(os.listdir(output_dir))
+                   if fn.endswith(".gguf") and not fn.startswith("mmproj")]
+    for fn in candidates:
+        fp = os.path.join(output_dir, fn)
+        if os.path.isfile(fp) and _is_under(fp, output_dir):
+            return fn, (meta if isinstance(meta, dict) else {})
+    return None, (meta if isinstance(meta, dict) else {})
+
+
 async def list_quantize_package(model_id: int, job_id: str) -> dict:
     """포팅 패키지 파일 목록(name/bytes). 미완료 시 ready=False.
 
@@ -1874,7 +1993,6 @@ async def list_quantize_package(model_id: int, job_id: str) -> dict:
         return {"job_id": job_id, "files": [], "ready": False}
     out_real = os.path.realpath(output_dir)
     files = []
-    gguf_name = None
     for fn in sorted(os.listdir(output_dir)):
         fp = os.path.join(output_dir, fn)
         # 심링크가 output_dir 밖을 가리키면 제외(악의적/손상 산출물이 임의 파일을
@@ -1883,9 +2001,10 @@ async def list_quantize_package(model_id: int, job_id: str) -> dict:
             continue
         if os.path.isfile(fp):
             files.append({"name": fn, "bytes": os.path.getsize(fp)})
-            if fn.endswith(".gguf"):
-                gguf_name = fn
-    ready = len(files) > 0
+    # convert 는 metadata.json 을 패키지 마지막에 쓴다 — GGUF 만 보이는 변환 중 상태를 완료로 오인하면
+    # lineage 가 미완성 파일로 마감되고(엣지 배포 대상이 된다) mmproj 판별도 metadata 없이 지나간다.
+    ready = any(f["name"] == "metadata.json" for f in files)
+    gguf_name, _meta = _package_model_gguf(output_dir) if ready else (None, {})
     if ready:
         try:
             gguf_path = f"jobs/{job_id}/output/{gguf_name}" if gguf_name else f"jobs/{job_id}/output"
@@ -2296,18 +2415,13 @@ async def register_quantized_servable(model_id: int, job_id: str,
     output_dir = await _quantize_output_dir(model_id, job_id)
     if not os.path.isdir(output_dir):
         raise Exception(f"quantize package not ready: {output_dir}")
-    out_real = os.path.realpath(output_dir)
-    gguf_name = None
-    for fn in sorted(os.listdir(output_dir)):
-        fp = os.path.join(output_dir, fn)
-        # 심링크가 output_dir 밖을 가리키면 제외(list_quantize_package 와 동일 가드).
-        if os.path.commonpath([os.path.realpath(fp), out_real]) != out_real:
-            continue
-        if os.path.isfile(fp) and fn.endswith(".gguf"):
-            gguf_name = fn
-            break
+    gguf_name, package_meta = _package_model_gguf(output_dir)
     if not gguf_name:
         raise Exception(f"no .gguf found in {output_dir}")
+    # SDS(eva-vlm) 패키지는 mmproj(비전)가 있어야 동작한다 — llama.cpp 서빙은 아직 이미지 입력·
+    # --mmproj 를 받지 않아 등록하면 이미지를 못 보는 텍스트 모델이 된다. 패키지 다운로드로만 쓴다.
+    if package_meta.get("mmproj_file"):
+        raise Exception("SDS(VLM) 양자화 패키지는 아직 llama.cpp 서빙 등록을 지원하지 않습니다 — 패키지를 내려받아 사용하세요")
 
     src_model = await db_model.get_model(model_id=model_id)
     if not src_model:

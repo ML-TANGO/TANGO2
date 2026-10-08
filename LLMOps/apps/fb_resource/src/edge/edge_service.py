@@ -687,6 +687,15 @@ def _resolve_artifact(lineage_id: int) -> str:
         raise _unavailable("path escapes jobs base")
     if not os.path.isfile(abs_path):
         raise _unavailable("file is missing on storage")
+    # SDS(VLM) 양자화 패키지는 mmproj(비전) GGUF 가 함께 있어야 동작한다 — 엣지는 아직 GGUF 1개만
+    # 전달하므로(remote_manager 계약) 보내면 이미지를 못 보는 모델이 된다. 지원 전까지 거절.
+    try:
+        with open(os.path.join(os.path.dirname(abs_path), "metadata.json"), encoding="utf-8") as f:
+            package_meta = json.load(f) or {}
+    except (OSError, ValueError):
+        package_meta = {}
+    if isinstance(package_meta, dict) and package_meta.get("mmproj_file"):
+        raise _unavailable("VLM package (mmproj) is not supported for edge deploy yet")
     return abs_path
 
 

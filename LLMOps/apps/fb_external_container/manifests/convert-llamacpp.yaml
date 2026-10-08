@@ -32,17 +32,26 @@ kind: ExternalContainer
 
 metadata:
   name: convert-llamacpp
-  version: "1.0.0"
+  version: "1.1.0"
   vendor: "Acryl (platform-owned)"
   contact: "platform@acryl.ai"
   description: |
     플랫폼 소유 llama.cpp 양자화·포팅 컨테이너. HF merged 모델(/model)을 받아
     (옵션 프루닝 →) f16 GGUF → 타겟 양자화(Q4_K_M/Q5_K_M/Q6_K) → /output 포팅
     패키지(model.gguf + inference.py + run.sh + config.json + metadata.json).
-    convert_hf_to_gguf + llama-quantize 실로직(베이스 ggml-org/llama.cpp:full).
+    convert_hf_to_gguf + llama-quantize 실로직(베이스 ggml-org/llama.cpp:full-b9628).
+    SDS(eva-vlm) 커밋은 params.checkpoint_name 으로 받아 base 에 LoRA merge + mmproj(f16) 동봉.
 
 spec:
-  image: "docker.io/acrylaaai/convert-llamacpp:1.0.0"
+  image: "docker.io/acrylaaai/convert-llamacpp:1.1.0"
+
+  # SDS(eva-vlm) merge 의 base(Llama-3.1-8B·CLIP-336)는 오프라인 HF 캐시(/hf-cache)에서만 읽는다.
+  env:
+    HF_HOME: "/hf-cache"
+    HF_HUB_CACHE: "/hf-cache/hub"
+    HF_HUB_OFFLINE: "1"
+    TRANSFORMERS_OFFLINE: "1"
+    HOME: "/tmp"
 
   job_type: convert
   # async: HTTP 서버(/run+poll) — generate/mock-convert 와 동일·검증된 와이어링.
@@ -51,7 +60,7 @@ spec:
 
   resources:
     cpu: "4"
-    memory: "16Gi"            # 변환·프루닝 시 모델 로드 — 모델 크기에 맞춰 조정.
+    memory: "40Gi"            # 변환·프루닝 시 모델 로드 — 모델 크기에 맞춰 조정.
     gpu: 0                    # llama.cpp 변환·양자화는 CPU 중심.
 
   inputs:
@@ -81,6 +90,6 @@ spec:
   capabilities:
     estimated_startup_seconds: 15
     estimated_duration_seconds: 300
-    timeout_seconds: 3600
+    timeout_seconds: 7200         # SDS 8B: CPU merge + f16 변환 + 양자화
 
   workspace_scope: per-workspace
