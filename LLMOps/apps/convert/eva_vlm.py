@@ -7,7 +7,10 @@ SDS 학습(협력기관 eva-vlm 컨테이너)은 커밋에 LoRA 어댑터 + proj
 
 eva 학습/추론과 같은 계산이 되도록(vision_encoder.py / projector.py / model_manager.py 대조):
   - 비전 특징 = hidden_states[vision_feature_layer] (CLS 제외, post_layernorm 미적용)
-    → mmproj 는 그 층까지만 싣고(block_count) post_layernorm 은 넣지 않는다.
+    → mtmd(b9628 models/llava.cpp)는 feature_layer 키가 없으면 `n_layer - 1` 층까지만 돈다(LLaVA 관례:
+      마지막 층 건너뜀). 그래서 k 층을 돌리려면 block_count = k+1 로 쓰고 0..k 층 텐서를 싣는다.
+      block_count = k 로 쓰면 한 층 덜 돌아 특징이 어긋나고 생성이 무너진다(2026-10-08 실측).
+      post_layernorm 은 넣지 않는다(있으면 적용된다).
   - CLIP FFN 활성화 = quick_gelu → clip.use_gelu 를 쓰지 않는다(mtmd 기본 = quick gelu).
   - projector = mlp2x_gelu(Linear→GELU→Linear) → mtmd 'mlp' 타입, 텐서 mm.0 / mm.2.
     (gguf 공식 매핑은 linear_1→mm.1 이지만 mtmd 의 llava mlp 는 mm.0/mm.2 를 읽는다.)
@@ -147,8 +150,10 @@ def build_mmproj(ckpt_dir: str, vision_dir: str, vlm_cfg: Dict[str, Any], out_pa
     feature_layer = int(vlm_cfg.get("vision_feature_layer", -2))
     # hidden_states[k] = k 개 층을 지난 출력(0 = 임베딩+pre_ln). 음수는 뒤에서 센다.
     n_layers = feature_layer if feature_layer >= 0 else n_layers_total + 1 + feature_layer
-    if not 1 <= n_layers <= n_layers_total:
+    # mtmd 가 마지막 층을 건너뛰므로 한 층을 더 실어야 한다 — 마지막 층 특징(-1)은 이 방식으로 못 만든다.
+    if not 1 <= n_layers < n_layers_total:
         raise ValueError(f"vision_feature_layer {feature_layer} out of range")
+    block_count = n_layers + 1
     hidden = int(vcfg["hidden_size"])
     llm_hidden = int(vlm_cfg.get("llm_hidden_size", 4096))
 
@@ -171,13 +176,13 @@ def build_mmproj(ckpt_dir: str, vision_dir: str, vlm_cfg: Dict[str, Any], out_pa
     writer.add_vision_patch_size(int(vcfg["patch_size"]))
     writer.add_vision_embedding_length(hidden)
     writer.add_vision_feed_forward_length(int(vcfg["intermediate_size"]))
-    writer.add_vision_block_count(n_layers)
+    writer.add_vision_block_count(block_count)
     writer.add_vision_head_count(int(vcfg["num_attention_heads"]))
     writer.add_vision_attention_layernorm_eps(float(vcfg.get("layer_norm_eps", 1e-5)))
     writer.add_vision_image_mean([float(x) for x in pre_cfg["image_mean"]])
     writer.add_vision_image_std([float(x) for x in pre_cfg["image_std"]])
 
-    tmap = gguf.get_tensor_name_map(gguf.MODEL_ARCH.MMPROJ, n_layers)
+    tmap = gguf.get_tensor_name_map(gguf.MODEL_ARCH.MMPROJ, block_count)
     layer_re = re.compile(r"\.encoder\.layers\.(\d+)\.")
 
     def _add(name: str, tensor) -> None:
@@ -197,8 +202,8 @@ def build_mmproj(ckpt_dir: str, vision_dir: str, vlm_cfg: Dict[str, Any], out_pa
             if key.startswith("vision_model.post_layernorm."):
                 continue  # 학습 특징은 post-LN 이전 hidden_states — 넣으면 mtmd 가 적용한다
             m = layer_re.search(key)
-            if m and int(m.group(1)) >= n_layers:
-                continue  # 특징 층 이후 블록은 계산에 쓰이지 않는다
+            if m and int(m.group(1)) >= block_count:
+                continue  # mtmd 가 돌지 않는 블록(건너뛰는 마지막 층 다음부터)
             mapped = tmap.get_name("vision_tower." + key, try_suffixes=(".weight", ".bias"))
             if mapped is None:
                 raise ValueError(f"unmapped CLIP tensor: {key}")
@@ -213,7 +218,8 @@ def build_mmproj(ckpt_dir: str, vision_dir: str, vlm_cfg: Dict[str, Any], out_pa
     writer.write_kv_data_to_file()
     writer.write_tensors_to_file()
     writer.close()
-    return {"vision_layers": n_layers, "tensors": count, "image_size": int(vcfg["image_size"])}
+    return {"vision_layers": n_layers, "block_count": block_count, "tensors": count,
+            "image_size": int(vcfg["image_size"])}
 
 
 def prepare(checkpoints_root: str, name: str, workdir: str) -> Dict[str, Any]:

@@ -44,7 +44,7 @@ LLAMA_QUANTIZE_BIN = os.environ.get("LLAMA_QUANTIZE_BIN", "/app/llama-quantize")
 CONVERT_HF_TO_GGUF = os.environ.get("CONVERT_HF_TO_GGUF", "/app/convert_hf_to_gguf.py")
 
 NAME    = "convert-llamacpp"
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 
 # SDS(eva-vlm) 커밋 마운트(플랫폼 차트가 commit_models 를 RO 로 붙인다).
 CHECKPOINTS_ROOT = os.environ.get("CHECKPOINTS_ROOT", "/models/checkpoints")

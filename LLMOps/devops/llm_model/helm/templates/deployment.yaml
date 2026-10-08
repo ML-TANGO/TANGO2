@@ -44,7 +44,7 @@ spec:
         - name: CONVERT_MANIFEST_NAME
           value: "convert-llamacpp"
         - name: CONVERT_MANIFEST_VERSION
-          value: "1.1.0"
+          value: "1.1.1"
         # SDS(3.5) 도메인 모델 생성 시 바인딩되는 학습 manifest — 같은 이유로
         # jfb-settings 에 키가 없어 코드 기본값에 의존하게 되는 값이라 여기서 고정.
         # recipe 를 가진 판본이어야 FT 탭이 레시피 파이프라인으로 렌더된다.
