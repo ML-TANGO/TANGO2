@@ -44,7 +44,7 @@ LLAMA_QUANTIZE_BIN = os.environ.get("LLAMA_QUANTIZE_BIN", "/app/llama-quantize")
 CONVERT_HF_TO_GGUF = os.environ.get("CONVERT_HF_TO_GGUF", "/app/convert_hf_to_gguf.py")
 
 NAME    = "convert-llamacpp"
-VERSION = "1.1.1"
+VERSION = "1.1.2"
 
 # SDS(eva-vlm) 커밋 마운트(플랫폼 차트가 commit_models 를 RO 로 붙인다).
 CHECKPOINTS_ROOT = os.environ.get("CHECKPOINTS_ROOT", "/models/checkpoints")
@@ -190,9 +190,11 @@ python inference.py "$@"
 # (이미지 + AIS 행 + 출력 유형) 을 같은 프롬프트로 조립한다(eva api/model_manager.py 대조).
 _VLM_INFERENCE_PY = '''\
 # 포팅 패키지 — SDS(eva-vlm) llama.cpp 멀티모달 추론 예시 (자동 생성, 코드 수정 UI 없음 / ⑬)
-# 사용: python inference.py <이미지> <AIS csv|json> [출력유형]
-#   필요: llama.cpp 의 llama-mtmd-cli (PATH 또는 LLAMA_MTMD_CLI 환경변수), pip install pillow
-import csv, json, os, subprocess, sys, tempfile
+# 사용: python inference.py <이미지> <AIS csv|json> [출력유형] [--server http://<디바이스>:<포트>]
+#   --server 없음: 이 장비에서 llama.cpp 의 llama-mtmd-cli 로 실행 (PATH 또는 LLAMA_MTMD_CLI 환경변수)
+#   --server 있음: 엣지 배포된 llama-server(--mmproj 로 띄운 OpenAI 호환 서버)에 같은 프롬프트로 요청
+#   공통: pip install pillow
+import base64, csv, json, os, subprocess, sys, tempfile, urllib.request
 from PIL import Image, ImageOps
 
 MODEL = {model_path}
@@ -239,16 +241,44 @@ def square_crop(src, dst):
     im.crop(((w - s) // 2, (h - s) // 2, (w - s) // 2 + s, (h - s) // 2 + s)).save(dst)
 
 
+def ask_server(url, image, prompt):
+    # CLI 와 같은 프롬프트("<__media__>\\n" + 프롬프트, 학습 형식 <image>\\n)가 되도록 텍스트 앞에
+    # 개행을 둔다 — llama-server 는 이미지 마커 뒤에 텍스트를 개행 없이 붙인다(그러면 출력이 달라진다).
+    with open(image, "rb") as f:
+        data = base64.b64encode(f.read()).decode("ascii")
+    body = {{"messages": [{{"role": "user", "content": [
+                {{"type": "image_url", "image_url": {{"url": "data:image/png;base64," + data}}}},
+                {{"type": "text", "text": "\\n" + prompt}}]}}],
+            "temperature": 0, "repeat_penalty": 1.1, "max_tokens": 512}}
+    req = urllib.request.Request(url.rstrip("/") + "/v1/chat/completions",
+                                 data=json.dumps(body).encode("utf-8"),
+                                 headers={{"Content-Type": "application/json"}})
+    with urllib.request.urlopen(req, timeout=900) as r:
+        print(json.load(r)["choices"][0]["message"]["content"])
+
+
 def main():
-    if len(sys.argv) < 3:
-        sys.exit("사용: python inference.py <이미지> <AIS csv|json> [출력유형]")
-    output_type = sys.argv[3] if len(sys.argv) > 3 else DEFAULT_TYPE
+    usage = "사용: python inference.py <이미지> <AIS csv|json> [출력유형] [--server http://<디바이스>:<포트>]"
+    args, server, rest = [], None, iter(sys.argv[1:])
+    for a in rest:
+        if a == "--server":
+            server = next(rest, None) or sys.exit(usage)
+        elif a.startswith("--server="):
+            server = a.split("=", 1)[1] or sys.exit(usage)
+        else:
+            args.append(a)
+    if len(args) < 2:
+        sys.exit(usage)
+    output_type = args[2] if len(args) > 2 else DEFAULT_TYPE
     lang = "en" if "영문" in output_type else "ko"
     question = PROMPTS.get(output_type) or sys.exit(f"알 수 없는 출력유형: {{output_type}} ({{', '.join(PROMPTS)}})")
-    prompt = ais_text(load_rows(sys.argv[2]), lang) + "\\n\\n" + question
+    prompt = ais_text(load_rows(args[1]), lang) + "\\n\\n" + question
     with tempfile.TemporaryDirectory() as tmp:
         image = os.path.join(tmp, "image.png")
-        square_crop(sys.argv[1], image)
+        square_crop(args[0], image)
+        if server:
+            ask_server(server, image, prompt)
+            return
         cli = os.environ.get("LLAMA_MTMD_CLI", "llama-mtmd-cli")
         subprocess.run([cli, "-m", MODEL, "--mmproj", MMPROJ, "--image", image,
                         "-p", "<__media__>\\n" + prompt, "--jinja", "--temp", "0",
@@ -263,6 +293,7 @@ _VLM_RUN_SH = '''\
 #!/usr/bin/env bash
 # 타겟 디바이스에서 실행: llama.cpp(llama-mtmd-cli) 설치 + pip install pillow
 #   ./run.sh <이미지> <AIS csv|json> [출력유형]
+# 엣지 배포된 서버로 보낼 때: ./run.sh <이미지> <AIS csv|json> [출력유형] --server http://<디바이스>:<포트>
 set -e
 python3 inference.py "$@"
 '''
