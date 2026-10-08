@@ -795,6 +795,21 @@ async def update_quantize_lineage_status(model_id: int, job_id: str, body: _Line
         return response(status=0, message=str(e), result=None)
 
 
+@model.delete("/{model_id}/quantize/{job_id}", summary='delete quantization history + porting package', tags=TAG_MODEL)
+async def delete_quantize_lineage(model_id: int, job_id: str):
+    """양자화 이력 1건 + 포팅 패키지 삭제 — 진행 중 job·엣지 배포 중 거절은 서비스에서."""
+    try:
+        if not await svc.user_can_access_model(get_user_id(), model_id):
+            return response(status=0, message="forbidden", result=False)
+        res = await svc.delete_quantize_lineage(model_id=model_id, job_id=job_id)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        _m = str(e)
+        _um = _m[len("Error:"):].strip() if _m.startswith("Error:") else "server error"
+        return response(status=0, message=_um, result=False)
+
+
 @model.get("/{model_id}/quantize/{job_id}/package", summary='list porting package files', tags=TAG_MODEL)
 async def list_quantize_package(model_id: int, job_id: str):
     try:
@@ -934,7 +949,10 @@ async def delete_model(model_id: int):
         return response(status=1, result=res)
     except Exception as e:
         traceback.print_exc()
-        return response(status=0, message="server error", result=None)
+        # 양자화 가드 거절("Error:" 접두)은 사유를 보여 준다 — 그 외는 기존대로 감춘다.
+        _m = str(e)
+        _um = _m[len("Error:"):].strip() if _m.startswith("Error:") else "server error"
+        return response(status=0, message=_um, result=None)
     
 @model.put("",summary='put - model', tags=TAG_MODEL)
 async def update_model(body: dto.PutModel):

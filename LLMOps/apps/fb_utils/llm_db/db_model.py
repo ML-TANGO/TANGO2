@@ -665,6 +665,25 @@ async def list_quantize_lineage(source_model_id : int) -> list:
     return res or []
 
 
+async def get_quantize_lineage_by_job(job_str_id : str, source_model_id : int):
+    """job_str_id 로 lineage 단건 — 삭제 전 존재·소속 확인(source_model_id 바인딩 필수)."""
+    sql = """
+        SELECT id, source_model_id, workspace_id, job_str_id, quantization_type,
+               gguf_path, status
+        FROM quantize_lineage
+        WHERE job_str_id = %s AND source_model_id = %s
+    """
+    res = await select_query(sql, params=(job_str_id, source_model_id), fetch_type=FetchType.ALL)
+    return (res or [None])[0]
+
+
+async def delete_quantize_lineage(lineage_id : int, source_model_id : int) -> bool:
+    """lineage 행 1건 삭제. 패키지 디렉터리 정리는 호출부(service)가 먼저 한다."""
+    sql = "DELETE FROM quantize_lineage WHERE id = %s AND source_model_id = %s"
+    await commit_query(query=sql, params=(lineage_id, source_model_id))
+    return True
+
+
 # ── SP-5 자동평가 결과 (v0.4 3.8) ────────────────────────────────────────────
 
 async def insert_eval_result(source_model_id : int, workspace_id : int,

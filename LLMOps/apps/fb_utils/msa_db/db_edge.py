@@ -260,6 +260,22 @@ def get_quantize_lineage(lineage_id):
         return None
 
 
+def list_edge_workers_by_lineage(lineage_id):
+    """이 lineage 를 다운로드 인가(deploy_lineage_id)로 들고 있는 워커들 — 양자화 이력 삭제 가드용.
+
+    다른 조회와 달리 예외를 삼키지 않는다: 빈 목록이 "쓰는 워커 없음" 으로 읽혀 배포 중인
+    아티팩트가 지워지면 안 된다(가드는 fail-closed). 인가는 stop 뒤에도 남으므로 상태는
+    호출부가 deploy_state 로 거른다.
+    """
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id, name, device_id, deploy_state FROM edge_worker WHERE deploy_lineage_id=%s",
+            (lineage_id,),
+        )
+        return cur.fetchall() or []
+
+
 # ── custom_label (노드 + 엣지워커 공용, 키-값) ────────────────────────────────
 
 def upsert_custom_label(target_type, target_id, label_key, label_value=None):

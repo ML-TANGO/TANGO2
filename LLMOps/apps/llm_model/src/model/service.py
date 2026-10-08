@@ -27,7 +27,7 @@ from aiopath import AsyncPath
 from utils import redis_key, TYPE, PATH, settings, common, topic_key, workspace_resource
 from utils.redis import get_redis_client_async
 from utils.llm_db import db_model
-from utils.msa_db import db_workspace, db_user, db_instance
+from utils.msa_db import db_workspace, db_user, db_instance, db_edge
 from utils.access_check import is_workspace_user
 from model.dto import FineTuningConfig, FineTuningPodInfo
 from utils.crypt import session_cipher, front_cipher
@@ -2047,6 +2047,85 @@ async def list_quantize_lineage(model_id: int) -> dict:
     }
 
 
+# 엣지 워커가 lineage 를 띄워 둔(또는 정리 전인) 상태 — FE stoppable·워커 삭제 게이트와 같은 집합.
+_EDGE_LINEAGE_LIVE_STATES = ("running", "deploying", "error")
+_EXTERNAL_TERMINAL_STATUSES = ("completed", "failed", "cancelled")
+
+
+async def _convert_job_active(job_id: str) -> bool:
+    """convert job 이 아직 도는지 BFF 에 묻는다 — lineage 행 상태는 근거가 못 된다(완료는 lazy 마감이고,
+    failed/cancelled 는 FE 가 lineage-status 로 새긴다). BFF 가 모르는 job(404)·끝난 job 이면 False.
+    확인할 수 없으면(도달 불가·5xx) 삭제를 막는다."""
+    from external.proxy import ExternalContainerClient, ExternalContainerError
+    import httpx
+
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as http:
+            raw = await ExternalContainerClient(
+                base_url=settings.FB_EXTERNAL_CONTAINER_URL, client=http).get_job(job_id)
+    except ExternalContainerError as e:
+        if e.status_code == 404:
+            return False
+        raise Exception("Error: 양자화 작업 상태를 확인할 수 없습니다. 잠시 후 다시 시도하세요") from e
+    status = ((raw or {}).get("result") or {}).get("status")
+    return status not in _EXTERNAL_TERMINAL_STATUSES
+
+
+async def _quantize_delete_blocker(job_id: str, lineage_id: int):
+    """양자화 산출물을 지우면 안 되는 사유(없으면 None) — 이력 단건 삭제와 모델 삭제가 같은 가드를 쓴다.
+
+    ⚠️ 남는 창: 이 검사 뒤 rm 전에 엣지 배포가 같은 lineage 를 인가하면 디바이스 다운로드가
+    404 로 실패한다(배포 error 로 드러남 — 조용한 손상은 없다). 막으려면 fb_resource 와 공유 락이 필요.
+    """
+    if await _convert_job_active(job_id):
+        return "양자화가 진행 중입니다. 작업을 취소한 뒤 삭제하세요"
+    # 인가(deploy_lineage_id)는 stop 뒤에도 남으므로 상태로 거른다.
+    workers = await asyncio.to_thread(db_edge.list_edge_workers_by_lineage, lineage_id)
+    live = [w for w in workers if w.get("deploy_state") in _EDGE_LINEAGE_LIVE_STATES]
+    if live:
+        names = ", ".join(str(w.get("name") or w.get("device_id")) for w in live)
+        return f"엣지 디바이스에 배포 중입니다({names}). 배포를 중지한 뒤 삭제하세요"
+    return None
+
+
+async def delete_quantize_lineage(model_id: int, job_id: str) -> dict:
+    """양자화 이력 1건 삭제 — 패키지 디렉터리(jobs/<job_id>) 통째 rm 후 lineage 행.
+
+    거절: convert job 이 아직 진행 중 / 엣지 워커가 이 lineage 로 배포 중(먼저 중지).
+    Playground 서빙 등록본(register_quantized_servable)은 GGUF 복사본이라 영향이 없다.
+    디렉터리를 먼저 지우므로 중간에 실패해도 같은 호출을 다시 하면 이어서 정리된다.
+    """
+    output_dir = await _quantize_output_dir(model_id, job_id)   # job_id 형식 + jobs base 봉쇄
+    row = await db_model.get_quantize_lineage_by_job(job_str_id=job_id, source_model_id=model_id)
+    if not row:
+        raise Exception("Error: 양자화 이력을 찾을 수 없습니다")
+    blocker = await _quantize_delete_blocker(job_id, row["id"])
+    if blocker:
+        raise Exception(f"Error: {blocker}")
+    job_dir = os.path.dirname(output_dir)
+    jobs_base = os.path.dirname(job_dir)
+    if not _is_under(job_dir, jobs_base) or os.path.realpath(job_dir) == os.path.realpath(jobs_base):
+        raise Exception("Error: invalid package path")
+    await asyncio.to_thread(common.rm_rf, job_dir)
+    await db_model.delete_quantize_lineage(lineage_id=row["id"], source_model_id=model_id)
+    return {"job_id": job_id, "lineage_id": row["id"], "deleted": True}
+
+
+async def _quantize_job_dirs(model_id: int) -> list:
+    """모델의 양자화 패키지 디렉터리 목록 — 모델 삭제가 FK CASCADE 로 lineage 행을 지우기 전에 잡아 둔다.
+    진행 중이거나 엣지 배포 중인 산출물이 하나라도 있으면 이력 단건 삭제와 같은 사유로 거절한다."""
+    dirs = []
+    for r in await db_model.list_quantize_lineage(source_model_id=model_id):
+        blocker = await _quantize_delete_blocker(r["job_str_id"], r["id"])
+        if blocker:
+            raise Exception(f"Error: 양자화 결과를 지울 수 없어 모델을 삭제할 수 없습니다 — {blocker}")
+        try:
+            dirs.append(os.path.dirname(await _quantize_output_dir(model_id, r["job_str_id"])))
+        except Exception:
+            traceback.print_exc()
+    return dirs
+
+
 # 4.5 타겟 디바이스 → 권장 양자화 매핑. device(ORIN/RPi+Hailo/PC) → 권장 Q.
 # 비트수↓ = 용량↓·디바이스 친화↑·정확도↓. (SP-6/Runtime edge spec 정합)
 _DEVICE_QUANT_MAP = [
@@ -3306,6 +3385,11 @@ async def delete_model(model_id : int) -> bool:
         if model_pod_status[TYPE.FINE_TUNING_TYPE].get(str(model_id),{}):
             raise Exception(f"현재 파인튜닝중입니다. 해당 작업을 종료 후 진행해 주세요.")
 
+    # 양자화 패키지(jobs/<job_id>)는 models/<name> 밖이라 delete_model_folder 가 못 지우고,
+    # lineage 행은 FK CASCADE 로 함께 사라져 경로를 잃는다 — 행이 남아 있을 때 잡아 둔다.
+    # 진행 중·엣지 배포 중이면 여기서 거절된다(아래 helm·secret 정리보다 먼저 — 반쯤 지워진 모델 방지).
+    quantize_dirs = await _quantize_job_dirs(model_id)
+
     # 해당 모델을 다운 받고 있을 경우
     model_commit_helm_repo_name = TYPE.MODEL_COMMIT_JOB_HELM_NAME.format(MODEL_ID=model_id)
     await delete_helm_repo(helm_repo_name=model_commit_helm_repo_name, workspace_id=model_info["workspace_id"])
@@ -3319,6 +3403,11 @@ async def delete_model(model_id : int) -> bool:
 
     await db_model.delete_model(model_id=model_id)
     await delete_model_folder(storage_name=workspace_info["main_storage_name"], workspace_name=workspace_info["name"], model_name=model_info["name"])
+    for d in quantize_dirs:
+        try:
+            await asyncio.to_thread(common.rm_rf, d)
+        except Exception as e:
+            print(f"Warning: failed to delete quantize package {d} for model {model_id}: {e}")
     
     return True
 
