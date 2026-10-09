@@ -3052,6 +3052,7 @@
   "edge.detail.stopping": "중지 중…",
   "edge.detail.noRemoteUrl": "이 디바이스는 heartbeat 전용입니다 — 원격 관리 주소(remoteManager URL)가 없어 실행·중지를 보낼 수 없습니다.",
   "edge.detail.nothingToStop": "중지할 배포가 없습니다.",
+  "edge.detail.configLocked": "배포 중에는 런타임과 설정을 바꿀 수 없습니다(실행 중인 구성은 '현재 배포 상태'에서 확인). 바꾸려면 먼저 배포를 중지하세요.",
   "edge.toast.stopRequested": "배포 중지를 요청했습니다.",
   "edge.toast.stopFail": "배포 중지에 실패했습니다.",
   "edge.toast.deletedButStopFailed": "{{device}} 를 삭제했지만 컨테이너 중지에 실패했습니다 — 디바이스에 컨테이너가 남아 있을 수 있습니다.",

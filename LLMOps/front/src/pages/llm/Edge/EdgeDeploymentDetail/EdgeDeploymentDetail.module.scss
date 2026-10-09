@@ -122,6 +122,21 @@
   color: $mono205;
   font-family: SpoqaM;
   font-size: 12px;
+
+  // 배포 중 런타임·설정 잠금 안내 — 클러스터 배포 헤더의 '설정 중' 주황과 같은 톤.
+  &.locked {
+    margin: 0 0 4px;
+    color: #ff7a00;
+  }
+}
+
+// 배포 중 잠금 — 눌리지 않는다는 것이 보이게 흐리게.
+.select:disabled,
+.input:disabled,
+.engine-opt:disabled,
+.slider:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 /* 배포 유형 배지(온디바이스/standalone 구분) */

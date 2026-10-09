@@ -58,6 +58,8 @@ const ENGINES = [
 ];
 const CUSTOM_ENGINE = 'custom';
 const DEFAULT_EDGE_IMAGE = ENGINES[1].image; // llama.cpp (엣지 기본)
+// 디바이스에 배포가 살아 있는(또는 정리 전인) 상태 — 중지 가능 집합이자 런타임·설정 잠금 집합.
+const LIVE_DEPLOY_STATES = ['running', 'deploying', 'error'];
 
 // 파라미터 기본값(목업 — 배포 요청 body 확장 시 사용).
 const DEFAULT_PARAMS = {
@@ -219,6 +221,20 @@ export default function EdgeDeploymentDetail() {
     };
   }, [tab, targetId]);
 
+  // 배포 탭 진입·디바이스 변경 시 1회 재관측 — 목록은 마운트 때 한 번 받으므로 다른 곳에서 시작·중지된
+  // 배포가 반영되지 않아 런타임·설정 잠금(isConfigLocked)이 실제와 어긋난다.
+  useEffect(() => {
+    if (tab !== 'DEPLOY' || !targetId) return undefined;
+    let alive = true;
+    (async () => {
+      const { status, result } = await refreshEdgeWorker(targetId);
+      if (alive && status === STATUS_SUCCESS) setWorker(result);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [tab, targetId]);
+
   const selectedModel = models.find((m) => String(m.id) === String(modelId));
   const selectedLineage = lineage.find(
     (l) => String(l.id) === String(lineageId),
@@ -235,6 +251,8 @@ export default function EdgeDeploymentDetail() {
 
   const handleDeploy = async () => {
     if (!worker) return toast.error(t('edge.toast.selectDevice'));
+    if (LIVE_DEPLOY_STATES.includes(worker.deploy_state))
+      return toast.error(t('edge.detail.configLocked'));
     if (!selectedLineage) return toast.error(t('edge.toast.selectQuantModel'));
     if (!image) return toast.error(t('edge.toast.checkImage'));
     setDeploying(true);
@@ -251,13 +269,14 @@ export default function EdgeDeploymentDetail() {
         ? { playground_id: Number(deployId) }
         : {}),
     });
-    setDeploying(false);
     if (status === STATUS_SUCCESS) {
       toast.success(t('edge.toast.deployRequested'));
-      loadWorkers();
+      // 목록을 다시 받은 뒤에 deploying 을 푼다 — 먼저 풀면 옛 stopped 상태로 설정·배포가 잠깐 열린다.
+      await loadWorkers();
     } else {
       toast.error(message || t('edgeDeploy.toast.fail'));
     }
+    setDeploying(false);
   };
 
   // 목록 GET 만으로는 부족하다: BE `_worker_view` 는 heartbeat 토큰이 있는 워커만
@@ -362,9 +381,12 @@ export default function EdgeDeploymentDetail() {
   // 실패 후 Created/crash-loop 컨테이너가 남을 수 있고, agent 도 docker 불가 시 기존
   // 컨테이너를 건드리지 않고 error 를 준다). BE stop_edge_worker 는 deploy_state 를
   // 아예 검사하지 않으므로, FE 가 여기서 막으면 정리 경로가 UI 에서 사라진다.
-  const stoppable = ['running', 'deploying', 'error'].includes(
-    worker?.deploy_state,
-  );
+  const stoppable = LIVE_DEPLOY_STATES.includes(worker?.deploy_state);
+  // 배포가 살아 있으면 런타임·설정을 잠근다 — 클러스터 배포와 같은 UI 계약(완전히 stop 인 배포만
+  // 구성 편집·실행, apis/llm/playground canEditConfig/canStart). 바꾸려면 먼저 중지한다.
+  //   중지할 수 있을 때만 잠근다(canOperate) — 오프라인·원격주소 없음이면 어차피 배포도 중지도 못 하고,
+  //   잠그면 '먼저 중지하세요' 라는 안내가 눌리지 않는 버튼을 가리킨다(리뷰).
+  const isConfigLocked = canOperate && stoppable;
   const tabOptions = [
     { label: 'information.label', value: 'INFO' },
     { label: 'deployment.label', value: 'DEPLOY' },
@@ -453,6 +475,11 @@ export default function EdgeDeploymentDetail() {
             <h3 className={cx('card-title')}>
               {t('deployDetail.section.modelRuntime')}
             </h3>
+            {isConfigLocked && (
+              <p className={cx('hint', 'locked')}>
+                {t('edge.detail.configLocked')}
+              </p>
+            )}
 
             <span className={cx('label')} id='edge-engine-label'>
               {t('deployDetail.field.engine')}
@@ -470,6 +497,7 @@ export default function EdgeDeploymentDetail() {
                   aria-checked={engine === eng.id}
                   className={cx('engine-opt', engine === eng.id && 'selected')}
                   onClick={() => handleSelectEngine(eng.id)}
+                  disabled={isConfigLocked}
                 >
                   {eng.label}
                 </button>
@@ -484,6 +512,7 @@ export default function EdgeDeploymentDetail() {
                   isCustomEngine && 'selected',
                 )}
                 onClick={() => handleSelectEngine(CUSTOM_ENGINE)}
+                disabled={isConfigLocked}
               >
                 {t('deployDetail.engine.custom')}
               </button>
@@ -501,6 +530,7 @@ export default function EdgeDeploymentDetail() {
               onChange={(e) => setImage(e.target.value)}
               placeholder='docker.io/org/image:tag'
               readOnly={!isCustomEngine}
+              disabled={isConfigLocked}
             />
 
             <div className={cx('divider')} />
@@ -513,6 +543,7 @@ export default function EdgeDeploymentDetail() {
               className={cx('select')}
               value={modelId}
               onChange={(e) => setModelId(e.target.value)}
+              disabled={isConfigLocked}
             >
               <option value=''>{t('deployDetail.model.select')}</option>
               {models.map((m) => (
@@ -530,7 +561,7 @@ export default function EdgeDeploymentDetail() {
               className={cx('select')}
               value={lineageId}
               onChange={(e) => setLineageId(e.target.value)}
-              disabled={!modelId}
+              disabled={!modelId || isConfigLocked}
             >
               <option value=''>
                 {modelId
@@ -580,6 +611,7 @@ export default function EdgeDeploymentDetail() {
                   step={p.step}
                   value={params[p.key]}
                   onChange={(e) => handleParam(p.key, e.target.value)}
+                  disabled={isConfigLocked}
                 />
               </div>
             ))}
@@ -671,7 +703,13 @@ export default function EdgeDeploymentDetail() {
                     : t('edge.detail.runDeploy')
                 }
                 colorType='skyblue'
-                disabled={deploying || stopping || refreshing || !canOperate}
+                disabled={
+                  deploying ||
+                  stopping ||
+                  refreshing ||
+                  !canOperate ||
+                  isConfigLocked
+                }
                 onClick={handleDeploy}
                 style={{ width: '100%', marginTop: '8px' }}
               />
@@ -707,6 +745,9 @@ export default function EdgeDeploymentDetail() {
               )}
               {canOperate && !stoppable && (
                 <p className={cx('hint')}>{t('edge.detail.nothingToStop')}</p>
+              )}
+              {isConfigLocked && (
+                <p className={cx('hint')}>{t('edge.detail.configLocked')}</p>
               )}
             </section>
           </div>

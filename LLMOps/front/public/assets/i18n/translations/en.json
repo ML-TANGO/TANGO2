@@ -3044,6 +3044,7 @@
   "edge.detail.stopping": "Stopping…",
   "edge.detail.noRemoteUrl": "This device is heartbeat-only — without a remoteManager URL the platform cannot send deploy or stop commands.",
   "edge.detail.nothingToStop": "No deployment to stop.",
+  "edge.detail.configLocked": "Runtime and settings are locked while deployed (see 'Current Deployment Status' for what is running). Stop the deployment to change them.",
   "edge.toast.stopRequested": "Stop requested.",
   "edge.toast.stopFail": "Failed to stop the deployment.",
   "edge.toast.deletedButStopFailed": "Deleted {{device}}, but stopping its container failed — a container may still be running on the device.",
