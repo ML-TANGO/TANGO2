@@ -300,7 +300,7 @@ Filter에서는 각종 로그에 대해 여러 처리를 거치게 됩니다.
         Logstash_Format On
         Logstash_Prefix idx_failed
         Logstash_Prefix_Key $_jfb_index
-        Logstash_DateFormat all
+        Logstash_DateFormat %Y.%m.%d
         Retry_Limit 5
         Suppress_Type_Name On
         Trace_Error On
@@ -321,7 +321,7 @@ Filter에서는 각종 로그에 대해 여러 처리를 거치게 됩니다.
         tls.verify Off
         Logstash_Format On
         Logstash_Prefix system-kubelet
-        Logstash_DateFormat all
+        Logstash_DateFormat %Y.%m.%d
         Retry_Limit 5
         Suppress_Type_Name On
         Trace_Error On
@@ -342,7 +342,7 @@ Filter에서는 각종 로그에 대해 여러 처리를 거치게 됩니다.
         tls.verify Off
         Logstash_Format On
         Logstash_Prefix system-kubecomp
-        Logstash_DateFormat all
+        Logstash_DateFormat %Y.%m.%d
         Retry_Limit 5
         Suppress_Type_Name On
         Trace_Error On
@@ -363,7 +363,7 @@ Filter에서는 각종 로그에 대해 여러 처리를 거치게 됩니다.
         tls.verify Off
         Logstash_Format On
         Logstash_Prefix system-event
-        Logstash_DateFormat all
+        Logstash_DateFormat %Y.%m.%d
         Retry_Limit 5
         Suppress_Type_Name On
         Trace_Error On
@@ -421,14 +421,26 @@ curl을 통해 elastic 서버에 요청을 보내므로 curl이 가능한 이미
 스크립트를 바탕으로 configmap 생성 -> 해당 cm을 활용해 job 실행 -> pod 내에서 curl로 요청하는 순으로 실행됨.
 
 이 과정에서 인덱스 템플릿 설정(시간 나노초 설정을 비롯한 타입 강제 포함) 및 ILP 생성 및 적용 등을 수행함.
+이후 `retention_setup.sh`가 날짜별 인덱스 템플릿과 삭제 정책을 확인하며 적용함.
+Fluent Bit은 `<분류>-YYYY.MM.DD` 인덱스에 기록한다.
+보관 기간은 `thirdparty` 등 1일, `jonathan-control-unmarked` 7일,
+`jonathan-user` 15일, `jonathan-control` 30일이다.
+일별 인덱스 안에서 늦게 기록된 문서도 지정 기간 이상 보존하도록
+인덱스 생성일 기준 삭제 시점은 각 기간에 하루를 더한다.
+`jonathan-worker`와 usage/resource 계열에는 자동 삭제를 적용하지 않는다.
 
 #### 수정
 
-[./elastic_init/setup_elastic.sh](./elastic_init/setup_elastic.sh) 파일을 수정하면 됨.
+[./retention_setup.sh](./retention_setup.sh)에서 날짜별 인덱스의 보관 기간을 수정한다.
 
-해당 파일 내에서 보관 기간 등을 조절할 수 있으며, **일단 한 번 실행된 이후에는 ./elastic_init.sh를 재실행해서 ILP를 변경할 수 있음**.
+변경 후 `./elastic_init.sh`를 다시 실행하면 새 템플릿과 정책을 적용할 수 있다.
+기존 `*-all` 인덱스는 자동으로 이전되지 않는다. `cleanup_legacy.py`는 기본 실행 시
+보존 대상 문서 수만 확인하며, `--apply`를 지정하면 기간 안의 문서를 날짜별 인덱스로
+복사하고 건수를 검증한 뒤 기존 인덱스를 삭제한다. 삭제 전에는 Fluent Bit의 날짜별
+인덱스 설정을 먼저 배포해야 한다.
 
-다만 한 번도 실행된 적이 없다면 index template이 생성되지 않아 적용이 전혀 안 된 상태이므로, 만약 init 스크립트를 실행하지 않은 채 Fluent-bit가 실행되었다면 아래 Kibana 사용 참조하여 index를 모두 지우거나 완전 재설치하여 해결 필요. (완전 재설치 시 차트 uninstall 후 pv/pvc 삭제 필요)
+초기화 작업이 완료 상태여도 템플릿과 정책이 실제 생성됐는지 확인해야 한다.
+새 인덱스에 대해 `_ilm/explain`의 `managed: true`를 확인한다.
 
 
 ### Kibana 사용
