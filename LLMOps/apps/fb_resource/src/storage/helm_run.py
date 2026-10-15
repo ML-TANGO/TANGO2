@@ -10,6 +10,19 @@ STORAGE_HELM_CHART_NAME = "storage_check"
 PVC_CHART_NAME = "volume"
 STORAGE_EXPORTER = "storage-exporter"
 
+def _existing_pvc_points_to(namespace, name, ip, mountpoint):
+    """이미 있는 PVC 가 묶인 PV 의 서버·경로가 등록 요청과 같은지. 같을 때만 그 PVC 를 재사용한다."""
+    from utils import kube
+    pvc = kube.get_pvc_info(namespace=namespace, pvc_name=name) or {}
+    pv_name = (pvc.get("spec") or {}).get("volume_name")
+    pv = (kube.get_pv_info(pv_name) if pv_name else None) or {}
+    spec = pv.get("spec") or {}
+    src = spec.get("nfs") or spec.get("host_path") or spec.get("local") or {}
+    same_path = bool(src.get("path")) and str(src["path"]).rstrip("/") == str(mountpoint).rstrip("/")
+    same_server = "server" not in src or src.get("server") == ip
+    return same_path and same_server
+
+
 def create_storage_pvc(ip, name, mountpoint, type):
     try:
 
@@ -38,6 +51,14 @@ def create_storage_pvc(ip, name, mountpoint, type):
             #   자기 PVC 를 삭제하는 결과가 된다(check job 실패로 DB row 만 지워진 뒤 재시도하는 경로).
             if "cannot re-use a name that is still in use" in err_msg:
                 return True, ""
+            # 기본 스토리지(values 의 jfStorage)는 fb_common_app 이 storage-<name> PVC 를 이미 만든다.
+            #   같은 이름으로 등록하면 그 PVC 의 소유권 충돌로 설치가 통째로 거절되므로(아무것도 안 만들어짐)
+            #   기존 PVC 를 그대로 쓰고 성공으로 본다 — check job·provisioner 는 이 PVC/경로로 이어서 동작한다.
+            if (f'PersistentVolumeClaim "{name}" in namespace "{namespace}" exists' in err_msg
+                    and 'current value is "common-app"' in err_msg):
+                if _existing_pvc_points_to(namespace, name, ip, mountpoint):
+                    return True, ""
+                return False, f"PVC {name} already exists (fb_common_app) with a different server/path"
             print(f"Warning: Helm install failed for {name}:", file=sys.stderr)
             print("Error:", err_msg, file=sys.stderr)
             return False, f"Error executing Helm command: {err_msg}"

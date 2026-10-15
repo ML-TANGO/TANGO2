@@ -74,6 +74,9 @@ def update_storage():
 # def delete_storage(storage_name):
 
 def create_storage(ip, mountpoint, type, name):
+    # 이 호출이 넣은 행만 정리한다 — 같은 이름 재등록은 UNIQUE 로 insert 가 실패하는데,
+    #   그때 이름으로 지우면 이미 쓰고 있는 스토리지 행이 사라진다.
+    storage_id = None
     try:
         storageclass_name=STORAGECLASS_NAME.format(NAME=name)
         DATA_SC="{NAME}-data-sc".format(NAME=storageclass_name)
@@ -112,7 +115,8 @@ def create_storage(ip, mountpoint, type, name):
             create_storage_exporter(helm_name=exporter_helm_name, name=storageclass_name, server=ip, mountpoint=mountpoint, storage_id=storage_id, type=type)
             return response(status=1, message="success storage create")
     except Exception as e:
-        storage_db.delete_storage(name=storageclass_name)
+        if storage_id:
+            storage_db.delete_storage(storage_id_list=storage_id)
         traceback.print_exc()
         return response(status=0, message=e)
 

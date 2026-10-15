@@ -95,9 +95,11 @@ def delete_storage(storage_id_list=None,name=None):
 
             if storage_id_list is not None:
                 sql = "DELETE FROM storage where id in ({})".format(storage_id_list)
-            if storage_id_list is not None:
-                sql = "DELETE FROM storage where name in ({})".format(name)
-            cur.execute(sql)
+                cur.execute(sql)
+            elif name is not None:
+                cur.execute("DELETE FROM storage where name = %s", (name,))
+            else:
+                return False
             conn.commit()
 
         return True
