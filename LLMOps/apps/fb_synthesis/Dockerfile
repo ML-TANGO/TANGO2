@@ -5,7 +5,7 @@ RUN apt-get update && apt-get install -y --allow-downgrades --allow-change-held-
 
 RUN mkdir -p /app/src /utils
 
-COPY fb_preprocessing /app
+COPY fb_synthesis /app
 COPY fb_utils /utils
 RUN rm /app/src/utils && ln -s /utils /app/src/utils
 
