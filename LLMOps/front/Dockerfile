@@ -4,8 +4,11 @@ WORKDIR /app
 COPY . .
 ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN rm -rf node_modules .yarn
-RUN yarn install --frozen-lockfile
-RUN yarn build
+# yarn.lock 은 yarn 4(berry) 형식 — node:20 기본 yarn 1 로는 설치되지 않는다
+RUN corepack enable && corepack prepare yarn@4.17.1 --activate
+RUN yarn install --immutable
+# yarn build 의 `rm -rf ./build/*` 는 berry 셸에서 빈 glob 이면 실패한다 — 깨끗한 컨테이너라 vite 만 돌린다
+RUN yarn vite build
 
 
 # 실행 스테이지
