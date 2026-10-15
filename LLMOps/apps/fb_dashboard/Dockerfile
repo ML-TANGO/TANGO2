@@ -1,7 +1,7 @@
-FROM python:3.13.0-slim
+# 서빙 이미지(tango_v2.0.1)와 같은 베이스 — 고정된 requirements(pydantic 2.4.1 등)는 이 Python 에서 빌드된다
+FROM python:3.11.4-alpine3.18
 
-RUN apt-get update && apt-get install -y --allow-downgrades --allow-change-held-packages --no-install-recommends \
-    vim git curl wget net-tools ethtool librdkafka-dev iputils-ping gnupg
+RUN apk update && apk add gcc python3-dev musl-dev build-base linux-headers libffi-dev bash curl
 
 RUN mkdir -p /app/src /utils
 

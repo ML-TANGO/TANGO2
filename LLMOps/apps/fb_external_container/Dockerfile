@@ -1,4 +1,4 @@
-FROM python:3.11-slim-bookworm
+FROM python:3.11.15-slim-bookworm
 # python:3.11.4-buster (Debian 10) is EOL — its apt mirrors return 404.
 # bookworm (Debian 12) is the current stable base image and matches what
 # upstream python images recommend as of late 2025.
@@ -17,7 +17,7 @@ RUN rm -f /app/src/utils && ln -s /utils /app/src/utils
 
 RUN rm -rf /app/src/__pycache__ \
     && rm -rf /utils/__pycache__ \
-    && pip install --no-cache-dir -r /app/requirements.txt
+    && pip install --no-cache-dir -r /app/requirements.txt -c /app/constraints.txt
 
 WORKDIR /app
 EXPOSE 8000

@@ -12,9 +12,9 @@ RUN rm /app/src/utils && ln -s /utils /app/src/utils
 RUN rm -rf /app/src/__pycache__ && \
     rm -rf /utils/__pycache__ && \
     pip install --upgrade pip &&\
-    pip install -r /app/requirements.txt &&\
-    pip install huggingface-hub &&\ 
-    pip install tensorboard
+    pip install -r /app/requirements.txt -c /app/constraints.txt &&\
+    pip install -c /app/constraints.txt huggingface-hub &&\ 
+    pip install -c /app/constraints.txt tensorboard
 
 # Helm 설치 (3.13.1 버전)
 RUN curl -O https://get.helm.sh/helm-v3.13.1-linux-amd64.tar.gz && \

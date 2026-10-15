@@ -11,7 +11,7 @@ RUN rm /app/src/utils && ln -s /utils /app/src/utils
 
 RUN rm -rf /app/src/__pycache__ && \
     rm -rf /utils/__pycache__ && \
-    pip install -r /app/requirements.txt
+    pip install -r /app/requirements.txt -c /app/constraints.txt
 
 RUN pip freeze > /app/requirements.txt
 

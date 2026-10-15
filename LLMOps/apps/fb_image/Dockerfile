@@ -16,7 +16,7 @@ RUN rm /app/src/utils && ln -s /utils /app/src/utils
 RUN rm -rf /app/src/__pycache__ && \
     rm -rf /utils/__pycache__ && \
     rm /usr/lib/python3.11/EXTERNALLY-MANAGED && \
-    pip install -r /app/requirements.txt
+    pip install -r /app/requirements.txt -c /app/constraints.txt
 
 # EXTERNALLY-MANAGED
 # https://stackoverflow.com/questions/75608323/how-do-i-solve-error-externally-managed-environment-every-time-i-use-pip-3
