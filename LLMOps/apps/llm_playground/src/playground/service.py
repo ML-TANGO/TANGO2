@@ -3979,9 +3979,9 @@ _PROMPT_OPT_EXAMPLES_MAX = 10     # dual _DUAL_EXAMPLES_MAX 와 같은 관용구
 _PROMPT_OPT_FIELD_MAX = 2000      # 필드당 길이 cap(프롬프트 폭주 방지)
 _PROMPT_OPT_TERMINAL = ("completed", "failed", "cancelled")
 _PROMPT_OPT_POLL_INTERVAL = 15    # 최적화는 분 단위 — 초 단위 폴링은 BFF 만 두드린다
-# manifest capabilities.timeout_seconds(1800)의 2배. 컨테이너가 먼저 죽어 terminal 을
+# manifest capabilities.timeout_seconds(21600)의 2배. 컨테이너가 먼저 죽어 terminal 을
 # 돌려주는 것이 정상 경로이고, 이 값은 그마저 안 될 때 태스크가 영원히 남지 않게 하는 상한.
-_PROMPT_OPT_POLL_MAX_SECONDS = 3600
+_PROMPT_OPT_POLL_MAX_SECONDS = 43200
 
 
 # few-shot 형식(`Query:/Response:`)으로 주입하면 모델이 그 패턴을 이어받아 다음 예시를

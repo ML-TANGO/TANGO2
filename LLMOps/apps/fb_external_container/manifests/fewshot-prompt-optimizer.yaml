@@ -88,6 +88,6 @@ spec:
   capabilities:
     estimated_startup_seconds: 15
     estimated_duration_seconds: 600   # 2~10분(rounds/예시 수에 비례)
-    timeout_seconds: 1800
+    timeout_seconds: 21600
 
   workspace_scope: per-workspace
