@@ -3,7 +3,7 @@ global:
   developer: jonathan-kong # !!!ingressClassName으로 사용됨
   jfb:
     static:
-      enabled: true
+      enabled: false  # MetalLB 미사용 → loadBalancerIP 어노테이션 비활성화 (proxy는 NodePort)
       ip: 192.168.0.57
 
     storageClass:
@@ -287,7 +287,7 @@ cluster:
 proxy:
   # Enable creating a Kubernetes service for the proxy
   enabled: true
-  type: LoadBalancer
+  type: NodePort  # MetalLB 를 쓰면 LoadBalancer + global.jfb.static.enabled: true (아래 nodePort 는 NodePort 일 때만)
   loadBalancerClass:
   # Override proxy Service name
   nameOverride: ""
@@ -309,7 +309,7 @@ proxy:
     servicePort: 80
     containerPort: 8000
     # Set a nodePort which is available if service type is NodePort
-    # nodePort: 32080
+    nodePort: 32080
     # Additional listen parameters, e.g. "reuseport", "backlog=16384"
     parameters: []
 
@@ -321,7 +321,7 @@ proxy:
     # Set a target port for the TLS port in proxy service
     # overrideServiceTargetPort: 8000
     # Set a nodePort which is available if service type is NodePort
-    # nodePort: 32443
+    nodePort: 32443
     # Additional listen parameters, e.g. "reuseport", "backlog=16384"
     parameters:
     - http2
