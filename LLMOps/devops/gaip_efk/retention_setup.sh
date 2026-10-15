@@ -6,6 +6,8 @@ set -eu
 # for at least the full requested period.
 ES_URL=${ES_URL:-https://elasticsearch:9200}
 ES_USER=${ES_USER:-elastic}
+# bitnami elasticsearch 파드에 마운트된 클러스터 CA 로 서버 인증서를 검증한다.
+ES_CA_CERT=${ES_CA_CERT:-/opt/bitnami/elasticsearch/config/certs/ca.crt}
 
 if [ "${EFK_DRY_RUN:-0}" != "1" ]; then
     if [ -n "${ELASTICSEARCH_PASSWORD_FILE:-}" ]; then
@@ -25,7 +27,7 @@ put_json() {
         printf '%s\n' "$payload"
         return
     fi
-    response=$(printf '%s' "$payload" | curl -fsSk \
+    response=$(printf '%s' "$payload" | curl -fsS --cacert "$ES_CA_CERT" \
         --user "$ES_USER:$ES_PASSWORD" \
         -H 'Content-Type: application/json' \
         -X PUT "$ES_URL/$path" --data-binary @-)

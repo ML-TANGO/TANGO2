@@ -15,6 +15,8 @@ from datetime import datetime, timedelta, timezone
 
 NAMESPACE = "jonathan-efk"
 POD = "elasticsearch-data-0"
+# bitnami elasticsearch 파드에 마운트된 클러스터 CA 로 서버 인증서를 검증한다.
+ES_CA_CERT = "/opt/bitnami/elasticsearch/config/certs/ca.crt"
 RETENTION_DAYS = {
     "thirdparty": 1,
     "jonathan-control-unmarked": 7,
@@ -33,7 +35,7 @@ CONTROL_DEFAULT_DAYS = 30
 
 def api(method, path, body=None):
     shell = (
-        'curl -sSk -w "\\n%{http_code}" '
+        f'curl -sS --cacert {ES_CA_CERT} -w "\\n%{{http_code}}" '
         '--user "elastic:$(cat "$ELASTICSEARCH_PASSWORD_FILE")" '
         '-H "Content-Type: application/json" -X "$1" '
         '"https://elasticsearch:9200/$2"'
