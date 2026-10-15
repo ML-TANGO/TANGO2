@@ -32,3 +32,10 @@ default.conf
 CLAUDE.md
 AGENTS.md
 .claude/
+
+# 클린 클론에서 빌드되도록 추적(2026-10): 벤더 모듈 산출물(Flow.js 가 dist·내장 zustand 를 상대경로로 import),
+# 빌드 기본 env(ETRI 로그인 브랜딩), 프론트 이미지 nginx 설정(Dockerfile 이 COPY)
+!xlib/ui-react/modules/react-flow-renderer/dist/
+!xlib/ui-react/modules/react-flow-renderer/node_modules/
+!configs/app-config/vite-env/.env.production
+!default.conf
