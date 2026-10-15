@@ -43,3 +43,9 @@ volume:
     type: 
     path: 
     server:
+
+  # 외부 컨테이너 잡 공유 HF 캐시(hf-model-cache-pvc). type·path 가 비면 만들지 않는다
+  hfModelCache:
+    type:
+    path:
+    server:
