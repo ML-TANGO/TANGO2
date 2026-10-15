@@ -2,7 +2,7 @@
 
 `Evaluation/Intent_web` 과 `Evaluation/Logickor_web` 은 ETRI 가 준 **독립 웹데모**다.
 둘 다 "웹 콘솔이 셸 파이프라인을 띄우는" 구조라, 플랫폼(K8s) 에 편입하지 않고
-이 호스트(idc93)에서 그대로 띄워 테스트할 수 있게 감싼 계층이 이 폴더다.
+플랫폼 호스트에서 그대로 띄워 테스트할 수 있게 감싼 계층이 이 폴더다.
 
 **ETRI 원본 소스는 수정하지 않는다.** 포트·GPU·인터프리터·docker 권한은 전부
 런처(`serve.sh`)가 환경변수/PATH 로 주입한다.
@@ -39,9 +39,9 @@ ssh -L 8090:localhost:8090 -L 8000:localhost:8000 <계정>@<서버>
 Intent_web 의 기본 포트가 8080 이라 그대로는 못 뜬다. `PORT=8090` 으로 옮겼다
 (`web_app.py` 가 `PORT` 환경변수를 읽는다). Logickor 는 기본 8000 그대로.
 
-### 2. docker 권한 — julian 은 docker 그룹이 아니다
-Intent_web 은 `docker run --gpus` 로 실험 컨테이너를 띄운다. julian 계정은
-docker 소켓 권한이 없고 **sudo NOPASSWD 만** 된다. 원본 스크립트를 고치지 않기 위해
+### 2. docker 권한 — 실행 계정이 docker 그룹이 아닐 때
+Intent_web 은 `docker run --gpus` 로 실험 컨테이너를 띄운다. 실행 계정에
+docker 소켓 권한이 없고 **sudo 로만** docker 를 쓸 수 있는 환경을 위해, 원본 스크립트를 고치지 않고
 `$SERVE_ROOT/bin/docker` shim(`exec sudo -n /usr/bin/docker "$@"`)을 만들고
 런처가 PATH 앞단에 얹는다. `web_app.py` 와 `auto2.sh` 둘 다 PATH 로 `docker` 를
 찾으므로 한 번에 해결된다.
@@ -82,7 +82,7 @@ ETRI 가 검증한 시점에는 같은 명세가 4.5x 로 풀렸다. 상한을 �
 (플랫폼 쪽도 같은 이유로 transformers 를 <5.0.0 으로 고정하고 있다.)
 
 ### 6. GPU 배정
-idc93 은 A100 80GB × 8 이고 0~5 는 서빙 스택이 쓰고 있다. 유휴인 **6, 7 번**만 쓴다.
+기본값은 **6, 7 번**이다. 서빙 스택이 쓰는 GPU 와 겹치지 않게 `env.sh` 의 `INTENT_GPU`/`LOGICKOR_GPU` 로 바꾼다.
 - Intent: `GPU_DEVICE=7` (환경변수 → `auto2.sh` → `docker --gpus device=7`)
 - Logickor: `gpu=6` (웹 UI 설정값 → `auto.sh` → `CUDA_VISIBLE_DEVICES=6`)
 
@@ -123,7 +123,7 @@ echo 'HF_TOKEN=hf_xxxx' > ~/etri-eval-serve/secrets.env
 - **웹 콘솔에 인증이 없다.** 0.0.0.0 바인딩이므로 내부망 전용으로만 쓰고,
   외부에서는 SSH 포워딩으로 접근할 것.
 - **`Intent_web/out/` 는 root 소유로 생긴다.** `auto2.sh` 가 `--user` 없이 컨테이너를
-  띄우고 컨테이너 안에서는 root 로 쓰기 때문이다. julian 계정으로는 지울 수 없으니
+  띄우고 컨테이너 안에서는 root 로 쓰기 때문이다. 실행 계정으로는 지울 수 없으니
   정리할 때는 `sudo rm -rf Evaluation/Intent_web/out` 을 쓴다. (git 에는 안 올라간다 —
   `Intent_web/.gitignore` 에 `out/` 을 넣어 두었다.)
 - **한 번에 하나의 실험만 돈다** (양쪽 앱 모두). 웹 프로세스를 죽이면 실험도 끊긴다.

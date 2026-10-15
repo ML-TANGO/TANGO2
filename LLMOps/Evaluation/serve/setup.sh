@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ETRI 평가 웹데모 서빙 환경 구축 (멱등).
 #   1) 런타임 루트/로그/캐시 디렉터리
-#   2) docker shim (julian 은 docker 그룹이 아니고 sudo NOPASSWD 만 됨)
+#   2) docker shim (실행 계정이 docker 그룹이 아니고 sudo 로만 docker 를 쓸 수 있을 때)
 #   3) Logickor venv  : python3.11 + ETRI 핀 스냅샷(vllm/torch)
 #   4) Intent  venv   : python3.11 stdlib 전용 (web_app.py)
 #   5) Intent  이미지 : qwen3-mixatis:latest
@@ -15,7 +15,7 @@ mkdir -p "${SERVE_ROOT}"/{bin,venvs,hf_cache,logs,run,uv_cache}
 echo "== 2. docker shim =="
 cat > "${SHIM_BIN}/docker" <<'SHIM'
 #!/usr/bin/env bash
-# julian 은 docker 그룹이 아니지만 sudo NOPASSWD 가 된다. ETRI 원본 스크립트를
+# 실행 계정이 docker 그룹이 아니어도 sudo 로 docker 를 쓸 수 있으면 된다. ETRI 원본 스크립트를
 # 고치지 않고 PATH 앞단에서 docker 호출을 sudo 로 넘긴다.
 exec sudo -n /usr/bin/docker "$@"
 SHIM

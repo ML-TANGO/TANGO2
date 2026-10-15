@@ -28,9 +28,10 @@ python3 "${APP_DIR}/rebuild_seq_out.py" "${STAGE}/data/MixATIS_clean"
 echo "빌드 컨텍스트: ${STAGE} ($(du -sh "${STAGE}" | cut -f1))"
 
 # buildkitd 가 없으면 임시로 띄운다(이 호스트에는 root 용 소켓이 상시 없다).
+BUILDKIT_ROOT="${BUILDKIT_ROOT:-/var/lib/buildkit-$(id -un)}"
 STARTED_BUILDKITD=0
 if ! sudo buildctl debug workers >/dev/null 2>&1; then
-  sudo sh -c 'nohup buildkitd --root /var/lib/buildkit-julian > /tmp/buildkitd-build.log 2>&1 &'
+  BUILDKITD_PID=$(sudo sh -c 'nohup buildkitd --root "$1" > /tmp/buildkitd-build.log 2>&1 & echo $!' sh "${BUILDKIT_ROOT}")
   for _ in $(seq 1 60); do sudo buildctl debug workers >/dev/null 2>&1 && break; sleep 1; done
   STARTED_BUILDKITD=1
 fi
@@ -39,7 +40,7 @@ sudo buildctl build --frontend dockerfile.v0 \
   --local context="${STAGE}" --local dockerfile="${STAGE}" \
   --output "type=oci,dest=${OUT},name=${TAG}"
 
-[ "${STARTED_BUILDKITD}" = 1 ] && sudo pkill -f 'buildkitd --root /var/lib/buildkit-julian' || true
+[ "${STARTED_BUILDKITD}" = 1 ] && sudo kill "${BUILDKITD_PID}" || true
 
 # OCI tar → containerd k8s.io. import 는 CRI 라벨을 붙이지 않으므로
 # io.cri-containerd.image=managed 를 별도로 박아야 kubelet 이 로컬 이미지로 인식한다

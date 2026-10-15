@@ -20,7 +20,7 @@ INTENT_PORT="${INTENT_PORT:-8090}"
 LOGICKOR_PORT="${LOGICKOR_PORT:-8000}"
 
 # --- GPU --------------------------------------------------------------------
-# idc93 A100 80GB x8 중 6,7 번이 유휴. 서빙 스택이 쓰는 0~5 는 건드리지 않는다.
+# 기본값 6,7 번. 서빙 스택이 쓰는 GPU 와 겹치지 않게 호스트에 맞춰 바꾼다.
 INTENT_GPU="${INTENT_GPU:-7}"     # auto2.sh 의 GPU_DEVICE (docker --gpus device=N)
 LOGICKOR_GPU="${LOGICKOR_GPU:-6}" # auto.sh 의 GPU (CUDA_VISIBLE_DEVICES)
 

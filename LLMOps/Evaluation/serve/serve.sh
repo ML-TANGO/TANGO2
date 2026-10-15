@@ -19,7 +19,7 @@ is_up() {
 start_intent() {
   if is_up intent; then echo "[intent] 이미 실행 중 (pid $(cat "$(pidfile intent)"))"; return; fi
   [[ -x "${INTENT_VENV}/bin/python" ]] || { echo "[intent] venv 없음 -> setup.sh 먼저" >&2; return 1; }
-  # PATH 앞단 shim 으로 docker 호출을 sudo 로 넘긴다(julian 은 docker 그룹이 아님).
+  # PATH 앞단 shim 으로 docker 호출을 sudo 로 넘긴다(실행 계정이 docker 그룹이 아닐 때).
   # GPU_DEVICE / HF_TOKEN / IMAGE / CONTAINER_NAME 은 web_app.py 가 os.environ 을
   # 그대로 자식(auto2.sh)에게 물려주므로 여기서 주입하면 된다.
   # 서브셸 안에서 exec 해야 $! 가 실제 파이썬 프로세스 pid 와 일치한다.
