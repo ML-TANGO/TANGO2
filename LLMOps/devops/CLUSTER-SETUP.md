@@ -278,6 +278,7 @@ networking:
 apiVersion: kubelet.config.k8s.io/v1beta1
 kind: KubeletConfiguration
 cgroupDriver: systemd
+maxPods: 250   # 기본 110 이면 플랫폼·인프라만으로 거의 찬다
 EOF
 
 # 이미지 선당김 (네트워크 문제를 init 실패와 분리)

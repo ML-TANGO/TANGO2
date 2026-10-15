@@ -1,6 +1,6 @@
 # GenAI Platform (devops) 설치 가이드
 
-이 문서는 `GenAI_Platform/devops` 아래에 포함된 **기본 인프라 차트**와 **플랫폼 앱 차트**를 현재 소스/스크립트 기준으로 설치하는 방법을 정리합니다.
+이 문서는 `LLMOps/devops` 아래에 포함된 **기본 인프라 차트**와 **플랫폼 앱 차트**를 현재 소스/스크립트 기준으로 설치하는 방법을 정리합니다.
 
 ## 전제 조건
 
@@ -8,6 +8,11 @@
 - **helm**, **kubectl** 사용 가능
 - 설치 권한(ClusterRole/CRD 설치 등) 보유
 - **metrics-server** 설치 완료 (`kubectl top nodes` 가 수치를 출력)
+- **kubelet `maxPods: 250`** — 플랫폼·인프라 파드만으로 90개를 넘어, 기본값 110 이면 워크스페이스 잡이
+  스케줄되지 않습니다 ([CLUSTER-SETUP.md](./CLUSTER-SETUP.md) 의 KubeletConfiguration 에 포함).
+- **NFS export** — values 의 볼륨 경로(`jfData`·`jfBin`·`jfStorage`·`hfModelCache`), NFS provisioner
+  system/efk 경로, registry 이미지 경로를 미리 만들고 노드 대역에 export 합니다. 소스·프론트를 NFS 로
+  마운트하는 개발 모드(`src.enabled`·`front.enabled`)면 체크아웃의 `LLMOps/apps`·`LLMOps/front` 도 export 합니다.
 
 > 📌 **클러스터가 아직 없다면** [CLUSTER-SETUP.md](./CLUSTER-SETUP.md) 를 먼저 수행하십시오.
 > containerd·CNI(Calico)·kubeadm·metrics-server 설치와 노드 라벨·taint 설정까지 다룹니다.
@@ -22,7 +27,7 @@
 #### 템플릿 파일 복사 및 수정
 
 ```bash
-cd GenAI_Platform/devops
+cd LLMOps/devops
 
 # 템플릿 파일을 복사하여 환경별 values 파일 생성
 cp values.yaml.template values_<서버명>.yaml
@@ -45,7 +50,7 @@ cp values.yaml.template values_<서버명>.yaml
 #### 실행 예
 
 ```bash
-cd GenAI_Platform/devops
+cd LLMOps/devops
 ./run.sh install -f ./values_<서버명>.yaml
 ./run_llm.sh install -f ./values_<서버명>.yaml
 ```
@@ -55,7 +60,7 @@ cd GenAI_Platform/devops
 위 스크립트들은 kubeconfig를 아래 경로에서 찾습니다.
 
 ```bash
-cp ~/.kube/config GenAI_Platform/devops/fb_common_app/helm/file/kube/config
+cp ~/.kube/config LLMOps/devops/fb_common_app/helm/file/kube/config
 ```
 
 ### 2) 로컬/개별 인프라 차트 values 파일
@@ -100,7 +105,7 @@ cp ~/.kube/config GenAI_Platform/devops/fb_common_app/helm/file/kube/config
 위 순서를 단계별로 묶어 실행하는 래퍼 스크립트가 추가되어 있습니다. **신규 환경 설치 시에는 이 흐름을 권장합니다.**
 
 ```bash
-cd GenAI_Platform/devops
+cd LLMOps/devops
 
 # Step 1 — 스토리지/네트워크 베이스 (NFS + 선택적 MetalLB)
 ./run_step1_infra_base.sh \
@@ -134,7 +139,7 @@ cd GenAI_Platform/devops
 `gaip_nfs_provisioner/run.sh`는 values 파일에서 `volumeName`을 읽어 namespace로 사용합니다.
 
 ```bash
-cd GenAI_Platform/devops/gaip_nfs_provisioner
+cd LLMOps/devops/gaip_nfs_provisioner
 ./run.sh install -f ./values.yaml
 ```
 
@@ -143,7 +148,7 @@ cd GenAI_Platform/devops/gaip_nfs_provisioner
 `gaip_metallb`는 manifest 기반입니다.
 
 ```bash
-cd GenAI_Platform/devops/gaip_metallb
+cd LLMOps/devops/gaip_metallb
 ./install.sh
 ```
 
@@ -152,18 +157,22 @@ cd GenAI_Platform/devops/gaip_metallb
 `gaip_kong/run.sh`는 values 파일에서 `developer:` 값을 읽어 namespace로 사용합니다.
 
 ```bash
-cd GenAI_Platform/devops/gaip_kong
+cd LLMOps/devops/gaip_kong
 ./run.sh install -f ./values.yaml
 ```
 
 #### 주의사항
 
+- 기본 proxy 는 **NodePort 32080(HTTP)/32443(HTTPS)** 입니다(MetalLB 불필요). 공통 values 의
+  `settings.external.port: "32080"`·`redirect: "false"` 와 짝입니다. MetalLB 로 80/443 을 쓰려면
+  `gaip_kong/values.yaml` 의 `proxy.type: LoadBalancer`·`global.jfb.static.enabled: true`(+ip) 로 바꾸고
+  external.port `"80"`·redirect `"true"` 로 맞춥니다.
 - **helm uninstall 후 재설치** 시, PV/PVC/실제 디렉토리가 남아 있으면 충돌할 수 있습니다. 스크립트도 uninstall 후 `CHECK DELETE volume - pvc, pv, directory`를 안내합니다.
 
 ### 4) Registry
 
 ```bash
-cd GenAI_Platform/devops/gaip_registry
+cd LLMOps/devops/gaip_registry
 ./run.sh install -f ./values.yaml
 ```
 
@@ -188,7 +197,7 @@ cd GenAI_Platform/devops/gaip_registry
 ### 5) MariaDB (run → init)
 
 ```bash
-cd GenAI_Platform/devops/gaip_maraidb
+cd LLMOps/devops/gaip_maraidb
 
 # DB 설치 (galera)
 ./run.sh install
@@ -200,7 +209,7 @@ cd GenAI_Platform/devops/gaip_maraidb
 ### 6) Kafka / Redis / MongoDB
 
 ```bash
-cd GenAI_Platform/devops/gaip_kafka
+cd LLMOps/devops/gaip_kafka
 ./run.sh install
 
 cd ../gaip_redis
@@ -215,7 +224,7 @@ cd ../gaip_mongodb
 `gaip_prometheus/run.sh`는 내부에서 `helm dependency build kube-prometheus-stack`를 수행하고, 설치 후 `ingress.yaml`도 적용합니다.
 
 ```bash
-cd GenAI_Platform/devops/gaip_prometheus
+cd LLMOps/devops/gaip_prometheus
 ./run.sh install
 ```
 
@@ -224,7 +233,7 @@ cd GenAI_Platform/devops/gaip_prometheus
 `gaip_efk`는 단일 `run.sh`가 아닌, 단계가 분리된 스크립트들로 구성됩니다. Elastic 클러스터가 정상 기동된 뒤에 init/Fluent를 실행하는 것이 안전합니다.
 
 ```bash
-cd GenAI_Platform/devops/gaip_efk
+cd LLMOps/devops/gaip_efk
 
 # 1) Helm 저장소 등록
 ./helm_repo_add.sh
@@ -233,7 +242,7 @@ cd GenAI_Platform/devops/gaip_efk
 ./helm_upgrade_elastic.sh
 
 # 3) Elastic Pod이 모두 Running 인지 확인
-kubectl -n efk get pods
+kubectl -n jonathan-efk get pods
 
 # 4) 인덱스/유저 초기화 + Fluent 설치
 ./elastic_init.sh
@@ -242,12 +251,16 @@ kubectl -n efk get pods
 
 > `esvalues.yaml`의 master/data/coordinating/ingest/Kibana 리소스는 2026-04-21 기준 단일 노드 환경에서도 동작 가능한 수준으로 축소되어 있습니다. 더 큰 워크로드를 다루는 환경에서는 `resources.requests`/`heapSize`를 다시 상향하세요.
 
+> `elastic_init.sh` 는 날짜별 인덱스 템플릿과 보존기간 정책(`retention_setup.sh`)까지 적용합니다.
+> 로그 조회 미들웨어(`apps/fb_log_middleware`)는 아직 설치 차트가 없어 이 가이드로 설치되지 않습니다 —
+> 대시보드의 최근 실행 기록과 파인튜닝 시스템 로그 화면은 비어 보입니다(설치는 정상 진행).
+
 ### 9) GPU Operators (선택)
 
 NVIDIA GPU 노드가 있는 환경에서만 설치합니다.
 
 ```bash
-cd GenAI_Platform/devops/gaip_gpu_operators
+cd LLMOps/devops/gaip_gpu_operators
 ./run.sh
 ```
 
@@ -258,7 +271,7 @@ cd GenAI_Platform/devops/gaip_gpu_operators
 `devops/run.sh`는 `fb_common_app`, `fb_dashboard`, `fb_dataset`, ... 등 앱 차트를 `jonathan-system` namespace에 설치합니다.
 
 ```bash
-cd GenAI_Platform/devops
+cd LLMOps/devops
 ./run.sh install -f ./values_<서버명>.yaml
 ```
 
@@ -268,8 +281,34 @@ cd GenAI_Platform/devops
 `llm_data_pipeline/helm` 을 설치합니다.
 
 ```bash
-cd GenAI_Platform/devops
+cd LLMOps/devops
 ./run_llm.sh install -f ./values_<서버명>.yaml
+```
+
+### 3) 프론트(front)
+
+기본(`global.jfb.volume.front.enabled: false`)은 front 이미지에 들어 있는 빌드를 서빙하므로 별도 작업이 없습니다.
+체크아웃의 빌드를 서빙하는 개발 모드(`front.enabled: true`)면 먼저 빌드합니다(yarn 만 사용, npm 금지).
+
+```bash
+cd LLMOps/front
+yarn install --frozen-lockfile
+yarn build
+```
+
+ETRI 로그인 브랜딩(`VITE_REACT_APP_BRAND=tango`)은 `configs/app-config/vite-env/.env.production` 에 들어 있습니다.
+
+### 4) 스토리지 등록 (워크스페이스 생성 전 필수)
+
+앱 설치만으로는 워크스페이스용 StorageClass(`storage-<name>-data-sc`/`-main-sc`)와 provisioner·exporter 가
+생기지 않습니다. 관리자 화면의 스토리지 추가 또는 API 로 등록합니다. 이름·경로·서버는 values 의
+`global.jfb.volume.jfStorage[0]` 과 같은 값을 씁니다(같은 이름의 PVC 는 common-app 이 이미 만들어 둡니다).
+
+```bash
+POD=$(kubectl get pods -n jonathan-system --no-headers | awk '/jfb-app-resource/{print $1; exit}')
+kubectl exec -n jonathan-system $POD -- curl -sS -X POST -H "Jf-User: <관리자 계정>" \
+  -F name=<jfStorage name> -F ip=<NFS_SERVER_IP> -F mountpoint=<jfStorage path> -F type=nfs \
+  http://localhost:8000/api/storage
 ```
 
 ## 외부 컨테이너 manifest 등록
@@ -277,23 +316,25 @@ cd GenAI_Platform/devops
 **표준 판본은 부팅 시 자동 등록되므로 별도 작업이 필요 없습니다.**
 `apps/fb_external_container/manifests/` 안의 YAML 을 `fb_external_container` 가
 기동하면서 시드합니다(`src/manifest/seed.py`, MariaDB 연결이 붙는 시점에 실행).
-이미 있는 `(name, version)` 은 건너뛰므로 재시작마다 돌아도 안전하고,
+이미 있는 `(name, version)` 은 건너뛰므로 재시작마다 돌아도 안전하고(대신 **내용만 바꾼 YAML 은 기존 설치에
+반영되지 않습니다** — 버전을 올리거나 기존 행을 지운 뒤 재시작합니다),
 같은 `service_family` 두 짝은 자동으로 pair 등록됩니다.
 
 기동 로그에서 결과를 확인할 수 있습니다.
 
 ```bash
 kubectl logs -n jonathan-system deploy/jfb-app-external-container | grep "manifest seed"
-# 예: manifest seed: {'seeded': 9, 'paired': 1, 'skipped': 0, 'invalid': 0}
+# 예: manifest seed: {'seeded': 11, 'paired': 1, 'skipped': 0, 'invalid': 0}
 ```
 
 자동 시드되는 판본은 다음과 같습니다.
 
 | manifest name | version | 이 manifest가 없으면 |
 |---|---|---|
-| `convert-llamacpp` | `1.0.0` | 양자화·포팅(변환) |
+| `convert-llamacpp` | `1.1.3` | 양자화·포팅(변환) |
 | `evaluate-selfmetric` | `1.0.0` | 자동평가(BLEU/ROUGE/perplexity) |
-| `evaluate-benchmark-mock` | `0.2.0` | 벤치마크 평가 |
+| `evaluate-lmeval` / `evaluate-lmeval-code` | `0.1.2` | 벤치마크 평가(lm-eval 실채점) |
+| `evaluate-benchmark-mock` | `0.2.0` | 벤치마크 평가(mock) |
 | `evaluate-logickor` / `evaluate-logickor-judge` | `0.1.0` / `0.2.5` | LogicKor 평가 |
 | `evaluate-intent` | `0.2.5` | 의도분류 평가 |
 | `fewshot-prompt-optimizer` | `1.0.0` | 프롬프트 최적화 |
@@ -317,6 +358,11 @@ manifest 를 등록해도 **가중치가 공유 HF 캐시에 없으면 학습이
 `/hf-cache` 는 RO 마운트이고 manifest env 가 `HF_HUB_OFFLINE=1`(폐쇄망 전제)이라
 런타임에 내려받을 수 없기 때문입니다 — 이 단계를 빼면 파트너 컨테이너가
 `model_loaded:false` → `/health` 503 으로 readiness 를 통과하지 못해 교착합니다.
+
+공유 캐시 PVC(`hf-model-cache-pvc`)는 워크스페이스를 만들 때 values 의 `global.jfb.volume.hfModelCache` 로
+워크스페이스 네임스페이스마다 자동 생성됩니다(값이 비면 생성되지 않아 외부 잡이 FailedMount 로 멈춥니다).
+이 기능 이전에 만든 워크스페이스에는 생기지 않으므로, 그 네임스페이스에는 같은 이름의 PVC 를 직접 만들거나
+워크스페이스를 다시 만듭니다.
 
 ```bash
 # 워크스페이스 네임스페이스별로 한 번씩. 기본 목록 = SDS VLM 학습용 2종
@@ -382,6 +428,17 @@ print(json.dumps({"manifests": [{"manifest_yaml": open(p).read()} for p in sys.a
 
 > 같은 `(name, version)`을 다시 등록하면 409로 거부됩니다 — 버전을 올리거나 기존 항목을
 > 먼저 삭제하세요.
+
+## 데이터를 보존한 재설치
+
+클러스터를 다시 만들되 NFS 데이터(DB·스토리지)를 살리는 경우의 차이입니다.
+
+- MariaDB 는 `gaip_maraidb/run.sh install` 만 실행합니다. **`init` 은 `jonathan_llm` 을 DROP 하므로 금지**입니다.
+- NFS provisioner 는 같은 PVC 이름이면 기존 디렉터리에 다시 붙습니다(`pathPattern: ${.PVC.name}`, Retain).
+- 앱 설치 뒤 스토리지는 새로 등록하지 않고 리콘사일만 합니다: 위 스토리지 등록 예시와 같은 파드에서
+  `curl -sS -X POST -H "Jf-User: <관리자 계정>" http://localhost:8000/api/storage/update`
+  (DB 의 storage 행 기준으로 StorageClass·provisioner·exporter 를 다시 만듭니다).
+- manifest 는 DB 에 남은 등록분이 그대로 쓰이고, 시드가 빠진 표준 판본만 채웁니다.
 
 > **DB 테이블**: manifest는 `msa_jfb.external_container_manifest`에 저장되며, 이 테이블은
 > `gaip_maraidb` init 스키마(5단계)에 포함되어 있으므로 별도 마이그레이션이 필요 없습니다.
