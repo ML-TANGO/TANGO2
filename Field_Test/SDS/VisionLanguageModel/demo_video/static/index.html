@@ -23,7 +23,12 @@
 <main class="layout">
   <section class="stage">
     <div class="video-wrap">
-      <video id="video" muted playsinline preload="auto"></video>
+      <div class="video-box">
+        <video id="video" muted playsinline preload="auto"></video>
+        <div id="advice" class="advice" hidden role="status" aria-live="polite">
+          <span class="adv-tag">⚠ 행동 권고</span><span id="adv-text" class="adv-text"></span>
+        </div>
+      </div>
       <div id="overlay" class="overlay">
         <div class="ov-head"><span class="ov-tag">AI 분석</span><span id="ov-time" class="ov-time"></span></div>
         <div id="ov-body" class="ov-body"></div>

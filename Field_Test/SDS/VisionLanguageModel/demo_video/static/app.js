@@ -144,6 +144,51 @@ function splitOutput(text) {
   return [["상황", parts[0]], ["조언", parts.slice(1).join(" ")]];
 }
 
+// ── 행동 권고 추출 ────────────────────────────────────────────────────────
+// 조언 문단에서 방향·속도 권고를 찾아 "우현 30° 변침 · 감속" 형태로 줄인다.
+// 모델 출력에 있는 표현만 옮긴다. 찾지 못한 항목은 비워 두고, 둘 다 없으면 표시하지 않는다.
+function firstAffirmed(text, re) {
+  for (const m of text.matchAll(re)) {
+    const tail = text.slice(m.index + m[0].length, m.index + m[0].length + 6);
+    if (/^\s*(은|는|을|를)?\s*(금|하지|피하)/.test(tail)) continue;   // "좌현 변침은 금한다" 같은 금지 표현
+    return m;
+  }
+  return null;
+}
+
+function extractAction(text) {
+  const parts = splitOutput(text);
+  const adv = parts.length > 1 ? parts[1][1] : text;
+  let dir = null, spd = null;
+  // 각도와 "변침" 사이에 다른 현(우/좌)이 끼면 타선 방위이므로 건너뛴다 (예: "우현 11.9°의 타선을 피해 …")
+  const num = firstAffirmed(adv, /(우현|좌현)\s*(\d+(?:\.\d+)?)\s*(?:도|°)\s*(?:의)?[^.,·우좌]{0,15}?변침/g);
+  if (num) dir = `${num[1]} ${num[2]}° 변침`;
+  else {
+    const bare = firstAffirmed(adv, /(우현|좌현)\s*(?:으로\s*)?변침/g);
+    if (bare) dir = `${bare[1]} 변침`;
+    else if (firstAffirmed(adv, /침로\s*(?:와|및)\s*속력\s*(?:을|를)?\s*유지/g)) { dir = "침로 유지"; spd = "속력 유지"; }
+    else if (firstAffirmed(adv, /침로\s*(?:를|은)?\s*유지/g)) dir = "침로 유지";
+  }
+  if (!spd) {
+    if (firstAffirmed(adv, /감속/g)) spd = "감속";
+    else if (firstAffirmed(adv, /증속/g)) spd = "증속";
+    else if (firstAffirmed(adv, /속력\s*(?:은|을)?\s*유지/g)) spd = "속력 유지";
+  }
+  const out = [dir, spd].filter(Boolean);
+  return out.length ? out.join(" · ") : null;
+}
+
+// 결과 문장을 모두 보여 준 뒤에만 호출한다. null 이면 숨긴다
+function showAdvice(text) {
+  const action = text ? extractAction(text) : null;
+  const box = $("advice");
+  if (!action) { box.hidden = true; box.dataset.a = ""; return; }
+  if (box.dataset.a === action && !box.hidden) return;
+  box.dataset.a = action;
+  $("adv-text").textContent = action;
+  box.hidden = false;
+}
+
 function outputHTML(text, block) {
   return splitOutput(text)
     .map(([lbl, p]) => {
@@ -160,6 +205,7 @@ function renderLiveOverlay() {
   $("ov-time").textContent = `${((L.frame - state.frames.first_frame) / state.frames.fps).toFixed(1)}초 장면 · 실시간 분석`;
   body.innerHTML = L.text ? outputHTML(L.text, true) + (L.done ? "" : `<span class="cursor"></span>`)
                           : `<p class="empty">이미지와 AIS를 읽는 중…</p>`;
+  showAdvice(L.done ? L.text : null);
 }
 
 // 스트리밍 중에도 사용자가 다른 시나리오나 장면으로 옮겼으면 그 화면을 덮지 않는다
@@ -199,6 +245,7 @@ function renderRtOverlay() {
     body.dataset.k = key;
     $("ov-time").innerHTML = head;
     body.innerHTML = html;
+    showAdvice(last ? last.text : null);     // 끝난 결과가 있을 때만
   }
   foot.hidden = !cur && !state.rt.error;
   if (cur) {
@@ -227,6 +274,7 @@ function renderOverlay(frame) {
       ? `<p class="empty">첫 분석 시점을 기다리는 중입니다</p>`
       : `<p class="empty">미리 분석된 결과가 없습니다. 오른쪽 ‘현재 장면 분석하기’를 눌러 보세요.</p>`;
     body.dataset.k = "";
+    showAdvice(null);
     return;
   }
   if (body.dataset.k === String(k)) return;
@@ -234,6 +282,7 @@ function renderOverlay(frame) {
   const r = state.results.frames[k];
   $("ov-time").textContent = `${((k - state.frames.first_frame) / state.frames.fps).toFixed(1)}초 장면을 분석한 결과`;
   body.innerHTML = outputHTML(r.text, true);
+  showAdvice(r.text);
 }
 
 function renderShips(frame) {
