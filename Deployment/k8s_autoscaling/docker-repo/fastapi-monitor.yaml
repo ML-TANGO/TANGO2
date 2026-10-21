@@ -1,0 +1,19 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: fastapi-svc-monitor
+  namespace: monitoring # Namespace that Prometheus is installed
+  labels:
+    release: prometheus 
+spec:
+  # Namespace of prometheus != Namespace of fastapi
+  namespaceSelector:
+    matchNames:
+      - docker-conn
+  selector:
+    matchLabels:
+      app: fastapi # Service.metadata.labels.name
+  endpoints:
+  - port: http-metrics # Target port name (=8100)
+    path: /metrics
+    interval: 5s # Scrape period

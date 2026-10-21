@@ -1,0 +1,16 @@
+prometheus:
+  url: http://prometheus-kube-prometheus-prometheus.monitoring.svc
+  port: 9090
+
+rules:
+  default: false  # 기본 제공 규칙은 미사용 (원하는 metric 만 정의)
+  custom:
+    - seriesQuery: 'http_requests_total{container="fastapi", namespace="docker-conn", handler!="/metrics"}' # 특정 앱과 네임스페이스 지정
+      resources:
+        overrides:
+          namespace: {resource: "namespace"}
+          pod: {resource: "pod"}
+      name:
+        matches: "http_requests_total" # "^(.*)_total"
+        as: "fastapi_requests_per_second" # 이름도 더 구체적으로 지정 가능
+      metricsQuery: 'sum(rate(<<.Series>>{<<.LabelMatchers>>}[1m])) by (<<.GroupBy>>)'

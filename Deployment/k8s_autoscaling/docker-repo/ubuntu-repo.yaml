@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: ubuntu-deploy
+  namespace: docker-conn
+spec:
+#  replicas: 3
+  selector:
+    matchLabels:
+      app: ubuntu
+  template:
+    metadata:
+      labels:
+        app: ubuntu
+    spec: 
+      tolerations: # Switch to another node after 15 seconds disconnection
+        - key: "node.kubernetes.io/not-ready"
+          operator: "Exists"
+          effect: "NoExecute"
+          tolerationSeconds: 15
+        - key: "node.kubernetes.io/unreachable"
+          operator: "Exists"
+          effect: "NoExecute"
+          tolerationSeconds: 15
+
+      containers:
+        - name: ubuntu
+          image: 203.254.171.40:5003/ubuntu:external
+          command: ["sleep", "infinity"]
+      imagePullSecrets:
+        - name: regcred
