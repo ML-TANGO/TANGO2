@@ -194,10 +194,3 @@ sdxr build list
 
 - 배포 시 같은 이름의 컨테이너가 노드에 있으면 제거한 뒤 새로 생성합니다 (재배포).
 - 아카이브 안의 심볼릭 링크는 허용하지 않습니다.
-
-### 향후 계획
-
-- **배포 대상 선택 (`target_env`)**: 응용 배포 서버를 k8s-cluster(기존) 또는 독립 노드(SDx) 중에서 선택할 수 있도록 노드 타입 key를 추가합니다.
-- **원격 노드 정보 DB 관리 (`resource_board`)**: 노드 정보를 DB에 저장하고 CRUD REST API로 관리합니다. `TARGET_ENV_CREATION`으로 노드를 등록합니다.
-- **노드 검증**: `SUBMIT_START` 시 node type과 IP를 받아 노드 정보와 자원이 유효한지 확인합니다.
-- **Workspace Checker 확장**: 기존 yaml 기반 K8s 클러스터 관리에 더해, docker API로 운영되는 독립 노드를 별도 DB로 관리합니다.
