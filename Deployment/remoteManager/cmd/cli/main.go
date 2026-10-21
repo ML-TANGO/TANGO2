@@ -42,7 +42,7 @@ func main() {
 	root.PersistentFlags().StringVar(&cp, "cp", "", "ControlPlane URL (default $CP_ADDR or http://localhost:8080)")
 
 	root.AddCommand(
-		cmdPull(), cmdCreate(), cmdStart(), cmdStop(), cmdDelete(),
+		cmdPull(), cmdCreate(), cmdStart(), cmdStop(), cmdDelete(), cmdBuild(),
 	)
 	if err := root.Execute(); err != nil {
 		os.Exit(1)

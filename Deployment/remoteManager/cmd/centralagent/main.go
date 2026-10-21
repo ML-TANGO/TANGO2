@@ -278,6 +278,9 @@ func main() {
 		c.JSON(200, result)
 	})
 
+	// ───────────── Build API (ImageMaker / ImagePusher) ─────────────
+	registerBuildRoutes(r, inv)
+
 	listen := getenv("CP_LISTEN", ":8080")
 	log.Printf("[controlplane] listening on %s (inventory=%s, nodes=%d)", listen, invPath, len(inv.Nodes))
 	log.Fatal(r.Run(listen))
