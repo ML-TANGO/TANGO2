@@ -24,6 +24,7 @@ import asyncio
 import json
 import logging
 import re
+import time
 from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Optional
 from urllib.parse import urlparse
@@ -566,11 +567,73 @@ def _run_dirs_by_mtime_sync(runs_dir: str) -> list[str]:
     return entries
 
 
+# phase 화면(그래프 SSE·로그 폴링)이 몇 초마다 부르므로 tracker 조회를 잠깐 재사용한다 —
+# tracker 가 죽어 있을 때 매 틱 15초 timeout 을 기다리지 않게.
+_JOB_STATE_TTL_SECONDS = 5.0
+_job_state_cache: dict[str, tuple[float, str]] = {}
+# tracker 가 job 을 모를 때(404) 잡 폴더가 이 시간 안에 쓰였으면 아직 도는 것으로 본다.
+_JOB_RECENT_WRITE_SECONDS = 600
+
+
+async def _bound_job_state(job_id: str) -> str:
+    """바인딩 job 상태 → 'live' | 'completed' | 'ended'(취소·실패) | 'missing'(404) | 'unknown'."""
+    now = time.monotonic()
+    hit = _job_state_cache.get(job_id)
+    if hit and now - hit[0] < _JOB_STATE_TTL_SECONDS:
+        return hit[1]
+    try:
+        detail = await (await _get_client()).get_job(job_id)
+        result = detail.get("result") if isinstance(detail, dict) else None
+        status = result.get("status") if isinstance(result, dict) else None
+        state = {"completed": "completed", "failed": "ended", "cancelled": "ended"}.get(
+            status, "live")
+    except ExternalContainerError as exc:
+        state = "missing" if exc.status_code == 404 else "unknown"
+    except Exception:
+        logger.exception("phase output: job lookup failed for %s", job_id)
+        state = "unknown"
+    _job_state_cache[job_id] = (now, state)
+    return state
+
+
+def _recently_written(job_dir: str) -> bool:
+    """잡 폴더나 그 안의 로그가 최근에 쓰였나 — 도는 학습은 로그를 계속 쓴다."""
+    import os
+    newest = 0.0
+    for path in (job_dir, os.path.join(job_dir, "train.log"), os.path.join(job_dir, "run.log")):
+        try:
+            newest = max(newest, os.path.getmtime(path))
+        except OSError:
+            continue
+    return time.time() - newest < _JOB_RECENT_WRITE_SECONDS
+
+
+async def _job_dir_is_current(job_id: str, job_dir: str) -> bool:
+    """잡 폴더를 그 phase 의 산출물로 우선할지.
+
+    모델은 job 이 끝난 뒤에도 external_job_id 를 유지한다. 그래서 취소·실패한 재실행의 잡 폴더가
+    남아 있으면 같은 phase 의 완료 커밋을 계속 가렸다(phase 4 로그가 0% 재실행 로그로 보이던 사례).
+    - 실행 중·상태 모름(조회 실패) → 잡 폴더. 실행 중 phase 가 직전 커밋으로 바뀌어 보이면 안 된다.
+    - completed → 잡 폴더. 자동 커밋은 완료 상태가 된 뒤에 돌아서 그 사이엔 커밋이 아직 없다.
+      커밋되면 산출물이 commit_models 로 옮겨져 잡 폴더가 사라지므로 자연히 커밋을 보게 된다.
+    - 취소·실패 → 커밋 우선. 커밋이 없으면(첫 실행이 끝난 경우) 호출부가 잡 폴더로 돌아간다.
+    - 404 → tracker 가 잊은 job(tombstone 만료)이거나, in-memory 레지스트리로 버티는 동안 도는
+      job 일 수 있다(llm_evaluation `_reconcile_running_eval` 주석). 최근에 쓰였으면 도는 것으로 본다.
+    """
+    state = await _bound_job_state(job_id)
+    if state in ("live", "completed", "unknown"):
+        return True
+    if state == "missing":
+        return await asyncio.to_thread(_recently_written, job_dir)
+    return False
+
+
 async def _resolve_phase_output_dir(model_id: int, phase_id: str) -> Optional[str]:
     """해당 phase 자신의 산출물 디렉토리(runs/ 와 checkpoint-*/ 의 부모).
 
-    1) 모델에 바인딩된 활성 job 이 이 phase 면 jobs/<job>/output/<phase_id> (학습 중 라이브)
+    1) 모델에 바인딩된 job 이 이 phase 를 돌리는 중이면 jobs/<job>/output/<phase_id> (라이브)
     2) 아니면 commit_models/{phase_id}-{ts} 최신 (완료분)
+    3) 커밋이 없으면 끝난 job 의 잡 폴더 (첫 실행이 취소·실패해 남은 유일한 산출물)
     다른 phase 디렉토리로는 폴백하지 않는다 — 없으면 None(빈 그래프)이 정답.
     """
     import os
@@ -601,20 +664,23 @@ async def _resolve_phase_output_dir(model_id: int, phase_id: str) -> Optional[st
         STORAGE_NAME=ws["main_storage_name"], WORKSPACE_NAME=ws["name"],
     )
 
+    job_dir = None
     job_id = model_row.get("external_job_id")
     if job_id:
         cand = _contained_path(main_root, "jobs", job_id, "output", phase_id)
         if cand and await asyncio.to_thread(os.path.isdir, cand):
-            return cand
+            if await _job_dir_is_current(job_id, cand):
+                return cand
+            job_dir = cand
 
     commit_root = _contained_path(main_root, "models", model_row["name"], "commit_models")
     if not commit_root:
-        return None
+        return job_dir
     for name in await asyncio.to_thread(_phase_commit_dirs_sync, commit_root, phase_id):
         cand = _contained_path(commit_root, name)
         if cand:
             return cand
-    return None
+    return job_dir
 
 
 async def _build_phase_graph_payload(model_id: int, phase_id: str) -> dict:

@@ -54,6 +54,10 @@ export const derivePhaseCommitMap = (commits, phases) => {
 /**
  * phase 카드에 표시할 상태.
  * 활성(실행 중) phase 는 라이브 SSE 상태를, 그 외 커밋이 있으면 done, 나머지 idle.
+ *
+ * 모델은 job 이 끝나도 그 job 에 묶여 있어 "활성 phase" 가 끝난 재실행을 가리킬 수 있다.
+ * 그 재실행이 취소(stop)·실패(error)했어도 이전 커밋이 있으면 완료로 본다 — 아니면
+ * 완료된 phase 의 로그·결과를 열 수 없게 된다.
  */
 export const derivePhaseStatus = (
   phase,
@@ -61,8 +65,13 @@ export const derivePhaseStatus = (
   activePhaseStatus,
   donePhases,
 ) => {
-  if (phase.id === activePhaseId && activePhaseStatus) return activePhaseStatus;
-  if ((donePhases || new Set()).has(phase.id)) return 'done';
+  const hasCommit = (donePhases || new Set()).has(phase.id);
+  if (phase.id === activePhaseId && activePhaseStatus) {
+    const endedWithoutResult =
+      activePhaseStatus === 'stop' || activePhaseStatus === 'error';
+    return endedWithoutResult && hasCommit ? 'done' : activePhaseStatus;
+  }
+  if (hasCommit) return 'done';
   return 'idle';
 };
 
