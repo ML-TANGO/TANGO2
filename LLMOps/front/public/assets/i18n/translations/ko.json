@@ -3281,6 +3281,7 @@
   "evaluation.run.subjectTitle": "평가 대상 모델·데이터셋",
   "evaluation.report.export": "리포트 내보내기",
   "evaluation.report.title": "평가 리포트",
+  "evaluation.report.projectTitle": "평가 프로젝트 리포트",
   "evaluation.report.downloadMarkdown": "Markdown 다운로드",
   "evaluation.report.savePdf": "PDF로 저장",
   "evaluation.report.pdfHint": "PDF로 저장: 인쇄 창의 대상에서 'PDF로 저장'을 고르세요.",

@@ -239,6 +239,15 @@ export const getEvalReport = async (modelId, jobId) => {
   });
 };
 
+// 평가 프로젝트 리포트(Markdown) — 프로젝트의 실행 전체를 한 표로 요약(샘플별 상세 없음).
+// → { markdown, filename }. 실행 1건 리포트와 같은 모달이 쓴다.
+export const getEvalProjectReport = async (projectId) => {
+  return await callApi({
+    url: `evaluations/projects/${projectId}/report`,
+    method: 'get',
+  });
+};
+
 // 멀티모달 — 전문가 샘플 이미지(서버 보관 NFS 이미지) blob. jf 헤더 인증 경유라 <img src>
 // 직접 GET(헤더 미탑재) 대신 blob 으로 받아 objectURL 로 렌더. URL 이미지는 FE 가 직접 렌더(미사용).
 export const fetchExpertImageBlob = async (modelId, jobId, idx) => {

@@ -471,12 +471,21 @@ def render_header(info: dict) -> str:
     if info.get("sample_limit"):
         rows.append(("문항 상한", f"태스크당 앞 {info['sample_limit']}문항(빠른 확인)"))
     rows.append(("리포트 생성 (KST)", datetime.now(_KST).strftime("%Y-%m-%d %H:%M")))
-    return f"# 평가 리포트 — {md_cell(title)}\n\n" + _table(("항목", "값"), rows)
+    return f"# 평가 리포트 — {_heading(title)}\n\n" + _table(("항목", "값"), rows)
+
+
+def _heading(value) -> str:
+    """제목 줄에 넣을 이름 — 서식 문자(#·*·`·| 등)를 걷어내 제목이 깨지거나 꾸며지지 않게 한다."""
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    return re.sub(r"[#*`|\\\[\]<>_~]", "", text)[:CELL_LIMIT].strip() or "-"
+
+
+def _safe_stem(text) -> str:
+    return re.sub(r'[\\/:*?"<>|\s]+', "_", str(text or "")).strip("_") or "평가"
 
 
 def _filename(info: dict) -> str:
-    stem = info.get("project_name") or info.get("run_name") or "평가"
-    stem = re.sub(r'[\\/:*?"<>|\s]+', "_", str(stem)).strip("_") or "평가"
+    stem = _safe_stem(info.get("project_name") or info.get("run_name"))
     return f"평가리포트_{stem}_{info['job_id'][:8]}.md"
 
 
@@ -523,3 +532,267 @@ async def build_run_report(model_id: int, job_id: str) -> dict:
                 body = f"> 채점 결과가 아직 없습니다(상태: {label}). 채점이 끝난 뒤 다시 내보내세요."
 
     return {"markdown": render_header(info) + "\n\n" + body + "\n", "filename": _filename(info)}
+
+
+# ── 프로젝트 리포트(실행 전체 요약) ───────────────────────────────────────────
+# 실행 1건 리포트가 한 실행을 깊게 본다면, 이쪽은 프로젝트의 실행들을 한 표로 나란히 놓는다.
+# 샘플별 상세는 싣지 않는다. 화면의 실행 목록·비교와 같은 출처(get_project 의 비교표)를 쓰고,
+# 비교표가 평탄화하며 버린 유형별 세부(LLM 심사 싱글/멀티턴·카테고리, 의도/슬롯 F1, 전문가 채점
+# 진행)는 eval_result.metrics 원본에서 읽는다.
+
+PROJECT_RUN_LIMIT = 200
+
+
+def _raw_metrics(row: dict) -> dict:
+    m = row.get("metrics")
+    if isinstance(m, str):
+        try:
+            m = json.loads(m)
+        except ValueError:
+            m = None
+    if not isinstance(m, dict):
+        return {}
+    m.pop("_samples", None)   # 전문가 샘플 원문 — 요약에 쓰지 않는다
+    return m
+
+
+def _run_label(run: dict) -> str:
+    """실행 이름 — 전문가 세션은 제목, 벤치마크 런은 벤치마크 id 목록. 같은 이름이 여럿일 수 있어
+    job id 앞 8자를 함께 붙인다."""
+    name = run.get("run_name")
+    if not name:
+        benches = [s.split(":")[0] for s in str(run.get("metric_set") or "").split(",") if s]
+        name = ", ".join(dict.fromkeys(benches)) or "-"
+    name = str(name).replace("`", "'")
+    return f"{md_cell(name)} (`{md_cell(str(run.get('job_id') or '')[:8])}`)"
+
+
+def _run_source(run: dict) -> str:
+    model = run.get("model_name") or "-"
+    if run.get("source_mode") == "checkpoint":
+        return md_cell(f"{model} · 체크포인트 {run.get('checkpoint')}")
+    if run.get("source_mode") == "deployment":
+        label = f"배포 {run.get('source_deployment') or '-'} · 모델 {run.get('source_model') or '-'}"
+        if run.get("source_commit"):
+            label += f" · 커밋 {run['source_commit']}"
+        return md_cell(label)
+    return md_cell(model)
+
+
+def _dig(data, *keys):
+    for key in keys:
+        data = data.get(key) if isinstance(data, dict) else None
+    return data
+
+
+def _expert_progress(run: dict, raw: dict) -> Optional[str]:
+    if run.get("status") == "completed" and raw.get("_total"):
+        return f"{raw.get('_rated', raw['_total'])} / {raw['_total']}"
+    prog = run.get("expert_progress")
+    if isinstance(prog, dict) and prog.get("total"):
+        return f"{prog.get('rated', 0)} / {prog['total']}"
+    return None
+
+
+def _pct(value) -> Optional[str]:
+    try:
+        return None if value is None else f"{_num(float(value))}%"
+    except (TypeError, ValueError):
+        return None
+
+
+# 정답 대조 표의 지표 열 상한 — lm-eval 프로젝트는 태스크가 수십 개라 표가 읽히지 않는다.
+# 넘치는 지표는 '지표별 최고 실행'에서 본다.
+PROJECT_METRIC_COLUMNS = 8
+
+
+def _main_metric(run: dict, raw: dict, key: str, *path):
+    """비교표 대표 점수(벤치마크 키) — 없으면 metrics 원본에서."""
+    value = run["metrics"].get(key)
+    return value if value is not None else _dig(raw, *path)
+
+
+def _project_columns(eval_type: str, metric_keys: list) -> list:
+    """유형별 지표 열 — (제목, 값 함수(run, raw), 최고 표시에 쓸 비교표 지표 키).
+    비교표 지표 키는 벤치마크 id 라, 심사·의도 유형의 대표 점수는 고정 키(logickor·mixatis)다 —
+    metric_keys 는 정렬돼 있어 첫 키가 대표라는 보장이 없다."""
+    if eval_type == "judge":
+        return [("종합", lambda r, m: _main_metric(r, m, "logickor", "logickor", "overall"), "logickor"),
+                ("싱글턴", lambda r, m: _dig(m, "logickor", "single_turn"), None),
+                ("멀티턴", lambda r, m: _dig(m, "logickor", "multi_turn"), None),
+                ("심판", lambda r, m: r.get("judge_deployment") or r.get("judge_model"), None)]
+    if eval_type == "intent":
+        return [("Joint acc", lambda r, m: _main_metric(r, m, "mixatis", "mixatis", "joint_acc"), "mixatis"),
+                ("의도 Acc", lambda r, m: _dig(m, "mixatis", "intent", "acc"), None),
+                ("의도 F1", lambda r, m: _dig(m, "mixatis", "intent", "f1"), None),
+                ("슬롯 F1", lambda r, m: _dig(m, "mixatis", "slot", "f1"), None)]
+    if eval_type == "expert":
+        return [("채점 진행", _expert_progress, None),
+                ("평균 점수 (1~5)", lambda r, m: r["metrics"].get("expert_avg_score")
+                 if r["metrics"].get("expert_avg_score") is not None
+                 else _dig(r, "expert_progress", "avg_score"), "expert_avg_score"),
+                ("통과율", lambda r, m: _pct(r["metrics"].get("expert_pass_rate")), "expert_pass_rate")]
+    return [(md_cell(key), (lambda k: lambda r, m: r["metrics"].get(k))(key), key)
+            for key in metric_keys[:PROJECT_METRIC_COLUMNS]]
+
+
+def _summary_table(eval_type: str, runs: list, raw_by_job: dict, metric_keys: list,
+                   best: dict) -> str:
+    columns = _project_columns(eval_type, metric_keys)
+    head = ("#", "실행", "평가 대상", "데이터셋", "상태", "실행 시각 (KST)", *(c[0] for c in columns))
+    rows = []
+    for n, run in enumerate(runs, 1):
+        raw = raw_by_job.get(run.get("job_id"), {})
+        cells = []
+        for _title, get, best_key in columns:
+            value = get(run, raw)
+            if value is None:
+                cell = "-"
+            elif isinstance(value, str):
+                cell = md_cell(value)
+            else:
+                cell = _num(value)
+            if value is not None and best_key and best.get(best_key) == run.get("id"):
+                cell += " ★"
+            cells.append(cell)
+        rows.append((str(n), _run_label(run), _run_source(run), md_cell(run.get("dataset_name")),
+                     _STATUS_LABELS.get(run.get("status"), md_cell(run.get("status"))),
+                     _kst(run.get("create_datetime")), *cells))
+    return _table(head, rows)
+
+
+def _best_section(runs: list, best: dict) -> str:
+    index = {run.get("id"): (n, run) for n, run in enumerate(runs, 1)}
+    rows = []
+    for key, run_id in sorted(best.items()):
+        if run_id not in index:
+            continue
+        n, run = index[run_id]
+        rows.append((md_cell(key), f"#{n} {_run_label(run)}", _num(run["metrics"].get(key))))
+    if not rows:
+        return ""
+    return "## 지표별 최고 실행\n\n" + _table(("지표", "실행", "점수"), rows)
+
+
+def _hidden_metrics_section(runs: list, hidden: list) -> str:
+    """요약 표에 못 실은 지표 — (실행 × 지표) 긴 표. 최고 기록이 없는 지표(실패·mock·빠른 확인
+    런에만 있는 지표)도 여기서는 빠지지 않는다."""
+    rows = [(f"#{n}", md_cell(key), _num(run["metrics"].get(key)))
+            for n, run in enumerate(runs, 1) for key in hidden
+            if run["metrics"].get(key) is not None]
+    if not rows:
+        return ""
+    return "## 나머지 지표\n\n" + _table(("#", "지표", "점수"), rows)
+
+
+def _judge_category_section(runs: list, raw_by_job: dict) -> str:
+    """카테고리 × 실행 — 셀은 '싱글턴 / 멀티턴'. 어느 영역에서 차이가 나는지 한눈에 본다."""
+    cols, order, cells = [], [], {}
+    for n, run in enumerate(runs, 1):
+        cats = _dig(raw_by_job.get(run.get("job_id"), {}), "logickor", "categories")
+        if run.get("status") != "completed" or not isinstance(cats, list):
+            continue
+        cols.append(f"#{n}")
+        for c in cats:
+            if not isinstance(c, dict):
+                continue
+            name = md_cell(c.get("category"))
+            if name not in order:
+                order.append(name)
+            cells[(name, f"#{n}")] = f"{_num(c.get('single'))} / {_num(c.get('multi'))}"
+    if not cols:
+        return ""
+    rows = [(name, *(cells.get((name, col), "-") for col in cols)) for name in order]
+    return ("## 카테고리별 점수 (싱글턴 / 멀티턴)\n\n"
+            + _table(("카테고리", *cols), rows))
+
+
+def _run_subject(run: dict) -> tuple:
+    """무엇이 이 점수를 냈나 — 위임 런은 배포·서빙 모델, 그 외(체크포인트 포함)는 모델."""
+    if run.get("source_mode") == "deployment":
+        return ("deployment", run.get("source_deployment"), run.get("source_model"))
+    return ("model", run.get("model_name"))
+
+
+def _project_notes(runs: list, skipped_inference: int, truncated: int,
+                   hidden_metrics: list, dropped_best: int) -> str:
+    notes = []
+    mock = [f"#{n}" for n, r in enumerate(runs, 1) if r.get("mock")]
+    if mock:
+        notes.append(f"mock 채점기 런({', '.join(mock)})은 실제 점수가 아니라 최고 기록·비교에서 뺐습니다.")
+    quick = [f"#{n}" for n, r in enumerate(runs, 1) if r.get("sample_limit")]
+    if quick:
+        notes.append(f"빠른 확인 런({', '.join(quick)})은 태스크당 앞 일부 문항만 채점해 최고 기록·비교에서 뺐습니다.")
+    models = {_run_subject(r) for r in runs}
+    datasets = {r.get("dataset_name") for r in runs if r.get("dataset_name")}
+    mixed = [what for what, values in (("모델", models), ("데이터셋", datasets)) if len(values) > 1]
+    if mixed:
+        notes.append(f"이 프로젝트의 실행에는 서로 다른 {'·'.join(mixed)}이 섞여 있습니다 — 점수를 나란히 볼 때 유의하세요.")
+    if hidden_metrics:
+        notes.append(f"지표가 많아 요약 표에는 앞 {PROJECT_METRIC_COLUMNS}개만 실었습니다 — 나머지 "
+                     f"{len(hidden_metrics)}개({', '.join(hidden_metrics[:10])}"
+                     f"{' 등' if len(hidden_metrics) > 10 else ''})는 '나머지 지표' 표에 있습니다.")
+    if dropped_best:
+        notes.append(f"최고 기록 {dropped_best}건은 싣지 않은 오래된 실행에 있어 '지표별 최고 실행'에서 뺐습니다.")
+    if skipped_inference:
+        notes.append(f"채점이 아닌 추론 생성 런 {skipped_inference}건은 요약에서 뺐습니다.")
+    if truncated:
+        notes.append(f"실행이 많아 오래된 {truncated}건은 싣지 않았습니다(최근 {PROJECT_RUN_LIMIT}건).")
+    if not notes:
+        return ""
+    return "## 참고\n\n" + "\n".join(f"- {md_cell(n)}" for n in notes)
+
+
+async def build_project_report(project_id: int) -> dict:
+    """평가 프로젝트 → {markdown, filename}. 실행 1건 리포트와 같은 응답 모양(같은 모달이 쓴다)."""
+    data = await svc.get_project(project_id=project_id)
+    project = data.get("project") or {}
+    comparison = data.get("runs") or {}
+    eval_type = project.get("eval_type") if project.get("eval_type") in EVAL_TYPE_LABELS else "reference"
+    metric_keys = list(comparison.get("metric_keys") or [])
+    best = comparison.get("best") or {}
+
+    all_runs = [r for r in comparison.get("runs") or [] if isinstance(r, dict)]
+    scored = sorted((r for r in all_runs if r.get("metric_set") != "inference"),
+                    key=lambda r: r.get("id") or 0)
+    skipped_inference = len(all_runs) - len(scored)
+    truncated = max(0, len(scored) - PROJECT_RUN_LIMIT)
+    runs = scored[-PROJECT_RUN_LIMIT:]
+    # 원본 metrics 는 **보여 줄 실행만** 읽는다 — get_project 가 이미 전체를 한 번 읽었고, 오래된
+    # 전문가 세션은 샘플 원문을 metrics 에 담고 있어 프로젝트 전체를 다시 읽으면 무겁다.
+    ids = [r["id"] for r in runs if r.get("id") is not None]
+    rows = (await db_model.list_eval_results_by_ids(ids, int(project.get("workspace_id") or 0))
+            if ids else [])
+    raw_by_job = {r.get("job_str_id"): _raw_metrics(r) for r in rows or []}
+
+    counts = {}
+    for r in runs:
+        counts[r.get("status")] = counts.get(r.get("status"), 0) + 1
+    count_text = " · ".join(f"{_STATUS_LABELS.get(s, md_cell(s))} {c}" for s, c in counts.items()) or "0"
+    header = (f"# 평가 프로젝트 리포트 — {_heading(project.get('name'))}\n\n" + _table(("항목", "값"), [
+        ("평가 프로젝트", md_cell(project.get("name"))),
+        ("평가 유형", EVAL_TYPE_LABELS.get(eval_type, eval_type)),
+        ("설명", md_cell(project.get("description"))),
+        ("생성자", md_cell(project.get("creator"))),
+        ("생성일 (KST)", _kst(project.get("create_datetime"))),
+        ("상태", _STATUS_LABELS.get(project.get("status"), md_cell(project.get("status")))),
+        ("실행", f"{len(runs)}건 ({count_text})"),
+        ("리포트 생성 (KST)", datetime.now(_KST).strftime("%Y-%m-%d %H:%M"))]))
+
+    parts = [header, "## 실행 요약"]
+    if runs:
+        parts.append("★ 는 지표별 최고 기록입니다(완료·실측·전체 측정 런 중).")
+        parts.append(_summary_table(eval_type, runs, raw_by_job, metric_keys, best))
+    else:
+        parts.append("> 아직 실행이 없습니다.")
+    hidden = metric_keys[PROJECT_METRIC_COLUMNS:] if eval_type == "reference" else []
+    parts.append(_best_section(runs, best))
+    parts.append(_hidden_metrics_section(runs, hidden))
+    if eval_type == "judge":
+        parts.append(_judge_category_section(runs, raw_by_job))
+    included = {r.get("id") for r in runs}
+    dropped = sum(1 for run_id in best.values() if run_id not in included)
+    parts.append(_project_notes(runs, skipped_inference, truncated, hidden, dropped))
+    markdown = "\n\n".join(p for p in parts if p) + "\n"
+    return {"markdown": markdown,
+            "filename": f"평가프로젝트리포트_{_safe_stem(project.get('name'))}.md"}

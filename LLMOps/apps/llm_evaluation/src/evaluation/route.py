@@ -65,6 +65,18 @@ async def compare_project_runs(project_id: int):
         return response(status=0, message=str(e), result=None)
 
 
+# ⚠️ /{model_id}/{job_id}/report 보다 **위에** 있어야 한다 — 아래로 가면 'projects' 가 model_id 로
+#    잡혀 int 검증에서 422 가 난다(/benchmark/judge-models 와 같은 이유).
+@evaluations.get("/projects/{project_id}/report", summary="평가 프로젝트 리포트(Markdown)", tags=TAG)
+async def get_project_report(project_id: int):
+    try:
+        res = await report.build_project_report(project_id=project_id)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message=svc._redact_paths(str(e)), result=None)
+
+
 @evaluations.put("/projects/{project_id}", summary="평가 프로젝트 설명 수정", tags=TAG)
 async def update_project(project_id: int, body: dto.EvalProjectUpdateBody):
     """설명만 고친다(이름·유형·워크스페이스는 정체성이라 생성 후 고정).

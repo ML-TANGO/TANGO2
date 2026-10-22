@@ -3273,6 +3273,7 @@
   "evaluation.run.subjectTitle": "Model & dataset to evaluate",
   "evaluation.report.export": "Export report",
   "evaluation.report.title": "Evaluation report",
+  "evaluation.report.projectTitle": "Evaluation project report",
   "evaluation.report.downloadMarkdown": "Download Markdown",
   "evaluation.report.savePdf": "Save as PDF",
   "evaluation.report.pdfHint": "To save a PDF, choose 'Save as PDF' as the destination in the print dialog.",

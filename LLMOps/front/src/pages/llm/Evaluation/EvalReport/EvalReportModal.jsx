@@ -7,7 +7,7 @@ import { Loading } from '@jonathan/ui-react';
 
 import NewStyleModalFrame from '@src/components/Modal/NewStyleModalFrame';
 
-import { getEvalReport } from '@src/apis/llm/evaluation';
+import { getEvalProjectReport, getEvalReport } from '@src/apis/llm/evaluation';
 import { STATUS_SUCCESS } from '@src/network';
 
 import { errorToastMessage } from '@src/utils';
@@ -19,11 +19,16 @@ import style from './EvalReport.module.scss';
 
 const cx = classNames.bind(style);
 
+// 리포트에는 정상적인 링크가 없다 — 데이터셋·모델 이름 등에 섞인 [글](주소) 가 미리보기·인쇄에서
+// 눌리는 외부 링크가 되지 않게 글자로만 그린다.
+const ReportLinkText = ({ children }) => <span>{children}</span>;
+
 // 평가 실행 1건 리포트 미리보기 — 서버가 만든 Markdown 을 그대로 보이고, 같은 텍스트를
 // .md 로 내려받거나 인쇄 창(PDF 저장)으로 보낸다.
 // 모델 출력·코멘트가 섞인 문서라 원문 HTML 은 렌더하지 않는다(rehype-raw 미사용). 리포트에는
 // 이미지가 없으므로 img 도 막아 둔다 — 문서 속 링크가 외부로 요청을 보내지 못하게.
-const EvalReportModal = ({ modelId, jobId, onClose }) => {
+// projectId 를 주면 프로젝트 리포트(실행 전체 요약), 아니면 실행 1건 리포트다.
+const EvalReportModal = ({ modelId, jobId, projectId, onClose }) => {
   const { t } = useTranslation();
   const [report, setReport] = useState(null); // { markdown, filename }
   const [loading, setLoading] = useState(true);
@@ -32,7 +37,11 @@ const EvalReportModal = ({ modelId, jobId, onClose }) => {
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    getEvalReport(modelId, jobId).then((res) => {
+    const load =
+      projectId != null
+        ? getEvalProjectReport(projectId)
+        : getEvalReport(modelId, jobId);
+    load.then((res) => {
       if (!alive) return;
       if (res.status === STATUS_SUCCESS && res.result?.markdown) {
         setReport(res.result);
@@ -44,7 +53,7 @@ const EvalReportModal = ({ modelId, jobId, onClose }) => {
     return () => {
       alive = false;
     };
-  }, [modelId, jobId]);
+  }, [modelId, jobId, projectId]);
 
   // NewStyleModalFrame 은 Redux 모달 스택을 닫는데 이 모달은 로컬 상태로 뜬다 — Esc 를
   // capture 단계에서 가로채 이 모달만 닫는다(ExpertInferenceModal 과 같은 처방).
@@ -92,7 +101,11 @@ const EvalReportModal = ({ modelId, jobId, onClose }) => {
   return (
     <NewStyleModalFrame
       type='evalReportModal'
-      title={t('evaluation.report.title')}
+      title={t(
+        projectId != null
+          ? 'evaluation.report.projectTitle'
+          : 'evaluation.report.title',
+      )}
       cancel={{ text: 'close.label', func: onClose }}
       apply={
         report
@@ -119,6 +132,7 @@ const EvalReportModal = ({ modelId, jobId, onClose }) => {
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             disallowedElements={['img']}
+            components={{ a: ReportLinkText }}
             unwrapDisallowed
           >
             {report.markdown}

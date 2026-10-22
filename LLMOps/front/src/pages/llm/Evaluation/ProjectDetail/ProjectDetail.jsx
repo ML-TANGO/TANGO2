@@ -35,6 +35,7 @@ import {
 } from '../BenchmarkEvaluation/benchmarkMetrics';
 import EvalComparison from '../EvalComparison/EvalComparison';
 import { isUnranked } from '../EvalCrossCompare/compareMatrix';
+import EvalReportButton from '../EvalReport/EvalReportButton';
 import ExpertInferenceModal from '../ExpertEvaluation/ExpertInferenceModal';
 import ExpertRunView from '../ExpertEvaluation/ExpertRunView';
 import JudgeResultView from '../JudgeEvaluation/JudgeResultView';
@@ -1314,6 +1315,8 @@ const ProjectDetail = () => {
   const topButtonList = (
     <div className={cx('top-actions')}>
       {/* SimpleNav 의 topButtonList 슬롯과 같은 자리라 하우스와 같은 size='l' 을 쓴다. */}
+      {/* 프로젝트 리포트 — 실행 전체를 한 표로 요약(실행이 없으면 낼 것이 없다). */}
+      <EvalReportButton projectId={projectId} disabled={!runs.length} />
       {showCompare && (
         <ButtonV2
           type='outline'

@@ -314,3 +314,148 @@ def test_build_report_unknown_run_raises(monkeypatch):
     monkeypatch.setattr(R.db_model, "get_eval_result_by_job", by_job)
     with pytest.raises(ValueError):
         asyncio.run(R.build_run_report(model_id=38, job_id="abcdef0123"))
+
+
+# ── 프로젝트 리포트(실행 전체 요약) ───────────────────────────────────────────
+
+def _run(run_id, job, status="completed", metrics=None, **extra):
+    base = {"id": run_id, "job_id": job, "dataset_name": "ds-a", "metric_set": "arc:acc",
+            "status": status, "create_datetime": "2026-10-20 01:00:00", "model_id": 21,
+            "model_name": "model-a", "checkpoint": None, "source_mode": None,
+            "source_model": "model-a", "source_deployment": None, "source_commit": None,
+            "judge_model": None, "judge_deployment": None, "mock": False, "sample_limit": None,
+            "metrics": metrics or {}}
+    base.update(extra)
+    return base
+
+
+def _patch_project(monkeypatch, eval_type, runs, best, metric_keys, raw=None, name="P|1"):
+    from evaluation import service as S
+
+    async def get_project(project_id):
+        return {"project": {"id": project_id, "workspace_id": 2, "name": name,
+                            "description": "설명", "eval_type": eval_type, "status": "completed",
+                            "creator": "acryl", "create_datetime": "2026-10-01 00:00:00"},
+                "runs": {"metric_keys": metric_keys, "best": best, "runs": runs}, "batches": []}
+
+    async def rows(result_ids, workspace_id):
+        return [{"job_str_id": job, "metrics": json.dumps(m)} for job, m in (raw or {}).items()]
+
+    monkeypatch.setattr(S, "get_project", get_project)
+    monkeypatch.setattr(R.db_model, "list_eval_results_by_ids", rows)
+
+
+def test_project_report_summarises_reference_runs(monkeypatch):
+    runs = [
+        _run(1, "job1", metrics={"arc": 0.5, "kmmlu": 0.4}, checkpoint="ckpt-1",
+             source_mode="checkpoint"),
+        _run(2, "job2", metrics={"arc": 0.6, "kmmlu": 0.3}, model_name="model-b",
+             source_model="model-b", dataset_name="ds-b"),
+        _run(3, "job3", metrics={"arc": 0.9}, mock=True),
+        _run(4, "job4", metrics={"arc": 0.8}, sample_limit=20),
+        _run(5, "job5", status="failed"),
+        _run(6, "job6", metric_set="inference"),
+    ]
+    _patch_project(monkeypatch, "reference", runs, {"arc": 2, "kmmlu": 1}, ["arc", "kmmlu"])
+
+    out = asyncio.run(R.build_project_report(project_id=3))
+    md = out["markdown"]
+    assert out["filename"].endswith(".md") and "P_1" in out["filename"]
+    assert "P\\|1" in md and "정답 대조" in md and "2026-10-01 09:00" in md
+    assert "| 0.6 ★ |" in md and "| 0.4 ★ |" in md            # 지표별 최고 표시
+    assert "ckpt-1" in md and "model-b" in md
+    assert "mock" in md and "빠른 확인" in md                  # 비교에서 뺀 런 안내
+    assert "모델" in md and "데이터셋" in md and "섞여" in md   # 서로 다른 모델·데이터셋 경고
+    assert "job6" not in md                                     # 추론 생성 런은 요약에서 제외
+    assert "실패" in md
+
+
+def test_project_report_pivots_judge_categories(monkeypatch):
+    lk = lambda o, s, m: {"logickor": {"overall": o, "single_turn": s, "multi_turn": m,
+                                        "categories": [{"category": "추론", "single": s,
+                                                        "multi": m, "count": 7}]}}
+    runs = [_run(1, "j1", metrics={"logickor": 4.3}, judge_model="gemma"),
+            _run(2, "j2", metrics={"logickor": 5.1}, judge_model="gemma")]
+    _patch_project(monkeypatch, "judge", runs, {"logickor": 2}, ["logickor"],
+                   raw={"j1": lk(4.3, 5.0, 3.6), "j2": lk(5.1, 5.5, 4.7)})
+
+    md = asyncio.run(R.build_project_report(project_id=3))["markdown"]
+    assert "gemma" in md and "5.1 ★" in md
+    assert "| 추론 | 5 / 3.6 | 5.5 / 4.7 |" in md
+
+
+def test_project_report_lists_intent_scores(monkeypatch):
+    mx = {"mixatis": {"joint_acc": 0.49, "intent": {"acc": 0.93, "f1": 0.97},
+                      "slot": {"f1": 0.86}}}
+    _patch_project(monkeypatch, "intent", [_run(1, "j1", metrics={"mixatis": 0.49})],
+                   {"mixatis": 1}, ["mixatis"], raw={"j1": mx})
+
+    md = asyncio.run(R.build_project_report(project_id=3))["markdown"]
+    assert "0.49 ★" in md and "0.93" in md and "0.97" in md and "0.86" in md
+
+
+def test_project_report_shows_expert_progress(monkeypatch):
+    runs = [_run(1, "e1", metric_set="expert",
+                 metrics={"expert_avg_score": 4.2, "expert_pass_rate": 80.0}, run_name="세트 1"),
+            _run(2, "e2", metric_set="expert", status="running", run_name="세트 2",
+                 expert_progress={"rated": 30, "total": 100, "avg_score": 3.5})]
+    _patch_project(monkeypatch, "expert", runs, {"expert_avg_score": 1},
+                   ["expert_avg_score", "expert_pass_rate"],
+                   raw={"e1": {"expert_avg_score": 4.2, "expert_pass_rate": 80.0,
+                               "_rated": 100, "_total": 100}})
+
+    md = asyncio.run(R.build_project_report(project_id=3))["markdown"]
+    assert "세트 1" in md and "100 / 100" in md and "4.2 ★" in md and "80" in md
+    assert "세트 2" in md and "30 / 100" in md and "3.5" in md
+
+
+def test_project_report_unknown_project_raises(monkeypatch):
+    from evaluation import service as S
+
+    async def get_project(project_id):
+        raise Exception(f"eval project {project_id} not found")
+
+    monkeypatch.setattr(S, "get_project", get_project)
+    with pytest.raises(Exception):
+        asyncio.run(R.build_project_report(project_id=999))
+
+
+def test_project_judge_main_score_uses_logickor_key(monkeypatch):
+    runs = [_run(1, "j1", metrics={"logickor": 4.3}), _run(2, "j2", metrics={"logickor": 5.1},
+                                                         judge_model="a|b%")]
+    _patch_project(monkeypatch, "judge", runs, {"logickor": 2}, ["a_first", "logickor"])
+
+    md = asyncio.run(R.build_project_report(project_id=3))["markdown"]
+    assert "5.1 ★" in md and "| 4.3 |" in md
+    assert "a\\|b%" in md                      # 문자열 셀은 늘 이스케이프
+
+
+def test_project_warns_when_deployments_differ(monkeypatch):
+    runs = [_run(1, "d1", metrics={"arc": 0.5}, source_mode="deployment", source_deployment="dep-a"),
+            _run(2, "d2", metrics={"arc": 0.6}, source_mode="deployment", source_deployment="dep-b")]
+    _patch_project(monkeypatch, "reference", runs, {"arc": 2}, ["arc"])
+
+    md = asyncio.run(R.build_project_report(project_id=3))["markdown"]
+    assert "섞여" in md
+
+
+def test_project_reference_table_caps_metric_columns(monkeypatch):
+    keys = [f"b{i:02d}" for i in range(10)]
+    runs = [_run(1, "r1", metrics={k: 0.5 for k in keys})]
+    _patch_project(monkeypatch, "reference", runs, {k: 1 for k in keys}, keys,
+                   name="**P** #1")
+
+    md = asyncio.run(R.build_project_report(project_id=3))["markdown"]
+    header_row = next(line for line in md.splitlines() if line.startswith("| # |"))
+    assert "b07" in header_row and "b08" not in header_row
+    assert "앞 8개" in md and "b09" in md     # 숨긴 지표는 안내 + 최고 기록 표에 남는다
+    assert md.startswith("# 평가 프로젝트 리포트 — P 1")
+
+
+def test_project_hidden_metric_without_best_still_listed(monkeypatch):
+    keys = [f"b{i:02d}" for i in range(9)]
+    runs = [_run(1, "r1", status="failed", metrics={"b08": 0.7})]   # 실패 런에만 있는 9번째 지표
+    _patch_project(monkeypatch, "reference", runs, {}, keys)
+
+    md = asyncio.run(R.build_project_report(project_id=3))["markdown"]
+    assert "## 나머지 지표" in md and "| #1 | b08 | 0.7 |" in md
