@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse, Response
 from utils.resource import response
 
 import evaluation.dto as dto
+import evaluation.report as report
 import evaluation.service as svc
 
 evaluations = APIRouter(prefix="/evaluations")
@@ -319,6 +320,17 @@ async def get_expert_result(model_id: int, job_id: str):
     except Exception as e:
         traceback.print_exc()
         return response(status=0, message=str(e), result=None)
+
+
+@evaluations.get("/{model_id}/{job_id}/report", summary="평가 리포트(Markdown)", tags=TAG)
+async def get_eval_report(model_id: int, job_id: str):
+    try:
+        res = await report.build_run_report(model_id=model_id, job_id=job_id)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        # 결과 파일을 읽다 난 OSError 등은 NFS 실경로를 담는다 — 응답에서는 가린다.
+        return response(status=0, message=svc._redact_paths(str(e)), result=None)
 
 
 @evaluations.get("/{model_id}/{job_id}/expert-image/{sample_idx}",

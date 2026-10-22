@@ -6,6 +6,7 @@ import { Badge, InputText, Loading } from '@jonathan/ui-react';
 import ContentBox from '@src/components/molecules/ContentBox';
 import EmptyBox from '@src/components/molecules/EmptyBox';
 
+import EvalReportButton from '../EvalReport/EvalReportButton';
 import CsvTable from './components/CsvTable';
 import ExpertCompletionBanner from './components/ExpertCompletionBanner';
 import ExpertProgressHeader from './components/ExpertProgressHeader';
@@ -320,6 +321,9 @@ const ExpertRunView = ({ modelId, jobId, onExit }) => {
           committing={committing}
           nextBlocked={commentRequired}
           onReset={onExit}
+          reportAction={
+            <EvalReportButton modelId={modelId} jobId={jobId} size='m' />
+          }
           t={t}
         />
       </div>

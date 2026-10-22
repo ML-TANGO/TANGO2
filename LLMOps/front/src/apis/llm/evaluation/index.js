@@ -230,6 +230,15 @@ export const getExpertResult = async (modelId, jobId) => {
   });
 };
 
+// 평가 실행 1건 리포트(Markdown) — 요약 + 샘플별 상세. 네 유형(정답 대조·LLM 심사·의도/슬롯·
+// 전문가) 공용. → { markdown, filename }. 미리보기·.md 다운로드·인쇄가 이 텍스트 하나를 쓴다.
+export const getEvalReport = async (modelId, jobId) => {
+  return await callApi({
+    url: `evaluations/${modelId}/${jobId}/report`,
+    method: 'get',
+  });
+};
+
 // 멀티모달 — 전문가 샘플 이미지(서버 보관 NFS 이미지) blob. jf 헤더 인증 경유라 <img src>
 // 직접 GET(헤더 미탑재) 대신 blob 으로 받아 objectURL 로 렌더. URL 이미지는 FE 가 직접 렌더(미사용).
 export const fetchExpertImageBlob = async (modelId, jobId, idx) => {

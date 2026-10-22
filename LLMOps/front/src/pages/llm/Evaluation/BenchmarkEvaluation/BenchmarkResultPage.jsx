@@ -21,6 +21,7 @@ import { openModal } from '@src/store/modules/modal';
 
 import { addNineHours, errorToastMessage } from '@src/utils';
 
+import EvalReportButton from '../EvalReport/EvalReportButton';
 import BenchmarkResultView from './BenchmarkResultView';
 import {
   BENCHMARK_LABEL,
@@ -248,6 +249,12 @@ const BenchmarkResultPage = () => {
         onBack={goBack}
         right={
           <>
+            {/* 리포트는 채점이 끝난 런만 — 도중 점수(partial)는 영속하지 않는 화면용 값이다. */}
+            <EvalReportButton
+              modelId={runModelId}
+              jobId={runId}
+              disabled={runStatus !== 'completed'}
+            />
             <ButtonV2
               type='outline'
               colorType='gray'

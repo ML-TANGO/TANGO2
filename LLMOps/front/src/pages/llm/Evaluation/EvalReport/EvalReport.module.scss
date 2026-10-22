@@ -1,0 +1,91 @@
+// 평가 리포트 미리보기 — 서버가 만든 Markdown 을 문서처럼 보인다. 인쇄본(printReport.js)과
+// 같은 위계(제목·표·코드 블록)를 쓰되, 색은 앱 토큰을 따른다.
+@import '@src/styles/color.scss';
+
+.report {
+  min-width: 0;
+  color: $mono206;
+  font-size: 14px;
+  line-height: 1.6;
+  word-break: break-word;
+
+  h1 {
+    margin: 0 0 16px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid $mono206;
+    font-size: 22px;
+  }
+
+  h2 {
+    margin: 28px 0 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid $mono203;
+    font-size: 18px;
+  }
+
+  h3 {
+    margin: 20px 0 8px;
+    font-size: 16px;
+  }
+
+  h4 {
+    margin: 14px 0 6px;
+    font-size: 14px;
+  }
+
+  p {
+    margin: 6px 0;
+  }
+
+  table {
+    width: 100%;
+    margin: 8px 0 12px;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  th,
+  td {
+    padding: 6px 8px;
+    border: 1px solid $mono203;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  th {
+    background: $mono202;
+    font-weight: 600;
+  }
+
+  pre {
+    margin: 4px 0 10px;
+    padding: 8px 10px;
+    border: 1px solid $mono203;
+    background: $mono201;
+    font-size: 12px;
+    white-space: pre-wrap;
+  }
+
+  blockquote {
+    margin: 8px 0;
+    padding: 4px 12px;
+    border-left: 3px solid $mono204;
+    color: $mono205;
+  }
+}
+
+.report-loading,
+.report-empty {
+  display: flex;
+  height: 240px;
+  align-items: center;
+  justify-content: center;
+  color: $mono205;
+}
+
+// LLM 심사 결과(프로젝트 상세 안)에는 페이지 헤더가 없어 결과 위에 버튼 줄을 둔다.
+.report-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}

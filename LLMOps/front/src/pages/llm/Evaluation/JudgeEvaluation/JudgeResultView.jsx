@@ -1,4 +1,12 @@
+import { useCallback, useState } from 'react';
+
 import BenchmarkResultView from '../BenchmarkEvaluation/BenchmarkResultView';
+import EvalReportButton from '../EvalReport/EvalReportButton';
+
+import classNames from 'classnames/bind';
+import style from '../EvalReport/EvalReport.module.scss';
+
+const cx = classNames.bind(style);
 
 // LLM 심사 런 결과 뷰(프로젝트 상세 진입).
 //
@@ -14,12 +22,32 @@ import BenchmarkResultView from '../BenchmarkEvaluation/BenchmarkResultView';
 //
 // 얇은 어댑터로 남기는 이유: 라우팅은 유형별로 갈린다(정답 대조 런은 독립 페이지,
 // 심사 런은 프로젝트 상세 안). 유형이 다시 갈라질 때 손댈 자리가 여기다.
-const JudgeResultView = ({ modelId, jobId, onComplete }) => (
-  <BenchmarkResultView
-    modelId={modelId}
-    jobId={jobId}
-    onComplete={onComplete}
-  />
-);
+//
+// 리포트 버튼: 심사 런 화면에는 페이지 헤더가 없어 결과 위에 둔다. 채점이 끝난 런만 내보낼 수
+// 있게, 결과 뷰가 완료를 알리는 onComplete 신호로 켠다.
+const JudgeResultView = ({ modelId, jobId, onComplete }) => {
+  const [completedJob, setCompletedJob] = useState(null);
+  const handleComplete = useCallback(() => {
+    setCompletedJob(jobId);
+    onComplete?.();
+  }, [jobId, onComplete]);
+
+  return (
+    <>
+      <div className={cx('report-bar')}>
+        <EvalReportButton
+          modelId={modelId}
+          jobId={jobId}
+          disabled={completedJob !== jobId}
+        />
+      </div>
+      <BenchmarkResultView
+        modelId={modelId}
+        jobId={jobId}
+        onComplete={handleComplete}
+      />
+    </>
+  );
+};
 
 export default JudgeResultView;

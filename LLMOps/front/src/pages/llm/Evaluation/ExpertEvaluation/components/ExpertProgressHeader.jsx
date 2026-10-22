@@ -29,6 +29,7 @@ const ExpertProgressHeader = ({
   committing,
   nextBlocked,
   onReset,
+  reportAction,
   t,
 }) => {
   const position = count > 0 ? current + 1 : 0;
@@ -93,6 +94,8 @@ const ExpertProgressHeader = ({
             }
             title={nextBlocked ? t('evaluation.expert.nextBlocked') : undefined}
           />
+          {/* 리포트 내보내기 — 채점 도중에도 연다(문서에 진행 n/m 이 찍힌다). */}
+          {reportAction}
           <ButtonV2
             type='clear'
             colorType='gray'
