@@ -16,6 +16,10 @@ Usage:
   # SigLIP 버전 확인
   /home/ywlee/miniconda3/envs/eva/bin/python model_summary.py \\
       --vision google/siglip-so400m-patch14-384
+
+  # 쿼리 리샘플러 프로젝터 확인 (576 패치 → 32 토큰)
+  /home/ywlee/miniconda3/envs/eva/bin/python model_summary.py \\
+      --projector_type qformer --projector_num_query_tokens 32
 """
 import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
@@ -24,7 +28,7 @@ import argparse
 import torch
 from torchinfo import summary
 
-from model import VLMConfig, build_model
+from model import VLMConfig, build_model, PROJECTOR_TYPES, PROJECTOR_MLP2
 
 
 def parse_args():
@@ -35,6 +39,25 @@ def parse_args():
                    choices=["bfloat16", "float16", "float32"])
     p.add_argument("--device", default="cuda:0")
     p.add_argument("--batch_size", type=int, default=1)
+
+    # ── Projector ─────────────────────────────────────────────────────────────
+    p.add_argument("--projector_type", default=PROJECTOR_MLP2,
+                   choices=list(PROJECTOR_TYPES),
+                   help="Vision projector architecture")
+    # 아래 인수는 cross_attn / qformer 리샘플러에서만 사용된다.
+    p.add_argument("--projector_num_query_tokens", type=int, default=32,
+                   help="Image tokens the resampler emits (cross_attn / qformer)")
+    p.add_argument("--projector_num_heads",  type=int,   default=8,
+                   help="Attention heads per resampler block")
+    p.add_argument("--projector_num_layers", type=int,   default=2,
+                   help="Number of stacked resampler blocks")
+    p.add_argument("--projector_ffn_ratio",  type=float, default=4.0,
+                   help="Resampler FFN width as a multiple of the hidden size")
+    p.add_argument("--projector_dropout",    type=float, default=0.0,
+                   help="Dropout inside the resampler blocks")
+    p.add_argument("--projector_hidden_size", type=int,  default=None,
+                   help="Resampler working width (default: vision hidden_size)")
+
     p.add_argument("--wandb_project",  default=None)
     p.add_argument("--wandb_run_name", default=None)
     return p.parse_args()
@@ -93,7 +116,8 @@ def run_torchinfo(model, config, batch_size: int, device, dtype):
     (full model summary is too large to display due to LLM depth).
     """
     B  = batch_size
-    N  = config.num_image_tokens
+    P  = config.vision_num_patches   # projector input length  (patches)
+    N  = config.num_image_tokens     # projector output length (image tokens)
     D  = config.vision_hidden_size
     LD = config.llm_hidden_size
     L  = 64   # short dummy seq length for LLM summary
@@ -122,11 +146,11 @@ def run_torchinfo(model, config, batch_size: int, device, dtype):
 
     # ── 2. Projector ──────────────────────────────────────────────────────────
     print(f"\n{divider}")
-    print("  [2/3] Projector (Vision → Language space)")
+    print(f"  [2/3] Projector (Vision → Language space)  {P} patches → {N} tokens")
     print(divider)
     proj_summary = summary(
         model.projector,
-        input_size=(B, N, D),
+        input_size=(B, P, D),
         dtypes=[dtype],
         device=device,
         col_names=["input_size", "output_size", "num_params", "trainable"],
@@ -208,7 +232,13 @@ def main():
     config = VLMConfig(
         vision_model_name=args.vision,
         llm_model_name=args.llm,
-        projector_type="mlp2x_gelu",
+        projector_type=args.projector_type,
+        projector_num_query_tokens=args.projector_num_query_tokens,
+        projector_num_heads=args.projector_num_heads,
+        projector_num_layers=args.projector_num_layers,
+        projector_ffn_ratio=args.projector_ffn_ratio,
+        projector_dropout=args.projector_dropout,
+        projector_hidden_size=args.projector_hidden_size,
         freeze_vision=True,
         freeze_llm=True,
     )
@@ -228,15 +258,22 @@ def main():
     print("  Data Flow")
     print("─" * 70)
     img_size = model.vision_encoder.model.config.image_size
-    N = config.num_image_tokens
+    P = config.vision_num_patches    # patches out of the vision encoder
+    N = config.num_image_tokens      # image tokens out of the projector
     L = "<seq_len>"
+    # 리샘플러 계열은 패치 수와 무관하게 쿼리 토큰 수만큼만 내보낸다.
+    proj_note = (
+        f"  {P} patches → {N} query tokens"
+        if config.is_resampler_projector
+        else f"  {P} patches → {N} tokens (1 per patch)"
+    )
     flow = f"""
   pixel_values  ({args.batch_size}, 3, {img_size}, {img_size})
       │
       ▼  VisionEncoder  [{config.vision_model_name}]
-  image_features ({args.batch_size}, {N}, {config.vision_hidden_size})
+  image_features ({args.batch_size}, {P}, {config.vision_hidden_size})
       │
-      ▼  Projector  [{config.projector_type}]
+      ▼  Projector  [{config.projector_type}]{proj_note}
   proj_features  ({args.batch_size}, {N}, {config.llm_hidden_size})
       │
       │  inserted at <image> token position
@@ -261,6 +298,7 @@ def main():
 
         run_name = args.wandb_run_name or (
             f"arch-{args.vision.split('/')[-1]}-{os.path.basename(args.llm)}"
+            f"-{config.projector_type}"
         )
         wandb.init(
             project=args.wandb_project,
@@ -284,9 +322,20 @@ def main():
         wandb.run.summary["params/total"]              = grand_total
         wandb.run.summary["params/trainable"]          = grand_trainable
         wandb.run.summary["params/trainable_pct"]      = 100 * grand_trainable / grand_total
+        wandb.run.summary["vision_num_patches"]        = config.vision_num_patches
         wandb.run.summary["num_image_tokens"]          = config.num_image_tokens
         wandb.run.summary["vision_hidden_size"]        = config.vision_hidden_size
         wandb.run.summary["llm_hidden_size"]           = config.llm_hidden_size
+        wandb.run.summary["projector_type"]            = config.projector_type
+        if config.is_resampler_projector:
+            wandb.run.summary["projector/num_query_tokens"] = config.projector_num_query_tokens
+            wandb.run.summary["projector/num_heads"]        = config.projector_num_heads
+            wandb.run.summary["projector/num_layers"]       = config.projector_num_layers
+            wandb.run.summary["projector/ffn_ratio"]        = config.projector_ffn_ratio
+            wandb.run.summary["projector/dropout"]          = config.projector_dropout
+            wandb.run.summary["projector/hidden_size"]      = (
+                config.projector_hidden_size or config.vision_hidden_size
+            )
 
         # Log torchinfo text as wandb artifacts
         artifact = wandb.Artifact("model-architecture", type="model-info")
@@ -299,15 +348,28 @@ def main():
 
         # Log config as a wandb Table for easy inspection
         cfg_rows = [
-            ["vision_model",      config.vision_model_name],
-            ["llm_model",         config.llm_model_name],
-            ["projector_type",    config.projector_type],
-            ["vision_hidden_size",str(config.vision_hidden_size)],
-            ["llm_hidden_size",   str(config.llm_hidden_size)],
-            ["num_image_tokens",  str(config.num_image_tokens)],
-            ["total_params",      human_size(grand_total)],
-            ["trainable_params",  human_size(grand_trainable)],
-            ["trainable_%",       f"{100*grand_trainable/grand_total:.2f}%"],
+            ["vision_model",       config.vision_model_name],
+            ["llm_model",          config.llm_model_name],
+            ["projector_type",     config.projector_type],
+            ["vision_hidden_size", str(config.vision_hidden_size)],
+            ["llm_hidden_size",    str(config.llm_hidden_size)],
+            ["vision_num_patches", str(config.vision_num_patches)],
+            ["num_image_tokens",   str(config.num_image_tokens)],
+        ]
+        if config.is_resampler_projector:
+            cfg_rows += [
+                ["projector_num_query_tokens", str(config.projector_num_query_tokens)],
+                ["projector_num_heads",        str(config.projector_num_heads)],
+                ["projector_num_layers",       str(config.projector_num_layers)],
+                ["projector_ffn_ratio",        str(config.projector_ffn_ratio)],
+                ["projector_dropout",          str(config.projector_dropout)],
+                ["projector_hidden_size",
+                 str(config.projector_hidden_size or config.vision_hidden_size)],
+            ]
+        cfg_rows += [
+            ["total_params",     human_size(grand_total)],
+            ["trainable_params", human_size(grand_trainable)],
+            ["trainable_%",      f"{100*grand_trainable/grand_total:.2f}%"],
         ]
         cfg_table = wandb.Table(columns=["Key", "Value"], data=cfg_rows)
         wandb.log({"model_config": cfg_table})

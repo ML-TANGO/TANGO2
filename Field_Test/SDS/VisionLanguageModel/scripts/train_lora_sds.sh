@@ -85,6 +85,8 @@ GRAD_ACCUM=2
 LEARNING_RATE=2e-4
 NUM_EPOCHS=10          # 소규모 데이터셋: 충분한 반복 학습
 MAX_SEQ_LEN=2048
+# linear | mlp2x_gelu | mlp3x_gelu | cross_attn | qformer
+PROJECTOR_TYPE="mlp2x_gelu"
 
 # steps/epoch ≈ 100 / (1 × 2 × NUM_GPUS)
 # 6 GPU → ~8 steps/epoch → 10 epoch → ~80 steps 총합
@@ -103,7 +105,7 @@ $LAUNCHER "$ROOT/train.py" \
     --train_type      lora \
     --vision_model    "openai/clip-vit-large-patch14-336" \
     --llm_model       "$LLM_MODEL" \
-    --projector_type  mlp2x_gelu \
+    --projector_type  "$PROJECTOR_TYPE" \
     --projector_path  "$PROJECTOR" \
     --resume_lora_path "$RESUME_LORA" \
     --data_path       "$DATA_PATH" \

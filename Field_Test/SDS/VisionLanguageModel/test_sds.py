@@ -45,7 +45,10 @@ import torch
 import pandas as pd
 from PIL import Image
 
-from model import VLMConfig, build_model
+from model import (
+    VLMConfig, build_model, PROJECTOR_TYPES,
+    PROJECTOR_CONFIG_KEYS, load_projector_config, resolve_projector_settings,
+)
 
 
 # ── 프롬프트 ──────────────────────────────────────────────────────────────────
@@ -208,7 +211,34 @@ def parse_args():
     # Model
     p.add_argument("--vision_model",    default="openai/clip-vit-large-patch14-336")
     p.add_argument("--llm_model",       default="/home/ywlee/Llama-3.1-8B-Instruct")
-    p.add_argument("--projector_type",  default="mlp2x_gelu")
+
+    # Projector
+    # 모든 projector 인자의 기본값은 None 이다. "지정하지 않음" 과
+    # "기본값과 같은 값을 지정함" 을 구분하기 위한 것이며, 지정하지 않은
+    # 인자는 체크포인트의 vlm_config.json → VLMConfig 기본값 순으로 채워진다.
+    p.add_argument("--projector_type", default=None, choices=list(PROJECTOR_TYPES),
+                   help="Projector 구조 (기본: mlp2x_gelu)")
+
+    # Projector (resampler options)
+    # cross_attn / qformer 에만 적용된다. linear·mlp*_gelu 는 무시한다.
+    p.add_argument("--projector_num_query_tokens", type=int, default=None,
+                   help="resampler 가 출력하는 image token 수 "
+                        "(cross_attn / qformer 전용, 기본: 32)")
+    p.add_argument("--projector_num_heads", type=int, default=None,
+                   help="resampler 블록당 attention head 수 "
+                        "(cross_attn / qformer 전용, 기본: 8)")
+    p.add_argument("--projector_num_layers", type=int, default=None,
+                   help="적층된 resampler 블록 수 "
+                        "(cross_attn / qformer 전용, 기본: 2)")
+    p.add_argument("--projector_ffn_ratio", type=float, default=None,
+                   help="resampler hidden size 대비 feed-forward 폭 배수 "
+                        "(cross_attn / qformer 전용, 기본: 4.0)")
+    p.add_argument("--projector_dropout", type=float, default=None,
+                   help="resampler 블록 내부 dropout "
+                        "(cross_attn / qformer 전용, 기본: 0.0)")
+    p.add_argument("--projector_hidden_size", type=int, default=None,
+                   help="resampler 동작 폭 (cross_attn / qformer 전용, "
+                        "기본: vision encoder hidden size)")
 
     # Weights
     p.add_argument("--projector_path", required=True,
@@ -274,16 +304,31 @@ def main():
         question  = build_question_old(sample_dir, args.lang)
         reference = get_reference_old(sample_dir, args.lang) if args.show_reference else None
 
+    # ── Projector 설정 결정 ────────────────────────────────────────────────────
+    # 우선순위: CLI 플래그 > 체크포인트 vlm_config.json > VLMConfig 기본값
+    proj_settings, proj_sources = resolve_projector_settings(
+        {key: getattr(args, key) for key in PROJECTOR_CONFIG_KEYS},
+        load_projector_config(args.projector_path),
+    )
+    for key in PROJECTOR_CONFIG_KEYS:
+        print(f"[Inference] {key:<26} = {proj_settings[key]}  "
+              f"(from {proj_sources[key]})")
+
     # ── Build model ────────────────────────────────────────────────────────────
     config = VLMConfig(
         vision_model_name=args.vision_model,
         llm_model_name=args.llm_model,
-        projector_type=args.projector_type,
         vision_feature_layer=-2,
         vision_feature_select_strategy="patch",
         freeze_vision=True,
         freeze_llm=True,
+        **proj_settings,
     )
+
+    print(f"[Inference] Projector type : {config.projector_type}")
+    if config.is_resampler_projector:
+        print(f"[Inference] Query tokens   : {config.projector_num_query_tokens}")
+
     model = build_model(config, torch_dtype=dtype)
 
     print(f"[Inference] Loading projector: {args.projector_path}")

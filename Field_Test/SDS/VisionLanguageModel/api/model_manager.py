@@ -210,13 +210,25 @@ class ModelManager:
         self._load_error = None
         try:
             from model import VLMConfig, build_model as _build
+            from model.checkpoint import (
+                load_projector_config, resolve_projector_settings,
+            )
+
+            # 프로젝터 구조는 학습 시점에 결정되므로 체크포인트에 기록된 값을
+            # 따른다. vlm_config.json 이 없는 구 체크포인트는 VLMConfig 기본값
+            # (mlp2x_gelu) 으로 떨어진다.
+            proj_settings, proj_sources = resolve_projector_settings(
+                {}, load_projector_config(projector_file)
+            )
+            print(f"[Eva] 프로젝터 타입: {proj_settings['projector_type']} "
+                  f"(출처: {proj_sources['projector_type']})")
 
             config = VLMConfig(
                 vision_model_name=vision_name,
                 llm_model_name=llm_path,
-                projector_type="mlp2x_gelu",
                 freeze_vision=True,
                 freeze_llm=not has_lora,
+                **proj_settings,
             )
 
             # 기존 모델 해제 후 새 모델 로드
