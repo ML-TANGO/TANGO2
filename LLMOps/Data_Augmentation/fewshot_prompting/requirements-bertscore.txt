@@ -1,0 +1,5 @@
+# Optional: metric="bert_score" (installed on top of requirements.txt).
+# Install PyTorch first — the CPU-only build is enough and much smaller:
+#   pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu
+bert-score==0.3.13
+transformers==5.20.2
