@@ -225,7 +225,7 @@ const RagSettingCreateModal = ({ data, type }) => {
     return false;
   };
 
-  // POST Submit Model
+  // POST Submit TrainingPage
   const postSetting = async () => {
     const embeddingSelectedIndex = embeddingSelectedOptions.findIndex(
       (item) => Object.values(item)[0] === true,

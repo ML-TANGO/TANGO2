@@ -1,0 +1,26 @@
+diff --git a/needlehaystack/providers/__init__.py b/needlehaystack/providers/__init__.py
+index bb97471..ad97903 100644
+--- a/needlehaystack/providers/__init__.py
++++ b/needlehaystack/providers/__init__.py
+@@ -14,11 +14,13 @@ package never requires the real SDKs at module load time.
+ from . import anthropic as _anthropic  # noqa: F401
+ from . import cohere as _cohere  # noqa: F401
+ from . import openai as _openai  # noqa: F401
++from . import transformers_local as _transformers_local  # noqa: F401
+ from .anthropic import AnthropicProvider
+ from .base import Completion, ModelProvider
+ from .cohere import CohereProvider
+ from .fake import FakeProvider, make_echo_prompt
+ from .openai import OpenAIProvider
++from .transformers_local import TransformersProvider
+ from .registry import (
+     PROVIDER_REGISTRY,
+     build_provider,
+@@ -28,6 +30,7 @@ from .registry import (
+ 
+ __all__ = [
+     "PROVIDER_REGISTRY",
++    "TransformersProvider",
+     "AnthropicProvider",
+     "CohereProvider",
+     "Completion",

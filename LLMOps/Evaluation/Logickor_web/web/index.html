@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Logickor 평가</title>
+<style>
+  :root {
+    --bg: #000000;
+    --panel: rgba(20, 22, 28, 0.92);
+    --panel-border: #2a2e3a;
+    --card: rgba(30, 33, 42, 0.85);
+    --text: #e7e9ee;
+    --muted: #8b90a0;
+    --accent: #2f6bff;
+    --green: #3fbf6b;
+    --red: #e05260;
+    --yellow: #d9a441;
+    --track: #333846;
+    --field-bg: #14161c;
+    --field-border: #333846;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: #000000;
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Malgun Gothic",
+      "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    min-height: 100vh;
+  }
+  /* sample.png 를 은은한 배경으로, 기본은 검정 */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background: #000000 url("/sample.png") center / cover no-repeat;
+    opacity: 0.10;
+    filter: saturate(0.7);
+    z-index: -1;
+  }
+
+  header.topbar {
+    display: flex; align-items: center; gap: 14px;
+    padding: 16px 26px;
+    background: rgba(8, 9, 12, 0.9);
+    border-bottom: 1px solid var(--panel-border);
+    position: sticky; top: 0; z-index: 10;
+    backdrop-filter: blur(6px);
+  }
+  .dot { width: 12px; height: 12px; border-radius: 50%; background: #4b5060; }
+  .dot.run { background: var(--yellow); box-shadow: 0 0 10px var(--yellow); animation: pulse 1.2s infinite; }
+  .dot.done { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+  header .title { font-size: 20px; font-weight: 700; letter-spacing: .3px; }
+  header .title .sub { color: var(--muted); font-weight: 500; font-size: 13px; margin-left: 8px; }
+  header .status-chip {
+    margin-left: auto; font-size: 13px; padding: 5px 14px; border-radius: 20px;
+    border: 1px solid var(--panel-border); color: var(--muted); background: rgba(255,255,255,.03);
+  }
+  header .status-chip.run { color: var(--yellow); border-color: var(--yellow); }
+  header .status-chip.done { color: var(--green); border-color: var(--green); }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    gap: 22px;
+    padding: 22px 26px 40px;
+    max-width: 1500px; margin: 0 auto;
+  }
+  @media (max-width: 1050px) { .layout { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 14px;
+    padding: 22px;
+  }
+  .panel h2 { margin: 0 0 18px; font-size: 15px; color: var(--accent); letter-spacing: .5px; }
+
+  label.field { display: block; margin-bottom: 15px; }
+  label.field .lbl { display: block; font-size: 11px; letter-spacing: 1px; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; }
+  input[type=text], select, textarea {
+    width: 100%; background: var(--field-bg); color: var(--text);
+    border: 1px solid var(--field-border); border-radius: 8px;
+    padding: 10px 12px; font-size: 13px; font-family: inherit;
+  }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+  input[readonly] { color: var(--muted); background: #0e1015; }
+  textarea { resize: vertical; min-height: 160px; font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; line-height: 1.5; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .derived { background: #0e1015; border: 1px dashed var(--field-border); border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; }
+  .derived .row { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; padding: 4px 0; }
+  .derived .row .k { color: var(--muted); }
+  .derived .row .v { font-family: ui-monospace, monospace; color: #c8ccd8; text-align: right; word-break: break-all; }
+
+  .toggles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 6px 0 16px; }
+  .toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text); background: var(--field-bg); border: 1px solid var(--field-border); border-radius: 8px; padding: 8px 10px; cursor: pointer; }
+  .toggle input { accent-color: var(--accent); width: 15px; height: 15px; }
+
+  .btns { display: flex; gap: 10px; margin-top: 4px; }
+  button {
+    font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+    border: none; border-radius: 9px; padding: 12px 16px; color: #fff;
+    display: inline-flex; align-items: center; gap: 8px; justify-content: center;
+  }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-start { background: var(--accent); flex: 1.3; }
+  .btn-start:hover:not(:disabled) { background: #1f5aff; }
+  .btn-stop { background: #3a2530; color: #ffb4bd; border: 1px solid #6d2b38; flex: 1; }
+  .btn-stop:hover:not(:disabled) { background: #52303c; }
+  .btn-ghost { background: transparent; border: 1px solid var(--field-border); color: var(--text); }
+  .btn-ghost:hover { border-color: var(--accent); }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 14px; line-height: 1.6; }
+  .hint code { color: #c8ccd8; background: #0e1015; padding: 1px 5px; border-radius: 4px; }
+  .mode-note { font-size: 12px; color: var(--muted); margin: -6px 0 16px; line-height: 1.5; }
+  .mode-note.debug { color: var(--yellow); }
+  .field.off { opacity: .4; }
+  .save-row { display:flex; gap:10px; align-items:center; margin-top: 12px; }
+  .saved-flash { font-size: 12px; color: var(--green); opacity: 0; transition: opacity .3s; }
+  .saved-flash.show { opacity: 1; }
+
+  details.cfg { margin-top: 14px; border-top: 1px solid var(--panel-border); padding-top: 12px; }
+  details.cfg summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+  details.cfg summary:hover { color: var(--text); }
+
+  /* 결과 영역 */
+  .results h2 { font-size: 17px; color: var(--text); margin-bottom: 2px; }
+  .results .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 20px; }
+  .scorecard { background: var(--card); border: 1px solid var(--panel-border); border-radius: 12px; padding: 16px 18px; }
+  .scorecard.accent { border-color: #3a4a80; }
+  .scorecard .name { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .scorecard .big { font-size: 40px; font-weight: 700; letter-spacing: 1px; }
+  .scorecard .unit { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .c-blue { color: #6f9bff; }
+  .c-green { color: #5fd08a; }
+  .c-purple { color: #b48bff; }
+
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+  @media (max-width: 760px) { .split, .cards { grid-template-columns: 1fr; } }
+  .subpanel { background: var(--card); border: 1px solid var(--panel-border); border-radius: 12px; padding: 16px 18px; }
+  .subpanel h3 { margin: 0 0 12px; font-size: 13px; color: var(--muted); font-weight: 600; }
+  .legend { display: flex; gap: 16px; font-size: 12px; margin-bottom: 12px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+  .legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+
+  .bars .bar-row { margin-bottom: 12px; }
+  .bars .cat-name { font-size: 12px; margin-bottom: 5px; color: var(--text); }
+  .bars .track { display:flex; align-items:center; gap:8px; margin-bottom: 3px; }
+  .bars .track .tag { width: 12px; color: var(--muted); font-size: 11px; }
+  .bars .track .rail { flex:1; height: 8px; background: var(--track); border-radius: 6px; overflow: hidden; }
+  .bars .track .fill { height: 100%; border-radius: 6px; }
+  .bars .track .val { width: 34px; text-align: right; font-size: 11px; font-family: ui-monospace, monospace; }
+  .fill.s { background: #4f7bff; }
+  .fill.m { background: #4bbf76; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table th { text-align: left; color: var(--muted); font-weight: 600; padding: 9px 8px; border-bottom: 1px solid var(--panel-border); font-size: 12px; }
+  table td { padding: 9px 8px; border-bottom: 1px solid rgba(255,255,255,.05); }
+  table tr:last-child td { border-bottom: none; }
+  td.num { font-family: ui-monospace, monospace; }
+  .pos { color: var(--green); } .neg { color: var(--red); } .zero { color: var(--muted); }
+  .badge { font-size: 11px; padding: 2px 9px; border-radius: 12px; border: 1px solid; }
+  .badge.good { color: #6f9bff; border-color: #3a4a80; }
+  .badge.ok { color: #5fd08a; border-color: #2f6b45; }
+  .badge.mid { color: var(--muted); border-color: var(--panel-border); }
+  .badge.overall { color: #b48bff; border-color: #4a3a80; }
+
+  .empty { text-align: center; color: var(--muted); padding: 50px 20px; font-size: 14px; }
+
+  /* 로그 */
+  .logwrap { background: var(--card); border: 1px solid var(--panel-border); border-radius: 12px; padding: 0; overflow: hidden; }
+  .logwrap .loghead { display:flex; align-items:center; gap:10px; padding: 10px 16px; border-bottom: 1px solid var(--panel-border); font-size: 13px; color: var(--muted); }
+  .logwrap .loghead .spacer { flex: 1; }
+  pre.log {
+    margin: 0; padding: 14px 16px; max-height: 320px; overflow: auto;
+    font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    font-size: 12px; line-height: 1.5; color: #cfd3de; white-space: pre-wrap; word-break: break-word;
+  }
+  .radar-wrap { display:flex; align-items:center; justify-content:center; }
+
+  /* 진행 상황 스텝퍼 */
+  .stepper { display:flex; margin: 6px 0 20px; }
+  .step { flex:1; display:flex; flex-direction:column; align-items:center; position:relative; }
+  .step::before { content:""; position:absolute; top:18px; left:-50%; width:100%; height:3px; background:var(--field-border); z-index:0; border-radius:2px; }
+  .step:first-child::before { display:none; }
+  .step:not(.pending)::before { background:var(--green); }
+  .step.stopped::before { background:var(--red); }
+  .step .ic { width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-size:15px; font-weight:700; background:var(--field-bg); border:2px solid var(--field-border); color:var(--muted); z-index:1; }
+  .step .nm { margin-top:8px; font-size:12px; color:var(--muted); text-align:center; line-height:1.35; }
+  .step .nm small { font-size:10px; color:var(--muted); }
+  .step.done .ic { background:var(--green); border-color:var(--green); color:#04120a; }
+  .step.done .nm { color:var(--text); }
+  .step.running .ic { border-color:var(--yellow); color:var(--yellow); animation:ring 1.4s infinite; }
+  .step.running .nm, .step.running .nm small { color:var(--yellow); }
+  .step.skipped .ic { border-style:dashed; color:var(--muted); }
+  .step.stopped .ic { border-color:var(--red); color:var(--red); }
+  .step.stopped .nm, .step.stopped .nm small { color:var(--red); }
+  @keyframes ring { 0%{box-shadow:0 0 0 0 rgba(217,164,65,.55)} 70%{box-shadow:0 0 0 9px rgba(217,164,65,0)} 100%{box-shadow:0 0 0 0 rgba(217,164,65,0)} }
+
+  .cur-progress { margin-bottom:14px; }
+  .cur-head { display:flex; justify-content:space-between; font-size:13px; margin-bottom:6px; color:var(--yellow); }
+  .rail.big { height:12px; background:var(--track); border-radius:8px; overflow:hidden; }
+  .rail.big .fill { height:100%; border-radius:8px; transition:width .4s ease; }
+  .fill.run { background:linear-gradient(90deg,#d9a441,#e0b866); }
+  .fill.ov { background:linear-gradient(90deg,#2f6bff,#3fbf6b); }
+  .cur-detail { font-size:11px; color:var(--muted); margin-top:5px; word-break:break-all; }
+  .mono { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; }
+  .overall-row { display:flex; align-items:center; gap:12px; }
+  .overall-row .ov-label { font-size:12px; color:var(--muted); width:36px; }
+  .overall-row .rail.big { flex:1; }
+  .overall-row .mono { font-size:12px; width:42px; text-align:right; }
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <span class="dot" id="statusDot"></span>
+    <span class="title">Logickor 평가 <span class="sub">파이프라인 · clean → train → generate → evaluate → score</span></span>
+    <span class="status-chip" id="statusChip">대기</span>
+  </header>
+
+  <div class="layout">
+    <!-- ===== 좌: 설정 ===== -->
+    <section class="panel">
+      <h2>실험 설정</h2>
+
+      <label class="field">
+        <span class="lbl">CONFIG_PATH</span>
+        <input type="text" id="config_path" list="configList" />
+        <datalist id="configList"></datalist>
+      </label>
+
+      <label class="field">
+        <span class="lbl">RUN_DIR</span>
+        <input type="text" id="run_dir" />
+      </label>
+
+      <div class="derived" id="derived">
+        <div class="row"><span class="k">merged model</span><span class="v" id="d_merged">–</span></div>
+        <div class="row"><span class="k">generated dir</span><span class="v" id="d_generated">–</span></div>
+        <div class="row"><span class="k">evaluated glob</span><span class="v" id="d_evaluated">–</span></div>
+      </div>
+
+      <div class="grid2">
+        <label class="field"><span class="lbl">SEED</span><input type="text" id="seed" /></label>
+        <label class="field"><span class="lbl">GPU</span><input type="text" id="gpu" /></label>
+        <label class="field"><span class="lbl">GEN_MODEL_LEN</span><input type="text" id="gen_model_len" /></label>
+        <label class="field"><span class="lbl">JUDGE_MODEL_LEN</span><input type="text" id="judge_model_len" /></label>
+      </div>
+      <label class="field">
+        <span class="lbl">JUDGE_MODEL</span>
+        <input type="text" id="judge_model" list="judgeList" />
+        <datalist id="judgeList"></datalist>
+      </label>
+
+      <div class="grid2">
+        <label class="field">
+          <span class="lbl">실행 모드</span>
+          <select id="mode">
+            <option value="full">full – 전체 학습</option>
+            <option value="debug">debug – 일부만 학습</option>
+          </select>
+        </label>
+        <label class="field" id="fracField">
+          <span class="lbl">TRAIN_FRACTION</span>
+          <input type="text" id="train_fraction" />
+        </label>
+      </div>
+      <div class="mode-note" id="modeNote">전체 데이터로 학습합니다.</div>
+
+      <div class="btns">
+        <button class="btn-start" id="btnStart">▶ 실행 (학습 + 평가)</button>
+        <button class="btn-stop" id="btnStop" disabled>■ 중지</button>
+      </div>
+      <div class="save-row">
+        <button class="btn-ghost" id="btnSave">설정 저장</button>
+        <button class="btn-ghost" id="btnReset">기본값 복원</button>
+        <span class="saved-flash" id="savedFlash">저장됨 ✓</span>
+      </div>
+
+      <p class="hint">실행 시 저장된 설정을 환경변수(<code>MODE</code>, <code>TRAIN_FRACTION</code> 포함)로 넘겨
+        <code>scripts/auto.sh</code> 를 구동합니다.
+        auto.sh 의 <b>Step 0</b> 이 <code>runs/</code>, <code>generated/runs/</code>,
+        <code>evaluated/*.jsonl</code> 을 삭제하므로 이전 실행 산출물은 남지 않습니다.</p>
+
+      <details class="cfg">
+        <summary>config 파일 내용 보기 / 편집</summary>
+        <textarea id="cfgText" spellcheck="false" placeholder="config 로딩 중..."></textarea>
+        <div class="save-row">
+          <button class="btn-ghost" id="btnCfgReload">다시 불러오기</button>
+          <button class="btn-ghost" id="btnCfgSave">config 저장</button>
+          <span class="saved-flash" id="cfgFlash">저장됨 ✓</span>
+        </div>
+      </details>
+    </section>
+
+    <!-- ===== 우: 결과 + 로그 ===== -->
+    <section class="panel results">
+      <h2>Logickor 평가 결과</h2>
+      <div class="subtitle">Korean LLM Benchmark · 6 Categories · LLM-as-a-Judge</div>
+
+      <div class="subpanel" style="margin-bottom:20px;">
+        <h3>실행 진행 상황</h3>
+        <div class="stepper" id="stepper"></div>
+        <div class="cur-progress" id="curProgress" style="display:none;">
+          <div class="cur-head"><span id="curLabel">–</span><span class="mono" id="curPct">0%</span></div>
+          <div class="rail big"><div class="fill run" id="curFill" style="width:0%"></div></div>
+          <div class="cur-detail mono" id="curDetail"></div>
+        </div>
+        <div class="overall-row">
+          <span class="ov-label">전체</span>
+          <div class="rail big"><div class="fill ov" id="ovFill" style="width:0%"></div></div>
+          <span class="mono" id="ovPct">0%</span>
+        </div>
+      </div>
+
+      <div id="resultArea">
+        <div class="empty" id="emptyResult">아직 평가 결과가 없습니다. 좌측에서 파이프라인을 실행하세요.</div>
+
+        <div id="resultBody" style="display:none;">
+          <div class="cards">
+            <div class="scorecard"><div class="name">Single Turn</div><div class="big c-blue" id="r_single">–</div><div class="unit">/ 10점 만점</div></div>
+            <div class="scorecard"><div class="name">Multi Turn</div><div class="big c-green" id="r_multi">–</div><div class="unit">/ 10점 만점</div></div>
+            <div class="scorecard accent"><div class="name">Overall</div><div class="big c-purple" id="r_overall">–</div><div class="unit">Single + Multi 평균</div></div>
+          </div>
+
+          <div class="split">
+            <div class="subpanel">
+              <h3>카테고리별 Single / Multi Turn 점수</h3>
+              <div class="legend"><span><i style="background:#4f7bff"></i>Single Turn</span><span><i style="background:#4bbf76"></i>Multi Turn</span></div>
+              <div class="bars" id="bars"></div>
+            </div>
+            <div class="subpanel">
+              <h3>카테고리 레이더 – Single vs Multi</h3>
+              <div class="radar-wrap"><svg id="radar" width="320" height="300" viewBox="0 0 320 300"></svg></div>
+            </div>
+          </div>
+
+          <div class="subpanel">
+            <table id="scoreTable">
+              <thead><tr><th>카테고리</th><th>Single Turn</th><th>Multi Turn</th><th>차이 (M−S)</th><th>평가</th></tr></thead>
+              <tbody id="tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="logwrap" style="margin-top:20px;">
+        <div class="loghead">
+          <span>실행 로그</span>
+          <span class="spacer"></span>
+          <label class="toggle" style="border:none;background:none;padding:0;"><input type="checkbox" id="autoscroll" checked /> 자동 스크롤</label>
+        </div>
+        <pre class="log" id="logView">로그 없음</pre>
+      </div>
+    </section>
+  </div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+// scripts/auto.sh 의 환경변수와 1:1 대응
+const FIELDS = ["config_path","run_dir","seed","gpu","gen_model_len","judge_model","judge_model_len","mode","train_fraction"];
+
+async function api(url, opts) {
+  const r = await fetch(url, opts);
+  return await r.json();
+}
+
+function collectSettings() {
+  const s = {};
+  FIELDS.forEach(f => s[f] = $(f).value);
+  return s;
+}
+
+function applySettings(s, derived) {
+  FIELDS.forEach(f => { if (s[f] !== undefined) $(f).value = s[f]; });
+  if (derived) applyDerived(derived);
+  syncMode();
+}
+
+// full 모드에서는 TRAIN_FRACTION 이 적용되지 않으므로 입력칸을 잠근다.
+function syncMode() {
+  const debug = $("mode").value === "debug";
+  $("train_fraction").disabled = !debug;
+  $("fracField").classList.toggle("off", !debug);
+  const note = $("modeNote");
+  note.classList.toggle("debug", debug);
+  if (!debug) {
+    note.textContent = "전체 데이터로 학습합니다.";
+    $("btnStart").textContent = "▶ 실행 (학습 + 평가)";
+    return;
+  }
+  const raw = parseFloat($("train_fraction").value);
+  const frac = (raw > 0 && raw <= 1) ? raw : 0.1;
+  const pct = +(frac * 100).toFixed(4);
+  note.textContent = `디버그 모드: 학습/평가 데이터의 ${pct}% 만 사용합니다(question_id 단위 샘플링). `
+    + "파이프라인 점검용이며 점수는 참고용입니다. 0 초과 1 이하 값을 입력하세요.";
+  $("btnStart").textContent = `▶ 실행 (debug ${pct}%)`;
+}
+
+function fillDatalist(id, items) {
+  const dl = $(id); if (!dl) return;
+  dl.innerHTML = "";
+  (items || []).forEach(v => {
+    const o = document.createElement("option"); o.value = v; dl.appendChild(o);
+  });
+}
+
+function applyDerived(d) {
+  $("d_merged").textContent = d.merged_model;
+  $("d_generated").textContent = d.generated_dir;
+  $("d_evaluated").textContent = d.evaluated_glob;
+}
+
+// auto.sh: MERGED_DIR="${RUN_DIR}/merged" → generated/${MERGED_DIR}
+function computeDerivedLocal() {
+  const merged = ($("run_dir").value || "").replace(/\/+$/,"") + "/merged";
+  applyDerived({ merged_model: merged, generated_dir: "generated/" + merged, evaluated_glob: "evaluated/*.jsonl" });
+}
+
+function flash(id) { const e=$(id); e.classList.add("show"); setTimeout(()=>e.classList.remove("show"), 1500); }
+
+// ---- 설정 로드/저장 ----
+async function loadSettings() {
+  const res = await api("/api/settings");
+  fillDatalist("configList", res.configs);
+  fillDatalist("judgeList", res.judge_presets);
+  applySettings(res.settings, res.derived);
+  loadConfigFile();
+}
+async function saveSettings(silent) {
+  const res = await api("/api/settings", {
+    method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify(collectSettings())
+  });
+  if (res.derived) applyDerived(res.derived);
+  if (!silent) flash("savedFlash");
+  return res;
+}
+$("btnSave").onclick = () => saveSettings(false);
+$("btnReset").onclick = async () => {
+  const res = await api("/api/reset", {method:"POST"});
+  applySettings(res.settings, res.derived);
+  flash("savedFlash");
+  loadConfigFile();
+};
+$("run_dir").addEventListener("input", computeDerivedLocal);
+$("config_path").addEventListener("change", loadConfigFile);
+$("mode").addEventListener("change", syncMode);
+$("train_fraction").addEventListener("input", syncMode);
+
+// ---- config 파일 편집 ----
+async function loadConfigFile() {
+  const path = $("config_path").value;
+  if (!path) return;
+  const res = await api("/api/config-file?path=" + encodeURIComponent(path));
+  $("cfgText").value = res.ok ? res.content : ("# " + (res.error || "불러오기 실패"));
+}
+$("btnCfgReload").onclick = loadConfigFile;
+$("btnCfgSave").onclick = async () => {
+  const res = await api("/api/config-file", {
+    method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ path: $("config_path").value, content: $("cfgText").value })
+  });
+  if (res.ok) flash("cfgFlash");
+  else alert("저장 실패: " + (res.error||""));
+};
+
+// ---- 실행 / 중지 ----
+// 로그 · 진행률 · 결과를 실행 전 상태로 되돌린다(시작 직전 / 중지 직후 / 첫 진입).
+function resetRunUI() {
+  logOffset = 0;
+  wasRunning = false;
+  $("logView").textContent = "로그 없음";
+  $("curProgress").style.display = "none";
+  $("curLabel").textContent = "–";
+  $("curPct").textContent = "0%";
+  $("curFill").style.width = "0%";
+  $("curDetail").textContent = "";
+  $("ovFill").style.width = "0%";
+  $("ovPct").textContent = "0%";
+  setRunningUI(false);                   // 대기 상태 · 버튼 원복
+  pollProgress();                        // 스텝퍼를 pending 으로 다시 그림
+  loadResults();                         // 점수 그래프를 0 으로
+}
+
+$("btnStart").onclick = async () => {
+  await saveSettings(true);              // 실행 전 현재 설정 저장
+  resetRunUI();                          // 실행 시작 시 이전 실행 흔적 초기화
+  $("btnStart").disabled = true;
+  const res = await api("/api/start", {method:"POST"});
+  if (!res.ok) { alert(res.error || "실행 실패"); $("btnStart").disabled = false; return; }
+  setRunningUI(true);
+  wasRunning = true;
+};
+$("btnStop").onclick = async () => {
+  $("btnStop").disabled = true;
+  wasRunning = false;                    // 폴링이 "완료" 로 표시하지 않도록 먼저 내린다
+  const res = await api("/api/stop", {method:"POST"});
+  if (!res.ok && res.error) console.log(res.error);
+  resetRunUI();                          // 중지 후 실행 전 상태로 초기화
+};
+
+function setRunningUI(running) {
+  $("btnStart").disabled = running;
+  $("btnStop").disabled = !running;
+  const dot = $("statusDot"), chip = $("statusChip");
+  dot.className = "dot" + (running ? " run" : "");
+  chip.className = "status-chip" + (running ? " run" : "");
+  chip.textContent = running ? "실행 중…" : "대기";
+}
+function setDoneUI() {
+  $("statusDot").className = "dot done";
+  $("statusChip").className = "status-chip done";
+  $("statusChip").textContent = "완료";
+  $("btnStart").disabled = false;
+  $("btnStop").disabled = true;
+}
+
+// ---- 로그 폴링 ----
+let logOffset = 0;
+let wasRunning = false;
+async function pollLogs() {
+  try {
+    const res = await api("/api/logs?offset=" + logOffset);
+    // 로그가 초기화(삭제/재생성)되면 서버가 offset 을 0 부터 다시 준다 → 화면도 비운다
+    if (res.offset < logOffset) { $("logView").textContent = "로그 없음"; logOffset = 0; }
+    if (res.data) {
+      const v = $("logView");
+      if (v.textContent === "로그 없음") v.textContent = "";
+      v.textContent += res.data;
+      logOffset = res.offset;
+      if ($("autoscroll").checked) v.scrollTop = v.scrollHeight;
+    }
+    if (res.running) { if(!wasRunning){setRunningUI(true);} wasRunning = true; }
+    else {
+      if (wasRunning) { setDoneUI(); loadResults(); }   // 방금 끝남
+      wasRunning = false;
+    }
+  } catch(e) {}
+}
+
+// ---- 진행 상황 ----
+function renderProgress(p) {
+  const stepper = $("stepper"); stepper.innerHTML = "";
+  p.stages.forEach((s, i) => {
+    const d = document.createElement("div");
+    d.className = "step " + s.status;
+    let ic = String(i + 1);
+    if (s.status === "done") ic = "✓";
+    else if (s.status === "skipped") ic = "–";
+    else if (s.status === "stopped") ic = "✕";
+    d.innerHTML = `<div class="ic">${ic}</div><div class="nm">${s.name}<br><small>${s.ko}</small></div>`;
+    stepper.appendChild(d);
+  });
+
+  const cp = $("curProgress");
+  if (p.running && p.current) {
+    cp.style.display = "block";
+    const st = p.stages.find(x => x.key === p.current) || {};
+    // "학습(Train) · 학습 스텝" 처럼 단계 + 세부 작업까지 표시
+    let label = `${st.ko || ""}(${st.name || p.current})`;
+    if (p.sub) label += ` · ${p.sub}`;
+    if (p.current_step != null && p.total_step != null)
+      label += ` ${p.current_step}/${p.total_step}`;
+    $("curLabel").textContent = label;
+    $("curPct").textContent = p.percent.toFixed(1) + "%";
+    $("curFill").style.width = p.percent + "%";
+    $("curDetail").textContent = p.detail || "";
+    // 헤더 상태칩에 현재 단계 + 진행률 표시
+    $("statusChip").textContent = `${st.ko || ""} ${Math.round(p.percent)}%`;
+  } else {
+    cp.style.display = "none";
+  }
+  $("ovFill").style.width = p.overall + "%";
+  $("ovPct").textContent = Math.round(p.overall) + "%";
+}
+
+async function pollProgress() {
+  try { renderProgress(await api("/api/progress")); } catch (e) {}
+}
+
+// ---- 결과 ----
+const CAT_ORDER = ["추론(Reasoning)","수학(Math)","글쓰기(Writing)","코딩(Coding)","이해(Understanding)","문법(Grammar)"];
+function sortCats(cats) {
+  return cats.slice().sort((a,b)=>{
+    const ia=CAT_ORDER.indexOf(a.category), ib=CAT_ORDER.indexOf(b.category);
+    return (ia<0?99:ia)-(ib<0?99:ib);
+  });
+}
+function verdict(avg) {
+  if (avg >= 7.5) return ["우수","good"];
+  if (avg >= 6.5) return ["양호","ok"];
+  return ["보통","mid"];
+}
+async function loadResults() {
+  const res = await api("/api/results");
+  if (!res.available) { $("emptyResult").style.display="block"; $("resultBody").style.display="none"; return; }
+  $("emptyResult").style.display="none"; $("resultBody").style.display="block";
+  $("r_single").textContent = res.single_turn.toFixed(2);
+  $("r_multi").textContent = res.multi_turn.toFixed(2);
+  $("r_overall").textContent = res.overall.toFixed(2);
+
+  const cats = sortCats(res.categories);
+  // bars
+  const bars = $("bars"); bars.innerHTML = "";
+  cats.forEach(c => {
+    const div = document.createElement("div");
+    div.className = "bar-row";
+    div.innerHTML = `<div class="cat-name">${c.category}</div>
+      <div class="track"><span class="tag">S</span><div class="rail"><div class="fill s" style="width:${c.single/10*100}%"></div></div><span class="val">${c.single.toFixed(2)}</span></div>
+      <div class="track"><span class="tag">M</span><div class="rail"><div class="fill m" style="width:${c.multi/10*100}%"></div></div><span class="val">${c.multi.toFixed(2)}</span></div>`;
+    bars.appendChild(div);
+  });
+  drawRadar(cats);
+  // table
+  const tb = $("tbody"); tb.innerHTML = "";
+  cats.forEach(c => {
+    const diff = c.multi - c.single;
+    const dcls = diff>0.001?"pos":(diff<-0.001?"neg":"zero");
+    const dtxt = (diff>0?"+":"") + diff.toFixed(2);
+    const [vt, vc] = verdict((c.single+c.multi)/2);
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${c.category}</td>
+      <td class="num c-blue">${c.single.toFixed(2)}</td>
+      <td class="num c-green">${c.multi.toFixed(2)}</td>
+      <td class="num ${dcls}">${dtxt}</td>
+      <td><span class="badge ${vc}">${vt}</span></td>`;
+    tb.appendChild(tr);
+  });
+  const dt = res.multi_turn - res.single_turn;
+  const dcls = dt>0.001?"pos":(dt<-0.001?"neg":"zero");
+  const tr = document.createElement("tr");
+  tr.style.borderTop = "1px solid var(--panel-border)";
+  tr.innerHTML = `<td><b>종합 (Overall)</b></td>
+    <td class="num c-blue">${res.single_turn.toFixed(2)}</td>
+    <td class="num c-green">${res.multi_turn.toFixed(2)}</td>
+    <td class="num ${dcls}">${(dt>0?"+":"")+dt.toFixed(2)}</td>
+    <td><span class="badge overall">${res.overall.toFixed(2)}</span></td>`;
+  tb.appendChild(tr);
+}
+
+function drawRadar(cats) {
+  const svg = $("radar");
+  const cx=160, cy=150, R=95, N=cats.length;
+  const ns="http://www.w3.org/2000/svg";
+  svg.innerHTML="";
+  const ang = i => (-Math.PI/2) + i*2*Math.PI/N;
+  const pt = (i,r) => [cx + r*Math.cos(ang(i)), cy + r*Math.sin(ang(i))];
+  // grid rings
+  for (let ring=1; ring<=4; ring++) {
+    const rr = R*ring/4;
+    let pts="";
+    for (let i=0;i<N;i++){ const [x,y]=pt(i,rr); pts+=`${x},${y} `; }
+    const poly=document.createElementNS(ns,"polygon");
+    poly.setAttribute("points",pts.trim());
+    poly.setAttribute("fill","none"); poly.setAttribute("stroke","#2a2e3a");
+    svg.appendChild(poly);
+  }
+  // spokes + labels
+  for (let i=0;i<N;i++){
+    const [x,y]=pt(i,R);
+    const l=document.createElementNS(ns,"line");
+    l.setAttribute("x1",cx);l.setAttribute("y1",cy);l.setAttribute("x2",x);l.setAttribute("y2",y);
+    l.setAttribute("stroke","#2a2e3a"); svg.appendChild(l);
+    const [lx,ly]=pt(i,R+16);
+    const t=document.createElementNS(ns,"text");
+    t.setAttribute("x",lx);t.setAttribute("y",ly);
+    t.setAttribute("fill","#8b90a0");t.setAttribute("font-size","10");
+    t.setAttribute("text-anchor", Math.abs(lx-cx)<8?"middle":(lx<cx?"end":"start"));
+    t.setAttribute("dominant-baseline","middle");
+    t.textContent = cats[i].category.replace(/\(.*\)/,"");
+    svg.appendChild(t);
+  }
+  const shape = (key,color,fill) => {
+    let pts="";
+    for (let i=0;i<N;i++){ const [x,y]=pt(i, R*cats[i][key]/10); pts+=`${x},${y} `; }
+    const poly=document.createElementNS(ns,"polygon");
+    poly.setAttribute("points",pts.trim());
+    poly.setAttribute("fill",fill); poly.setAttribute("stroke",color); poly.setAttribute("stroke-width","2");
+    svg.appendChild(poly);
+  };
+  shape("single","#4f7bff","rgba(79,123,255,0.18)");
+  shape("multi","#4bbf76","rgba(75,191,118,0.18)");
+}
+
+// ---- init ----
+loadSettings();
+(async function statusInit(){
+  const st = await api("/api/status");
+  if (st.running) {                      // 실행 중 새로고침: 현재 상태를 그대로 이어받는다
+    wasRunning = true;
+    setRunningUI(true);
+    loadResults();
+    pollProgress();
+  } else {
+    resetRunUI();                        // 처음 진입(대기 상태)에서는 화면을 초기화
+  }
+})();
+setInterval(() => { pollLogs(); pollProgress(); }, 1200);
+</script>
+</body>
+</html>

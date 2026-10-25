@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LM-Eval 벤치마크 평가</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <span class="dot" id="stateDot"></span>
+  <h1>벤치마크 평가</h1>
+  <span class="pipeline" id="pipelineText">파이프라인 · prepare → download → load → english → korean → generative → score</span>
+  <span class="badge" id="stateBadge">대기</span>
+</header>
+
+<div class="layout">
+
+  <!-- ================= 좌: 실험 설정 ================= -->
+  <aside class="panel side">
+    <h2 class="side-title">실험 설정</h2>
+
+    <label class="fld">MODEL (HuggingFace repo id)
+      <select id="model_preset"></select>
+    </label>
+
+    <label class="fld" id="modelPathFld">MODEL_PATH (repo id 또는 로컬 경로)
+      <input id="model_path" type="text" spellcheck="false"
+             placeholder="예: Qwen/Qwen3-8B">
+    </label>
+
+    <div class="modelstat" id="modelStat">-</div>
+
+    <label class="fld">RUN_DIR
+      <input id="run_dir" type="text" spellcheck="false">
+    </label>
+
+    <div class="infobox">
+      <div class="row"><span>resolved model</span><b id="i_resolved">-</b></div>
+      <div class="row"><span>model name</span><b id="i_name">-</b></div>
+      <div class="row"><span>HF_TOKEN</span><b id="i_token">-</b></div>
+      <div class="row"><span>results json</span><b id="i_results">-</b></div>
+      <div class="row"><span>run log</span><b id="i_log">-</b></div>
+    </div>
+
+    <div class="grid2">
+      <label class="fld">SEED<input id="seed" type="number"></label>
+      <label class="fld">GPU (CUDA_VISIBLE_DEVICES)<input id="gpus" type="text"></label>
+    </div>
+
+    <div class="grid2">
+      <label class="fld">BATCH_SIZE<input id="batch_size" type="text" placeholder="8 또는 auto"></label>
+      <label class="fld">MAX_LENGTH<input id="max_length" type="number"></label>
+    </div>
+
+    <div class="grid2">
+      <label class="fld">LIMIT (태스크당 샘플, 0=전체)<input id="limit" type="number" min="0"></label>
+      <label class="fld">NUM_FEWSHOT (빈칸=권장값)<input id="num_fewshot" type="text" placeholder="auto"></label>
+    </div>
+
+    <div class="grid2">
+      <label class="fld">DTYPE
+        <select id="dtype">
+          <option value="bfloat16">bfloat16</option>
+          <option value="float16">float16</option>
+          <option value="float32">float32</option>
+          <option value="auto">auto</option>
+        </select>
+      </label>
+      <label class="fld">CUSTOM_LANG
+        <select id="custom_lang">
+          <option value="auto">auto</option>
+          <option value="ko">ko (문자 단위)</option>
+          <option value="en">en (공백 단위)</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="checks">
+      <label><input type="checkbox" id="apply_chat_template"> chat template 적용 (IT 모델 권장)</label>
+      <label><input type="checkbox" id="fewshot_as_multiturn"> few-shot 을 멀티턴으로</label>
+      <label><input type="checkbox" id="log_samples"> 샘플별 예측 저장 (log_samples)</label>
+      <label><input type="checkbox" id="parallelize"> 여러 GPU 분산 (device_map=auto)</label>
+    </div>
+
+    <h3 class="sec">평가 항목 선택</h3>
+    <div class="quick">
+      <button class="mini" data-preset="all">전체</button>
+      <button class="mini" data-preset="core_en">영어</button>
+      <button class="mini" data-preset="korean">한국어</button>
+      <button class="mini" data-preset="generative">생성형</button>
+      <button class="mini" data-preset="default">기본</button>
+      <button class="mini" data-preset="none">해제</button>
+    </div>
+    <div id="taskGroups" class="taskgroups"></div>
+
+    <h3 class="sec">커스텀 파일 평가</h3>
+    <label class="fld">CUSTOM_FILE (json / jsonl / csv)
+      <input id="custom_file" type="text" spellcheck="false">
+    </label>
+    <label class="fld">CUSTOM_MAX_NEW_TOKENS
+      <input id="custom_max_new_tokens" type="number">
+    </label>
+    <label class="fld">CUSTOM_SYSTEM_PROMPT (선택)
+      <textarea id="custom_system_prompt" rows="2" spellcheck="false"></textarea>
+    </label>
+
+    <div class="btns">
+      <button id="btnRun" class="primary">▶ 실행 (평가)</button>
+      <button id="btnStop" class="danger" disabled>■ 중지</button>
+    </div>
+    <div class="btns">
+      <button id="btnSave">설정 저장</button>
+      <button id="btnReset">기본값 복원</button>
+    </div>
+
+    <p class="hint">
+      실행 시 설정을 <code>configs/default.yaml</code> 에 저장하고
+      <code>run_eval.py</code> 를 서브프로세스로 구동합니다. 진행 상황은
+      <code>RUN_DIR/status.json</code>, 로그는 <code>RUN_DIR/run.log</code>,
+      최종 결과는 <code>RUN_DIR/results.json</code> 에 기록됩니다.
+      LIMIT 을 비우거나 0 으로 두면 전체 데이터셋을 평가합니다(수 시간 소요).
+      모델이 캐시에 없으면 실행 시 HuggingFace 에서 자동으로 내려받습니다.
+      gated 모델(gemma 등)은 서버를 띄운 셸에서
+      <code>export HF_TOKEN=hf_xxx</code> 를 먼저 실행하세요.
+    </p>
+
+    <details class="details">
+      <summary>▶ config 파일 내용 보기 / 편집</summary>
+      <textarea id="rawYaml" rows="16" spellcheck="false"></textarea>
+      <div class="btns">
+        <button id="btnYamlSave">YAML 저장</button>
+        <button id="btnYamlReload">다시 읽기</button>
+      </div>
+      <div id="yamlMsg" class="msg"></div>
+    </details>
+
+    <details class="details" id="gpuDetails">
+      <summary>▶ GPU 상태</summary>
+      <div id="gpuInfo" class="gpuinfo">-</div>
+    </details>
+  </aside>
+
+  <!-- ================= 우: 결과 ================= -->
+  <main class="panel main">
+    <h2 class="main-title">벤치마크 평가 결과</h2>
+    <p class="main-sub" id="mainSub">
+      lm-evaluation-harness · 영어 core · 한국어(KoBEST/KMMLU) · 생성형(F1 / BLEU / ROUGE)
+    </p>
+
+    <!-- 진행 상황 -->
+    <section class="card">
+      <h3 class="card-title">실행 진행 상황</h3>
+      <div class="stages" id="stages"></div>
+      <div class="progline">
+        <span class="plabel">전체</span>
+        <div class="bar"><div class="fill blue" id="overallFill"></div></div>
+        <span class="pval" id="overallPct">0%</span>
+      </div>
+      <div class="progline">
+        <span class="plabel" id="currentLabel">현재</span>
+        <div class="bar"><div class="fill green" id="currentFill"></div></div>
+        <span class="pval" id="currentPct">0%</span>
+      </div>
+      <div class="meta" id="runMeta">대기 중 — 설정을 확인하고 [실행]을 누르세요.</div>
+      <div class="warnbox" id="warnBox" hidden></div>
+    </section>
+
+    <!-- 요약 카드 -->
+    <section class="cards4" id="summaryCards"></section>
+
+    <!-- 벤치마크 점수 + 레이더 -->
+    <section class="two">
+      <div class="card">
+        <h3 class="card-title">벤치마크별 점수</h3>
+        <div class="legend">
+          <span><i class="sw blue"></i>영어 core</span>
+          <span><i class="sw green"></i>한국어</span>
+          <span><i class="sw purple"></i>생성형</span>
+          <span><i class="sw amber"></i>커스텀</span>
+        </div>
+        <div id="benchList" class="benchlist">
+          <div class="empty">결과가 없습니다. 평가를 실행하세요.</div>
+        </div>
+      </div>
+      <div class="card">
+        <h3 class="card-title">카테고리 레이더 – 역량별 평균</h3>
+        <canvas id="radar" width="440" height="420"></canvas>
+        <div id="radarLegend" class="radarlegend"></div>
+      </div>
+    </section>
+
+    <!-- 생성형 지표 -->
+    <section class="card">
+      <h3 class="card-title">생성형 지표 (F1 / EM / BLEU / ROUGE)</h3>
+      <div class="tablewrap">
+        <table class="tbl" id="genTable">
+          <thead><tr>
+            <th>벤치마크</th><th>F1</th><th>EM</th><th>BLEU</th>
+            <th>ROUGE-1</th><th>ROUGE-2</th><th>ROUGE-L</th>
+          </tr></thead>
+          <tbody><tr><td colspan="7" class="empty">SQuADv2 / TruthfulQA-gen / 커스텀 평가를 선택하면 표시됩니다.</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 상세 지표 -->
+    <section class="card">
+      <h3 class="card-title">전체 지표 상세</h3>
+      <div class="tablewrap">
+        <table class="tbl" id="detailTable">
+          <thead><tr>
+            <th>벤치마크</th><th>task</th><th>few-shot</th><th>지표</th>
+            <th>값</th><th>stderr</th><th>n</th><th>소요(s)</th><th>상태</th>
+          </tr></thead>
+          <tbody><tr><td colspan="9" class="empty">-</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 로그 -->
+    <section class="card">
+      <h3 class="card-title">
+        실행 로그
+        <label class="tail"><input type="checkbox" id="autoScroll" checked> 자동 스크롤</label>
+      </h3>
+      <pre id="logBox" class="logbox">(로그 없음)</pre>
+    </section>
+  </main>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

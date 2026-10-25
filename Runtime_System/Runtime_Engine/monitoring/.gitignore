@@ -1,0 +1,2 @@
+# Prometheus runtime TSDB data (generated at runtime, not source)
+prometheus/data/

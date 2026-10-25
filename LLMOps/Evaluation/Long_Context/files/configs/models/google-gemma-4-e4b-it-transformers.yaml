@@ -1,0 +1,13 @@
+id: "google-gemma-4-e4b-it-transformers"
+runtime:
+  sdk: "transformers"
+  api: "generate"
+client: {}
+request:
+  model: "google/gemma-4-E4B-it"
+  max_tokens: 128
+  temperature: 0.0
+  dtype: "bfloat16"
+  device: "cuda"
+  trust_remote_code: true
+  do_sample: false

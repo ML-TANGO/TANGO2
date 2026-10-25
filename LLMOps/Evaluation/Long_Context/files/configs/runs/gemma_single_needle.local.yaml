@@ -1,0 +1,24 @@
+run_name: "gemma-4-e4b-it-single-needle"
+model: "google-gemma-4-e4b-it-transformers"
+
+task:
+  type: "single"
+
+haystack:
+  type: "files"
+  path: "PaulGrahamEssays"
+
+sweep:
+  context_lengths: [4096, 8192, 16384, 32768]
+  depth_percents: [50]
+  seeds: [1]
+
+runner:
+  concurrency: 1
+  retries: 0
+  sleep_between_seconds: 0
+  resume: true
+
+store:
+  type: "jsonl"
+  path: "results/gemma-4-e4b-it-single-needle.jsonl"

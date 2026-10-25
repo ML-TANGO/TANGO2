@@ -349,7 +349,7 @@ const AddModel = ({ data, type }) => {
     }
   };
 
-  // POST Submit Model
+  // POST Submit TrainingPage
   const postModel = async () => {
     setLoading(true);
     // External training 분기 — manifest_name/version 만 보내고 huggingface 필드는
@@ -710,8 +710,8 @@ const AddModel = ({ data, type }) => {
                   secondIcon={IconSmile}
                   menuOptions={menuOptions}
                   title={{
-                    first: 'Model 1',
-                    second: 'Model 2',
+                    first: 'TrainingPage 1',
+                    second: 'TrainingPage 2',
                   }}
                   t={t}
                 />

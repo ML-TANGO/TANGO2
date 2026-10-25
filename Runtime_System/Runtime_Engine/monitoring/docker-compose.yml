@@ -1,3 +1,7 @@
+networks:
+  obsnet:
+    driver: bridge
+
 services:
   prometheus:
     image: docker.io/bitnami/prometheus:latest
@@ -10,6 +14,8 @@ services:
       - ./prometheus/config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       # Collected data
       - prometheus-data:/opt/bitnami/prometheus/data
+    networks: [obsnet]
+
 
   grafana:
     image: docker.io/grafana/grafana:latest
@@ -25,7 +31,35 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
     depends_on:
       - prometheus
+    networks: [obsnet]
+  
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: otel-collector
+    restart: unless-stopped
+    ports:
+      - "13133:13133"
+      - "4317:4317"
+      - "4318:4318"
+      - "8889:8889"
+    volumes:
+      - ./otel/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    depends_on:
+      - tempo
+    networks: [obsnet]
+
+  tempo:
+    image: grafana/tempo:latest
+    command: [ "-config.file=/etc/tempo.yaml" ]
+    container_name: tempo
+    ports:
+      - "3200:3200"
+    volumes:
+      - ./grafana/tempo/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    networks: [obsnet]
 
 volumes:
   prometheus-data:
   grafana-data:
+  tempo-data:
