@@ -1,0 +1,9 @@
+# The repo root ignores build/; here build/ is the Docker build context and holds the code.
+!build/
+
+# never commit weights, keys or data
+*.pt
+*.env
+hf_cache/
+data/
+out/

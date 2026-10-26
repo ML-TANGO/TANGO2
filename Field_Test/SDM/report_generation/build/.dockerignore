@@ -1,0 +1,23 @@
+# The CT volumes are gigabytes and never belong in the build context — they are
+# mounted at run time. Same for the bundle tarball the image is built from.
+data/
+test/
+*.tar.gz
+out/
+inference_bundle/out/
+inference_bundle/export_probe.py
+inference_bundle/export_ject.py
+**/__pycache__/
+*.pyc
+*.log
+.git/
+
+# live API credential - must never enter an image layer
+key.txt
+*.key
+.env.secret
+demo_data/
+test_data/
+test_d2_top/
+labeler.env
+*.env

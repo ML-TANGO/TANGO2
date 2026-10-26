@@ -1,0 +1,10 @@
+# Pinned to the versions that produced our reported numbers.
+#
+# transformers 5.14.1 specifically: 5.15 refactored Gemma3's
+# prepare_inputs_for_generation to **kwargs, and generate() then rejects the
+# inputs_embeds this model needs. src/pipeline.py works around that so a newer
+# transformers still runs, but 5.14.1 is the validated one.
+transformers==5.14.1
+peft==0.20.0
+numpy>=1.22,<3
+# torch comes from the base image (2.5.1 + cu121). Outside Docker, torch>=2.5.
