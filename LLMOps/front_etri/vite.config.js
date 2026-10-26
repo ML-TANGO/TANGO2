@@ -1,7 +1,14 @@
 import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv } from 'vite';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 
-const path = require('path');
+import { inspectorServer } from '@react-dev-inspector/vite-plugin';
+
+// ESM 환경 대응을 위한 고유 경로 설정
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 function I18nHotReload() {
   return {
@@ -17,14 +24,10 @@ function I18nHotReload() {
   };
 }
 
-// Serves /api/model-config?model_id=xxx → returns config.json from the local
-// checkpoint directory so the browser can build the architecture graph directly.
 function ModelConfigPlugin() {
   return {
     name: 'model-config-api',
     configureServer(server) {
-      const fs = require('fs');
-
       const MODEL_PATHS = {
         'llama-single': '/home/etri/Downloads/Llama-3.1-8B-Instruct',
       };
@@ -51,13 +54,10 @@ function ModelConfigPlugin() {
   };
 }
 
-// Serves /sds-dataset/** from a local filesystem path configured via VITE_SDS_DATASET_PATH.
-// Each machine sets its own path in .env (gitignored).
 function SdsDatasetPlugin(datasetPath) {
   return {
     name: 'sds-dataset',
     configureServer(server) {
-      const fs = require('fs');
       const mime = {
         '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
         '.gif': 'image/gif', '.webp': 'image/webp',
@@ -81,11 +81,16 @@ function SdsDatasetPlugin(datasetPath) {
   };
 }
 
-// https://vitejs.dev/config/
 const config = ({ mode }) => {
-  // process.env = { ...process.env, ...loadEnv(mode, process.cwd()) };
   const envDir = path.resolve(__dirname, '.');
   const env = loadEnv(mode, envDir, '');
+  
+  if (env.REACT_EDITOR) {
+    process.env.REACT_EDITOR = env.REACT_EDITOR;
+  }
+  console.log('[DEBUG] env.REACT_EDITOR:', env.REACT_EDITOR);
+  console.log('[DEBUG] process.env.REACT_EDITOR:', process.env.REACT_EDITOR);
+
   const isLocal = env.VITE_REACT_APP_API_HOST === 'local';
   const sdsDatasetPath = path.resolve(__dirname, env.VITE_SDS_DATASET_PATH ?? '../../Field_Test/SDS/dataset/20260227/');
 
@@ -98,7 +103,13 @@ const config = ({ mode }) => {
       },
     },
     envDir: './',
-    plugins: [react(), I18nHotReload(), ModelConfigPlugin(), SdsDatasetPlugin(sdsDatasetPath)],
+    plugins: [
+      react(),
+      inspectorServer(),
+      I18nHotReload(),
+      ModelConfigPlugin(),
+      SdsDatasetPlugin(sdsDatasetPath)
+    ].filter(Boolean), // null 값 제거 시팅
     build: {
       outDir: 'build',
     },
@@ -108,7 +119,6 @@ const config = ({ mode }) => {
       ...(isLocal && {
         proxy: {
           '/api': {
-            // target: 'http://115.71.28.100/api',
             target: 'http://115.71.28.72/api',
             changeOrigin: true,
             rewrite: (path) => path.replace(/^\/api/, ''),
@@ -123,10 +133,7 @@ const config = ({ mode }) => {
       preprocessorOptions: {
         scss: {
           api: 'modern',
-          silenceDeprecations: [
-            'legacy-js-api', // JS 레거시 API 경고
-            'import', // @import 경고
-          ],
+          silenceDeprecations: ['legacy-js-api', 'import'],
         },
         sass: {
           api: 'modern',

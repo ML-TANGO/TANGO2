@@ -2,7 +2,7 @@
 # demo/run.sh — VLM SDS 데모 실행 스크립트
 set -euo pipefail
 
-PYTHON=/home/ywlee/miniconda3/envs/eva/bin/python
+PYTHON=$HOME/miniforge3/envs/eva/bin/python
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 PORT=${1:-7860}

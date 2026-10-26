@@ -78,7 +78,7 @@ function useDeploymentOutputTypeBox(deploymentInputValueState) {
       checked: false,
     },
     {
-      label: '3D Object Model',
+      label: '3D Object TrainingPage',
       subtext: ['deploymentOutputTypes.obj.message'],
       value: 'obj',
       checked: false,

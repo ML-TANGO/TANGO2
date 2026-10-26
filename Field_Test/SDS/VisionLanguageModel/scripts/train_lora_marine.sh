@@ -72,4 +72,6 @@ $LAUNCHER "$ROOT/train_text_lora.py" \
 
 echo ""
 echo "LoRA adapter saved to: $OUTPUT_DIR"
-echo "projector.bin copied from: $LORA_PATH"
+# vlm_config.json travels with the weights: it records which projector
+# architecture produced them, which is what the inference paths rebuild from.
+echo "projector.bin and vlm_config.json copied from: $LORA_PATH"

@@ -181,7 +181,7 @@ class BuiltinModelFormModalContainer extends PureComponent {
         checked: false,
       },
       {
-        label: '3D Object Model',
+        label: '3D Object TrainingPage',
         subtext: ['deploymentOutputTypes.obj.message'],
         value: 'obj',
         checked: false,
@@ -250,7 +250,7 @@ class BuiltinModelFormModalContainer extends PureComponent {
    ================================================================================ */
 
   /**
-   * Model 선택 항목 가져오기
+   * TrainingPage 선택 항목 가져오기
    */
   getOptions = async () => {
     const response = await callApi({
@@ -266,7 +266,7 @@ class BuiltinModelFormModalContainer extends PureComponent {
   };
 
   /**
-   * Model 선택 항목 세팅하기
+   * TrainingPage 선택 항목 세팅하기
    */
   setOptions = async (type) => {
     const options = await this.getOptions();

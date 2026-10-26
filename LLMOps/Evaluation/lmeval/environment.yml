@@ -1,0 +1,49 @@
+# ===========================================================================
+# conda 환경 정의 — lm-eval 벤치마크 평가 대시보드
+#
+#   conda env create -f environment.yml
+#   conda activate lmeval
+#   python app.py --port 7860
+#
+# 검증 환경: Ubuntu / A100 80GB x2 / conda 25.x
+#   → python 3.11, torch 2.13.0+cu130, transformers 5.16.0.dev0, lm_eval 0.4.12
+#
+# torch 는 PyPI 기본 휠(CUDA 13)을 사용합니다. 드라이버가 CUDA 12 세대라면
+# 아래 --extra-index-url 을 cu126/cu128 로 바꾸고 torch 버전을 낮추세요.
+# ===========================================================================
+name: lmeval
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip>=24.0
+  - git                       # transformers main 설치용
+  - pip:
+      # ---- 런타임 --------------------------------------------------------
+      # CUDA 12 드라이버라면: --extra-index-url https://download.pytorch.org/whl/cu128
+      - torch>=2.6.0
+      - accelerate>=1.4.0
+      # gemma-4 지원(Gemma4ForConditionalGeneration)은 transformers main 필요
+      - transformers @ git+https://github.com/huggingface/transformers.git@main
+      - sentencepiece>=0.2.0
+      - protobuf>=4.25.0
+      - safetensors>=0.4.5
+      - huggingface_hub>=0.30.0
+      - timm>=1.0.0
+      # ---- 평가 하네스 ---------------------------------------------------
+      - lm_eval[math,ifeval,sentencepiece]>=0.4.9
+      - datasets>=3.0.0
+      - evaluate>=0.4.3
+      - sacrebleu>=2.4.3
+      - rouge_score>=0.1.2
+      - nltk>=3.9
+      - absl-py>=2.1.0
+      - scikit-learn>=1.5.0
+      - sqlitedict>=2.1.0
+      - immutabledict>=4.2.0
+      - langdetect>=1.0.9
+      - pycountry>=24.6.1
+      - jsonlines>=4.0.0
+      # ---- 웹 대시보드 ---------------------------------------------------
+      - Flask>=3.0.0
+      - PyYAML>=6.0.2

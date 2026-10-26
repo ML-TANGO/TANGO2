@@ -1,7 +1,9 @@
 """Synthetic-demo Generator.
 
-Calls an LM with a (generation_prompt, seed examples) prompt and parses the
-JSONL synthetic examples it returns.
+Calls an LM with real examples of the task and parses the JSONL synthetic
+examples it returns. Each synthetic example records which real examples it was
+generated from (``Example.origin``), so scoring can keep it out of those
+examples' own prompts.
 """
 
 from __future__ import annotations
@@ -16,75 +18,109 @@ from src.optimizer.task import Example
 ChatMessage = dict[str, str]
 LMFn = Callable[[Sequence[ChatMessage]], str]
 
-DEFAULT_GENERATION_PROMPT = """You generate high-quality synthetic training examples for a downstream task.
+GENERATION_PROMPT = """You write new examples for a task, given real examples of it. A new example must be indistinguishable from the real ones:
 
-You will be shown a few seed examples. Produce {n_new} NEW example(s) that are
-correct, realistic, diverse, and COMPLEMENTARY to the seeds — cover cases the
-seeds likely miss; do not paraphrase the seeds or repeat each other.
+- inputs: exactly the same format and fields as the real inputs, realistic values in the same ranges, but a different situation from every real example (do not copy an input).
+- outputs: the correct output for YOUR inputs, written the way the real outputs are written: same structure and sentence order, similar length, the same wording habits, the same number formatting (rounding) and the same level of detail. Every value or category an output states about its input must be right for your inputs. Details the real outputs add beyond their inputs may be invented in the same style.
 
-Output EXACTLY {n_new} line(s). Each line is one JSON object on its own line:
-{"inputs": {...}, "outputs": {...}}
-The "inputs" and "outputs" keys must match the seed examples' schema exactly.
+Work in a "notes" field first: list the facts of your inputs that the output must state, and derive anything the output concludes from them. Then write the output."""
+
+VARIATION_PROMPT = """You write a new training example for a task by varying a real one. The new example must keep every conclusion of the real output true:
+
+- inputs: exactly the same format and fields as the real inputs. Change the values a little — identifiers, times, sizes, and small changes to the other numbers — so that it stays the same kind of situation and every conclusion the real output states still holds for the new inputs. Do not copy the real inputs unchanged.
+- outputs: the output for the NEW inputs, written the way the real output is written: same structure and sentence order, the same wording habits, the same number formatting and level of detail. Keep its conclusions, update every value it takes from the inputs, and details that do not depend on the inputs may be varied in the same style.
+
+Work in a "notes" field first: list the values you changed and check that each conclusion of the real output still holds for them. Then write the example."""
+
+# Appended after the generation prompt; ``_parse`` depends on it.
+OUTPUT_FORMAT = """Output EXACTLY {n_new} line(s). Each line is one JSON object on its own line:
+{"notes": "...", "inputs": {...}, "outputs": {...}}
+The "inputs" and "outputs" keys must match the real examples' schema exactly.
 No commentary, no numbering, no markdown fences."""
 
 
 class Generator:
-    """Calls an LM with a (generation_prompt, seed examples) prompt and parses
+    """Calls an LM with a (generation prompt, real examples) prompt and parses
     JSONL synthetic examples.
 
-    The LM interface matches GEPA's chat callable
-    (``Sequence[{role, content}] -> str``), so a ``gepa.lm.LM`` instance,
-    OpenAI-style wrapper, or a test closure can be passed directly.
+    The LM interface is a chat callable (``Sequence[{role, content}] -> str``),
+    so an OpenAI-style wrapper or a test closure can be passed directly.
     """
 
-    def __init__(self, lm: LMFn, *, n_per_call: int = 4) -> None:
+    def __init__(self, lm: LMFn, *, n_per_call: int = 3) -> None:
         self.lm = lm
         self.n_per_call = n_per_call
 
     def generate(
         self,
-        generation_prompt: str,
         seeds: Sequence[Example],
         input_keys: Sequence[str],
         output_keys: Sequence[str],
         *,
         n: int | None = None,
-        task_instruction: str | None = None,
+        guidance: str | None = None,
     ) -> list[Example]:
+        """New examples in the style of ``seeds`` (only ``input_keys`` /
+        ``output_keys`` are shown and parsed). ``guidance`` is extra direction
+        for this call, e.g. what earlier synthetic examples got wrong."""
         n = n if n is not None else self.n_per_call
         if n <= 0:
             return []
-        # Plain string replacement (not str.format) so reflection-mutated
-        # prompts are robust to stray ``{...}`` in JSON; only ``{n_new}`` is
-        # reserved.
-        system = generation_prompt.replace("{n_new}", str(n))
-        user = self._format_user_message(seeds, n, task_instruction)
+        system = f"{GENERATION_PROMPT}\n\n{OUTPUT_FORMAT}".replace("{n_new}", str(n))
         messages: list[ChatMessage] = [
             {"role": "system", "content": system},
-            {"role": "user", "content": user},
+            {"role": "user", "content": self._format_user_message(seeds, input_keys, output_keys, n, guidance)},
         ]
         raw = self.lm(messages)
-        results = self._parse(raw, input_keys, output_keys)
+        results = self._parse(raw, input_keys, output_keys)[:n]
         if not results:
             preview = raw[:800] if isinstance(raw, str) else repr(raw)[:800]
-            print(
-                f"[generator debug] _parse() returned 0 demos. "
-                f"raw type={type(raw).__name__}, len={len(raw) if isinstance(raw, str) else 'N/A'}; "
-                f"first 800 chars:\n{preview!r}"
-            )
-        return results
+            print(f"[generator] parsed 0 examples; first 800 chars of the reply:\n{preview!r}")
+        origin = tuple(s.key for s in seeds)
+        return [Example(inputs=r.inputs, outputs=r.outputs, origin=origin) for r in results]
+
+    def vary(
+        self,
+        seed: Example,
+        input_keys: Sequence[str],
+        output_keys: Sequence[str],
+        *,
+        n: int = 1,
+    ) -> list[Example]:
+        """``n`` variations of one real example that keep its conclusions true
+        (its decisive inputs barely change, so its labels stay right). Each
+        records that one example as its origin."""
+        if n <= 0:
+            return []
+        system = f"{VARIATION_PROMPT}\n\n{OUTPUT_FORMAT}".replace("{n_new}", str(n))
+        shown = {"inputs": {k: seed.inputs[k] for k in input_keys if k in seed.inputs},
+                 "outputs": {k: seed.outputs[k] for k in output_keys if k in seed.outputs}}
+        user = f"Real example:\n{json.dumps(shown, ensure_ascii=False)}\n\nNow produce {n} variation(s)."
+        raw = self.lm([{"role": "system", "content": system}, {"role": "user", "content": user}])
+        results = [r for r in self._parse(raw, input_keys, output_keys)[:n] if r.inputs != shown["inputs"]]
+        if not results:
+            preview = raw[:400] if isinstance(raw, str) else repr(raw)[:400]
+            print(f"[generator] no usable variation; first 400 chars of the reply:\n{preview!r}")
+        return [Example(inputs=r.inputs, outputs=r.outputs, origin=(seed.key,)) for r in results]
 
     @staticmethod
-    def _format_user_message(seeds: Sequence[Example], n: int, task_instruction: str | None) -> str:
-        lines = [f"{i}. {json.dumps(ex.to_dict(), ensure_ascii=False)}" for i, ex in enumerate(seeds, 1)]
-        seeds_block = "\n".join(lines) if lines else "(no seed examples — invent reasonable ones from scratch)"
-        parts = [f"Seed examples:\n{seeds_block}"]
-        if task_instruction:
-            parts.append(
-                "The downstream model is given this exact instruction when solving the task:\n"
-                f'"""\n{task_instruction}\n"""\n'
-                "Generate examples whose (inputs -> outputs) this instruction should handle well."
-            )
+    def _format_user_message(
+        seeds: Sequence[Example],
+        input_keys: Sequence[str],
+        output_keys: Sequence[str],
+        n: int,
+        guidance: str | None,
+    ) -> str:
+        lines = []
+        for i, ex in enumerate(seeds, 1):
+            shown = {
+                "inputs": {k: ex.inputs[k] for k in input_keys if k in ex.inputs},
+                "outputs": {k: ex.outputs[k] for k in output_keys if k in ex.outputs},
+            }
+            lines.append(f"{i}. {json.dumps(shown, ensure_ascii=False)}")
+        parts = ["Real examples:\n" + ("\n".join(lines) if lines else "(none)")]
+        if guidance:
+            parts.append(f"Guidance for this batch:\n{guidance}")
         parts.append(f"Now produce {n} new example(s).")
         return "\n\n".join(parts)
 
@@ -94,8 +130,7 @@ class Generator:
         input_keys: Sequence[str],
         output_keys: Sequence[str],
     ) -> list[Example]:
-        # Fast path: line-by-line JSONL (the canonical format the seed
-        # generation prompt asks for: one JSON object per line, no fences).
+        # Fast path: line-by-line JSONL (the format the prompt asks for).
         results: list[Example] = []
         for line in raw.splitlines():
             line = re.sub(r"^\s*\d+[\.\)]\s*", "", line).strip()

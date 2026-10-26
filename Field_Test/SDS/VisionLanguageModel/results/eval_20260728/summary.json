@@ -1,0 +1,730 @@
+{
+  "qwen3_clean": {
+    "pred_file": "qwen3_clean.jsonl",
+    "n": 1000,
+    "surface": {
+      "BLEU": 6.30933623830079e-09,
+      "BLEU-1": 7.782487149427361,
+      "BLEU-2": 0.004955892556249381,
+      "BLEU-3": 0.002750577621300473,
+      "BLEU-4": 0.0015453084435653357,
+      "chrF++": 0.49481418886022416,
+      "chrF": 0.48384648490042953,
+      "TER": 99.54562028440805,
+      "TER_n": 200,
+      "ROUGE-1": 0.9119793135053821,
+      "ROUGE-2": 0.0,
+      "ROUGE-L": 0.9092375073119332,
+      "METEOR": 0.28041888835973044,
+      "CIDEr-D": 1.3817969323909268e-146
+    },
+    "semantic": {
+      "BERTScore-P": 35.23351550102234,
+      "BERTScore-R": 28.693506121635437,
+      "BERTScore-F1": 31.60962164402008,
+      "BERTScore_model": "klue/roberta-large"
+    },
+    "content": {
+      "hangul_ratio_mean": 0.0,
+      "korean_output_pct": 0.0,
+      "multi_paragraph_pct": 0.0,
+      "sds_format_pct": 0.0,
+      "empty_pct": 0.0,
+      "pred_len_median": 49.0,
+      "pred_len_mean": 52.405,
+      "encounter_acc": 0.0,
+      "encounter_n": 1000,
+      "role_acc": 0.0,
+      "role_n": 940,
+      "turn_dir_acc": 0.0,
+      "turn_dir_n": 603,
+      "vessel_count_vs_ref_acc": 0.0,
+      "vessel_count_n": 810,
+      "colreg_precision": 0.0,
+      "colreg_recall": 0.0,
+      "colreg_f1": 0.0,
+      "colreg_tp": 0,
+      "colreg_fp": 0,
+      "colreg_fn": 777,
+      "port_turn_violation_pct": 0.0,
+      "port_turn_cases": 601,
+      "advises_turn_pct": 0.0,
+      "numeric": {
+        "cpa": {
+          "within_tol": null,
+          "mae": null,
+          "median_ae": null,
+          "n": 0,
+          "coverage": 0.0
+        },
+        "tcpa": {
+          "within_tol": null,
+          "mae": null,
+          "median_ae": null,
+          "n": 0,
+          "coverage": 0.0
+        },
+        "own_course": {
+          "within_tol": null,
+          "mae": null,
+          "median_ae": null,
+          "n": 0,
+          "coverage": 0.0
+        },
+        "own_speed": {
+          "within_tol": null,
+          "mae": null,
+          "median_ae": null,
+          "n": 0,
+          "coverage": 0.0
+        },
+        "tgt_course": {
+          "within_tol": null,
+          "mae": null,
+          "median_ae": null,
+          "n": 0,
+          "coverage": 0.0
+        },
+        "tgt_speed": {
+          "within_tol": null,
+          "mae": null,
+          "median_ae": null,
+          "n": 0,
+          "coverage": 0.0
+        }
+      },
+      "numeric_tolerance": {
+        "cpa": 0.05,
+        "tcpa": 5.0,
+        "own_course": 1.0,
+        "own_speed": 0.1,
+        "tgt_course": 1.0,
+        "tgt_speed": 0.1
+      }
+    }
+  },
+  "qwen3_marine": {
+    "pred_file": "qwen3_marine.jsonl",
+    "n": 1000,
+    "surface": {
+      "BLEU": 2.1018895406339175,
+      "BLEU-1": 19.151910389614336,
+      "BLEU-2": 3.937281486516556,
+      "BLEU-3": 1.0960989882868752,
+      "BLEU-4": 0.23614633712496436,
+      "chrF++": 14.48013084805138,
+      "chrF": 16.66520273590956,
+      "TER": 168.2831739264578,
+      "TER_n": 200,
+      "ROUGE-1": 24.918967051934427,
+      "ROUGE-2": 5.149912983639726,
+      "ROUGE-L": 12.670117092189791,
+      "METEOR": 17.921039587924113,
+      "CIDEr-D": 3.637810430836199e-14
+    },
+    "semantic": {
+      "BERTScore-P": 49.8302161693573,
+      "BERTScore-R": 55.6863009929657,
+      "BERTScore-F1": 52.55456566810608,
+      "BERTScore_model": "klue/roberta-large"
+    },
+    "content": {
+      "hangul_ratio_mean": 63.27948802919526,
+      "korean_output_pct": 94.6,
+      "multi_paragraph_pct": 100.0,
+      "sds_format_pct": 0.0,
+      "empty_pct": 0.0,
+      "pred_len_median": 754.5,
+      "pred_len_mean": 766.247,
+      "encounter_acc": 0.1,
+      "encounter_n": 1000,
+      "role_acc": 0.0,
+      "role_n": 940,
+      "turn_dir_acc": 0.0,
+      "turn_dir_n": 603,
+      "vessel_count_vs_ref_acc": 0.0,
+      "vessel_count_n": 810,
+      "colreg_precision": 0.0,
+      "colreg_recall": 0.0,
+      "colreg_f1": 0.0,
+      "colreg_tp": 0,
+      "colreg_fp": 9,
+      "colreg_fn": 777,
+      "port_turn_violation_pct": 0.0,
+      "port_turn_cases": 601,
+      "advises_turn_pct": 0.0,
+      "numeric": {
+        "cpa": {
+          "within_tol": 74.3801652892562,
+          "mae": 0.42726666666666674,
+          "median_ae": 0.0,
+          "n": 363,
+          "coverage": 36.3
+        },
+        "tcpa": {
+          "within_tol": 82.67716535433071,
+          "mae": 101.76175853018371,
+          "median_ae": 0.0,
+          "n": 381,
+          "coverage": 38.1
+        },
+        "own_course": {
+          "within_tol": null,
+          "mae": null,
+          "median_ae": null,
+          "n": 0,
+          "coverage": 0.0
+        },
+        "own_speed": {
+          "within_tol": null,
+          "mae": null,
+          "median_ae": null,
+          "n": 0,
+          "coverage": 0.0
+        },
+        "tgt_course": {
+          "within_tol": null,
+          "mae": null,
+          "median_ae": null,
+          "n": 0,
+          "coverage": 0.0
+        },
+        "tgt_speed": {
+          "within_tol": null,
+          "mae": null,
+          "median_ae": null,
+          "n": 0,
+          "coverage": 0.0
+        }
+      },
+      "numeric_tolerance": {
+        "cpa": 0.05,
+        "tcpa": 5.0,
+        "own_course": 1.0,
+        "own_speed": 0.1,
+        "tgt_course": 1.0,
+        "tgt_speed": 0.1
+      }
+    }
+  },
+  "qwen3_sds9k": {
+    "pred_file": "qwen3_sds9k.jsonl",
+    "n": 1000,
+    "surface": {
+      "BLEU": 57.54102478136039,
+      "BLEU-1": 79.87845857681486,
+      "BLEU-2": 62.83380494678596,
+      "BLEU-3": 51.72026408876701,
+      "BLEU-4": 43.770353115692615,
+      "chrF++": 61.91949897953478,
+      "chrF": 63.14122229255978,
+      "TER": 34.65346534653465,
+      "TER_n": 200,
+      "ROUGE-1": 79.57900626247577,
+      "ROUGE-2": 62.65620805642088,
+      "ROUGE-L": 72.20848329563773,
+      "METEOR": 73.9830589115085,
+      "CIDEr-D": 142.09113587525596
+    },
+    "semantic": {
+      "BERTScore-P": 87.60677576065063,
+      "BERTScore-R": 87.52549290657043,
+      "BERTScore-F1": 87.5560462474823,
+      "BERTScore_model": "klue/roberta-large"
+    },
+    "content": {
+      "hangul_ratio_mean": 79.17690952173486,
+      "korean_output_pct": 100.0,
+      "multi_paragraph_pct": 100.0,
+      "sds_format_pct": 100.0,
+      "empty_pct": 0.0,
+      "pred_len_median": 380.0,
+      "pred_len_mean": 379.858,
+      "encounter_acc": 99.5,
+      "encounter_n": 1000,
+      "role_acc": 97.23404255319149,
+      "role_n": 940,
+      "turn_dir_acc": 82.4212271973466,
+      "turn_dir_n": 603,
+      "vessel_count_vs_ref_acc": 86.54320987654322,
+      "vessel_count_n": 810,
+      "colreg_precision": 86.1271676300578,
+      "colreg_recall": 95.88159588159589,
+      "colreg_f1": 90.74299634591961,
+      "colreg_tp": 745,
+      "colreg_fp": 120,
+      "colreg_fn": 32,
+      "port_turn_violation_pct": 0.16638935108153077,
+      "port_turn_cases": 601,
+      "advises_turn_pct": 68.1,
+      "numeric": {
+        "cpa": {
+          "within_tol": 96.2,
+          "mae": 0.012759200000000002,
+          "median_ae": 0.0,
+          "n": 1000,
+          "coverage": 100.0
+        },
+        "tcpa": {
+          "within_tol": 96.0,
+          "mae": 32.866639999999975,
+          "median_ae": 0.20000000000004547,
+          "n": 1000,
+          "coverage": 100.0
+        },
+        "own_course": {
+          "within_tol": 100.0,
+          "mae": 0.03334340382678683,
+          "median_ae": 0.020000000000038654,
+          "n": 993,
+          "coverage": 99.3
+        },
+        "own_speed": {
+          "within_tol": 100.0,
+          "mae": 0.02623363544813688,
+          "median_ae": 0.029999999999997584,
+          "n": 993,
+          "coverage": 99.3
+        },
+        "tgt_course": {
+          "within_tol": 96.0,
+          "mae": 4.819290000000031,
+          "median_ae": 0.029999999999972715,
+          "n": 1000,
+          "coverage": 100.0
+        },
+        "tgt_speed": {
+          "within_tol": 96.2,
+          "mae": 0.12533000000000016,
+          "median_ae": 0.02999999999999936,
+          "n": 1000,
+          "coverage": 100.0
+        }
+      },
+      "numeric_tolerance": {
+        "cpa": 0.05,
+        "tcpa": 5.0,
+        "own_course": 1.0,
+        "own_speed": 0.1,
+        "tgt_course": 1.0,
+        "tgt_speed": 0.1
+      }
+    }
+  },
+  "llama31_clean": {
+    "pred_file": "llama31_clean.jsonl",
+    "n": 1000,
+    "surface": {
+      "BLEU": 2.7315598215999015e-11,
+      "BLEU-1": 4.97379007680117,
+      "BLEU-2": 0.006941552131056504,
+      "BLEU-3": 0.004030307915524746,
+      "BLEU-4": 0.0024024601191620218,
+      "chrF++": 0.46127493552264476,
+      "chrF": 0.45142154385475725,
+      "TER": 99.91305079516451,
+      "TER_n": 200,
+      "ROUGE-1": 0.4368711997757856,
+      "ROUGE-2": 0.0,
+      "ROUGE-L": 0.43045265380164055,
+      "METEOR": 0.1684030652881718,
+      "CIDEr-D": 2.901485967553129e-113
+    },
+    "semantic": {
+      "BERTScore-P": 34.643375873565674,
+      "BERTScore-R": 28.07202935218811,
+      "BERTScore-F1": 30.99033832550049,
+      "BERTScore_model": "klue/roberta-large"
+    },
+    "content": {
+      "hangul_ratio_mean": 0.0,
+      "korean_output_pct": 0.0,
+      "multi_paragraph_pct": 0.0,
+      "sds_format_pct": 0.0,
+      "empty_pct": 0.0,
+      "pred_len_median": 35.0,
+      "pred_len_mean": 38.253,
+      "encounter_acc": 0.0,
+      "encounter_n": 1000,
+      "role_acc": 0.0,
+      "role_n": 940,
+      "turn_dir_acc": 0.0,
+      "turn_dir_n": 603,
+      "vessel_count_vs_ref_acc": 0.0,
+      "vessel_count_n": 810,
+      "colreg_precision": 0.0,
+      "colreg_recall": 0.0,
+      "colreg_f1": 0.0,
+      "colreg_tp": 0,
+      "colreg_fp": 0,
+      "colreg_fn": 777,
+      "port_turn_violation_pct": 0.0,
+      "port_turn_cases": 601,
+      "advises_turn_pct": 0.0,
+      "numeric": {
+        "cpa": {
+          "within_tol": null,
+          "mae": null,
+          "median_ae": null,
+          "n": 0,
+          "coverage": 0.0
+        },
+        "tcpa": {
+          "within_tol": null,
+          "mae": null,
+          "median_ae": null,
+          "n": 0,
+          "coverage": 0.0
+        },
+        "own_course": {
+          "within_tol": null,
+          "mae": null,
+          "median_ae": null,
+          "n": 0,
+          "coverage": 0.0
+        },
+        "own_speed": {
+          "within_tol": null,
+          "mae": null,
+          "median_ae": null,
+          "n": 0,
+          "coverage": 0.0
+        },
+        "tgt_course": {
+          "within_tol": null,
+          "mae": null,
+          "median_ae": null,
+          "n": 0,
+          "coverage": 0.0
+        },
+        "tgt_speed": {
+          "within_tol": null,
+          "mae": null,
+          "median_ae": null,
+          "n": 0,
+          "coverage": 0.0
+        }
+      },
+      "numeric_tolerance": {
+        "cpa": 0.05,
+        "tcpa": 5.0,
+        "own_course": 1.0,
+        "own_speed": 0.1,
+        "tgt_course": 1.0,
+        "tgt_speed": 0.1
+      }
+    }
+  },
+  "llama31_marine": {
+    "pred_file": "llama31_marine.jsonl",
+    "n": 1000,
+    "surface": {
+      "BLEU": 0.9530463524605598,
+      "BLEU-1": 13.329260971679533,
+      "BLEU-2": 1.5343351038553734,
+      "BLEU-3": 0.4108037141737869,
+      "BLEU-4": 0.09819637151137485,
+      "chrF++": 10.10719019420572,
+      "chrF": 11.05356428719213,
+      "TER": 198.58917903121758,
+      "TER_n": 200,
+      "ROUGE-1": 18.195071788599265,
+      "ROUGE-2": 2.0995542174610122,
+      "ROUGE-L": 10.515222014415906,
+      "METEOR": 13.725587829397611,
+      "CIDEr-D": 6.121265025408959e-19
+    },
+    "semantic": {
+      "BERTScore-P": 45.258039236068726,
+      "BERTScore-R": 50.09717345237732,
+      "BERTScore-F1": 47.492775321006775,
+      "BERTScore_model": "klue/roberta-large"
+    },
+    "content": {
+      "hangul_ratio_mean": 38.566927890444106,
+      "korean_output_pct": 36.6,
+      "multi_paragraph_pct": 98.0,
+      "sds_format_pct": 0.0,
+      "empty_pct": 0.0,
+      "pred_len_median": 1054.0,
+      "pred_len_mean": 1167.347,
+      "encounter_acc": 0.0,
+      "encounter_n": 1000,
+      "role_acc": 0.0,
+      "role_n": 940,
+      "turn_dir_acc": 0.0,
+      "turn_dir_n": 603,
+      "vessel_count_vs_ref_acc": 0.0,
+      "vessel_count_n": 810,
+      "colreg_precision": 0.0,
+      "colreg_recall": 0.0,
+      "colreg_f1": 0.0,
+      "colreg_tp": 0,
+      "colreg_fp": 0,
+      "colreg_fn": 777,
+      "port_turn_violation_pct": 0.0,
+      "port_turn_cases": 601,
+      "advises_turn_pct": 0.0,
+      "numeric": {
+        "cpa": {
+          "within_tol": 80.95238095238095,
+          "mae": 0.35245952380952383,
+          "median_ae": 0.0,
+          "n": 420,
+          "coverage": 42.0
+        },
+        "tcpa": {
+          "within_tol": 77.088948787062,
+          "mae": 142.81360592722103,
+          "median_ae": 0.0,
+          "n": 371,
+          "coverage": 37.1
+        },
+        "own_course": {
+          "within_tol": null,
+          "mae": null,
+          "median_ae": null,
+          "n": 0,
+          "coverage": 0.0
+        },
+        "own_speed": {
+          "within_tol": null,
+          "mae": null,
+          "median_ae": null,
+          "n": 0,
+          "coverage": 0.0
+        },
+        "tgt_course": {
+          "within_tol": null,
+          "mae": null,
+          "median_ae": null,
+          "n": 0,
+          "coverage": 0.0
+        },
+        "tgt_speed": {
+          "within_tol": null,
+          "mae": null,
+          "median_ae": null,
+          "n": 0,
+          "coverage": 0.0
+        }
+      },
+      "numeric_tolerance": {
+        "cpa": 0.05,
+        "tcpa": 5.0,
+        "own_course": 1.0,
+        "own_speed": 0.1,
+        "tgt_course": 1.0,
+        "tgt_speed": 0.1
+      }
+    }
+  },
+  "llama31_sds9k": {
+    "pred_file": "llama31_sds9k.jsonl",
+    "n": 1000,
+    "surface": {
+      "BLEU": 56.45601161675787,
+      "BLEU-1": 79.57748092477603,
+      "BLEU-2": 62.109095937132714,
+      "BLEU-3": 50.837331664464685,
+      "BLEU-4": 42.891031170587276,
+      "chrF++": 61.03792641877238,
+      "chrF": 62.28827545055441,
+      "TER": 35.579053656073825,
+      "TER_n": 200,
+      "ROUGE-1": 79.03248409408273,
+      "ROUGE-2": 61.72824297516733,
+      "ROUGE-L": 71.51677864612583,
+      "METEOR": 73.08502451628493,
+      "CIDEr-D": 137.47279324401345
+    },
+    "semantic": {
+      "BERTScore-P": 87.36900687217712,
+      "BERTScore-R": 87.12705373764038,
+      "BERTScore-F1": 87.23724484443665,
+      "BERTScore_model": "klue/roberta-large"
+    },
+    "content": {
+      "hangul_ratio_mean": 79.19032807181004,
+      "korean_output_pct": 100.0,
+      "multi_paragraph_pct": 100.0,
+      "sds_format_pct": 100.0,
+      "empty_pct": 0.0,
+      "pred_len_median": 379.0,
+      "pred_len_mean": 378.689,
+      "encounter_acc": 98.1,
+      "encounter_n": 1000,
+      "role_acc": 95.1063829787234,
+      "role_n": 940,
+      "turn_dir_acc": 79.27031509121062,
+      "turn_dir_n": 603,
+      "vessel_count_vs_ref_acc": 85.06172839506173,
+      "vessel_count_n": 810,
+      "colreg_precision": 85.31889290012033,
+      "colreg_recall": 91.24839124839124,
+      "colreg_f1": 88.18407960199004,
+      "colreg_tp": 709,
+      "colreg_fp": 122,
+      "colreg_fn": 68,
+      "port_turn_violation_pct": 0.0,
+      "port_turn_cases": 601,
+      "advises_turn_pct": 66.9,
+      "numeric": {
+        "cpa": {
+          "within_tol": 96.2,
+          "mae": 0.012761000000000002,
+          "median_ae": 0.0,
+          "n": 1000,
+          "coverage": 100.0
+        },
+        "tcpa": {
+          "within_tol": 96.0,
+          "mae": 32.87045999999999,
+          "median_ae": 0.21000000000000796,
+          "n": 1000,
+          "coverage": 100.0
+        },
+        "own_course": {
+          "within_tol": 100.0,
+          "mae": 0.035511022044087646,
+          "median_ae": 0.029999999999972715,
+          "n": 998,
+          "coverage": 99.8
+        },
+        "own_speed": {
+          "within_tol": 100.0,
+          "mae": 0.026713426853707336,
+          "median_ae": 0.029999999999997584,
+          "n": 998,
+          "coverage": 99.8
+        },
+        "tgt_course": {
+          "within_tol": 96.0,
+          "mae": 4.821560000000028,
+          "median_ae": 0.02999999999999936,
+          "n": 1000,
+          "coverage": 100.0
+        },
+        "tgt_speed": {
+          "within_tol": 96.2,
+          "mae": 0.12640000000000035,
+          "median_ae": 0.02999999999999936,
+          "n": 1000,
+          "coverage": 100.0
+        }
+      },
+      "numeric_tolerance": {
+        "cpa": 0.05,
+        "tcpa": 5.0,
+        "own_course": 1.0,
+        "own_speed": 0.1,
+        "tgt_course": 1.0,
+        "tgt_speed": 0.1
+      }
+    }
+  },
+  "gemma4_sds9k": {
+    "pred_file": "gemma4_sds9k.jsonl",
+    "n": 1000,
+    "surface": {
+      "BLEU": 58.095166936450006,
+      "BLEU-1": 80.06645652446032,
+      "BLEU-2": 63.31185552262037,
+      "BLEU-3": 52.29059474889787,
+      "BLEU-4": 44.36076733389675,
+      "chrF++": 62.636161295264905,
+      "chrF": 63.86112250532025,
+      "TER": 34.53566319804785,
+      "TER_n": 200,
+      "ROUGE-1": 79.77996514228255,
+      "ROUGE-2": 63.12819908608982,
+      "ROUGE-L": 72.76893990567136,
+      "METEOR": 74.30501601193112,
+      "CIDEr-D": 135.30973839350676
+    },
+    "semantic": {
+      "BERTScore-P": 87.84977793693542,
+      "BERTScore-R": 87.72379755973816,
+      "BERTScore-F1": 87.7753734588623,
+      "BERTScore_model": "klue/roberta-large"
+    },
+    "content": {
+      "hangul_ratio_mean": 79.40716877964978,
+      "korean_output_pct": 100.0,
+      "multi_paragraph_pct": 100.0,
+      "sds_format_pct": 100.0,
+      "empty_pct": 0.0,
+      "pred_len_median": 380.0,
+      "pred_len_mean": 379.486,
+      "encounter_acc": 99.9,
+      "encounter_n": 1000,
+      "role_acc": 98.93617021276596,
+      "role_n": 940,
+      "turn_dir_acc": 82.91873963515755,
+      "turn_dir_n": 603,
+      "vessel_count_vs_ref_acc": 91.35802469135803,
+      "vessel_count_n": 810,
+      "colreg_precision": 85.20642201834862,
+      "colreg_recall": 95.62419562419562,
+      "colreg_f1": 90.11522134627046,
+      "colreg_tp": 743,
+      "colreg_fp": 129,
+      "colreg_fn": 34,
+      "port_turn_violation_pct": 0.0,
+      "port_turn_cases": 601,
+      "advises_turn_pct": 68.5,
+      "numeric": {
+        "cpa": {
+          "within_tol": 96.2,
+          "mae": 0.0127594,
+          "median_ae": 0.0,
+          "n": 1000,
+          "coverage": 100.0
+        },
+        "tcpa": {
+          "within_tol": 96.0,
+          "mae": 32.87348999999999,
+          "median_ae": 0.22000000000001307,
+          "n": 1000,
+          "coverage": 100.0
+        },
+        "own_course": {
+          "within_tol": 100.0,
+          "mae": 0.03185999999999967,
+          "median_ae": 0.020000000000038654,
+          "n": 1000,
+          "coverage": 100.0
+        },
+        "own_speed": {
+          "within_tol": 100.0,
+          "mae": 0.02546999999999997,
+          "median_ae": 0.029999999999997584,
+          "n": 1000,
+          "coverage": 100.0
+        },
+        "tgt_course": {
+          "within_tol": 96.0,
+          "mae": 4.8176500000000315,
+          "median_ae": 0.029999999999972715,
+          "n": 1000,
+          "coverage": 100.0
+        },
+        "tgt_speed": {
+          "within_tol": 96.2,
+          "mae": 0.12522000000000025,
+          "median_ae": 0.02999999999999936,
+          "n": 1000,
+          "coverage": 100.0
+        }
+      },
+      "numeric_tolerance": {
+        "cpa": 0.05,
+        "tcpa": 5.0,
+        "own_course": 1.0,
+        "own_speed": 0.1,
+        "tgt_course": 1.0,
+        "tgt_speed": 0.1
+      }
+    }
+  }
+}

@@ -50,9 +50,9 @@ class TrainingFormModalContainer extends PureComponent {
     workspaceOptions: [], // Workspace 선택 옵션
     builtInFilterOptions: [],
     builtInFilter: null,
-    builtInModelOptions: [], // Built-in Model 선택 옵션
-    builtInModelSearchResult: null, // Built-in Model 검색 데이터
-    builtInModel: null, // Built-in Model 값
+    builtInModelOptions: [], // Built-in TrainingPage 선택 옵션
+    builtInModelSearchResult: null, // Built-in TrainingPage 검색 데이터
+    builtInModel: null, // Built-in TrainingPage 값
     modelTypeValue: 0,
     selectedCategory: { name: '', value: null },
     selectedModel: { name: '', value: null },

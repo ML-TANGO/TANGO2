@@ -43,6 +43,8 @@ NUM_EPOCHS=3
 MAX_SEQ_LEN=2048
 LORA_R=128
 LORA_ALPHA=256
+# linear | mlp2x_gelu | mlp3x_gelu | cross_attn | qformer
+PROJECTOR_TYPE="mlp2x_gelu"
 
 # ── Launch ────────────────────────────────────────────────────────────────────
 if [ "$NUM_GPUS" -gt 1 ]; then
@@ -57,7 +59,7 @@ $LAUNCHER "$ROOT/train.py" \
     --train_type lora \
     --vision_model "$VISION_MODEL" \
     --llm_model    "$LLM_MODEL" \
-    --projector_type mlp2x_gelu \
+    --projector_type "$PROJECTOR_TYPE" \
     --projector_path "$PROJECTOR_PATH" \
     --data_path  "$DATA_PATH" \
     --image_dir  "$IMAGE_DIR" \

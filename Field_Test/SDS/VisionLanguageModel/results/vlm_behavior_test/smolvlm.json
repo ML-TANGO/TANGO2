@@ -1,0 +1,80 @@
+{
+  "model": "smolvlm",
+  "repo": "HuggingFaceTB/SmolVLM-Instruct",
+  "n": 10,
+  "vessel_recall": 1.0,
+  "halluc_rate": 0.0333,
+  "colreg_acc": 0.4,
+  "per_sample": [
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-0dL1k060Ox",
+      "gt_sit": "crossing",
+      "pred_sit": "crossing",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-0dLhkqLMw",
+      "gt_sit": "overtaking",
+      "pred_sit": "overtaking",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-0dzraEavMx",
+      "gt_sit": "crossing",
+      "pred_sit": "overtaking",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-0p0rtLzOH",
+      "gt_sit": "head-on",
+      "pred_sit": "crossing",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-0pvAkDzMx",
+      "gt_sit": "overtaking",
+      "pred_sit": "overtaking",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-H-FMrdbSdY",
+      "gt_sit": "overtaking",
+      "pred_sit": "overtaking",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-H-F_rRP2ZY",
+      "gt_sit": "head-on",
+      "pred_sit": "overtaking",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-H-LCr1yoZY",
+      "gt_sit": "crossing",
+      "pred_sit": "overtaking",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-H-i0H5CZb",
+      "gt_sit": "head-on",
+      "pred_sit": "overtaking",
+      "vessel_yes": true,
+      "gt_n": 1
+    },
+    {
+      "ep": "tango_sds-unity-llm-20260226-v0.3-H-iCrVyEZV",
+      "gt_sit": "crossing",
+      "pred_sit": "overtaking",
+      "vessel_yes": true,
+      "gt_n": 1
+    }
+  ]
+}

@@ -1,0 +1,3 @@
+# Test-only dependencies (offline unit tests under tests/; no LLM needed).
+-r requirements.txt
+pytest==9.1.1

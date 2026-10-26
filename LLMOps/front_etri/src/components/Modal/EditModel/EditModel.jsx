@@ -300,7 +300,7 @@ const EditModel = ({ data, type }) => {
     }
   };
 
-  // POST Submit Model
+  // POST Submit TrainingPage
   const putModel = async () => {
     setLoading(true);
     const body = {
