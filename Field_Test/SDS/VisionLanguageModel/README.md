@@ -1235,7 +1235,7 @@ apt-get download cuda-nvcc-12-6 cuda-crt-12-6 cuda-nvvm-12-6 libcublas-dev-12-6 
 for d in *.deb; do dpkg -x $d ~/cuda-local/root; done
 C=~/cuda-local/root/usr/local/cuda-12.6
 for f in /usr/local/cuda-12.6/targets/aarch64-linux/lib/*; do
-  [ -e $C/targets/aarch64-linux/lib/$(basename $f) ] || ln -s $f $C/targets/aarch64-linux/lib/
+  [ -e $C/targets/aarch64-linux/lib/$(basename $f) ] || ln -sf $f $C/targets/aarch64-linux/lib/
 done
 
 # ~/llama.cpp-eva 에서
