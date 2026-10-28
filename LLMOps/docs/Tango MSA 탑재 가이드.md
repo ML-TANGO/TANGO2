@@ -3,6 +3,14 @@
 > 📌 **이 문서는 외부 협력 기관 개발자를 위한 기술 가이드입니다.** Tango GenAI 플랫폼 위에 자체 MSA 서비스를 배포하고 연동하는 전 과정을 단계별로 안내합니다.
 > 
 
+> 🔄 **2026-10 기준 안내** — 플랫폼은 두 층의 계약을 둡니다. 이 문서는 모든 협력기관 서비스에 공통인 **기본 계약**(`/health`·`/info`·`/run`, Helm Chart 작성법)을 다루고, 학습·추론·변환·평가처럼 GPU/PVC 를 쓰는 장시간 작업은 **외부 컨테이너 계약**을 추가로 따릅니다.
+>
+> - 계약 전문: [`examples/hello-plugin/external-container-spec.md`](../examples/hello-plugin/external-container-spec.md) — *외부 컨테이너 인터페이스 계약서 v1* (spec 버전 v1.1, manifest `apiVersion: tango.acryl.ai/v1`)
+> - 시작 템플릿: [`examples/hello-plugin/`](../examples/hello-plugin/) (manifest + FastAPI 예제 + Dockerfile)
+> - 학습/추론 짝(hybrid) manifest 예시: [`examples/external-container-manifests/`](../examples/external-container-manifests/)
+>
+> 외부 컨테이너로 등록된 서비스는 플랫폼이 직접 띄우고 클러스터 내부(ClusterIP)로만 호출합니다. 현재 호스팅·인증·격리 방식은 [1.4절](#14-현재-플랫폼의-외부-컨테이너-호스팅-방식)을 보세요.
+
 # 0. 시작하기 전에
 
 ## 0.1 Tango GenAI 플랫폼이란?
@@ -48,6 +56,10 @@ Tango GenAI 플랫폼은 아크릴에서 개발한 쿠버네티스(Kubernetes) �
 | **Kubernetes (k8s)** | 컨테이너화된 애플리케이션의 배포·확장·관리를 자동화하는 오픈소스 플랫폼 |
 | **Ingress** | 클러스터 외부에서 내부 서비스로 HTTP/HTTPS 트래픽을 라우팅하는 쿠버네티스 리소스 |
 | **Namespace** | 쿠버네티스 클러스터 내에서 리소스를 논리적으로 격리하는 단위 |
+| **ClusterIP** | 클러스터 내부에서만 접근 가능한 쿠버네티스 Service 유형. 외부(노드 포트·Ingress)로 노출되지 않음 |
+| **외부 컨테이너** | 협력기관이 제공하고 manifest 로 등록해 플랫폼이 직접 실행하는 컨테이너 (`fb_external_container` 가 관리) |
+| **manifest** | 외부 컨테이너의 이미지·포트·자원·엔드포인트·네트워크 정책을 적은 YAML (`apiVersion: tango.acryl.ai/v1`) |
+| **외부 API 게시** | 배포를 클러스터 밖에서 호출할 수 있도록 API 키를 발급하고 Kong 경로를 여는 플랫폼 기능 |
 
 ## 0.5 사전 요건
 
@@ -107,8 +119,28 @@ Tango GenAI 플랫폼은 아크릴에서 개발한 쿠버네티스(Kubernetes) �
 
 배포 후 플랫폼이 `/health`를 통해 서비스 상태를 확인하고, `/info`로 서비스 정보를 조회합니다. 정상 확인 후 플랫폼 UI에서 서비스가 노출됩니다. (4장 참고)
 
-> 💡 **참고:** 현재는 탑재 과정 일부를 수동으로 진행해야 합니다. 향후 플랫폼 UI를 통한 탑재 및 테스트 기능을 지원할 예정입니다.
+> 💡 **참고:** 외부 컨테이너 계약으로 등록된 서비스는 manifest 등록 후 플랫폼 화면(모델의 도메인 학습·양자화, 평가, 배포/추론 등)에서 작업으로 실행됩니다. 2~3장의 Helm Chart 직접 설치는 이 경로에 속하지 않는 서비스에 해당하며, 일부 과정을 수동으로 진행해야 합니다.
 > 
+
+## 1.4 현재 플랫폼의 외부 컨테이너 호스팅 방식
+
+외부 컨테이너 계약을 따르는 서비스를 플랫폼이 어떻게 띄우고 부르는지 정리합니다. (구현: `apps/fb_external_container`, 차트: `apps/fb_scheduler/helm_chart/external_container`)
+
+| 단계 | 동작 |
+| --- | --- |
+| **등록** | manifest 를 `fb_external_container`(BFF)가 검증해 MariaDB(`msa_jfb.external_container_manifest`)에 저장합니다. 플랫폼 표준 판본(`apps/fb_external_container/manifests/`)은 플랫폼 기동 시 자동 등록되며, 그 외 판본은 플랫폼 담당자가 등록합니다. |
+| **실행** | 사용자가 화면에서 작업을 시작하면 `fb_scheduler` 가 `external_container` 차트로 워크스페이스 네임스페이스에 파드와 **ClusterIP Service**(포트 80 → manifest `spec.port`)를 만듭니다. |
+| **호출** | BFF 가 이 ClusterIP 로 `/health`·`/run`·`/jobs/{id}` 등을 **직접** 호출합니다. 협력기관 컨테이너에 Ingress 를 만들지 않습니다. |
+| **외부 호출** | 클러스터 밖에서 추론 API 를 써야 하면 배포 상세의 **외부 API 게시**로 API 키를 발급받습니다. 게시된 배포는 `/ext/<api_path>` 경로로만 열리고 Kong key-auth(`apikey` 헤더 또는 쿼리)가 붙으며, IP 당 분당 60회·요청 10MB 상한이 걸립니다. 키는 재발급(회전)하거나 게시를 해제할 수 있습니다. |
+
+**인증 · 격리 요약**
+
+- **Kong 인증** — 플랫폼(`fb_ingress_management`)은 Kong 에서 `/api` 로 시작하는 경로에 key-auth·request-termination 플러그인을 자동으로 붙여, 인증되지 않은 요청을 차단합니다(로그인 등 허용 목록 경로 제외). `/api` 가 아닌 경로에는 자동으로 인증이 붙지 않습니다.
+- **`/msa` 공개 Ingress 제거** — 예전에는 sync 외부 컨테이너마다 `/msa/<manifest 이름>` Kong Ingress 를 만들었습니다. 이 경로는 `/api` 가 아니어서 인증 없이 누구나 `/run`(GPU)을 호출할 수 있었고, 같은 manifest 의 배포끼리 경로가 겹쳤습니다. 2026-10 부터 이 Ingress 를 만들지 않고 ClusterIP 로만 호출합니다.
+- **네트워크 격리(opt-in)** — manifest 에 `spec.network.isolate: true` 를 적으면 NetworkPolicy 로 egress 를 전면 차단(DNS 포함)하고, ingress 는 플랫폼 BFF 에서 `spec.port` 로 오는 요청만 허용합니다. 서비스어카운트 토큰과 `/model` 쓰기 마운트도 빠집니다. 외부로 나갈 이유가 없는 컨테이너(예: 모델이 생성한 코드를 실행하는 채점기)에 켭니다. 기본값은 `false` 입니다 — `spec.network.egress_whitelist` 는 v1 에서 신고용(advisory)이며 차단하지 않습니다.
+- **컨테이너 내부 토큰 검증** — 계약서 v1 은 컨테이너 안의 API 키/JWT 검증을 요구하지 않습니다(플랫폼 계층의 Kong·ClusterIP·NetworkPolicy 로 보호). 컨테이너 내부 인증 표준은 v2 에서 정할 예정입니다.
+
+> ⚠️ 2~3장의 방식으로 서비스를 직접 설치하는 경우에도 같은 원칙을 따르세요. **백엔드는 ClusterIP 로만 두고**, 외부 노출(Ingress·NodePort)이 필요하면 플랫폼 담당자와 경로·인증 방식을 먼저 협의합니다. `/api` 가 아닌 Ingress 경로나 NodePort 는 인증 없이 열립니다.
 
 ---
 
@@ -184,21 +216,19 @@ labels:
   workspace_id: ""
   project_id: ""
 
-# ── 서비스(포트) 설정 ──
+# ── 서비스(포트) 설정 — ClusterIP(클러스터 내부 전용) ──
 service:
   frontend:
     port: 80              # 클러스터 내부 접근 포트
     targetPort: 80        # 컨테이너 내부 애플리케이션 포트
-    nodePort: 30000       # 클러스터 외부 접속 포트 (30000-32767)
   backend:
-    port: 8000
+    port: 8000            # 외부 컨테이너 템플릿(hello-plugin)과 같은 8000
     targetPort: 8000
-    nodePort: 30001
 
-# ── Ingress 설정 ──
+# ── Ingress 설정 — 기본 비활성. 외부 노출은 플랫폼 담당자와 협의 후에만 ──
 ingress:
-  enabled: true
-  className: "jonathan-kong"
+  enabled: false
+  className: "jonathan-kong"   # 플랫폼 Kong IngressClass (kubectl get ingressclass 로 확인)
 
 # ── 프론트엔드 Pod 설정 ──
 frontend:
@@ -334,7 +364,7 @@ spec:
 {{- end }}
 ```
 
-> 📌 **Ingress 경로 네이밍 규칙**
+> 📌 **Ingress 경로 네이밍 규칙** (`ingress.enabled: true` 로 외부 노출을 협의한 경우에만)
 > 
 > 
 > Ingress path는 다음 규칙을 따릅니다. 플랫폼 담당자와 사전 협의 후 확정합니다.
@@ -345,6 +375,8 @@ spec:
 > 
 > • 플랫폼 내 다른 서비스와 경로가 충돌하지 않도록 담당자와 반드시 확인합니다.
 > 
+> ⚠️ `/msa/...` 는 `/api` 경로가 아니므로 Kong 이 인증을 자동으로 붙이지 않습니다(1.4절). 인증 방식을 정하지 않은 채로 백엔드를 이 경로에 열지 마세요.
+
 
 ### templates/service.yaml
 
@@ -357,11 +389,10 @@ metadata:
   name: {{ .Values.metadata.pod_name }}-frontend-svc
   namespace: {{ .Values.metadata.namespace }}
 spec:
-  type: NodePort
+  type: ClusterIP
   ports:
   - port: {{ .Values.service.frontend.port }}
     targetPort: {{ .Values.service.frontend.targetPort }}
-    nodePort: {{ .Values.service.frontend.nodePort }}
     protocol: TCP
   selector:
     app: {{ .Values.labels.helm_name }}-frontend
@@ -375,11 +406,10 @@ metadata:
   name: {{ .Values.metadata.pod_name }}-backend-svc
   namespace: {{ .Values.metadata.namespace }}
 spec:
-  type: NodePort
+  type: ClusterIP
   ports:
   - port: {{ .Values.service.backend.port }}
     targetPort: {{ .Values.service.backend.targetPort }}
-    nodePort: {{ .Values.service.backend.nodePort }}
     protocol: TCP
   selector:
     app: {{ .Values.labels.helm_name }}-backend
@@ -387,6 +417,8 @@ spec:
 ```
 
 위의 예시와 같이 helm chart 탬플릿을 정의합니다.
+
+> 💡 Service 는 `ClusterIP` 로 둡니다. 백엔드는 클러스터 내부 DNS(`<pod_name>-backend-svc.<네임스페이스>.svc`)로 호출합니다. 프론트엔드를 브라우저에 노출해야 하면 노출 방식을 플랫폼 담당자와 협의하세요 — `NodePort` 는 모든 노드의 포트로 인증 없이 열리므로 권장하지 않습니다.
 
 ---
 
@@ -403,18 +435,22 @@ helm install <릴리스명> ./<chart_디렉토리>/ \
   --set metadata.workspace_id=<워크스페이스_ID> \
   --set metadata.project_id=<프로젝트_ID> \
   --set metadata.pod_name=<Pod_이름> \
-  --set labels.helm_name=<릴리스명> \
-  --set ingress.enabled=true
+  --set labels.helm_name=<릴리스명>
 ```
 
 `--set` 플래그를 사용하면 `values.yaml`에 정의된 기본값을 설치 시점에 동적으로 덮어쓸 수 있습니다. 위 명령은 최소 필수 파라미터만 포함한 예시이며, 서비스에 따라 `--set` 항목을 추가할 수 있습니다.
 
 ### 3.2 애플리케이션 코드에서 설치하는 예시 (Python)
 
-서비스 로직 내에서 Helm 설치를 자동화하려는 경우, 아래와 같이 서브프로세스로 실행할 수 있습니다.
+서비스 로직 내에서 Helm 설치를 자동화하려는 경우, 아래와 같이 서브프로세스로 실행할 수 있습니다. 명령을 **문자열로 이어 붙여 셸로 실행하지 말고**, 인자 목록(argv)으로 넘기세요 — 릴리스명이나 `--set` 값에 공백·`;`·`$()` 같은 문자가 섞여도 셸이 해석하지 않으므로 명령 주입이 생기지 않습니다.
 
 ```python
 import asyncio
+import re
+
+# Helm 릴리스명/네임스페이스는 DNS-1123 규칙(소문자·숫자·하이픈) — 여기서는 53자 이하로 제한
+_DNS1123 = re.compile(r"^[a-z0-9]([-a-z0-9]{0,51}[a-z0-9])?$")
+
 
 async def install_msa_service(release_name: str, namespace: str, chart_path: str, values: dict):
     """
@@ -424,16 +460,20 @@ async def install_msa_service(release_name: str, namespace: str, chart_path: str
     :param chart_path:   Helm Chart 디렉토리 경로
     :param values:       --set 으로 전달할 값들 {"key": "value"}
     """
-    set_flags = " ".join(f'--set {k}={v}' for k, v in values.items())
+    for name in (release_name, namespace):
+        if not _DNS1123.match(name):
+            raise ValueError(f"invalid name: {name!r}")
 
-    command = (
-        f"helm install {release_name} {chart_path}/ "
-        f"-n {namespace} --create-namespace "
-        f"{set_flags}"
-    )
+    argv = [
+        "helm", "install", release_name, chart_path,
+        "-n", namespace, "--create-namespace",
+    ]
+    for key, value in values.items():
+        # --set-string: 값을 문자열로 전달. 콤마는 helm 이 항목 구분자로 해석하므로 `\,` 로 이스케이프
+        argv += ["--set-string", f"{key}={str(value).replace(',', chr(92) + ',')}"]
 
-    process = await asyncio.create_subprocess_shell(
-        command,
+    process = await asyncio.create_subprocess_exec(
+        *argv,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
@@ -454,10 +494,10 @@ async def install_msa_service(release_name: str, namespace: str, chart_path: str
 
 MSA 서비스를 Helm Chart를 이용해 설치하는데 성공했다면, GenAI Platform에서 연동된 서비스가 제대로 동작하는지 확인합니다.
 
-> ⚠️ **현재는 외부 MSA 서비스 연동을 위한 별도의 UI가 존재하지 않으나 추후 지원할 예정입니다.**
+> ⚠️ **Helm Chart 로 직접 설치한 MSA 서비스를 관리하는 범용 UI 는 아직 없습니다.** 외부 컨테이너 계약으로 등록된 서비스는 해당 기능 화면(모델의 도메인 학습·양자화, 평가, 배포/추론)에서 작업으로 실행·조회됩니다(1.4절).
 > 
 
-아래 화면들은 앞의 과정들을 통해 설치한 MSA 서비스와 GenAI Platform를 연동하여, MSA 서비스가 GenAI Platform 위에서 정상적으로 동작하고 있음을 보여주는 예시입니다.
+아래 화면들은 앞의 과정들을 통해 설치한 MSA 서비스와 GenAI Platform를 연동한 초기 사례(연합학습)로, MSA 서비스가 GenAI Platform 위에서 동작하는 모습을 보여주는 예시입니다.
 
 ![image.png](files/image.png)
 
@@ -481,9 +521,9 @@ MSA 서비스와 GenAI Platform 이 서로 통신하며 데이터를 주고받�
 
 Tango GenAI 플랫폼은 탑재된 MSA 서비스를 직접 호출합니다. 따라서 **협력기관은 자신의 서비스에 아래 엔드포인트를 반드시 구현해야 합니다.**
 
-모든 엔드포인트는 Helm Chart의 `ingress.yaml`에 설정된 경로(`/federated/{서비스명}`) 하위에 위치합니다.
+모든 엔드포인트는 백엔드 서비스의 **루트 경로**(`/health`, `/info`, `/run`)에 둡니다. 플랫폼 연동은 클러스터 내부 Service(ClusterIP)를 통해 이루어집니다 — 예: `http://<pod_name>-backend-svc.<네임스페이스>.svc:<port>/health` (외부 컨테이너는 플랫폼 BFF 가 이 방식으로 직접 호출합니다). 담당자와 협의해 Ingress 를 연 경우에만 같은 엔드포인트가 `/msa/<서비스명>/...` 아래에도 노출됩니다.
 
-> ⚠️ **인증 방식(Authentication)은 현재 미정입니다.** API Key 또는 JWT 토큰 방식이 검토 중이며, 확정되는 대로 본 문서에 업데이트됩니다. 현재는 클러스터 내부 네트워크 신뢰를 기반으로 운영합니다.
+> ⚠️ **인증:** 컨테이너 자체의 API 키/JWT 검증은 현재 요구하지 않습니다. 보호는 플랫폼 계층에서 합니다 — 백엔드는 ClusterIP 로만 두고, Kong 이 `/api` 경로에 인증을 강제하며, 클러스터 밖에서의 추론 호출은 **외부 API 게시**(API 키)로만 엽니다. 외부 컨테이너는 manifest `network.isolate` 로 네트워크를 격리할 수 있습니다(1.4절). 컨테이너 내부 인증 표준은 외부 컨테이너 계약 v2 에서 정할 예정입니다.
 > 
 
 ---
@@ -564,6 +604,8 @@ GET /info
 ### [3] 서비스 실행
 
 플랫폼이 서비스의 주요 기능을 실행할 때 호출합니다. **기본적으로 동기 방식**으로 동작하며, 실행 결과를 즉시 반환해야 합니다.
+
+> 📌 **현재 구현과의 차이:** 이 절의 envelope(`workspace_id`·`project_id`·`params`) 형식 `/run` 은 MSA 기본 계약의 정의이며, 지금 플랫폼이 실제로 `/run` 을 호출하는 경로는 **외부 컨테이너**(§1.4)뿐입니다. 그 경로는 envelope 없이 **`params` 객체를 본문 그대로** POST 하고, 타임아웃은 300초입니다(`fb_external_container`). 외부 컨테이너로 탑재한다면 `examples/hello-plugin/external-container-spec.md` 를 기준으로 구현하세요.
 
 > ⚠️ **타임아웃 정책:** 플랫폼은 `/run` 호출 시 **기본 60초** 타임아웃을 적용합니다 (정확한 값은 추후 확정). 이 시간 내에 응답을 반환하지 못하면 플랫폼은 타임아웃 오류로 처리합니다.
 
@@ -691,15 +733,15 @@ POST /run
 
 서비스 특성에 따라 `/health`, `/info`, `/run` 외에 플랫폼이 추가로 호출해야 할 엔드포인트가 필요할 수 있습니다.
 
-> 📌 **장기 실행 학습·추론·배포 도메인의 경우 — SP-1 외부 컨테이너 계약 v2 우선 참조**
+> 📌 **장기 실행 학습·추론·배포 도메인의 경우 — 외부 컨테이너 인터페이스 계약서 v1 우선 참조**
 >
 > 학습·추론·배포처럼 **GPU/PVC 자원이 필요하고 비동기 long-running job 형태**로 동작하는 도메인 API는, 본 가이드의 기본 contract(`/health`, `/info`, `/run`)와는 별개로 플랫폼이 별도 표준 spec을 제공합니다.
 >
-> → `examples/hello-plugin/external-container-spec.md` (SP-1 외부 컨테이너 계약 v2)
+> → [`examples/hello-plugin/external-container-spec.md`](../examples/hello-plugin/external-container-spec.md) (외부 컨테이너 인터페이스 계약서 v1, spec 버전 v1.1) + 템플릿 [`examples/hello-plugin/`](../examples/hello-plugin/)
 >
-> 이 spec 은 **manifest 기반 endpoint 정의(협력기관 URL 자유 유지), 워크스페이스 PVC 마운트 표준, job lifecycle, response shape**(`status` enum / `job_id` / `progress` / `result` / `error` 필드 구조)을 명시합니다. 해당 도메인 서비스 탑재 시 이 spec 을 우선 참조해 주시기 바랍니다.
+> 이 spec 은 **manifest 기반 endpoint 정의(협력기관 URL 자유 유지), 워크스페이스 PVC 마운트 표준, job lifecycle(`/run` → `/jobs/{id}` → `/jobs/{id}/cancel`), response shape**(`status` enum / `job_id` / `progress` / `result` / `error` 필드 구조)을 명시합니다. 해당 도메인 서비스 탑재 시 이 spec 을 우선 참조해 주시기 바랍니다. 외부 컨테이너의 `/health` 는 readiness 전용(`200 {"status":"ready"}` / 준비 중 `503`)으로, 본 문서 5.3 의 기본 형식과 다르니 spec §5.2 를 따르세요.
 >
-> 단순 inference 또는 short-lived 호출만 있는 서비스는 본 가이드의 `/run` 만으로 충분하며, SP-1 spec 은 적용되지 않습니다.
+> 단순 inference 또는 short-lived 호출만 있는 서비스는 본 가이드의 `/run` 만으로 충분하며, 외부 컨테이너 spec 은 적용되지 않습니다.
 
 이 경우 **협력기관이 해당 API의 명세를 작성하여 플랫폼 담당자에게 전달**해 주세요. 플랫폼이 협력기관 서비스를 호출하는 방향이므로, 서비스를 가장 잘 아는 협력기관이 먼저 명세를 제안하고 플랫폼 담당자가 검토·확정하는 방식으로 진행합니다.
 

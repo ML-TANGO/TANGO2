@@ -86,17 +86,60 @@ net.bridge.bridge-nf-call-ip6tables = 1
 net.ipv4.ip_forward                 = 1
 EOF
 sudo sysctl --system >/dev/null
+
+# 3-4. NFS 클라이언트 — 모든 노드(워커 추가 시 각 노드에서도)
+#      플랫폼 values 의 볼륨이 모두 type: nfs 라 kubelet 이 마운트할 때 필요
+sudo apt-get install -y nfs-common
 ```
 
 **[검증]**
 ```bash
 lsmod | grep -E "^overlay|^br_netfilter"
 sysctl net.ipv4.ip_forward net.bridge.bridge-nf-call-iptables   # 둘 다 = 1
+dpkg -s nfs-common | grep Status                                 # install ok installed
 ```
 
 > `sysctl --system` 실행 시 `net.ipv4.conf.all.accept_source_route` 등에서
 > `Invalid argument` 경고가 날 수 있습니다. 배포판 기본 설정(`/usr/lib/sysctl.d/50-default.conf`)의
 > 와일드카드 규칙에서 나오는 것으로, 위 3개 값이 `1` 이면 무시해도 됩니다.
+
+### 3-5. NFS 서버 (export)
+
+플랫폼 볼륨·NFS provisioner·레지스트리가 모두 NFS 를 씁니다. NFS 서버(단일 노드면 같은 서버)에서
+경로를 만들고 노드 대역(`<NODE_CIDR>`, 예: `10.0.0.0/24`)에 export 합니다. 아래 경로는
+`values.yaml.template` 기본값이며, values 에서 바꿨다면 그 경로를 씁니다. export 옵션
+`rw,sync,no_root_squash,no_subtree_check` 는 템플릿이 전제하는 값입니다(NFS provisioner 가 root 로
+PVC 하위 디렉터리를 만들기 때문에 `no_root_squash` 가 필요합니다).
+
+```bash
+sudo apt-get install -y nfs-kernel-server
+
+# values.yaml.template 의 jfData·jfBin·jfStorage·markerData·hfModelCache 기본 경로
+sudo mkdir -p /opt/dynamic-storage/{jf-data,jf-bin,tmp-storage,marker-data,hf-model-cache}
+# gaip_nfs_provisioner(values-system/efk)·gaip_registry values 에 넣을 경로
+sudo mkdir -p <NFS_PROVISIONER_SYSTEM_PATH> <NFS_PROVISIONER_EFK_PATH> <REGISTRY_IMAGES_PATH>
+
+sudo tee -a /etc/exports >/dev/null <<'EOF'
+/opt/dynamic-storage/jf-data         <NODE_CIDR>(rw,sync,no_root_squash,no_subtree_check)
+/opt/dynamic-storage/jf-bin          <NODE_CIDR>(rw,sync,no_root_squash,no_subtree_check)
+/opt/dynamic-storage/tmp-storage     <NODE_CIDR>(rw,sync,no_root_squash,no_subtree_check)
+/opt/dynamic-storage/marker-data     <NODE_CIDR>(rw,sync,no_root_squash,no_subtree_check)
+/opt/dynamic-storage/hf-model-cache  <NODE_CIDR>(rw,sync,no_root_squash,no_subtree_check)
+<NFS_PROVISIONER_SYSTEM_PATH>        <NODE_CIDR>(rw,sync,no_root_squash,no_subtree_check)
+<NFS_PROVISIONER_EFK_PATH>           <NODE_CIDR>(rw,sync,no_root_squash,no_subtree_check)
+<REGISTRY_IMAGES_PATH>               <NODE_CIDR>(rw,sync,no_root_squash,no_subtree_check)
+EOF
+sudo exportfs -ra
+```
+
+소스 마운트 개발 모드(`global.jfb.volume.src.enabled: true`)를 쓰면 체크아웃의 `LLMOps/apps` 절대 경로
+(`<SRC_PATH>`)도 같은 옵션으로 export 합니다.
+
+**[검증]**
+```bash
+sudo exportfs -v                   # 위 경로가 모두 표시
+showmount -e <NFS_SERVER_IP>       # 각 노드에서 실행 (nfs-common 에 포함)
+```
 
 ---
 
@@ -449,7 +492,8 @@ ss -lntup | egrep ':(6443|10250|2379|2380)\b' || echo "ports clean"
 
 > ⚠️ 이 절차는 **클러스터만** 제거합니다. NFS 스토리지의 데이터는 건드리지 않습니다.
 > 다만 플랫폼을 재설치할 때 기존 데이터를 재사용하려면 StorageClass 설정과 PVC 이름이
-> 이전과 같아야 합니다. 자세한 내용은 설치 매뉴얼의 스토리지 항목을 참고하십시오.
+> 이전과 같아야 합니다. 자세한 내용은 [INSTALL.md 의 "데이터를 보존한 재설치"](./INSTALL.md#데이터를-보존한-재설치)를
+> 참고하십시오(이 경우 MariaDB 를 초기화하는 `run_step2_core_infra.sh` 는 쓰지 않습니다).
 
 ---
 

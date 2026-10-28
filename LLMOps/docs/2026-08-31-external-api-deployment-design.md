@@ -13,7 +13,7 @@
 
 | 항목 | 실측값 |
 |---|---|
-| 네임스페이스 | `tango-dev` (개발), 서빙 `jonathan-system` 과 분리 |
+| 네임스페이스 | 개발 인스턴스(`${JF_NAMESPACE}`), 서빙 `jonathan-system` 과 분리 |
 | 배포 서비스 | `jfb-llm-playground` / `docker.io/acrylaaai/genai-platform-playground_app:tango_v2.0.1` |
 | 레거시 | `jfb-app-deployment`(fb_deployment) — 배포 탭 소스 아님, 건드리지 않음 |
 | **소스 반영** | `/app`=`jf-src-playground-pvc`, `/fb_utils`=`jf-src-utils-pvc` → NFS `<NFS 서버>:<개발 워크트리>/LLMOps/apps/...` |
@@ -147,7 +147,7 @@ base)로 소비한다(`llm_evaluation/service.py:103`). §6.2 분기가 열리�
 
 ```
 1. apps/llm_playground/src, apps/fb_utils 수정
-2. kubectl rollout restart deploy/jfb-llm-playground -n tango-dev
+2. kubectl rollout restart deploy/jfb-llm-playground -n ${JF_NAMESPACE}
 3. front/ 수정 후 yarn build  (npm 금지)
 4. (필요 시) jfb-app-front rollout restart
 ```
@@ -220,7 +220,7 @@ base)로 소비한다(`llm_evaluation/service.py:103`). §6.2 분기가 열리�
 `normalize_cluster_phase` 를 쓰고, 전용 함수는 **삭제**했다(신규 추상화 0 유지).
 provider/model 메타는 목록 행에 `remote_api` 키로 동봉한다(키는 제외).
 
-## 15. 구현 검증 결과 (클러스터 e2e, tango-dev)
+## 15. 구현 검증 결과 (클러스터 e2e, 개발 인스턴스)
 
 | # | 항목 | 결과 |
 |---|---|---|
@@ -236,7 +236,7 @@ provider/model 메타는 목록 행에 `remote_api` 키로 동봉한다(키는 �
 | 10 | 데이터셋 일괄 거부 메시지 | PASS |
 | 11 | targets read-model — phase/provider/model 정확, 키 없음 | PASS |
 | 12 | 상용 provider(ChatGPT) 실도달 → 401 → "인증 실패" | PASS |
-| 13 | K8s Secret 생성(`tango-dev-2`) / DB 행엔 `secret_ref` 만 | PASS |
+| 13 | K8s Secret 생성(개발 인스턴스 워크스페이스 네임스페이스) / DB 행엔 `secret_ref` 만 | PASS |
 | 14 | 삭제 → Secret 소멸 + 타겟 목록 회귀 없음(cluster 4건) | PASS |
 | 15 | FE `yarn build` 그린, 신규 페이지 번들 포함 | PASS |
 
