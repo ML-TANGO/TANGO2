@@ -9,7 +9,7 @@
 #
 # 사용:
 #   ./run.sh <workspace-namespace> [모델...]
-#   ./run.sh tango-dev-2                       # 기본 목록(SDS VLM 학습용 2종)
+#   ./run.sh jonathan-system-2                 # 기본 목록(SDS VLM 학습용 2종)
 #   ./run.sh jonathan-system-2 openai/clip-vit-large-patch14-336
 #
 # 전제: 대상 ns 에 hf-model-cache-pvc 가 있고, 플랫폼 ns 의 jfb-settings 에
@@ -23,7 +23,7 @@ if [ ${#MODELS[@]} -eq 0 ]; then
   MODELS=("openai/clip-vit-large-patch14-336" "meta-llama/Llama-3.1-8B-Instruct")
 fi
 
-# 플랫폼 ns = 워크스페이스 ns 에서 마지막 `-<id>` 를 뗀 것 (tango-dev-2 → tango-dev).
+# 플랫폼 ns = 워크스페이스 ns 에서 마지막 `-<id>` 를 뗀 것 (jonathan-system-2 → jonathan-system).
 PLATFORM_NS="${NS%-*}"
 TOKEN="$(kubectl get cm -n "$PLATFORM_NS" jfb-settings -o jsonpath='{.data.HUGGINGFACE_TOKEN}' 2>/dev/null || true)"
 [ -n "$TOKEN" ] || echo "[warn] HUGGINGFACE_TOKEN 없음 — gated repo(meta-llama)는 실패한다" >&2

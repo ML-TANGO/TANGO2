@@ -68,17 +68,19 @@ SAVE_COMMAND="$CLI save -o REPLACE.tar $IMAGE"
 
 if [ "$BUILD_ALL" == "y" ]; then
 
-    dir=("dashboard" "dataset" "deployment" "external_container" "image" "monitoring" "notification" "resource" "scheduler" "ssh" "training" "user" "workspace" "evaluation" "data_pipeline")
-    # dir=("model" "playground" "prompt" "rag")
+    # devops/run.sh(fb_*) + run_llm.sh(evaluation·data_pipeline) 가 배포하는 앱 = Dockerfile 이 있는 디렉터리.
+    # 없는 디렉터리를 넣으면 cd 가 실패해 직전 앱을 엉뚱한 태그로 다시 빌드하므로 아래 cd 에서 중단한다.
+    dir=("dashboard" "dataset" "deployment" "external_container" "image" "monitoring" "notification" "resource" "scheduler" "user" "workspace" "option" "alert_management" "ingress_management" "collect" "preprocessing" "pipeline" "analyzing" "synthesis" "evaluation" "data_pipeline")
+    # dir=("model" "playground")   # llm_model·llm_playground 는 일괄 대상 밖 — "APP NAME?" 에 model/playground 로 개별 빌드
     # 주: "evaluation" → llm_evaluation (아래 llm_$APP 분기). 외부컨테이너(evaluate/convert/
     #     evaluate_benchmark_mock)는 apps/evaluate 등과 동일하게 ad-hoc 빌드(이 배열 밖).
     for APP in "${dir[@]}"; do
         if [[ "$APP" == "playground" || "$APP" == "model" || "$APP" == "rag"  || "$APP" == "prompt" || "$APP" == "evaluation" || "$APP" == "data_pipeline" ]]; then
             echo cd $BASE_DIR/llm_$APP
-            cd $BASE_DIR/llm_$APP
+            cd $BASE_DIR/llm_$APP || { echo "ERROR: $BASE_DIR/llm_$APP 없음 — 중단" >&2; exit 1; }
         else
             echo cd $BASE_DIR/fb_$APP
-            cd $BASE_DIR/fb_$APP
+            cd $BASE_DIR/fb_$APP || { echo "ERROR: $BASE_DIR/fb_$APP 없음 — 중단" >&2; exit 1; }
         fi
 
         command="${BUILD_COMMAND/REPLACE/"$APP"}"
@@ -102,10 +104,10 @@ elif [ "$BUILD_ALL" == "n" ]; then
 
     if [[ "$APP" == "playground" || "$APP" == "model" || "$APP" == "rag"  || "$APP" == "prompt" || "$APP" == "evaluation" || "$APP" == "data_pipeline" ]]; then
         echo cd $BASE_DIR/llm_$APP
-        cd $BASE_DIR/llm_$APP
+        cd $BASE_DIR/llm_$APP || { echo "ERROR: $BASE_DIR/llm_$APP 없음 — 중단" >&2; exit 1; }
     else
         echo cd $BASE_DIR/fb_$APP
-        cd $BASE_DIR/fb_$APP
+        cd $BASE_DIR/fb_$APP || { echo "ERROR: $BASE_DIR/fb_$APP 없음 — 중단" >&2; exit 1; }
     fi
 
     command="${BUILD_COMMAND/REPLACE/"$APP"}"

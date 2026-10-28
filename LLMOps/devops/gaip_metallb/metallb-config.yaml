@@ -5,8 +5,14 @@ metadata:
   name: default
   namespace: metallb-system
 spec:
-  addresses:
-    - 192.168.0.57/32   # CIDR (subnetmask 포함) 또는 IP Range로 세팅해야 함 (단독 IP 불가)
+  # ⚠️ install.sh(run_step1_infra_base.sh --metallb) 실행 전에 반드시 수정하세요.
+  #   MetalLB 가 LoadBalancer 서비스에 나눠 줄 주소 대역입니다. 리스트로 적습니다.
+  #   예) addresses: ["<시작 IP>-<끝 IP>"]  또는  addresses: ["<IP>/32"]
+  #   CIDR (subnetmask 포함) 또는 IP Range로 세팅해야 함 (단독 IP 불가 — 한 개면 /32)
+  # ※ placeholder 를 일부러 리스트가 아닌 문자열로 두었습니다. install.sh 는 MetalLB 검증 웹훅을
+  #   지운 뒤 kubectl create 하므로, 리스트 안의 잘못된 문자열은 API 서버를 그대로 통과해 조용히 실패합니다.
+  #   문자열인 채로 적용하면 "spec.addresses ... must be of type array" 로 바로 거부됩니다.
+  addresses: <METALLB_ADDRESS_RANGE>
   autoAssign: true
 ---
 apiVersion: metallb.io/v1beta1

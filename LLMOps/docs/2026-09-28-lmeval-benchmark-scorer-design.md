@@ -23,7 +23,7 @@ F1/EM/BLEU/ROUGE). 채점 엔진은 ETRI 가 origin/main 에 올린 `LLMOps/Eval
 
 | 항목 | 실측값 |
 |---|---|
-| 인스턴스 | 개발 `tango-dev`(:31080) / 서빙 `jonathan-system` — 둘 다 BENCHMARK = `evaluate-benchmark-mock` 0.2.0 (settings 기본값, env 오버라이드 없음) |
+| 인스턴스 | 개발 인스턴스 / 서빙 `jonathan-system` — 둘 다 BENCHMARK = `evaluate-benchmark-mock` 0.2.0 (settings 기본값, env 오버라이드 없음) |
 | 소스 반영(dev) | `jfb-llm-evaluation`·`jfb-app-external-container`·`jfb-app-scheduler` = `/app`·`/fb_utils` src 마운트, `jfb-app-front` = `/front-data` src 마운트 → **rollout 만으로 반영** |
 | GPU | 단일 노드 A100 80GB PCIe × 8 |
 | HF 캐시 PVC | dev = 모델 3개(gemma-4-E4B-it·Llama-3.1-8B-Instruct·clip), 서빙 = 의료 QA 데이터셋 6종 — **lm-eval 벤치마크 데이터셋 전무** |
@@ -218,7 +218,7 @@ mock 과 같은 최상위 계약을 유지하고 상세 키를 더한다.
 
 - **opt-in 인 이유**: 기존 `egress_whitelist: []` 를 차단으로 해석하면 배포 위임 모드의
   intent·logickor 가 shim 을 못 불러 전부 깨진다.
-- ingress 대상 네임스페이스는 인스턴스마다 다르다(`tango-dev` / `jonathan-system`) →
+- ingress 대상 네임스페이스는 인스턴스마다 다르다(개발 인스턴스 `${JF_NAMESPACE}` / 서빙 `jonathan-system`) →
   fb_external_container 가 자기 네임스페이스를 values 로 넘긴다. kubelet 프로브는 Calico 기본
   정책상 호스트→로컬 파드 허용이지만 **P0 에서 실측**한다.
 - 잔여 위험(수용): 실행 코드는 같은 모델의 커밋(RO)과 런 데이터셋(RO)을 읽을 수 있고
@@ -320,7 +320,7 @@ mock 과 같은 최상위 계약을 유지하고 상세 키를 더한다.
   humaneval 단독 런 강제·기본 집합에 humaneval 없음, `sample_limit` 범위·타 채점기 거절,
   비교 행 `mock`, stale 불변식(`STALE_HOURS*3600 > 모든 매니페스트 timeout`).
 - **패리티** — BE constants ↔ 컨테이너 registry ↔ FE benchmarks.js ↔ i18n 키.
-- **클러스터 e2e(dev :31080)** — 커밋 모델 배포 → reference 프로젝트 → 19종 각각
+- **클러스터 e2e(개발 인스턴스)** — 커밋 모델 배포 → reference 프로젝트 → 19종 각각
   `sample_limit=20` 완주 → 결과·비교 화면. MMLU 1회 전체 측정. HumanEval 격리 검증(§7.1-6).
 - **FE 브라우저 QA** — 카탈로그·카테고리·샘플 제한·상세 섹션·mock 배지·ko/en.
 
@@ -336,7 +336,7 @@ mock 과 같은 최상위 계약을 유지하고 상세 키를 더한다.
 
 ## 11. P0 실측 결과와 구현 확정 사항 (2026-09-28)
 
-스파이크: tango-dev-2, GPU 7(A100 80GB) 임시 파드, 잡 파드와 같은 securityContext.
+스파이크: 개발 인스턴스 워크스페이스 네임스페이스, GPU 7(A100 80GB) 임시 파드, 잡 파드와 같은 securityContext.
 모델 = dev 커밋 Llama-3.2-3B(`source_model`). 스파이크 리소스는 검증 후 삭제했다.
 
 | # | 항목 | 결과 |
@@ -570,7 +570,7 @@ mock 과 같은 최상위 계약을 유지하고 상세 키를 더한다.
   기능·보안 리뷰 추가 결함 없음.
 - 실사용 관찰(사용자 브라우저, batch 4): 17개(전체 문항)를 GPU 3장 → 런 3개. KMMLU 가 혼자 한 런(LPT), 나머지 8+8 은
   완료(예: MMLU 72.65·GSM8K 85.44·DROP 43.96). ⚠️ GPU 가용 검사는 통과해도 **워크스페이스 네임스페이스 ResourceQuota
-  (dev tango-dev-2: limits.cpu 8 · memory 160G, 잡 1개 = 1.9 CPU·39.9G)** 에 막히면 스케줄러 helm install 이 거절되고
+  (개발 인스턴스 워크스페이스: limits.cpu 8 · memory 160G, 잡 1개 = 1.9 CPU·39.9G)** 에 막히면 스케줄러 helm install 이 거절되고
   런은 failed 로 마감된다 — 런치 전 검사가 쿼터를 보지 않는다(기존 제약, 이번 범위 밖).
 
 ### 14.1 KMMLU 전체 OOMKilled → vLLM 요청 청크(0.1.2, 2026-09-29)

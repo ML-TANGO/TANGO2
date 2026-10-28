@@ -13,6 +13,7 @@
 - **NFS export** — values 의 볼륨 경로(`jfData`·`jfBin`·`jfStorage`·`hfModelCache`), NFS provisioner
   system/efk 경로, registry 이미지 경로를 미리 만들고 노드 대역에 export 합니다. 소스·프론트를 NFS 로
   마운트하는 개발 모드(`src.enabled`·`front.enabled`)면 체크아웃의 `LLMOps/apps`·`LLMOps/front` 도 export 합니다.
+  모든 노드에 `nfs-common` 이 설치되어 있어야 합니다([CLUSTER-SETUP.md](./CLUSTER-SETUP.md) 3-4·3-5).
 
 > 📌 **클러스터가 아직 없다면** [CLUSTER-SETUP.md](./CLUSTER-SETUP.md) 를 먼저 수행하십시오.
 > containerd·CNI(Calico)·kubeadm·metrics-server 설치와 노드 라벨·taint 설정까지 다룹니다.
@@ -33,17 +34,37 @@ cd LLMOps/devops
 cp values.yaml.template values_<서버명>.yaml
 # 예: cp values.yaml.template values_prod.yaml
 
-# 템플릿 파일의 TODO 주석을 확인하며 실제 환경에 맞게 수정
-# - <NFS_SERVER_IP>: NFS 서버 IP 주소
-# - <EXTERNAL_HOST_IP>: 외부 접근 IP 또는 도메인
-# - <SYSTEM_REGISTRY_IP>: 시스템 레지스트리 주소
-# - <USER_REGISTRY_IP>: 사용자 레지스트리 주소
-# - <INIT_ROOT_PASSWORD>: 초기 루트 비밀번호
-# - <KAFKA_USERNAME>, <KAFKA_PASSWORD>: Kafka 인증 정보
-# - <MONGODB_PASSWORD>: MongoDB 비밀번호
-# - <HUGGINGFACE_TOKEN>: HuggingFace 액세스 토큰 (선택, HF 모델/private repo 사용 시 필수)
-# 기타 TODO 주석이 있는 항목들 확인
+# 템플릿 상단의 [필수 설정 체크리스트] 를 따라 실제 환경에 맞게 수정
+# placeholder (모두 채워야 함):
+# - <NFS_SERVER_IP>: NFS 서버 IP (jfData·jfBin·jfStorage·markerData·hfModelCache·src·front 의 server)
+# - <EXTERNAL_HOST_IP>: 외부 접근 IP 또는 도메인 (settings.external.host)
+# - <USER_REGISTRY_IP>:<PORT>: 사용자 레지스트리 주소 (gaip_registry 사용 시 <노드 IP>:30500)
+# - <SRC_PATH>: 소스 마운트 경로 (src.enabled: true 일 때만 — 아래 "소스 마운트 여부 결정" 참고)
+# - <NODE_HOSTNAME>: front 를 hostPath 로 마운트할 노드 (front.enabled: true 일 때만)
+# placeholder 는 아니지만 직접 정해야 하는 값 (비밀번호는 예시 기본값이 들어 있음):
+# - settings.initRootPassword: 플랫폼 루트 비밀번호
+# - settings.mongoDb.password: gaip_mongodb/mongodb/values.yaml 의 auth.rootPassword 와 같아야 함 (두 곳을 같이 바꿔야 한다)
+# - secrets.workspace.integration.encryptionKey: 현재 차트·앱에서 읽지 않는 예약 값 (비워 둬도 됨)
+# - settings.huggingface.token: 선택 (HF 모델/private repo 사용 시 필수)
+# 참고: settings.kafka.protocol·sasl_* 는 미사용입니다 (cm_settings 는 JF_KAFKA_DNS 만 내보내고
+#       gaip_kafka 리스너는 PLAINTEXT) — 바꿀 필요 없습니다.
 ```
+
+인프라 차트 values 에도 placeholder 가 있습니다 — 설치 전에 함께 채웁니다.
+
+- `gaip_nfs_provisioner/values-system.yaml`·`values-efk.yaml`: `<NFS_SERVER_IP>`, `<NFS_PROVISIONER_SYSTEM_PATH>`, `<NFS_PROVISIONER_EFK_PATH>`
+- `gaip_registry/values.yaml`: `<NFS_SERVER_IP>`, `<REGISTRY_IMAGES_PATH>`
+- `gaip_metallb/metallb-config.yaml`(MetalLB 를 쓸 때만): `<METALLB_ADDRESS_RANGE>`
+
+#### 소스 마운트 여부 결정 (`global.jfb.volume.src`)
+
+템플릿 기본값은 `src.enabled: true` + `path: <SRC_PATH>` 입니다. 그대로 두면 소스 볼륨 마운트가 실패해
+앱 파드가 기동하지 않으므로 둘 중 하나를 고릅니다.
+
+- **이미지에 포함된 코드로 실행**: `src.enabled: false`. 앱 이미지가 코드를 포함하고 있어 추가 작업이 없습니다.
+- **체크아웃 소스를 마운트**: `src.path` 에 체크아웃의 `LLMOps/apps` 절대 경로를 넣고, 그 경로를 NFS 로
+  export 합니다(앱별 하위 디렉터리가 각 파드에 마운트됨). 코드 수정은 이미지 재빌드 없이
+  `kubectl rollout restart` 로 반영합니다.
 
 > 📌 **HuggingFace 토큰 (`global.jfb.settings.huggingface.token`)**: HuggingFace 모델/private 레포를 사용할 경우 토큰을 입력합니다. nexus 등 오프라인 환경에서는 빈 값으로 두면 startup 시 HF login을 자동 스킵합니다. 토큰은 ConfigMap `jfb-settings`의 `HUGGINGFACE_TOKEN` 환경변수로 주입되며, 값이 변경되면 `llm_model`/`llm_playground` Pod이 자동 rollout 됩니다 (`checksum/config` annotation 적용).
 
@@ -60,6 +81,7 @@ cd LLMOps/devops
 위 스크립트들은 kubeconfig를 아래 경로에서 찾습니다.
 
 ```bash
+mkdir -p LLMOps/devops/fb_common_app/helm/file/kube   # 클론에는 없는 디렉터리
 cp ~/.kube/config LLMOps/devops/fb_common_app/helm/file/kube/config
 ```
 
@@ -67,7 +89,7 @@ cp ~/.kube/config LLMOps/devops/fb_common_app/helm/file/kube/config
 
 인프라 차트(`gaip_*`)는 차트별로 values 파일 구조가 다릅니다.
 
-- `gaip_nfs_provisioner/run.sh`: `-f <values.yaml>` **필수**. 현재 시스템/EFK/마커 용도로 values가 분리되어 있습니다 (`values-system.yaml`, `values-efk.yaml`, `values-marker.yaml`, `*_dev.yaml`).
+- `gaip_nfs_provisioner/run.sh`: `-f <values.yaml>` **필수**. 현재 시스템/EFK/마커 용도로 values가 분리되어 있습니다 (`values-system.yaml`, `values-efk.yaml`, `values-marker.yaml`). 환경별 `values-*_dev.yaml` 은 gitignore 대상이라 클론에는 없습니다.
 - `gaip_kong/run.sh`: `-f <values.yaml>` **필수** (`developer:` 값을 namespace로 사용)
 - `gaip_registry/run.sh`: `-f <values.yaml>` **필수**
 - `gaip_maraidb/run.sh`: `install`은 기본 값으로 설치, `init -f <values.yaml>`은 **values 필요**
@@ -96,7 +118,7 @@ cp ~/.kube/config LLMOps/devops/fb_common_app/helm/file/kube/config
 10. **(Optional) EFK** (`gaip_efk`) — Elastic 설치 → Pod Running 확인 → init/Fluent 설치
 11. **(Optional) GPU Operators** (`gaip_gpu_operators`) — NVIDIA GPU 노드가 있는 경우
 12. **Platform Apps** (`devops/run.sh`)
-13. **LLM Apps(선택)** (`devops/run_llm.sh`)
+13. **LLM Apps** (`devops/run_llm.sh`) — 모델·배포/추론·평가·데이터 파이프라인 메뉴의 백엔드
 14. **외부 컨테이너 manifest 확인** — 표준 판본은 앱 기동 시 자동 등록됩니다.
     아래 [외부 컨테이너 manifest 등록](#외부-컨테이너-manifest-등록) 참고.
 
@@ -108,19 +130,20 @@ cp ~/.kube/config LLMOps/devops/fb_common_app/helm/file/kube/config
 cd LLMOps/devops
 
 # Step 1 — 스토리지/네트워크 베이스 (NFS + 선택적 MetalLB)
+#   values-system.yaml·values-efk.yaml 의 placeholder 를 먼저 채웁니다.
 ./run_step1_infra_base.sh \
   --system ./gaip_nfs_provisioner/values-system.yaml \
-  --efk    ./gaip_nfs_provisioner/values-efk.yaml \
-  --metallb            # MetalLB가 필요할 때만
+  --efk    ./gaip_nfs_provisioner/values-efk.yaml
+# MetalLB 가 필요할 때만(기본 Kong NodePort 면 불필요) 위 명령 끝에 `--metallb` 를 붙입니다.
+#   먼저 gaip_metallb/metallb-config.yaml 의 <METALLB_ADDRESS_RANGE> 를 수정해야 합니다 —
+#   그대로 두면 적용 단계에서 거부되어 step1 이 중단됩니다.
 
-# Step 2 — 핵심 인프라 (Kong → Registry → MariaDB init)
+# Step 2 — 핵심 인프라 (Kong → Registry → MariaDB install+init → Kafka → Redis → MongoDB)
+#   ⚠️ MariaDB init 이 jonathan_llm 을 DROP 후 재생성합니다 — 신규 설치에서만 실행하세요.
 ./run_step2_core_infra.sh \
   --kong     ./gaip_kong/values.yaml \
   --registry ./gaip_registry/values.yaml \
   --mariadb  ./gaip_maraidb/values.yaml
-
-# Kafka / Redis / MongoDB 는 step 스크립트로 묶여 있지 않습니다.
-# 아래 "설치 예시 → 6) Kafka / Redis / MongoDB" 항목을 참고하여 개별 실행하세요.
 
 # Step 3 — 선택 옵저버빌리티 / GPU
 ./run_step3_optional_obs.sh --prometheus
@@ -136,19 +159,29 @@ cd LLMOps/devops
 
 ### 1) NFS Provisioner
 
-`gaip_nfs_provisioner/run.sh`는 values 파일에서 `volumeName`을 읽어 namespace로 사용합니다.
+`gaip_nfs_provisioner/run.sh`는 values 파일에서 `volumeName`을 읽어 namespace로 사용합니다(릴리스명 `<volumeName>-sc`).
+시스템용(`values-system.yaml` → `jonathan-system-sc`)과 EFK용(`values-efk.yaml` → `jonathan-efk-sc`) 두 개를 설치합니다.
+두 파일의 `<NFS_SERVER_IP>`·`<NFS_PROVISIONER_SYSTEM_PATH>`·`<NFS_PROVISIONER_EFK_PATH>` 를 먼저 채우고,
+그 경로를 NFS 서버에서 export 해 둡니다. (기본 `values.yaml` 은 `volumeName`·`server`·`path`·`storageClass.name` 이
+모두 비어 있어 그대로는 쓸 수 없습니다.)
 
 ```bash
 cd LLMOps/devops/gaip_nfs_provisioner
-./run.sh install -f ./values.yaml
+./run.sh install -f ./values-system.yaml
+./run.sh install -f ./values-efk.yaml
 ```
 
 ### 2) (Optional) MetalLB
 
-`gaip_metallb`는 manifest 기반입니다.
+`gaip_metallb`는 manifest 기반입니다. 기본 Kong proxy 는 NodePort(32080/32443)라 **MetalLB 가 필요 없습니다** —
+80/443 을 LoadBalancer 로 쓸 때만 설치합니다(아래 Kong 주의사항 참고).
+
+`install.sh` 는 `metallb-config.yaml` 을 그대로 `kubectl create` 하므로, 실행 전에 `addresses` 의
+`<METALLB_ADDRESS_RANGE>` 를 실제 주소 대역(리스트)으로 바꿉니다. 수정하지 않으면 적용 단계에서 거부됩니다.
 
 ```bash
 cd LLMOps/devops/gaip_metallb
+vi metallb-config.yaml     # addresses: ["<시작 IP>-<끝 IP>"] 형태로 수정
 ./install.sh
 ```
 
@@ -179,6 +212,8 @@ cd LLMOps/devops/gaip_registry
 #### containerd 설정(참고)
 
 레지스트리를 insecure registry로 붙여야 하는 경우, `/etc/containerd/config.toml`에 registry 설정이 필요할 수 있습니다.
+기본 설정 파일에는 `registry.configs`·`registry.mirrors` 헤더가 이미 있으므로 **파일 끝에 덧붙이지 말고 기존 헤더 아래에
+하위 블록만 넣습니다**(헤더가 두 번 나오면 containerd 가 설정을 읽지 못합니다). 자세한 절차는 [CLUSTER-SETUP.md](./CLUSTER-SETUP.md) 4-2.
 
 ```text
   [plugins."io.containerd.grpc.v1.cri".registry.configs]
@@ -202,11 +237,13 @@ cd LLMOps/devops/gaip_maraidb
 # DB 설치 (galera)
 ./run.sh install
 
-# DB 초기화 (init 차트)
+# DB 초기화 (init 차트) — jonathan_llm 을 DROP 후 재생성하므로 신규 설치에서만
 ./run.sh init -f ./values.yaml
 ```
 
 ### 6) Kafka / Redis / MongoDB
+
+`run_step2_core_infra.sh` 를 썼다면 이미 설치되어 있습니다. 개별 설치할 때만 실행합니다.
 
 ```bash
 cd LLMOps/devops/gaip_kafka
@@ -225,6 +262,10 @@ cd ../gaip_mongodb
 
 ```bash
 cd LLMOps/devops/gaip_prometheus
+# 처음 설치하는 호스트면 의존 차트 저장소를 먼저 등록합니다 (run_step3_optional_obs.sh --prometheus 는 자동 수행)
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo add grafana https://grafana.github.io/helm-charts
+helm repo update
 ./run.sh install
 ```
 
@@ -289,11 +330,11 @@ cd LLMOps/devops
 
 기본(`global.jfb.volume.front.enabled: false`)은 front 이미지에 들어 있는 빌드를 서빙하므로 별도 작업이 없습니다.
 체크아웃의 빌드를 서빙하는 개발 모드(`front.enabled: true`)면 먼저 빌드합니다(yarn 만 사용, npm 금지).
+`yarn.lock` 이 yarn 4(berry) 형식이라 yarn 1 로는 설치되지 않습니다 — 프론트 이미지(`front/Dockerfile`)와 같은 방식으로 빌드합니다.
 
 ```bash
 cd LLMOps/front
-yarn install --frozen-lockfile
-yarn build
+corepack enable && corepack prepare yarn@4.17.1 --activate && yarn install --immutable && yarn vite build
 ```
 
 ETRI 로그인 브랜딩(`VITE_REACT_APP_BRAND=tango`)은 `configs/app-config/vite-env/.env.production` 에 들어 있습니다.
@@ -320,11 +361,12 @@ kubectl exec -n jonathan-system $POD -- curl -sS -X POST -H "Jf-User: <관리자
 반영되지 않습니다** — 버전을 올리거나 기존 행을 지운 뒤 재시작합니다),
 같은 `service_family` 두 짝은 자동으로 pair 등록됩니다.
 
-기동 로그에서 결과를 확인할 수 있습니다.
+기동 로그에서 결과를 확인할 수 있습니다. 이 로그는 새로 시드했거나(`seeded`) 잘못된 파일(`invalid`)이
+있을 때만 찍히므로, 이미 모두 등록된 상태에서 재시작하면 아무것도 나오지 않는 것이 정상입니다.
 
 ```bash
 kubectl logs -n jonathan-system deploy/jfb-app-external-container | grep "manifest seed"
-# 예: manifest seed: {'seeded': 11, 'paired': 1, 'skipped': 0, 'invalid': 0}
+# 예(최초 기동): manifest seed: {'seeded': 11, 'paired': 1, 'skipped': 0, 'invalid': 0}
 ```
 
 자동 시드되는 판본은 다음과 같습니다.
@@ -365,10 +407,11 @@ manifest 를 등록해도 **가중치가 공유 HF 캐시에 없으면 학습이
 워크스페이스를 다시 만듭니다.
 
 ```bash
-# 워크스페이스 네임스페이스별로 한 번씩. 기본 목록 = SDS VLM 학습용 2종
-# (openai/clip-vit-large-patch14-336, meta-llama/Llama-3.1-8B-Instruct)
-devops/hf-prefetch/run.sh tango-dev-2
-devops/hf-prefetch/run.sh jonathan-system-2 <추가-모델-repo-id>
+# 워크스페이스 네임스페이스(<플랫폼 ns>-<워크스페이스 ID>, 예: jonathan-system-2) 하나를 지정합니다.
+# 모든 워크스페이스의 hf-model-cache-pvc 는 같은 NFS 경로(hfModelCache.path)를 가리키므로 한 번이면 됩니다.
+# 기본 목록 = SDS VLM 학습용 2종 (openai/clip-vit-large-patch14-336, meta-llama/Llama-3.1-8B-Instruct)
+devops/hf-prefetch/run.sh jonathan-system-<워크스페이스 ID>
+devops/hf-prefetch/run.sh jonathan-system-<워크스페이스 ID> <추가-모델-repo-id>
 ```
 
 스크립트가 함께 처리하는 것(전부 실제로 밟은 함정입니다):
@@ -401,10 +444,9 @@ register() {
          -H 'Content-Type: application/json' --data-binary @- ; echo "  <- $1"
 }
 
-register apps/convert/manifest.yaml
-register apps/evaluate/manifest.yaml
-register apps/evaluate_benchmark_mock/manifest.yaml
-register Data_Augmentation/fewshot_prompting/manifest.yaml
+# 경로는 LLMOps/ 기준. 레포의 표준 판본(apps/convert/manifest.yaml 등)은 이미 자동 시드되어
+# 있으므로 다시 등록하면 409 입니다 — 레포에 없는 manifest 만 등록합니다.
+register <사용자 manifest>.yaml
 
 # 등록 확인
 curl -sS http://localhost:8000/api/v1/manifests
@@ -414,14 +456,17 @@ curl -sS http://localhost:8000/api/v1/manifests
 `POST /api/v1/manifests/pair` 로 한 번에 등록해 같은 `pair_id`로 묶습니다. 본문은
 `{"manifests": [{"manifest_yaml": "..."}, {"manifest_yaml": "..."}]}` (정확히 2개).
 페어는 `service_family` · `contract_version` · image identity · (infer + workload) 형태가
-서로 일치해야 하며, 불일치 시 422로 거부됩니다 (SP-1 v2 §1.1).
+서로 일치해야 하며, 불일치 시 422로 거부됩니다.
+표준 `eva-vlm-train`/`eva-vlm-infer` 페어(`1.1.0`)는 이미 자동 시드되므로 다시 등록할 필요가 없습니다
+(`examples/external-container-manifests/` 의 두 파일은 작성 양식 참고용 `1.0.0` 예시입니다).
 
 ```bash
+# 경로는 LLMOps/ 기준
 python3 -c '
 import json,sys
 print(json.dumps({"manifests": [{"manifest_yaml": open(p).read()} for p in sys.argv[1:]]}))' \
-  examples/external-container-manifests/eva-vlm-train.yaml \
-  examples/external-container-manifests/eva-vlm-infer.yaml \
+  <사용자 학습 manifest>.yaml \
+  <사용자 추론 manifest>.yaml \
 | curl -sS -X POST http://localhost:8000/api/v1/manifests/pair \
        -H 'Content-Type: application/json' --data-binary @-
 ```
@@ -432,6 +477,10 @@ print(json.dumps({"manifests": [{"manifest_yaml": open(p).read()} for p in sys.a
 ## 데이터를 보존한 재설치
 
 클러스터를 다시 만들되 NFS 데이터(DB·스토리지)를 살리는 경우의 차이입니다.
+
+> ⚠️ **`run_step2_core_infra.sh` 를 실행하지 마십시오.** 이 스크립트는 MariaDB `install` 뒤에 항상
+> `init` 까지 실행하고, init(`mariadb-init/file/check.py`)은 `jonathan_llm` 을 무조건 DROP 후 재생성합니다.
+> Kong·Registry·Kafka·Redis·MongoDB 는 [설치 예시](#설치-예시)의 개별 `run.sh` 로 설치합니다.
 
 - MariaDB 는 `gaip_maraidb/run.sh install` 만 실행합니다. **`init` 은 `jonathan_llm` 을 DROP 하므로 금지**입니다.
 - NFS provisioner 는 같은 PVC 이름이면 기존 디렉터리에 다시 붙습니다(`pathPattern: ${.PVC.name}`, Retain).

@@ -21,7 +21,14 @@
 
 </aside>
 
-이미지 빌드를 완료한 이후의 Helm Chart 작성 및 배포 절차는 **Tango MSA 탑재 가이드**를 참고하세요.
+이미지 빌드를 완료한 이후의 Helm Chart 작성 및 배포 절차는 **[Tango MSA 탑재 가이드](./Tango%20MSA%20탑재%20가이드.md)** 를 참고하세요.
+
+> 📌 **학습·추론·변환·평가처럼 장시간 GPU 작업을 하는 서비스라면** 플랫폼이 manifest 로 직접 띄우는 **외부 컨테이너** 계약도 따라야 합니다. 이미지 작성 규칙(non-root UID 1000, `readOnlyRootFilesystem` 호환, 쓰기는 `/output`·`/tmp` 만, 플랫폼이 주입하는 `JF_PORT` 로 listen 등)이 추가됩니다.
+>
+> - 계약 전문: [`examples/hello-plugin/external-container-spec.md`](../examples/hello-plugin/external-container-spec.md) (외부 컨테이너 인터페이스 계약서 v1, spec 버전 v1.1)
+> - 바로 fork 해서 쓰는 템플릿: [`examples/hello-plugin/`](../examples/hello-plugin/) — `manifest.yaml` · `app.py`(FastAPI, 표준 엔드포인트) · `Dockerfile`
+>
+> 이 문서의 예시 포트(백엔드 **8000**)와 values 키(`frontend` / `backend` / `service.*`)는 탑재 가이드 및 hello-plugin 템플릿과 같습니다.
 
 ## 0.2 대상 독자
 
@@ -116,6 +123,8 @@ def get_info():
 
 @app.post("/run")
 def run_service(body: dict):
+    # MSA 기본 계약의 envelope 형식. 외부 컨테이너로 탑재하면 플랫폼은 params 를 본문 그대로 보냅니다
+    # (envelope 없음 — examples/hello-plugin/external-container-spec.md 참고).
     workspace_id = body.get("workspace_id")
     project_id = body.get("project_id")
     params = body.get("params", {})
@@ -158,7 +167,7 @@ app.post('/run', (req, res) => {
   res.json({ status: 'success', result });
 });
 
-app.listen(30000);
+app.listen(process.env.PORT || 8000);
 ```
 
 ---
@@ -211,11 +220,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # 서비스가 사용할 포트 노출
-# values.yaml의 backend.port와 반드시 일치해야 함
-EXPOSE 30000
+# values.yaml의 backend.port / service.backend.targetPort 와 반드시 일치해야 함
+EXPOSE 8000
 
-# 서비스 실행 명령
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "30000"]
+# 서비스 실행 명령 (외부 컨테이너는 플랫폼이 주는 JF_PORT 를 따라야 하므로 shell 형식으로 기본값만 둠)
+CMD ["sh", "-c", "exec uvicorn app:app --host 0.0.0.0 --port ${JF_PORT:-8000}"]
 ```
 
 **GPU가 필요한 백엔드의 경우:**
@@ -232,9 +241,11 @@ COPY requirements.txt .
 RUN pip3 install --no-cache-dir -r requirements.txt
 
 COPY . .
-EXPOSE 30000
-CMD ["python3", "app.py"]
+EXPOSE 8000
+CMD ["python3", "app.py"]   # app.py 안에서 0.0.0.0:8000 으로 listen
 ```
+
+> ⚠️ CUDA 베이스 이미지의 CUDA 버전은 배포 클러스터 GPU 드라이버가 지원하는 버전(`nvidia-smi` 의 "CUDA Version") **이하**여야 합니다. 더 높은 CUDA 로 빌드한 torch 는 초기화에 실패할 수 있습니다. (외부 컨테이너 계약서 §3.2)
 
 ## 4.2 프론트엔드 Dockerfile (React + Nginx 예시)
 
@@ -252,7 +263,7 @@ FROM nginx:alpine
 COPY --from=builder /app/build /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/nginx.conf
 
-# values.yaml의 service.frontend1.targetPort와 반드시 일치해야 함
+# values.yaml의 service.frontend.targetPort와 반드시 일치해야 함
 EXPOSE 80
 
 CMD ["nginx", "-g", "daemon off;"]
@@ -275,8 +286,9 @@ http {
         }
 
         # 백엔드 API 프록시 (필요한 경우)
+        # 서비스명 = 탑재 가이드 templates/service.yaml 의 <pod_name>-backend-svc, 포트 = service.backend.port
         location /api/ {
-            proxy_pass http://my-backend-svc:30000/;
+            proxy_pass http://<pod_name>-backend-svc:8000/;
         }
     }
 }
@@ -329,13 +341,13 @@ docker build -t docker.io/my-org/my-service-frontend:v1.0.0 ./my-frontend
 docker images | grep my-service
 
 # 로컬에서 컨테이너 실행하여 동작 확인 (선택)
-docker run -p 30000:30000 docker.io/my-org/my-service-backend:v1.0.0
+docker run -p 8000:8000 docker.io/my-org/my-service-backend:v1.0.0
 
 # /health 엔드포인트 동작 확인
-curl http://localhost:30000/health
+curl http://localhost:8000/health
 # 예상 응답: {"status": "healthy", "timestamp": "..."}
 
-curl http://localhost:30000/info
+curl http://localhost:8000/info
 # 예상 응답: {"name": "my-service", "version": "1.0.0", ...}
 ```
 
@@ -387,15 +399,25 @@ Push가 완료된 이미지 경로를 Helm Chart의 `values.yaml`에 등록합�
 backend:
   image: "docker.io/my-org/my-service-backend:v1.0.0"  # ← Push한 이미지 경로
   imagePullPolicy: "IfNotPresent"  # 로컬에 이미지가 없을 때만 pull
-  port: 30000                       # Dockerfile의 EXPOSE와 일치해야 함
+  port: 8000                        # Dockerfile의 EXPOSE와 일치해야 함
 
-frontend1:
+frontend:
   image: "docker.io/my-org/my-service-frontend:v1.0.0"
   imagePullPolicy: "IfNotPresent"
   port: 80
+
+service:
+  backend:
+    port: 8000
+    targetPort: 8000                # = backend.port = Dockerfile EXPOSE
+  frontend:
+    port: 80
+    targetPort: 80
 ```
 
-이후 Helm Chart 설치 방법은 **Tango MSA 탑재 가이드 — 3장 Helm Chart 설치**를 참고하세요.
+> 💡 외부 컨테이너로 등록하는 경우에는 Helm values 대신 `manifest.yaml` 의 `spec.image` 와 `spec.port` 에 같은 값을 적습니다(템플릿: [`examples/hello-plugin/manifest.yaml`](../examples/hello-plugin/manifest.yaml)).
+
+이후 Helm Chart 설치 방법은 **Tango MSA 탑재 가이드 — 3장 Helm Chart 설치**를, 외부 컨테이너 manifest 등록 절차는 계약서 §13(manifest 제출 흐름)과 탑재 가이드 1.4절을 참고하세요.
 
 ---
 

@@ -36,7 +36,7 @@ fi
 # ============================================================
 # IMAGE INFO
 # ============================================================
-REGISTRY="192.168.0.150:30500"
+REGISTRY="${REGISTRY:-registry.jonathan.acryl.ai}"   # 기본값은 apps/build.sh 와 동일, env REGISTRY 로 덮어씀
 read -p "Image registry url? $REGISTRY (y/n) " RESPONSE
 if [ "$RESPONSE" == "n" ]; then
     read -p "Enter Image registry url: " REGISTRY

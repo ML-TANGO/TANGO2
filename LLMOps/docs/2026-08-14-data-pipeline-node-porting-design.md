@@ -1,8 +1,8 @@
 # 데이터 파이프라인 노드 이식 설계
 
-작성 2026-08-14 · 대상 브랜치 `Acryl-LLMOps-dev` · 개발 인스턴스 `tango-dev`
+작성 2026-08-14 · 대상 브랜치 `Acryl-LLMOps-dev` · 개발 인스턴스
 
-프로토타입 정본: `~/data_pipeline` (Python 2,620줄 · 테스트 144건 그린 · 실모델 E2E 완주)
+프로토타입 정본: 별도 프로토타입 저장소 `data_pipeline` (Python 2,620줄 · 테스트 144건 그린 · 실모델 E2E 완주)
 선행 설계: [`2026-08-14-llm-data-pipeline-design.md`](2026-08-14-llm-data-pipeline-design.md) — FE 12화면 + BE 스캐폴드(커밋 `eadec874c`/`074c7d3b6`/`91740fbf8`)
 
 ---

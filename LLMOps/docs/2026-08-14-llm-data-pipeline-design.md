@@ -1,6 +1,6 @@
 # LLM · VLM 학습 특화 데이터 파이프라인 설계
 
-작성 2026-08-14 · 대상 브랜치 `Acryl-LLMOps-dev` · 개발 인스턴스 `tango-dev`
+작성 2026-08-14 · 대상 브랜치 `Acryl-LLMOps-dev` · 개발 인스턴스
 
 목업 정본: `LLMOps/vlm-data-factory-app/` (Vite + React18 + Tailwind + react-router v6, 48파일 ~2,600줄)
 
@@ -15,7 +15,7 @@ LLM 도메인 안의 단일 표면으로 세운다. 프론트는 `front/src/page
 
 | 항목 | 실측 |
 |---|---|
-| 개발 네임스페이스 | `tango-dev` (이 worktree 소속) — 작업 대상 |
+| 개발 네임스페이스 | 개발 인스턴스(`${JF_NAMESPACE}`, 이 worktree 소속) — 작업 대상 |
 | 서빙 네임스페이스 | `jonathan-system` (얼림) — 건드리지 않음 |
 | 기존 LLM 앱 | `jfb-llm-model` · `jfb-llm-playground` · `jfb-llm-evaluation` → 신규가 4번째 |
 | front | 모노레포 단일 repo (별도 repo 아님). Vite + Redux + SCSS 모듈 786개, **Tailwind 없음**, **react-router v5** |
@@ -155,7 +155,7 @@ JSON 을 평가하지 않게 한다. 생성자는 `create_user` 문자열(jf-Use
 ## 9. 빌드 · 배포 시퀀스
 
 1. `apps/llm_data_pipeline` 이미지 빌드 → `devops/llm_data_pipeline/helm/values` 태그 정합
-2. `devops/run_llm.sh install|upgrade -f values_dev.yaml` (`JF_NAMESPACE=tango-dev`)
+2. `devops/run_llm.sh install|upgrade -f values_dev.yaml` (`JF_NAMESPACE=<개발 인스턴스 네임스페이스>`)
 3. `migrations/001_llm_data_pipeline.sql` 수동 적용
 4. front: `yarn build` → `jfb-app-front` 반영
 
