@@ -1,5 +1,5 @@
 #!/bin/bash
-IMAGE_REGI="192.168.1.14:30500"
+IMAGE_REGI="${REGISTRY:-registry.jonathan.acryl.ai}"   # 다른 레지스트리: REGISTRY=<host:port> ./build.sh
 IMAGE_REPO="jfb-system"
 DOCKERFILE="Dockerfile"
 
