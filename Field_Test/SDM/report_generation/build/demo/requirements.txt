@@ -1,0 +1,4 @@
+# Demo-only. Pinned to the versions the demo was rehearsed with.
+openai==3.36.1   # gpt-6-luna labeler for crg_eval.py
+rich==15.0.0     # terminal progress bars and panels (demo/ui.py)
+brotli==1.2.0    # httpx2 (openai SDK) passes output_buffer_limit, which brotli 1.1.0 in the base image rejects
