@@ -22,21 +22,33 @@ Run locally:  python main.py   (or: uvicorn main:app --host 0.0.0.0 --port 30000
 from __future__ import annotations
 
 import os
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from src.fewshot_task import bert_score_installed, preload_bert_scorer
 from src.jobs import JobStore
 from src.schemas import RunRequest
 from src.service import optimize_system_prompt, validate_params
+from src.spice import preload_spice, spice_installed
 
 SERVICE_NAME = "fewshot-prompt-optimizer"
 SERVICE_VERSION = "1.0.0"
 PORT = int(os.environ.get("PORT", "30000"))
 
-app = FastAPI(title=SERVICE_NAME, version=SERVICE_VERSION)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # background threads; /health answers right away
+    preload_spice()
+    preload_bert_scorer()
+    yield
+
+
+app = FastAPI(title=SERVICE_NAME, version=SERVICE_VERSION, lifespan=lifespan)
 JOBS = JobStore()
 
 
@@ -77,6 +89,8 @@ def get_info() -> dict:
             "system_prompt_generation",
             "vlm_ready",
             "async_run",
+            *(["spice"] if spice_installed() else []),
+            *(["bert_score"] if bert_score_installed() else []),
         ],
     }
 

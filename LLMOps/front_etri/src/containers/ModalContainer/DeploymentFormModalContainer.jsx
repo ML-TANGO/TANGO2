@@ -1467,7 +1467,7 @@ class DeploymentFormModalContainer extends PureComponent {
     });
   };
 
-  // 셀렉트 박스 이벤트 핸들러 (Workspace, Training Model)
+  // 셀렉트 박스 이벤트 핸들러 (Workspace, Training TrainingPage)
   selectInputHandler = async (name, value) => {
     const { type } = this.props;
     const { dockerImageOptions } = this.state;

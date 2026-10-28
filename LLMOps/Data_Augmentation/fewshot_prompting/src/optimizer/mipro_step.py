@@ -1,12 +1,14 @@
-"""DSPy MIPROv2 instruction + demo selection.
+"""DSPy MIPROv2 instruction + demo selection (compression).
 
-The ``_MIPROv2RandomSubsets`` override replaces MIPRO's metric-filtered
-bootstrap stage with metric-free random subsets of the trainset, giving the
-caller direct control over how much of the trainset each candidate keeps.
+The ``_MIPROv2PoolSubsets`` override replaces MIPRO's metric-filtered bootstrap
+stage with candidate demo sets drawn from the pool itself (gold demos, never LM
+outputs), always including the whole pool, so "keep every demo" stays one of
+MIPRO's options.
 """
 
 from __future__ import annotations
 
+import math
 import random
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -15,28 +17,40 @@ from typing import Any
 import dspy
 from dspy.teleprompt import MIPROv2
 
-from src.optimizer.scoring import build_program
-from src.optimizer.task import Example, Task
+from src.optimizer.scoring import build_program, program_inputs
+from src.optimizer.task import Example, Task, example_key
 
 
-class _MIPROv2RandomSubsets(MIPROv2):
-    """MIPROv2 with the few-shot candidate stage replaced by metric-free random
-    subsets of the trainset.
+class _MIPROv2PoolSubsets(MIPROv2):
+    """MIPROv2 with the few-shot candidate stage replaced by subsets of the
+    trainset (the demo pool).
 
     The ``num_fewshot_candidates`` slots are filled as:
-      - slot 0: zero-shot (empty demos)
-      - slot 1: labels-only — raw random sample of size min(max_labeled_demos, N)
-      - slots 2..K-1: random subsets, size ~ Uniform[max_bootstrapped_demos/2,
-        max_bootstrapped_demos] (clamped to [1, N])
+      - slot 0: the whole pool (no compression)
+      - slot 1: the given examples only, when the pool holds synthetic demos
+      - other slots: random subsets of size ~ Uniform[ceil(N/2), N-1]
 
-    Why: the default bootstrap stage caps each shuffled slot at
-    ``randint(1, max_bootstrapped_demos)`` and further drops candidates whose
-    teacher trace fails the metric. On hard tasks with low pass-rate this
-    collapses most candidate sets to 3-5 demos regardless of cap. This override
-    removes the metric filter and pins the upper bound exactly at
-    ``max_bootstrapped_demos`` so the caller has direct control over how much of
-    the trainset MIPRO may discard per candidate.
+    Why: the default bootstrap stage builds demos from the task LM's own
+    outputs, filtered by the metric — for a few dozen gold examples that mostly
+    collapses to 3-5 demos and drops the gold answers. Here every candidate is
+    made of the pool's own (gold or gated synthetic) demos.
     """
+
+    def __init__(
+        self, *args: Any, given_flags: Sequence[bool] = (), extra_instructions: Sequence[str] = (), **kwargs: Any
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self._given_flags = list(given_flags)
+        self._extra_instructions = list(extra_instructions)
+
+    def _propose_instructions(self, program, trainset, demo_candidates, *args, **kwargs):
+        """MIPRO's own proposals, plus the caller's extra candidates."""
+        candidates = super()._propose_instructions(program, trainset, demo_candidates, *args, **kwargs)
+        for i in candidates:
+            for extra in self._extra_instructions:
+                if extra not in candidates[i]:
+                    candidates[i].append(extra)
+        return candidates
 
     def _bootstrap_fewshot_examples(
         self,
@@ -63,32 +77,22 @@ class _MIPROv2RandomSubsets(MIPROv2):
         def push(demos: list) -> None:
             for i in range(n_preds):
                 demo_candidates[i].append(list(demos))
+            sizes.append(len(demos))
 
-        # slot 0: zero-shot baseline
-        push([])
-        sizes.append(0)
-
-        # slot 1: labels-only baseline (raw sample, no metric filter)
-        if num_fewshot_candidates >= 2:
-            k = min(max_labeled_demos, n)
-            push(rng.sample(list(trainset), k))
-            sizes.append(k)
-
-        # slots 2..K-1: metric-free random subsets.
-        cap = max_bootstrapped_demos if max_bootstrapped_demos and max_bootstrapped_demos > 0 else n
-        hi = max(1, min(cap, n))
-        lo = max(1, min(int(cap / 2), hi))
-        for _ in range(max(0, num_fewshot_candidates - 2)):
+        push(list(trainset))
+        given = [d for d, g in zip(trainset, self._given_flags) if g]
+        if 0 < len(given) < n and num_fewshot_candidates >= 2:
+            push(given)
+        lo, hi = max(1, math.ceil(n / 2)), max(1, n - 1)
+        lo = min(lo, hi)
+        while len(sizes) < num_fewshot_candidates:
             size = rng.randint(lo, hi)
-            shuffled = list(trainset)
-            rng.shuffle(shuffled)
-            push(shuffled[:size])
-            sizes.append(size)
+            order = list(range(n))
+            rng.shuffle(order)
+            keep = sorted(order[:size])  # subsets keep the pool's order
+            push([trainset[i] for i in keep])
 
-        print(
-            f"[mipro_random] built {num_fewshot_candidates} candidate sets: "
-            f"sizes={sizes} (trainset={n}, band=[{lo},{hi}])"
-        )
+        print(f"[mipro] built {len(sizes)} candidate demo sets: sizes={sizes} (pool={n})")
         return demo_candidates
 
 
@@ -98,11 +102,12 @@ class MIPROOutcome:
 
     program: Any  # dspy.Module
     instruction: str | None
-    demos: list[Example]  # curated subset of the trainset MIPRO kept as few-shot
+    demos: list[Example]  # the pool demos MIPRO kept as few-shot, in prompt order
 
 
-def _to_dspy(ex: Example, input_keys: Sequence[str]) -> Any:
-    return dspy.Example(**{**ex.inputs, **ex.outputs}).with_inputs(*input_keys)
+def _to_dspy(ex: Example, task: Task) -> Any:
+    inputs = program_inputs(task, ex)  # images as dspy.Image, like scoring
+    return dspy.Example(**inputs, **ex.outputs).with_inputs(*inputs)
 
 
 def _wrap_metric(task: Task):
@@ -111,7 +116,7 @@ def _wrap_metric(task: Task):
 
     def metric(gold: Any, pred: Any, trace: Any = None) -> float:
         ex = Example(
-            inputs={k: str(getattr(gold, k)) for k in input_keys if hasattr(gold, k)},
+            inputs={k: getattr(gold, k) for k in input_keys if isinstance(getattr(gold, k, None), str)},
             outputs={k: str(getattr(gold, k)) for k in output_keys if hasattr(gold, k)},
         )
         pred_dict = {k: (str(getattr(pred, k)) if hasattr(pred, k) else "") for k in output_keys}
@@ -128,83 +133,65 @@ def _extract_instruction(program: Any) -> str | None:
     return None
 
 
-def _key(ex: Example) -> tuple[tuple[str, str], ...]:
-    # Inputs-only: MIPRO's bootstrapped demos carry LM-generated outputs that
-    # won't match gold verbatim, but their inputs come straight from trainset.
-    return tuple(sorted(ex.inputs.items()))
-
-
-def _extract_demos(
-    program: Any,
-    trainset: Sequence[Example],
-    input_keys: Sequence[str],
-    output_keys: Sequence[str],
-) -> list[Example]:
-    """Recover which trainset Examples MIPRO retained as few-shot demos."""
-    index = {_key(ex): ex for ex in trainset}
-    seen: set[tuple[tuple[str, str], ...]] = set()
+def _extract_demos(program: Any, pool: Sequence[Example], task: Task) -> list[Example]:
+    """Recover which pool Examples MIPRO kept as few-shot demos."""
+    index = {example_key(program_inputs(task, ex)): ex for ex in pool}
+    seen: set[str] = set()
     out: list[Example] = []
     for _name, predictor in program.named_predictors():
         for demo in getattr(predictor, "demos", None) or []:
-            if not all(hasattr(demo, k) for k in (*input_keys, *output_keys)):
+            if not all(demo.get(k) is not None for k in task.output_keys):
                 continue
-            rec = Example(
-                inputs={k: str(getattr(demo, k)) for k in input_keys},
-                outputs={k: str(getattr(demo, k)) for k in output_keys},
-            )
-            kk = _key(rec)
-            if kk in index and kk not in seen:
-                seen.add(kk)
-                out.append(index[kk])
+            key = example_key({k: demo.get(k) for k in task.input_keys if demo.get(k) is not None})
+            if key in index and key not in seen:
+                seen.add(key)
+                out.append(index[key])
     return out
 
 
 def run_mipro(
     task: Task,
-    trainset: Sequence[Example],
-    holdout: Sequence[Example],
+    pool: Sequence[Example],
+    scoring: Sequence[Example],
     *,
     lm: Any,
-    prompt_lm: Any = None,
     instruction: str | None = None,
     auto: str = "light",
-    max_demos: int = 4,
     num_threads: int | None = None,
     seed: int = 9,
+    extra_instructions: Sequence[str] = (),
 ) -> MIPROOutcome:
-    """Compile ``task`` over ``trainset`` with the public MIPROv2 optimizer.
+    """Compile ``task`` over ``pool`` with the public MIPROv2 optimizer.
 
-    The student is warm-started with ``instruction`` (if any) and all of
-    ``trainset`` as candidate demos; MIPRO's own Bayesian search picks the
-    instruction + the demo subset that maximizes the metric on ``holdout``.
+    The student is warm-started with ``instruction`` and the whole pool as its
+    demos; MIPRO's Bayesian search picks the instruction + demo subset that
+    maximizes the metric on ``scoring`` (leave-one-out, see ``scoring.py``).
+    ``extra_instructions`` join MIPRO's own proposals as candidates.
     """
-    trainset = list(trainset)
-    if not trainset:
-        raise ValueError("run_mipro: empty trainset")
+    pool = list(pool)
+    if not pool:
+        raise ValueError("run_mipro: empty pool")
 
-    train_dspy = [_to_dspy(e, task.input_keys) for e in trainset]
-    val_dspy = [_to_dspy(e, task.input_keys) for e in holdout] if holdout else None
+    train_dspy = [_to_dspy(e, task) for e in pool]
+    val_dspy = [_to_dspy(e, task) for e in scoring]
 
     with dspy.context(lm=lm):
-        student = build_program(task, trainset, instruction)
-        optimizer = _MIPROv2RandomSubsets(
+        student = build_program(task, pool, instruction)
+        optimizer = _MIPROv2PoolSubsets(
             metric=_wrap_metric(task),
             auto=auto,
-            # prompt_model 은 **과제를 푸는 LM 이 아니라** 새 instruction 을 제안하는
-            #   메타 LM 이다(GroundedProposer → proposed_instruction 필드를 JSON 으로
-            #   내놔야 한다). 대상이 VLM(SDS)이면 이 계약을 지킬 수 없어
-            #   AdapterParseError 로 죽으므로, 텍스트 LM 을 따로 물릴 수 있게 한다.
-            #   미지정이면 종전대로 과제 LM 을 그대로 쓴다.
-            prompt_model=prompt_lm or lm,
+            prompt_model=lm,
             task_model=lm,
-            max_bootstrapped_demos=max_demos,
-            max_labeled_demos=max_demos,
+            max_bootstrapped_demos=len(pool),
+            max_labeled_demos=len(pool),
             num_threads=num_threads,
+            given_flags=[not e.synthetic for e in pool],
+            extra_instructions=extra_instructions,
         )
         optimized = optimizer.compile(student, trainset=train_dspy, valset=val_dspy, seed=seed)
 
     return MIPROOutcome(
         program=optimized,
         instruction=_extract_instruction(optimized),
-        demos=_extract_demos(optimized, trainset, task.input_keys, task.output_keys),
+        demos=_extract_demos(optimized, pool, task),
     )

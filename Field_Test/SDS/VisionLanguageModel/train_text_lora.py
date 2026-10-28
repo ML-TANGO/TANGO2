@@ -262,11 +262,21 @@ def main():
 
     # Copy projector.bin from the source LoRA checkpoint so the output dir
     # is self-contained and can be used directly with the VLM demo / service.
-    proj_src = os.path.join(args.lora_path, "projector.bin")
-    proj_dst = os.path.join(args.output_dir, "projector.bin")
-    if os.path.exists(proj_src) and not os.path.exists(proj_dst):
-        shutil.copy2(proj_src, proj_dst)
-        print(f"[Train] Copied projector.bin → {proj_dst}")
+    #
+    # vlm_config.json travels with it. Since projector_type is selectable, that
+    # file is what tells the inference paths which architecture to rebuild
+    # before loading these weights. Leaving it behind would make the copied
+    # projector.bin fall back to the mlp2x_gelu default, which loads a
+    # cross_attn or qformer checkpoint into the wrong module and fails.
+    for filename in ("projector.bin", "vlm_config.json"):
+        src = os.path.join(args.lora_path, filename)
+        dst = os.path.join(args.output_dir, filename)
+        if os.path.exists(src) and not os.path.exists(dst):
+            shutil.copy2(src, dst)
+            print(f"[Train] Copied {filename} → {dst}")
+        elif not os.path.exists(src) and filename == "vlm_config.json":
+            print(f"[Train] 경고: {src} 없음. 이 출력 디렉토리로 추론할 때 "
+                  f"프로젝터 구조가 기본값(mlp2x_gelu)으로 가정됩니다.")
 
     print("[Train] Done.")
 

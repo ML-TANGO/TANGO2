@@ -1,0 +1,6 @@
+# NIAH upstream clone, created by scripts/setup.sh (includes .venv and results/)
+needle-in-a-haystack/
+# LoRA adapters downloaded from the Hugging Face Hub (see README)
+adapters/
+__pycache__/
+*.pyc

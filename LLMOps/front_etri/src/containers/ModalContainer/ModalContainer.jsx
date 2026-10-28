@@ -438,7 +438,7 @@ function ModalContainer() {
           {modalType === 'SYSTEM_LOG' && (
             <SystemLogModalContainer data={modal[modalType]} type={modalType} />
           )}
-          {/* Built-in Model Modal */}
+          {/* Built-in TrainingPage Modal */}
           {modalType === 'CREATE_BUILTIN_MODEL' && (
             <BuiltinModelFormModalContainer
               data={modal[modalType]}
@@ -662,7 +662,7 @@ function ModalContainer() {
           {modalType === 'UPLOAD_CHECKPOINT' && (
             <UploadCheckpointModal data={modal[modalType]} type={modalType} />
           )}
-          {/* DNA Model Upload Modal */}
+          {/* DNA TrainingPage Upload Modal */}
           {/* {modalType === 'UPLOAD_DNA_MODEL' && (
             <DNAModelUploadModal data={modal[modalType]} type={modalType} />
           )} */}

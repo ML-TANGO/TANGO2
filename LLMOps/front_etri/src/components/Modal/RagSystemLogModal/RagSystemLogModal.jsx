@@ -62,7 +62,7 @@ const RagSystemLogModal = ({ data, type }) => {
 
   const { t } = useTranslation();
 
-  // POST Submit Model
+  // POST Submit TrainingPage
   const postDatasetFiles = async () => {
     const { id } = datasetData.selectedModel; // dataset id
     const { name } = trainingData.selectedModel; // path
