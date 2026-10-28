@@ -1,0 +1,33 @@
+# 우선순위 선점(Preemption) 시험용 매니페스트 1/2
+# 1) low-filler 로 ubuntu2204-worker 노드의 CPU 를 거의 채운다 (5개 x 3 core = 15 core / 노드 16 core)
+# 2) priority-test-high.yaml 의 high-pod 를 같은 노드에 배치하면
+#    scheduler 가 low-filler 1개를 선점(퇴거)하고 high-pod 를 배치하는지 확인한다
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: priority-test
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: low-filler
+  namespace: priority-test
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: low-filler
+  template:
+    metadata:
+      labels:
+        app: low-filler
+    spec:
+      priorityClassName: algorithm-service          # 낮은 우선순위 (1000)
+      nodeSelector:
+        kubernetes.io/hostname: ubuntu2204-worker   # 16 core 노드에 고정
+      containers:
+        - name: pause
+          image: registry.k8s.io/pause:3.8          # 모든 노드에 이미 존재하는 초경량 이미지
+          resources:
+            requests:
+              cpu: "3000m"                          # 5개 합계 15 core → 노드 포화
