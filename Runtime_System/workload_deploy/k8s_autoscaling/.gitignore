@@ -1,0 +1,5 @@
+# 민감 정보: 실제 값은 .env 에만 두고 커밋하지 않는다
+.env
+.env.*
+!.env.example
+*.secret.yaml

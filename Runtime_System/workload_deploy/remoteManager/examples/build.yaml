@@ -1,0 +1,27 @@
+apiVersion: sdx/v1
+kind: ImageBuild
+metadata:
+  name: my-app
+  tag: 1.0.0
+spec:
+  base:
+    image: ubuntu            # 허용 목록: ubuntu, centos, debian, alpine, rockylinux
+    tag: "22.04"
+  plugins:                   # BUILD_PLUGIN_ROOT/<name>/<version> 에 존재해야 함
+    - name: vacuum-lib
+      version: 1.0.3
+  source:
+    path: .                  # 소스 아카이브 내 경로
+    workdir: /app            # 컨테이너 내 작업 디렉토리
+  build:
+    entrypoint: ["./run.sh"]
+    env:
+      TZ: Asia/Seoul
+    expose: [8080]
+  push:
+    registry: harbor.example.local
+    project: sdx
+    deploy:
+      enabled: false         # true 이면 push 후 nodes 에 pull → create → start
+      nodes: [node-52]
+      ports: ["8080:8080"]

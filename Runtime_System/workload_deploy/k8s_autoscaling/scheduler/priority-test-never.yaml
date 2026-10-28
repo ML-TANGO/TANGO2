@@ -1,0 +1,27 @@
+# (선택) preemptionPolicy: Never 비교 시험용
+# 우선순위 값은 높지만 선점을 하지 않는 PriorityClass 와 그 pod.
+# 노드가 가득 찬 상태에서는 선점 없이 Pending 으로 대기해야 한다.
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: critical-no-preempt
+value: 10000
+globalDefault: false
+preemptionPolicy: Never
+description: "High priority but never preempts lower-priority pods"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: high-pod-never
+  namespace: priority-test
+spec:
+  priorityClassName: critical-no-preempt
+  nodeSelector:
+    kubernetes.io/hostname: ubuntu2204-worker
+  containers:
+    - name: pause
+      image: registry.k8s.io/pause:3.8
+      resources:
+        requests:
+          cpu: "2000m"

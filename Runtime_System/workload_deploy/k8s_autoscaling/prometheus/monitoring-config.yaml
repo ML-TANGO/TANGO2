@@ -1,0 +1,59 @@
+# kube-prometheus-stack values
+# 적용: helm upgrade prometheus prometheus-community/kube-prometheus-stack \
+#         -n monitoring --version 81.4.3 -f monitoring-config.yaml \
+#         --set-string grafana.adminPassword="$GRAFANA_ADMIN_PASSWORD"
+# Grafana 관리자 비밀번호는 이 파일에 두지 않고 환경변수(GRAFANA_ADMIN_PASSWORD)로 넘긴다.
+# 생략하면 차트 기본값으로 바뀌므로 upgrade 때도 항상 넘긴다. (.env.example 참고)
+
+# ---- 공통: control-plane(ketis) 노드에 고정 ----
+# ketis 노드 label: node-role.kubernetes.io/control-plane=""
+# ketis 노드에는 현재 taint가 없지만, 나중에 복구될 경우를 대비해 toleration도 함께 둠
+
+grafana:
+  adminUser: admin
+  nodeSelector:
+    node-role.kubernetes.io/control-plane: ""
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+  service:
+    type: NodePort
+    nodePort: 30300
+
+prometheus:
+  service:
+    type: NodePort
+    nodePort: 30090
+  prometheusSpec:
+    nodeSelector:
+      node-role.kubernetes.io/control-plane: ""
+    tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+
+alertmanager:
+  alertmanagerSpec:
+    nodeSelector:
+      node-role.kubernetes.io/control-plane: ""
+    tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+
+prometheusOperator:
+  nodeSelector:
+    node-role.kubernetes.io/control-plane: ""
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+
+kube-state-metrics:
+  nodeSelector:
+    node-role.kubernetes.io/control-plane: ""
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule

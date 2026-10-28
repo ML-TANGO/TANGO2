@@ -1,0 +1,26 @@
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: critical-service # E.g., Main API server
+value: 10000
+globalDefault: false # Not designated service's value is set to 0
+preemptionPolicy: PreemptLowerPriority # Default // Node 자원이 부족하면 낮은 우선순위의 pod를 강제 추출
+description: "Super-high priority service"
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: algorithm-service # E.g, Main algorithm
+value: 1000
+globalDefault: false # Not designated service's value is set to 0
+preemptionPolicy: PreemptLowerPriority # Default // Node 자원이 부족하면 낮은 우선순위의 pod를 강제 추출
+description: "Simulation algorithm marginal priority service"
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: db-service # SQL/NoSQL DB
+value: 20000
+globalDefault: false # Not designated service's value is set to 0
+preemptionPolicy: PreemptLowerPriority # Default // Node 자원이 부족하면 낮은 [>
+description: "DB service - Must be activated first"

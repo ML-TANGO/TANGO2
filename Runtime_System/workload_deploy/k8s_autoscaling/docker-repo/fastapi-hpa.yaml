@@ -1,0 +1,56 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: fastapi-hpa
+  namespace: docker-conn
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: fastapi-deploy
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  # 1. CPU based HPA (100m 기준 50%: Normal // 100m 기준 500%: API request)
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 50 # HPA criterion: CPU usage > 500%
+  # 2. RAM based HPA (128Mi 기준 60%)
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 60 # HPA crierion: Memory usage > 60%
+  # 3. API request based HPA (Pod 당 5 RPS 기준)
+  - type: Pods
+    pods:
+      metric:
+        name: fastapi_requests_per_second
+      target:
+        type: AverageValue
+        averageValue: 5 # Avg requests: 5/sec
+  behavior:
+    scaleUp:
+      # 초기화 스파이크가 안정화될 수 있도록 유예 시간 설정 (0s 대신 15s~30s 권장)
+      stabilizationWindowSeconds: 30
+      # 정책 중 보수적인 값(더 작은 증가폭)을 선택하도록 Min 설정 (또는 Pods 정책 하나만 단독 유지)
+      selectPolicy: Max # Policy 중 최대치를 사용n
+      policies:
+        # 정책 1: 30초 동안 최대 2개까지만 증설 허용
+        - type: Pods
+          value: 2
+          periodSeconds: 30
+        # 정책 2: 30초 동안 현재 파드 수의 50%까지만 증설 허용
+        - type: Percent
+          value: 50
+          periodSeconds: 30
+    scaleDown:
+      stabilizationWindowSeconds: 30 # Default: 300 sec
+      policies:
+        - type: Pods
+          value: 2 # Number of scale-down pods = 2
+          periodSeconds: 15

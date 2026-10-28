@@ -1,0 +1,50 @@
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fastapi-deploy
+  namespace: docker-conn
+spec:
+  # replicas: 2 # Dynamic adjust the number of replicas
+  selector:
+    matchLabels:
+      app: fastapi
+  template:
+    metadata:
+      labels:
+        app: fastapi
+    spec:
+      priorityClassName: critical-service
+      containers:
+        - name: fastapi
+          image: 203.254.171.40:5003/fastapi:external
+          imagePullPolicy: Always # ADD for pull updated image
+          ports:
+           - containerPort: 8100 # Container port
+          # command: ["python", "main.py"]
+          resources:
+            requests:
+              cpu: "100m"    # HPA의 기준이 되는 CPU 할당량 (0.1 코어)
+              memory: "512Mi" # 메모리 할당 시작점
+            limits:
+              cpu: "500m"    # 최대 사용 가능 CPU (0.5 코어)
+              memory: "1024Mi" # 최대 사용 가능 메모리
+      imagePullSecrets:
+        - name: regcred
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fastapi-svc # Monitoring label
+  namespace: docker-conn
+  labels:
+    app: fastapi
+spec:
+  selector:
+    app: fastapi
+  type: NodePort
+  ports:
+    - port: 8100
+      name: http-metrics 
+      targetPort: 8100
+      nodePort: 30810   # Fix external port
