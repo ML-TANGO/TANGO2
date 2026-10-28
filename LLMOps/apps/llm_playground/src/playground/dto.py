@@ -1,5 +1,5 @@
-from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
+from pydantic import BaseModel, Field, model_validator
+from typing import Optional, List, Dict, Any, Literal
 import datetime
 from utils.TYPE import DEPLOYMENT_TYPE
 
@@ -12,6 +12,21 @@ class CreatePlaygroundInput(BaseModel):
     access: int = Field(default=1, description='Access Type : 0 = private, 1 = public')
     owner_id: int = Field(default=None, description='Users Id' )
     users_id: Optional[list] = Field(default=list(), description='Users Id' )
+    deploy_type: Literal['cluster', 'edge', 'standalone', 'remote_api'] = Field(default='cluster', description='배포 유형(cluster|edge|standalone|remote_api) — 미지원 값/null 거부')
+
+class RemoteApiConfigInput(BaseModel):
+    """외부 LLM 배포(deploy_type='remote_api') 구성 저장.
+
+    ⚠️ api_key 는 요청으로만 받고 **DB 에 저장하지 않는다** — 워크스페이스 네임스페이스의
+    K8s Secret 으로 가고, playground 행에는 secret 이름(secret_ref)만 남는다.
+    재구성 시 키를 비우면 기존 Secret 을 유지한다(모델만 바꾸는 흔한 경우)."""
+    playground_id: int
+    provider: Literal['chatgpt', 'claude', 'gemini', 'endpoint'] = Field(
+        description='외부 LLM 제공자. 상용 3사는 호스트를 플랫폼이 고정한다')
+    model: Optional[str] = Field(default=None, description='모델명(미지정 시 provider 기본값)')
+    base_url: Optional[str] = Field(default=None, description="provider='endpoint' 일 때 필수. OpenAI 호환 base URL")
+    api_key: Optional[str] = Field(default=None, description='API 키(저장은 K8s Secret). 재구성 시 생략하면 기존 키 유지')
+
 
 class UpdatePlaygroundInput(BaseModel):
     playground_id: int
@@ -37,6 +52,8 @@ class UpdatePlaygroundOptionsInput(BaseModel):
     model_allm_id: Optional[str] = Field(default=None, description="모델: allm 모델 선택시 id")
     model_allm_commit_id: Optional[str] = Field(default=None, description="모델: commit 선택시 model commit id")
     model_info: Optional[dict] = Field(default=None, description="모델 정보 - 설명, 커밋버전, 접근권한, 생성일시, 최근업데이트일시")
+    # serving engine (멀티엔진 로드맵 Phase 1). 현재 vllm 만 지원, 그 외 값은 서버측 거부.
+    serving_system: Optional[str] = Field(default="vllm", description="서빙 엔진: vllm (Phase 2: llama_cpp 등)")
     # model parameter
     model_temperature: Optional[float] = Field(default=None, description="모델 파라미터: temperature")
     model_top_p: Optional[float] = Field(default=None, description="모델 파라미터: top_p")
@@ -111,8 +128,159 @@ class RunPlaygroundInput(BaseModel):
     class Config:
         protected_namespaces = () 
     
+class PipelineDeployInput(BaseModel):
+    """파이프라인(통합 파이프라인 llm_deploy 노드)의 s2s 클러스터 배포 요청(spec #4).
+    create→옵션(모델 바인딩)→start 를 원자적으로 수행. FE 수동 배포와 동일 경로 재사용."""
+    workspace_id: int
+    model_id: Optional[int] = Field(default=None, description="배포할 학습완료 모델(allm) id. huggingface 배포면 생략")
+    model_huggingface_id: Optional[str] = Field(
+        default=None,
+        description="huggingface 저장소 경로(예: Qwen/Qwen2-VL-2B-Instruct). 학습 데이터 "
+                    "파이프라인이 생성·심사용 VLM 을 자동 배포할 때 쓴다. model_id 와 택일.")
+    user_name: str = Field(description="배포 소유자(파이프라인 실행 사용자, OWNER_NAME)")
+    model_instance_id: Optional[int] = Field(
+        default=None,
+        description="모델 자원 인스턴스 id. 생략하면 워크스페이스 인스턴스 중 min_vram_gb 를 "
+                    "충족하는 것을 서버가 고른다(호출자가 인스턴스 표를 몰라도 되게).")
+    min_vram_gb: Optional[int] = Field(
+        default=None,
+        description="이 모델이 요구하는 최소 VRAM(GB). 인스턴스 자동 선택과 사전 거절에 쓴다 — "
+                    "띄운 뒤 OOM 으로 죽으면 사용자에게 원인이 보이지 않는다.")
+    model_commit_id: Optional[int] = Field(default=None, description="배포할 commit id(생략 시 미지정)")
+    name: Optional[str] = Field(default=None, description="배포명(생략 시 자동)")
+    model_instance_count: Optional[int] = Field(default=1, description="인스턴스 할당 개수")
+    model_gpu_count: Optional[int] = Field(default=1, description="GPU 할당 개수")
+    prompt_system_message: Optional[str] = Field(
+        default=None,
+        description="배포 시 baking 할 시스템 프롬프트(생략 시 None=현행 동작). 평가 추론 러너가 "
+                    "전용 배포에 런의 시스템 프롬프트를 실제로 주입해 표시=실사용 일치시키는 용도.")
+
+    class Config:
+        protected_namespaces = ()
+
+    @model_validator(mode="after")
+    def _check_model_target(self):
+        """배포 대상은 정확히 하나 — 둘 다 주면 어느 쪽을 띄웠는지 기록과 실물이 갈린다."""
+        if bool(self.model_id) == bool(self.model_huggingface_id):
+            raise ValueError("model_id 와 model_huggingface_id 중 정확히 하나를 지정하세요")
+        return self
+
+class CreateDualSessionInput(BaseModel):
+    """이중모델 추론 세션 생성(WBS 추론 4.2) — 프롬프트생성 모델(LLM1) + 추론 모델(LLM2)을
+    한 세션으로 동시 배포(co-provision). 각 모델은 기존 배포 경로(pipeline_deploy)로 올라가고,
+    추론 playground(부모)-프롬프트생성 playground(자식)를 JSON 링크한다.
+    자원 블록은 두 모델에 각각 적용하되, GPU 는 모델별 개별 지정 가능(a안 +
+    prompt_gen_gpu_count/inference_gpu_count 오버라이드)."""
+    workspace_id: int
+    name: str = Field(min_length=1, max_length=64, description="세션 이름")
+    prompt_gen_model_id: int = Field(description="프롬프트 생성 모델(LLM1, allm) id")
+    inference_model_id: int = Field(description="추론 모델(LLM2, allm) id")
+    model_instance_id: int = Field(description="자원 인스턴스 id (두 모델 공통 적용)")
+    prompt_gen_commit_id: Optional[int] = Field(default=None, description="LLM1 배포 commit id(생략 시 latest)")
+    inference_commit_id: Optional[int] = Field(default=None, description="LLM2 배포 commit id(생략 시 latest)")
+    # instance/gpu 상한 = 폭주 입력 backstop(실제 상한은 워크스페이스 쿼터가 다운스트림 강제). gpu 0=CPU 허용.
+    model_instance_count: Optional[int] = Field(default=1, ge=1, le=16, description="인스턴스 할당 개수(모델당)")
+    model_gpu_count: Optional[int] = Field(default=1, ge=0, le=16, description="GPU 할당 개수(모델당, 모델별 미지정 시 폴백)")
+    # 모델별 GPU 개별 지정(회의결정: LLM1/LLM2 각각 독립 GPU 수). 생략 시 공통 model_gpu_count 폴백(하위호환).
+    prompt_gen_gpu_count: Optional[int] = Field(default=None, ge=0, le=16, description="LLM1(프롬프트 생성) GPU 할당 개수(생략 시 model_gpu_count)")
+    inference_gpu_count: Optional[int] = Field(default=None, ge=0, le=16, description="LLM2(추론) GPU 할당 개수(생략 시 model_gpu_count)")
+
+    class Config:
+        protected_namespaces = ()
+
+class CreateDualShellInput(BaseModel):
+    """이중모델 세션 '셸' 생성(단일 CreatePlaygroundInput 대칭) — 모델/자원 없이 세션 행만 만든다.
+    LLM1/LLM2·GPU 선택과 실제 배포는 상세 화면의 provision(ProvisionDualInput)에서."""
+    workspace_id: int
+    # 길이는 서비스에서 한국어 envelope 오류로 검증한다. DTO 선검증(422)이 서비스 오류를 가리지 않게 한다.
+    name: str = Field(description="세션 이름(최대 20자, -promptgen 파생명 여유 포함)")
+    description: Optional[str] = None
+    access: Optional[int] = 1
+    owner_id: Optional[int] = None
+    users_id: Optional[list] = Field(default=list(), description="접근 사용자 id")
+
+    class Config:
+        protected_namespaces = ()
+
+class DualModelParams(BaseModel):
+    """역할별 생성 파라미터 — 단일 UpdatePlaygroundOptionsInput 의 model_* 5종과 같은 계약.
+    파라미터는 추론 요청이 아니라 **배포 시점**에 서빙 컨테이너로 주입되므로(llm_deployment param_*),
+    값을 바꾸려면 재배포가 필요하다 = 중지 상태에서만 편집 가능한 구성의 일부.
+    생략(None) 시 서비스의 기존 기본값을 그대로 쓴다(하위호환)."""
+    temperature: Optional[float] = Field(default=None, ge=0, le=2)
+    # top_p·repetition_penalty 는 0 을 허용하면 안 된다: 서빙 파드가 그대로 vLLM
+    #   SamplingParams 로 넘겨 ValueError(top_p in (0,1], repetition_penalty>0) 로
+    #   lifespan 크래시한다(같은 제약이 service.py 기본값 고정 주석에도 적혀 있다).
+    #   배포는 성공하고 서빙만 죽는 형태라 경계에서 막는다.
+    top_p: Optional[float] = Field(default=None, gt=0, le=1)
+    # top_k = -1 은 '비활성(제한 없음)' 관례라 하한을 -1 로 둔다.
+    top_k: Optional[int] = Field(default=None, ge=-1, le=1000)
+    repetition_penalty: Optional[float] = Field(default=None, gt=0, le=10)
+    max_new_tokens: Optional[int] = Field(default=None, ge=1, le=131072)
+
+    class Config:
+        protected_namespaces = ()
+
+class ProvisionDualInput(BaseModel):
+    """이중모델 셸을 실제 배포(단일 RunPlaygroundInput 대칭) — 상세 화면에서 LLM1/LLM2·인스턴스·모델별 GPU를
+    받아 자식(프롬프트생성) 신규 배포 + 부모(추론=셸) bind+start + 링크."""
+    playground_id: int = Field(description="이중 세션 셸(부모) playground id")
+    prompt_gen_model_id: int = Field(description="프롬프트 생성 모델(LLM1, allm) id")
+    inference_model_id: int = Field(description="추론 모델(LLM2, allm) id")
+    model_instance_id: int = Field(description="자원 인스턴스 id (두 모델 공통 적용)")
+    prompt_gen_commit_id: Optional[int] = Field(default=None, description="LLM1 배포 commit id(생략 시 latest)")
+    inference_commit_id: Optional[int] = Field(default=None, description="LLM2 배포 commit id(생략 시 latest)")
+    model_instance_count: Optional[int] = Field(default=1, ge=1, le=16, description="인스턴스 할당 개수(모델당)")
+    model_gpu_count: Optional[int] = Field(default=1, ge=0, le=16, description="GPU 할당 개수(모델당, 모델별 미지정 시 폴백)")
+    prompt_gen_gpu_count: Optional[int] = Field(default=None, ge=0, le=16, description="LLM1 GPU 할당 개수(생략 시 model_gpu_count)")
+    inference_gpu_count: Optional[int] = Field(default=None, ge=0, le=16, description="LLM2 GPU 할당 개수(생략 시 model_gpu_count)")
+    # 역할별 생성 파라미터. 이중은 부모(LLM2)·자식(LLM1)이 각각 playground 행이라
+    #   model_parameter JSON 컬럼도 역할별로 이미 존재 → 마이그레이션 없이 분리 저장된다.
+    prompt_gen_params: Optional[DualModelParams] = Field(default=None, description="LLM1(프롬프트 생성) 생성 파라미터(생략 시 기본값)")
+    inference_params: Optional[DualModelParams] = Field(default=None, description="LLM2(추론) 생성 파라미터(생략 시 기본값). 외부 SDS 모델은 미적용")
+
+    class Config:
+        protected_namespaces = ()
+
+class DualBatchInput(BaseModel):
+    """이중모델 데이터셋 일괄 추론(WBS 4.3 배치). N 샘플에 LLM1→LLM2 체인 실행 + 인-프로세스
+    BLEU/ROUGE 채점(reference 있을 때). 동기 배치라 sample_count 상한 10."""
+    playground_id: int
+    test_dataset_id: int
+    test_dataset_filename: str = Field(description="데이터셋 파일명(데이터셋 디렉터리 하위 상대경로)")
+    sample_count: Optional[int] = Field(default=5, ge=1, le=10, description="샘플 수(동기 배치 상한 10)")
+    metrics: Optional[List[str]] = Field(default=None, description="채점 메트릭 [bleu, rouge] (reference 필요)")
+    session_id: Optional[str] = None
+    system_prompt: Optional[str] = Field(default=None, max_length=4000, description="LLM1 시스템 지침(예시기반 최적화)")
+    dual_examples: Optional[List[Dict[str, Any]]] = Field(default=None, max_length=10, description="LLM1 few-shot 예시")
+    prompt_gen_playground_id: Optional[int] = Field(default=None, description="미지정 시 세션 링크에서 서버 파생")
+    # LLM2 가 외부 SDS(VLM)일 때 공유 멀티모달 입력(image_base64/ais_rows/output_type).
+    #   데이터셋 행이 image/ais 를 실으면 per-sample 값이 우선, 없으면 이 공유 payload 폴백.
+    external_payload: Optional[Dict[str, Any]] = Field(default=None, description="외부 SDS 배치 공유 payload")
+
+    class Config:
+        protected_namespaces = ()
+
 class PlaygroundIdInput(BaseModel):
     playground_id: int
+
+
+class DualInvokeInput(BaseModel):
+    """게시된 이중모델 API 요청 — 단일 게시의 question format과 같은 필드명을 사용한다."""
+    test_type: Optional[str] = Field(default="question")
+    # 타입도 단일 계약(PlaygroundTestInput·DualBatchInput 의 Optional[str])과 같아야 한다.
+    #   int 로 좁히면 기존 게시 클라이언트가 보내는 UUID 형태 session_id 가 이 경로에서만
+    #   422 가 돼, 위에 적은 "같은 question format" 이 깨진다.
+    session_id: Optional[str] = None
+    test_question: str
+    external_payload: Optional[Dict[str, Any]] = None
+
+
+class ExternalInvokeInput(BaseModel):
+    """게시된 외부(SDS) 배포 API 요청 — 협력기관 /run params 를 external_payload 로 그대로 싣는다
+    (Playground /test 의 external 분기와 같은 필드). 검증은 그 분기가 한다."""
+    session_id: Optional[str] = None
+    external_payload: Dict[str, Any]
 
 
 
@@ -124,6 +292,40 @@ class PlaygroundTestInput(BaseModel):
     test_question: Optional[str] = None
     session_id: Optional[str] = None
     network_load: Optional[int] = Field(default=0, description="없음 0, 저 1, 중 2, 고3")
+    external_payload: Optional[dict] = Field(
+        default=None,
+        description=(
+            "External partner container 호출 시 /run body 의 params 로 그대로 전달. "
+            "image_base64, ais_rows 등 partner 전용 필드. None 이면 internal 분기."
+        ),
+    )
+    images: Optional[List[str]] = Field(
+        default=None,
+        description=(
+            "내부 VLM 배포에 넣을 이미지(base64 또는 data URI). 서빙 파드에는 데이터셋 "
+            "마운트가 없어 인라인으로 싣는다. 텍스트 전용 모델에 주면 400 으로 거부된다 — "
+            "이미지를 버리고 텍스트로 답하면 이미지를 본 결과로 오해되기 때문이다. "
+            "external_payload 와 별개(그쪽은 협력기관 컨테이너 전용 필드)."
+        ),
+    )
+    prompt_gen_playground_id: Optional[int] = Field(
+        default=None,
+        description=(
+            "이중모델 추론(SP-7 슬라이스). 지정 시 이 playground(LLM1, 프롬프트 생성기)가 "
+            "test_question 을 최적 프롬프트로 재작성 → 현 playground(LLM2)가 그 프롬프트로 추론. "
+            "test_type=question 에서만 동작. (이중 세션은 서버가 자동 파생)"
+        ),
+    )
+    system_prompt: Optional[str] = Field(
+        default=None,
+        max_length=4000,
+        description="이중모델: LLM1 에 줄 시스템 지침(예시기반 최적화, WBS 4.2).",
+    )
+    dual_examples: Optional[List[Dict[str, Any]]] = Field(
+        default=None,
+        max_length=10,
+        description="이중모델: LLM1 few-shot 예시 [{query, answer}, ...] (예시기반 최적화, WBS 4.2).",
+    )
 
 
 ######################KAFKA##########################
@@ -195,3 +397,31 @@ class DeploymentInfo(BaseModel):
     resources: DeploymentResources
     deployment_llm: Optional[DeploymentLlm] = None
     deployment_llm_db: Optional[DeploymentLlmDb] = None
+
+
+class StartPromptOptimizationInput(BaseModel):
+    """프롬프트 최적화 실행 — examples 직접 입력 또는 dataset_id 추출 중 하나."""
+    examples: Optional[List[Dict[str, Any]]] = Field(
+        default=None, max_length=10,
+        description="[{query, response|answer}] few-shot 예시. 최소 2건(seed 1 + holdout 1)")
+    dataset_id: Optional[int] = Field(
+        default=None, description="examples 미지정 시 데이터셋에서 예시를 추출한다")
+    dataset_filename: Optional[str] = Field(default=None, max_length=512)
+    sample_count: Optional[int] = Field(
+        default=None, ge=2, le=10, description="데이터셋 추출 샘플 수(기본 10)")
+    metric: Optional[str] = Field(
+        default="token_f1",
+        description="token_f1(기본) | bert_score. bert_score 는 폐쇄망에서 token_f1 로 폴백")
+    rounds: Optional[int] = Field(
+        default=0, ge=0, le=3,
+        description="0=빠른 모드(합성 예시 증강 생략). 클수록 대상 모델 추론량·소요시간 증가")
+    proposer_playground_id: Optional[int] = Field(
+        default=None,
+        description=("instruction 제안·reflection·예시생성을 맡을 **텍스트** 배포의 playground id. "
+                     "VLM(외부 SDS) 대상 최적화는 그 모델이 구조화 출력을 못 내 필수. "
+                     "URL 이 아니라 id 를 받는다 — 서버가 shim URL 을 조립해 SSRF 를 막는다."))
+
+
+class SetActivePromptOptimizationInput(BaseModel):
+    """추론에 주입할 최적화 지정. null 이면 해제(최적화 미적용으로 복귀)."""
+    optimization_id: Optional[int] = Field(default=None)

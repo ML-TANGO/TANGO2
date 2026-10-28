@@ -1,0 +1,900 @@
+@import './styles/tokens';
+
+// 화면별 고유 레이아웃.
+//
+// 카드·표·라벨 같은 반복 패턴은 styles/common.module.scss 에 있고, 여기에는 화면마다
+// 다른 것(그리드 열 구성, 그 화면에만 있는 블록)만 둔다.
+
+// ── 페이지 셸 ───────────────────────────────────────────────────────────────
+// 13개 화면이 모두 같은 세로 리듬을 쓴다.
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 0 48px 48px;
+  background: $dp-canvas;
+  min-height: 100%;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+// ── 데이터셋 목록 ───────────────────────────────────────────────────────────
+.list-grid {
+  grid-template-columns: 2fr 1fr 1fr 1.5fr 1fr 1fr 1fr 80px;
+}
+
+.list-name {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.list-name-text {
+  @include dp-num;
+  @include dp-solid(14px);
+  color: $dp-ink;
+}
+
+.list-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.list-hint {
+  font-family: SpoqaM;
+  @include dp-solid(12px);
+  color: $dp-ink-mute;
+}
+
+.list-pass {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.list-pass-row {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.list-pass-value {
+  @include dp-num;
+  @include dp-solid(14px);
+  font-weight: 700;
+  color: $dp-ink;
+}
+
+.list-pass-out {
+  color: $dp-fail;
+}
+
+// 통과율 막대 — 파란 구간이 정상 범위, 세로선이 이 데이터셋의 값이다.
+// 숫자만 보면 82% 가 좋은지 나쁜지 알 수 없으므로 범위를 함께 그린다.
+.list-gauge {
+  position: relative;
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  background: $dp-line-soft;
+}
+
+.list-gauge-band {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: $dp-primary-pale;
+}
+
+.list-gauge-mark {
+  position: absolute;
+  top: -2px;
+  width: 2px;
+  height: 8px;
+  border-radius: 1px;
+}
+
+// ── 파이프라인 ──────────────────────────────────────────────────────────────
+// 검수 대기가 쌓여 있으면 파이프라인을 더 돌리기 전에 그것부터 보라는 신호다.
+.pending-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 24px;
+  border-radius: $dp-r-card;
+  background: $dp-surface;
+  box-shadow: inset 4px 0 0 0 #{$dp-warn}, #{$dp-sh-card};
+}
+
+.pending-left {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 14px;
+}
+
+.pending-count {
+  @include dp-num;
+  @include dp-solid(26px);
+  font-weight: 700;
+  color: $dp-warn-ink;
+}
+
+.pending-unit {
+  font-family: SpoqaB;
+  @include dp-solid(15px);
+  color: $dp-ink-sub;
+}
+
+// ── 단계(전처리 · 필터) ─────────────────────────────────────────────────────
+.stage-grid {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  align-items: start;
+  gap: 24px;
+}
+
+.step-item {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 20px;
+  border-bottom: 1px solid $dp-line-soft;
+  cursor: pointer;
+  background: $dp-surface;
+}
+
+.step-item-on {
+  background: $dp-primary-tint;
+  box-shadow: $dp-ring-left;
+}
+
+.step-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.step-tag {
+  @include dp-num;
+  @include dp-solid(12px);
+  font-weight: 700;
+  color: $dp-ink-faint;
+}
+
+.step-tag-del {
+  color: $dp-warn-ink;
+}
+
+.step-desc {
+  padding-left: 24px;
+  font-family: SpoqaM;
+  @include dp-prose(12px, 1.5);
+  color: $dp-ink-mute;
+}
+
+.step-actions {
+  display: flex;
+  gap: 8px;
+  padding: 20px;
+}
+
+.param-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.param-value {
+  @include dp-num;
+  @include dp-solid(12px);
+  font-weight: 700;
+  color: $dp-ink;
+}
+
+.reason-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 1.2fr 80px 70px;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 24px;
+  border-bottom: 1px solid $dp-line-soft;
+  cursor: pointer;
+  background: $dp-surface;
+}
+
+.reason-row-on {
+  background: $dp-primary-tint;
+  box-shadow: $dp-ring-left;
+}
+
+.removed-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: $dp-r-ctl2;
+  box-shadow: $dp-ring-soft;
+}
+
+.removed-card-kept {
+  box-shadow: inset 0 0 0 1px $dp-pass;
+}
+
+.removed-shot {
+  position: relative;
+  display: block;
+  opacity: 0.55;
+}
+
+.removed-shot-kept {
+  opacity: 1;
+}
+
+.removed-tag {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: rgba(42, 45, 62, 0.82);
+  color: #fff;
+  @include dp-num;
+  @include dp-solid(10px);
+  font-weight: 700;
+}
+
+.removed-tag-kept {
+  background: $dp-pass-bg;
+  color: $dp-pass;
+}
+
+.removed-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-top: 1px solid $dp-line-soft;
+  background: $dp-surface;
+}
+
+.removed-id {
+  @include dp-num;
+  @include dp-solid(11px);
+  color: $dp-ink;
+}
+
+.removed-why {
+  font-family: SpoqaM;
+  @include dp-prose(11px, 1.4);
+  color: $dp-ink-mute;
+}
+
+.removed-btn {
+  padding: 6px 0;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  background: $dp-primary-pale;
+  color: $dp-primary-deep;
+  font-family: SpoqaM;
+  @include dp-solid(11px);
+}
+
+.removed-btn-undo {
+  background: $dp-line-soft;
+  color: $dp-ink-mute;
+}
+
+// ── 생성 ────────────────────────────────────────────────────────────────────
+.generate-grid {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr) 380px;
+  align-items: start;
+  gap: 24px;
+}
+
+.model-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+// 제약 칩 — 누르면 프롬프트 문장이 실제로 들어가고 빠진다.
+.chip {
+  padding: 10px 12px;
+  border: 0;
+  border-radius: $dp-r-ctl;
+  cursor: pointer;
+  background: $dp-surface;
+  color: $dp-primary;
+  box-shadow: inset 0 0 0 1px $dp-primary-soft;
+  font-family: SpoqaM;
+  @include dp-solid(12px);
+  transition: background-color $dp-fast $dp-ease;
+}
+
+.chip-on {
+  background: $dp-primary;
+  color: #fff;
+  box-shadow: none;
+}
+
+.chip-lock {
+  cursor: default;
+  background: $dp-line-soft;
+  color: $dp-ink-mute;
+  box-shadow: $dp-ring;
+}
+
+.qa-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.qa-text {
+  font-family: SpoqaM;
+  @include dp-prose(14px);
+  color: $dp-ink;
+}
+
+.estimate-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid $dp-line-soft;
+}
+
+.estimate-value {
+  @include dp-num;
+  @include dp-solid(22px);
+  font-weight: 700;
+}
+
+.result-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.result-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: $dp-r-ctl2;
+  background: $dp-primary-bg;
+}
+
+.result-value {
+  @include dp-num;
+  @include dp-solid(20px);
+  font-weight: 700;
+  color: $dp-ink;
+}
+
+.cap-row {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) 52px;
+  align-items: center;
+  gap: 12px;
+}
+
+// ── 게이트 ──────────────────────────────────────────────────────────────────
+.gate-grid {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  align-items: start;
+  gap: 24px;
+}
+
+.gate-hero {
+  padding: 28px 32px;
+}
+
+.gate-rate-row {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+}
+
+.gate-rate {
+  @include dp-num;
+  @include dp-solid(48px);
+  font-weight: 700;
+  color: $dp-ink;
+}
+
+.gate-rate-out {
+  color: $dp-fail;
+}
+
+.gate-gauge {
+  position: relative;
+  display: block;
+  height: 14px;
+  margin-top: 24px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: $dp-line-soft;
+}
+
+.gate-gauge-legend {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 12px;
+  @include dp-num;
+  @include dp-solid(11px);
+  color: $dp-ink-mute;
+}
+
+.threshold-row {
+  display: grid;
+  // 104px 은 'COLREG 판단 정확도' 를 담지 못해 라벨이 슬라이더에 붙어 보였다.
+  // 임계값을 조정하는 컨트롤이라 잘못 잡으면 그대로 재심사로 이어진다.
+  grid-template-columns: 132px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 14px;
+}
+
+.fail-row {
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr) 80px 70px;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid $dp-line-soft;
+}
+
+.gate-cta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 20px;
+  padding: 16px 20px;
+  border-radius: $dp-r-ctl2;
+  background: $dp-primary-pale;
+}
+
+// ── SDS 노드 상세 ───────────────────────────────────────────────────────────
+.sds-grid {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  align-items: start;
+  gap: 24px;
+}
+
+.cfg-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 0;
+  border-bottom: 1px solid $dp-line-soft;
+}
+
+.cfg-value {
+  @include dp-num;
+  @include dp-prose(13px, 1.4);
+  text-align: right;
+  color: $dp-ink;
+}
+
+.sample-grid {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  align-items: start;
+  gap: 24px;
+  padding: 24px;
+}
+
+.sample-text {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.sample-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-left: 16px;
+  border-left: 2px solid $dp-primary-pale;
+}
+
+.sample-block-strong {
+  border-left-color: $dp-primary;
+}
+
+.sample-body {
+  font-family: SpoqaM;
+  @include dp-prose(14px, 1.7);
+  color: $dp-ink;
+}
+
+// ── 검수 ────────────────────────────────────────────────────────────────────
+.review-grid {
+  display: grid;
+  // 가운데 칸의 하한을 두면 좁아질 때 줄어드는 대신 넘친다. 캔버스 안쪽(.review-shot
+  // /.review-edit)이 이미 max-width 560px 로 제 폭을 지키므로 하한이 필요 없다.
+  grid-template-columns: 240px minmax(0, 1fr) 360px;
+  align-items: start;
+  gap: 24px;
+}
+
+// 세 칸(240 + 420 + 360 + gap)은 사이드바·패딩까지 더해 실측 1444px 을 요구한다. 그 아래에서
+// 그냥 두면 판정 패널이 뷰포트 밖으로 나가는데 **가로 스크롤도 생기지 않아** 승인·거절
+// 버튼에 아예 도달할 수 없다(1366×768 은 흔한 노트북 해상도다).
+// 정렬·오류 유형은 판정에 필수가 아니므로 위로 올리고, 캔버스와 판정을 남긴다.
+@media (max-width: 1459px) {
+  .review-grid {
+    grid-template-columns: minmax(0, 1fr) 340px;
+  }
+
+  .review-grid > :first-child {
+    grid-column: 1 / -1;
+  }
+
+  // 완료 화면에는 판정 패널이 없다. 2단을 유지하면 340px 이 빈 채로 남는다.
+  .review-done {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 900px) {
+  .review-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .review-grid > :first-child {
+    grid-column: auto;
+  }
+
+  // 완료 카드의 span 2 가 남으면 1단 규칙을 뚫고 암시적 2번째 열을 만든다.
+  .review-done {
+    grid-column: auto;
+  }
+}
+
+.review-canvas {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px;
+}
+
+.review-shot {
+  display: block;
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  overflow: hidden;
+  border-radius: $dp-r-ctl2;
+  box-shadow: $dp-ring-soft;
+}
+
+.review-edit {
+  display: flex;
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  flex-direction: column;
+  gap: 20px;
+  padding-top: 20px;
+  border-top: 1px solid $dp-line;
+}
+
+.review-verdicts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid $dp-line-soft;
+}
+
+.tax-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px;
+  align-items: center;
+  gap: 8px;
+}
+
+.keys {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  padding: 16px 24px;
+}
+
+.key-cap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 5px;
+  background: $dp-surface;
+  box-shadow: $dp-ring;
+  @include dp-num;
+  @include dp-solid(11px);
+  font-weight: 700;
+  color: $dp-ink;
+}
+
+.review-done {
+  display: flex;
+  grid-column: span 2;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 80px 40px;
+  text-align: center;
+}
+
+.review-done-title {
+  font-family: SpoqaB;
+  @include dp-solid(24px);
+  color: $dp-navy;
+}
+
+// ── 분포 분석 ───────────────────────────────────────────────────────────────
+.coverage-grid {
+  grid-template-columns: 1.4fr 1.6fr 0.7fr 0.9fr 0.8fr 1fr 1.2fr;
+}
+
+.analysis-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  align-items: start;
+  gap: 24px;
+}
+
+// 격자 배경은 좌표가 아니라 "빈 곳"을 읽게 도와준다.
+.scatter {
+  padding: 24px;
+  background-image: linear-gradient(#f5f7fb 1px, transparent 1px),
+    linear-gradient(90deg, #f5f7fb 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.scatter-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.detail-shot {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: $dp-r-ctl2;
+  box-shadow: $dp-ring-soft;
+}
+
+.detail-shot-id {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  padding: 4px 8px;
+  background: rgba(42, 45, 62, 0.82);
+  color: #fff;
+  @include dp-num;
+  @include dp-solid(10px);
+}
+
+// ── 구성 · 분할 ─────────────────────────────────────────────────────────────
+.compose-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) 380px;
+  align-items: start;
+  gap: 24px;
+}
+
+.mix-row {
+  display: grid;
+  grid-template-columns: 120px minmax(80px, 1fr) 52px 80px;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid $dp-line-soft;
+}
+
+.split-row {
+  display: grid;
+  grid-template-columns: 110px minmax(80px, 1fr) 52px 80px;
+  align-items: center;
+  gap: 14px;
+}
+
+.split-bar {
+  display: flex;
+  height: 12px;
+  overflow: hidden;
+  border-radius: 2px;
+}
+
+.totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid $dp-line;
+}
+
+.total-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.total-value {
+  @include dp-num;
+  @include dp-solid(22px);
+  font-weight: 700;
+  color: $dp-ink;
+}
+
+.check-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid $dp-line-soft;
+}
+
+.link-btn {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+  background: transparent;
+  font-family: SpoqaB;
+  @include dp-solid(13px);
+  color: $dp-warn-ink;
+}
+
+.fail-link {
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+  background: transparent;
+  text-align: left;
+  @include dp-num;
+  @include dp-prose(11px, 1.6);
+  color: $dp-fail;
+}
+
+// ── 이력 ────────────────────────────────────────────────────────────────────
+.version-grid {
+  grid-template-columns: 1fr 1fr 1.1fr 1.1fr 1.1fr 1.4fr 80px;
+}
+
+.record-grid {
+  grid-template-columns: 1.1fr 1fr 2.2fr 1.1fr 0.9fr 70px;
+}
+
+.delta-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.delta-value {
+  @include dp-num;
+  @include dp-solid(14px);
+  color: $dp-ink;
+}
+
+.delta-diff {
+  @include dp-num;
+  @include dp-solid(11px);
+}
+
+.delta-up { color: $dp-pass; }
+.delta-down { color: $dp-fail; }
+
+// ── 레코드 상세 ─────────────────────────────────────────────────────────────
+.record-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 400px;
+  align-items: start;
+  gap: 24px;
+}
+
+.turn {
+  display: grid;
+  grid-template-columns: 80px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 16px;
+}
+
+.turn-divider {
+  padding-top: 16px;
+  border-top: 1px solid $dp-line-soft;
+}
+
+.turn-role {
+  @include dp-num;
+  @include dp-solid(12px);
+  color: $dp-ink-mute;
+}
+
+.turn-text {
+  font-family: SpoqaM;
+  @include dp-prose(14px);
+  color: $dp-ink;
+}
+
+.lineage-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid $dp-line-soft;
+}
+
+.lineage-key {
+  flex-shrink: 0;
+  font-family: SpoqaM;
+  @include dp-solid(12px);
+  color: $dp-ink-mute;
+}
+
+.lineage-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  @include dp-num;
+  @include dp-solid(12px);
+  color: $dp-ink;
+}
+
+.membership {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.membership-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: $dp-r-ctl;
+  background: $dp-primary-bg;
+}
+
+.membership-ver {
+  @include dp-num;
+  @include dp-solid(12px);
+  color: $dp-ink;
+}

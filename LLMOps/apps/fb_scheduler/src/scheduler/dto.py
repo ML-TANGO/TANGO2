@@ -1,5 +1,5 @@
-from pydantic import BaseModel, Field, validator, StrictStr
-from typing import Optional, List, Union
+from pydantic import BaseModel, ConfigDict, Field, validator, StrictStr
+from typing import Dict, Optional, List, Union
 import utils.HELP as HELP
 from utils import PATH
 from utils.TYPE import TRAINING_ITEM_A, TRAINING_ITEM_B, TRAINING_ITEM_C, PROJECT_TYPE, DEPLOYMENT_TYPE, PROJECT_POD_HOSTNAME, PROJECT_TYPE_A, PROJECT_TYPE_B, PROJECT_TYPE_C, DEPLOYMENT_TYPE_CUSTOM
@@ -289,11 +289,193 @@ class FineTuningParam(BaseModel):
     warmup_steps : int = Field(default=0, description='Linear warmup over warmup_steps.')
     load_in_8bit : int = Field(default=0, description='')
     used_lora : int = Field(default=0, description='used lora')
-    precision : Optional[str] = Field(default="auto", description='학습 정밀도: "auto" | "fp16" | "bf16"')
+    # pattern= 로 화이트리스트 강제 — 이 값들은 --{key}={value} 로 deepspeed 명령에 보간된 뒤
+    # helm --set command="..." + shell=True 로 실행되므로, 미검증 시 셸/helm 인젝션(RCE). (보안리뷰 C-1)
+    precision : Optional[str] = Field(default="auto", pattern=r'^(auto|fp16|bf16)$', description='학습 정밀도: "auto" | "fp16" | "bf16"')
     auto_target_modules : Optional[int] = Field(default=1, description='LoRA 타겟 모듈 자동 감지: 1=auto(all-linear), 0=static map')
-    dataset_format : Optional[str] = Field(default="auto", description='데이터셋 형식: "auto" | "text" | "chat" | "instruction"')
+    dataset_format : Optional[str] = Field(default="auto", pattern=r'^(auto|text|chat|instruction)$', description='데이터셋 형식: "auto" | "text" | "chat" | "instruction"')
     zero_stage : Optional[int] = Field(default=1, description='DeepSpeed ZeRO stage: 1, 2, 3')
+    eval_steps : Optional[int] = Field(default=500, description='평가(eval/loss) 실행 간격(step) → --eval_steps')
+    save_steps : Optional[int] = Field(default=500, description='체크포인트 저장 간격(step) → --save_steps')
 
 
+#==========================================================================
+# External container (SP-1 v2)
+# 1:1 mapping with apps/fb_scheduler/helm_chart/external_container/values.yaml
+# Field-level shape comes from apps/fb_external_container/src/manifest/schema.py
+# — kept as a separate DTO here so fb_scheduler stays decoupled from the
+# external-container service codebase.
+#==========================================================================
+
+class ExternalManifestMeta(BaseModel):
+    name: str
+    version: str
+    provider: str = ""
+    service_family: str = ""
+    contract_version: str = ""
+
+
+class ExternalResources(BaseModel):
+    cpu: str
+    memory: str
+    gpu: int = 0
+    gpu_memory: str = ""
+
+
+class ExternalInputDataset(BaseModel):
+    name: str = ""
+    access: str = ""
+
+
+class ExternalInputNamed(BaseModel):
+    name: str = ""
+
+
+class ExternalInputs(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    dataset: ExternalInputDataset = Field(default_factory=ExternalInputDataset)
+    base_model: ExternalInputNamed = Field(default_factory=ExternalInputNamed)
+    built_in_checkpoint: ExternalInputNamed = Field(default_factory=ExternalInputNamed)
+    # JSON string written to /input/params.json via ConfigMap. Empty string
+    # means "no params" — chart still mounts an empty file for path stability.
+    params_json: str = "{}"
+
+
+class ExternalEndpoints(BaseModel):
+    info: str = "/info"
+    health: str = "/health"
+    live: str = ""
+    run: str = "/run"
+    jobs: str = ""
+    cancel: str = ""
+
+
+class ExternalCapabilities(BaseModel):
+    estimated_startup_seconds: int = 300
+    estimated_duration_seconds: int = 0
+    timeout_seconds: int = 0
+
+
+class ExternalSecurityContext(BaseModel):
+    # SP-1 v2 §7.1 defaults. Override during mock validation for partner images
+    # that aren't yet non-root ready.
+    runAsNonRoot: bool = True
+    runAsUser: int = 1000
+    runAsGroup: int = 1000
+    allowPrivilegeEscalation: bool = False
+    readOnlyRootFilesystem: bool = True
+    dropAllCapabilities: bool = True
+
+
+class ExternalNetwork(BaseModel):
+    # 매니페스트 spec.network.isolate(opt-in). true 면 차트가 NetworkPolicy(egress 전면 차단,
+    # ingress 는 ingress_namespace 의 BFF 파드에서만)를 렌더하고 SA 토큰·/model 마운트를 뺀다.
+    # 구버전 external_container 가 이 키 없이 보내면 기본값(비격리)이라 동작이 바뀌지 않는다.
+    isolate: bool = False
+    ingress_namespace: str = ""
+
+
+class ExternalIngress(BaseModel):
+    enabled: bool = False
+    className: str = "jonathan-kong"
+    path_prefix: str = "/msa"
+
+
+class ExternalJFEnv(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    JF_HOME: str = "/root/project"
+    JF_HOST: str = ""
+    JF_ITEM_ID: str = ""
+    JF_POD_NAME: str = ""
+    JF_TOTAL_GPU: int = 0
+    JF_MODEL_PATH: str = "/model"
+    JF_MODEL_NAME: str = ""
+    JF_DATASET_PATH: str = "/dataset"
+    JF_DATASET_NAME: str = ""
+    JF_BUILT_IN_CHECKPOINT_PATH: str = "/built_in_checkpoint"
+    JF_INPUT_PATH: str = "/input"
+    JF_OUTPUT_PATH: str = "/output"
+    JF_JOB_TYPE: str = ""
+    JF_EXECUTION_MODE: str = ""
+    JF_PARAMS_PATH: str = "/input/params.json"
+    JF_PORT: str = "8000"
+    JF_HUGGINGFACE_TOKEN: str = ""
+
+
+class ExternalPodInfo(BaseModel):
+    # Identity & K8s placement
+    namespace: str
+    pod_name: str
+    helm_release: str
+    terminationGracePeriodSeconds: int = 60
+    # SP-Ext Phase 2: resolved lifecycle bound (초). pod.yaml 이 train/batch pod 의
+    # activeDeadlineSeconds 백스톱으로 사용(infer 제외, 0 이면 미부여). 구버전
+    # external_container 가 이 필드 없이 보내도 default 0 → deadline 미부여(안전).
+    timeout_seconds: int = 0
+
+    # Manifest provenance (label-only)
+    manifest: ExternalManifestMeta
+
+    # Image
+    image: str
+    image_digest: str = ""
+    imagePullPolicy: str = "IfNotPresent"
+
+    # Classification (mirrors manifest.spec)
+    job_type: str
+    execution_mode: str
+    port: int = 8000
+    workspace_scope: str = "per-workspace"
+
+    # Resources & node placement
+    resources: ExternalResources
+    node_name: str = ""
+    gpu_uuids: str = ""
+    cpu_instance_name: str = ""
+
+    # GPU pre-allocation cluster spec — internal fine_tuning/deployment chart
+    # 의 cluster[N].device.* 패턴과 동형. fb_scheduler external_run.py 가
+    # create_external_pod 진입 시 Redis GPU pool 에서 free GPU 선택 + node_db
+    # uuid→id 매핑으로 자동 채움. chart pod.yaml 의 labels.device_type/
+    # device_count/device_ids 가 이 값을 박아서 fb_monitoring 의
+    # update_pod_gpu_usage_from_labels + insert_gpu_usage 가 used=1 +
+    # used_info 갱신. 비어있으면 K8s nvidia-device-plugin 자동 할당 fallback.
+    cluster: List[Node] = Field(default_factory=list)
+
+    # Workspace inputs
+    inputs: ExternalInputs = Field(default_factory=ExternalInputs)
+
+    # HTTP endpoints (sync/async only)
+    endpoints: ExternalEndpoints = Field(default_factory=ExternalEndpoints)
+
+    # Capability declaration
+    capabilities: ExternalCapabilities = Field(default_factory=ExternalCapabilities)
+
+    # SP-1 v2 §7.1 hardening
+    securityContext: ExternalSecurityContext = Field(default_factory=ExternalSecurityContext)
+
+    # 네트워크 격리(opt-in) — templates/networkpolicy.yaml·pod.yaml 이 읽는다.
+    network: ExternalNetwork = Field(default_factory=ExternalNetwork)
+
+    # Sync-only Kong ingress
+    ingress: ExternalIngress = Field(default_factory=ExternalIngress)
+
+    # Labels merged onto the pod
+    labels: Dict[str, str] = Field(default_factory=dict)
+
+    # Partner-defined env extras (EVA_LLM_MODEL_PATH, etc.)
+    env: Dict[str, str] = Field(default_factory=dict)
+
+    # Dynamic env override — manifest spec.env 위에 덮어쓰기. BFF/playground 가
+    # launch 시점에 결정되는 값 주입 (예: EVA_CHECKPOINT_PATH = latest commit).
+    env_overrides: Dict[str, str] = Field(default_factory=dict)
+
+    # Manifest.secrets.required values (injected via helm --set spec.containers.env.*)
+    secrets: Dict[str, str] = Field(default_factory=dict)
+
+    # Platform metadata env (JF_*)
+    jf_env: ExternalJFEnv = Field(default_factory=ExternalJFEnv)
 
 

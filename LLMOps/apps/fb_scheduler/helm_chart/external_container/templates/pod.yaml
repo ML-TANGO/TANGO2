@@ -1,0 +1,377 @@
+{{- /*
+  external-container/templates/pod.yaml
+
+  Spec: examples/hello-plugin/external-container-spec.md (SP-1 v2)
+
+  - kind: Pod + restartPolicy: Never matches fb_scheduler/fine_tuning pattern.
+    Inference pods (sync) are also Never; lifecycle (relaunch on crash) is
+    fb_scheduler's responsibility, not kubelet's.
+  - securityContext defaults to SP-1 v2 §7.1 (non-root, readOnlyRootFilesystem,
+    drop ALL capabilities). values.yaml exposes an override for mock work
+    while partner images mature.
+  - probes follow §5.2 — startupProbe absorbs cold-start, readinessProbe
+    gates traffic, livenessProbe only kicks in after startup completes.
+*/ -}}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ .Values.pod_name }}
+  namespace: {{ .Values.namespace }}
+  annotations:
+    acryl.ai/appType: user
+    acryl.ai/manifest-name: {{ .Values.manifest.name | quote }}
+    acryl.ai/manifest-version: {{ .Values.manifest.version | quote }}
+    acryl.ai/provider: {{ .Values.manifest.provider | quote }}
+    acryl.ai/service-family: {{ .Values.manifest.service_family | quote }}
+    acryl.ai/contract-version: {{ .Values.manifest.contract_version | quote }}
+  labels:
+    # SP-Ext.4 review H2: caller-supplied labels 가 첫 번째 layer.
+    # 우리가 박는 monitoring/lifecycle reserved 라벨이 BFF labels dict 보다
+    # 뒤에 와서 override 우선권을 가진다. internal fine_tuning chart 의
+    # range-first 패턴과 일치 — partner manifest 가 우연히 (또는 악의적으로)
+    # device_type/node_name 같은 reserved key 보내도 monitoring 동작 보존.
+    {{- range $key, $val := .Values.labels }}
+    {{ $key }}: {{ $val | quote }}
+    {{- end }}
+    role: jfb-external-container
+    job_type: {{ .Values.job_type | quote }}
+    execution_mode: {{ .Values.execution_mode | quote }}
+    manifest_name: {{ .Values.manifest.name | quote }}
+    service_family: {{ .Values.manifest.service_family | quote }}
+    # fb_monitoring GPU usage 가 kube_pod_labels join 으로 다음 4개 라벨
+    # 모두 access (workspace_id, pod_type, helm_name, instance_id) +
+    # work_func_type 으로 filter. 누락 시 KeyError → workspace_usage
+    # tick 자체 crash. 다른 fb_scheduler chart 와 같은 패턴.
+    # SP-Ext.4 Codex #2 fix: monitoring_service.py:2125 의 fine_tuning
+    # 분기 조건이 (label_pod_type == FINE_TUNING_TYPE AND
+    # label_work_func_type == FINE_TUNING_TYPE). 즉 train/batch 는 둘 다
+    # "fine_tuning" 이어야 분기 탄다. 이전 값 "training" 은 monitoring 의
+    # 어떤 분기에도 안 잡혀 workspace_pods[FINE_TUNING_TYPE] 누락 → GPU=0
+    # 의 진짜 root cause. internal fine_tuning chart 도 monitoring 진입
+    # 위해 work_func_type=fine_tuning 사용.
+    work_func_type: {{- if eq .Values.job_type "infer" }} "deployment"
+    {{- else if or (eq .Values.job_type "train") (eq .Values.job_type "batch") }} "fine_tuning"
+    {{- else if eq .Values.job_type "generate" }} "generation"
+    {{- else }} "tool"
+    {{- end }}
+    # pod_type — monitoring 의 insert_gpu_usage 분기에 쓰이는 enum
+    # (project / fine_tuning / preprocessing / deployment / generation). train job 은
+    # fine_tuning 분기로 매핑 — label_model_id 도 같이 박혀야 used_info 채워짐.
+    # generate job(생성형 파이프라인 노드)은 generation 분기 — label_job_id 로 귀속(WBS 1.1).
+    pod_type: {{- if eq .Values.job_type "infer" }} "deployment"
+    {{- else if or (eq .Values.job_type "train") (eq .Values.job_type "batch") }} "fine_tuning"
+    {{- else if eq .Values.job_type "generate" }} "generation"
+    {{- else }} "tool"
+    {{- end }}
+    helm_name: {{ .Values.helm_release | quote }}
+    instance_id: {{ .Values.labels.instance_id | default "" | quote }}
+    # SP-Ext.4 dashboard fix: monitoring_service.py:2126 의 fine_tuning
+    # workspace_pods set 분기가 `if pod_info.get("label_pod_count"):` 안에서만
+    # workspace_pods[FINE_TUNING_TYPE][model_id] 채움. 누락 시 fb_dashboard
+    # 의 platform_usage.a-llm.gpu 가 영원히 0 → ListStack stack bar 폭 0
+    # → 화면 그래프 바 안 보임. external 은 단일 pod 패턴이라 항상 "1".
+    # internal deployment_llm chart 의 node-length 기반 pod_count 와 동일 의도.
+    pod_count: "1"
+    # SP-Ext review HIGH #C3: a per-release identifier so the Service
+    # selector below targets exactly this pod, never a sibling job's pod
+    # sharing the same manifest_name in the same namespace.
+    helm_release: {{ .Values.helm_release | quote }}
+    # GPU device labels — fb_monitoring 의 update_pod_gpu_usage_from_labels
+    # + insert_gpu_usage 가 device_type=="GPU" + device_ids ("12.13" 형식)
+    # 으로 used GPU 추적. internal fine_tuning chart 의 _label.tpl 과 동일
+    # 패턴. fb_scheduler external_run._ensure_gpu_allocation 이 cluster[0]
+    # 를 채울 때만 박힘 (auto-allocation fallback 시엔 누락 — 다음 단계
+    # backlog).
+    # SP-Ext.4 review H1: node_name 라벨 필수 — monitoring_service.py:1820
+    # 가 label_node_name 으로 gpu_status[node_name][gpu_uuid] indexing.
+    # 누락 시 None key 로 indexing → used=1 갱신 안 됨 → 본 fix 목적 미달성.
+    {{- if and .Values.cluster (gt (len .Values.cluster) 0) }}
+    {{- $clusterEntry := (index .Values.cluster 0) }}
+    {{- $dev := $clusterEntry.device }}
+    node_name: {{ $clusterEntry.node_name | default "" | quote }}
+    {{- if $dev }}
+    device_type: {{ $dev.device_type | default "" | quote }}
+    device_count: {{ $dev.count | default 0 | quote }}
+    device_ids: {{ $dev.ids | default "" | quote }}
+    device_model: {{ $dev.model | default "" | quote }}
+    {{- end }}
+    {{- end }}
+spec:
+  restartPolicy: Never
+  {{- if .Values.network.isolate }}
+  # 격리 파드는 K8s API 에 닿을 이유가 없다 — 기본 SA 토큰을 마운트하지 않는다
+  # (egress 차단과 별개로, 정책이 풀려도 토큰이 없도록 두 겹으로 둔다).
+  automountServiceAccountToken: false
+  {{- end }}
+  {{- if .Values.node_name }}
+  nodeName: {{ .Values.node_name }}
+  {{- end }}
+  {{- if .Values.cpu_instance_name }}
+  nodeSelector:
+    jfb/cpu-instance.name: {{ .Values.cpu_instance_name }}
+  {{- end }}
+  terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+  # SP-Ext Phase 2: K8s 백스톱. in-memory 감독자(external_container poll task)가
+  # 죽어도 kubelet 이 시한 초과 학습 pod 를 강제 종료(DeadlineExceeded) — 리부트
+  # 없이 폭주 pod 정지. infer(서빙=장수 pod)엔 미부여. timeout_seconds=0(구버전
+  # 미배선)이면 미부여. +600s 마진: 감독자의 graceful uninstall 이 1차, 이건 백스톱.
+  {{- if and (ne .Values.job_type "infer") (gt (int .Values.timeout_seconds) 0) }}
+  activeDeadlineSeconds: {{ add (int .Values.timeout_seconds) 600 }}
+  {{- end }}
+  containers:
+  - name: external-container
+    {{- if .Values.image_digest }}
+    image: "{{ .Values.image }}@{{ .Values.image_digest }}"
+    {{- else }}
+    image: {{ .Values.image | quote }}
+    {{- end }}
+    imagePullPolicy: {{ .Values.imagePullPolicy | quote }}
+    {{- if and .Values.ingress.enabled (eq .Values.execution_mode "sync") }}
+    # When the partner pod is exposed through Kong at /msa/<name>, override
+    # the default uvicorn args so FastAPI knows about its root_path. Without
+    # this, the rendered Swagger UI references an absolute `/openapi.json`
+    # URL and `Try it out` lands on the wrong (or nonexistent) endpoint.
+    # Args mirror ETRI's eva-vlm-backend default Cmd, with --root-path added.
+    args:
+    - uvicorn
+    - app:app
+    - --host
+    - 0.0.0.0
+    - --port
+    - {{ .Values.port | quote }}
+    - --timeout-keep-alive
+    - "300"
+    - --root-path
+    - {{ printf "%s/%s" .Values.ingress.path_prefix .Values.manifest.name | quote }}
+    {{- end }}
+    {{- if ne .Values.execution_mode "batch" }}
+    ports:
+    - name: http
+      containerPort: {{ .Values.port }}
+      protocol: TCP
+    {{- end }}
+    env:
+    # ── Distributed env (PyTorch / DeepSpeed env-based init) ─────────────
+    # GPU 개수가 1 일 때는 정확히 작동. multi-GPU 학습은 partner container 가
+    # `deepspeed/torchrun` launcher 로 N process 띄워야 하며, 그 때 launcher
+    # 가 env 를 process 별로 override 한다. 우리는 default env 만 깔아둠 —
+    # launcher 없이 호출되는 partner 가 DeepSpeed 의 mpi_discovery fallback
+    # 으로 빠지지 않도록 하기 위함.
+    - name: RANK
+      value: "0"
+    - name: WORLD_SIZE
+      value: {{ .Values.resources.gpu | default 1 | quote }}
+    - name: LOCAL_RANK
+      value: "0"
+    - name: LOCAL_WORLD_SIZE
+      value: {{ .Values.resources.gpu | default 1 | quote }}
+    - name: MASTER_ADDR
+      value: "localhost"
+    - name: MASTER_PORT
+      value: "29500"
+    # ── Platform metadata (JF_*) ─────────────────────────────────────────
+    {{- range $key, $val := .Values.jf_env }}
+    {{- if ne (toString $val) "" }}
+    - name: {{ $key }}
+      value: {{ $val | quote }}
+    {{- end }}
+    {{- end }}
+    # ── Partner-defined extras (EVA_*, etc.) ─────────────────────────────
+    # manifest spec.env 가 base. env_overrides 가 있으면 동일 key 덮어씀
+    # (BFF 가 model.latest_commit 의 dynamic path 주입 — EVA_CHECKPOINT_PATH 등)
+    {{- $merged := dict }}
+    {{- range $k, $v := .Values.env }}
+    {{- $_ := set $merged $k $v }}
+    {{- end }}
+    {{- range $k, $v := .Values.env_overrides }}
+    {{- $_ := set $merged $k $v }}
+    {{- end }}
+    {{- range $key, $val := $merged }}
+    - name: {{ $key }}
+      value: {{ $val | quote }}
+    {{- end }}
+    # ── Secrets declared via manifest.secrets.required (SP-3 보안 하드닝) ──
+    # 값은 helm 밖 K8s Secret(.Values.secret_ref_name)에 있고 여기선 참조만 한다.
+    # → secret 값이 PodSpec / Helm release manifest·history 에 평문으로 안 들어감
+    # (kubectl/helm read at-rest 노출 차단). fb_scheduler 가 install 전 Secret 생성.
+    {{- if .Values.secret_ref_name }}
+    {{- range $key := .Values.secret_keys }}
+    - name: {{ $key }}
+      valueFrom:
+        secretKeyRef:
+          name: {{ $.Values.secret_ref_name }}
+          key: {{ $key }}
+    {{- end }}
+    {{- end }}
+    # NVIDIA_VISIBLE_DEVICES — fb_scheduler external_run._ensure_gpu_allocation
+    # 이 cluster[0].device.uuids 또는 top-level gpu_uuids 둘 다 채움. cluster
+    # 가 우선 (pre-allocation 일관성).
+    #
+    # SP-Ext.4 GPU fix (2026-05-29): internal fine_tuning/deployment_llm chart
+    # 와 동일하게 NVIDIA_VISIBLE_DEVICES 기반 할당만 사용한다 (nvidia 기본
+    # 런타임이 이 uuid 의 GPU 만 컨테이너에 노출). 이전엔 resources 에
+    # nvidia.com/gpu 도 같이 요청해서 K8s nvidia-device-plugin 이 별도 GPU 를
+    # 할당 + 우리 NVIDIA_VISIBLE_DEVICES override 가 충돌 → 컨테이너에 GPU 2개
+    # 노출 + torch.cuda init 실패 (infer pod 의 model load 가 CPU 로 떨어짐).
+    # internal 은 nvidia.com/gpu 를 전혀 요청하지 않고 (helm_chart/*/templates/
+    # _resources.tpl 에 GPU 없음) NVIDIA_VISIBLE_DEVICES=.node.device.uuids
+    # 만으로 GPU 를 잡는다. GPU 중복 할당 방지는 scheduler 의 Redis
+    # used_info pre-allocation (_ensure_gpu_allocation) 이 담당 — device-plugin
+    # 카운트 불필요. 대시보드 GPU 사용량은 device_ids 라벨 기반이라 영향 없음.
+    {{- $gpuUuids := .Values.gpu_uuids }}
+    {{- if and .Values.cluster (gt (len .Values.cluster) 0) }}
+    {{- $clusterDev := (index .Values.cluster 0).device }}
+    {{- if and $clusterDev $clusterDev.uuids }}
+    {{- $gpuUuids = $clusterDev.uuids }}
+    {{- end }}
+    {{- end }}
+    {{- if $gpuUuids }}
+    - name: NVIDIA_VISIBLE_DEVICES
+      value: {{ $gpuUuids | quote }}
+    {{- end }}
+    resources:
+      limits:
+        cpu: {{ .Values.resources.cpu | quote }}
+        memory: {{ .Values.resources.memory | quote }}
+      requests:
+        cpu: {{ .Values.resources.cpu | quote }}
+        memory: {{ .Values.resources.memory | quote }}
+    securityContext:
+      runAsNonRoot: {{ .Values.securityContext.runAsNonRoot }}
+      {{- if .Values.securityContext.runAsNonRoot }}
+      runAsUser: {{ .Values.securityContext.runAsUser }}
+      runAsGroup: {{ .Values.securityContext.runAsGroup }}
+      {{- end }}
+      allowPrivilegeEscalation: {{ .Values.securityContext.allowPrivilegeEscalation }}
+      readOnlyRootFilesystem: {{ .Values.securityContext.readOnlyRootFilesystem }}
+      {{- if .Values.securityContext.dropAllCapabilities }}
+      capabilities:
+        drop:
+        - ALL
+      {{- end }}
+    {{- if ne .Values.execution_mode "batch" }}
+    # SP-1 v2 §5.2 probe semantics — separate /health (readiness) and /live
+    # (liveness), startupProbe absorbs cold-start so liveness doesn't loop.
+    startupProbe:
+      httpGet:
+        path: {{ .Values.endpoints.health | quote }}
+        port: {{ .Values.port }}
+      failureThreshold: {{ div (int .Values.capabilities.estimated_startup_seconds) 5 | default 60 }}
+      periodSeconds: 5
+    readinessProbe:
+      httpGet:
+        path: {{ .Values.endpoints.health | quote }}
+        port: {{ .Values.port }}
+      periodSeconds: 10
+      failureThreshold: 3
+    # livenessProbe 는 endpoints.live 가 있으면 거기, 없으면 endpoints.health
+    # 로 fallback. ETRI v1.0.0 (eva-vlm-infer) 처럼 /live 를 안 만든 partner
+    # 가 livenessProbe 404 로 SIGTERM 받아 sync pod 가 idle 상태에서 죽는 것
+    # 방어. /health 가 model_loaded 와 무관하게 200 응답하는 partner 면 충분.
+    livenessProbe:
+      httpGet:
+        path: {{ .Values.endpoints.live | default .Values.endpoints.health | quote }}
+        port: {{ .Values.port }}
+      periodSeconds: 30
+      failureThreshold: 3
+      initialDelaySeconds: {{ add (int .Values.capabilities.estimated_startup_seconds) 60 }}
+    {{- end }}
+    volumeMounts:
+    # /dataset/{name} — RO, subPath isolation per workspace ACL
+    {{- if .Values.inputs.dataset.name }}
+    - name: jf-data
+      mountPath: /dataset/{{ .Values.inputs.dataset.name }}
+      subPath: "{{ .Values.inputs.dataset.access }}/{{ .Values.inputs.dataset.name }}"
+      readOnly: true
+    {{- end }}
+    # /model — RW workspace model checkpoint (train/batch only)
+    # 격리 파드(network.isolate)에는 붙이지 않는다 — 모델 생성 코드를 실행하는 파드가
+    # 모델의 latest_checkpoint 에 쓸 수 있게 되면 안 된다. 가중치는 아래 RO 경로로 읽는다.
+    {{- if and .Values.inputs.base_model.name (ne .Values.job_type "infer") (not .Values.network.isolate) }}
+    - name: jf-main
+      mountPath: /model
+      subPath: models/{{ .Values.inputs.base_model.name }}/latest_checkpoint
+    {{- end }}
+    # /models/checkpoints — infer + train 모두 commit_models RO mount.
+    # ETRI EVA_CHECKPOINTS_ROOT default 는 /models/checkpoints. 학습 종료 후
+    # commit_external_artifacts 가 결과를 models/<base_model>/commit_models/<name>/
+    # 로 옮기니, infer pod 의 ckpt_path = /models/checkpoints/<name> 이 그 path
+    # 에 자동 매핑되도록 subPath 를 commit_models 디렉토리로 mount.
+    # train 도 같은 path 필요: ETRI 4-phase chain (Phase 2a 가 Phase 1
+    # projector_path 받음, Phase 2b/3 가 이전 LoRA resume_lora_path 받음) 에서
+    # 이전 phase commit 의 artifact 를 partner train.py 가 그 path 로 load.
+    {{- if .Values.inputs.base_model.name }}
+    - name: jf-main
+      mountPath: /models/checkpoints
+      subPath: models/{{ .Values.inputs.base_model.name }}/commit_models
+      readOnly: true
+    {{- end }}
+    # /built_in_checkpoint — RO platform checkpoint cache
+    {{- if .Values.inputs.built_in_checkpoint.name }}
+    - name: jf-main
+      mountPath: /built_in_checkpoint
+      subPath: built_in_checkpoint/{{ .Values.inputs.built_in_checkpoint.name }}
+      readOnly: true
+    {{- end }}
+    # /input — RO, /input/params.json comes from configmap
+    - name: input-config
+      mountPath: /input
+      readOnly: true
+    # /output — RW, partner artifacts (model / metrics / dataset / logs)
+    - name: jf-main
+      mountPath: /output
+      subPath: jobs/{{ .Values.jf_env.JF_ITEM_ID }}/output
+    # /logs — RW, TensorBoard events etc.
+    - name: jf-main
+      mountPath: /logs
+      subPath: jobs/{{ .Values.jf_env.JF_ITEM_ID }}/logs
+    # /tmp — writable scratch (readOnlyRootFilesystem-safe)
+    - name: scratch
+      mountPath: /tmp
+    # /dev/shm — PyTorch DataLoader 워커 IPC(공유메모리). 컨테이너 기본 64MB 는
+    # VLM 이미지 배치 prefetch(num_workers × 이미지 텐서)로 넘쳐 "bus error
+    # (insufficient shared memory)" → DataLoader worker exited unexpectedly 로
+    # 첫 배치에서 학습이 죽는다. medium=Memory 로 상향(pod memory 회계, 예약 아님).
+    - name: dshm
+      mountPath: /dev/shm
+    # /hf-cache — RO HuggingFace model cache (cluster-wide shared NFS).
+    # operator 가 `huggingface-cli download` 로 미리 받은 모델이 여기에 들어있고,
+    # manifest 의 spec.env 가 HF_HOME=/hf-cache 등을 설정하면 transformers 가
+    # 외부망 없이 cache hit 으로 LLM/projector/checkpoint 를 load 한다.
+    # Internal LLM 의 workspace/models/ 영역과 완전히 분리됨.
+    - name: hf-model-cache
+      mountPath: /hf-cache
+      readOnly: true
+  volumes:
+  - name: jf-main
+    persistentVolumeClaim:
+      claimName: {{ .Values.namespace }}-main-pvc
+  - name: jf-data
+    persistentVolumeClaim:
+      claimName: {{ .Values.namespace }}-data-pvc
+  - name: input-config
+    configMap:
+      name: {{ .Values.pod_name }}-input
+      items:
+      - key: params.json
+        path: params.json
+  - name: scratch
+    emptyDir:
+      # /tmp 중간 산출물용. convert-llamacpp 은 f16 중간 GGUF(≈2바이트×파라미터,
+      # 8B 모델 ≈16G, 프루닝 시 pruned 모델 사본 추가)를 /tmp 에 쓴다 → 4Gi 면
+      # ephemeral-storage eviction("Usage of EmptyDir scratch exceeds limit").
+      # 노드 ephemeral-storage 여유(800Gi+) 충분 → 일반 모델 변환 커버하도록 상향.
+      # (sizeLimit 은 상한일 뿐 예약 아님 — 소량 사용 job 엔 영향 없음. 향후 manifest
+      #  per-job scratch 선언으로 세분화 가능.)
+      sizeLimit: 64Gi
+  # /dev/shm tmpfs — DataLoader worker IPC. medium=Memory 라 pod memory 상한
+  # (resources.limits.memory) 에서 사용분만큼 차감(사전 예약 아님). VLM 학습의
+  # 이미지 배치 prefetch 를 커버하도록 16Gi(모델 로드 후 여유 내). infer/convert
+  # 등 shm 소량 job 엔 영향 없음(사용분만 차감).
+  - name: dshm
+    emptyDir:
+      medium: Memory
+      sizeLimit: 16Gi
+  - name: hf-model-cache
+    persistentVolumeClaim:
+      claimName: hf-model-cache-pvc

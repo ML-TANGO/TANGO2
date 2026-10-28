@@ -27,7 +27,7 @@
 ## 💻 시스템 요구사항
 
 - **OS:** Ubuntu 22.04.5 Jammy LTS 이상
-- **쿠버네티스**: v1.30.x 계열 권장(테스트 기준 v1.30.14)
+- **쿠버네티스**: v1.34.x 계열 권장(검증 기준 v1.34.0)
 - Helm/kubectl은 설치 서버에서 실행 가능해야 하며, kubectl은 대상 클러스터에 접근 가능한 kubeconfig를 사용해야 합니다.
 - 본 매뉴얼은 인터넷 연결이 가능한 온라인 환경을 기준으로 작성되었습니다. 오프라인 설치가 필요한 경우 별도 문의가 필요합니다.
 
@@ -46,6 +46,12 @@
     동적 프로비저닝은 **NFS Provisioner(gaip_nfs_provisioner)** 설치를 의미하며, 설치 후 StorageClass가 생성되는지 확인합니다.
     
 - [ ]  삭제 후 재설치 시 기존 PV, PVC 삭제 확인
+
+- [ ]  metrics-server 설치 (`kubectl top nodes` 가 수치를 출력해야 함)
+
+> 📌 **클러스터 구축 절차는 [CLUSTER-SETUP.md](./CLUSTER-SETUP.md) 에 정리되어 있습니다.**
+> containerd 1.7.29 · Calico v3.32.1 · kubeadm v1.34.0 · metrics-server 설치와
+> 노드 라벨·단일 노드 taint 제거까지 포함합니다.
 
 - 쿠버네티스 설치가 필요한 경우 다음 가이드를 참고하시기 바랍니다.
     

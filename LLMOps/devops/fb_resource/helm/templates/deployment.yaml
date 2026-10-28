@@ -43,6 +43,18 @@ spec:
         env:
         - name: JFB_RESOURCE_IMAGE
           value: {{ .Values.global.jfb.image.system.registry }}/{{ .Values.global.jfb.image.resource }}
+        # 엣지 계약 v1 — 플랫폼 → 디바이스 /ops·/metrics 인증 토큰. 전역 단일 값이며
+        # Secret 에만 둔다(엣지 디바이스 토큰의 '평문 미저장' 불변식을 DB 에서 깨지 않기
+        # 위해서다). optional: true — Secret 이 없으면 값이 비고, 그러면 플랫폼이 헤더를
+        # 붙이지 않아 토큰 검증이 없는 기존 설치와 그대로 호환된다.
+        #   kubectl -n <ns> create secret generic jfb-edge-ops-token \
+        #     --from-literal=ops-token='<토큰>'
+        - name: EDGE_OPS_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: jfb-edge-ops-token
+              key: ops-token
+              optional: true
         envFrom:
         - configMapRef:
             name: jfb-settings

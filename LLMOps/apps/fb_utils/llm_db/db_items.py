@@ -36,6 +36,10 @@ try:
 except:
     traceback.print_exc()
 try:
+    from utils.llm_db.db_prompt_optimization import *
+except:
+    traceback.print_exc()
+try:
     from utils.llm_db.db_model import *
 except:
     traceback.print_exc()

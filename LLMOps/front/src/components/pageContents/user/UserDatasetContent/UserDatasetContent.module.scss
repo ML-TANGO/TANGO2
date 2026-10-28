@@ -1,116 +1,250 @@
 @import '@src/styles/color.scss';
 
 .wrapper {
-  .page-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid $mono203;
-    padding-bottom: 16px;
-    box-sizing: border-box;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  min-height: 100%;
+}
 
-    .btn {
-      display: flex;
-      align-items: center;
-      gap: 16px;
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid $mono203;
+}
 
-      .create-btn {
-        all: unset;
-        box-sizing: border-box;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 132px;
-        height: 34px;
-        font-weight: 700;
-        font-size: 14px;
-        border-radius: 4px;
-        color: $blue104;
-        background-color: white;
-        box-shadow: 0px 3px 6px 0px rgba(45, 118, 248, 0.1);
-        cursor: pointer;
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
 
-        &:hover {
-          border: 1px solid $blue104;
-        }
-      }
-    }
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.list-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.btn-filter {
+  display: flex;
+  align-items: center;
+}
+
+// 높이 제한 없음 — 카드가 페이지 아래로 쭉 흐르고 스크롤은 템플릿의 content-area
+// (xlib PageTemplate, overflow:auto) 가 담당. 내부 스크롤 박스를 만들면 목록이
+// 중간에서 잘려 보이므로 중첩 스크롤을 두지 않는다.
+.ds-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ds-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: $mono200;
+  border: 1px solid $mono203;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+
+  &:hover {
+    border-color: $mono204;
+    box-shadow: $card-hover-color;
   }
-  .marker-btn {
-    width: 100%;
-    height: 80px;
-    position: absolute;
-    top: 78px;
-    right: 48px;
-    display: flex;
-    justify-content: flex-end;
-    @media (max-width: 1200px) {
-      position: relative;
-      top: -32px;
-      right: 0;
-    }
+  &.ds-card--on {
+    border-color: $blue104;
+    background: $blue100;
   }
-  .content {
-    margin-top: 16px;
-    .btn-filter {
-      display: flex;
-      flex-direction: row;
-      button {
-        margin-right: 8px;
-      }
-      > div {
-        width: 184px;
-      }
-    }
+}
+
+.ds-check {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1.5px solid $mono204;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: $mono200;
+  transition: border-color 0.15s, background 0.15s;
+
+  &.ds-check--on {
+    background: $blue104;
+    border-color: $blue104;
   }
-  .dataset-box {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    flex-direction: column;
-    z-index: 999;
-    width: 700px;
-    height: 100%;
-    border-radius: 5px;
-    .dataset-wrap {
-      padding-top: 15px;
-      height: 80px;
-    }
+}
+
+.ds-card-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ds-card-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ds-card-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: $mono207;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ds-access-badge {
+  font-size: 11px;
+  border-radius: 4px;
+  padding: 2px 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+
+  &.ds-access--ro {
+    background: $mono202;
+    color: $mono205;
+    border: 1px solid $mono203;
   }
-  .modal-wrap {
-    position: relative;
+  &.ds-access--rw {
+    background: $blue100;
+    color: $blue105;
+    border: 1px solid $blue102;
+  }
+}
+
+.ds-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: $mono205;
+  flex-wrap: wrap;
+}
+
+.dot {
+  color: $mono204;
+  font-size: 11px;
+}
+
+.ds-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid $mono203;
+  background: $mono200;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+
+  img {
+    width: 16px;
+    height: 16px;
   }
 
-  .delete-btn {
-    all: unset;
-    box-sizing: border-box;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 58px;
-    height: 32px;
-    border-radius: 4px;
-    background-color: $red501;
-    color: $red502;
-    font-size: 14px;
-    font-style: normal;
-    font-weight: 700;
-    cursor: pointer;
-
-    &:disabled {
-      color: white;
-      background-color: #f0f0f0;
-      cursor: not-allowed;
-    }
-
-    &:hover {
-      background-color: $red502;
-      color: $red501;
-    }
-
-    &:disabled:hover {
-      background-color: #f0f0f0;
-      color: white;
-    }
+  &:hover:not(.icon-btn--disabled):not(:disabled) {
+    border-color: $blue104;
+    background: $blue100;
   }
+  &.icon-btn--disabled,
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .spin {
+    animation: ds-spin 0.8s linear infinite;
+  }
+}
+
+@keyframes ds-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.empty-inline {
+  padding: 32px 0;
+  text-align: center;
+  font-size: 13px;
+  color: $mono205;
+  background: $mono200;
+  border: 1px dashed $mono203;
+  border-radius: 10px;
+}
+
+// 카드별 파일 미리보기(상위 4개) — 상세 진입 전 목록에서 내부 파일 노출
+.ds-preview {
+  list-style: none;
+  margin: 10px 0 0 0;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: $mono200;
+  border: 1px solid $mono203;
+  border-radius: 8px;
+}
+
+.ds-preview-item {
+  font-family: SpoqaM;
+  font-size: 12px;
+  color: $mono207;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ds-preview-more {
+  margin-top: 2px;
+  font-family: SpoqaM;
+  font-size: 11px;
+  color: $mono205;
+}
+
+.ds-preview--empty {
+  margin: 10px 0 0 0;
+  padding: 10px;
+  text-align: center;
+  font-family: SpoqaM;
+  font-size: 12px;
+  color: $mono205;
+  background: $mono200;
+  border: 1px dashed $mono203;
+  border-radius: 8px;
 }

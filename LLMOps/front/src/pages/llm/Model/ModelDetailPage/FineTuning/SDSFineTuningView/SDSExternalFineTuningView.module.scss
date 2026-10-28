@@ -1,0 +1,67 @@
+@import '@src/styles/color.scss';
+@import '@src/styles/focus.scss';
+
+// W&B run 링크 — 하우스 모델 박스(`FineTuning.module.scss` 의 `.name`) 안에 놓인다.
+// 키보드 도달 가능한 유일한 컨트롤이라 전역 `*:focus{outline:none}` 을 되살린다.
+.wandb-link {
+  color: #3babff;
+  text-decoration: none;
+
+  @include focus-ring;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.5;
+  white-space: pre-line;
+}
+
+.text-input {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid #d6dae0;
+  border-radius: 6px;
+  font-size: 14px;
+  background: #fff;
+  color: #222;
+  &:focus {
+    outline: none;
+    border-color: #3babff;
+  }
+  &:disabled {
+    background: #f3f4f6;
+    color: #4b5563;
+  }
+}
+
+.params-textarea {
+  width: 100%;
+  min-height: 240px;
+  padding: 12px;
+  border: 1px solid #d6dae0;
+  border-radius: 6px;
+  font-family: 'Menlo', 'Consolas', 'Monaco', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  background: #fff;
+  color: #1f2937;
+  resize: vertical;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+  &:focus {
+    outline: none;
+    border-color: #3babff;
+  }
+  &:disabled {
+    background: #f3f4f6;
+    color: #4b5563;
+  }
+}

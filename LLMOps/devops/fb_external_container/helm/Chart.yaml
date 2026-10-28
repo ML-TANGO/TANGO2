@@ -1,0 +1,11 @@
+apiVersion: v2
+name: jfb-external-container
+description: External partner container hosting service (SP-Ext.2)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+
+dependencies:
+  - name: commonlib
+    version: "0.1.0"
+    repository: "file://../../fb_common_lib/helm"

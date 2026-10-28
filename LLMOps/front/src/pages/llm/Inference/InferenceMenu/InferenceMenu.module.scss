@@ -1,0 +1,21 @@
+@import '@src/styles/color.scss';
+
+// 페이지 좌우/상하 패딩은 상위 프레임 소관(배포 목록 .playground-cont 와 동일) —
+//   화면 자체에 padding 을 두면 다른 페이지와 여백이 어긋난다.
+// 카드 그리드/카드 룩은 플랫폼 CardList·Card 가 자체 SCSS 로 소유 → 여기서 정의하지 않는다.
+.inference-cont {
+  .title-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 40px;
+  }
+
+  .title {
+    margin: initial;
+    color: $blue107;
+    font-family: SpoqaB;
+    font-size: 24px;
+    line-height: 24px;
+  }
+}

@@ -56,7 +56,7 @@ const PlaygroundHeader = ({ title }) => {
 
   const selectList = [
     {
-      label: '플레이그라운드 모니터',
+      label: '배포 모니터',
       value: 0,
       disabled: !playground_id,
     },
@@ -141,14 +141,17 @@ function DeployDashboardContent({
   onChangeResolution,
   onChangeSearchType,
   onSelectGraph,
+  embedded = false,
 }) {
   const match = useRouteMatch();
   const isPlayground = calIsPlaygroundPath(match.path);
 
   return (
     <div className={cx('dashboard')}>
-      {isPlayground && <PlaygroundHeader title={title} />}
-      {!isPlayground && title && <div className={cx('title')}>{title}</div>}
+      {!embedded && isPlayground && <PlaygroundHeader title={title} />}
+      {!embedded && !isPlayground && title && (
+        <div className={cx('title')}>{title}</div>
+      )}
       <DeployStatusCard
         type='deployDashboard'
         totalInfoData={totalInfoData}

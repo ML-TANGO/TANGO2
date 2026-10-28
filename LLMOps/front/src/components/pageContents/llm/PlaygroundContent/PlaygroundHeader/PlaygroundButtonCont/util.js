@@ -1,9 +1,7 @@
 import _ from 'lodash';
 
-import {
-  getDetailPlayground,
-  getPlaygroundCheckAccel,
-} from '@src/apis/llm/playground';
+// [엑셀러레이터 미사용] getPlaygroundCheckAccel 제거 (apis 정의는 유지)
+import { getDetailPlayground } from '@src/apis/llm/playground';
 import {
   handleSetPlaygroundState,
   initialLLMPlaygroundState,
@@ -78,10 +76,13 @@ export const calEqualValue = (info, model, rag, prompt, originValue) => {
 
 // ** [GET] 플레이그라운드 데이터 **
 export const getDetailPlaygroundInfo = async (dispatch, playgroundId) => {
-  const { result, message, status, error } = await getDetailPlayground(
-    playgroundId,
-  );
-  const { data } = await getPlaygroundCheckAccel();
+  const { result, message, status, error } =
+    await getDetailPlayground(playgroundId);
+  // [엑셀러레이터 미사용] /check-accel 호출 제거 (하드코딩 IP 115.71.36.50 로
+  //   나가던 요청). 실패 시 catch 가 주던 값과 동일하게 고정 → 아래
+  //   accellator=false / isAccellator=false 로 기존 동작과 같음.
+  // const { data } = await getPlaygroundCheckAccel();
+  const data = { result: 'error' };
 
   if (status === STATUS_SUCCESS) {
     const payload = {
@@ -90,12 +91,13 @@ export const getDetailPlaygroundInfo = async (dispatch, playgroundId) => {
         ? {
             id: result.info.id,
             create_datetime: result.info.create_datetime,
-            description: result.info.description,
+            description: result.info.description ?? '-',
             name: result.info.name,
             owner: result.info.owner,
             update_datetime: result.info.update_datetime,
             access: result.info.access,
-            users: result.info.users,
+            users: result.info.users ?? [],
+            deployment_id: result.info.deployment_id ?? null,
           }
         : initialLLMPlaygroundState.info,
       accellator: data.result === 'running' ? true : false,
@@ -120,6 +122,7 @@ export const getDetailPlaygroundInfo = async (dispatch, playgroundId) => {
       model: result.model
         ? {
             model_type: result.model.model_type,
+            serving_system: result.model.serving_system ?? 'vllm',
             model_huggingface_id: result.model.model_hf_id,
             model_allm_id: result.model.model_allm_id,
             model_allm_name: result.model.model_allm_name,

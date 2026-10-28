@@ -1,0 +1,437 @@
+@import '@src/styles/color.scss';
+
+.container {
+  padding: 8px 0;
+}
+
+.content {
+  min-width: 0;
+}
+
+.back-to-list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  width: max-content;
+  margin-bottom: 12px;
+  cursor: pointer;
+  // 다른 화면의 뒤로가기는 div 라 크롬이 없지만 여기는 키보드 접근성 때문에 button 이다
+  // (ProjectDetail.jsx 참고). UA 기본 배경/테두리/패딩을 벗겨 하우스 룩과 일치시킨다.
+  padding: 0;
+  border: 0;
+  background: none;
+  appearance: none;
+
+  // 전역 `*:focus { outline: none }` 이 링을 지워서 button 으로 만든 취지가 반감된다.
+  // 키보드 사용자에게만 링을 되돌린다.
+  &:focus-visible {
+    outline: 2px solid $primary-color;
+    outline-offset: 2px;
+  }
+
+  .back-btn-image {
+    width: 16px;
+    height: 16px;
+  }
+
+  .back-btn-label {
+    margin-left: 4px;
+    color: $mono208;
+    font-family: SpoqaB;
+    font-size: 16px;
+    font-style: normal;
+    font-weight: 700;
+    line-height: 16px;
+  }
+}
+
+.loading-state {
+  display: flex;
+  min-height: 120px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: $sub-text-color;
+  font-size: 14px;
+}
+
+.top-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+// ── 프로젝트 정보(접힘 가능) ────────────────────────────────────────────────
+// ContentBox 의 title 슬롯 대신 직접 머리줄을 세운다 — 제목이 곧 토글 버튼이어야
+// 하는데 ContentBox 는 title 을 <p> 로만 그린다(공용 컴포넌트의 동작은 건드리지 않는다).
+// 패딩은 ContentBox 의 title(20px 20px 10px)이 있던 자리에 맞춘다.
+.info-head {
+  display: flex;
+  min-height: 24px;
+  align-items: baseline;
+  padding: 16px 20px;
+  gap: 12px;
+}
+
+// 접기/펼치기 — div+onClick 이 아니라 button 이다. Tab 으로 닿고 Enter/Space 로 열린다.
+.info-toggle {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  gap: 6px;
+
+  // 전역 `*:focus { outline: none }` 이 링을 지운다 — 키보드 사용자에게만 되돌린다.
+  &:focus-visible {
+    outline: 2px solid $primary-color;
+    outline-offset: 2px;
+  }
+}
+
+.info-title {
+  color: $mono207;
+  font-family: SpoqaB;
+  font-size: 13px;
+}
+
+.info-arrow {
+  width: 14px;
+  height: 14px;
+  transition: transform 0.15s;
+
+  &.open {
+    transform: rotate(180deg);
+  }
+}
+
+// 접힌 줄이 들고 있는 요약 — 접었다고 화면이 비지 않게 만든 이·생성 일시·설명 한 줄을
+// 남긴다. 설명은 산문이라 길면 자르고(전체는 title 이 준다), 앞 둘은 자리를 지킨다.
+.info-summary {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  min-width: 0;
+  align-items: baseline;
+  color: $sub-text-color;
+  font-family: SpoqaM;
+  font-size: 12px;
+  gap: 6px;
+}
+
+.summary-item {
+  flex-shrink: 0;
+  color: $normal-text-color;
+}
+
+.summary-label {
+  margin-right: 4px;
+  color: $sub-text-color;
+}
+
+.summary-sep {
+  flex-shrink: 0;
+  color: $mono204;
+}
+
+.summary-desc {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-meta {
+  display: grid;
+  grid-template-columns: minmax(240px, 2fr) repeat(3, minmax(140px, 1fr));
+  padding: 8px 20px 16px;
+  gap: 24px;
+}
+
+// 설명 — 산문이라 메타 그리드 칸(140px)에 들어가지 않는다. 그리드 아래 전폭 한 줄로 세우고
+// 구분선을 둔다. width:100% 가 아니라 블록 기본 폭 + padding 이라 box-sizing 이 필수다.
+.project-desc {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 20px 20px;
+  border-top: 1px solid $mono202;
+  gap: 8px;
+}
+
+.desc-head {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.desc-label {
+  color: $sub-text-color;
+  font-family: SpoqaM;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.desc-edit-btn {
+  display: flex;
+  padding: 4px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+
+  &:hover {
+    background-color: $hover-bg-color;
+  }
+
+  img {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+.desc-value {
+  color: $normal-text-color;
+  font-family: SpoqaM;
+  font-size: 14px;
+  line-height: 22px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+
+  // 모델·배포 카드의 빈 설명과 같은 회색.
+  &.no-desc {
+    color: $mono204;
+  }
+}
+
+.desc-length {
+  display: flex;
+  justify-content: flex-end;
+  color: $mono203;
+  font-family: SpoqaM;
+  font-size: 12px;
+}
+
+.meta-item {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 8px;
+}
+
+.meta-label {
+  color: $sub-text-color;
+  font-family: SpoqaM;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.meta-value {
+  display: block;
+  min-width: 0;
+  color: $normal-text-color;
+  font-family: SpoqaM;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+// 말줄임 + 호버 툴팁으로 전체 이름을 보여주던 자리다. 툴팁이 보이는 값과 같은 문자열을
+// 되풀이해 노이즈였으므로 걷어내고, 대신 줄바꿈을 허용해 전체 이름이 항상 보이게 한다.
+.dataset-value {
+  overflow-wrap: anywhere;
+}
+
+.runs {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+@media (max-width: 1100px) {
+  .project-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.runs-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.runs-title {
+  margin: 0;
+  color: $normal-text-color;
+  font-family: SpoqaB;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.run-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.run-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  border: 1px solid $disable-color;
+  border-radius: 10px;
+  background: $mono200;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+
+  &:hover {
+    border-color: $primary-color;
+    background: $background-color;
+  }
+}
+
+.run-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  gap: 4px;
+}
+
+.run-dataset {
+  color: $normal-text-color;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.run-config {
+  overflow: hidden;
+  max-width: 420px;
+  color: $sub-text-color;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run-side {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.run-metrics {
+  color: $primary-color;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.run-date {
+  color: $sub-text-color;
+  font-size: 12px;
+}
+
+.run-open {
+  color: $primary-color;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+// ── 벤치마크 실행 목록(펼친 표) 셀 ────────────────────────────────────────────
+// 표의 골격(머리글·행·페이지네이션)은 공용 molecules/Table 이, 정렬 레벨·칩은
+// molecules/MultiSortTable 이 갖는다. 여기서는 셀 안의 톤만 정한다.
+.cell-bench {
+  color: $normal-text-color;
+  font-weight: 700;
+}
+
+.cell-metric {
+  color: $sub-text-color;
+  font-size: 12.5px;
+}
+
+.cell-score {
+  display: inline-flex;
+  align-items: center;
+  color: $normal-text-color;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  gap: 6px;
+  white-space: nowrap;
+
+  // 같은 (벤치마크, 지표) 를 2회 이상 잰 경우에만 붙는다.
+  &.best {
+    color: $lime603;
+  }
+}
+
+// 모델(굵게) 위에, 위임 런이면 어느 배포를 빌렸는지 한 줄 아래에 붙인다.
+.cell-model {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cell-model-name {
+  color: $normal-text-color;
+  font-weight: 700;
+}
+
+.cell-model-via {
+  color: $lime604;
+  font-size: 11px;
+}
+
+// 체크포인트 이름은 식별자라 mono 로 둔다. 목업의 IBM Plex Mono 는 플랫폼이 싣지
+// 않으므로 이 저장소가 쓰는 시스템 mono 스택을 그대로 쓴다. 이름이 길어도 열이
+// 밀리지 않게 자르고, 잘린 전체 이름은 title 이 준다(ProjectDetail.jsx 참고).
+.cell-checkpoint {
+  display: inline-block;
+  max-width: 190px;
+  overflow: hidden;
+  color: $mono206;
+  font-family: 'Menlo', 'Consolas', 'Monaco', monospace;
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
+// 같은 체크포인트로 같은 날 두 번 돌린 런이 갈려야 해서 시:분:초까지 보인다.
+.cell-run {
+  color: $sub-text-color;
+  font-family: 'Menlo', 'Consolas', 'Monaco', monospace;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cell-dim {
+  color: $mono204;
+}
+
+.cell-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+// 정답 대조 실행 카드의 '열기' — 키보드로 카드를 여는 진짜 버튼(모양은 기존 .run-open 글자).
+.run-open-btn {
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+
+  &:focus-visible {
+    border-radius: 2px;
+    outline: 2px solid $primary-color;
+    outline-offset: 2px;
+  }
+}

@@ -45,11 +45,21 @@ const menuOptions = [
   { label: 'Private', value: 'private' },
 ];
 
-// Hugging Submenu options
+// 모델 유형 옵션 — AddModel 의 accessTypeOptions 와 동일 taxonomy 로 정렬(2026-07-06 QA(2)).
+// 수정 모달에선 read-only 표시 전용: Single(1)/Multimodal('multimodal')/GenAI Platform(0)/Domain(2).
 const accessTypeOptions = [
   {
-    label: 'Hugging Face',
+    label: 'Single',
     value: 1,
+    labelStyle: {
+      fontSize: '14px',
+      fontFamily: 'SpoqaM',
+      marginTop: '2px',
+    },
+  },
+  {
+    label: 'Multimodal',
+    value: 'multimodal',
     labelStyle: {
       fontSize: '14px',
       fontFamily: 'SpoqaM',
@@ -59,6 +69,15 @@ const accessTypeOptions = [
   {
     label: 'GenAI Platform',
     value: 0,
+    labelStyle: {
+      fontSize: '14px',
+      fontFamily: 'SpoqaM',
+      marginTop: '2px',
+    },
+  },
+  {
+    label: 'Domain',
+    value: 2,
     labelStyle: {
       fontSize: '14px',
       fontFamily: 'SpoqaM',
@@ -193,9 +212,13 @@ const EditModel = ({ data, type }) => {
       const {
         huggingface_model_id: huggingModel,
         commit_model_name: commitModel,
+        training_type: trainingType,
       } = result;
 
-      if (commitModel && commitModel !== '') {
+      // 유형 판별(2026-07-06 QA(2)): external→Domain(2), comma→Multimodal, commit→GenAI(0), else→Single(1).
+      if (trainingType === 'external') {
+        setLoadType(2);
+      } else if (commitModel && commitModel !== '') {
         setLoadType(0);
         const [commit, version] = commitModel.split('/');
         setModelBaseData((prev) => ({
@@ -206,6 +229,12 @@ const EditModel = ({ data, type }) => {
         setVersionData((prev) => ({
           ...prev,
           selectedModel: { name: version },
+        }));
+      } else if (huggingModel && huggingModel.includes(',')) {
+        setLoadType('multimodal');
+        setHuggingData((prev) => ({
+          ...prev,
+          selectedModel: { name: huggingModel },
         }));
       } else {
         setLoadType(1);
@@ -443,30 +472,46 @@ const EditModel = ({ data, type }) => {
         const loginUser = result.filter(({ name }) => name === userName)[0];
 
         if (prevModelData) {
-          const prevSelectedUsers = prevModelData.users.map((v) => {
+          const prevSelectedUsers = (prevModelData.users ?? []).map((v) => {
             return {
               label: v.user_name,
               value: v.user_id,
             };
           });
 
-          const newOwenrList = [
-            ...newList.filter(
-              (owner) =>
-                !prevSelectedUsers.some((prev) => prev.value === owner.value),
-            ),
+          // 워크스페이스 전체 사용자 + (그 목록에 없는) 기존 멤버.
+          // 이전엔 대칭차집합이라 "워크스페이스 사용자이면서 동시에 모델 멤버"인 사람이
+          // 소유자 후보에서 통째로 빠졌다 — 현재 소유자가 멤버이기도 하면 프리필된
+          // owner 가 정작 드롭다운 목록에 없는 상태가 된다.
+          const mergedOwnerList = [
+            ...newList,
             ...prevSelectedUsers.filter(
               (prev) => !newList.some((owner) => owner.value === prev.value),
             ),
           ];
 
-          setOwnerList(newOwenrList);
+          setOwnerList(mergedOwnerList);
 
-          const prevOwner = newList.filter(
-            (v) => v.label === prevModelData?.constructor,
-          )[0];
-          setOwner(prevOwner);
-          setSelectedAccessType(prevModelData.isAccess);
+          // 소유자는 id 로 식별한다. 이전엔 create_user_name 문자열 매칭이라
+          // 동명이인·개명에 취약했고, 매칭 실패 시 owner 가 undefined 로 빠졌다.
+          // (create_user_id 는 BE get_models 가 내려주는 필드 — name 매칭은 하위호환 폴백)
+          const prevOwner =
+            mergedOwnerList.find(
+              (v) => v.value === prevModelData.create_user_id,
+            ) ??
+            mergedOwnerList.find(
+              (v) => v.label === prevModelData.create_user_name,
+            );
+          if (prevOwner) setOwner(prevOwner);
+
+          // 공개(1)/비공개(0) 원본값으로 프리필. isAccess 는 "내가 접근 가능한가"라는
+          // 파생 판정이라 수정 모달을 열 수 있는 사람은 사실상 항상 1 → 그대로 저장하면
+          // 비공개 모델이 조용히 공개로 덮인다. access 가 없으면 비공개로 보수 처리.
+          setSelectedAccessType(prevModelData.access ?? 0);
+
+          // 멤버 목록을 건드리지 않아도 기존 멤버가 그대로 재전송되도록 초기화한다.
+          // BE update_model 은 받은 user_list 로 전량 치환하므로 빈 배열 = 전원 삭제다.
+          setUserList(prevSelectedUsers);
         } else {
           setOwner({ label: loginUser.name, value: loginUser.id });
         }
@@ -488,16 +533,18 @@ const EditModel = ({ data, type }) => {
   const isNameValidate = calNameValidate(modelData.modelName);
 
   useEffect(() => {
-    if (prevModelData) {
-      if (prevModelData.isAccess === 0 && prevModelData.users) {
-        const prevSelectedUsers = prevModelData.users.map((v) => {
-          return {
-            label: v.user_name,
-            value: v.user_id,
-          };
-        });
-        setSelectedUserList(prevSelectedUsers);
-      }
+    // 기존 멤버는 항상 프리필한다. 이전엔 `isAccess === 0` 조건이 붙어 있었지만
+    // isAccess 는 "내가 접근 가능한가"라 수정 모달을 연 시점엔 언제나 1 이라
+    // 이 분기가 한 번도 실행되지 않았고, 멤버 목록이 늘 빈 채로 보였다.
+    // MultiSelect 자체가 비공개일 때만 렌더되므로 항상 채워도 무해하다.
+    if (prevModelData?.users) {
+      const prevSelectedUsers = prevModelData.users.map((v) => {
+        return {
+          label: v.user_name,
+          value: v.user_id,
+        };
+      });
+      setSelectedUserList(prevSelectedUsers);
     }
   }, [prevModelData]);
 
@@ -586,7 +633,8 @@ const EditModel = ({ data, type }) => {
             />
           </div>
           <div className={cx('model')}>
-            {loadType === 1 ? (
+            {/* 2026-07-06 QA(2): 유형별 분기. multimodal/domain 은 read-only 표시(빈 GenAI 피커 오표시 방지) */}
+            {loadType === 1 && (
               <>
                 <SearchComponent
                   key='model'
@@ -609,7 +657,8 @@ const EditModel = ({ data, type }) => {
                   {t('finetuning.huggingface.message')}
                 </span>
               </>
-            ) : (
+            )}
+            {loadType === 0 && (
               <>
                 <SearchComponent
                   key='version'
@@ -634,6 +683,23 @@ const EditModel = ({ data, type }) => {
                   t={t}
                 />
               </>
+            )}
+            {loadType === 'multimodal' && (
+              <span className={cx('hugging-message')}>
+                {t('editModel.multimodal.encoders', {
+                  vision:
+                    (huggingData?.selectedModel?.name || '').split(',')[0] ||
+                    '-',
+                  llm:
+                    (huggingData?.selectedModel?.name || '').split(',')[1] ||
+                    '-',
+                })}
+              </span>
+            )}
+            {loadType === 2 && (
+              <span className={cx('hugging-message')}>
+                {t('editModel.domain.sds')}
+              </span>
             )}
           </div>
         </InputBoxWithLabel>

@@ -14,6 +14,7 @@ from utils.redis_key import GPU_INFO_RESOURCE, CPU_INFO_RESOURCE, MEM_INFO_RESOU
 from utils.msa_db import db_node
 from utils.msa_db import db_instance
 from utils.msa_db import db_workspace
+from utils import kube
 from node.helm_run import create_node_active_job, delete_helm
 import time
 import ast
@@ -108,6 +109,11 @@ def get_node_resource_info():
         node_id_list = get_node_id_list()
         # node_id_list = db_node.get_node_list()
 
+        # K8s node-role.kubernetes.io/* 라벨 라이브 조회(요청당 1회) → db 등 배지 파생.
+        # DB role 은 신규 노드에만 기록되고 이후 갱신 안 되므로(monitoring init 가드), 기존
+        # 노드에 라벨을 붙여도 반영되도록 여기서 라이브로 읽는다. best-effort(실패 시 {}).
+        node_role_labels = kube.list_node_roles()
+
         def get_node_hardware_info():
             for hostname, info in node_list.items():
                 try:
@@ -183,6 +189,9 @@ def get_node_resource_info():
                             node_types.append("gpu")
                     if "manage" in role_list and 'manage' not in node_types:
                         node_types.append("manage")
+                    # K8s node-role.kubernetes.io/db 라벨 → DB 배지(라이브, best-effort).
+                    if "db" in node_role_labels.get(hostname, ()) and "db" not in node_types:
+                        node_types.append("db")
                     result['node_list'].append(
                         {
                             'id' : node_id_list[hostname]['id'],

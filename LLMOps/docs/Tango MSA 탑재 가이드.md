@@ -691,6 +691,16 @@ POST /run
 
 서비스 특성에 따라 `/health`, `/info`, `/run` 외에 플랫폼이 추가로 호출해야 할 엔드포인트가 필요할 수 있습니다.
 
+> 📌 **장기 실행 학습·추론·배포 도메인의 경우 — SP-1 외부 컨테이너 계약 v2 우선 참조**
+>
+> 학습·추론·배포처럼 **GPU/PVC 자원이 필요하고 비동기 long-running job 형태**로 동작하는 도메인 API는, 본 가이드의 기본 contract(`/health`, `/info`, `/run`)와는 별개로 플랫폼이 별도 표준 spec을 제공합니다.
+>
+> → `examples/hello-plugin/external-container-spec.md` (SP-1 외부 컨테이너 계약 v2)
+>
+> 이 spec 은 **manifest 기반 endpoint 정의(협력기관 URL 자유 유지), 워크스페이스 PVC 마운트 표준, job lifecycle, response shape**(`status` enum / `job_id` / `progress` / `result` / `error` 필드 구조)을 명시합니다. 해당 도메인 서비스 탑재 시 이 spec 을 우선 참조해 주시기 바랍니다.
+>
+> 단순 inference 또는 short-lived 호출만 있는 서비스는 본 가이드의 `/run` 만으로 충분하며, SP-1 spec 은 적용되지 않습니다.
+
 이 경우 **협력기관이 해당 API의 명세를 작성하여 플랫폼 담당자에게 전달**해 주세요. 플랫폼이 협력기관 서비스를 호출하는 방향이므로, 서비스를 가장 잘 아는 협력기관이 먼저 명세를 제안하고 플랫폼 담당자가 검토·확정하는 방식으로 진행합니다.
 
 전달 시 아래 항목을 포함해 주세요.

@@ -1,0 +1,95 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# convert-llamacpp.yaml — 부팅 시드 manifest (양자화·포팅, async)
+#
+# ⚠️ 정본은 컨테이너 소스 옆의 `apps/convert/manifest.yaml` 이다. 이 파일은 부팅
+# 자동 등록(src/manifest/seed.py)을 위한 **사본**이라, 한쪽을 고치면 반드시 다른
+# 쪽도 맞춰야 한다(이미지 태그·버전이 특히 그렇다).
+# 사본을 두는 이유: 시드 디렉터리는 이미지에 COPY 되고 NFS src 마운트로도 잡히는데,
+# 리포 루트 밖을 가리키는 심링크는 이미지 빌드에서 깨진다.
+#
+# 이 파일이 없어서 생겼던 일: 시드 디렉터리에 convert 판본이 없으면 레지스트리의
+# job_type 분포가 convert 0건이 되고, 그러면
+#   ① 모델 상세 → 양자화·포팅 탭에서 실행할 컨테이너가 없어 양자화 잡을 못 돌리고
+#   ② 산출물(GGUF)이 안 생기므로 EdgeDeployModal 의 제출이 영구 disabled 가 되며
+#      (ggufFile·jobId 가 완료된 양자화 잡에서만 오므로)
+#   ③ jonathan_llm.quantize_lineage 가 0행으로 남는다.
+# MODEL-QUANT 와 DEPLOY-EDGE 의 실행 케이스가 같은 원인으로 함께 막혔던 게 이것이다.
+#
+# service_family 가 없으므로 페어가 아니라 단건으로 등록된다(짝 컨테이너 없음).
+# 플랫폼 바인딩은 llm_model 의 CONVERT_MANIFEST_NAME/VERSION 이 해석하고, 그 값은
+# devops/llm_model/helm/templates/deployment.yaml 에 "convert-llamacpp"/"1.0.0" 으로
+# 명시 오버라이드돼 있다(jfb-settings 에 키가 없어 코드 기본값 mock-convert 로
+# 떨어지는 것을 막기 위함). 아래 metadata.name/version 이 그 두 값과 반드시 일치해야
+# 한다 — 어긋나면 레지스트리에 있어도 해석되지 않는다.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# convert-llamacpp — 플랫폼 소유 llama.cpp 양자화·포팅 컨테이너 (SP-4 / v0.4 3.9).
+# mock-convert(examples/) 의 실로직 대체본. 플랫폼이 소유·구현(협력기관 제공물 아님),
+# 배포는 external_container launch 메커니즘 재사용(J-1). 계약 전문:
+# ../../examples/hello-plugin/external-container-spec.md
+apiVersion: tango.acryl.ai/v1
+kind: ExternalContainer
+
+metadata:
+  name: convert-llamacpp
+  version: "1.1.3"
+  vendor: "Acryl (platform-owned)"
+  contact: "platform@acryl.ai"
+  description: |
+    플랫폼 소유 llama.cpp 양자화·포팅 컨테이너. HF merged 모델(/model)을 받아
+    (옵션 프루닝 →) f16 GGUF → 타겟 양자화(Q4_K_M/Q5_K_M/Q6_K) → /output 포팅
+    패키지(model.gguf + inference.py + run.sh + config.json + metadata.json).
+    convert_hf_to_gguf + llama-quantize 실로직(베이스 ggml-org/llama.cpp:full-b9628).
+    SDS(eva-vlm) 커밋은 params.checkpoint_name 으로 받아 base 에 LoRA merge + mmproj(f16) 동봉.
+
+spec:
+  image: "docker.io/acrylaaai/convert-llamacpp:1.1.3"
+
+  # SDS(eva-vlm) merge 의 base(Llama-3.1-8B·CLIP-336)는 오프라인 HF 캐시(/hf-cache)에서만 읽는다.
+  env:
+    HF_HOME: "/hf-cache"
+    HF_HUB_CACHE: "/hf-cache/hub"
+    HF_HUB_OFFLINE: "1"
+    TRANSFORMERS_OFFLINE: "1"
+    HOME: "/tmp"
+
+  job_type: convert
+  # async: HTTP 서버(/run+poll) — generate/mock-convert 와 동일·검증된 와이어링.
+  execution_mode: async
+  port: 8000
+
+  resources:
+    cpu: "4"
+    memory: "40Gi"            # 변환·프루닝 시 모델 로드 — 모델 크기에 맞춰 조정.
+    gpu: 0                    # llama.cpp 변환·양자화는 CPU 중심.
+
+  inputs:
+    params:
+      required: false         # target_quant(q4/q5/q6) / model_name / prune / prune_sparsity
+    dataset:
+      required: false         # 입력은 merged 모델(/model) — dataset 아님
+
+  outputs:
+    metrics: true             # /output/metadata.json
+    artifacts: true           # /output 포팅 패키지
+
+  secrets:
+    required: []
+
+  network:
+    egress_whitelist: []
+
+  endpoints:
+    info: "/info"
+    health: "/health"
+    live: "/live"
+    run: "/run"
+    jobs: "/jobs/{id}"
+    cancel: "/jobs/{id}/cancel"
+
+  capabilities:
+    estimated_startup_seconds: 15
+    estimated_duration_seconds: 300
+    timeout_seconds: 7200         # SDS 8B: CPU merge + f16 변환 + 양자화
+
+  workspace_scope: per-workspace

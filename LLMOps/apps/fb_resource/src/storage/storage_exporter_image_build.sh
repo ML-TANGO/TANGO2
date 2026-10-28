@@ -1,8 +1,13 @@
 #!/bin/bash
-IMAGE_REGI="registry.jonathan.acryl.ai"
-IMAGE_REPO="jfb-system"
+# SP-Ext.4: 인프라 app 차트와 동일하게 오픈 docker hub (acrylaaai) 로 push.
+# helm chart (apps/fb_resource/src/storage/helm_chart/storage-exporter,
+# devops/gaip_prometheus/storage-exporter) 가 docker.io/acrylaaai/storage-exporter
+# 를 참조한다. 이전엔 build.sh 만 사내 registry (registry.jonathan.acryl.ai)
+# 타겟이라 chart 와 불일치했음.
+IMAGE_REGI="docker.io"
+IMAGE_REPO="acrylaaai"
 DOCKERFILE="Dockerfile"
-TAG=0.4.1
+TAG=0.3.2
 IMAGE_REGISTRY=$IMAGE_REGI/$IMAGE_REPO
 APP_NAME="storage-exporter"
 
@@ -22,7 +27,7 @@ if [[ -z "$IMAGE_INFO" ]]; then
     fi
 
     sudo nerdctl build --no-cache --tag $IMAGE_REGISTRY/$APP_NAME:$TAG -f $DOCKERFILE ../../..
-    sudo nerdctl push $IMAGE_REGISTRY/$APP_NAME:$TAG --insecure-registry
+    sudo nerdctl push $IMAGE_REGISTRY/$APP_NAME:$TAG
 
     echo "Image build & push completed"
     exit 0
@@ -60,5 +65,5 @@ IMAGE_FULL_NAME="$IMAGE_NAME:$TAG"
 
 
 sudo nerdctl build --no-cache --tag $IMAGE_FULL_NAME -f $DOCKERFILE ../../..
-sudo nerdctl push $IMAGE_FULL_NAME --insecure-registry
+sudo nerdctl push $IMAGE_FULL_NAME
 

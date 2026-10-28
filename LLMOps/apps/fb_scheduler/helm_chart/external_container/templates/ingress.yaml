@@ -1,0 +1,37 @@
+{{- /*
+  Kong ingress for sync containers — exposes /msa/{manifest.name} on the
+  cluster gateway. async/batch stay internal; their BFF talks to the
+  ClusterIP service directly inside the cluster.
+
+  Disabled by default (ingress.enabled=false). fb_scheduler flips this on
+  when the manifest is a sync model-serving deployment that the user UI
+  needs to reach through Kong.
+*/ -}}
+{{- if and .Values.ingress.enabled (eq .Values.execution_mode "sync") }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Values.pod_name }}-ing
+  namespace: {{ .Values.namespace }}
+  annotations:
+    acryl.ai/manifest-name: {{ .Values.manifest.name | quote }}
+    # Kong-specific: strip the /msa/<name> prefix before forwarding so the
+    # partner pod receives the same paths it would on a direct call
+    # (`/docs`, `/health`, `/info`, ...). Without this, every Swagger asset
+    # 404s because Kong forwards the full /msa/<name>/docs to the backend.
+    konghq.com/strip-path: "true"
+spec:
+  ingressClassName: {{ .Values.ingress.className | quote }}
+  rules:
+  - http:
+      paths:
+      - path: {{ printf "%s/%s" .Values.ingress.path_prefix .Values.manifest.name | quote }}
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ .Values.pod_name }}-svc
+            # Service exposes 80 → targetPort 8000; reach it via 80
+            # (matches how the rest of the platform's ingresses are wired).
+            port:
+              number: 80
+{{- end }}

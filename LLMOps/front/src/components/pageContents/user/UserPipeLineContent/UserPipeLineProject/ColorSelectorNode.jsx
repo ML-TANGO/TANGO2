@@ -5,9 +5,17 @@ import CardFrame from './CardFrame';
 import './ReactFlowComponent/ReactFlowComponent.scss';
 
 const TtaskType = {
+  generation: 'generation',
   preprocessing: 'pre',
   project: 'train',
+  finetuning: 'finetune',
+  quantize: 'quantize',
+  llm_deploy: 'llmdeploy',
   deployment: 'deployment',
+  // SP-7 프롬프트 최적화 3-모듈 (핸들 id 가 '-' split 되므로 cardType 은 하이픈 없이)
+  prompt_gen: 'promptgen',
+  data_gen: 'datagen',
+  algo_call: 'algocall',
 };
 
 const calCardType = (task_type) => {

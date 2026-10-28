@@ -20,22 +20,47 @@ const calInstanceStatus = (model, immediately_status) => {
   };
 };
 
-export default function PlaygroundInstanceSettingInfo() {
-  const { model, immediately_status } = useSelector(
+export default function PlaygroundInstanceSettingInfo({
+  model: modelProp,
+  status,
+  immediatelyStatus,
+  allocations,
+  title = '인스턴스 설정 정보',
+}) {
+  const {
+    model: reduxModel,
+    immediately_status: reduxImmediatelyStatus,
+  } = useSelector(
     (state) => state.llmPlayground.info_instance,
     shallowEqual,
   );
-  const { status: statusType } = useSelector(
+  const { status: reduxStatus } = useSelector(
     (state) => state.llmPlayground.status,
     shallowEqual,
   );
+  // props가 없으면 단일 배포의 Redux 값을 그대로 사용한다.
+  // dual만 정규화 read-model을 주입해 역할별 상태가 서로 섞이지 않게 한다.
+  const model = modelProp ?? reduxModel;
+  const statusType = status ?? reduxStatus;
+  const isImmediatelyAvailable =
+    immediatelyStatus ?? reduxImmediatelyStatus;
 
-  const { color, message } = calInstanceStatus(model, immediately_status);
+  const { color, message } = calInstanceStatus(
+    model,
+    isImmediatelyAvailable,
+  );
+  const frameDisabled =
+    status === undefined
+      ? undefined
+      : ['installing', 'pending'].includes(statusType);
 
   return (
-    <PlaygroundFrame style={{ backgroundColor: '#fff' }}>
+    <PlaygroundFrame
+      disabled={frameDisabled}
+      style={{ backgroundColor: '#fff' }}
+    >
       <div className={cx('header')}>
-        <h3 className={cx('title')}>인스턴스 설정 정보</h3>
+        <h3 className={cx('title')}>{title}</h3>
         <span className={cx('status')} style={{ color }}>
           {message}
         </span>
@@ -80,6 +105,22 @@ export default function PlaygroundInstanceSettingInfo() {
                 {model.gpu_allocate ? `${model.gpu_allocate} EA` : '0 EA'}
               </span>
             </div>
+            {allocations?.map(({ role, gpuCount, badgeType = 'gray' }) => (
+              <div className={cx('between-cont')} key={role}>
+                <div className={cx('left-cont')}>
+                  <Badge
+                    label={role}
+                    size='sm'
+                    type={badgeType}
+                    radius='small'
+                  />
+                  <span className={cx('label')}>GPU 할당</span>
+                </div>
+                <span className={cx('value')}>
+                  {gpuCount != null ? `${gpuCount} EA` : '-'}
+                </span>
+              </div>
+            ))}
             <div className={cx('between-cont')}>
               <div className={cx('left-cont')}>
                 <Badge

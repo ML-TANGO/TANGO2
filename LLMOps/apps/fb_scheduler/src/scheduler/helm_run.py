@@ -18,16 +18,16 @@ def create_project_tool_pod(project_tool_pod : ToolPodInfo):
         labels_command=""
         for key, val in project_tool_pod.labels.model_dump().items():
             if val:
-                labels_command += f" --set labels.{key}={val}"
-        
+                labels_command += f" --set labels.{key}={common.helm_set_value(val)}"
+
         env_command=""
         for key, val in project_tool_pod.env.model_dump().items():
             if val:
-                env_command += f" --set spec.containers.env.{key}={val}"
-            
+                env_command += f" --set spec.containers.env.{key}={common.helm_set_value(val)}"
+
         resource_limit_command=""
         for key, val in project_tool_pod.resource.model_dump().items():
-            resource_limit_command += f" --set spec.containers.resource.limits.{key}={val}"
+            resource_limit_command += f" --set spec.containers.resource.limits.{key}={common.helm_set_value(val)}"
         
         rdma_command = ""
         if settings.JF_RDMA_ENABLED:
@@ -49,12 +49,12 @@ def create_project_tool_pod(project_tool_pod : ToolPodInfo):
 
         nodes_command = ""
         for index, node in enumerate(project_tool_pod.cluster):
-            nodes_command += f" --set cluster[{index}].node_name={node.node_name}"
-            nodes_command += f' --set cluster[{index}].device.type="{node.device.device_type}"'
-            nodes_command += f' --set cluster[{index}].device.model="{node.device.model}"'
-            nodes_command += f" --set cluster[{index}].device.count={node.device.count}"
-            nodes_command += f' --set cluster[{index}].device.uuids="{node.device.uuids}"'
-            nodes_command += f' --set cluster[{index}].device.ids="{node.device.ids}"'
+            nodes_command += f" --set cluster[{index}].node_name={common.helm_set_value(node.node_name)}"
+            nodes_command += f" --set cluster[{index}].device.type={common.helm_set_value(node.device.device_type)}"
+            nodes_command += f" --set cluster[{index}].device.model={common.helm_set_value(node.device.model)}"
+            nodes_command += f" --set cluster[{index}].device.count={common.helm_set_value(node.device.count)}"
+            nodes_command += f" --set cluster[{index}].device.uuids={common.helm_set_value(node.device.uuids)}"
+            nodes_command += f" --set cluster[{index}].device.ids={common.helm_set_value(node.device.ids)}"
         namespace = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=project_tool_pod.labels.workspace_id)
         
         if settings.EXTERNAL_HOST_REDIRECT:
@@ -63,22 +63,22 @@ def create_project_tool_pod(project_tool_pod : ToolPodInfo):
             domain = f"{settings.EXTERNAL_HOST}:{settings.EXTERNAL_HOST_PORT}"
         
         
-        command=f"""helm install {project_tool_pod.labels.helm_name} tools/ \
-            -n {namespace} \
-            --set namespace={namespace} \
+        command=f"""helm install {common.shell_arg(project_tool_pod.labels.helm_name)} tools/ \
+            -n {common.shell_arg(namespace)} \
+            --set namespace={common.shell_arg(namespace)} \
             --set ingress_class_name={settings.INGRESS_CLASS_NAME} \
-            --set owner_name={project_tool_pod.owner_name} \
-            --set pod_name={project_tool_pod.pod_name} \
-            --set service.svc_name={project_tool_pod.svc_name} \
+            --set owner_name={common.helm_set_value(project_tool_pod.owner_name)} \
+            --set pod_name={common.helm_set_value(project_tool_pod.pod_name)} \
+            --set service.svc_name={common.helm_set_value(project_tool_pod.svc_name)} \
             --set service.port={project_tool_pod.port} \
-            --set spec.containers.image="{project_tool_pod.image}" \
+            --set spec.containers.image={common.helm_set_value(project_tool_pod.image)} \
             --set domain="{domain}" \
-            --set tool_password="{project_tool_pod.tool_password}" \
+            --set tool_password={common.helm_set_value(project_tool_pod.tool_password)} \
             --set spec.restartPolicy={project_tool_pod.restartPolicy}\
             --set total_device_count={project_tool_pod.total_device_count} \
-            --set spec.hostname={project_tool_pod.hostname} \
-            --set dataset.access={project_tool_pod.dataset_access} \
-            --set dataset.name={project_tool_pod.dataset_name} \
+            --set spec.hostname={common.helm_set_value(project_tool_pod.hostname)} \
+            --set dataset.access={common.helm_set_value(project_tool_pod.dataset_access)} \
+            --set dataset.name={common.helm_set_value(project_tool_pod.dataset_name)} \
             --set privateRepo={settings.JONATHAN_PRIVATE_REPO_ENABLED} \
             --set privatePip={settings.JONATHAN_PRIVATE_PIP_ENABLED} \
             --set nexusPrefix={settings.JONATHAN_NEXUS_PREFIX} \
@@ -92,7 +92,7 @@ def create_project_tool_pod(project_tool_pod : ToolPodInfo):
             
         
         if project_tool_pod.cpu_instance_name:
-            command += f"  --set spec.cpu_instance_name={project_tool_pod.cpu_instance_name}"
+            command += f"  --set spec.cpu_instance_name={common.helm_set_value(project_tool_pod.cpu_instance_name)}"
         
         print(command, file=sys.stderr)
         
@@ -118,44 +118,44 @@ def create_project_tool_pod(project_tool_pod : ToolPodInfo):
 def create_project_hps_pod(hps_pod : HPSPodInfo):
     try:
         os.chdir("/app/helm_chart/") # TODO 나중에 변수화 해야할 듯
-        hps_command = f' --set spec.containers.command="{hps_pod.command}"'
+        hps_command = f" --set spec.containers.command={common.helm_set_value(hps_pod.command)}"
         
         labels_command=""
         for key, val in hps_pod.labels.model_dump().items():
             if val:
-                labels_command += f" --set labels.{key}={val}"
-        
+                labels_command += f" --set labels.{key}={common.helm_set_value(val)}"
+
         env_command=""
         for key, val in hps_pod.env.model_dump().items():
             if val:
-                env_command += f" --set spec.containers.env.{key}={val}"
-            
+                env_command += f" --set spec.containers.env.{key}={common.helm_set_value(val)}"
+
         resource_limit_command=""
         for key, val in hps_pod.resource.model_dump().items():
-            resource_limit_command += f" --set spec.containers.resource.limits.{key}={val}"
+            resource_limit_command += f" --set spec.containers.resource.limits.{key}={common.helm_set_value(val)}"
         
         nodes_command = ""
         for index, node in enumerate(hps_pod.cluster):
-            nodes_command += f" --set cluster[{index}].node_name={node.node_name}"
-            nodes_command += f' --set cluster[{index}].device.type="{node.device.device_type}"'
-            nodes_command += f' --set cluster[{index}].device.model="{node.device.model}"'
-            nodes_command += f" --set cluster[{index}].device.count={node.device.count}"
-            nodes_command += f' --set cluster[{index}].device.uuids="{node.device.uuids}"'
-            nodes_command += f' --set cluster[{index}].device.ids="{node.device.ids}"'
+            nodes_command += f" --set cluster[{index}].node_name={common.helm_set_value(node.node_name)}"
+            nodes_command += f" --set cluster[{index}].device.type={common.helm_set_value(node.device.device_type)}"
+            nodes_command += f" --set cluster[{index}].device.model={common.helm_set_value(node.device.model)}"
+            nodes_command += f" --set cluster[{index}].device.count={common.helm_set_value(node.device.count)}"
+            nodes_command += f" --set cluster[{index}].device.uuids={common.helm_set_value(node.device.uuids)}"
+            nodes_command += f" --set cluster[{index}].device.ids={common.helm_set_value(node.device.ids)}"
         namespace = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=hps_pod.labels.workspace_id)
-        command=f"""helm install {hps_pod.labels.helm_name} project_job/ \
-            -n {namespace} \
-            --set namespace={namespace} \
-            --set owner_name={hps_pod.owner_name} \
-            --set pod_name={hps_pod.pod_name} \
+        command=f"""helm install {common.shell_arg(hps_pod.labels.helm_name)} project_job/ \
+            -n {common.shell_arg(namespace)} \
+            --set namespace={common.shell_arg(namespace)} \
+            --set owner_name={common.helm_set_value(hps_pod.owner_name)} \
+            --set pod_name={common.helm_set_value(hps_pod.pod_name)} \
             --set spec.restartPolicy={hps_pod.restartPolicy} \
-            --set spec.containers.image={hps_pod.image} \
+            --set spec.containers.image={common.helm_set_value(hps_pod.image)} \
             --set distributed_framework={hps_pod.distributed_framework} \
-            --set distributed_config_path="{hps_pod.distributed_config_path}" \
+            --set distributed_config_path={common.helm_set_value(hps_pod.distributed_config_path)} \
             --set total_device_count={hps_pod.total_device_count} \
-            --set spec.hostname={hps_pod.hostname} \
-            --set dataset.access={hps_pod.dataset_access} \
-            --set dataset.name={hps_pod.dataset_name} \
+            --set spec.hostname={common.helm_set_value(hps_pod.hostname)} \
+            --set dataset.access={common.helm_set_value(hps_pod.dataset_access)} \
+            --set dataset.name={common.helm_set_value(hps_pod.dataset_name)} \
             --set privateRepo={settings.JONATHAN_PRIVATE_REPO_ENABLED} \
             --set privatePip={settings.JONATHAN_PRIVATE_PIP_ENABLED} \
             --set nexusPrefix={settings.JONATHAN_NEXUS_PREFIX} \
@@ -168,7 +168,7 @@ def create_project_hps_pod(hps_pod : HPSPodInfo):
             # --set dataset.access={project_tool_pod.dataset_access} \
             # --set dataset.name={project_tool_pod.dataset_name} \
         if hps_pod.cpu_instance_name:
-            command += f"  --set spec.cpu_instance_name={hps_pod.cpu_instance_name}"
+            command += f"  --set spec.cpu_instance_name={common.helm_set_value(hps_pod.cpu_instance_name)}"
             
         print(command, file=sys.stderr)
         result = subprocess.run(
@@ -193,44 +193,44 @@ def create_project_training_pod(training_pod : TrainingPodInfo):
     try:
         os.chdir("/app/helm_chart/") # TODO 나중에 변수화 해야할 듯
 
-        training_command = f' --set spec.containers.command="{training_pod.command}"'
+        training_command = f" --set spec.containers.command={common.helm_set_value(training_pod.command)}"
         
         labels_command=""
         for key, val in training_pod.labels.model_dump().items():
             if val:
-                labels_command += f" --set labels.{key}={val}"
-        
+                labels_command += f" --set labels.{key}={common.helm_set_value(val)}"
+
         env_command=""
         for key, val in training_pod.env.model_dump().items():
             if val:
-                env_command += f" --set spec.containers.env.{key}={val}"
-            
+                env_command += f" --set spec.containers.env.{key}={common.helm_set_value(val)}"
+
         resource_limit_command=""
         for key, val in training_pod.resource.model_dump().items():
-            resource_limit_command += f" --set spec.containers.resource.limits.{key}={val}"
+            resource_limit_command += f" --set spec.containers.resource.limits.{key}={common.helm_set_value(val)}"
         
         nodes_command = ""
         for index, node in enumerate(training_pod.cluster):
-            nodes_command += f" --set cluster[{index}].node_name={node.node_name}"
-            nodes_command += f' --set cluster[{index}].device.type="{node.device.device_type}"'
-            nodes_command += f' --set cluster[{index}].device.model="{node.device.model}"'
-            nodes_command += f" --set cluster[{index}].device.count={node.device.count}"
-            nodes_command += f' --set cluster[{index}].device.uuids="{node.device.uuids}"'
-            nodes_command += f' --set cluster[{index}].device.ids="{node.device.ids}"'
+            nodes_command += f" --set cluster[{index}].node_name={common.helm_set_value(node.node_name)}"
+            nodes_command += f" --set cluster[{index}].device.type={common.helm_set_value(node.device.device_type)}"
+            nodes_command += f" --set cluster[{index}].device.model={common.helm_set_value(node.device.model)}"
+            nodes_command += f" --set cluster[{index}].device.count={common.helm_set_value(node.device.count)}"
+            nodes_command += f" --set cluster[{index}].device.uuids={common.helm_set_value(node.device.uuids)}"
+            nodes_command += f" --set cluster[{index}].device.ids={common.helm_set_value(node.device.ids)}"
         namespace = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=training_pod.labels.workspace_id)
-        command=f"""helm install {training_pod.labels.helm_name} project_job/ \
-            -n {namespace} \
-            --set namespace={namespace} \
-            --set owner_name={training_pod.owner_name} \
-            --set pod_name={training_pod.pod_name} \
+        command=f"""helm install {common.shell_arg(training_pod.labels.helm_name)} project_job/ \
+            -n {common.shell_arg(namespace)} \
+            --set namespace={common.shell_arg(namespace)} \
+            --set owner_name={common.helm_set_value(training_pod.owner_name)} \
+            --set pod_name={common.helm_set_value(training_pod.pod_name)} \
             --set spec.restartPolicy={training_pod.restartPolicy} \
-            --set spec.containers.image={training_pod.image} \
+            --set spec.containers.image={common.helm_set_value(training_pod.image)} \
             --set distributed_framework={training_pod.distributed_framework} \
-            --set distributed_config_path="{training_pod.distributed_config_path}" \
+            --set distributed_config_path={common.helm_set_value(training_pod.distributed_config_path)} \
             --set total_device_count={training_pod.total_device_count} \
-            --set spec.hostname={training_pod.hostname} \
-            --set dataset.access={training_pod.dataset_access} \
-            --set dataset.name={training_pod.dataset_name} \
+            --set spec.hostname={common.helm_set_value(training_pod.hostname)} \
+            --set dataset.access={common.helm_set_value(training_pod.dataset_access)} \
+            --set dataset.name={common.helm_set_value(training_pod.dataset_name)} \
             --set privateRepo={settings.JONATHAN_PRIVATE_REPO_ENABLED} \
             --set privatePip={settings.JONATHAN_PRIVATE_PIP_ENABLED} \
             --set nexusPrefix={settings.JONATHAN_NEXUS_PREFIX} \
@@ -243,7 +243,7 @@ def create_project_training_pod(training_pod : TrainingPodInfo):
             # --set dataset.access={project_tool_pod.dataset_access} \
             # --set dataset.name={project_tool_pod.dataset_name} \
         if training_pod.cpu_instance_name:
-            command += f"  --set spec.cpu_instance_name={training_pod.cpu_instance_name}"
+            command += f"  --set spec.cpu_instance_name={common.helm_set_value(training_pod.cpu_instance_name)}"
             
         print(command, file=sys.stderr)
         result = subprocess.run(
@@ -275,7 +275,7 @@ def install_deployment_svc_ing(deployment_info: DeploymentInfo):
     labels = DeploymentLabels(**deployment_info).dict()
     labels_command=""
     for key,val in labels.items():
-        labels_command += f"--set labels.{key}={val} "
+        labels_command += f"--set labels.{key}={common.helm_set_value(val)} "
 
     # =======================================================================================
     namespace = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=workspace_id)
@@ -285,13 +285,13 @@ def install_deployment_svc_ing(deployment_info: DeploymentInfo):
     # svc, ing 는 배포 당 1개씩 만듬 (worker 마다 1개가 아니라)
     namespace = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=workspace_id)    
     command=f"helm install deployment-svc-ing-{deployment_id} \
-        -n {namespace} --create-namespace \
+        -n {common.shell_arg(namespace)} --create-namespace \
         --set metadata.id.deploymentId={str(deployment_id)} \
         --set metadata.id.workspaceId={str(workspace_id)} \
-        --set metadata.name.podBaseName={pod_base_name} \
-        --set metadata.name.workspaceName={workspace_name} \
+        --set metadata.name.podBaseName={common.helm_set_value(pod_base_name)} \
+        --set metadata.name.workspaceName={common.helm_set_value(workspace_name)} \
         --set metadata.namespace.systemNamespace={settings.JF_SYSTEM_NAMESPACE} \
-        --set metadata.pod.podBaseName={pod_base_name} \
+        --set metadata.pod.podBaseName={common.helm_set_value(pod_base_name)} \
         --set ingress.ingressClassName={settings.INGRESS_CLASS_NAME} \
         {labels_command} {helm_path}"
         
@@ -392,19 +392,19 @@ def install_deployment_pod(deployment_info: dict):
     labels = DeploymentLabels(**deployment_info).dict()
     if labels is not None:
         for key,val in labels.items():
-            labels_command += f"--set labels.{key}={val} "
+            labels_command += f"--set labels.{key}={common.helm_set_value(val)} "
 
     env_command=""
     env = deployment_info.get("env")
     if env is not None:
         for item in env:
-            env_command +=f"--set env.{item['name']}={item['value']} "
+            env_command +=f"--set env.{item['name']}={common.helm_set_value(item['value'])} "
 
     annotation_command=""
     pod_annotation = deployment_info.get("pod_annotation")
     if pod_annotation is not None:
         for key,val in pod_annotation.items():
-            annotation_command += f"--set annotations.{key}={val} "
+            annotation_command += f"--set annotations.{key}={common.helm_set_value(val)} "
             
     resources_command=""
     resources = deployment_info.get("resources")
@@ -413,24 +413,24 @@ def install_deployment_pod(deployment_info: dict):
             if key == "limits":
                 if val is not None:
                     for k, v in val.items():
-                        resources_command += f"--set resources.limits.{k}={v}  " 
+                        resources_command += f"--set resources.limits.{k}={common.helm_set_value(v)}  "
             else:
                 if val is not None:
                     for k, v in val.items():
-                        resources_command += f"--set resources.requests.{k}={v}  " 
+                        resources_command += f"--set resources.requests.{k}={common.helm_set_value(v)}  "
 
     # LLM
     deployment_llm_command=""
     deployment_llm = deployment_info.get("deployment_llm")
     if deployment_llm is not None:
         json_deployment_llm = json.dumps(deployment_llm)
-        deployment_llm_command = f" --set-json llm='{json_deployment_llm}' "
+        deployment_llm_command = f" --set-json llm={common.shell_arg(json_deployment_llm)} "
     
     deployment_llm_db_command=""
     deployment_llm_db = deployment_info.get("deployment_llm_db")
     if deployment_llm_db is not None:
         json_deployment_llm_db = json.dumps(deployment_llm_db)
-        deployment_llm_db_command = f" --set-json llm.db='{json_deployment_llm_db}' "
+        deployment_llm_db_command = f" --set-json llm.db={common.shell_arg(json_deployment_llm_db)} "
  
     # =======================================================================================
     namespace = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=workspace_id)
@@ -438,27 +438,27 @@ def install_deployment_pod(deployment_info: dict):
     helm_path = "./deployment_pod" # JONATHAN
 
     command=f"helm install deployment-pod-{deployment_id}-{deployment_worker_id} \
-        -n {namespace} --create-namespace \
-        --set metadata.name.podName={pod_name} \
-        --set metadata.name.podBaseName={pod_base_name} \
-        --set metadata.name.hostname={pod_name} \
-        --set metadata.name.workspaceName={workspace_name} \
-        --set metadata.name.trainingName={project_name} \
-        --set metadata.name.deploymentName={deployment_name} \
+        -n {common.shell_arg(namespace)} --create-namespace \
+        --set metadata.name.podName={common.helm_set_value(pod_name)} \
+        --set metadata.name.podBaseName={common.helm_set_value(pod_base_name)} \
+        --set metadata.name.hostname={common.helm_set_value(pod_name)} \
+        --set metadata.name.workspaceName={common.helm_set_value(workspace_name)} \
+        --set metadata.name.trainingName={common.helm_set_value(project_name)} \
+        --set metadata.name.deploymentName={common.helm_set_value(deployment_name)} \
         --set metadata.namespace.systemNamespace={settings.JF_SYSTEM_NAMESPACE} \
         --set metadata.id.workspaceId={workspace_id} \
-        --set pod.cpuInstance={cpu_instance_name} \
-        --set pod.image={pod_image} \
+        --set pod.cpuInstance={common.helm_set_value(cpu_instance_name)} \
+        --set pod.image={common.helm_set_value(pod_image)} \
         --set pod.imageRegistry={settings.DOCKER_REGISTRY_URL} \
-        --set command.runCode=\'{run_code}\' \
+        --set command.runCode={common.helm_set_value(run_code)} \
         --set command.deploymentWorkerId={deployment_worker_id} \
         --set resources.limits.npu={npu_count} \
         --set resources.limits.gpu={gpu_count} \
         --set resources.requests.gpu={gpu_count} \
         --set ingress.ingressClassName={settings.INGRESS_CLASS_NAME} \
-        --set deployment.model_type={model_type} \
-        --set deployment.huggingface_model_id={huggingface_model_id} \
-        --set deployment.huggingface_token={huggingface_token} \
+        --set deployment.model_type={common.helm_set_value(model_type)} \
+        --set deployment.huggingface_model_id={common.helm_set_value(huggingface_model_id)} \
+        --set deployment.huggingface_token={common.helm_set_value(huggingface_token)} \
         --set deployment.training_id={training_id} \
         --set privateRepo={settings.JONATHAN_PRIVATE_REPO_ENABLED} \
         --set privatePip={settings.JONATHAN_PRIVATE_PIP_ENABLED} \
@@ -493,7 +493,7 @@ def install_deployment_pod(deployment_info: dict):
     
 def uninstall_pod_deployment(workspace_id, deployment_id, deployment_worker_id, **kwargs):
     helm_namespace = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=workspace_id)
-    command=f"helm uninstall -n {helm_namespace} deployment-pod-{deployment_id}-{deployment_worker_id}"
+    command=f"helm uninstall -n {common.shell_arg(helm_namespace)} deployment-pod-{deployment_id}-{deployment_worker_id}"
     try:
         os.chdir("/app/helm_chart/")
         subprocess.run(
@@ -511,8 +511,8 @@ def uninstall_pod_deployment(workspace_id, deployment_id, deployment_worker_id, 
 def uninstall_all_deployment(workspace_id, deployment_id, **kwargs):
     helm_namespace = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=workspace_id)
     # deployment-pod-{deployment_id}- 끝에 '-' 없으면 안됨
-    command_pod=f"helm list -n {helm_namespace} | grep deployment-pod-{deployment_id}- | \
-        awk \'{{print $1}}\' | xargs helm uninstall -n {helm_namespace} "
+    command_pod=f"helm list -n {common.shell_arg(helm_namespace)} | grep deployment-pod-{deployment_id}- | \
+        awk \'{{print $1}}\' | xargs helm uninstall -n {common.shell_arg(helm_namespace)} "
 
     try:
         os.chdir("/app/helm_chart/")
@@ -525,8 +525,8 @@ def uninstall_all_deployment(workspace_id, deployment_id, **kwargs):
         print(e.stderr)
         print(command_pod)
     
-    command_svc_ing=f"helm list -n {helm_namespace} | grep deployment-svc-ing-{deployment_id} | \
-        awk \'{{print $1}}\' | xargs helm uninstall -n {helm_namespace} "
+    command_svc_ing=f"helm list -n {common.shell_arg(helm_namespace)} | grep deployment-svc-ing-{deployment_id} | \
+        awk \'{{print $1}}\' | xargs helm uninstall -n {common.shell_arg(helm_namespace)} "
 
     try:
         os.chdir("/app/helm_chart/")
@@ -546,7 +546,7 @@ def delete_helm_preprocessing(preprocessing_tool_type : str, preprocessing_tool_
     try:
         os.chdir("/app/helm_chart/")
         namespace = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=workspace_id)
-        command=f"helm uninstall {TYPE.PREPROCESSING_HELM_CHART_NAME.format(preprocessing_tool_id, preprocessing_tool_type)} -n {namespace}"
+        command=f"helm uninstall {common.shell_arg(TYPE.PREPROCESSING_HELM_CHART_NAME.format(preprocessing_tool_id, preprocessing_tool_type))} -n {common.shell_arg(namespace)}"
         
         print(command)
         result = subprocess.run(
@@ -571,7 +571,7 @@ def delete_helm_project(project_tool_type : str, project_tool_id : int, workspac
     try:
         os.chdir("/app/helm_chart/")
         namespace = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=workspace_id)
-        command=f"helm uninstall {TYPE.PROJECT_HELM_CHART_NAME.format(project_tool_id, project_tool_type)} -n {namespace}"
+        command=f"helm uninstall {common.shell_arg(TYPE.PROJECT_HELM_CHART_NAME.format(project_tool_id, project_tool_type))} -n {common.shell_arg(namespace)}"
         
         print(command)
         result = subprocess.run(
@@ -596,8 +596,8 @@ def delete_helm_fine_tuning(model_id : int, workspace_id : int):
     try:
         os.chdir("/app/helm_chart/")
         namespace = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=workspace_id)
-        command=f"helm uninstall {TYPE.FINE_TUNING_REPO_NAME.format(model_id)} -n {namespace}"
-        
+        command=f"helm uninstall {common.shell_arg(TYPE.FINE_TUNING_REPO_NAME.format(model_id))} -n {common.shell_arg(namespace)}"
+
         print(command)
         result = subprocess.run(
             command,
@@ -618,6 +618,62 @@ def delete_helm_fine_tuning(model_id : int, workspace_id : int):
         return False ,err_msg
 
 
+def delete_helm_external(helm_release: str, namespace: str):
+    """Uninstall the helm release created by `external_run.create_external_pod`.
+
+    `namespace` is passed in rather than derived from a workspace_id because
+    SP-1 v2 allows `workspace_scope: shared` manifests to live outside the
+    standard `WORKSPACE_NAMESPACE.format(...)` pattern (cluster-wide hub
+    services etc.). Caller is responsible for matching the namespace used at
+    install time.
+    """
+    command = ""
+    # SP-Ext.4 C1: 이 release 가 claim 한 GPU reservation 을 즉시 해제
+    # (TTL 900s 안 기다리고). pod 이 사라지면 monitoring used_info 도 비워지니
+    # reservation 만 남아 다음 launch 의 SETNX 를 막는 것을 방지.
+    try:
+        from scheduler.external_run import release_reservations_for_release
+        release_reservations_for_release(helm_release)
+    except Exception:
+        pass
+    # SP-3 보안: helm 밖에서 만든 secret Secret 정리(best-effort). helm 이 소유하지
+    # 않으므로 uninstall 이 자동 삭제하지 않는다(orphan 방지).
+    try:
+        from scheduler.external_run import _delete_external_secret
+        _delete_external_secret(helm_release, namespace)
+    except Exception:
+        pass
+    try:
+        os.chdir("/app/helm_chart/")
+        command = f"helm uninstall {common.shell_arg(helm_release)} -n {common.shell_arg(namespace)}"
+
+        print(command)
+        result = subprocess.run(
+            command,
+            shell=True,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=120,                      # SP-Ext Phase 2: helm uninstall 상한(--wait 없어 보통 수초).
+        )
+        return 1, result.stdout
+    except subprocess.TimeoutExpired:
+        # SP-Ext Phase 2: uninstall 이 120s 초과 → 이벤트루프 무한 블로킹 방지 위해 실패
+        # 반환. 미삭제 release 는 호출측 재시도/부팅 reconcile 이 회수.
+        print(f"helm uninstall timed out (>120s): {helm_release}")
+        return False, "helm uninstall timed out (>120s)"
+    except subprocess.CalledProcessError as e:
+        err_msg = (e.stderr or "").strip()
+        # Already gone — treat as success so cleanup is idempotent.
+        if "release: not found" in err_msg or "uninstalled" in err_msg:
+            return True, ""
+        print(e.stdout)
+        print(err_msg)
+        print(command)
+        return False, err_msg
+
+
 def install_deployment_llm(pod_info):
     cluster_info = get_cluster_command(pod_info=pod_info)
     cluster_command = cluster_info.get("cluster_command")
@@ -631,8 +687,11 @@ def install_deployment_llm(pod_info):
     print("*" * 10, file=sys.stderr)
     try:
         helm_name = pod_info.get("metadata_helm_name")
+        namespace = pod_info.get("metadata_workspace_namespace")
         set_values = YamlToValues(**pod_info, pod_cpu_instance=cpu_instance_name)
-        command=f"helm install {helm_name} -n {pod_info.get("metadata_workspace_namespace")} \
+        # helm_name/namespace 는 워크스페이스·배포명 파생(사용자 영향) → shell=True `helm install`
+        # 인젝션 차단 위해 shlex.quote. set_values 값은 YamlToValues(helm_dto)가 이미 값별 quote.
+        command=f"helm install {common.shell_arg(helm_name)} -n {common.shell_arg(namespace)} \
             {set_values} {cluster_command} {rdma_command} ./deployment_llm"
     except Exception as e:
         traceback.print_exc()
@@ -654,7 +713,7 @@ def install_deployment_llm(pod_info):
             err_msg = e.stderr.strip()
             if "cannot re-use a name that is still in use" in err_msg:
                 print(err_msg, file=sys.stderr)
-                uninstall_command = f"helm uninstall -n {pod_info.get('metadata_workspace_namespace')} {helm_name}"
+                uninstall_command = f"helm uninstall -n {common.shell_arg(namespace)} {common.shell_arg(helm_name)}"
                 command = f"{uninstall_command} && {command}"
                 subprocess.run(command, shell=True, check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 return True, ""
@@ -678,7 +737,7 @@ def uninstall_deployment_llm(deployment_id, llm_type, llm_id):
         llm_deployment_helm_name = TYPE.LLM_DEPLOYMENT_HELM_NAME.format(deployment_id=deployment_id, llm_type=llm_type, llm_id=llm_id)
 
         def uninstall_deployment_helm():
-            command=f"helm uninstall -n {helm_namespace} {llm_deployment_helm_name} "
+            command=f"helm uninstall -n {common.shell_arg(helm_namespace)} {common.shell_arg(llm_deployment_helm_name)} "
             try:
                 subprocess.run(
                     command, shell=True, check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -687,7 +746,7 @@ def uninstall_deployment_llm(deployment_id, llm_type, llm_id):
                 pass
 
         uninstall_deployment_helm()
-        command = f"helm list -n {helm_namespace} | grep {llm_deployment_helm_name}"
+        command = f"helm list -n {common.shell_arg(helm_namespace)} | grep {common.shell_arg(llm_deployment_helm_name)}"
         try:
             subprocess.run(command, shell=True, check=True, text=True,
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -732,7 +791,7 @@ def get_cluster_command(pod_info):
                     device=Accelerator(
                         device_type=resource_type,
                         model=model,
-                        uuids = common.escape_special_chars(",".join(gpu_uuids)),
+                        uuids = ",".join(gpu_uuids),
                         ids = ".".join(map(str, gpu_ids)),
                         count = len(gpu_uuids)
                     )
@@ -765,12 +824,12 @@ def get_cluster_command(pod_info):
         ))
         cluster_command = ""
         for index, node in enumerate(nodes):
-            cluster_command += f" --set cluster[{index}].node_name={node.node_name}"
-            cluster_command += f' --set cluster[{index}].device.type="{node.device.device_type}"'
-            cluster_command += f' --set cluster[{index}].device.model="{node.device.model}"'
-            cluster_command += f" --set cluster[{index}].device.count={node.device.count}"
-            cluster_command += f' --set cluster[{index}].device.uuids="{node.device.uuids}"'
-            cluster_command += f' --set cluster[{index}].device.ids="{node.device.ids}"'
+            cluster_command += f" --set cluster[{index}].node_name={common.helm_set_value(node.node_name)}"
+            cluster_command += f" --set cluster[{index}].device.type={common.helm_set_value(node.device.device_type)}"
+            cluster_command += f" --set cluster[{index}].device.model={common.helm_set_value(node.device.model)}"
+            cluster_command += f" --set cluster[{index}].device.count={common.helm_set_value(node.device.count)}"
+            cluster_command += f" --set cluster[{index}].device.uuids={common.helm_set_value(node.device.uuids)}"
+            cluster_command += f" --set cluster[{index}].device.ids={common.helm_set_value(node.device.ids)}"
         rdma_command = ""
         if settings.JF_RDMA_ENABLED:
             rdma_command += " --set rdma.enabled=true"
@@ -814,7 +873,7 @@ def create_analyzer_pod(pod_info):
         helm_name = pod_info.get("metadata_helm_name")
         helm_namespace = pod_info.get("metadata_workspace_namespace")
         set_values = YamlToSetValuesAnalyzer(**pod_info, pod_cpu_instance=cpu_instance_name)
-        command=f"helm install {helm_name} -n {helm_namespace} {set_values} {cluster_command} ./analyzer"
+        command=f"helm install {common.shell_arg(helm_name)} -n {common.shell_arg(helm_namespace)} {set_values} {cluster_command} ./analyzer"
         
         print(command)
         os.chdir("/app/helm_chart/")
@@ -829,7 +888,7 @@ def create_analyzer_pod(pod_info):
             err_msg = e.stderr.strip()
             if "cannot re-use a name that is still in use" in err_msg:
                 print(err_msg, file=sys.stderr)
-                uninstall_command = f"helm uninstall -n {helm_namespace} {helm_name}"
+                uninstall_command = f"helm uninstall -n {common.shell_arg(helm_namespace)} {common.shell_arg(helm_name)}"
                 command = f"{uninstall_command} && {command}"
                 subprocess.run(command, shell=True, check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 return True, ""
@@ -851,7 +910,7 @@ def delete_helm_analyzer(pod_info):
         helm_name = pod_info.get("metadata_helm_name")
 
         def uninstall_deployment_helm():
-            command=f"helm uninstall -n {helm_namespace} {helm_name} "
+            command=f"helm uninstall -n {common.shell_arg(helm_namespace)} {common.shell_arg(helm_name)} "
             try:
                 subprocess.run(
                     command, shell=True, check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -860,7 +919,7 @@ def delete_helm_analyzer(pod_info):
                 pass
 
         uninstall_deployment_helm()
-        command = f"helm list -n {helm_namespace} | grep {helm_name}"
+        command = f"helm list -n {common.shell_arg(helm_namespace)} | grep {common.shell_arg(helm_name)}"
         try:
             subprocess.run(command, shell=True, check=True, text=True,
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,

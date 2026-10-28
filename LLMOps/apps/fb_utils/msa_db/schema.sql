@@ -147,6 +147,70 @@ CREATE TABLE IF NOT EXISTS `node_instance` (
     CONSTRAINT FOREIGN KEY (`instance_id`) REFERENCES `msa_jfb`.`instance` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
 );
 
+-- SP-8 / 수용계획서 3.1 — Edge 워커 노드 (인스턴스 없는 단일 노드, K8s join 안 함).
+-- remoteManager(K8s-free 브리지) 가 관리하는 엣지 디바이스(ORIN/RPi/PC)를 플랫폼
+-- 노드 테이블에 등록. 상태는 remoteManager /metrics 폴링으로 갱신.
+CREATE TABLE IF NOT EXISTS `edge_worker` (
+    `id`                 INT(11) NOT NULL AUTO_INCREMENT,
+    `device_id`          VARCHAR(128) NOT NULL,          -- 식별
+    `name`               VARCHAR(128),
+    `device_type`        VARCHAR(32),                    -- orin / rpi-hailo / pc-gpu ...
+    `remote_manager_url` VARCHAR(512) NULL,              -- remoteManager centralagent endpoint (SP-8 §4/D1: heartbeat-only 디바이스는 NULL 허용)
+    `conn_status`        VARCHAR(16) DEFAULT 'offline',  -- 연결상태 online/offline
+    `last_seen`          DATETIME DEFAULT NULL,          -- heartbeat
+    `deploy_model`       VARCHAR(128) DEFAULT NULL,      -- 배포상태: 모델명
+    `deploy_version`     VARCHAR(64) DEFAULT NULL,       -- 버전
+    `deploy_state`       VARCHAR(16) DEFAULT NULL,       -- running / stopped / error
+    `cpu_cores`          INT(11) DEFAULT NULL,           -- [협의] 자원
+    `mem_total`          BIGINT DEFAULT NULL,
+    `gpu_info`           VARCHAR(256) DEFAULT NULL,
+    `container_count`    INT(11) DEFAULT NULL,
+    `edge_token_hash`    VARCHAR(128) DEFAULT NULL,      -- 노드별 Bearer token sha256 (평문 미저장)
+    `token_prefix`       VARCHAR(16) DEFAULT NULL,       -- 토큰 식별 prefix (표시용)
+    `token_expires_at`   DATETIME DEFAULT NULL,          -- 토큰 만료 (발급+90일)
+    `last_heartbeat_json` TEXT DEFAULT NULL,             -- 최근 heartbeat 원본 (자원/지연/에러)
+    -- 디바이스 heartbeat 수신 시각 — last_seen 과 분리한다. last_seen 은 '생존 증거'라
+    -- refresh(/metrics 폴링)·deploy 도 갱신하는데, 30초 throttle 을 그 값에 걸면 UI
+    -- 새로고침 한 번이 디바이스의 다음 heartbeat 를 429 로 튕긴다(2026-09-11 재현).
+    -- throttle 은 이 컬럼(디바이스 푸시만 갱신)을 기준으로 판단해야 한다.
+    `last_heartbeat_at`  DATETIME DEFAULT NULL,
+    -- 배포상태(deploy_state/deploy_model)를 마지막으로 **관측**한 시각. last_seen 과
+    -- 분리한다 — last_seen 은 heartbeat 도 올리는 '연결 증거' 인데, heartbeat 는
+    -- 컨테이너를 보지 않는다(/metrics 만 docker ps 를 본다). 둘을 한 값으로 쓰면
+    -- 컨테이너가 죽었는데 에이전트만 살아 heartbeat 를 보내는 디바이스가 화면에서
+    -- 계속 'running' 으로 신선하게 보인다. 배포상태의 신선도는 이 컬럼이 답한다.
+    `deploy_observed_at` DATETIME DEFAULT NULL,
+    -- 이 워커가 내려받도록 인가된 아티팩트(jonathan_llm.quantize_lineage.id). 디바이스
+    -- 아티팩트 다운로드는 이 값이 가리키는 파일 하나만 허용한다(임의 경로 요청 차단).
+    -- 배포를 지시한 경로에서만 새기며, stop 은 지우지 않는다 — 에이전트 재시작 후
+    -- 같은 아티팩트를 다시 받아야 컨테이너가 복구된다(권한 확대가 아니다).
+    `deploy_lineage_id`  INT(11) DEFAULT NULL,
+    -- 비동기 배포 실패 사유(디바이스 /metrics 의 last_deploy_error). 상태만 error 로
+    -- 새기면 화면이 '왜' 를 말할 수 없어 사유 문자열을 함께 보존한다.
+    `deploy_error`       VARCHAR(512) DEFAULT NULL,
+    -- 마지막으로 성공한 배포를 낸 온디바이스 배포(jonathan_llm.playground, deploy_type='edge').
+    -- 배포 목록 카드 상태와 상세 재진입 시 디바이스 선택 복원의 근거. 배포 성공 시에만 새기고
+    -- (playground 없이 배포하면 비운다) stop 은 지우지 않는다 — 카드가 '중지'를 정확히 보인다.
+    `deploy_playground_id` INT(11) DEFAULT NULL,
+    `create_datetime`    DATETIME DEFAULT CURRENT_TIMESTAMP,
+    `update_datetime`    DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY(`id`),
+    UNIQUE KEY `uq_edge_device` (`device_id`)
+);
+
+-- SP-8 자유 텍스트 커스텀 레이블 (키-값, value 옵션 → 태그 겸용). 클러스터 노드 +
+-- 엣지 워커 공용(target_type 으로 구분). "이 서버는 DB" 같은 운영 메모.
+CREATE TABLE IF NOT EXISTS `custom_label` (
+    `id`              INT(11) NOT NULL AUTO_INCREMENT,
+    `target_type`     VARCHAR(16) NOT NULL,             -- 'node' | 'edge_worker'
+    `target_id`       VARCHAR(128) NOT NULL,            -- node name 또는 edge device_id
+    `label_key`       VARCHAR(64) NOT NULL,
+    `label_value`     VARCHAR(255) DEFAULT NULL,
+    `create_datetime` DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(`id`),
+    UNIQUE KEY `uq_custom_label` (`target_type`, `target_id`, `label_key`)
+);
+
 CREATE TABLE IF NOT EXISTS `workspace` (
 	`id`	                INT(11)	NOT NULL AUTO_INCREMENT,
 	`name`	                VARCHAR(100) NOT	NULL,
@@ -503,6 +567,18 @@ CREATE TABLE IF NOT EXISTS `deployment_worker`(
     constraint foreign key (`instance_id`) references `msa_jfb`.`instance` (`id`) ON DELETE SET NULL
 );
 
+-- SP-Deployment(D6) §12: 클러스터 배포 API 게시 상태. 키 원본은 저장 안 함(Kong 보관, fetch).
+CREATE TABLE IF NOT EXISTS `deployment_api` (
+    `deployment_id`     INT(11) NOT NULL COMMENT '게시 대상 클러스터 배포(deployment.id)',
+    `api_consumer`      VARCHAR(128) NOT NULL COMMENT 'Kong consumer username (dep-{deployment_id})',
+    `api_route_id`      VARCHAR(64) COMMENT 'Kong route id (path /deployment/{api_path})',
+    `enabled`           TINYINT(1) NOT NULL DEFAULT 1 COMMENT '게시 활성(1)/해제(0)',
+    `published_at`      VARCHAR(50) DEFAULT current_timestamp(),
+    `update_datetime`   DATETIME DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+    PRIMARY KEY(`deployment_id`),
+    constraint foreign key (`deployment_id`) references `deployment` (`id`) on update cascade on delete cascade
+);
+
 CREATE TABLE IF NOT EXISTS `deployment_data_form` (
     `deployment_id`             INT(11) NOT NULL,
     `location`                  VARCHAR(11) NOT NULL COMMENT 'data location in API (body, args, file ...)',
@@ -652,6 +728,7 @@ CREATE TABLE IF NOT EXISTS `pipeline_task` (
     `start_datetime`             VARCHAR(50),
     `end_datetime`               VARCHAR(50),
     `task_item_job_id`           INT(11) COMMENT "training, worker id",
+    `task_item_job_str_id`       VARCHAR(64) COMMENT "external container job id (str/uuid) — generation 노드용",
     `dataset_data_path`          LONGTEXT,
     `x_index`                    INT(11) DEFAULT 0,
     `y_index`                    INT(11) DEFAULT 0,
@@ -675,6 +752,42 @@ CREATE TABLE IF NOT EXISTS `pipeline_history` (
     `is_retraining_setting`      TINYINT DEFAULT 0,
     PRIMARY KEY(`id`),
     CONSTRAINT FOREIGN KEY (`pipeline_id`) REFERENCES `msa_jfb`.`pipeline` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+-- 데이터 합성 프레임워크 단독 UI P1 (v0.4 3.3 / SP-7)
+CREATE TABLE IF NOT EXISTS `synthesis_project` (
+    `id`                  INT(11) NOT NULL AUTO_INCREMENT,
+    `workspace_id`        INT(11) NOT NULL,
+    `name`                VARCHAR(255) NOT NULL,
+    `field`               VARCHAR(50)  COMMENT 'SDS/SDF/SDM 등 분야',
+    `description`         VARCHAR(500),
+    `owner_id`            INT(11),
+    `owner_name`          VARCHAR(100),
+    `mode`                VARCHAR(20)  DEFAULT 'wizard' COMMENT 'wizard/canvas',
+    `manifest_name`       VARCHAR(128) COMMENT 'generate 외부 컨테이너 manifest',
+    `manifest_version`    VARCHAR(64),
+    `params`              LONGTEXT     COMMENT 'JSON: meta_prompt/optimize_method/count/instruction',
+    `gpu_count`           INT(11)      DEFAULT 0,
+    `dataset_id`          INT(11)      COMMENT '입력 데이터셋',
+    `output_subdir`       VARCHAR(255) COMMENT '생성 결과(result.jsonl) 하위 경로',
+    `job_str_id`          VARCHAR(64)  COMMENT '현재 external generate job id',
+    `status`              VARCHAR(50)  DEFAULT 'created' COMMENT 'created/running/completed/failed',
+    `result_count`        INT(11)      DEFAULT 0,
+    `create_datetime`     VARCHAR(50),
+    `update_datetime`     VARCHAR(50),
+    PRIMARY KEY(`id`)
+);
+
+CREATE TABLE IF NOT EXISTS `synthesis_candidate` (
+    `id`                  INT(11) NOT NULL AUTO_INCREMENT,
+    `project_id`          INT(11) NOT NULL,
+    `prompt`              LONGTEXT,
+    `score`               FLOAT        DEFAULT 0,
+    `method`              VARCHAR(50)  COMMENT 'OPRO/APE 등 최적화 방식',
+    `iteration`           INT(11)      DEFAULT 0,
+    `status`              VARCHAR(20)  DEFAULT 'candidate' COMMENT 'candidate/adopted/discarded',
+    `create_datetime`     VARCHAR(50),
+    PRIMARY KEY(`id`)
 );
 
 CREATE TABLE IF NOT EXISTS `collect` (
@@ -945,3 +1058,59 @@ CREATE TABLE IF NOT EXISTS `project_tool_port_history` (
     `created_datetime`      VARCHAR(50) DEFAULT CURRENT_TIMESTAMP(),
     PRIMARY KEY(`id`)
 );
+
+-- fb_external_container 매니페스트 레지스트리 (SP-Ext.3 / ADR 0003 v2 + SP-1 v2 §6).
+-- (name, version) 당 1 row. Hybrid 페어는 pair_id UUID 를 공유하고 단독 등록은 NULL 로 둔다.
+-- 조회처: db_pipeline.py, db_synthesis.py (같은 msa_jfb DB 라 직접 SELECT).
+-- 쓰기는 fb_external_container 의 MariaDBManifestRegistry.
+-- ⚠️ 없으면 BFF 가 DB 연결에 성공해 MariaDB 레지스트리로 승격된 뒤 모든 매니페스트
+--   쿼리가 실패한다 (in-memory 폴백은 연결 실패에만 걸린다 — main.py:89 참조).
+CREATE TABLE IF NOT EXISTS external_container_manifest (
+    id                INT AUTO_INCREMENT PRIMARY KEY,
+    name              VARCHAR(63)  NOT NULL,
+    version           VARCHAR(63)  NOT NULL,
+    api_version       VARCHAR(63)  NOT NULL DEFAULT 'tango.acryl.ai/v1',
+    job_type          VARCHAR(31)  NOT NULL,
+    execution_mode    VARCHAR(31)  NOT NULL,
+    image             VARCHAR(255) NOT NULL,
+    service_family    VARCHAR(63),
+    contract_version  VARCHAR(63),
+    pair_id           CHAR(36),
+    raw_yaml          TEXT         NOT NULL,
+    raw_json          JSON         NOT NULL,
+    created_at        TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    updated_at        TIMESTAMP    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_name_version (name, version),
+    INDEX idx_service_family (service_family),
+    INDEX idx_pair_id (pair_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- BFF JobTracker 상태 영속 (SP-Ext.3). BFF 재시작 시 in-flight partner job 을 복원한다.
+-- terminal 도달 시 DELETE 하지 않고 status 만 갱신해 tombstone 으로 남긴다 (재시작 후
+-- 조회가 404 대신 터미널 상태를 답해야 호출자가 폴링을 멈춘다). startup_recovery() 는
+-- non-terminal row 만 복원하고, 보존기간 지난 tombstone 은 prune_terminal() 이 정리한다.
+-- execution_mode=sync (infer 서빙) 은 persist 대상이 아니다 (lifecycle._db_persist 참조).
+-- model_id 는 jonathan_llm.model.id 를 application-level 로 참조한다 (cross-schema FK 회피).
+CREATE TABLE IF NOT EXISTS external_job_state (
+    job_id            VARCHAR(64)  NOT NULL,
+    model_id          INT(11)      DEFAULT NULL,
+    workspace_id      INT(11)      NOT NULL,
+    manifest_name     VARCHAR(128) NOT NULL,
+    manifest_version  VARCHAR(64)  NOT NULL,
+    manifest_json     LONGTEXT     NOT NULL,
+    namespace         VARCHAR(128) NOT NULL,
+    pod_name          VARCHAR(128) NOT NULL,
+    helm_release      VARCHAR(128) NOT NULL,
+    service_url       VARCHAR(256) NOT NULL,
+    timeout_seconds   INT(11)      NOT NULL,
+    params_json       LONGTEXT     NOT NULL,
+    partner_job_id    VARCHAR(128) DEFAULT NULL,
+    status            VARCHAR(32)  NOT NULL DEFAULT 'pending',
+    output_subdir     VARCHAR(256) DEFAULT NULL,
+    effective_gpu     INT(11)      NOT NULL DEFAULT 0,
+    started_at        DATETIME     NOT NULL,
+    updated_at        DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (job_id),
+    INDEX idx_status (status),
+    INDEX idx_workspace (workspace_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

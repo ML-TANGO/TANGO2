@@ -25,8 +25,8 @@ import PopupContainer from './containers/PopupContainer';
 import DeferredComponent from './hooks/useDeferredComponent';
 import useWorkerClose from './hooks/useWorkerClose';
 
-const LoadingForIntegrationLogin = lazy(() =>
-  import('@src/components/atoms/loading/LoadingForIntegrationLogin'),
+const LoadingForIntegrationLogin = lazy(
+  () => import('@src/components/atoms/loading/LoadingForIntegrationLogin'),
 );
 
 // Pages
@@ -36,8 +36,11 @@ const UserRouter = lazy(() => import('@src/pages/authRouter/UserRouter'));
 const NotFoundPage = lazy(() => import('@src/pages/NotFoundPage'));
 const UIPage = lazy(() => import('@src/pages/UiPage'));
 const UploadTestPage = lazy(() => import('@src/pages/UploadTestPage'));
-const IntegrationLoginFailPage = lazy(() =>
-  import('@src/pages/IntegrationLoginFailPage'),
+const IntegrationLoginFailPage = lazy(
+  () => import('@src/pages/IntegrationLoginFailPage'),
+);
+const MarkerTokenErrorPage = lazy(
+  () => import('@src/pages/MarkerTokenErrorPage/MarkerTokenErrorPage'),
 );
 
 const MODE = import.meta.env.VITE_REACT_APP_MODE;
@@ -200,6 +203,12 @@ function App() {
               />
               <Route exact path='/unknownerror'>
                 <IntegrationLoginFailPage />
+              </Route>
+              {/* marker(라벨링) 가 토큰 오류 시 베이스네임 없는 절대경로
+                  '/common/token-error' 로 이동해 우리 SPA 로 떨어진다(marker FE 코드,
+                  소스 미보유) → 404 대신 안내 화면. 만료 상태로 진입하므로 인증 게이트 없음. */}
+              <Route exact path='/common/token-error'>
+                <MarkerTokenErrorPage />
               </Route>
               <AdminRoute
                 path='/admin'

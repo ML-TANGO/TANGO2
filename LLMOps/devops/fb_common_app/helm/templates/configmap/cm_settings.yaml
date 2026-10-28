@@ -48,6 +48,10 @@ data:
   JF_VOLUME_BIN_TYPE: {{ .Values.global.jfb.volume.jfBin.type }}
   JF_VOLUME_BIN_PATH: {{ .Values.global.jfb.volume.jfBin.path }}
   JF_VOLUME_BIN_SERVER: {{ .Values.global.jfb.volume.jfBin.server }}
+  # 외부 컨테이너 잡이 마운트하는 공유 HF 캐시(워크스페이스 ns 마다 hf-model-cache-pvc). 값이 없으면 빈 문자열
+  JF_VOLUME_HF_CACHE_TYPE: {{ (.Values.global.jfb.volume.hfModelCache | default dict).type | default "" | quote }}
+  JF_VOLUME_HF_CACHE_PATH: {{ (.Values.global.jfb.volume.hfModelCache | default dict).path | default "" | quote }}
+  JF_VOLUME_HF_CACHE_SERVER: {{ (.Values.global.jfb.volume.hfModelCache | default dict).server | default "" | quote }}
   JF_FILEBROWSER_MAX_COUNT : {{ .Values.global.jfb.settings.filebrowser.max | quote }}
   JF_VOLUME_WORKSPACE_STORAGE_CLASS_NAME: ""
   JF_SYSTEM_NAMESPACE: {{ .Values.global.jfb.namespace }}

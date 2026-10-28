@@ -1,0 +1,59 @@
+# hello-plugin — Tango 외부 컨테이너 인터페이스(SP-1 v1) 템플릿 manifest
+# 계약 전문: external-container-spec.md (§6 manifest)
+# 협력기관은 metadata/image/resources/inputs 를 자기 컨테이너에 맞게 바꾼다.
+apiVersion: tango.acryl.ai/v1
+kind: ExternalContainer
+
+metadata:
+  name: hello-plugin              # DNS-1123 (소문자/숫자/-), 최대 63자
+  version: "1.0.0"
+  vendor: "Acryl (template)"
+  contact: "platform@acryl.ai"
+  description: |
+    Tango 외부 컨테이너 규약(SP-1 v1) 준수 최소 템플릿.
+    async 작업 lifecycle(/run → /jobs/{id} → cancel) + 표준 endpoint +
+    env/params/output/stdout 규약을 그대로 보여준다. fork 후 _run_job() 만 교체.
+
+spec:
+  # 협력기관이 접근 가능한 registry 로 교체. (운영 컨벤션: registry.jonathan.acryl.ai/external/...)
+  image: "docker.io/acrylaaai/hello-plugin:1.0.0"
+
+  job_type: preprocess            # train | evaluate | preprocess | convert | infer
+  execution_mode: async           # sync | async | batch
+  port: 8000
+
+  resources:
+    cpu: "1"
+    memory: "512Mi"
+    gpu: 0                         # GPU 필요 시 >0 + gpu_memory 명시
+
+  inputs:
+    params:
+      required: true              # /run body 또는 /input/params.json
+    dataset:
+      required: false             # 데모는 dataset 불필요 (필요 시 true → /dataset/{name})
+
+  outputs:
+    metrics: true                 # /output/metrics.json
+    artifacts: true               # /output/result.json 등
+
+  secrets:
+    required: []                  # 필요한 자격증명 list (예: OPENAI_API_KEY) — 운영자가 env 주입
+
+  network:
+    egress_whitelist: []          # 외부 통신 없음 (advisory)
+
+  endpoints:                      # async 필수 키: info, health, run, jobs
+    info: "/info"
+    health: "/health"
+    live: "/live"
+    run: "/run"
+    jobs: "/jobs/{id}"            # {id} placeholder 필수
+    cancel: "/jobs/{id}/cancel"
+
+  capabilities:
+    estimated_startup_seconds: 10 # startupProbe 산정 기준 (HTTP 컨테이너 필수)
+    estimated_duration_seconds: 30
+    timeout_seconds: 300
+
+  workspace_scope: per-workspace

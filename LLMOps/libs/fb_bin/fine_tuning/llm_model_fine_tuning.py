@@ -82,6 +82,8 @@ class FineTuningArgs:
     auto_target_modules: int = 1  # LoRA 타겟 모듈 자동 감지: 1=auto(all-linear), 0=static map
     dataset_format: str = "auto"  # 데이터셋 형식: "auto" | "text" | "chat" | "instruction"
     zero_stage: int = 1  # DeepSpeed ZeRO stage: 1, 2, 3
+    eval_steps: int = 500  # 평가(eval/loss) 실행 간격(step) — SP-5 사용자 제어
+    save_steps: int = 500  # 체크포인트 저장 간격(step) — SP-5 사용자 제어 / ⑩ 점 마킹
 
 
 class PathManager:
@@ -656,6 +658,11 @@ class TrainingManager:
     def create_training_arguments(self, args: FineTuningArgs, remove_unused_columns: bool, use_bf16: bool = False) -> TrainingArguments:
         """TrainingArguments 생성 - 사용자 설정 파일 또는 동적 DeepSpeed 설정 사용"""
         self.training_config.remove_unused_columns = remove_unused_columns
+        # SP-5: 사용자 지정 eval/save 간격 반영(현 500 하드코딩 제거). ⑩ 점 마킹과 일치.
+        if getattr(args, "eval_steps", None):
+            self.training_config.eval_steps = args.eval_steps
+        if getattr(args, "save_steps", None):
+            self.training_config.save_steps = args.save_steps
 
         if args.config_path:
             # 사용자 정의 설정 파일 로드
@@ -1080,6 +1087,10 @@ def main():
                        help="데이터셋 형식: auto | text | chat | instruction")
     parser.add_argument("--zero_stage", type=int, default=1,
                        help="DeepSpeed ZeRO stage: 1, 2, 3 (기본값: 1)")
+    parser.add_argument("--eval_steps", type=int, default=500,
+                       help="평가(eval/loss) 실행 간격 step (기본값: 500)")
+    parser.add_argument("--save_steps", type=int, default=500,
+                       help="체크포인트 저장 간격 step (기본값: 500)")
     # Kafka 관련 CLI 인자는 제거하고 환경 변수를 사용합니다.
 
     # args = parser.parse_args()
@@ -1116,6 +1127,8 @@ def main():
         auto_target_modules=args.auto_target_modules,
         dataset_format=args.dataset_format,
         zero_stage=args.zero_stage,
+        eval_steps=args.eval_steps,
+        save_steps=args.save_steps,
     )
 
     # 파인튜닝 엔진 실행

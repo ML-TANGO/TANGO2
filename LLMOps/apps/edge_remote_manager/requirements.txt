@@ -1,0 +1,3 @@
+fastapi>=0.100
+uvicorn>=0.22
+# docker 는 CLI(docker) 로 호출, HTTP 는 stdlib urllib 사용 → 추가 의존성 없음.

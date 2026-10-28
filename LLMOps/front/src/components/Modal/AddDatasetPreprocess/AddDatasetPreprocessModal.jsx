@@ -39,7 +39,8 @@ const accessOption = [
   },
 ];
 
-const PROCESS_RULE = ['advanced', 'built-in'];
+// 전처리 카테고리(Image/Tabular/Domain)는 모두 백엔드 preprocessing_type='built-in' 으로 저장.
+// Custom(advanced) 전처리는 화면에서 제외.
 
 const nameExg = /[\\<>:*?"'|:;`{}^$ &[\]!\uAC00-\uD7A3ㄱ-ㅎㅏ-ㅣ]/;
 
@@ -57,7 +58,6 @@ const AddDatasetPreprocessModal = ({ data, type }) => {
   const [instanceOption, setInstanceOption] = useState([]);
 
   const [selectedAccessType, setSelectedAccessType] = useState(1);
-  const [selectedProcessRule, setSelectedProcessRule] = useState(0);
   const [dataType, setDataType] = useState(0);
   const [dataTypeList, setDataTypeList] = useState([]);
   const [owner, setOwner] = useState({ label: '', value: '' });
@@ -76,21 +76,6 @@ const AddDatasetPreprocessModal = ({ data, type }) => {
   // 할당 가능한 사용자
   const [allocateUser, setAllocateUser] = useState([]);
 
-  const processRuleOption = [
-    {
-      label: 'Custom 전처리 룰',
-      value: 0,
-      labelStyle: { fontSize: '14px', fontFamily: 'SpoqaM' },
-      disabled: type === 'MODIFY_DATASET_PREPROCESS',
-    },
-    {
-      label: 'Built-in 전처리 룰',
-      value: 1,
-      labelStyle: { fontSize: '14px', fontFamily: 'SpoqaM' },
-      disabled: type === 'MODIFY_DATASET_PREPROCESS',
-    },
-  ];
-
   const handleOwner = ({ value, label }) => {
     setOwner({ label, value });
   };
@@ -101,10 +86,6 @@ const AddDatasetPreprocessModal = ({ data, type }) => {
 
   const radioBtnHandler = (name, value) => {
     setSelectedAccessType(Number(value));
-  };
-
-  const processRuleRadioBtnHandler = (name, value) => {
-    setSelectedProcessRule(Number(value));
   };
 
   const builtInTypeRadioHandler = (name, value) => {
@@ -132,12 +113,10 @@ const AddDatasetPreprocessModal = ({ data, type }) => {
       if (isAddMode) {
         Object.assign(body, {
           preprocessing_name: processName,
-          preprocessing_type: PROCESS_RULE[selectedProcessRule],
+          preprocessing_type: 'built-in',
           workspace_id: Number(workspace_id),
-          ...(selectedAccessType === 1 && {
-            built_in_data_tf: conversionFunction.value,
-            built_in_data_type: dataTypeList[dataType].label,
-          }),
+          built_in_data_tf: conversionFunction.value,
+          built_in_data_type: dataTypeList[dataType]?.label,
         });
       } else {
         Object.assign(body, {
@@ -203,7 +182,7 @@ const AddDatasetPreprocessModal = ({ data, type }) => {
     const { result, status } = response;
 
     if (status === STATUS_SUCCESS) {
-      const { instances, user_list, built_in_data_tfs, built_in_data_types } =
+      const { instances, user_list, built_in_data_types, domain_data_types } =
         result;
 
       const instanceList = instances.map(
@@ -233,16 +212,22 @@ const AddDatasetPreprocessModal = ({ data, type }) => {
       }));
 
       const curOwner = userList.filter((v) => userName === v.label)[0];
-      const dataTypeList = built_in_data_types.map((v, index) => ({
-        label: v,
-        value: index,
-        labelStyle: { fontSize: '14px', fontFamily: 'SpoqaM' },
-        disabled: type === 'MODIFY_DATASET_PREPROCESS',
-      }));
+      // 카테고리 = built-in(Image/Tabular) + domain(SDS) 합침 → 단일 라디오로 노출.
+      const categoryList = [
+        ...(built_in_data_types || []),
+        ...(domain_data_types || []),
+      ];
+      setDataTypeList(
+        categoryList.map((v, index) => ({
+          label: v,
+          value: index,
+          labelStyle: { fontSize: '14px', fontFamily: 'SpoqaM' },
+          disabled: type === 'MODIFY_DATASET_PREPROCESS',
+        })),
+      );
       setOwnerList(userList);
       setAllocateUser(userList);
       setInstanceOption(instanceList);
-      setDataTypeList(dataTypeList);
       setOwner(curOwner);
     }
   };
@@ -291,8 +276,6 @@ const AddDatasetPreprocessModal = ({ data, type }) => {
         ownerList.filter(({ value }) => !privateOwnerIds.includes(value)),
       );
       setIntialSelectUser(privateUser);
-      setSelectedProcessRule(type === 'advanced' ? 0 : 1);
-
       if (type === 'built-in') {
         const dataTypeIndex = dataTypeList.findIndex(
           (v) => v.label === built_in_data_type,
@@ -307,7 +290,8 @@ const AddDatasetPreprocessModal = ({ data, type }) => {
   };
 
   const fetchConversionFunction = async () => {
-    if (!dataTypeList || !dataTypeList.length) return;
+    if (!dataTypeList || !dataTypeList.length || !dataTypeList[dataType])
+      return;
 
     const dType = dataTypeList[dataType].label;
 
@@ -334,7 +318,8 @@ const AddDatasetPreprocessModal = ({ data, type }) => {
 
   useEffect(() => {
     fetchConversionFunction();
-  }, [dataType, selectedProcessRule]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataType, dataTypeList]);
 
   useEffect(() => {
     getDetailInfo();
@@ -355,7 +340,7 @@ const AddDatasetPreprocessModal = ({ data, type }) => {
         message: '인스턴스 할당량을 입력해 주세요.',
       },
       {
-        condition: selectedProcessRule === 1 && !conversionFunction.label,
+        condition: !conversionFunction.label,
         message: '전처리 함수를 선택해 주세요.',
       },
     ];
@@ -378,7 +363,7 @@ const AddDatasetPreprocessModal = ({ data, type }) => {
       !isValidInstance ||
       !isValidInstance.used ||
       !owner.label ||
-      (selectedProcessRule === 1 && conversionFunction.label === '')
+      conversionFunction.label === ''
     ) {
       setValidate(false);
       return;
@@ -387,13 +372,7 @@ const AddDatasetPreprocessModal = ({ data, type }) => {
     setValidate(true);
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    processName,
-    instanceOption,
-    owner,
-    selectedProcessRule,
-    conversionFunction,
-  ]);
+  }, [processName, instanceOption, owner, conversionFunction]);
 
   return (
     <NewStyleModalFrame
@@ -498,42 +477,25 @@ const AddDatasetPreprocessModal = ({ data, type }) => {
           disableErrorMsg
         >
           <FbRadio
-            name='process-rule'
-            options={processRuleOption}
-            value={selectedProcessRule}
+            name='data-type'
+            options={dataTypeList}
+            value={dataType}
             onChange={(e) => {
-              processRuleRadioBtnHandler('process-rule', e.currentTarget.value);
+              builtInTypeRadioHandler('data-type', e.currentTarget.value);
             }}
             isLabelColor
           />
+          <FixGrayDropDown
+            list={conversionFunctionList}
+            value={conversionFunction}
+            handleSelectOption={handleBuiltIn}
+            placeholder={t('전처리 함수를 선택하세요')}
+            isCloseBorder={false}
+            listCustomStyle={{ maxHeight: '110px', overflow: 'auto' }}
+            customStyle={{ marginTop: '16px' }}
+            isReadOnly={type === 'MODIFY_DATASET_PREPROCESS'}
+          />
         </InputBoxWithLabel>
-        {selectedProcessRule === 1 && (
-          <InputBoxWithLabel
-            labelText={t('dataType.label')}
-            labelSize='large'
-            disableErrorMsg
-          >
-            <FbRadio
-              name='data-type'
-              options={dataTypeList}
-              value={dataType}
-              onChange={(e) => {
-                builtInTypeRadioHandler('data-type', e.currentTarget.value);
-              }}
-              isLabelColor
-            />
-            <FixGrayDropDown
-              list={conversionFunctionList}
-              value={conversionFunction}
-              handleSelectOption={handleBuiltIn}
-              placeholder={t('전처리 함수를 선택하세요')}
-              isCloseBorder={false}
-              listCustomStyle={{ maxHeight: '110px', overflow: 'auto' }}
-              customStyle={{ marginTop: '16px' }}
-              isReadOnly={type === 'MODIFY_DATASET_PREPROCESS'}
-            />
-          </InputBoxWithLabel>
-        )}
         <div className={cx('bottom-box')}>
           <div className={cx('content')}>
             <div className={cx('text')}>

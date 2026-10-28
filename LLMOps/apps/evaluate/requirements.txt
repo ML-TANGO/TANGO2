@@ -1,0 +1,6 @@
+# SP-1 FastAPI 래퍼 deps. torch/transformers 는 베이스 이미지
+# (ghcr.io/ggml-org/llama.cpp:full) 가 제공. 메트릭(BLEU/ROUGE/perplexity)은
+# 순수 파이썬 + torch 로 구현하므로 sacrebleu/rouge-score 의존 없음.
+fastapi>=0.111.0,<1.0.0
+uvicorn[standard]>=0.29.0,<1.0.0
+pydantic>=2.0.0,<3.0.0

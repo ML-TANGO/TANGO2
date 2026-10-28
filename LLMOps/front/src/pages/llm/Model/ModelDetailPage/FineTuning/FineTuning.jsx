@@ -3,7 +3,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallowEqual, useDispatch, useSelector } from 'react-redux';
 
-import ExternalFineTuningView from './ExternalFineTuningView';
+import SDSFineTuningView from './SDSFineTuningView';
 
 import { ButtonV2, Checkbox, Radio, Switch } from '@jonathan/ui-react';
 
@@ -16,7 +16,7 @@ import { openModal } from '@src/store/modules/modal';
 import { callApi, STATUS_SUCCESS } from '@src/network';
 import { loadModalComponent } from '@src/modal';
 
-import SimpleNav from '../SimpleNav';
+import SimpleNav from '@src/components/molecules/SimpleNav';
 import Advanced from './Advanced';
 import DataList from './DataList';
 import FineTuningGraph from './FineTuningGraph';
@@ -64,6 +64,7 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
   const [fineTuningData, setFineTuningData] = useState(null);
   const [fineTuningType, setFineTuningType] = useState(1);
   const [graphData, setGraphData] = useState(null);
+  const [checkpoints, setCheckpoints] = useState([]); // ⑩ 체크포인트 점 마킹 (SP-5)
   const [progressData, setProgressData] = useState(null);
   const [commitId, setCommitId] = useState(null);
   const [accelator, setAccelator] = useState(false); // 0 1 Accelator 기능
@@ -80,7 +81,9 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
   const [rangeCheckValue, setRangeCheckValue] = useState({
     bit: false,
     lora: true,
+    vlm: false, // 내부 VLM 2-stage 파인튜닝(LLaVA류). 베이스=VLM, 데이터셋=이미지+텍스트.
   });
+  const [vlmStage1Epochs, setVlmStage1Epochs] = useState(1.0); // stage1 projector 정렬 epoch
 
   const handleRangeBar = useCallback(
     (e, label) => {
@@ -167,6 +170,13 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
   };
 
   const runFineTuning = async ({ instanceId, instanceCount, gpuCount }) => {
+    // VLM 2-stage 는 basic(type 1) 전용 토글. advanced 로 전환해도 토글 state 가 잔존하므로
+    // fineTuningType 으로 게이트 — advanced/텍스트 런에 VLM 트레이너가 새지 않도록(codex).
+    const isVlmRun = fineTuningType === 1 && rangeCheckValue.vlm;
+    const stage1Epochs =
+      vlmStage1Epochs === '' || !Number.isFinite(Number(vlmStage1Epochs))
+        ? 1.0
+        : Number(vlmStage1Epochs);
     const body = {
       model_id: parseInt(modelId, 10),
       model_dataset_id: fineTuningData?.model_datasets[0]?.id ?? 0,
@@ -183,6 +193,10 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
         used_lora: rangeCheckValue.lora ? 1 : 0,
         warmup_steps: range.warmupSteps,
         used_jonathan_accelerator: accelator ? 1 : 0,
+        // 내부 VLM 2-stage(LLaVA류) — vlm=1 이면 스케줄러가 VLM 학습 스크립트 선택.
+        // used_lora 가 stage2 방식(LoRA/full) 결정. stage1=projector 정렬 epoch.
+        vlm: isVlmRun ? 1 : 0,
+        vlm_stage1_epochs: isVlmRun ? stage1Epochs : 1.0,
       },
     };
 
@@ -273,8 +287,13 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
 
         // 외부 학습 모델은 fine_tuning_config 가 null (partner manifest 기반).
         // 아래 internal LLM hyperparameter dispatch 는 skip 하고
-        // ExternalFineTuningView 로 render 분기.
+        // SDSFineTuningView 로 render 분기.
         if (result?.training_type === 'external') {
+          return;
+        }
+        // 멀티모달(VLM) 모델은 internal hyperparameter dispatch 를 건너뛰고
+        // SDSFineTuningView 로 render 분기(설정은 그 뷰가 자체 관리).
+        if (result?.load_type === 'multimodal') {
           return;
         }
 
@@ -309,7 +328,9 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
         setRangeCheckValue({
           bit: config.load_in_8bit,
           lora: config.used_lora,
+          vlm: config.vlm ? true : false,
         });
+        setVlmStage1Epochs(config.vlm_stage1_epochs ?? 1.0);
 
         if (!userChangedFineTuningType) {
           setFineTuningType(config.fine_tuning_type === 'basic' ? 1 : 2);
@@ -365,8 +386,15 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
     }
   };
 
+  // SDS external 모델은 SDSFineTuningView 내부에서 external SSE 를 직접 구독한다.
+  // 부모는 internal/VLM 모델만 기존 internal SSE 를 연다.
+  const isExternalModel = fineTuningData?.training_type === 'external';
+  const isMultimodalModel = fineTuningData?.load_type === 'multimodal';
+  const shouldUseInternalSSE = !!fineTuningData && !isExternalModel;
+  const internalSSEModelId = shouldUseInternalSSE ? modelId : null;
+
   // SSE Status
-  useSSEStatus(modelId, userName, setFineStatus);
+  useSSEStatus(internalSSEModelId, userName, setFineStatus);
 
   // fineTuning status
   const fineTuningStatus = useMemo(
@@ -380,8 +408,15 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
     [fineTuningStatus],
   );
 
-  useSSEGraph(modelId, userName, fineTuningStatus, setGraphData);
-  useSSETime(modelId, userName, setProgressData, fineTuningStatus);
+  useSSEGraph(
+    internalSSEModelId,
+    userName,
+    fineTuningStatus,
+    setGraphData,
+    'internal',
+    setCheckpoints,
+  );
+  useSSETime(internalSSEModelId, userName, setProgressData, fineTuningStatus);
 
   // * A-LLM MODELBASE 용 모델이름과 커밋버전
   const modelName = fineTuningData?.commit_model_name || '';
@@ -438,17 +473,20 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
   // 외부 학습 모델 (training_type='external') 은 FineTuning 탭 안에서
   // 같은 SimpleNav + box{left, right} 레이아웃을 유지한 채 내용만 교체한다.
   // (별도 탭으로 분리하지 않음 — internal 과 동일한 운영 UX.)
-  const isExternalModel = fineTuningData?.training_type === 'external';
-
-  if (isExternalModel) {
+  if (isExternalModel || isMultimodalModel) {
     return (
-      <ExternalFineTuningView
+      <SDSFineTuningView
         navList={navList}
         fineTuningData={fineTuningData}
         workspaceId={workspaceId}
         modelId={modelId}
         refresh={() => getFineTuningData()}
         filteredRest={filteredRest}
+        // internal VLM 은 부모 SSE 를 props 로 소비하고, external SDS 는 내부에서 external SSE 를 연다.
+        fineStatus={fineStatus}
+        graphData={graphData}
+        progressData={progressData}
+        checkpoints={checkpoints}
       />
     );
   }
@@ -604,6 +642,61 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
                       disabled={runningStatus}
                     />
                   </div>
+                  {/* 내부 VLM 2-stage(LLaVA류) — 베이스 모델=VLM, 데이터셋=이미지+텍스트 필요.
+                      stage1 projector 정렬 → stage2 LM(Use LoRA 체크 시 LoRA, 아니면 full). */}
+                  <div
+                    className={cx(
+                      'range-checkbox',
+                      runningStatus && 'disabled',
+                    )}
+                  >
+                    {t('finetuning.vlm2stage')}
+                    <Checkbox
+                      checked={rangeCheckValue.vlm}
+                      onChange={() => {
+                        if (!runningStatus) {
+                          handleRangeCheckbox('vlm');
+                        }
+                      }}
+                      disabled={runningStatus}
+                    />
+                  </div>
+                  {rangeCheckValue.vlm && (
+                    <div
+                      className={cx(
+                        'range-checkbox',
+                        runningStatus && 'disabled',
+                      )}
+                    >
+                      {t('finetuning.vlmStage1Epochs')}
+                      <input
+                        type='number'
+                        min={0}
+                        max={20}
+                        step={0.5}
+                        value={vlmStage1Epochs}
+                        disabled={runningStatus}
+                        onChange={(e) => {
+                          // 빈/중간 입력은 그대로 유지해 clear-and-retype 허용
+                          // (Number('')→0 스냅 방지). blur 시 정규화.
+                          const v = e.target.value;
+                          setVlmStage1Epochs(v === '' ? '' : Number(v));
+                        }}
+                        onBlur={(e) => {
+                          const n = parseFloat(e.target.value);
+                          setVlmStage1Epochs(
+                            Number.isFinite(n) && n >= 0 ? n : 1.0,
+                          );
+                        }}
+                        style={{
+                          width: 80,
+                          padding: '4px 8px',
+                          border: '1px solid #d8d8d8',
+                          borderRadius: 6,
+                        }}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
               {fineTuningType === 2 && (
@@ -639,6 +732,7 @@ const FineTuning = memo(function FineTuning({ navList, data, ...rest }) {
             fineStatus={fineStatus}
             fineTuningData={fineTuningData}
             progressData={progressData}
+            checkpoints={checkpoints}
           />
         </div>
       </div>

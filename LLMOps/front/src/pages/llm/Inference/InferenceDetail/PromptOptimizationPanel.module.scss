@@ -1,0 +1,388 @@
+@import '@src/styles/color.scss';
+
+// 프롬프트 최적화 패널 — 추론 입력 바로 위.
+//   상태 배지·탭·표·버튼은 전부 플랫폼 컴포넌트(Badge / molecules Tab / BorderTable /
+//   ButtonV2 / SwitchBtn)가 스타일을 소유한다. 여기서는 그것들을 담는 레이아웃과
+//   플랫폼 토큰만 다룬다 — 컴포넌트 룩을 여기서 재정의하지 않는다.
+//   카드 셸은 형제 카드(.status-card)와 같은 idiom(16px radius, $blue102 테두리).
+.panel {
+  padding: 20px 24px;
+  border: 1px solid $blue102;
+  border-radius: 16px;
+  background: $mono200;
+}
+
+// ── 헤더: 토글 + 제목 (패널이 닫혀 있어도 항상 보인다) ──
+.head-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.title {
+  color: $mono207;
+  font-family: SpoqaM;
+  font-size: 15px;
+  line-height: 15px;
+}
+
+.caption {
+  margin-top: 8px;
+  color: $mono205;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+// 사용자가 손쓸 수 있는 경고(모델 불일치 / 배포 중지) — 본문에 묻히면 경고 구실을 못 한다.
+.alert {
+  margin-top: 10px;
+  padding: 9px 12px;
+  border: 1px solid $yellow304;
+  border-radius: 6px;
+  background: $yellow301;
+  color: $mono207;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid $mono202;
+}
+
+// ── 섹션 ──
+.sec {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sec-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  h4 {
+    padding-left: 9px;
+    border-left: 3px solid $primary-color;
+    color: $mono207;
+    font-family: SpoqaM;
+    font-size: 14px;
+    line-height: 16px;
+  }
+}
+
+.count {
+  color: $mono205;
+  font-size: 13px;
+
+  b {
+    color: $mono207;
+    font-family: SpoqaM;
+  }
+}
+
+.need {
+  color: $red502;
+  font-style: normal;
+}
+
+.row-end {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+// ── 예시 카드 ──
+.qa-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.qa {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid $blue101;
+  border-radius: 10px;
+  background: $blue109;
+}
+
+.qa-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.idx {
+  color: $primary-color;
+  font-family: SpoqaM;
+  font-size: 13px;
+}
+
+.qa-label {
+  margin-top: 2px;
+  color: $mono205;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+// SDS 예시 이미지 선택 줄 — 플랫폼 입력창과 같은 높이·테두리로 맞춘다.
+.file-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px 7px 12px;
+  border: 1px solid $mono203;
+  border-radius: 6px;
+  background: $mono200;
+  cursor: pointer;
+
+  &:hover {
+    border-color: $primary-color;
+  }
+}
+
+.file-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: $mono205;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-btn {
+  flex: 0 0 auto;
+  padding: 5px 12px;
+  border: 1px solid $mono203;
+  border-radius: 4px;
+  background: $mono201;
+  color: $mono206;
+  font-size: 12px;
+}
+
+// ── 파일 가져오기 ──
+.drop {
+  display: block;
+  padding: 26px 16px;
+  border: 1px dashed $blue103;
+  border-radius: 10px;
+  background: $blue109;
+  color: $mono205;
+  font-size: 13px;
+  line-height: 20px;
+  text-align: center;
+  cursor: pointer;
+
+  &:hover,
+  &.over {
+    border-color: $primary-color;
+    background: $hover-bg-color;
+  }
+
+  b {
+    display: block;
+    color: $mono207;
+    font-family: SpoqaM;
+    font-size: 14px;
+  }
+}
+
+.fmt {
+  color: $primary-color;
+  font-family: 'D2Coding', monospace;
+  font-size: 12px;
+}
+
+.hint {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: $blue100;
+  color: $mono205;
+  font-size: 12px;
+  line-height: 20px;
+
+  code {
+    padding: 1px 5px;
+    border: 1px solid $mono203;
+    border-radius: 4px;
+    background: $mono200;
+    color: $mono206;
+    font-family: 'D2Coding', monospace;
+    font-size: 11px;
+  }
+}
+
+.ok-msg {
+  color: $lime604;
+  font-family: SpoqaM;
+  font-size: 13px;
+}
+
+// ── 아코디언(고급 설정 / 이력) — PlaygroundAccordion 과 같은 관례(회색 화살표 회전) ──
+.acc {
+  overflow: hidden;
+  border: 1px solid $mono203;
+  border-radius: 10px;
+}
+
+.acc-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 12px 14px;
+  border: none;
+  background: $mono200;
+  color: $mono207;
+  font-family: SpoqaM;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+
+  &.open {
+    border-bottom: 1px solid $mono202;
+  }
+}
+
+.arrow {
+  width: 16px;
+  transition: transform 0.2s;
+
+  &.open {
+    transform: rotate(180deg);
+  }
+}
+
+.acc-b {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+}
+
+.opt-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.lab {
+  color: $mono207;
+  font-family: SpoqaM;
+  font-size: 13px;
+}
+
+.sub {
+  display: block;
+  margin-top: 2px;
+  color: $mono205;
+  font-family: Spoqa;
+  font-size: 12px;
+}
+
+// 제안 LLM 선택 — 플랫폼 입력창과 같은 테두리·높이로 맞춘다.
+.select {
+  min-width: 180px;
+  padding: 7px 10px;
+  border: 1px solid $mono203;
+  border-radius: 6px;
+  background: $mono200;
+  color: $mono207;
+  font-family: Spoqa;
+  font-size: 13px;
+
+  &:focus {
+    outline: none;
+    border-color: $primary-color;
+  }
+
+  &:disabled {
+    background: $mono201;
+    cursor: not-allowed;
+  }
+}
+
+.opt-actions {
+  display: flex;
+  gap: 6px;
+}
+
+// 실패 원인 — 표 칸에서는 잘려서 못 읽으므로 아래에 펼친다.
+.job-error {
+  padding: 8px 10px;
+  border-radius: 4px;
+  background: $red501;
+  color: $red503;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+// ── 실행 / 결과 ──
+.foot {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid $mono202;
+}
+
+.latest-label {
+  color: $mono205;
+  font-size: 12px;
+}
+
+.result {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid $blue102;
+  border-radius: 10px;
+  background: $blue109;
+
+  h5 {
+    color: $mono207;
+    font-family: SpoqaM;
+    font-size: 14px;
+  }
+}
+
+.sp-box {
+  max-height: 170px;
+  padding: 12px;
+  overflow-y: auto;
+  border: 1px solid $mono203;
+  border-radius: 8px;
+  background: $mono200;
+  color: $mono207;
+  font-family: 'D2Coding', monospace;
+  font-size: 12px;
+  line-height: 20px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.foot-note {
+  color: $mono205;
+  font-size: 12px;
+  line-height: 16px;
+  text-align: center;
+}

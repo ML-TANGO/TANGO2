@@ -291,8 +291,17 @@ function LLMDatasetPage({ trackingEvent }) {
           footerRender: DatasetFormModalFooter,
           submit: {
             text: 'create.label',
-            func: () => {
-              getDatasetsData();
+            // 생성 후 새 데이터셋 상세로 자동 진입 → 업로드/폴더 관리는 상세에서(Req 2 흐름).
+            func: (newDatasetId) => {
+              if (newDatasetId) {
+                history.push({
+                  pathname: `/user/workspace/${workspaceId}/llm-datasets/${newDatasetId}/files`,
+                  // 상세 페이지는 location.state 에서 id 를 읽음 — 카드 클릭과 동일하게 새 id 전달.
+                  state: { id: newDatasetId, workspaceId },
+                });
+              } else {
+                getDatasetsData();
+              }
             },
           },
           cancel: {
@@ -911,6 +920,9 @@ function LLMDatasetPage({ trackingEvent }) {
       builtInModelList={builtInModelList}
       builtInTemplateOpen={builtInTemplateOpen}
       onSortHandler={onSortHandler}
+      onEditRow={onUpdate}
+      onDownloadRow={onDatasetDownload}
+      downloadIds={downloadIds}
     />
   );
 }

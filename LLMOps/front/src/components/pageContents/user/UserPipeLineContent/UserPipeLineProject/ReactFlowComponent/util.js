@@ -1,21 +1,44 @@
 import { openModal } from '@src/store/modules/modal';
 
 export const nodeLineColorStyle = {
+  generation: '#8B5CF6',
   preprocessing: '#2D76F8',
   project: '#FF7A00',
+  finetuning: '#14B8A6',
+  quantize: '#F59E0B',
+  llm_deploy: '#10B981',
   deployment_task: '#00C775',
+  // SP-7 프롬프트 최적화 3-모듈 (고려대 LLM1/2/3)
+  prompt_gen: '#6366F1',
+  data_gen: '#EC4899',
+  algo_call: '#0EA5E9',
 };
 
 export const TRevertaskType = {
+  generate: 'generation',
+  generation: 'generation', // cardType(ColorSelectorNode)은 'generation' — 행 삭제 task_type undefined 방지
   pre: 'preprocessing',
   train: 'project',
+  finetune: 'finetuning',
+  quantize: 'quantize',
+  llmdeploy: 'llm_deploy',
   deployment: 'deployment',
+  // SP-7 — cardType(promptgen/datagen/algocall) → BE task_type
+  promptgen: 'prompt_gen',
+  datagen: 'data_gen',
+  algocall: 'algo_call',
 };
 
 export const xPositionList = [
   0, 288, 576, 864, 1152, 1440, 1728, 2016, 2304, 2592,
 ];
 export const typePosition = {
+  generation: {
+    x: 0,
+    y: 24,
+    width: 288,
+    height: 0,
+  },
   preprocessing: {
     x: 0,
     y: 24,
@@ -28,7 +51,44 @@ export const typePosition = {
     width: 288,
     height: 0,
   },
+  finetuning: {
+    x: 0,
+    y: 24,
+    width: 288,
+    height: 0,
+  },
+  quantize: {
+    x: 0,
+    y: 24,
+    width: 288,
+    height: 0,
+  },
+  llm_deploy: {
+    x: 0,
+    y: 24,
+    width: 288,
+    height: 0,
+  },
   deployment: {
+    x: 0,
+    y: 24,
+    width: 288,
+    height: 0,
+  },
+  // SP-7 3-모듈 노드 위치 (generation 과 동형)
+  prompt_gen: {
+    x: 0,
+    y: 24,
+    width: 288,
+    height: 0,
+  },
+  data_gen: {
+    x: 0,
+    y: 24,
+    width: 288,
+    height: 0,
+  },
+  algo_call: {
     x: 0,
     y: 24,
     width: 288,
@@ -37,10 +97,18 @@ export const typePosition = {
 };
 
 const calModalName = (type) => {
+  if (type === 'generate') return 'ADD_GENERATION_DATA';
   // return 'ADD_PREPROCESS_BUILT_IN'; // 데이터 전처리 작업 Built-in 추가
   if (type === 'pre') return 'ADD_PREPREOCESS_DATA';
   // return 'ADD_TRAINING_BUILT_IN'; // 학습 작업 Built-in 추가
   if (type === 'train') return 'AI_TRAINING_SETTING';
+  if (type === 'finetune') return 'ADD_FINETUNING_DATA';
+  if (type === 'quantize') return 'ADD_QUANTIZE_DATA';
+  if (type === 'llmdeploy') return 'ADD_LLM_DEPLOY_DATA';
+  // SP-7 프롬프트 최적화 3-모듈
+  if (type === 'promptgen') return 'ADD_PROMPT_GEN_DATA';
+  if (type === 'datagen') return 'ADD_DATA_GEN_DATA';
+  if (type === 'algocall') return 'ADD_ALGO_CALL_DATA';
   return 'ADD_DEPLOY_DATA';
 };
 
@@ -74,7 +142,14 @@ export const handleAddData = (
 };
 
 const subTitleObj = {
+  '생성 데이터': 'headerGeneration',
   '학습 데이터 전처리': 'header0',
+  '프롬프트 생성': 'headerPromptGen',
+  '데이터 생성': 'headerDataGen',
+  '알고리즘 호출': 'headerAlgoCall',
+  파인튜닝: 'headerFinetuning',
+  양자화: 'headerQuantize',
+  'LLM 배포': 'headerLlmDeploy',
   학습: 'header1',
   배포: 'header2',
 };
@@ -127,12 +202,391 @@ export const calLastPosition = (lastValue) => {
   return lastValue.position.y + 390 + 24;
 };
 
+export const calGenerationGroupList = (
+  list,
+  handleResetData,
+  isStopBtn,
+  dataset_info,
+  pipelineType,
+  genStartPositionY = 0,
+) => {
+  // 생성 레인 = 캔버스 맨 앞(dataset → 생성 → 전처리 → 학습 → 배포). calPreDataGroupList
+  // 와 동형 — id 'generation-group', type 'generate'. (WBS 1.2)
+  const returnList = [];
+
+  if (list.length === 0) {
+    returnList.push({
+      id: 'generation-group0',
+      type: 'emptyGroup',
+      data: {
+        x: 0,
+        y: 0,
+        type: 'generate',
+        handleResetData,
+        isStopBtn,
+        dataset_info,
+        pipelineType,
+      },
+      position: {
+        x: 0,
+        y: genStartPositionY + 60,
+      },
+      style: {
+        width: '100%',
+        height: '84px',
+      },
+      draggable: false,
+      connectable: false,
+    });
+    return returnList;
+  }
+
+  const yList = list.map((el) => el.coordinate.y_index);
+  const maxY = Math.max(...yList);
+
+  for (let i = 0; i < maxY + 1; i++) {
+    const filterList = list.filter((el) => el.coordinate.y_index === i);
+    const xList = filterList.map((el) => el.coordinate.x_index);
+    const sortXList = xList.sort((a, b) => a - b);
+    const xIndex = sortXList.findIndex((number, idx) => number !== idx);
+
+    returnList.push({
+      id: `generation-group${i + 1}`,
+      type: 'lineGroup',
+      data: {
+        x: xIndex !== -1 ? xIndex : sortXList.length,
+        y: i,
+        type: 'generate',
+        handleResetData,
+        isStopBtn,
+        dataset_info,
+        pipelineType,
+      },
+      position: {
+        x: 0,
+        y: genStartPositionY + 44 + 390 * i,
+      },
+      style: {
+        width: '100%',
+        height: '390px',
+      },
+      draggable: false,
+      connectable: false,
+    });
+  }
+  return returnList;
+};
+
+export const calFinetuningGroupList = (
+  list,
+  handleResetData,
+  isStopBtn,
+  dataset_info,
+  pipelineType,
+  finetuneStartPositionY = 0,
+) => {
+  // 파인튜닝 레인 = 전처리 다음(데이터셋 → 생성 → 전처리 → 파인튜닝 → 양자화 → 배포).
+  // calGenerationGroupList 와 동형 — id 'finetuning-group', type 'finetune'. (GenAI 통합 파이프라인)
+  const returnList = [];
+
+  if (list.length === 0) {
+    returnList.push({
+      id: 'finetuning-group0',
+      type: 'emptyGroup',
+      data: {
+        x: 0,
+        y: 0,
+        type: 'finetune',
+        handleResetData,
+        isStopBtn,
+        dataset_info,
+        pipelineType,
+      },
+      position: {
+        x: 0,
+        y: finetuneStartPositionY + 60,
+      },
+      style: {
+        width: '100%',
+        height: '84px',
+      },
+      draggable: false,
+      connectable: false,
+    });
+    return returnList;
+  }
+
+  const yList = list.map((el) => el.coordinate.y_index);
+  const maxY = Math.max(...yList);
+
+  for (let i = 0; i < maxY + 1; i++) {
+    const filterList = list.filter((el) => el.coordinate.y_index === i);
+    const xList = filterList.map((el) => el.coordinate.x_index);
+    const sortXList = xList.sort((a, b) => a - b);
+    const xIndex = sortXList.findIndex((number, idx) => number !== idx);
+
+    returnList.push({
+      id: `finetuning-group${i + 1}`,
+      type: 'lineGroup',
+      data: {
+        x: xIndex !== -1 ? xIndex : sortXList.length,
+        y: i,
+        type: 'finetune',
+        handleResetData,
+        isStopBtn,
+        dataset_info,
+        pipelineType,
+      },
+      position: {
+        x: 0,
+        y: finetuneStartPositionY + 44 + 390 * i,
+      },
+      style: {
+        width: '100%',
+        height: '390px',
+      },
+      draggable: false,
+      connectable: false,
+    });
+  }
+  return returnList;
+};
+
+export const calQuantizeGroupList = (
+  list,
+  handleResetData,
+  isStopBtn,
+  dataset_info,
+  pipelineType,
+  quantizeStartPositionY = 0,
+) => {
+  // 양자화 레인 = 파인튜닝 다음(데이터셋 → 생성 → 전처리 → 파인튜닝 → 양자화 → LLM배포).
+  // calFinetuningGroupList 와 동형 — id 'quantize-group', type 'quantize'. (GenAI 통합 파이프라인)
+  const returnList = [];
+
+  if (list.length === 0) {
+    returnList.push({
+      id: 'quantize-group0',
+      type: 'emptyGroup',
+      data: {
+        x: 0,
+        y: 0,
+        type: 'quantize',
+        handleResetData,
+        isStopBtn,
+        dataset_info,
+        pipelineType,
+      },
+      position: {
+        x: 0,
+        y: quantizeStartPositionY + 60,
+      },
+      style: {
+        width: '100%',
+        height: '84px',
+      },
+      draggable: false,
+      connectable: false,
+    });
+    return returnList;
+  }
+
+  const yList = list.map((el) => el.coordinate.y_index);
+  const maxY = Math.max(...yList);
+
+  for (let i = 0; i < maxY + 1; i++) {
+    const filterList = list.filter((el) => el.coordinate.y_index === i);
+    const xList = filterList.map((el) => el.coordinate.x_index);
+    const sortXList = xList.sort((a, b) => a - b);
+    const xIndex = sortXList.findIndex((number, idx) => number !== idx);
+
+    returnList.push({
+      id: `quantize-group${i + 1}`,
+      type: 'lineGroup',
+      data: {
+        x: xIndex !== -1 ? xIndex : sortXList.length,
+        y: i,
+        type: 'quantize',
+        handleResetData,
+        isStopBtn,
+        dataset_info,
+        pipelineType,
+      },
+      position: {
+        x: 0,
+        y: quantizeStartPositionY + 44 + 390 * i,
+      },
+      style: {
+        width: '100%',
+        height: '390px',
+      },
+      draggable: false,
+      connectable: false,
+    });
+  }
+  return returnList;
+};
+
+export const calLlmDeployGroupList = (
+  list,
+  handleResetData,
+  isStopBtn,
+  dataset_info,
+  pipelineType,
+  llmDeployStartPositionY = 0,
+) => {
+  // LLM 배포 레인 = 양자화 다음(터미널 레인). calFinetuningGroupList 와 동형 —
+  // id 'llm-deploy-group', type 'llmdeploy'. (GenAI 통합 파이프라인)
+  const returnList = [];
+
+  if (list.length === 0) {
+    returnList.push({
+      id: 'llm-deploy-group0',
+      type: 'emptyGroup',
+      data: {
+        x: 0,
+        y: 0,
+        type: 'llmdeploy',
+        handleResetData,
+        isStopBtn,
+        dataset_info,
+        pipelineType,
+      },
+      position: {
+        x: 0,
+        y: llmDeployStartPositionY + 60,
+      },
+      style: {
+        width: '100%',
+        height: '84px',
+      },
+      draggable: false,
+      connectable: false,
+    });
+    return returnList;
+  }
+
+  const yList = list.map((el) => el.coordinate.y_index);
+  const maxY = Math.max(...yList);
+
+  for (let i = 0; i < maxY + 1; i++) {
+    const filterList = list.filter((el) => el.coordinate.y_index === i);
+    const xList = filterList.map((el) => el.coordinate.x_index);
+    const sortXList = xList.sort((a, b) => a - b);
+    const xIndex = sortXList.findIndex((number, idx) => number !== idx);
+
+    returnList.push({
+      id: `llm-deploy-group${i + 1}`,
+      type: 'lineGroup',
+      data: {
+        x: xIndex !== -1 ? xIndex : sortXList.length,
+        y: i,
+        type: 'llmdeploy',
+        handleResetData,
+        isStopBtn,
+        dataset_info,
+        pipelineType,
+      },
+      position: {
+        x: 0,
+        y: llmDeployStartPositionY + 44 + 390 * i,
+      },
+      style: {
+        width: '100%',
+        height: '390px',
+      },
+      draggable: false,
+      connectable: false,
+    });
+  }
+  return returnList;
+};
+
+// SP-7 프롬프트 최적화 3-모듈 레인 공용 빌더 — prompt_gen/data_gen/algo_call 의
+// cal*GroupList 가 idPrefix(group node id)/type(lane short type)만 다르고 동일하므로
+// 1개 제네릭으로 통합(기존 cal*GroupList 5종은 보존). type = promptgen|datagen|algocall.
+export const calModuleGroupList = (
+  list,
+  type,
+  idPrefix,
+  handleResetData,
+  isStopBtn,
+  dataset_info,
+  pipelineType,
+  moduleStartPositionY = 0,
+) => {
+  const returnList = [];
+
+  if (list.length === 0) {
+    returnList.push({
+      id: `${idPrefix}0`,
+      type: 'emptyGroup',
+      data: {
+        x: 0,
+        y: 0,
+        type,
+        handleResetData,
+        isStopBtn,
+        dataset_info,
+        pipelineType,
+      },
+      position: {
+        x: 0,
+        y: moduleStartPositionY + 60,
+      },
+      style: {
+        width: '100%',
+        height: '84px',
+      },
+      draggable: false,
+      connectable: false,
+    });
+    return returnList;
+  }
+
+  const yList = list.map((el) => el.coordinate.y_index);
+  const maxY = Math.max(...yList);
+
+  for (let i = 0; i < maxY + 1; i++) {
+    const filterList = list.filter((el) => el.coordinate.y_index === i);
+    const xList = filterList.map((el) => el.coordinate.x_index);
+    const sortXList = xList.sort((a, b) => a - b);
+    const xIndex = sortXList.findIndex((number, idx) => number !== idx);
+
+    returnList.push({
+      id: `${idPrefix}${i + 1}`,
+      type: 'lineGroup',
+      data: {
+        x: xIndex !== -1 ? xIndex : sortXList.length,
+        y: i,
+        type,
+        handleResetData,
+        isStopBtn,
+        dataset_info,
+        pipelineType,
+      },
+      position: {
+        x: 0,
+        y: moduleStartPositionY + 44 + 390 * i,
+      },
+      style: {
+        width: '100%',
+        height: '390px',
+      },
+      draggable: false,
+      connectable: false,
+    });
+  }
+  return returnList;
+};
+
 export const calPreDataGroupList = (
   copyPreDataList,
   handleResetData,
   isStopBtn,
   dataset_info,
   pipelineType,
+  preStartPositionY = 0,
 ) => {
   const returnList = [];
 
@@ -151,7 +605,7 @@ export const calPreDataGroupList = (
       },
       position: {
         x: 0,
-        y: 60,
+        y: preStartPositionY + 60,
       },
       style: {
         width: '100%',
@@ -188,7 +642,7 @@ export const calPreDataGroupList = (
       },
       position: {
         x: 0,
-        y: 44 + 390 * i,
+        y: preStartPositionY + 44 + 390 * i,
       },
       style: {
         width: '100%',

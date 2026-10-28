@@ -1,0 +1,266 @@
+@import '@src/styles/color.scss';
+
+// SDS/external 체크포인트 탭 — ETRI 목업(MultimodalTabContent '관리') 레이아웃 +
+// CommitList/ModelCommitListItem 의 스텝 카드 idiom 을 실 팔레트로 정렬.
+
+.checkpoint-tab {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.container {
+  background-color: $mono200;
+  padding-top: 12px;
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+}
+
+.section-label {
+  font-family: SpoqaB;
+  font-size: 16px;
+  color: $mono207;
+  margin-bottom: 16px;
+}
+
+.empty {
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: $mono205;
+  padding: 24px 0;
+}
+
+// ── 체크포인트 목록 ──────────────────────────────────────────────────────────
+.ckpt-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.ckpt-item {
+  border: 1px solid $mono203;
+  border-radius: 12px;
+  padding: 16px 20px;
+  background: $mono200;
+  transition: border-color 0.15s, background 0.15s;
+  &:hover {
+    border-color: $blue103;
+  }
+  // best = 모델 반영본 → 그린 강조(스텝 카드 관례와 동일).
+  &--best {
+    border-color: $lime603;
+    background: rgba($lime603, 0.05);
+    &:hover {
+      border-color: $lime604;
+    }
+  }
+}
+
+.ckpt-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.ckpt-id {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ckpt-step {
+  font-family: SpoqaB;
+  font-size: 16px;
+  color: $mono207;
+}
+
+.ckpt-epoch {
+  font-family: SpoqaM;
+  font-size: 12px;
+  color: $mono205;
+  padding: 2px 8px;
+  background: $mono202;
+  border-radius: 4px;
+}
+
+// stage 태그(파란 칩) — proj/llm 등 단계 라벨. 목업 .ckpt-mode 대응.
+.ckpt-stage {
+  font-family: SpoqaM;
+  font-size: 11px;
+  color: $blue104;
+  background: $blue101;
+  border: 1px solid rgba($blue104, 0.3);
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.best-badge {
+  font-family: SpoqaB;
+  font-size: 11px;
+  color: $lime604;
+  padding: 2px 9px;
+  background: $lime601;
+  border-radius: 4px;
+  border: 1px solid rgba($lime603, 0.4);
+  white-space: nowrap;
+}
+
+.ckpt-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.best-btn {
+  padding: 6px 14px;
+  border-radius: 7px;
+  border: 1px solid $lime603;
+  background: $mono200;
+  color: $lime604;
+  font-family: SpoqaM;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+  &:hover:not(:disabled) {
+    background: $lime601;
+    border-color: $lime604;
+  }
+  &:focus-visible {
+    outline: 2px solid $lime603;
+    outline-offset: 2px;
+  }
+  &:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+}
+
+.del-btn {
+  padding: 6px 14px;
+  border-radius: 7px;
+  border: 1px solid $mono203;
+  background: $mono200;
+  color: $mono205;
+  font-family: SpoqaM;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, opacity 0.15s;
+  &:hover:not(:disabled) {
+    border-color: $red502;
+    color: $red502;
+  }
+  &:focus-visible {
+    outline: 2px solid $red502;
+    outline-offset: 2px;
+  }
+  &:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+}
+
+.ckpt-metrics {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: $mono205;
+  b {
+    color: $mono207;
+    font-family: SpoqaB;
+    font-weight: normal;
+    margin-left: 4px;
+  }
+}
+
+// ── 스토리지 사용량 ──────────────────────────────────────────────────────────
+.storage-box {
+  padding: 20px 24px;
+  border: 1px solid $mono203;
+  border-radius: 12px;
+  background: $blue109;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.storage-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.storage-label {
+  font-family: SpoqaM;
+  font-size: 13px;
+  color: $mono205;
+}
+
+.storage-val {
+  font-family: SpoqaB;
+  font-size: 16px;
+  color: $mono207;
+}
+
+.storage-track {
+  position: relative;
+  width: 100%;
+  height: 8px;
+  border-radius: 4px;
+  background: $mono202;
+  overflow: hidden;
+}
+
+// 총 할당량 미제공(P1) → 비율 대신 subtle 인디케이터.
+.storage-track--indeterminate {
+  .storage-shimmer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 38%;
+    border-radius: 4px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba($blue104, 0.55),
+      transparent
+    );
+    animation: ckpt-shimmer 1.8s ease-in-out infinite;
+  }
+}
+
+@keyframes ckpt-shimmer {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(330%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .storage-track--indeterminate .storage-shimmer {
+    animation: none;
+    width: 100%;
+    transform: none;
+    opacity: 0.3;
+    background: $blue103;
+  }
+}

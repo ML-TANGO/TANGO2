@@ -4,6 +4,7 @@
 *.out
 *.log
 nohup.out
+.gstack/
 
 # AI assistant / editor tool directories
 *.omc/

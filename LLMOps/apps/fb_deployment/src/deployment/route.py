@@ -794,3 +794,56 @@ def delete_deployments(id_list):
         return response(status=0, message=str(e))
 
 
+# ── SP-Deployment(D6) §12: 클러스터 배포 API 게시 ──
+# 게시 = Kong route(/deployment/{api_path})에 key-auth + consumer/key.
+# 외부 소비자는 키 필수, 내부 추론(Inference)은 ClusterIP 직접 호출(키 불필요).
+@deployments.post("/{deployment_id}/api-publish")
+def post_deployment_api_publish(deployment_id: int):
+    """클러스터 배포를 외부 호출용 API 로 게시(엔드포인트+키 발급). 인증 사용자면 가능(소유자 전용 아님 — 플랫폼 posture)."""
+    try:
+        user_name, _ = get_auth()
+        res = svc.publish_deployment_api(deployment_id=deployment_id, headers_user=user_name)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message="Publish Deployment API Error : {}".format(e))
+
+
+@deployments.get("/{deployment_id}/api-publish")
+def get_deployment_api_publish(deployment_id: int):
+    """게시 정보(엔드포인트/consumer/키[Kong fetch]/published_at). 인증 사용자면 조회(키 반환·소유자 전용 아님). 미게시면 status=0."""
+    try:
+        user_name, _ = get_auth()
+        res = svc.get_deployment_api_info(deployment_id=deployment_id, headers_user=user_name)
+        if res is None:
+            return response(status=0, message="Deployment API not published")
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message="Get Deployment API Error : {}".format(e))
+
+
+@deployments.post("/{deployment_id}/api-publish/rotate-key")
+def post_deployment_api_rotate_key(deployment_id: int):
+    """API 키 회전(기존 키 폐기 후 재발급). 인증 사용자면 가능(소유자 전용 아님)."""
+    try:
+        user_name, _ = get_auth()
+        res = svc.rotate_deployment_api_key(deployment_id=deployment_id, headers_user=user_name)
+        return response(status=1, result=res)
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message="Rotate Deployment API Key Error : {}".format(e))
+
+
+@deployments.delete("/{deployment_id}/api-publish")
+def delete_deployment_api_publish(deployment_id: int):
+    """게시 해제(key-auth plugin 제거 + consumer/key 삭제). 인증 사용자면 가능(소유자 전용 아님). 멱등."""
+    try:
+        user_name, _ = get_auth()
+        svc.unpublish_deployment_api(deployment_id=deployment_id, headers_user=user_name)
+        return response(status=1, result={"deployment_id": deployment_id, "enabled": False})
+    except Exception as e:
+        traceback.print_exc()
+        return response(status=0, message="Unpublish Deployment API Error : {}".format(e))
+
+

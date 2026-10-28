@@ -74,6 +74,9 @@ def update_storage():
 # def delete_storage(storage_name):
 
 def create_storage(ip, mountpoint, type, name):
+    # 이 호출이 넣은 행만 정리한다 — 같은 이름 재등록은 UNIQUE 로 insert 가 실패하는데,
+    #   그때 이름으로 지우면 이미 쓰고 있는 스토리지 행이 사라진다.
+    storage_id = None
     try:
         storageclass_name=STORAGECLASS_NAME.format(NAME=name)
         DATA_SC="{NAME}-data-sc".format(NAME=storageclass_name)
@@ -82,11 +85,12 @@ def create_storage(ip, mountpoint, type, name):
         storage_id = storage_db.insert_storage(ip=ip, name=storageclass_name, mountpoint=mountpoint, type=type, data_sc=DATA_SC, main_sc=MAIN_SC)
         # time.sleep(5)
         if storage_id:
-            # fb_common_app 에서 생성함 
-            # res, message = create_storage_pvc(ip=ip, name=storageclass_name, mountpoint=mountpoint, type=type)
-            # if not res:
-            #     delete_helm(name=storageclass_name)
-            #     raise Exception(message)
+            # runtime 추가 스토리지는 fb_common_app(=values 의 jfStorage)이 PVC 를 만들지 않으므로
+            # 여기서 정적 PVC(storage-<name>)를 생성해야 한다. check job 이 이 PVC 를 마운트해 df 로 size 측정.
+            res, message = create_storage_pvc(ip=ip, name=storageclass_name, mountpoint=mountpoint, type=type)
+            if not res:
+                delete_helm(name=storageclass_name)
+                raise Exception(message)
             job_name = "job-"+storageclass_name
             res, message = create_storage_check_job(name=storageclass_name, helm_name=job_name)
             if not res:
@@ -111,7 +115,8 @@ def create_storage(ip, mountpoint, type, name):
             create_storage_exporter(helm_name=exporter_helm_name, name=storageclass_name, server=ip, mountpoint=mountpoint, storage_id=storage_id, type=type)
             return response(status=1, message="success storage create")
     except Exception as e:
-        storage_db.delete_storage(name=storageclass_name)
+        if storage_id:
+            storage_db.delete_storage(storage_id_list=storage_id)
         traceback.print_exc()
         return response(status=0, message=e)
 
@@ -198,14 +203,14 @@ def get_storage_usage_info():
                         "data_used" : storage['data_alloc'],
                         "main_used" : storage['main_alloc'],
                         "avail": storage['avail'],
-                        "pcent": str((storage['total_alloc']/storage['total'])*100)+"%"
+                        "pcent": (str((storage['total_alloc']/storage['total'])*100)+"%") if storage['total'] else "0%"
                     }
                 }
             )
             result_dict['total']['total_size'] += storage['total']
             result_dict['total']['total_alloc'] += storage['total_alloc']
             result_dict['total']['total_used'] += storage['total_used']
-        result_dict['total']['total_pcent'] = str((result_dict['total']['total_alloc']/result_dict['total']['total_size'])*100) +"%"
+        result_dict['total']['total_pcent'] = (str((result_dict['total']['total_alloc']/result_dict['total']['total_size'])*100) +"%") if result_dict['total']['total_size'] else "0%"
     else:
         storage_list = storage_db.get_storage()
         if storage_list is None:

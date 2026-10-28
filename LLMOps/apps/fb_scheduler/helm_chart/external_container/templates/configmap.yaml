@@ -1,0 +1,15 @@
+{{- /*
+  /input/params.json provenance. Mounted RO into the pod at /input — SP-1 v2
+  §3.3 mandates that dynamic user parameters arrive via this file, never via
+  environment variables.
+*/ -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.pod_name }}-input
+  namespace: {{ .Values.namespace }}
+  annotations:
+    acryl.ai/manifest-name: {{ .Values.manifest.name | quote }}
+data:
+  params.json: |
+{{ .Values.inputs.params_json | indent 4 }}

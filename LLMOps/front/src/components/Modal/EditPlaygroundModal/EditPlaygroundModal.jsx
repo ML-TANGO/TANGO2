@@ -104,7 +104,12 @@ const EditPlaygroundModal = ({ data, type }) => {
     setSelectedAccessType(Number(value));
   };
 
-  const [editUserList, setUserList] = useState([]);
+  // 기존 멤버로 초기화한다. 빈 배열로 두면 멤버 목록을 건드리지 않고 저장했을 때
+  // users_id: [] 가 전송되고, BE update_playground 가 소유자만 남기고 나머지를
+  // 전부 삭제한다(del_user = 기존 - [소유자]).
+  const [editUserList, setUserList] = useState(() =>
+    (userList || []).map(({ value }) => value),
+  );
   const handleUserList = ({ selectedList }) => {
     const copyList = selectedList.slice();
     const transformList = copyList.map((info) => info.value);
@@ -117,26 +122,28 @@ const EditPlaygroundModal = ({ data, type }) => {
       const { result, status } = res;
 
       if (status === STATUS_SUCCESS) {
-        const ownerList = result.map(({ id, name }) => ({
+        const candidates = result.map(({ id, name }) => ({
           value: id,
           label: name,
         }));
-        const filterList = ownerList.filter((item1) => {
-          return !userList.some((item2) => item1.value === item2.value);
-        });
-        setOwnerList(filterList);
-        const playgroundOwner = result.filter(
-          ({ name }) => name === playground_data.constructor,
-        )[0];
-        setOwner({
-          label: playgroundOwner.name,
-          value: playgroundOwner.id,
-        });
+        // 기존 멤버를 소유자 후보에서 빼지 않는다. 배포는 BE 가 소유자를 항상
+        // user_playground 에 넣으므로(create_playground / update_playground 의
+        // users_id.append(owner_id)), 멤버를 제외하면 비공개 배포에서는 현재
+        // 소유자가 후보 목록에서 100% 사라진다.
+        setOwnerList(candidates);
+
+        // 소유자는 id 로 식별한다. 이름 문자열 매칭은 동명이인·개명에 취약하고,
+        // 미매치 시 undefined.name 접근으로 모달 자체가 열리지 않았다.
+        // (create_user_id 는 BE 목록 응답 필드 — name 매칭은 하위호환 폴백)
+        const playgroundOwner =
+          candidates.find((v) => v.value === playground_data?.create_user_id) ??
+          candidates.find((v) => v.label === playground_data?.constructor);
+        if (playgroundOwner) setOwner(playgroundOwner);
       }
     };
 
     fetchOwnerList();
-  }, [playground_data, userList, workspace_id]);
+  }, [playground_data, workspace_id]);
 
   return (
     <NewStyleModalFrame

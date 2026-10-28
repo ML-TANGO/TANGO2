@@ -1,13 +1,22 @@
 namespace:
 image:
 labels:
+resources:  # compose_vlm 은 create_model_helm 에서 --set 으로 상향(두 모델 RAM 적재)
+  limits:
+    cpu: 1
+    memory: "6Gi"
+  requests:
+    cpu: 1
+    memory: "3Gi"
 command:
-  mode: ""  # "download_model" 또는 "copy_commit_model" 중 하나를 선택
+  mode: ""  # "download_model" / "copy_commit_model" / "compose_vlm" 등
   model_id: ""  # Hugging Face 모델 ID
-  token: ""  # Hugging Face API 토큰
+  token: ""  # (사용 안 함·deprecated) 토큰은 tokenSecretName 의 Secret→env HF_TOKEN 으로 주입(보안 C-4)
+  tokenSecretName: ""  # HF 토큰을 담은 사전 생성 K8s Secret 이름(키 'token'). 비면 토큰 미주입(offline)
   dst_model_path: ""  # 저장할 모델 디렉토리
   tokenizer_dir: ""  # 저장할 토크나이저 디렉토리
   latest_checkpoint_path: ""  # 최신 모델 디렉토리
+  dtype: ""  # compose_vlm 조립 dtype (float32/bfloat16/float16)
   dst_log_dir: ""  # 로그 저장 디렉토리 (copy_commit_model 전용)
   dst_tokenizer_dir: ""
   src_model_path: ""  # 소스 모델 디렉토리 (copy_commit_model에서 사용)

@@ -1,0 +1,1235 @@
+@import '@src/styles/color.scss';
+
+// 실행 모달 폼 규격(run-form·run-sec·run-label·run-note…)은 세 실행 모달
+// (정답 대조·LLM 심사·전문가)이 한 벌을 나눠 쓴다. LLM 심사는 이 시트를 JS 에서 합쳐
+// 쓰므로(JudgeRunConfig 의 cx bind) 여기서 import 하면 심사 쪽도 같은 규격을 받는다.
+@import '../_runModal.scss';
+
+// ── 벤치마크 실행 설정(단일 화면 모달) ────────────────────────────────
+// 좌: 종류 필터 + 이름 검색 + 벤치마크 카드 격자 / 우: 340px 레일(평가 대상 → 포맷 학습
+// → 출력 배포 → 기록될 지표). NewStyleModalFrame 안에 들어가므로 바깥 여백·스크롤은
+// 프레임이 갖는다. 두 컬럼 모두 카드(테두리·배경)를 두르지 않는다 — 모달 시트가 이미
+// 카드이고, 그 안에 또 카드를 두르면 위계가 한 겹 헛돈다.
+.run-config {
+  display: grid;
+  align-items: start;
+  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) 340px;
+}
+
+.run-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+}
+
+// 종류 필터와 이름 검색은 한 쌍이라 한 줄로 세운다 — 폭이 모자라면 검색이 줄고
+// (customStyle 의 1fr) 필터는 제 폭을 지킨다.
+.run-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  @media (max-width: 560px) {
+    flex-wrap: wrap;
+  }
+}
+
+// 남는 폭을 먹는 쪽(이름 검색). InputText 는 customStyle 을 <input> 에만 실어 주므로
+// (제 래퍼 div.input 은 display:block) 폭은 여기서 잡는다 — 래퍼가 이 칸을 채우고
+// 안쪽 input 이 100% 를 받는다.
+.run-filters-grow {
+  min-width: 0;
+  flex: 1;
+
+  input {
+    width: 100%;
+  }
+}
+
+.rail {
+  position: sticky;
+  top: 0;
+
+  @media (max-width: 920px) {
+    position: static;
+  }
+}
+
+// ── 정답 대조 벤치마크 격자 ────────────────────────────────────────────
+.benchmark-grid {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+
+// 선택 표시를 테두리 두께가 아니라 inset 링으로 준다 — border-width 를 바꾸면 고를
+// 때마다 카드 안 내용이 1px 씩 밀린다.
+.benchmark-option {
+  display: grid;
+  align-items: start;
+  width: 100%;
+  min-width: 0;
+  padding: 14px 14px 14px 12px;
+  border: 0;
+  border-radius: 9px;
+  background-color: $mono200;
+  box-shadow: inset 0 0 0 1px $mono202;
+  cursor: pointer;
+  gap: 10px;
+  grid-template-columns: auto 1fr;
+  text-align: left;
+  transition: box-shadow 0.12s cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 0.12s cubic-bezier(0.4, 0, 0.2, 1);
+
+  &:hover:not(.selected) {
+    box-shadow: inset 0 0 0 1px $blue103;
+  }
+
+  &.selected {
+    background-color: $background-color;
+    box-shadow: inset 0 0 0 1px $primary-color;
+  }
+}
+
+// 라디오 표식 — 디자인시스템 Radio 는 라벨 텍스트만 렌더해 이 카드형 옵션에 맞지 않는다.
+.pick-radio {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  margin-top: 1px;
+  border-radius: 50%;
+  background-color: $mono200;
+  box-shadow: inset 0 0 0 1px $mono203;
+}
+
+.benchmark-option.selected .pick-radio {
+  box-shadow: inset 0 0 0 4.5px $primary-color, inset 0 0 0 1px $primary-color;
+}
+
+// 체크 표식 — lm-eval 벤치마크는 여러 개를 함께 고른다(라디오와 모양으로 구분한다).
+.pick-check {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  margin-top: 1px;
+  border-radius: 4px;
+  background-color: $mono200;
+  box-shadow: inset 0 0 0 1px $mono203;
+}
+
+.benchmark-option.selected .pick-check {
+  background-color: $primary-color;
+  box-shadow: none;
+
+  // 체크 모양 — 테두리 두 변을 돌려 그린다(아이콘 자산 없이).
+  &::after {
+    position: absolute;
+    top: 3px;
+    left: 5.5px;
+    width: 4px;
+    height: 7px;
+    border: solid $mono200;
+    border-width: 0 2px 2px 0;
+    content: '';
+    transform: rotate(45deg);
+  }
+}
+
+// 선택 막대 — 선택 수 + 보이는 항목 전부/해제.
+.pick-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.pick-bar-btn {
+  padding: 0;
+  border: none;
+  background: none;
+  color: $primary-color;
+  cursor: pointer;
+  font-size: 12.5px;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &:focus-visible {
+    border-radius: 2px;
+    outline: 2px solid $primary-color;
+    outline-offset: 2px;
+  }
+}
+
+.option-body {
+  min-width: 0;
+}
+
+.bo-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  color: $blue107;
+  font-size: 14px;
+  font-weight: 700;
+  gap: 6px;
+}
+
+.benchmark-option.selected .bo-name {
+  color: $primary-color;
+}
+
+.bo-desc {
+  display: block;
+  margin-top: 5px;
+  color: $sub-text-color;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  line-height: 18px;
+}
+
+.grid-empty {
+  grid-column: 1 / -1;
+}
+
+// ── 레일: 기록될 지표 ──────────────────────────────────────────────────
+.metric-plan {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  gap: 5px;
+  list-style: none;
+
+  // 묶음 목록의 대표 지표(벤치마크 이름 옆, 한 단계 약하게).
+  .plan-metric {
+    margin-left: auto;
+    color: $mono204;
+    font-size: 11.5px;
+  }
+
+  li {
+    display: flex;
+    align-items: center;
+    color: $sub-text-color;
+    font-size: 12.5px;
+    gap: 6px;
+
+    &::before {
+      content: '·';
+      color: $mono204;
+    }
+
+    // 대표(권장) 지표 — 이력·목록·비교에 실리는 스칼라가 이것이다.
+    &.rec {
+      color: $normal-text-color;
+      font-weight: 600;
+    }
+  }
+}
+
+.gen-opt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+// 포맷 학습 레시피 — 카드는 벤치마크 옵션(.benchmark-option)을 그대로 쓰고 세로로만 쌓는다.
+.recipe-list {
+  display: grid;
+  margin-top: 8px;
+  gap: 6px;
+}
+
+@media (max-width: 920px) {
+  .run-config {
+    grid-template-columns: 1fr;
+  }
+}
+
+// ── 벤치마크 결과 ─────────────────────────────────────────────────────
+.benchmark-result {
+  display: flex;
+  flex-direction: column;
+  max-width: 1040px;
+  // 완료 상태 배지를 뺀 뒤 첫 섹션 제목이 프로젝트 정보 카드에 붙어버려, 배지가 차지하던
+  // 한 줄만큼(8px + 약 24px) 위 여백을 준다.
+  margin-top: 32px;
+  gap: 24px;
+}
+
+// 결과 헤더 — 상태 배지(진행중·실패)와 '실행 로그' 버튼을 한 줄에 놓는다.
+// 완료 상태에서는 배지를 감추므로(중복 표시) 버튼만 오른쪽에 남기는 .end 변형을 둔다.
+.result-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+
+  &.end {
+    justify-content: flex-end;
+  }
+}
+
+.result-status {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.result-loading {
+  display: flex;
+  min-height: 120px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid $disable-color;
+  border-radius: 8px;
+  color: $sub-text-color;
+  font-size: 14px;
+  gap: 12px;
+}
+
+.result-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.result-section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.result-section-title {
+  margin: 0;
+  color: $normal-text-color;
+  font-family: SpoqaB;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.score-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.score-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 18px 16px;
+  border: 1px solid $disable-color;
+  border-radius: 8px;
+  background-color: $mono200;
+  text-align: center;
+  gap: 7px;
+}
+
+.score-metric {
+  color: $normal-text-color;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.score-sub {
+  color: $sub-text-color;
+  font-size: 11px;
+}
+
+.score-value {
+  color: $primary-color;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+// 차트 박스의 겉면(흰 카드 + 제목 줄)은 공용 ContentBox 가 소유한다 — 평가 표면의 다른
+// 박스(프로젝트 정보·전문가 프롬프트)와 같은 것을 쓴다. 여기 남는 건 안쪽 본문뿐이다.
+// 제목이 있는 박스는 제목 줄(padding 20/20/10)에 이어 붙고, 없는 박스는 사방 20px 를 쓴다.
+.chart-body {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: 0 20px 20px;
+  gap: 12px;
+
+  &.untitled {
+    padding: 20px;
+  }
+}
+
+.chart-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.chart-label {
+  width: 100px;
+  flex-shrink: 0;
+  color: $normal-text-color;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.chart-bar-wrap {
+  overflow: hidden;
+  height: 20px;
+  flex: 1;
+  border-radius: 4px;
+  background-color: $mono202;
+}
+
+.chart-bar {
+  min-width: 4px;
+  height: 100%;
+  border-radius: 4px;
+  background-color: $primary-color;
+  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.chart-value {
+  width: 56px;
+  flex-shrink: 0;
+  color: $primary-color;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  text-align: right;
+}
+
+/* ── LogicKor 상세 ─────────────────────────────────────────────────────────────
+   소스 모듈 웹 콘솔(Evaluation/Logickor_web/web)의 결과 패널 구성을 플랫폼 디자인
+   토큰으로 옮긴 것. 구성(스코어카드 3장 → 영역 막대 + 레이더 → 차이·평가 표)은 소스와
+   같고, 색·간격은 플랫폼 팔레트를 쓴다. 레이더 SVG 쪽 리터럴 색은 logickorResult.js
+   의 TURN_COLOR/RADAR_INK 에 있으므로 아래 .cat-fill-* 과 함께 고쳐야 한다. */
+
+.score-card {
+  &.accent {
+    border-color: $primary-color;
+    background-color: $blue100;
+  }
+}
+
+.score-unit {
+  color: $placeholder-text-color;
+  font-size: 10px;
+}
+
+.turn-single {
+  color: $primary-color;
+}
+
+.turn-multi {
+  color: $lime604;
+}
+
+/* 표 셀은 .table-score 가 이미 색($primary-color)을 들고 있어 단일 클래스끼리는 정의
+   순서로 승자가 갈린다(2턴이 파랑으로 나오던 원인). 두 클래스로 특이도를 올려 확정한다. */
+.table-score {
+  &.turn-single {
+    color: $primary-color;
+  }
+
+  &.turn-multi {
+    color: $lime604;
+  }
+}
+
+.logickor-charts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 12px;
+}
+
+
+.cat-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cat-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.cat-name {
+  color: $normal-text-color;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.cat-track {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cat-tag {
+  width: 12px;
+  flex-shrink: 0;
+  color: $sub-text-color;
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.cat-rail {
+  overflow: hidden;
+  height: 12px;
+  flex: 1;
+  border-radius: 4px;
+  background-color: $mono202;
+}
+
+.cat-fill {
+  min-width: 3px;
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+
+  &.single {
+    background-color: $primary-color;
+  }
+
+  &.multi {
+    background-color: $lime604;
+  }
+}
+
+.cat-value {
+  width: 38px;
+  flex-shrink: 0;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  text-align: right;
+}
+
+.radar-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.radar-legend {
+  display: flex;
+  gap: 14px;
+}
+
+.radar-legend-item {
+  display: flex;
+  align-items: center;
+  color: $sub-text-color;
+  font-size: 11px;
+  gap: 5px;
+}
+
+.radar-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+
+  &.single {
+    background-color: $primary-color;
+  }
+
+  &.multi {
+    background-color: $lime604;
+  }
+}
+
+.diff-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+
+  &.pos {
+    color: $lime604;
+  }
+
+  &.neg {
+    color: $error-color;
+  }
+
+  &.zero {
+    color: $sub-text-color;
+  }
+}
+
+.total-label {
+  color: $normal-text-color;
+  font-family: SpoqaB;
+  font-weight: 700;
+}
+
+.result-table {
+  overflow: hidden;
+  border-radius: 8px;
+
+  // 표가 fixedHeaderScrollHeight(320·360px)보다 길면 **본문이 스크롤**한다(KMMLU 서브태스크 45·MMLU 57행).
+  // react-data-table-component 6.x 는 fixedHeader 면 본문(.rdt_TableBody)에 max-height + overflow-y: auto
+  // 를 건다(머리 행은 그 위에 그대로 남는다). 그런데 공용 BorderTable 스타일이
+  // `.bordertable .rdt_Table .rdt_TableBody { overflow: visible !important }` 로 그 스크롤을 꺼, 높이 제한만
+  // 남은 본문에서 넘친 행이 위 overflow: hidden 에 잘려 표가 도중에 끊겼다. 공용 규칙은 다른 화면의 드롭다운
+  // 셀 때문에 그대로 두고 이 화면의 표만 되살린다 — 선택자는 공용 규칙(클래스 3개)보다 구체적이어야 이긴다.
+  :global(.bordertable .rdt_Table .rdt_TableBody) {
+    overflow-y: auto !important;
+  }
+}
+
+.table-label {
+  color: $normal-text-color;
+  font-weight: 700;
+}
+
+.table-score {
+  color: $primary-color;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+@media (max-width: 1080px) {
+  .logickor-charts {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .chart-label {
+    width: 72px;
+  }
+}
+
+/* ── 실행 근거(LogicKor 결과) ──────────────────────────────────────────────────
+   "어느 체크포인트·어느 심판에서 나온 점수인가". 점수 카드 위에 한 줄로 깔아 두어
+   숫자보다 먼저 눈에 걸리지 않으면서 항상 같이 읽히게 한다. 조용한 누락(파싱 실패·
+   형식 불량·빈 생성)은 .warn 으로 세워 평균이 깎인 양을 놓치지 않게 한다. */
+
+.provenance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.provenance-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border: 1px solid $disable-color;
+  border-radius: 6px;
+  background-color: $mono200;
+
+  &.warn {
+    border-color: $error-color;
+  }
+}
+
+.provenance-label {
+  color: $sub-text-color;
+  font-size: 11px;
+}
+
+.provenance-value {
+  color: $normal-text-color;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+
+  .warn & {
+    color: $error-color;
+  }
+}
+
+/* ── lm-eval 채점 상세 ────────────────────────────────────────────────────────
+   벤치마크마다 요약 칩(.provenance 재사용) → 전 지표 표 → 서브태스크(접힘) → 경고. */
+.lmeval-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  & + & {
+    margin-top: 16px;
+  }
+}
+
+.lmeval-detail-title {
+  margin: 0;
+  color: $normal-text-color;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.lmeval-sub-title {
+  margin: 4px 0 0;
+  color: $sub-text-color;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.lmeval-subtasks > summary {
+  cursor: pointer;
+}
+
+// ── 결과 페이지 ───────────────────────────────────────────────────────────────
+// 런 하나를 깊게 읽는 독립 페이지. 헤더는 배포 상세와 같은 규약(DeployDetailHeader)을 쓴다.
+.result-page {
+  padding: 8px 0;
+}
+
+.result-title {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+// 헤더 바로 아래 한 줄 — 이 점수를 해석하는 전제(데이터셋·대표 지표·실행 시각).
+.result-meta {
+  display: flex;
+  flex-wrap: wrap;
+  margin: -22px 0 0;
+  color: $sub-text-color;
+  font-size: 13px;
+  gap: 4px 16px;
+
+  em {
+    color: $normal-text-color;
+    font-style: normal;
+  }
+}
+
+// 그래프 아래 한 줄 해설 — 무엇을 왜 이 순서로 놓았는지.
+.note-line {
+  margin: 0;
+  color: $sub-text-color;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+// 표 안에서 라벨과 '대표' 배지를 한 줄에 둔다.
+.metric-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── 벤치마크 실행(묶음) 결과 요약 — ETRI 결과 화면 구성(BenchmarkBatchPage) ─────────────
+   ① 진행 상황 → ② 요약 카드 4장 → ③ 벤치마크별 점수 + 레이더 → ④ 생성형 지표 → ⑤ 전체 지표.
+   그룹 색 슬롯(g-0~3) = BENCHMARK_GROUPS 순서: 영어 core · 한국어 · 생성형 · 커스텀. */
+$batch-mono: 'Menlo', 'Consolas', 'Monaco', monospace;
+
+// 구역 사이 간격 — ETRI 화면처럼 카드가 한 칸씩 떨어져 쌓인다.
+.batch-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 16px; // 머리 메타 줄과 첫 카드 사이(설명 줄을 뺀 자리)
+}
+
+.batch-card {
+  padding: 18px 20px;
+  border: 1px solid $card-border-color;
+  border-radius: 8px;
+  background-color: $mono200;
+}
+
+.batch-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.batch-progress-label {
+  flex: none;
+  color: $normal-text-color;
+  font-size: 12.5px;
+}
+
+.batch-bar {
+  flex: 1;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 4px;
+  background-color: $mono202;
+
+  i {
+    display: block;
+    height: 100%;
+    border-radius: 4px;
+    background-color: $primary-color;
+    transition: width 0.3s ease;
+  }
+}
+
+.batch-progress-pct {
+  flex: none;
+  min-width: 40px;
+  color: $sub-text-color;
+  font-family: $batch-mono;
+  font-size: 12px;
+  text-align: right;
+}
+
+.batch-stages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.batch-stage {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border: 1px solid $mono203;
+  border-radius: 12px;
+  background: $mono200;
+  color: $normal-text-color;
+  cursor: pointer;
+  font-size: 12px;
+  gap: 6px;
+
+  &:hover {
+    border-color: $primary-color;
+  }
+
+  &:focus-visible {
+    outline: 2px solid $primary-color;
+    outline-offset: 2px;
+  }
+}
+
+.batch-stage-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: $blue104; // 진행 중
+}
+
+.batch-stage.st-completed .batch-stage-dot {
+  background-color: $lime603;
+}
+
+.batch-stage.st-failed .batch-stage-dot,
+.batch-stage.st-cancelled .batch-stage-dot {
+  background-color: $red502;
+}
+
+// 대기 — 같은 런의 앞 벤치마크를 채점하는 중(런 하나가 벤치마크를 차례로 채점한다).
+.batch-stage.st-pending .batch-stage-dot {
+  background-color: $mono203;
+}
+
+// ② 요약 카드 4장 — 값이 주인공이다(ETRI scard: 라벨 · 큰 값 · 부연).
+.batch-cards4 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+
+  @media (max-width: 960px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.batch-sum {
+  display: flex;
+  flex-direction: column;
+  padding: 14px 16px;
+  border: 1px solid $card-border-color;
+  border-top-width: 3px;
+  border-radius: 8px;
+  background-color: $mono200;
+  gap: 4px;
+
+  &.g-0 {
+    border-top-color: $blue104;
+  }
+
+  &.g-1 {
+    border-top-color: $lime603;
+  }
+
+  &.g-2 {
+    border-top-color: $orange403;
+  }
+
+  &.g-3 {
+    border-top-color: $yellow304;
+  }
+
+  &.overall {
+    border-top-color: $blue107;
+  }
+}
+
+.batch-sum-k {
+  color: $sub-text-color;
+  font-size: 12px;
+}
+
+.batch-sum-v {
+  color: $normal-text-color;
+  font-family: SpoqaB;
+  font-size: 26px;
+  line-height: 1.15;
+}
+
+.batch-sum-s {
+  color: $sub-text-color;
+  font-size: 11.5px;
+}
+
+// ③ 벤치마크별 점수 + 레이더(2단)
+.batch-two {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 16px;
+
+  // 레이더가 없는 실행(의도/슬롯 평가) — 점수 카드 하나가 전체 폭을 쓴다.
+  &.single {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  @media (max-width: 1100px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.batch-legend {
+  display: flex;
+  flex-wrap: wrap;
+  color: $sub-text-color;
+  font-size: 12px;
+  gap: 4px 14px;
+
+  span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+}
+
+.batch-sw {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.batch-benchlist {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.batch-brow {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+  gap: 6px;
+  text-align: left;
+
+  &:hover {
+    background-color: $hover-bg-color;
+  }
+
+  &:focus-visible {
+    outline: 2px solid $primary-color;
+    outline-offset: 1px;
+  }
+
+  &.error .batch-bval {
+    color: $red502;
+  }
+}
+
+.batch-bt {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.batch-bname {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  color: $normal-text-color;
+  font-family: SpoqaB;
+  font-size: 13px;
+  gap: 8px;
+}
+
+.batch-bmeta {
+  color: $sub-text-color;
+  font-family: Spoqa, sans-serif;
+  font-size: 11.5px;
+  font-weight: normal;
+}
+
+.batch-bval {
+  flex: none;
+  color: $normal-text-color;
+  font-family: $batch-mono;
+  font-size: 13px;
+}
+
+.batch-bline {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background-color: $mono202;
+
+  i {
+    display: block;
+    height: 100%;
+    border-radius: 3px;
+  }
+}
+
+// 그룹 색 슬롯 — 요약 카드 윗줄·막대·범례가 같은 색을 쓴다.
+.batch-bline .g-0,
+.batch-sw.g-0 {
+  background-color: $blue104;
+}
+
+.batch-bline .g-1,
+.batch-sw.g-1 {
+  background-color: $lime603;
+}
+
+.batch-bline .g-2,
+.batch-sw.g-2 {
+  background-color: $orange403;
+}
+
+.batch-bline .g-3,
+.batch-sw.g-3 {
+  background-color: $yellow304;
+}
+
+.batch-empty {
+  margin: 0;
+  color: $sub-text-color;
+  font-size: 12.5px;
+}
+
+// ④·⑤ 표
+.batch-tablewrap {
+  overflow-x: auto;
+}
+
+.batch-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+
+  th,
+  td {
+    padding: 8px 10px;
+    border-bottom: 1px solid $mono202;
+    color: $normal-text-color;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  th {
+    color: $sub-text-color;
+    font-weight: normal;
+  }
+
+  .num {
+    font-family: $batch-mono;
+    text-align: right;
+  }
+
+  th.num {
+    font-family: inherit;
+  }
+
+  .mono {
+    font-family: $batch-mono;
+    font-size: 11.5px;
+  }
+
+  // 태스크 목록(KoBEST 5종 등)은 줄을 바꿔 표가 가로로 넘치지 않게 한다.
+  td.wrap {
+    min-width: 160px;
+    max-width: 280px;
+    white-space: normal;
+    word-break: break-word;
+  }
+
+  tr.clickable {
+    cursor: pointer;
+
+    &:hover td {
+      background-color: $hover-bg-color;
+    }
+  }
+
+  // 벤치마크가 바뀌는 줄 — 병합된 표처럼 읽히도록 윗선을 진하게.
+  tr.first td {
+    border-top: 1px solid $mono203;
+  }
+}
+
+.batch-pill {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background-color: $blue101;
+  color: $blue105;
+  font-size: 11px;
+
+  &.st-completed {
+    background-color: $lime601;
+    color: $lime604;
+  }
+
+  &.st-failed,
+  &.st-cancelled {
+    background-color: $mono202;
+    color: $red502;
+  }
+
+  &.st-pending {
+    background-color: $mono202;
+    color: $mono204;
+  }
+}
+
+// 표 안 벤치마크 이름 — 키보드로 세부 결과를 여는 버튼(행 클릭은 마우스용). 글자처럼 보인다.
+.batch-cell-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: $primary-color;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &:focus-visible {
+    border-radius: 2px;
+    outline: 2px solid $primary-color;
+    outline-offset: 2px;
+  }
+}
+
+// 런치조차 못 한 벤치마크 — 열 곳이 없다(사유는 title 로).
+.batch-stage:disabled,
+.batch-brow:disabled {
+  cursor: default;
+  opacity: 0.7;
+
+  &:hover {
+    border-color: $mono203;
+    background: none;
+  }
+}
+
+// 세부 화면 머리 — 좁혀 보는 중(런 하나가 여러 벤치마크를 담는다)·중간 결과를 한 줄로 알린다.
+.focus-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background-color: $blue101;
+  color: $blue105;
+  font-size: 13px;
+  line-height: 20px;
+
+  span {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .warn {
+    color: $red502;
+  }
+}
+
+// 채점기가 남긴 실패 사유 — 원문 그대로(줄바꿈 유지, 가로로 넘치지 않게).
+.focus-error {
+  margin: 8px 0 0;
+  color: $mono204;
+  font-family: $batch-mono;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+// 실행 설정 — 묶음이 쓸 GPU 수(= 런 수) 스테퍼.
+.gpu-count {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 4px 0 6px;
+}
+
+.gpu-count-label {
+  margin-right: auto;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.gpu-count-btn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid $mono203;
+  border-radius: 6px;
+  background-color: $mono200;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    border-color: $primary-color;
+    color: $primary-color;
+  }
+
+  &:focus-visible {
+    outline: 2px solid $primary-color;
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+}
+
+.gpu-count-value {
+  min-width: 56px;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+}

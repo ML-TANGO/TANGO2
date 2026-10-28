@@ -1,0 +1,301 @@
+// 데이터 파이프라인 화면 공용 클래스.
+//
+// 13개 화면이 같은 표·카드·라벨 패턴을 반복하므로 화면마다 같은 규칙을 다시 쓰지 않고
+// 여기 한 벌만 둔다. 화면 고유 레이아웃(그리드 열 구성 등)은 pages.module.scss 에 있다.
+@import '../styles/tokens';
+
+// ── 면 ─────────────────────────────────────────────────────────────────────
+.card {
+  @include dp-card;
+}
+
+.card-pad {
+  @include dp-card;
+  padding: 24px;
+}
+
+.card-clip {
+  @include dp-card;
+  overflow: hidden;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.stack-lg {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+// ── 글자 ───────────────────────────────────────────────────────────────────
+.num {
+  @include dp-num;
+}
+
+.eyebrow {
+  @include dp-eyebrow;
+}
+
+.section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+
+  > .section-title {
+    font-family: SpoqaB;
+    @include dp-solid(20px);
+    color: $dp-ink;
+  }
+}
+
+.label {
+  font-family: SpoqaB;
+  @include dp-solid(13px);
+  color: $dp-ink-mute;
+}
+
+.body {
+  font-family: SpoqaM;
+  @include dp-solid(14px);
+  color: $dp-ink;
+}
+
+.prose {
+  font-family: SpoqaM;
+  @include dp-prose(14px);
+  color: $dp-ink-mute;
+}
+
+.mute {
+  color: $dp-ink-mute;
+}
+
+.faint {
+  color: $dp-ink-faint;
+}
+
+.danger {
+  color: $dp-fail;
+}
+
+.warn {
+  color: $dp-warn-ink;
+}
+
+.pass {
+  color: $dp-pass;
+}
+
+// ── 표 ─────────────────────────────────────────────────────────────────────
+// 표는 table 이 아니라 grid 다. 열 구성이 화면마다 다르고 셀 안에 여러 줄 정보가
+// 들어가므로 grid-template-columns 를 화면이 직접 정하게 둔다.
+.thead {
+  display: grid;
+  gap: 16px;
+  padding: 12px 24px;
+  background: $dp-primary-bg;
+}
+
+.th {
+  @include dp-th;
+}
+
+.th-right {
+  @include dp-th;
+  text-align: right;
+}
+
+.row {
+  display: grid;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 24px;
+  border-top: 1px solid $dp-line-soft;
+}
+
+.row-click {
+  cursor: pointer;
+  transition: background-color $dp-fast $dp-ease;
+
+  &:hover {
+    background: $dp-primary-tint;
+  }
+}
+
+.row-selected {
+  background: $dp-primary-tint;
+  box-shadow: $dp-ring-left;
+}
+
+.cell {
+  font-family: SpoqaM;
+  @include dp-solid(13px);
+  color: $dp-ink;
+  min-width: 0;
+}
+
+.cell-mute {
+  font-family: SpoqaM;
+  @include dp-solid(13px);
+  color: $dp-ink-mute;
+  min-width: 0;
+}
+
+.cell-num {
+  @include dp-num;
+  @include dp-solid(13px);
+  color: $dp-ink;
+  text-align: right;
+}
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// ── 배치 ───────────────────────────────────────────────────────────────────
+.row-flex {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.row-between {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.right {
+  display: flex;
+  justify-content: flex-end;
+}
+
+// 이미지 타일 격자 — 썸네일 개수가 유동적이라 auto-fill.
+.thumb-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 14px;
+  padding: 24px;
+}
+
+.thumb {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: $dp-r-ctl2;
+  box-shadow: $dp-ring-soft;
+
+  > svg,
+  > img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+}
+
+.thumb-cap {
+  @include dp-num;
+  @include dp-solid(11px);
+  padding: 8px 10px;
+  border-top: 1px solid $dp-line-soft;
+  background: $dp-surface;
+  color: $dp-ink-mute;
+}
+
+// ── 강조 상자 ──────────────────────────────────────────────────────────────
+// 배경과 잉크는 항상 짝으로 움직인다. 배경만 바꾸면 대비가 깨진다.
+.note {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: $dp-r-ctl2;
+}
+
+.note-pass {
+  background: $dp-pass-bg;
+  color: $dp-pass-ink;
+}
+
+.note-warn {
+  background: $dp-warn-bg;
+  color: $dp-warn-ink;
+}
+
+.note-fail {
+  background: $dp-fail-bg;
+  color: $dp-fail;
+}
+
+.note-info {
+  background: $dp-primary-bg;
+  color: $dp-ink-sub;
+}
+
+.note-title {
+  font-family: SpoqaB;
+  @include dp-solid(12px);
+  color: $dp-ink-mute;
+}
+
+.note-body {
+  font-family: SpoqaM;
+  @include dp-prose(13px);
+}
+
+// ── 지표 타일 ──────────────────────────────────────────────────────────────
+.tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 150px;
+  padding: 20px 24px;
+  border-radius: $dp-r-card;
+  background: $dp-surface;
+  box-shadow: $dp-sh-tile;
+}
+
+.tile-value {
+  @include dp-num;
+  @include dp-solid(24px);
+  font-weight: 700;
+  color: $dp-ink;
+}
+
+.tile-label {
+  font-family: SpoqaM;
+  @include dp-solid(13px);
+  color: $dp-ink-mute;
+}
+
+// ── 구분선 ─────────────────────────────────────────────────────────────────
+.divider {
+  border-top: 1px solid $dp-line-soft;
+}
+
+.divider-strong {
+  border-top: 1px solid $dp-line;
+}
+
+.vline {
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: $dp-line;
+}

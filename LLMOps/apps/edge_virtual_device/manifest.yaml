@@ -1,0 +1,106 @@
+# Edge 가상 디바이스 하네스 배포 (테스트 전용, ClusterIP 내부 한정 — 외부 비노출).
+# 배포:
+#   kubectl -n jonathan-system create configmap edge-vdev-code \
+#     --from-file=edge_virtual_device.py=apps/edge_virtual_device/edge_virtual_device.py \
+#     --dry-run=client -o yaml | kubectl apply -f -
+#   kubectl apply -f apps/edge_virtual_device/manifest.yaml
+# 등록 URL(경로 없이): http://jfb-edge-virtual-device.jonathan-system.svc.cluster.local:8500
+# 엔진: 받은 파일이 진짜 GGUF 면 /app/llama-server 를 띄워 **실모델로 추론**한다
+#       (ENGINE=off 로 끄면 파일 수신까지만 하고 mock 응답). /v1/chat/completions 는
+#       엔진이 떠 있으면 그대로 프록시한다 — 응답을 하네스가 꾸미지 않는다.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jfb-edge-virtual-device
+  namespace: jonathan-system
+  labels:
+    app: jfb-edge-virtual-device
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jfb-edge-virtual-device
+  template:
+    metadata:
+      labels:
+        app: jfb-edge-virtual-device
+    spec:
+      containers:
+        - name: vdev
+          # 신규 빌드/푸시 회피 — 이미 노드에 있는 convert 이미지 재사용.
+          # FROM ghcr.io/ggml-org/llama.cpp:full 이라 /app/llama-server(실 서빙 바이너리)와
+          # python3/uvicorn/fastapi 를 모두 갖고 있다. 플랫폼 서빙(playground_llamacpp.py)이
+          # 쓰는 것과 같은 바이너리 — 하네스가 mock 응답이 아니라 실모델을 띄운다.
+          image: docker.io/acrylaaai/convert-llamacpp:1.0.0
+          imagePullPolicy: IfNotPresent
+          workingDir: /app/vdev
+          env:
+            - name: PYTHONPATH
+              value: /app/vdev
+            # 계약 v1 — 플랫폼이 /ops·/metrics 를 부를 때 제시하는 공유 토큰. 실 디바이스의
+            # OPS_TOKEN 과 같은 역할이며, 플랫폼(fb_resource)이 쓰는 Secret 과 **같은 값**을
+            # 봐야 한다. Secret 이 없으면 값이 비고 무인증으로 동작한다(기존과 동일).
+            - name: OPS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: jfb-edge-ops-token
+                  key: ops-token
+                  optional: true
+            # 회전 창 — 플랫폼이 재발급하면 직전 키가 여기 남는다. 두 키 모두 허용해야
+            # 아직 교체되지 않은 디바이스가 끊기지 않는다(계약 1.1).
+            - name: OPS_TOKEN_PREV
+              valueFrom:
+                secretKeyRef:
+                  name: jfb-edge-ops-token
+                  key: ops-token-prev
+                  optional: true
+            # 서빙 엔진(llama.cpp). ENGINE=off 로 두면 파일 수신까지만 하고 mock 응답.
+            # CPU 빌드라 스레드를 묶지 않으면 48코어를 전부 잡는다.
+            - name: ENGINE
+              value: "auto"
+            - name: ENGINE_THREADS
+              value: "8"
+            # SDS(VLM) 패키지 = 이미지 576토큰 + AIS 표 + 생성 512 → 패키지 config.json n_ctx(4096)와 맞춘다.
+            - name: ENGINE_CTX
+              value: "4096"
+          command:
+            - python3
+            - -m
+            - uvicorn
+            - edge_virtual_device:app
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8500"
+          ports:
+            - containerPort: 8500
+          # 2.5GB q4 를 CPU 로 여는 데 필요한 여유 + 노드 잠식 방지.
+          resources:
+            requests:
+              cpu: "2"
+              memory: 4Gi
+            limits:
+              cpu: "8"
+              memory: 12Gi
+          volumeMounts:
+            - name: code
+              mountPath: /app/vdev
+      volumes:
+        - name: code
+          configMap:
+            name: edge-vdev-code
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jfb-edge-virtual-device
+  namespace: jonathan-system
+  labels:
+    app: jfb-edge-virtual-device
+spec:
+  selector:
+    app: jfb-edge-virtual-device
+  ports:
+    - name: http
+      port: 8500
+      targetPort: 8500

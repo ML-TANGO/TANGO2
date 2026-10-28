@@ -1025,6 +1025,81 @@ def get_instance_node_name(instance_id):
     return res
 
 
+# ── SP-Deployment(D6) §12: 클러스터 배포 API 게시 상태 (deployment_api, 1:1) ──
+def upsert_deployment_api(deployment_id, api_consumer, api_route_id=None, enabled=1):
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            sql = """
+                INSERT INTO deployment_api (deployment_id, api_consumer, api_route_id, enabled)
+                VALUES (%s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    api_consumer=VALUES(api_consumer),
+                    api_route_id=VALUES(api_route_id),
+                    enabled=VALUES(enabled),
+                    published_at=current_timestamp()
+            """
+            cur.execute(sql, (deployment_id, api_consumer, api_route_id, enabled))
+            conn.commit()
+        return {'result': True}
+    except Exception as e:
+        traceback.print_exc()
+        return {'result': False, 'message': str(e)}
+
+
+def get_deployment_api(deployment_id):
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM deployment_api WHERE deployment_id=%s", (deployment_id,))
+            return cur.fetchone()
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
+def set_deployment_api_enabled(deployment_id, enabled):
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("UPDATE deployment_api SET enabled=%s WHERE deployment_id=%s",
+                        (enabled, deployment_id))
+            conn.commit()
+        return {'result': True}
+    except Exception as e:
+        traceback.print_exc()
+        return {'result': False, 'message': str(e)}
+
+
+def delete_deployment_api(deployment_id):
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM deployment_api WHERE deployment_id=%s", (deployment_id,))
+            conn.commit()
+        return {'result': True}
+    except Exception as e:
+        traceback.print_exc()
+        return {'result': False, 'message': str(e)}
+
+
+def list_deployment_api_ids():
+    """deployment_api 에 존재하는 모든 deployment_id(enabled 무관). 게시 orphan sweep 의
+    '정상(비-orphan)' 집합 — row 가 존재하면 orphan 아님. **enabled 로 거르지 않는다**:
+    stop_deployment 은 중지 시 enabled=0 으로 두되 consumer/key 를 의도적으로 보존(재시작 후
+    재게시 키 안정)하므로, enabled=1 만 정상으로 보면 중지-보존 크리덴셜을 orphan 으로 오삭제한다.
+    ⚠️ 조회 실패 시 None 반환 — 호출부(sweep)는 None 이면 이번 주기를 반드시 스킵(빈 집합 오인 시
+    유효 게시를 전부 삭제)."""
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT deployment_id FROM deployment_api")
+            return [row["deployment_id"] for row in (cur.fetchall() or [])]
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
 # playground ==============================================================
 def insert_deployment_llm(**kwargs):
     try:

@@ -377,7 +377,11 @@ class StorageMetricCollector:
         self.health = ServiceHealth()
         self.health_checker = HealthChecker(self)
         self.shutdown_event = threading.Event()
-        
+        # du -sb 타임아웃 시 0 으로 오보고하지 않도록 경로별 마지막 성공 측정값 보관
+        # (큰/느린 NFS 트리가 timeout 되면 직전 값 유지 → 호출부의 `usage or 0` 이
+        # Prometheus 게이지를 0 으로 붕괴시키는 것을 방지. 성공 측정 시 갱신).
+        self._last_disk_usage: dict = {}
+
         # 시그널 핸들러 등록
         signal.signal(signal.SIGTERM, self._signal_handler)
         signal.signal(signal.SIGINT, self._signal_handler)
@@ -442,17 +446,27 @@ class StorageMetricCollector:
                 logger.debug(f"Processing NFS/remote storage: {path} (IP: {storage_info.ip}, mountpoint: {storage_info.mountpoint})")
             
             # Pod 환경에서는 경로 존재 여부를 확인하지 않고 바로 du 명령 실행
-            result = subprocess.run(
-                ['du', '-sb', path], 
-                stdout=subprocess.PIPE, 
-                stderr=subprocess.PIPE, 
-                text=True,
-                # timeout=30
-            )
-            
+            try:
+                result = subprocess.run(
+                    ['du', '-sb', path],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    timeout=30,
+                )
+            except subprocess.TimeoutExpired:
+                # 느리거나 큰 NFS 트리(학습 중 커지는 체크포인트)에서 du 가 30s 를 넘기면,
+                # 재시도(재귀 walk 반복)가 오히려 NFS 부하를 키운다 → 이번 주기는 재측정하지
+                # 않는다. 단 0 으로 오보고하면 근접-만재 워크스페이스가 빈 것으로 보이므로
+                # (호출부가 `usage or 0` 로 게이지 set), 직전 성공값을 유지 반환한다(측정된 적
+                # 없으면 None). None 은 정상 실패 반환값이라 RetryHandler 재시도도 유발 안 함.
+                logger.warning(f"du -sb timed out (>30s), keeping last value: {path}")
+                return self._last_disk_usage.get(path)
+
             if result.returncode == 0:
                 usage = int(result.stdout.split('\t')[0])
                 logger.debug(f"Disk usage for {path}: {usage} bytes")
+                self._last_disk_usage[path] = usage
                 return usage
             else:
                 raise Exception(f"du command failed: {result.stderr}")

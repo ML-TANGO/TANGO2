@@ -1,0 +1,102 @@
+@import './styles/tokens';
+
+// 두 실행 A/B 비교 화면.
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px 28px 48px;
+  background: $dp-canvas;
+}
+
+// ── 실행 선택기 ────────────────────────────────────────────────────────────
+.picker {
+  display: grid;
+  align-items: end;
+  padding: 16px;
+  border-radius: $dp-r-card;
+  background: $dp-surface;
+  box-shadow: $dp-sh-card;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+
+  @media (max-width: 720px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.picker-side {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.picker-vs {
+  @include dp-eyebrow;
+  padding-bottom: 10px;
+  color: $dp-ink-faint;
+}
+
+.note {
+  @include dp-prose(13px);
+  padding: 12px 14px;
+  border-radius: $dp-r-ctl2;
+  background: $dp-warn-bg;
+  color: $dp-warn-ink;
+}
+
+// ── 카운트 증감 ────────────────────────────────────────────────────────────
+.totals {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 18px 20px;
+  border-radius: $dp-r-card;
+  background: $dp-surface;
+  box-shadow: $dp-sh-card;
+  gap: 28px;
+}
+
+.total {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.total-label {
+  @include dp-eyebrow;
+  color: $dp-ink-mute;
+}
+
+.total-delta {
+  @include dp-num;
+  font-size: 22px;
+}
+
+.total-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-left: auto;
+  gap: 6px;
+}
+
+// 통과가 늘면 파랑, 줄면 빨강. 0 은 회색으로 눌러 둔다 — 안 변한 값이 눈에 띄면
+// 정작 변한 값을 찾지 못한다.
+.d-up {
+  color: $dp-primary;
+}
+
+.d-down {
+  color: $dp-fail;
+}
+
+.d-zero {
+  color: $dp-ink-faint;
+}
+
+.d-none {
+  color: $dp-ink-faint;
+}

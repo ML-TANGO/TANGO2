@@ -1,0 +1,113 @@
+@import '@src/styles/color.scss';
+@import '@src/styles/focus.scss';
+
+.cont {
+  padding: 32px 40px;
+}
+
+.back-to-list {
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  width: max-content;
+
+  padding: 0;
+  border: 0;
+  background: none;
+  appearance: none;
+  cursor: pointer;
+
+  @include focus-ring;
+
+  .back-btn-image {
+    width: 16px;
+    height: 16px;
+  }
+  .back-btn-label {
+    font-size: 16px;
+    font-style: normal;
+    font-weight: 700;
+    line-height: 16px;
+    color: $mono208;
+    font-family: SpoqaB;
+    margin-left: 4px;
+  }
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.title {
+  font-size: 24px;
+  font-weight: 700;
+  color: $blue107;
+}
+
+.desc {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 8px 0 24px;
+}
+
+.mock {
+  color: #f59e0b;
+  font-weight: 600;
+}
+
+.empty {
+  padding: 32px;
+  text-align: center;
+  color: #9ca3af;
+  border: 1px dashed #d1d5db;
+  border-radius: 10px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+
+  th,
+  td {
+    border: 1px solid #e5e7eb;
+    padding: 8px 12px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background: #f3f4f6;
+    font-weight: 600;
+  }
+}
+
+.prompt-cell {
+  max-width: 640px;
+}
+
+.badge {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  padding: 2px 8px;
+  color: #6b7280;
+  background: #f3f4f6;
+
+  &.adopted {
+    color: #00824f;
+    background: #d1fae5;
+  }
+  &.discarded {
+    color: #9ca3af;
+    background: #f3f4f6;
+    text-decoration: line-through;
+  }
+  &.candidate {
+    color: #6d28d9;
+    background: #ede9fe;
+  }
+}

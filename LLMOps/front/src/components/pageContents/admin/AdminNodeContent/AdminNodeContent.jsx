@@ -1,14 +1,19 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useHistory } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+
+import { ButtonV2 } from '@jonathan/ui-react';
 
 import PageHeader from '@src/components/molecules/PageHeader/PageHeader';
 
-import { callApi, STATUS_FAIL } from '@src/network';
+import { callApi, STATUS_FAIL, STATUS_SUCCESS } from '@src/network';
+import { getEdgeWorkers } from '@src/apis/flightbase/edge';
 import { loadModalComponent } from '@src/modal';
 
 import CPUAllocationStatus from './CPUServerTab/CPUAllocationStatus';
 import RamUsageStatus from './CPUServerTab/RamUsageStatus';
 import GPUAllocationStatus from './GPUServerTab/GPUAllocationStatus';
+import EdgeOpsToken from './EdgeOpsToken';
 import InstanceDetail from './InstanceDetail';
 import NodeTable from './NodeTable';
 
@@ -119,8 +124,12 @@ function AdminNodeContent() {
 
   const [nodeInfo, setNodeInfo] = useState(initial);
   const [statusList, setStatusList] = useState([]);
+  // Edge 워커: stat grid 집계 + 통합 노드표에 EDGE 행으로 병합할 소스. 10s 폴링.
+  const [edgeWorkers, setEdgeWorkers] = useState([]);
+  const [segment, setSegment] = useState('all'); // all | cluster | edge
 
   const isLoading = useRef(true);
+  const history = useHistory();
 
   useEffect(() => {
     loadModalComponent('SETTING_VIRTUAL_NODE');
@@ -156,45 +165,200 @@ function AdminNodeContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodeListLength]);
 
+  // Edge 워커: 부모가 소유·폴링(단일 소스) → stat grid + 통합 노드표(EDGE 행) 공용.
+  // 세그먼트가 'cluster'라 엣지 행이 안 보여도 stat 카운트는 유지되도록 부모가 폴링.
+  const edgeFetchingRef = useRef(false);
+  const fetchEdge = useCallback(async () => {
+    if (edgeFetchingRef.current) return; // 중첩 방지
+    edgeFetchingRef.current = true;
+    try {
+      const res = await getEdgeWorkers();
+      if (res.status === STATUS_SUCCESS) setEdgeWorkers(res.result || []);
+    } finally {
+      edgeFetchingRef.current = false;
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchEdge();
+    const iv = setInterval(fetchEdge, 10000);
+    return () => clearInterval(iv);
+  }, [fetchEdge]);
+
+  const nodeList = nodeInfo.node_list || [];
+  const k8sTotal = nodeList.length;
+  const k8sOnline = nodeList.filter((n) => n.status === 'Ready').length;
+  const edgeTotal = edgeWorkers.length;
+  // 집계도 신선도를 본다 — pull-only 워커는 주기 폴러가 없어 conn_status 가 마지막
+  // 폴링 성공 시점에 고정되므로, 그것만 세면 꺼진 디바이스가 영구히 online 으로 잡힌다.
+  const edgeOnline = edgeWorkers.filter(
+    (w) => w.conn_status === 'online' && !w.contact_stale,
+  ).length;
+  const gpuTotal = nodeInfo?.usage?.gpu?.total ?? 0;
+  const gpuUsed = nodeInfo?.usage?.gpu?.used ?? 0;
+
+  // 엣지 워커를 노드표 행 shape 로 정규화(EDGE 배지 행). 구조화 하드웨어가 없어
+  // cpu/gpu/ram 은 heartbeat 요약값, 상세 컬럼은 NodeTable 이 _rowType 로 분기.
+  const edgeToRow = (w) => ({
+    id: `edge-${w.id}`,
+    _rowType: 'edge',
+    _edge: w,
+    hostname: w.name || w.device_id,
+    device_id: w.device_id,
+    ip: '-',
+    role: [],
+    type: ['edge'],
+    active_status: 1,
+    status: w.conn_status === 'online' ? 'Ready' : 'Not Ready',
+    conn_status: w.conn_status,
+    deploy_model: w.deploy_model,
+    deploy_version: w.deploy_version,
+    deploy_state: w.deploy_state,
+    // 신선도 두 축(BE 파생) — 연결(contact)과 배포상태(deploy)를 구분해 전달한다.
+    // 통합표가 끊긴 디바이스를 attached 로, 옛 관측을 running 으로 단정하지 않도록.
+    contact_stale: w.contact_stale,
+    deploy_stale: w.deploy_stale,
+    cpu_cores: w.cpu_cores,
+    mem_total: w.mem_total,
+    gpu_info: w.gpu_info,
+    container_count: w.container_count,
+    last_seen: w.last_seen,
+  });
+  const edgeRows = edgeWorkers.map(edgeToRow);
+
+  const showCluster = segment !== 'edge';
+  // 통합 노드표 데이터: 세그먼트 필터(all=클러스터+엣지 / cluster / edge). 노드 로딩 중
+  // (node_list 미도착)엔 undefined 로 넘겨 스피너 유지. edge 세그먼트는 즉시 표시.
+  const loadedNodes = nodeInfo.node_list;
+  let tableRows;
+  if (segment === 'edge') tableRows = edgeRows;
+  else if (segment === 'cluster') tableRows = loadedNodes ? nodeList : undefined;
+  else tableRows = loadedNodes ? [...nodeList, ...edgeRows] : undefined;
+
+  const STAT_BOXES = [
+    { key: 'total', label: t('nodes.stat.total'), value: k8sTotal + edgeTotal },
+    {
+      key: 'k8s',
+      label: t('nodes.stat.k8s'),
+      value: k8sTotal,
+      extra: <span className={cx('stat-on')}>● {k8sOnline}</span>,
+    },
+    {
+      key: 'edge',
+      label: t('nodes.stat.edge'),
+      value: edgeTotal,
+      edge: true,
+      extra: (
+        <>
+          <span className={cx('stat-on')}>● {edgeOnline}</span>{' '}
+          <span className={cx('stat-off')}>○ {edgeTotal - edgeOnline}</span>
+        </>
+      ),
+    },
+    {
+      key: 'gpu',
+      label: t('nodes.stat.gpu'),
+      value: `${gpuUsed} / ${gpuTotal}`,
+    },
+  ];
+
   return (
     <div>
       <PageHeader title={t('nodes.label')} />
       <div className={cx('content')}>
-        <CPUAllocationStatus
-          isLoading={isLoading.current}
-          cpu={
-            nodeInfo
-              ? nodeInfo.usage.cpu
-              : { total: 0, used: 0, alloc: 0, avail: 0 }
-          }
-          nodeList={nodeInfo.usage.cpu.detail}
-        />
-        <GPUAllocationStatus
-          isLoading={isLoading.current}
-          gpu={
-            nodeInfo
-              ? nodeInfo.usage.gpu
-              : { total: 0, used: 0, alloc: 0, avail: 0 }
-          }
-          gpuList={nodeInfo.usage.gpu.detail}
-        />
-        <RamUsageStatus
-          isLoading={isLoading.current}
-          ram={
-            nodeInfo
-              ? nodeInfo.usage.mem
-              : { total: 0, used: 0, alloc: 0, avail: 0 }
-          }
-          nodeList={nodeInfo.usage.mem.detail}
-        />
-        <InstanceDetail
-          isLoading={isLoading.current}
-          instanceList={nodeInfo ? nodeInfo.usage.instanceList : []}
-        />
+        <div className={cx('stat-grid')}>
+          {STAT_BOXES.map((s) => (
+            <div key={s.key} className={cx('stat-box')}>
+              <div className={cx('stat-label')}>{s.label}</div>
+              <div className={cx('stat-value', { edge: s.edge })}>
+                {s.value} {s.extra}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div
+          className={cx('segments')}
+          role='tablist'
+          aria-label={t('nodes.label')}
+        >
+          {['all', 'cluster', 'edge'].map((s) => (
+            <button
+              key={s}
+              type='button'
+              role='tab'
+              aria-selected={segment === s}
+              className={cx('segment', { active: segment === s })}
+              onClick={() => setSegment(s)}
+            >
+              {t(`nodes.segment.${s}`)}
+            </button>
+          ))}
+        </div>
+
+        {showCluster && (
+          <>
+            <CPUAllocationStatus
+              isLoading={isLoading.current}
+              cpu={
+                nodeInfo
+                  ? nodeInfo.usage.cpu
+                  : { total: 0, used: 0, alloc: 0, avail: 0 }
+              }
+              nodeList={nodeInfo.usage.cpu.detail}
+            />
+            <GPUAllocationStatus
+              isLoading={isLoading.current}
+              gpu={
+                nodeInfo
+                  ? nodeInfo.usage.gpu
+                  : { total: 0, used: 0, alloc: 0, avail: 0 }
+              }
+              gpuList={nodeInfo.usage.gpu.detail}
+            />
+            <RamUsageStatus
+              isLoading={isLoading.current}
+              ram={
+                nodeInfo
+                  ? nodeInfo.usage.mem
+                  : { total: 0, used: 0, alloc: 0, avail: 0 }
+              }
+              nodeList={nodeInfo.usage.mem.detail}
+            />
+            <InstanceDetail
+              isLoading={isLoading.current}
+              instanceList={nodeInfo ? nodeInfo.usage.instanceList : []}
+            />
+          </>
+        )}
+        {/* 플랫폼 ↔ 디바이스 공유 키. 디바이스 등록·토큰 발급과 같은 맥락이라 여기 둔다. */}
+        <EdgeOpsToken />
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            gap: 8,
+            marginBottom: 12,
+          }}
+        >
+          <ButtonV2
+            type='outline'
+            size='s'
+            label={t('edgeApi.title')}
+            onClick={() => history.push('/admin/nodes/edge/api-spec')}
+          />
+          <ButtonV2
+            colorType='blue'
+            size='s'
+            label={t('edge.register.title')}
+            onClick={() => history.push('/admin/nodes/edge/new')}
+          />
+        </div>
         <NodeTable
-          nodeList={nodeInfo.node_list}
+          nodeList={tableRows}
           statusList={statusList}
           setStatusList={setStatusList}
+          refetchEdge={fetchEdge}
         />
       </div>
     </div>

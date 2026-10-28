@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field, validator, StrictStr, model_validator, field_validator
 from typing import Optional, List, Union, Any
 import json
+import shlex
 import utils.HELP as HELP
 from utils import PATH
 from utils.TYPE import TRAINING_ITEM_A, TRAINING_ITEM_B, TRAINING_ITEM_C, PROJECT_TYPE, DEPLOYMENT_TYPE, PROJECT_POD_HOSTNAME
@@ -100,9 +101,10 @@ class HelmLLMInputModel(BaseModel):
     model_allm_name: Optional[str] = None
     model_allm_commit_name: Optional[str] = None
     huggingface_api_token: Optional[str] = settings.HUGGINGFACE_TOKEN
+    serving_system: Optional[str] = "vllm"  # 멀티엔진 로드맵 Phase 1 (pod-side 소비는 Phase 2)
 
     class Config:
-        protected_namespaces = () 
+        protected_namespaces = ()
 
 # LLM - Rag
 class HelmRag(HelmLlm, HelmLLMInputModel):
@@ -224,6 +226,7 @@ class BaseConfig(BaseModel):
                 "id": values.get("llm_id"),
                 "name": values.get("llm_name"),
                 "type": values.get("llm_type"),
+                "gpu_memory_utilization": settings.DEPLOYMENT_LLM_GPU_MEMORY_UTILIZATION,
                 # "gpu_count" : values.get("gpu_count"),
                 "model" : {
                     "type": values.get("model_type"),
@@ -231,7 +234,8 @@ class BaseConfig(BaseModel):
                     "huggingface_token": values.get("model_huggingface_token"),
                     "allm_name": values.get("model_allm_name"),
                     "allm_commit_name": values.get("model_allm_commit_name"),
-                    "huggingface_api_token" : values.get("huggingface_api_token")
+                    "huggingface_api_token" : values.get("huggingface_api_token"),
+                    "serving_system" : values.get("serving_system"),
                 },
                 "rag" : {
                     "id": values.get("rag_id"),
@@ -276,8 +280,12 @@ class BaseConfig(BaseModel):
                 if value is None or value == "None":
                     continue
                 try:
-                    value = str(value).replace(",", "\\,").replace("{", '\\{').replace("}", '\\}')
-                    lines.append(f'{full_key}="{value}"')
+                    # helm parser 이스케이프(,{}) 후 shlex.quote 로 셸-안전화 — shell=True 로 실행되는
+                    # `helm install --set` 인젝션 차단(멀티엔진 landmine #8, model_huggingface_id/
+                    # model_allm_name/serving_system 등 사용자 제어 값이 이 경로로 흐름). 단일따옴표
+                    # 래핑이라 helm 이스케이프 백슬래시(\,)는 그대로 helm 에 전달되어 파싱 동일.
+                    helm_escaped = str(value).replace(",", "\\,").replace("{", "\\{").replace("}", "\\}")
+                    lines.append(f"{full_key}={shlex.quote(helm_escaped)}")
                 except:
                     pass
                     # print("values", value)
@@ -404,12 +412,16 @@ class DictModel(BaseModel):
     allm_name: Optional[str] = None
     allm_commit_name: Optional[str] = None
     huggingface_api_token: Optional[str] = settings.HUGGINGFACE_TOKEN
+    serving_system: Optional[str] = None  # 멀티엔진 Phase 1 — YamlToValues 라운드트립에서 --set 로 살아남게
 
 class DictLlm(BaseModel):
     db: Optional[DictLlmDb] = None
     id: Optional[int] = None
     name: Optional[str] = None
     type: Optional[str] = None
+    # vLLM 이 확보할 GPU 메모리 비율. 서빙과 GPU 를 공유하는 노드에서 기본 0.90 이면
+    # 기동이 거부되므로(vLLM 은 여유 메모리와 비교) 클러스터별로 낮출 수 있어야 한다.
+    gpu_memory_utilization: Optional[float] = None
     model: Optional[DictModel] = None
     playground: Optional[DictPlayground] = None
     rag: Optional[DictRag] = None

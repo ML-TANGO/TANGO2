@@ -1,0 +1,10 @@
+# 플랫폼 서빙 레이어(FastAPI shim) 의존성. 버전 range-pin(공급망/브레이킹 릴리스 회귀 방지).
+# ⚠️ torch/transformers/huggingface_hub 는 베이스(text-generation-inference)가 제공 —
+#    여기서 재핀 금지(충돌 방지).
+# 서빙 계약 복제에 필요한 것만: FastAPI 스택 + httpx(엔진 native API 호출/RAG DNS)
+#    + aiofiles(dataset) + aiomysql(db.py).
+fastapi>=0.110,<1.0
+uvicorn[standard]>=0.29,<1.0
+httpx>=0.27,<1.0
+aiofiles>=23.0,<25.0
+aiomysql>=0.2.0,<1.0

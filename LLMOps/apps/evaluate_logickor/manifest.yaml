@@ -1,0 +1,61 @@
+# evaluate-logickor — LogicKor 채점 집계 컨테이너.
+# LogicKor 파이프라인의 score 단계만 수행한다(생성·심판은 별 단계). 모델을 로드하지 않아
+# GPU 0 · CPU only 이고, 그래서 LogicKor 의 transformers 5.5.4 / vllm 핀과 무관하다
+# (플랫폼 기본은 transformers>=4.52.4,<5.0.0 — 생성·심판 단계는 전용 이미지가 필요).
+# 계약 전문: ../../examples/hello-plugin/external-container-spec.md
+apiVersion: tango.acryl.ai/v1
+kind: ExternalContainer
+
+metadata:
+  name: evaluate-logickor
+  version: "0.1.0"
+  vendor: "Acryl (platform-owned)"
+  contact: "platform@acryl.ai"
+  description: |
+    LogicKor 벤치마크 채점 집계. ETRI evaluator 가 채점해 둔 jsonl(문항별 심판 점수
+    1~10)을 읽어 6영역 × 1턴/2턴 격자와 종합 점수를 산출한다. 대표 스칼라는 요청의
+    metric(judge_overall/judge_single/judge_multi)이 결정하고, 전체 격자는 metrics JSON
+    의 'logickor' 키에 함께 실린다. 해시 mock 이 아닌 실채점이다.
+
+spec:
+  image: "docker.io/acrylaaai/evaluate-logickor:0.1.0"
+
+  job_type: evaluate
+  execution_mode: async
+  port: 8000
+
+  resources:
+    cpu: "1"
+    memory: "512Mi"           # 모델 로드 없음 — 42문항 × 파일수 jsonl 파싱만.
+    gpu: 0
+
+  inputs:
+    params:
+      required: false         # benchmarks[{benchmark,metric}] / datasets / evaluated_subdir
+    dataset:
+      required: true          # evaluator 산출 jsonl 이 담긴 데이터셋(/dataset/<name>).
+
+  outputs:
+    metrics: true             # /output/metrics.json
+    artifacts: false
+
+  secrets:
+    required: []
+
+  network:
+    egress_whitelist: []      # 외부 호출 없음(로컬 파일 집계만).
+
+  endpoints:
+    info: "/info"
+    health: "/health"
+    live: "/live"
+    run: "/run"
+    jobs: "/jobs/{id}"
+    cancel: "/jobs/{id}/cancel"
+
+  capabilities:
+    estimated_startup_seconds: 5
+    estimated_duration_seconds: 15
+    timeout_seconds: 600
+
+  workspace_scope: per-workspace

@@ -1,0 +1,58 @@
+# mock-generate-plugin — 생성형 데이터 파이프라인 BE 스캐폴드용 mock manifest.
+# 고려대 LLM1/LLM2 컨테이너 수령 전 파이프라인 end-to-end 검증용. 계약 전문:
+# ../hello-plugin/external-container-spec.md
+apiVersion: tango.acryl.ai/v1
+kind: ExternalContainer
+
+metadata:
+  name: mock-generate
+  version: "1.0.0"
+  vendor: "Acryl (scaffold)"
+  contact: "platform@acryl.ai"
+  description: |
+    생성형 데이터 파이프라인(WBS 1.1 / v0.4 3.3) 노드 mock. /output/result.jsonl 에
+    VLM instruction 데이터(image+instruction+output)를 고정 생성. 고려대 LLM1/LLM2
+    도착 시 동일 계약으로 교체.
+
+spec:
+  image: "docker.io/acrylaaai/mock-generate-plugin:1.0.0"
+
+  job_type: generate              # ← 신규 job_type (chart: work_func_type/pod_type=generation)
+  execution_mode: async
+  port: 8000
+
+  resources:
+    cpu: "1"
+    memory: "512Mi"
+    gpu: 0                         # mock 은 GPU 불필요. monitoring GPU 귀속 실증 시 >0 로 launch.
+
+  inputs:
+    params:
+      required: false             # count / instruction / image_prefix (기본값 있음)
+    dataset:
+      required: false             # 실제 생성은 dataset 입력 — mock 은 불요
+
+  outputs:
+    metrics: true                 # /output/metrics.json
+    artifacts: true               # /output/result.jsonl (VLM instruction)
+
+  secrets:
+    required: []
+
+  network:
+    egress_whitelist: []
+
+  endpoints:
+    info: "/info"
+    health: "/health"
+    live: "/live"
+    run: "/run"
+    jobs: "/jobs/{id}"
+    cancel: "/jobs/{id}/cancel"
+
+  capabilities:
+    estimated_startup_seconds: 10
+    estimated_duration_seconds: 30
+    timeout_seconds: 600
+
+  workspace_scope: per-workspace

@@ -33,7 +33,18 @@ def download(body, headers_user = None):
         if body.path is not None:
             dataset_dir = dataset_dir.joinpath(body.path)
 
-        if len(body.download_files) > 1:
+        if not body.download_files:
+            # 파일 미지정 = 데이터셋 전체 다운로드 — 최상위 항목 전부 tar.gz (리뷰 HIGH: whole-dataset)
+            now = datetime.now()
+            formatted_time = now.strftime("%Y-%m-%d-%H:%M:%S")
+            children = [c for c in dataset_dir.iterdir()]
+            tar_path = dataset_dir.joinpath(dataset_info['name'] + '-' + str(formatted_time) + ".tar")
+            with tarfile.open(tar_path, "w:gz") as tar:
+                for child in children:
+                    tar.add(child, arcname=child.relative_to(dataset_dir))
+            download_path = tar_path
+
+        elif len(body.download_files) > 1:
             now = datetime.now()
             formatted_time = now.strftime("%Y-%m-%d-%H:%M:%S")
             tar_path = dataset_dir.joinpath(headers_user+'-'+str(formatted_time)+".tar")

@@ -1,0 +1,4 @@
+# SP-1 FastAPI 래퍼 deps. mock 이라 torch/transformers/메트릭 라이브러리 불필요.
+fastapi>=0.111.0,<1.0.0
+uvicorn[standard]>=0.29.0,<1.0.0
+pydantic>=2.0.0,<3.0.0

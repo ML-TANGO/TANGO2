@@ -1,0 +1,20 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  generation: 1
+  name: {{ .Values.global.jfb.name.marker_front }}-api
+  namespace: {{ .Values.global.jfb.namespace }}
+  annotations:
+    konghq.com/strip-path: 'true'
+spec:
+  ingressClassName: {{ .Values.global.jfb.settings.external.ingressClassName }}
+  rules:
+  - http:
+      paths:
+      - backend:
+          service:
+            name: {{ .Values.global.jfb.name.marker_front }}-svc
+            port:
+              number: 80
+        path: /marker
+        pathType: Prefix

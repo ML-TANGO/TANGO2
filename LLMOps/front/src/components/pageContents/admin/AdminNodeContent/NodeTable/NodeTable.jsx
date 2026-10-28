@@ -14,10 +14,16 @@ import { openConfirm } from '@src/store/modules/confirm';
 // Actions
 import { openModal } from '@src/store/modules/modal';
 
+// 엣지 워커 행 액션(통합 노드표에 병합된 EDGE 행의 새로고침/삭제).
+import { deleteEdgeWorker, refreshEdgeWorker } from '@src/apis/flightbase/edge';
+import { STATUS_SUCCESS } from '@src/network';
+import { toast } from '@src/components/Toast';
+
 import { calFindNodeList, postChangeStatus } from '../util';
 
 // Components
 import AdminNodeDetail from '../AdminNodeDetail';
+import EdgeWorkerDetail from '../EdgeWorkerDetail';
 
 import classNames from 'classnames/bind';
 // CSS module
@@ -68,10 +74,20 @@ const nodeTypeColorObj = {
   CPU: 'yellow',
   GPU: 'green',
   MANAGE: 'pink',
+  DB: 'blue', // K8s node-role.kubernetes.io/db 라벨 파생
+  EDGE: 'orange', // 통합표에 병합된 엣지 워커 행 표식
 };
 
 const calBadgeColor = (nodeType) => {
   return nodeTypeColorObj[nodeType];
+};
+
+// 엣지 워커 자원(heartbeat 코어 수는 정수 bytes 아님 → mem_total 만 포맷).
+const formatBytes = (n) => {
+  if (!n || n <= 0) return '';
+  const u = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.min(Math.floor(Math.log(n) / Math.log(1024)), u.length - 1);
+  return `${(n / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${u[i]}`;
 };
 
 const calIsCpuGpu = (typeList) => {
@@ -111,9 +127,47 @@ function NodeTable({
   statusList,
   setStatusList,
   handleRefresh,
+  refetchEdge,
 }) {
   const { t } = useTranslation();
   const dispatch = useDispatch();
+
+  // 통합표에 병합된 엣지 워커 행 액션(remoteManager 새로고침 / 삭제). 진행 중 busy 가드.
+  const [edgeBusyId, setEdgeBusyId] = useState(null);
+
+  const handleEdgeRefresh = useCallback(
+    async (edgeId) => {
+      setEdgeBusyId(edgeId);
+      const res = await refreshEdgeWorker(edgeId);
+      setEdgeBusyId(null);
+      if (res.status === STATUS_SUCCESS) refetchEdge?.();
+      else toast.error(res.message || t('edge.toast.refreshFail'));
+    },
+    [refetchEdge, t],
+  );
+
+  const handleEdgeDelete = useCallback(
+    async (edgeId, deviceId) => {
+      // eslint-disable-next-line no-alert
+      if (!window.confirm(t('edge.confirm.delete', { device: deviceId }))) return;
+      setEdgeBusyId(edgeId);
+      const res = await deleteEdgeWorker(edgeId);
+      setEdgeBusyId(null);
+      if (res.status === STATUS_SUCCESS) {
+        // BE 는 배포가 돌고 있으면 stop 을 best-effort 로 먼저 보내고, 결과와 무관하게
+        // 삭제를 진행한다(죽은 디바이스를 영구히 못 지우는 것을 막기 위해). 실패했다면
+        // 디바이스에 컨테이너가 유령으로 남으므로 조용히 넘기지 않고 알린다.
+        const stop = res.result?.stop;
+        if (stop?.attempted && !stop.ok) {
+          toast.warning(
+            t('edge.toast.deletedButStopFailed', { device: deviceId }),
+          );
+        }
+        refetchEdge?.();
+      } else toast.error(res.message || t('edge.toast.deleteFail'));
+    },
+    [refetchEdge, t],
+  );
 
   const [searchKey, setSearchKey] = useState({
     label: t('nodeName.label'),
@@ -229,7 +283,23 @@ function NodeTable({
     {
       name: t('status.label'),
       selector: 'condition',
-      cell: ({ status, id }) => {
+      cell: (row) => {
+        if (row._rowType === 'edge') {
+          // 연결 배지도 신선도를 본다. pull-only 워커의 conn_status 는 "마지막 폴링이
+          // 성공했다" 는 뜻으로 저장돼 고정되므로(주기 폴러 없음), 그것만 보면 전원이
+          // 꺼진 디바이스가 계속 attached 로 보인다 — 같은 행의 배포상태는 '미상' 인데
+          // 연결만 '접속됨' 이라 말하는 모순이 생긴다. 표시 전용이며 조작 게이트
+          // (canOperate/stoppable)는 여전히 conn_status 기반으로 둔다.
+          const on = row.conn_status === 'online' && !row.contact_stale;
+          return (
+            <Badge
+              size='lg'
+              label={t(on ? 'attached' : 'detached')}
+              type={on ? 'primary-2' : 'gray'}
+            />
+          );
+        }
+        const { status, id } = row;
         const findList = calFindNodeList(statusList, id);
         const newStatus = calStatusFlag(findList, status);
         return (
@@ -257,19 +327,21 @@ function NodeTable({
       minWidth: '380px',
       maxWidth: '380px',
       sortable: true,
-      cell: ({
-        role,
-        hostname: name,
-        active_status: activeStatus = 1,
-        type,
-      }) => {
-        const isMaster = role.find((role) => role === 'control-plane');
+      cell: (row) => {
+        const {
+          role,
+          hostname: name,
+          active_status: activeStatus = 1,
+          type,
+        } = row;
+        const isEdge = row._rowType === 'edge';
+        const isMaster = role.find((r) => r === 'control-plane');
         return (
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
-              cursor: 'not-allowed',
+              cursor: isEdge ? 'default' : 'not-allowed',
             }}
           >
             <div
@@ -278,6 +350,19 @@ function NodeTable({
               style={{ textOverflow: 'hidden', textWrap: 'nowrap' }}
             >
               {name}
+              {isEdge && row.deploy_model && (
+                <span style={{ opacity: 0.6, marginLeft: 6 }}>
+                  · {row.deploy_model}
+                  {/* deploy_stale = 배포상태를 관측한 지 오래됐거나 한 번도 관측한
+                      적이 없다. 저장된 deploy_state 는 그 시점의 값일 뿐 라이브 상태의
+                      증거가 아니므로 '미상' 으로 축약한다. */}
+                  {row.deploy_stale
+                    ? ` (${t('edge.detail.stateUnknown')})`
+                    : row.deploy_state
+                      ? ` (${row.deploy_state})`
+                      : ''}
+                </span>
+              )}
             </div>
             <div className={cx('flex-cont')}>
               {type.length !== 0 &&
@@ -344,9 +429,32 @@ function NodeTable({
     {
       name: t('setting.label'),
       selector: 'id',
-      minWidth: '64px',
-      maxWidth: '64px',
+      minWidth: '150px',
+      maxWidth: '180px',
       cell: (row) => {
+        if (row._rowType === 'edge') {
+          const eid = row._edge.id;
+          return (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type='button'
+                className={cx('edge-act')}
+                disabled={edgeBusyId === eid}
+                onClick={() => handleEdgeRefresh(eid)}
+              >
+                {t('edge.action.refresh')}
+              </button>
+              <button
+                type='button'
+                className={cx('edge-act', 'danger')}
+                disabled={edgeBusyId === eid}
+                onClick={() => handleEdgeDelete(eid, row.device_id)}
+              >
+                {t('delete.label')}
+              </button>
+            </div>
+          );
+        }
         const { role, type } = row;
         const { isSettingBtn } = calDisabledBtn(role, type);
 
@@ -372,8 +480,10 @@ function NodeTable({
     {
       name: t('cpuConfig.label'),
       minWidth: '356px',
-      cell: ({ cpu_info }) => {
-        const { cpu_model } = cpu_info;
+      cell: (row) => {
+        if (row._rowType === 'edge')
+          return row.cpu_cores ? `${row.cpu_cores} cores` : '-';
+        const { cpu_model } = row.cpu_info;
         return cpu_model;
       },
       style: {
@@ -383,7 +493,9 @@ function NodeTable({
     {
       name: t('gpuConfig.label'),
       minWidth: '280px',
-      cell: ({ gpu_info }) => {
+      cell: (row) => {
+        if (row._rowType === 'edge') return row.gpu_info || '-';
+        const { gpu_info } = row;
         if (!gpu_info) return '-';
 
         const gpuConfigurationObj = Object.values(gpu_info).reduce(
@@ -418,7 +530,9 @@ function NodeTable({
     {
       name: t('node.ramInfo.label'),
       minWidth: '210px',
-      cell: ({ mem_info }) => {
+      cell: (row) => {
+        if (row._rowType === 'edge') return formatBytes(row.mem_total) || '-';
+        const { mem_info } = row;
         if (!mem_info) return '-';
 
         const { device } = mem_info;
@@ -463,7 +577,12 @@ function NodeTable({
   }, [nodeStatus, statusOptions, selectInputHandler]);
 
   const expandedComponent = useCallback((row) => {
-    return <AdminNodeDetail data={row.data} />;
+    // AdminNodeDetail 은 K8s 노드 shape 전용(cpu_info/sw_version/mem_info 구조분해).
+    // 엣지 행은 전용 상세(EdgeWorkerDetail)로 분기 — 원본 워커 객체(_edge) 전달.
+    const d = row.data;
+    if (!d) return null;
+    if (d._rowType === 'edge') return <EdgeWorkerDetail worker={d._edge} />;
+    return <AdminNodeDetail data={d} />;
   }, []);
 
   const onSortHandler = useCallback(

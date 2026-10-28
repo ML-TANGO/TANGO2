@@ -46,3 +46,8 @@ echo "Job logs:"
 kubectl logs job/elasticsearch-config-job -n $NAMESPACE
 
 echo "Elasticsearch configuration process completed."
+
+# Install the date-based templates after the legacy initialization job.
+# The templates have higher priority than the legacy wildcard templates.
+kubectl exec -i -n "$NAMESPACE" elasticsearch-data-0 -- /bin/sh -s < ./retention_setup.sh \
+    || { echo "Error: retention setup failed." >&2; exit 1; }

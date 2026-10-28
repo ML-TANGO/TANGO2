@@ -316,6 +316,10 @@ dcgm:
 
 dcgmExporter:
   enabled: true
+  # A100 + driver 570 조합의 DCP 프로파일링 unrecoverable error 회피용 커스텀 metrics.
+  # ../dcgm-custom-metrics.yaml (ConfigMap) 을 설치 전에 apply 해야 함 (install-nvidia-gpu-operator.sh 에서 처리).
+  config:
+    name: dcgm-custom-metrics
   repository: registry.jonathan.acryl.ai # offline일 경우 로컬 레포지토리로 수정
   image: nvidia/dcgm-exporter
   version: 4.0.4-acryl # 3.3.7-3.5.0-ubuntu22.04
@@ -327,6 +331,14 @@ dcgmExporter:
       value: "true"
     - name: DCGM_EXPORTER_COLLECTORS
       value: "/etc/dcgm-exporter/dcp-metrics-included.csv"
+    # 플랫폼에 노출할 GPU 집합. "f" = 전체 노출(기본값 — 환경 중립).
+    #   ⚠️ 이 차트는 values_<env> 오버레이가 없는 단일 tracked values.yaml 이라, 여기에
+    #   서버별 인덱스(g:2,3 등)를 박으면 다른 클러스터에서 dcgm export 대상이 0개가 되어
+    #   fb_scheduler 의 GPU 인벤토리(dcgm→Prometheus→fb_monitoring→Redis)가 비고
+    #   스케줄링이 멈춘다. 환경별 제한은 커밋하지 말고 런타임 토글로 적용한다:
+    #     ../set-visible-gpus.sh <all|g:IDX,...>     (예: g:2,3 = 유휴 GPU 2·3 만 노출)
+    - name: DCGM_EXPORTER_DEVICES_STR
+      value: "f"
   resources: {}
   serviceMonitor:
     enabled: true

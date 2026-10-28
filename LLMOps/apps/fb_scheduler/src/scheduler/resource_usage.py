@@ -76,8 +76,11 @@ def calculate_collector_usage(collect):
     used_cpu = used_ram = used_gpu = 0
     # 예: 만약 collect["start_datetime"] and collect["end_datetime"] is None 이면 사용 중
     if collect["start_datetime"] and collect["end_datetime"] is None:
-        used_cpu += collect["cpu_allocate"]
-        used_ram += collect["ram_allocate"]
+        # 인스턴스가 지워진 수집기는 instance 조인 값이 None 이다(db_collect.get_collect_list 의
+        # LEFT JOIN) — 0 으로 본다. 그 한 행의 TypeError 가 run_scheduler 바깥 try 까지 올라가
+        # 매 틱 전체(모든 워크스페이스·helm 배포 단계)를 버리던 장애(서빙, 2026-09-29).
+        used_cpu += collect["cpu_allocate"] or 0
+        used_ram += collect["ram_allocate"] or 0
     return used_cpu, used_ram, used_gpu
 
 

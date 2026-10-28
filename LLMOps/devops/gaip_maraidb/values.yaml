@@ -6,6 +6,6 @@ global:
         host: 'mariadb-galera'
         port: '3306'
     image:
-      registry: registry.jonathan.acryl.ai
+      registry: docker.io
       db: mariadb:10.11
-      pymysql: jfb-system/user_app:dev
+      pymysql: acrylaaai/genai-platform-user_app:tango_v2.0.1

@@ -1,0 +1,20 @@
+{
+ "results": {
+  "gsm8k": {
+   "name": "gsm8k",
+   "alias": "gsm8k",
+   "sample_len": 20,
+   "exact_match,strict-match": 0.5,
+   "exact_match_stderr,strict-match": 0.11470786693528086,
+   "exact_match,flexible-extract": 0.55,
+   "exact_match_stderr,flexible-extract": 0.11413288653790232
+  }
+ },
+ "groups": {},
+ "n-samples": {
+  "gsm8k": {
+   "original": 1319,
+   "effective": 20
+  }
+ }
+}

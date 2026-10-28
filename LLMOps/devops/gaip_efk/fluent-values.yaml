@@ -160,6 +160,7 @@ config:
     [INPUT]
         Name tail
         Path /var/log/containers/*.log
+        Exclude_Path /var/log/containers/*_network-operator_*.log
         multiline.parser cri, docker, multiline-custom, multiline-python-trace
         Tag kube.*
         Buffer_Max_Size 10MB
@@ -292,7 +293,7 @@ config:
         Logstash_Format On
         Logstash_Prefix idx_failed
         Logstash_Prefix_Key $_jfb_index
-        Logstash_DateFormat all
+        Logstash_DateFormat %Y.%m.%d
         Retry_Limit 5
         Suppress_Type_Name On
         Trace_Error On
@@ -313,7 +314,7 @@ config:
         tls.verify Off
         Logstash_Format On
         Logstash_Prefix system-kubelet
-        Logstash_DateFormat all
+        Logstash_DateFormat %Y.%m.%d
         Retry_Limit 5
         Suppress_Type_Name On
         Trace_Error On
@@ -334,7 +335,7 @@ config:
         tls.verify Off
         Logstash_Format On
         Logstash_Prefix system-kubecomp
-        Logstash_DateFormat all
+        Logstash_DateFormat %Y.%m.%d
         Retry_Limit 5
         Suppress_Type_Name On
         Trace_Error On
@@ -355,7 +356,7 @@ config:
         tls.verify Off
         Logstash_Format On
         Logstash_Prefix system-event
-        Logstash_DateFormat all
+        Logstash_DateFormat %Y.%m.%d
         Retry_Limit 5
         Suppress_Type_Name On
         Trace_Error On

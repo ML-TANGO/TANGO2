@@ -85,6 +85,24 @@ const AIPipeLineDeploySettingModal = React.lazy(() =>
 const AIPipeLineDeployModal = React.lazy(() =>
   import('@src/components/Modal/AIPipeLineDeployModal'),
 );
+const AddAIPipeLineGenerationModal = React.lazy(() =>
+  import('@src/components/Modal/AddAIPipeLineGenerationModal'),
+);
+const AddAIPipeLineFinetuningModal = React.lazy(() =>
+  import('@src/components/Modal/AddAIPipeLineFinetuningModal'),
+);
+const AddAIPipeLineQuantizeModal = React.lazy(() =>
+  import('@src/components/Modal/AddAIPipeLineQuantizeModal'),
+);
+const AddAIPipeLineLlmDeployModal = React.lazy(() =>
+  import('@src/components/Modal/AddAIPipeLineLlmDeployModal'),
+);
+const AddAIPipeLineSP7ModuleModal = React.lazy(() =>
+  import('@src/components/Modal/AddAIPipeLineSP7ModuleModal'),
+);
+const CreateSynthesisModal = React.lazy(() =>
+  import('@src/components/Modal/CreateSynthesisModal'),
+);
 const AIPipelineLogModal = React.lazy(() =>
   import('@src/modals/PipelineLogModal'),
 );
@@ -182,6 +200,13 @@ const DatasetFormModalContainer = React.lazy(() =>
 const DeploymentFormModalContainer = React.lazy(() =>
   import('./DeploymentFormModalContainer'),
 );
+const EvalProjectFormModalContainer = React.lazy(() =>
+  import('./EvalProjectFormModalContainer'),
+);
+
+const DataPipelineDatasetModal = React.lazy(() =>
+  import('@src/components/Modal/DataPipelineDatasetModal'),
+);
 const DeployWorkerMemoModalContainer = React.lazy(() =>
   import('./DeployWorkerMemoModalContainer'),
 );
@@ -262,6 +287,9 @@ const EditPlaygroundModal = React.lazy(() =>
 );
 const AddPlayground = React.lazy(() =>
   import('@src/components/Modal/AddPlayground'),
+);
+const NewDeploymentModal = React.lazy(() =>
+  import('@src/components/Modal/NewDeploymentModal'),
 );
 const AddPromptModal = React.lazy(() =>
   import('@src/components/Modal/AddPromptModal'),
@@ -428,6 +456,21 @@ function ModalContainer() {
           )}
           {modalType === 'EDIT_DEPLOYMENT' && (
             <DeploymentFormModalContainer
+              data={modal[modalType]}
+              type={modalType}
+            />
+          )}
+          {/* 학습 데이터 파이프라인 데이터셋 생성 */}
+          {modalType === 'CREATE_DP_DATASET' && (
+            <DataPipelineDatasetModal
+              data={modal[modalType]}
+              type={modalType}
+            />
+          )}
+          {/* Evaluation Project Modal — 생성/수정이 한 컨테이너를 공유한다(학습/배포와 동일). */}
+          {(modalType === 'CREATE_EVAL_PROJECT' ||
+            modalType === 'EDIT_EVAL_PROJECT') && (
+            <EvalProjectFormModalContainer
               data={modal[modalType]}
               type={modalType}
             />
@@ -766,6 +809,9 @@ function ModalContainer() {
             <SshConnectionGuideModal data={modal[modalType]} type={modalType} />
           )}
           {/* ** LLM ** */}
+          {modalType === 'NEW_DEPLOYMENT' && (
+            <NewDeploymentModal data={modal[modalType]} type={modalType} />
+          )}
           {modalType === 'ADD_PLAYGROUND' && (
             <AddPlayground data={modal[modalType]} type={modalType} />
           )}
@@ -898,6 +944,54 @@ function ModalContainer() {
           )}
           {modalType === 'ADD_DEPLOY_DATA' && (
             <AIPipeLineDeployModal data={modal[modalType]} type={modalType} />
+          )}
+          {modalType === 'ADD_GENERATION_DATA' && (
+            <AddAIPipeLineGenerationModal
+              data={modal[modalType]}
+              type={modalType}
+            />
+          )}
+          {modalType === 'ADD_FINETUNING_DATA' && (
+            <AddAIPipeLineFinetuningModal
+              data={modal[modalType]}
+              type={modalType}
+            />
+          )}
+          {modalType === 'ADD_QUANTIZE_DATA' && (
+            <AddAIPipeLineQuantizeModal
+              data={modal[modalType]}
+              type={modalType}
+            />
+          )}
+          {modalType === 'ADD_LLM_DEPLOY_DATA' && (
+            <AddAIPipeLineLlmDeployModal
+              data={modal[modalType]}
+              type={modalType}
+            />
+          )}
+          {modalType === 'ADD_PROMPT_GEN_DATA' && (
+            <AddAIPipeLineSP7ModuleModal
+              data={modal[modalType]}
+              type={modalType}
+              moduleKind='prompt_gen'
+            />
+          )}
+          {modalType === 'ADD_DATA_GEN_DATA' && (
+            <AddAIPipeLineSP7ModuleModal
+              data={modal[modalType]}
+              type={modalType}
+              moduleKind='data_gen'
+            />
+          )}
+          {modalType === 'ADD_ALGO_CALL_DATA' && (
+            <AddAIPipeLineSP7ModuleModal
+              data={modal[modalType]}
+              type={modalType}
+              moduleKind='algo_call'
+            />
+          )}
+          {modalType === 'CREATE_SYNTHESIS_PROJECT' && (
+            <CreateSynthesisModal data={modal[modalType]} type={modalType} />
           )}
           {modalType === 'AI_PIPELINE_LOG' && (
             <AIPipelineLogModal data={modal[modalType]} type={modalType} />

@@ -1,0 +1,82 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# evaluate-benchmark-mock.yaml — 부팅 시드 manifest (벤치마크 mock, async)
+#
+# ⚠️ 정본은 컨테이너 소스 옆의 `apps/evaluate_benchmark_mock/manifest.yaml` 이다. 이 파일은 부팅 자동 등록
+# (src/manifest/seed.py)을 위한 **사본**이라, 한쪽을 고치면 반드시 다른 쪽도 맞춰야
+# 한다(이미지 태그·버전이 특히 그렇다).
+# 사본을 두는 이유: 시드 디렉터리는 이미지에 COPY 되고 NFS src 마운트로도 잡히는데,
+# 리포 루트 밖을 가리키는 심링크는 이미지 빌드에서 깨진다.
+#
+# service_family 가 없으므로 페어가 아니라 단건으로 등록된다(짝 컨테이너 없음).
+# 플랫폼 바인딩은 settings 의 BENCHMARK_MANIFEST_NAME/VERSION 이 해석한다
+# (기본값 evaluate-benchmark-mock / 0.2.0 — 아래 metadata 와 일치해야 한다).
+#
+# 이 파일이 없으면: 레지스트리 등록은 런타임 POST /api/v1/manifests 뿐이라, 신규
+# 설치 인스턴스는 이 컨테이너가 미등록 상태로 뜨고 해당 평가 경로가 조용히 막힌다
+# (dev 의 evaluate 행들은 과거에 손으로 POST 한 것이다).
+#
+# 🔴 이미지 태그 불일치(2026-09-11 실측, 기록된 결함): Hub 의
+# acrylaaai/evaluate-benchmark-mock 에는 0.1.0 만 있고 0.2.0 이 없다. 벤치마크↔메트릭
+# 분리 작업에서 mock 0.2.0 을 만들었지만 docker.io push 가 남아 있다.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# evaluate-benchmark-mock — 벤치마크 평가 mock 컨테이너 (llm_evaluation P1a).
+# 정식 벤치마크 컨테이너(고려대 plugin / 실측) 탑재 전, 오케스트레이션+FE e2e 테스트용.
+# 9 벤치마크×지정 메트릭에 결정적 mock 점수 반환. SP-1 계약(apps/evaluate 동형) → 런치 와이어링 무변경.
+# 계약 전문: ../../examples/hello-plugin/external-container-spec.md
+apiVersion: tango.acryl.ai/v1
+kind: ExternalContainer
+
+metadata:
+  name: evaluate-benchmark-mock
+  version: "0.2.0"
+  vendor: "Acryl (platform-owned, mock)"
+  contact: "platform@acryl.ai"
+  description: |
+    벤치마크 평가 MOCK 컨테이너. 모델을 실제로 돌리지 않고 9개 벤치마크(ARC·MMLU·KoBEST…)를
+    벤치마크별 지정 메트릭(Accuracy/F1/…)으로 결정적(hash 기반) 채점해 점수를 반환한다.
+    오케스트레이션(llm_evaluation)+FE e2e 검증 목적. 정식 메트릭은 apps/evaluate
+    (실측 기본) / 고려대 plugin(정밀)로 라우팅하며 manifest 교체로 대체.
+
+spec:
+  image: "docker.io/acrylaaai/evaluate-benchmark-mock:0.2.0"
+
+  job_type: evaluate
+  execution_mode: async
+  port: 8000
+
+  resources:
+    cpu: "1"
+    memory: "512Mi"           # 모델 로드 없음(mock) — 경량.
+    gpu: 0
+
+  inputs:
+    params:
+      required: false         # benchmarks(벤치마크→메트릭) / datasets
+    dataset:
+      required: true          # evaluate 계약상 필수(validator 강제). mock 은 마운트만 받고 내용 미열람.
+
+  outputs:
+    metrics: true             # /output/metrics.json
+    artifacts: false
+
+  secrets:
+    required: []
+
+  network:
+    egress_whitelist: []
+
+  endpoints:
+    info: "/info"
+    health: "/health"
+    live: "/live"
+    run: "/run"
+    jobs: "/jobs/{id}"
+    cancel: "/jobs/{id}/cancel"
+
+  capabilities:
+    estimated_startup_seconds: 5
+    estimated_duration_seconds: 10
+    timeout_seconds: 300
+
+  workspace_scope: per-workspace

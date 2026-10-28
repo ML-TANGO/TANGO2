@@ -1,0 +1,33 @@
+@import '@src/styles/color.scss';
+
+// 페이지 여백은 상위 프레임이, 카드 그리드·카드·배지·버튼 모양은 CardTemplate 이 소유한다.
+.eval-projects {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+
+  .title-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .title {
+    margin: initial;
+    color: $blue107;
+    font-family: SpoqaB;
+    font-size: 24px;
+    line-height: 24px;
+  }
+
+  // 유형 필터 — 제목 바로 아래 붙는 한 줄이라 컨테이너의 40px 리듬에서 빼낸다.
+
+
+  .placeholder {
+    padding: 48px 0;
+    color: $sub-text-color;
+    font-size: 14px;
+    text-align: center;
+  }
+}

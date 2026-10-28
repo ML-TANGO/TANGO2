@@ -84,6 +84,13 @@ global:
     # 기본 네임스페이스 (플랫폼 앱들이 배포될 네임스페이스)
     namespace: jonathan-system  # [필수] 환경에 맞게 수정
 
+    # SDS(eva-vlm) 외부 학습 manifest 판본 → llm_model env SDS_MANIFEST_VERSION. 비우면 차트 기본 "1.1.0"
+    #   (fb_external_container 가 부팅 시 시드하는 ETRI 공개 판본).
+    # ⚠️ 공개 1.1.0 이미지는 /health 가 추론 모델 적재로 게이팅돼, 학습 파드가 503 에서 멈춰 학습이 시작되지
+    #   않을 수 있다(ETRI 이미지 쪽 수정 대기). 별도 패치 이미지를 manifest 로 등록했다면 그 버전을 지정한다.
+    # ※ 판본은 SDS 모델을 만들 때 모델 행에 기록되므로, 바꾼 뒤 새로 만든 모델부터 적용된다.
+    # sds_manifest_version: "1.1.0"
+
     # ========================================================================
     # Volume 설정
     # ========================================================================
@@ -134,13 +141,24 @@ global:
         path: /opt/dynamic-storage/marker-data    # [필수] NFS export 경로
         server: <NFS_SERVER_IP>                   # [필수] NFS 서버 IP
 
+      # hfModelCache: HuggingFace 모델 캐시 NFS (클러스터 전역 공유, RO)
+      # ※ 외부 협력기관 컨테이너 학습이 base LLM/projector/checkpoint 를 로드할 때 사용.
+      # ※ 운영자가 `HF_HOME=<여기> huggingface-cli download <model_id>` 로 미리 받음.
+      # ※ 외부 학습 manifest 의 spec.env 가 HF_HOME=/hf-cache 등을 가리키면 pod 내
+      #   transformers 가 외부망 없이 cache hit 으로 로드.
+      # ※ Internal LLM 의 workspace/models/ (`jfData`/`jfStorage`) 영역과 완전 분리.
+      hfModelCache:
+        type: nfs
+        path: /opt/dynamic-storage/hf-model-cache # [필수] NFS export 경로
+        server: <NFS_SERVER_IP>                   # [필수] NFS 서버 IP
+
       # src: 백엔드 소스 코드 볼륨
       # ※ 개발 환경에서 소스 코드를 직접 마운트하여 핫리로드할 때 사용
       # ※ 운영/배포 환경에서는 enabled: false 권장 (이미지에 코드가 포함됨)
       src:
         enabled: true                             # 운영 환경: false / 개발 환경: true
         type: nfs
-        path: <SRC_PATH>                          # [조건부 필수] enabled=true일 때 TANGO2/GenAI_Platform/apps 소스 절대 경로
+        path: <SRC_PATH>                          # [조건부 필수] enabled=true일 때 TANGO2/LLMOps/apps 소스 절대 경로
                                                   # 주의: 해당 경로에 NFS 설정이 되어있어야 정상적으로 동작함
         server: <NFS_SERVER_IP>                   # [조건부 필수] enabled=true일 때 NFS 서버 IP
 
@@ -189,15 +207,16 @@ global:
                                                   #   별도로 설정해야 합니다. (별도 가이드 참조)
         host: "<EXTERNAL_HOST_IP>"                # [필수] 외부 접근 IP 또는 도메인
                                                   #   예: "platform.example.com" 또는 "10.0.1.50"
-        port: "80"                                # 외부 접근 포트 (HTTP: 80, HTTPS: 443)
+        port: "32080"                             # 외부 접근 포트. 기본 Kong proxy = NodePort 32080/32443(gaip_kong)
+                                                  #   LoadBalancer(MetalLB)로 80/443 을 쓰면 "80"/"443" + redirect "true"
         sshPort: "30022"                          # SSH 접근 포트 (NodePort 범위: 30000-32767)
 
         # redirect 설정:
         #   "true"  → URL에 포트를 포함하지 않음 (예: http://platform.example.com)
         #             ※ 80(HTTP) 또는 443(HTTPS) 포트를 사용할 때 선택
         #   "false" → URL에 포트를 포함함 (예: http://10.0.1.50:8080)
-        #             ※ 비표준 포트를 사용할 때 선택
-        redirect: "true"
+        #             ※ 비표준 포트를 사용할 때 선택 (기본 NodePort 32080 은 false)
+        redirect: "false"
 
         # Kong Ingress Controller의 IngressClass 이름
         # ※ Kong이 사전 설치되어 있어야 하며, 해당 IngressClass가 존재해야 합니다.
@@ -388,13 +407,20 @@ global:
       db: mariadb:10.11
       playground: acrylaaai/genai-platform-playground_app:tango_v2.0.1
       model: acrylaaai/genai-platform-model_app:tango_v2.0.1
+      evaluation: acrylaaai/genai-platform-evaluation_app:tango_v2.0.1
+      data_pipeline: acrylaaai/genai-platform-data_pipeline_app:tango_v2.0.1
       pipeline: acrylaaai/genai-platform-pipeline_app:tango_v2.0.1
       preprocessing: acrylaaai/genai-platform-preprocessing_app:tango_v2.0.1
       analyzing: acrylaaai/genai-platform-analyzing_app:tango_v2.0.1
+      synthesis: acrylaaai/genai-platform-synthesis_app:tango_v2.0.1
       option: acrylaaai/genai-platform-option_app:tango_v2.0.1
       filebrowser: acrylaaai/genai-platform-filebrowser:0.1.0
       ingress_management: acrylaaai/genai-platform-ingress_management_app:tango_v2.0.1
       alert_management: acrylaaai/genai-platform-alert_management_app:tango_v2.0.1
+      # ⚠️ external_container 는 위 system.registry 를 앞에 붙이지 않고 이 값을 그대로
+      #   image 로 사용합니다 (devops/fb_external_container/helm/templates/deployment.yaml).
+      #   폐쇄망에서는 여기에 내부 레지스트리 주소를 직접 포함시켜야 합니다.
+      external_container: acrylaaai/genai-platform-external_container_app:tango_v2.0.1
       #
       # [미사용 서비스] - 수정 불필요, 빈 값으로 두세요
       marker_front:                               # 미사용 (마커 프론트엔드)
@@ -434,13 +460,17 @@ global:
       model: llm_model
       prompt: llm_prompt
       cost-management: fb_cost_management
+      evaluation: llm_evaluation
+      data_pipeline: llm_data_pipeline
       pipeline: fb_pipeline
       preprocessing: fb_preprocessing
       collect: fb_collect
       analyzing: fb_analyzing
+      synthesis: fb_synthesis
       option: fb_option
       ingress_management: fb_ingress_management
       alert_management: fb_alert_management
+      external_container: fb_external_container
 
     # ========================================================================
     # Application Names (Helm Release Names)
@@ -472,14 +502,18 @@ global:
       model: jfb-llm-model
       rag: jfb-llm-rag
       prompt: jfb-llm-prompt
+      evaluation: jfb-llm-evaluation
+      data_pipeline: jfb-llm-data-pipeline
       cost-management: jfb-cost-management
       pipeline: jfb-app-pipeline
       preprocessing: jfb-app-preprocessing
       collect: jfb-app-collect
       analyzing: jfb-app-analyzing
+      synthesis: jfb-app-synthesis
       option: jfb-app-option
       ingress_management: jfb-app-ingress-management
       alert_management: jfb-app-alert-management
+      external_container: jfb-app-external-container
 
     # ========================================================================
     # RDMA Settings (고성능 GPU 통신, 선택사항)

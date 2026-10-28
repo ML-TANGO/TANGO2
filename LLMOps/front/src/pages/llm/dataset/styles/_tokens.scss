@@ -1,0 +1,147 @@
+// 학습 데이터 파이프라인 화면 전용 토큰.
+//
+// 조나단 팔레트는 이미 @src/styles/color.scss 에 있으므로 그대로 쓰고, 목업에만 있던
+// 값(라운드·그림자·모션·일부 색)만 여기서 채운다. 색을 새로 정의하지 않고 매핑만 하는
+// 이유: 같은 색을 두 벌 들고 있으면 팔레트가 바뀔 때 한쪽만 바뀐다.
+@import '@src/styles/color.scss';
+
+// ── 색 매핑 ────────────────────────────────────────────────────────────────
+// color.scss 에 이름이 다르게 있는 것들. 화면 코드는 아래 별칭만 쓴다.
+$dp-ink: $mono207; // 본문 잉크
+$dp-ink-sub: $mono206;
+$dp-ink-mute: $mono205; // 라벨 · 보조 문구
+$dp-ink-faint: $mono204;
+$dp-line: $mono203; // 구분선
+$dp-line-soft: $mono202;
+$dp-surface: $mono200; // 카드 바닥
+$dp-canvas: #fbfcff; // 페이지 바닥
+
+$dp-primary: $blue104;
+$dp-primary-deep: $blue105; // = #164abe
+$dp-primary-soft: $blue103;
+$dp-primary-pale: $blue101;
+$dp-primary-bg: $blue100;
+
+$dp-pass: $lime603; // 통과 · 정상
+$dp-pass-bg: $lime601;
+$dp-pass-ink: $lime604;
+$dp-fail: $red503; // 미달 · 위험
+$dp-fail-mid: $red502;
+$dp-fail-bg: $red501;
+$dp-warn: #ffab31; // 주의 (color.scss $orange402 와 같은 값)
+$dp-warn-bg: $orange401;
+
+// 목업에만 있던 색 — color.scss 에 대응 이름이 없다.
+$dp-primary-tint: #eaf1fe; // 선택된 행 배경 (front $blue102 는 다른 값)
+$dp-primary-hover: #1e5bc5; // 버튼 hover
+$dp-primary-link: #0f6cc7;
+$dp-navy: #042659; // 강조 헤딩
+$dp-header: #2a2d3e; // 상단 바
+$dp-chip: #c8dbfd;
+$dp-warn-ink: #b35500; // 주의 문구 잉크(배경 $orange401 과 짝)
+$dp-yellow-bg: $yellow301;
+$dp-yellow-ink: $yellow304;
+
+// ── 라운드 ─────────────────────────────────────────────────────────────────
+// 컨트롤 높이가 커질수록 라운드도 커진다 — 30px:7, 36px:8, 42px:9.
+$dp-r-ctl: 7px;
+$dp-r-ctl2: 8px;
+$dp-r-ctl3: 9px;
+$dp-r-ctl4: 10px;
+$dp-r-card: 12px;
+$dp-r-tile: 16px;
+
+// ── 그림자 ─────────────────────────────────────────────────────────────────
+// 검정이 아니라 파랑 틴트를 쓴다. 회색 그림자는 화면을 탁하게 만든다.
+$dp-sh-card: 0 3px 12px 0 rgba(45, 118, 248, 0.06);
+$dp-sh-lift: 0 6px 16px 0 rgba(45, 118, 248, 0.16);
+$dp-sh-tile: inset 0 0 0 1px #dee9ff, 0 3px 12px 0 rgba(45, 118, 248, 0.06);
+$dp-sh-node: inset 0 0 0 1px #dee9ff, 0 3px 12px 0 rgba(45, 118, 248, 0.08);
+$dp-sh-node-on: inset 0 0 0 2px #2d76f8, 0 6px 16px 0 rgba(45, 118, 248, 0.16);
+$dp-sh-rail: inset -3px 0 12px 0 rgba(0, 0, 0, 0.04);
+$dp-sh-drawer: -6px 0 24px 0 rgba(45, 118, 248, 0.16);
+
+// 테두리는 border 가 아니라 inset shadow 로 그린다. border 를 쓰면 포커스로 두께가
+// 바뀔 때 레이아웃이 1px 씩 밀린다.
+$dp-ring: inset 0 0 0 1px #{$mono203};
+$dp-ring-on: inset 0 0 0 1px #{$blue104};
+$dp-ring-soft: inset 0 0 0 1px #{$blue101};
+
+// 선택된 목록 행 왼쪽의 강조 막대.
+$dp-ring-left: inset 2px 0 0 0 #{$blue104};
+
+// ── 모션 ───────────────────────────────────────────────────────────────────
+// easing 하나만 쓴다. 화면마다 다른 곡선을 쓰면 같은 제품처럼 느껴지지 않는다.
+$dp-ease: cubic-bezier(0.4, 0, 0.2, 1);
+$dp-fast: 120ms;
+$dp-normal: 180ms;
+$dp-slow: 240ms;
+
+// ── 타이포 ─────────────────────────────────────────────────────────────────
+// 라벨은 line-height = font-size(솔리드)로 둔다. 산문만 1.5~1.7 을 준다.
+// 본문 기본 두께는 500(SpoqaM) — Regular 본문 스타일은 이 화면에 없다.
+@mixin dp-solid($size) {
+  font-size: $size;
+  line-height: $size;
+}
+
+@mixin dp-prose($size, $lh: 1.6) {
+  font-size: $size;
+  line-height: $lh;
+}
+
+// 숫자는 자릿수 폭을 고정한다 — 표가 세로로 흔들리지 않게 하는 핵심.
+//
+// 목업은 여기에 Source Code Pro 를 썼는데 플랫폼은 그 폰트를 싣지 않는다. 그대로 두면
+// 브라우저가 아무 monospace 로 대체해 이 화면들만 다른 글꼴로 보인다. 본문 폰트를
+// 그대로 쓰고 tabular-nums 로 자릿수 폭만 맞춘다.
+@mixin dp-num {
+  font-family: SpoqaM;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+// 섹션 위 작은 라벨.
+@mixin dp-eyebrow {
+  font-family: SpoqaB;
+  font-variant-numeric: tabular-nums;
+  font-size: 10px;
+  line-height: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: $dp-ink-mute;
+}
+
+// 카드 표면.
+@mixin dp-card {
+  border-radius: $dp-r-card;
+  background: $dp-surface;
+  box-shadow: $dp-sh-card;
+}
+
+// 입력 필드.
+@mixin dp-field {
+  height: 36px;
+  width: 100%;
+  padding: 0 12px;
+  border: 0;
+  border-radius: $dp-r-ctl2;
+  background: $dp-surface;
+  box-shadow: $dp-ring;
+  color: $dp-ink;
+  font-family: SpoqaM;
+  @include dp-solid(14px);
+  transition: box-shadow $dp-fast $dp-ease;
+
+  &:focus {
+    outline: none;
+    box-shadow: $dp-ring-on;
+  }
+}
+
+// 표 헤더 셀.
+@mixin dp-th {
+  font-family: SpoqaB;
+  @include dp-solid(13px);
+  color: $dp-ink-mute;
+}

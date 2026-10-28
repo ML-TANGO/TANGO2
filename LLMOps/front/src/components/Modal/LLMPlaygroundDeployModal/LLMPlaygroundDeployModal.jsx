@@ -11,12 +11,15 @@ import { toast } from 'react-toastify';
 
 import {
   getPlaygroundDeploymentList,
+  postDualStart,
   postPlaygroundDeployStart,
+  putDualOptions,
 } from '@src/apis/llm/playground';
 import { closeModal } from '@src/store/modules/modal';
 import { STATUS_SUCCESS } from '@src/network';
 
 import NewStyleModalFrame from '../NewStyleModalFrame';
+import DualModelInstance from './DualModelInstance';
 import ModelInstance from './ModelInstance';
 import RagModelInstance from './RagInbedingModelInstance';
 import RagrerankerModelInstance from './RagrerankerModelInstance/RagrerankerModelInstance';
@@ -199,7 +202,136 @@ const getPlaygroundInstanceList = async (
   isFetching.current = false;
 };
 
-export default function LLMPlaygroundDeployModal({ type, data }) {
+function DualPlaygroundDeployModal({ type, data }) {
+  const dispatch = useDispatch();
+  const {
+    playgroundId,
+    canEdit,
+    options = {},
+    resources = {},
+    onSuccess,
+  } = data;
+  const [instanceList, setInstanceList] = useState([]);
+  const [isFetching, setIsFetching] = useState(true);
+  const [selectedInstanceId, setSelectedInstanceId] = useState(
+    resources.instanceId ?? null,
+  );
+  const [promptGpuCount, setPromptGpuCount] = useState(
+    resources.promptGpuCount ?? 1,
+  );
+  const [inferenceGpuCount, setInferenceGpuCount] = useState(
+    resources.inferenceGpuCount ?? 1,
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    setIsFetching(true);
+    getPlaygroundDeploymentList(+playgroundId).then(
+      ({ result, message, status, error }) => {
+        if (cancelled) return;
+        if (status === STATUS_SUCCESS) {
+          setInstanceList(Array.isArray(result) ? result : []);
+        } else {
+          errorToastMessage(error, message);
+        }
+        setIsFetching(false);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [playgroundId]);
+
+  const selectedInstance = instanceList.find(
+    (instance) =>
+      String(instance.instance_id) === String(selectedInstanceId),
+  );
+  // 단일 모달과 같은 /playgrounds/instance 계약의 총량으로 두 역할의 합계를 검증한다.
+  const gpuCapacity =
+    (selectedInstance?.instance_allocate ?? 0) *
+    (selectedInstance?.gpu_allocate ?? 0);
+  const requestedGpu =
+    Number(promptGpuCount || 0) + Number(inferenceGpuCount || 0);
+  const footerMessage = !canEdit
+    ? '중지 상태에서만 배포 구성을 변경할 수 있습니다.'
+    : !selectedInstance
+      ? '배포할 인스턴스를 선택해주세요.'
+      : requestedGpu > gpuCapacity
+        ? `LLM1과 LLM2의 GPU 합계가 인스턴스 용량을 초과합니다. (${requestedGpu}/${gpuCapacity})`
+        : '';
+  const validate = !isFetching && footerMessage === '';
+
+  const submit = {
+    text: '배포',
+    func: async () => {
+      if (!validate) return false;
+      try {
+        const { isInferenceExternal, ...savedOptions } = options;
+        const optionsResponse = await putDualOptions({
+          ...savedOptions,
+          playground_id: +playgroundId,
+          model_instance_id: +selectedInstanceId,
+          prompt_gen_gpu_count: Number(promptGpuCount || 0),
+          inference_gpu_count: Number(inferenceGpuCount || 0),
+          // 외부 SDS는 생성 파라미터를 읽지 않으므로 기존 규칙대로 null을 보낸다.
+          inference_params: isInferenceExternal
+            ? null
+            : savedOptions.inference_params,
+        });
+        if (optionsResponse.status !== STATUS_SUCCESS) {
+          errorToastMessage(optionsResponse.error, optionsResponse.message);
+          return false;
+        }
+
+        const startResponse = await postDualStart(+playgroundId);
+        if (startResponse.status !== STATUS_SUCCESS) {
+          errorToastMessage(startResponse.error, startResponse.message);
+          return false;
+        }
+
+        await onSuccess?.({
+          instanceId: selectedInstanceId,
+          promptGpuCount: Number(promptGpuCount || 0),
+          inferenceGpuCount: Number(inferenceGpuCount || 0),
+        });
+        dispatch(closeModal(type));
+      } catch (error) {
+        errorToastMessage(null, '이중모델 배포 중 오류가 발생했습니다.');
+        return false;
+      }
+      return undefined;
+    },
+  };
+
+  return (
+    <NewStyleModalFrame
+      type={type}
+      title='배포 자원 설정'
+      validate={validate}
+      isResize={true}
+      isMinimize={true}
+      cancel={{ text: '취소' }}
+      submit={submit}
+      footerMessage={footerMessage}
+      customStyle={{ width: '664px' }}
+    >
+      <div className={cx('flex-32')}>
+        <DualModelInstance
+          isFetching={isFetching}
+          instanceList={instanceList}
+          selectedInstanceId={selectedInstanceId}
+          promptGpuCount={promptGpuCount}
+          inferenceGpuCount={inferenceGpuCount}
+          onSelectInstance={setSelectedInstanceId}
+          onPromptGpuChange={setPromptGpuCount}
+          onInferenceGpuChange={setInferenceGpuCount}
+        />
+      </div>
+    </NewStyleModalFrame>
+  );
+}
+
+function SinglePlaygroundDeployModal({ type, data }) {
   const { t } = useTranslation();
   const dispatch = useDispatch();
 
@@ -401,4 +533,12 @@ export default function LLMPlaygroundDeployModal({ type, data }) {
       </div>
     </NewStyleModalFrame>
   );
+}
+
+export default function LLMPlaygroundDeployModal(props) {
+  // 기존 PLAYGROUND_DEPLOY 라우팅은 유지하고 data.mode만으로 안전하게 본문을 분기한다.
+  if (props.data?.mode === 'dual') {
+    return <DualPlaygroundDeployModal {...props} />;
+  }
+  return <SinglePlaygroundDeployModal {...props} />;
 }

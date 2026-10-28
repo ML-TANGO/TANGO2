@@ -1,0 +1,100 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# eva-vlm-infer.yaml — 부팅 시드 manifest (SDS-VLM 추론, sync)
+#
+# eva-vlm-train.yaml 의 짝. 두 파일은 service_family/contract_version/image
+# 가 일치해야 seed.py 가 pair 로 등록하고, 그래야 학습 완료 → 추론 pod
+# `/deploy` reload 체인이 산다. 한쪽만 고치지 말 것.
+# ─────────────────────────────────────────────────────────────────────────────
+
+apiVersion: tango.acryl.ai/v1
+kind: ExternalContainer
+metadata:
+  name: eva-vlm-infer
+  version: "1.1.0"
+  vendor: ETRI
+  provider: ETRI
+  contact: "yvvyee@etri.re.kr"
+  description: |-
+    SDS-VLM 추론 서비스. eva-vlm-train 이 커밋한 체크포인트를 /deploy 로 reload 한다.
+spec:
+  job_type: infer
+  execution_mode: sync
+  image: docker.io/yvvyee/eva-vlm-backend:1.1.0
+  port: 8000
+  workspace_scope: per-workspace
+
+  resources:
+    cpu: "8"
+    memory: "32Gi"
+    gpu: 1
+    gpu_memory: "32Gi"
+    accelerator: nvidia
+
+  inputs:
+    base_model:
+      required: true
+    dataset:
+      required: false
+    params:
+      required: true
+
+  outputs:
+    metrics: false
+    model: false
+    dataset: false
+    artifacts: false
+
+  secrets:
+    required: []
+
+  network:
+    egress_whitelist:
+      - "huggingface.co"
+      - "hf.co"
+
+  # Acryl patched-v2 image + cluster HF cache offline 정합 위해 학습용과 동일
+  # env block 사용 + EVA_LLM_MODEL_PATH/EVA_CHECKPOINT_PATH 필수 env 보강.
+  # EVA_LLM_MODEL_PATH 는 HF repo_id (OFFLINE cache hit), EVA_CHECKPOINT_PATH
+  # 는 일단 dummy — startup 시점에 projector.bin 없어 graceful skip 되지만
+  # KeyError 차단되어 /deploy 호출까지 도달 가능.
+  env:
+    EVA_LLM_MODEL_PATH: "meta-llama/Llama-3.1-8B-Instruct"
+    # startup 초기 checkpoint — pod 띄울 때 mount 된 commit_models 의 첫 폴더
+    # 사용. payload 로 swap 가능.
+    EVA_CHECKPOINT_PATH: "/models/checkpoints/_bootstrap"
+    EVA_VISION_MODEL_NAME: "openai/clip-vit-large-patch14-336"
+    # ETRI partner default 그대로 사용 — helm chart 가 /models/checkpoints 에
+    # commit_models 디렉토리를 RO mount (job_type=infer 분기).
+    EVA_CHECKPOINTS_ROOT: "/models/checkpoints"
+    HF_HOME: "/hf-cache"
+    HF_HUB_OFFLINE: "1"
+    TRANSFORMERS_OFFLINE: "1"
+    HOME: "/tmp"
+    TRITON_CACHE_DIR: "/tmp/triton"
+    TORCH_HOME: "/tmp/torch"
+    MPLCONFIGDIR: "/tmp/matplotlib"
+
+  endpoints:
+    info: /info
+    health: /health
+    # /live 제거 — ETRI v1.0.0 (eva-vlm-infer) 가 미구현. helm chart 의
+    # livenessProbe 는 endpoints.health 로 fallback (chart fix 2026-05-20).
+    # /run — partner code 의 @app.post("/run") 매핑. 이미 startup 시 load 된
+    # 모델로 즉시 추론 (reload 없음). /deploy 와 별도 endpoint.
+    run: /run
+    deploy: /deploy
+    models: /models
+
+  capabilities:
+    supported_models:
+      - llama-3.1-8b
+      - qwen3-8b
+    min_gpu_memory_gb: 16
+    estimated_startup_seconds: 600
+    estimated_duration_seconds: 30
+    timeout_seconds: 600
+
+  service_family: eva-vlm
+  contract_version: "1.1.0"
+  model_artifact_format: "projector.bin + LoRA adapter"
+  checkpoint_namespace: sds-marine

@@ -1,0 +1,390 @@
+@import '@src/styles/color.scss';
+
+/* 고정 프롬프트 박스 */
+.prompt-text {
+  margin: 0;
+  padding: 0 20px 20px;
+  color: $normal-text-color;
+  font-size: 15px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 진행 헤더 */
+.ph {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  font-size: 15px;
+}
+
+.ph-summary,
+.ph-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ph-name {
+  max-width: 280px;
+  overflow: hidden;
+  color: $normal-text-color;
+  font-family: SpoqaB;
+  font-size: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ph-progress {
+  color: $normal-text-color;
+  font-family: SpoqaB;
+}
+
+.ph-avg {
+  color: $sub-text-color;
+
+  strong {
+    color: $primary-color;
+    font-family: SpoqaB;
+  }
+}
+
+.ph-spacer {
+  flex: 1;
+}
+
+.ph-position {
+  min-width: 64px;
+  color: $sub-text-color;
+  font-family: SpoqaM;
+  font-size: 14px;
+  text-align: center;
+}
+
+/* 별점 */
+.star-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.star {
+  display: inline-flex;
+  width: 42px;
+  height: 42px;
+  padding: 4px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 4px;
+  background-color: transparent;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background-color: $hover-bg-color;
+  }
+
+  &:focus-visible {
+    outline: 2px solid $primary-color;
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+  }
+}
+
+.star-icon {
+  width: 32px;
+  height: 32px;
+  background-color: $mono204;
+  mask: url('/images/icon/ic-star.svg') center / contain no-repeat;
+  -webkit-mask: url('/images/icon/ic-star.svg') center / contain no-repeat;
+}
+
+.star--filled .star-icon {
+  background-color: $yellow304;
+}
+
+.star:disabled .star-icon {
+  background-color: $disable-color;
+}
+
+.star-value {
+  margin-left: 8px;
+  color: $normal-text-color;
+  font-family: SpoqaB;
+  font-size: 16px;
+}
+
+/* 코멘트 의무 안내 — 낮은 점수인데 사유가 비었을 때 채점 블록 하단에 노출. */
+.comment-required {
+  color: $error-color;
+  font-family: SpoqaM;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* CSV 테이블 — AIS 계측값은 숫자 비교라 기본 14px 로는 눈이 금방 지친다. 이 표만 키운다. */
+.csv-wrap {
+  margin: 4px 0 20px;
+  overflow-x: auto;
+
+  :global(.rdt_TableCol),
+  :global(.rdt_TableCol_Sortable),
+  :global(.rdt_TableCell) {
+    font-size: 16px;
+  }
+}
+
+/* 완료 안내 */
+.completion {
+  padding: 20px;
+  margin-bottom: 16px;
+  border: 1px solid $card-border-color;
+  border-radius: 4px;
+  background-color: $background-color;
+}
+
+.completion-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+/* 샘플 이미지 — 인라인은 카드 폭까지 채우고(기존 360x280 고정은 선박 장면 세부 판독 불가),
+   클릭하면 라이트박스로 뷰포트까지 확대한다. 원본은 서버가 리사이즈 없이 그대로 준다. */
+.img-button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  margin-bottom: 16px;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+  text-align: left;
+
+  &:focus-visible {
+    outline: 2px solid $primary-color;
+    outline-offset: 2px;
+  }
+}
+
+.img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: 720px;
+  border: 1px solid $mono203;
+  border-radius: 4px;
+  background-color: $mono201;
+  object-fit: contain;
+}
+
+/* 바운딩박스 오버레이 — 이미지 표시 영역에 딱 겹치는 래퍼(원본 비율 그대로 축소되므로 % 좌표가
+   그대로 맞는다). 박스/이름표 규약은 SDS 데모(_draw_bboxes)와 동일: 초록 테두리 + 위쪽 이름표. */
+.img-frame {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+  vertical-align: top;
+}
+
+.bbox-layer {
+  position: absolute;
+  inset: 0;
+  display: block;
+  pointer-events: none;
+}
+
+.bbox {
+  position: absolute;
+  display: block;
+  box-sizing: border-box;
+  border: 2px solid #00ff00;
+}
+
+.bbox-label {
+  position: absolute;
+  bottom: 100%;
+  left: -2px;
+  padding: 0 6px;
+  background-color: #00cc00;
+  color: #000;
+  font-family: SpoqaB;
+  font-size: 13px;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+/* 이미지 위쪽에 붙은 배는 이름표를 위에 두면 잘린다 — 박스 안쪽으로. */
+.bbox-label--inside {
+  top: 0;
+  bottom: auto;
+}
+
+/* 확대 크롭이 잘라 간 영역 — 패널 테두리 색·번호와 짝지어 어느 배인지 눈으로 잇는다. */
+.bbox-region {
+  position: absolute;
+  display: block;
+  box-sizing: border-box;
+  border: 2px solid;
+  border-radius: 2px;
+}
+
+.bbox-region-index {
+  position: absolute;
+  bottom: 100%;
+  left: -2px;
+  min-width: 20px;
+  padding: 0 6px;
+  color: #000;
+  font-family: SpoqaB;
+  font-size: 13px;
+  line-height: 20px;
+  text-align: center;
+}
+
+.bbox-region-index--inside {
+  top: 0;
+  bottom: auto;
+}
+
+/* 배별 확대 크롭 — 원본에서 박스 주변을 잘라 최근접 보간으로 키운다(없는 정보는 만들지 않는다). */
+.crop-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.crop-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.crop {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.crop-view {
+  position: relative;
+  box-sizing: content-box;
+  overflow: hidden;
+  border: 2px solid;
+  border-radius: 4px;
+  background-color: $mono201;
+}
+
+.crop-inner {
+  position: absolute;
+}
+
+.crop-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+.crop-caption {
+  color: $sub-text-color;
+  font-family: SpoqaM;
+  font-size: 14px;
+}
+
+.crop-omitted {
+  color: $sub-text-color;
+  font-family: SpoqaM;
+  font-size: 14px;
+}
+
+/* 확대 라이트박스 — 페이지 헤더/드롭다운(999~1000 대)보다 위. */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background-color: rgba(0, 0, 0, 0.82);
+  cursor: zoom-out;
+}
+
+.lightbox-frame {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+  cursor: default;
+}
+
+/* 래퍼 높이가 auto 라 % 는 해석되지 않는다 — 뷰포트에서 .lightbox 패딩(32px×2)을 뺀 값으로 제한. */
+.lightbox-img {
+  display: block;
+  max-width: calc(100vw - 64px);
+  max-height: calc(100vh - 64px);
+  cursor: default;
+  object-fit: contain;
+}
+
+.lightbox-close {
+  position: absolute;
+  top: 16px;
+  right: 24px;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+
+  &:hover {
+    background-color: rgba(255, 255, 255, 0.26);
+  }
+
+  &:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+  }
+}
+
+.img-status {
+  display: flex;
+  width: 240px;
+  min-height: 120px;
+  margin-bottom: 16px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: $sub-text-color;
+  font-size: 14px;
+}
+
+@media (max-width: 960px) {
+  .ph {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .ph-summary {
+    flex-wrap: wrap;
+  }
+
+  .ph-spacer {
+    display: none;
+  }
+
+  .ph-actions {
+    width: 100%;
+  }
+}

@@ -25,6 +25,8 @@ import { openModal } from '@src/store/modules/modal';
 import { callApi, STATUS_SUCCESS } from '@src/network';
 
 import DatasetFinder from './DatasetFinder';
+import DatasetFormatConvert from './DatasetFormatConvert';
+import DatasetSdsConvert from './DatasetSdsConvert';
 // import UploadButton from './UploadButton';
 import DatasetMoveCopy from './DatasetMoveCopy';
 import EditIcon from './EditIcon';
@@ -97,6 +99,7 @@ function DatasetDetailContent({
   historyForward,
   paginationResetDefaultPage,
   onFileUpload, // 파일 업로드 이벤트
+  onDropUpload, // 드래그앤드롭 업로드 (현재 데이터셋으로 직접 업로드)
   onCreateFolder, // 폴더 생성 이벤트
   onGitHubClone, // 깃허브 클론 이벤트
   onGoogleDriveUpload, // 구글드라이브 업로드 이벤트
@@ -128,11 +131,35 @@ function DatasetDetailContent({
   switchStatus,
   rowClickFetching,
   fromUploadFetching,
+  onFormatConvert, // 포맷 변환 실행 (선택 파일 1개)
+  onSdsConvert, // SDS→LLaVA 변환 실행 (선택 폴더 1개 또는 현재 경로)
+  converting, // 포맷 변환 요청 중
+  convertJob, // 진행 중/직전 포맷 변환 잡 { id, name, status, reason }
+  onOpenConvertLog, // 포맷 변환 시스템 로그 모달 열기
 }) {
   const filebrowserDisable = accessType === 0 && permissionLevel > 3;
 
   const { t } = useTranslation();
   const dispatch = useDispatch();
+
+  // 드래그앤드롭 업로드 — 드롭 시 현재 데이터셋으로 직접 업로드, 클릭 시 업로드 모달
+  const [isDragging, setIsDragging] = useState(false);
+  const handleUploadDragOver = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+  const handleUploadDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+  const handleUploadDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const dropped = e.dataTransfer?.files;
+    if (dropped && dropped.length > 0) {
+      onDropUpload?.([...dropped]);
+    }
+  };
 
   // ! const memoizedFileList = useMemo(() => fileList, [fileList]);
 
@@ -153,6 +180,38 @@ function DatasetDetailContent({
   const isDisabledBtn =
     (Number(accessType) === 1 && Number(permissionLevel) > 4) ||
     (Number(accessType) === 0 && Number(permissionLevel) > 3);
+
+  /**
+   * 포맷 변환 — 파일 "1개"만 대상.
+   * format_convert.py 는 realpath(input_data) 의 dirname 에 결과를 쓰므로 폴더/루트를
+   * 넘기면 결과가 상위(또는 파드 루트)에 생긴다. 따라서 파일(type === 'file')이 정확히
+   * 1개일 때만 활성 — 폴더·다중 선택은 비활성.
+   * 지원 확장자(csv/txt/parquet)가 아니면 잡이 확정 실패하므로 함께 차단.
+   */
+  const FORMAT_CONVERT_EXTS = ['csv', 'txt', 'parquet'];
+  const convertTarget = selectedRows.length === 1 ? selectedRows[0] : null;
+  const convertTargetExt = (convertTarget?.name || '')
+    .split('.')
+    .pop()
+    .toLowerCase();
+  const isFormatConvertDisabled =
+    !convertTarget ||
+    convertTarget.type !== 'file' ||
+    !FORMAT_CONVERT_EXTS.includes(convertTargetExt) ||
+    isDisabledBtn ||
+    isTempPath;
+
+  /**
+   * SDS 변환 — 대상은 "디렉터리". sds_llava_convert.py 가 입력 디렉터리를 스캔해
+   * 그 안에 결과를 쓰므로 폴더 1개 선택 또는 미선택(현재 경로 = 데이터셋 전체)만 허용.
+   * 파일 선택·다중 선택은 비활성 — 파일을 넘기면 스크립트가 즉시 실패한다.
+   */
+  const sdsConvertTarget = selectedRows.length === 1 ? selectedRows[0] : null;
+  const isSdsConvertDisabled =
+    selectedRows.length > 1 ||
+    (sdsConvertTarget && sdsConvertTarget.type !== 'dir') ||
+    isDisabledBtn ||
+    isTempPath;
 
   const searchOptions = [{ label: t('name.label'), value: 'name' }];
 
@@ -597,6 +656,20 @@ function DatasetDetailContent({
       >
         {t('decompression.label')}
       </Button>
+      <DatasetFormatConvert
+        targetFileName={convertTarget?.name || ''}
+        disabled={isFormatConvertDisabled}
+        converting={converting}
+        onConfirm={onFormatConvert}
+        btnCustomStyle={{ marginRight: '12px' }}
+      />
+      <DatasetSdsConvert
+        targetDirName={sdsConvertTarget?.name || loc || '/'}
+        disabled={isSdsConvertDisabled}
+        converting={converting}
+        onConfirm={onSdsConvert}
+        btnCustomStyle={{ marginRight: '12px' }}
+      />
       <Button
         type='red-light'
         onClick={openDeleteConfirmPopup}
@@ -874,10 +947,10 @@ function DatasetDetailContent({
                 switchStatus === 'pending'
                   ? { backgroundColor: '#ffab31' }
                   : switchStatus === 'failed' || switchStatus === 'error'
-                  ? { backgroundColor: '#eb3e2a' }
-                  : switchStatus === null
-                  ? { backgroundColor: '#c1c1c1' }
-                  : {}
+                    ? { backgroundColor: '#eb3e2a' }
+                    : switchStatus === null
+                      ? { backgroundColor: '#c1c1c1' }
+                      : {}
               }
               onChange={() => {
                 if (
@@ -901,6 +974,60 @@ function DatasetDetailContent({
           )}
         </div>
       </div>
+      {!isTempPath && !isDisabledBtn && (
+        <div
+          className={cx('upload-dropzone', isDragging && 'dragging')}
+          role='button'
+          tabIndex={0}
+          onClick={onFileUpload}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onFileUpload();
+            }
+          }}
+          onDragOver={handleUploadDragOver}
+          onDragLeave={handleUploadDragLeave}
+          onDrop={handleUploadDrop}
+        >
+          <span className={cx('upload-dropzone-text')}>
+            {t(
+              'dragAndDropUpload.message',
+              '파일을 여기로 끌어다 놓거나 클릭해 업로드하세요',
+            )}
+          </span>
+        </div>
+      )}
+      {convertJob && (
+        <div
+          className={cx(
+            'format-convert-banner',
+            convertJob.failed ? 'failed' : convertJob.finished ? 'done' : '',
+          )}
+        >
+          <span className={cx('text')}>
+            {convertJob.failed
+              ? t('formatConvertFailed.message', '포맷 변환에 실패했습니다.')
+              : convertJob.finished
+                ? t(
+                    'formatConvertDone.message',
+                    '포맷 변환이 완료되었습니다. 결과 파일이 원본과 같은 폴더에 생성되었습니다.',
+                  )
+                : t(
+                    'formatConvertRunning.message',
+                    '포맷 변환을 실행하는 중입니다.',
+                  )}
+            {convertJob.reason ? ` (${convertJob.reason})` : ''}
+          </span>
+          <Button
+            type='none-border'
+            size='small'
+            onClick={() => onOpenConvertLog?.(convertJob)}
+          >
+            {t('systemLog.label')}
+          </Button>
+        </div>
+      )}
       <Table
         loading={tableLoading || rowClickFetching || fromUploadFetching}
         finder={DatasetFinderWrapper}

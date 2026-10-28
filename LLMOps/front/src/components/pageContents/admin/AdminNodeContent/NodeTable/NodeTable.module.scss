@@ -1,3 +1,5 @@
+@import '@src/styles/color.scss';
+
 .nodetable-cont {
   border-top: 1px solid #dbdbdb;
 }
@@ -19,6 +21,102 @@
   }
 }
 
+// 엣지 행의 설정 컬럼 액션(새로고침/삭제). 규칙이 없어 UA 순정 회색 버튼이 노출됐다.
+// padding/border/background 를 모두 명시하고 appearance 로 UA 크롬을 벗긴다.
+.edge-act {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid $mono203;
+  border-radius: 6px;
+  background: $mono200;
+  font-family: SpoqaM;
+  font-size: 12px;
+  color: $mono205;
+  appearance: none;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, opacity 0.15s;
+
+  &:hover:not(:disabled) {
+    border-color: $primary-color;
+    color: $primary-color;
+  }
+
+  // 전역 `*:focus { outline: none }` 이 링을 지우므로 :focus-visible 로 되살린다.
+  &:focus-visible {
+    outline: 2px solid $primary-color;
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  // 삭제는 파괴적 액션이라 error 토큰으로 구분한다.
+  &.danger {
+    border-color: rgba($error-color, 0.5);
+    color: $error-color;
+
+    &:hover:not(:disabled) {
+      border-color: $error-color;
+      background: $red501;
+    }
+
+    &:focus-visible {
+      outline-color: $error-color;
+    }
+  }
+}
+
 .flex-cont {
   display: flex;
 }
+
+/* ── SP-8 P4b: 커스텀 레이블 칩 컬럼 (관리 모달 규칙은 미참조라 삭제) ── */
+.label-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px 2px 8px;
+  font-size: 12px;
+  background: #f1f3f7;
+  border-radius: 10px;
+  color: #444;
+}
+
+.chip-x {
+  border: none;
+  background: none;
+  color: #999;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0;
+
+  &:hover {
+    color: #e0483e;
+  }
+}
+
+.add-label {
+  border: none;
+  background: none;
+  color: #2f6fed;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+}
+

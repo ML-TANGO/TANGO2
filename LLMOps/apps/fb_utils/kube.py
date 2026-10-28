@@ -150,6 +150,74 @@ def get_pod_info(namespace, pod_name):
         print(f"Error getting pod: {e}")
         return None
 
+
+def create_or_replace_secret(namespace, name, string_data: dict):
+    """Opaque Secret 생성(있으면 교체). HF 토큰을 helm --set/pod command 평문 대신 secretKeyRef 로
+    주입하기 위함(보안리뷰 C-4). string_data 는 평문 dict(k8s 가 base64 인코딩해 저장)."""
+    v1 = client.CoreV1Api()
+    body = client.V1Secret(
+        metadata=client.V1ObjectMeta(name=name),
+        string_data=string_data,
+        type="Opaque",
+    )
+    try:
+        v1.replace_namespaced_secret(name=name, namespace=namespace, body=body)
+    except ApiException as e:
+        if e.status == 404:
+            v1.create_namespaced_secret(namespace=namespace, body=body)
+        else:
+            raise
+
+
+def read_secret(namespace, name):
+    """Opaque Secret 을 평문 dict 로 읽는다(없으면 None). 값은 base64 디코딩해 돌려준다."""
+    import base64
+    v1 = client.CoreV1Api()
+    try:
+        sec = v1.read_namespaced_secret(name=name, namespace=namespace)
+    except ApiException as e:
+        if e.status == 404:
+            return None
+        raise
+    out = {}
+    for k, v in (sec.data or {}).items():
+        try:
+            out[k] = base64.b64decode(v).decode("utf-8")
+        except Exception:
+            out[k] = ""
+    return out
+
+
+def delete_secret(namespace, name):
+    """Secret 삭제(없으면 무시). 토큰 Secret 정리용."""
+    v1 = client.CoreV1Api()
+    try:
+        v1.delete_namespaced_secret(name=name, namespace=namespace)
+    except ApiException as e:
+        if e.status != 404:
+            print(f"Error deleting secret: {e}")
+
+def get_pod_log(namespace, pod_name, tail_lines: int = 200, container: str = None):
+    """pod stdout 로그 tail. pod 미존재(GC/미생성) 시 None.
+    generation 등 외부 job 의 실시간 로그(stdout JSONL)용 — 결과는 NFS, 로그는 stdout."""
+    if not namespace or not pod_name:
+        return None
+    v1 = client.CoreV1Api()
+    try:
+        log = v1.read_namespaced_pod_log(
+            name=pod_name, namespace=namespace,
+            tail_lines=tail_lines, container=container, timestamps=False,
+        )
+        # pod 종료 직후 transient — 컨테이너 로그가 이미 GC됨(원문 노출 방지).
+        if log and log.startswith("unable to retrieve container logs"):
+            return None
+        return log
+    except ApiException as e:
+        if e.status == 404:
+            return None
+        print(f"Error getting pod log: {e}")
+        return None
+
 def get_all_pods(namespace : str, label_selector: str = ""):
     v1 = client.CoreV1Api()
     try:
@@ -168,6 +236,26 @@ def get_node_info(node_name):
     except ApiException as e:
         print(f"Error getting node: {e}")
         return None
+
+
+def list_node_roles():
+    """모든 노드의 node-role.kubernetes.io/* 라벨을 {node_name: set(role)} 로 반환.
+
+    노드 배지 파생용(예: 관리자가 `kubectl label node X node-role.kubernetes.io/db=`
+    하면 'db' 배지). best-effort — 실패 시 {} (배지 없이도 노드표는 정상 동작).
+    """
+    v1 = client.CoreV1Api()
+    prefix = "node-role.kubernetes.io/"
+    try:
+        out = {}
+        for n in v1.list_node().items:
+            labels = n.metadata.labels or {}
+            out[n.metadata.name] = {
+                k[len(prefix):] for k in labels if k.startswith(prefix) and len(k) > len(prefix)
+            }
+        return out
+    except Exception:
+        return {}
 
 
 def get_pvc_info(namespace, pvc_name):

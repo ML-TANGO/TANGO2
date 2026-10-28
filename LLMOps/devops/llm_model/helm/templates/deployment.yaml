@@ -38,6 +38,25 @@ spec:
         envFrom:
         - configMapRef:
             name: jfb-settings
+        env:
+        # 양자화(convert) 컨테이너 manifest 바인딩 — 레지스트리 등록명(convert-llamacpp).
+        # jfb-settings 에 키가 없어 코드 기본값 mock-convert 로 떨어지므로 여기서 명시 오버라이드.
+        - name: CONVERT_MANIFEST_NAME
+          value: "convert-llamacpp"
+        - name: CONVERT_MANIFEST_VERSION
+          value: "1.1.3"
+        # SDS(3.5) 도메인 모델 생성 시 바인딩되는 학습 manifest — 같은 이유로
+        # jfb-settings 에 키가 없어 코드 기본값에 의존하게 되는 값이라 여기서 고정.
+        # recipe 를 가진 판본이어야 FT 탭이 레시피 파이프라인으로 렌더된다.
+        # 기본값 1.1.0 = fb_external_container 가 부팅 시 시드하는 표준 판본이라
+        # 신규 설치에서 항상 존재한다. 내부 패치 이미지를 쓰는 인스턴스는
+        # values 의 global.jfb.sds_manifest_version 으로 그 버전을 지정한다 —
+        # 하드코딩하면 그런 인스턴스의 수동 env 가 upgrade 때 덮여 FT 탭이
+        # 레시피 없는 화면으로 되돌아간다.
+        - name: SDS_MANIFEST_NAME
+          value: "eva-vlm-train"
+        - name: SDS_MANIFEST_VERSION
+          value: "{{ .Values.global.jfb.sds_manifest_version | default "1.1.0" }}"
         volumeMounts:
         {{- include "lib.volume.volumeMounts" (dict "name" "jf-kube" )  | nindent 8 }}
         {{- include "lib.volume.volumeMounts"  (dict "name" "jf-src" "enabled" .Values.global.jfb.volume.src.enabled )  | nindent 8 }}

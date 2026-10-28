@@ -14,6 +14,6 @@ download = APIRouter(
 @download.get("")
 def donwload_data(args : model.DownLoadModel=Depends()):
     user_name, _ = get_auth()
-    args.download_files= args.download_files.split(',')
+    args.download_files = args.download_files.split(',') if args.download_files else []
     return download_svc.download(body=args,headers_user=user_name)
     

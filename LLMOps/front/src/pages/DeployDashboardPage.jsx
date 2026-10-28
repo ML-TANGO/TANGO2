@@ -26,14 +26,19 @@ import { callApi, network, STATUS_SUCCESS } from '@src/network';
 // Utils
 import { defaultSuccessToastMessage, errorToastMessage } from '@src/utils';
 
-function DeployDashboardPage() {
+function DeployDashboardPage({
+  deploymentId,
+  workspaceId,
+  embedded = false,
+} = {}) {
   // i18n
   const { t } = useTranslation();
 
   // Router Hooks
-  const { did } = useParams();
+  const routeParams = useParams();
   const match = useRouteMatch();
-  const { id: wid } = match.params;
+  const did = deploymentId ?? routeParams.did;
+  const wid = workspaceId ?? match.params.id;
 
   // Redux Hooks
   const dispatch = useDispatch();
@@ -742,7 +747,7 @@ function DeployDashboardPage() {
 
     if (status === STATUS_SUCCESS) {
       setTitle(result);
-      breadCrumbHandler(result);
+      if (!embedded) breadCrumbHandler(result);
       return true;
     }
     errorToastMessage(error, message);
@@ -791,6 +796,7 @@ function DeployDashboardPage() {
 
   return (
     <DeployDashboardContent
+      embedded={embedded}
       title={title}
       totalInfoData={totalInfoData}
       resourceInfoData={resourceInfoData}

@@ -1,14 +1,14 @@
 namespace: jonathan-system
 
 service:
-  type: LoadBalancer          # NodePort, LoadBalancer
-  port: 30500
+  type: NodePort          # NodePort, LoadBalancer (MetalLB 미사용 → NodePort)
+  port: 30500             # NodePort 값 (템플릿이 nodePort로 사용)
   loadBalancerIP:         # type이 LoadBalancer일때만
 
 volume: # data volume
   type: nfs
-  path: /storage/jonathan-storage/jf-data/images
-  server: 192.168.0.44
+  path: <REGISTRY_IMAGES_PATH>     # [필수] NFS 상의 레지스트리 이미지 저장 경로
+  server: <NFS_SERVER_IP>          # [필수] NFS 서버 IP
 
 auth:
   enabled: false

@@ -54,7 +54,13 @@ ALLOWED_PATH = [
     "/api/(login|logout)(.*)/",
     "/api/users/register/",
     "/api/users/check/",
-    
+    # SP-8 §5.3 — 엣지 device heartbeat: 기관 디바이스가 자체 Bearer 토큰으로 호출(Kong
+    # consumer 아님) → key-auth 면제. 백엔드(fb_resource) 토큰 검증이 실 게이트이고,
+    # rate-limiting/request-size-limiting(edge-device-plugins.yaml)로 익명 표면 방어.
+    # ⚠️ 실 device 연동(2차년도) 시 활성. apply 시 라이브 Kong route path 문자열과
+    # 정확히 일치하는지 확인(GET {admin}/routes 의 paths) — 아래는 -device-api 인그레스 기준.
+    "/api/edge/devices(.*)/",
+
     # Marker용 임시 허용 경로들
     # "/api/(workspaces)(.*)/",
     # "~/api/(workspaces)(.*)$",
@@ -162,6 +168,10 @@ def kong_sync_user_to_consumer():
             print(f"Failed to create consumer {new_user}: {e}", file=sys.stderr)
 
     old_users = list(set(consumers) - set(users))
+    # 게시(D6) 전용 consumer(dep-<id>)는 DB user 가 아니지만 publish_deployment_api 가 관리한다.
+    # 제외하지 않으면 이 동기화가 ~5s 루프마다 삭제 → key-auth 크리덴셜 cascade 소멸 → 게시 키 401.
+    # unpublish_deployment_api 에서만 삭제된다.
+    old_users = [u for u in old_users if not (u.startswith("dep-") and u[4:].isdigit())]
     if len(old_users) or len(new_users):
         print(f"[SYNC User] Create: {new_users} |  Remove: {old_users}", file=sys.stderr)
 
@@ -733,7 +743,13 @@ def kong_sync_consumer_acl_groups():
             
             if not username or username == "anonymous-user":
                 continue
-                
+
+            # 게시(D6) consumer(dep-<id>)는 publish_deployment_api 가 ACL 그룹(=자기 group)을 관리한다.
+            # 이 동기화가 DB user 아님을 이유로 그룹을 벗기면 게시 route 의 acl(allow=[dep-<id>])이
+            # 소유 consumer 를 거부(403) → 제외한다.
+            if username.startswith("dep-") and username[4:].isdigit():
+                continue
+
             processed_users += 1
             
             # username으로 user 정보 조회

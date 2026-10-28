@@ -42,8 +42,12 @@
 ### 1-1. 시스템 요구사항
 
 - OS: Ubuntu 22.04.5 Jammy LTS 이상
-- Kubernetes: v1.30.x 권장 (테스트 v1.30.14)
+- Kubernetes: v1.34.x 권장 (검증 v1.34.0)
 - Helm 3.x, kubectl 설치 및 대상 클러스터 접근 가능
+- metrics-server 설치 완료
+
+> 📌 **클러스터가 아직 없다면 [CLUSTER-SETUP.md](./CLUSTER-SETUP.md) 를 먼저 수행합니다.**
+> containerd·Calico·kubeadm·metrics-server 설치와 노드 라벨·taint 설정을 다룹니다.
 
 ### 1-2. 기본 동작 검증
 
@@ -53,6 +57,7 @@
 kubectl cluster-info
 kubectl get nodes -o wide
 helm version
+kubectl top nodes        # metrics-server 동작 확인
 ```
 
 추가로 현재 컨텍스트를 반드시 확인합니다.
@@ -323,14 +328,38 @@ kubectl delete pod -n jonathan-system <user-pod-name>
 2. **스토리지 등록**
    - 메뉴: 스토리지
    - 등록값:
-     - 이름: `local-nfs` (예시)
+     - **이름: `values_<서버명>.yaml` 의 `global.jfb.volume.jfStorage[0].name` 과 반드시 동일**
+       (해당 값이 `local` 이면 여기에도 `local` 을 입력)
      - 타입: `nfs`
      - IP: NFS 서버 IP
      - 마운트 경로: values 파일에 입력한 `global.jfb.volume.jfStorage[0].path`(스토리지 루트 경로)와 동일
+
+   > 🔴 **이름이 다르면 데이터셋 파일이 보이지 않습니다.**
+   > 플랫폼은 등록 이름 앞에 `storage-` 를 붙여 저장합니다(`storage-<입력값>`).
+   > 한편 앱 차트는 values 의 `jfStorage[0].name` 으로 PVC `storage-<name>` 을 만들어 마운트합니다.
+   > 두 값이 어긋나면 DB 가 가리키는 경로와 실제 마운트 경로가 달라져,
+   > **UI 목록에는 데이터셋이 보이는데 내부 파일은 비어 있는** 상태가 됩니다.
+   >
+   > 예) values 가 `name: "local"` 인데 UI 에 `local-nfs` 를 입력하면
+   > DB 는 `storage-local-nfs`, 실제 마운트는 `storage-local` 이 되어 불일치합니다.
+
    - 등록 후 확인:
      ```bash
-     kubectl get pod -A | rg -i "storage|provisioner"
+     kubectl get pod -A | grep -Ei "storage|provisioner"
      ```
+     StorageClass 와 exporter 가 생성되었는지도 함께 확인합니다.
+     ```bash
+     kubectl get sc | grep -E "data-sc|main-sc"
+     ```
+
+   > 📌 **기존 DB 를 보존한 채 재설치한 경우**에는 UI 에서 다시 등록하지 마십시오.
+   > 스토리지 행은 이미 있는데 StorageClass·provisioner 만 없는 상태이므로,
+   > 아래 리콘사일러를 호출하면 DB 기준으로 재생성됩니다(멱등).
+   > ```bash
+   > POD=$(kubectl get pods -n jonathan-system --no-headers | grep jfb-app-resource | awk '{print $1}')
+   > kubectl exec -n jonathan-system $POD -- \
+   >   curl -sS -X POST -H "Jf-User: <관리자 계정>" http://localhost:8000/api/storage/update
+   > ```
 
 3. **사용자 생성**
    - 메뉴: 사용자 > 사용자 추가

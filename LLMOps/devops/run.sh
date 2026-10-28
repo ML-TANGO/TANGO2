@@ -4,7 +4,10 @@ SCRIPT=$( readlink -m $( type -p $0 ))
 BASE_DIR=`dirname ${SCRIPT}`
 
 MODE=true # default
-NAMESPACE="jonathan-system"
+# helm release 를 설치할 namespace. 서빙/개발 인스턴스를 한 클러스터에서 나눠 쓰므로
+# env 로 덮어쓸 수 있게 한다(미지정 시 기존 동작 그대로).
+#   예) JF_NAMESPACE=tango-dev ./run.sh install -f ./values_dev.yaml
+NAMESPACE="${JF_NAMESPACE:-jonathan-system}"
 
 while [[ $# -gt 0 ]]; do
   key="$1"
@@ -59,14 +62,16 @@ fi
 CHARTS=(
     "common_app" "dashboard" "dataset" "deployment" "front" "image" "monitoring" "notification"
     "option" "resource" "scheduler"
-    "user" "workspace" "alert_management" "ingress_management"
+    "user" "workspace" "alert_management" "ingress_management" "external_container"
+    "collect" "preprocessing" "pipeline" "analyzing" "synthesis"
 )
 
 # ================================================
 cd $BASE_DIR
 if [ "$MODE" == "true" ]; then
-  # kubectl create ns {NAMESPACE}-image
-  kubectl create ns jonathan-system-image 2> /dev/null
+  # 이미지 빌드 전용 ns. settings.py 의 IMAGE_NAMESPACE = "{JF_SYSTEM_NAMESPACE}-image" 와
+  # 같은 규칙이어야 한다(리터럴로 두면 dev 인스턴스가 서빙 이미지 ns 를 쓴다).
+  kubectl create ns ${NAMESPACE}-image 2> /dev/null
 
   for chart in "${CHARTS[@]}"; do
     printf '%*s\n' `tput cols` '' | tr ' ' '-'

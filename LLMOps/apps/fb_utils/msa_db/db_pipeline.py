@@ -73,6 +73,19 @@ async def get_task_items(workspace_id : int, task_type : str):
     res = await select_query(sql)
     return res
 
+async def get_generation_manifests():
+    # 생성형 파이프라인 노드용 외부 컨테이너 manifest 목록 (job_type=generate).
+    # external_container_manifest 는 같은 msa_jfb DB → 직접 조회. (WBS 1.2)
+    sql = """
+        SELECT name, version, execution_mode,
+               JSON_UNQUOTE(JSON_EXTRACT(raw_json, '$.metadata.description')) AS description
+        FROM external_container_manifest
+        WHERE job_type = 'generate'
+        ORDER BY name, version
+    """
+    res = await select_query(sql)
+    return res
+
 async def get_task_item(task_item_id : int, task_type : str):
     sql = f"""
         SELECT t.*, w.name as workspace_name, s.name as main_storage_name
@@ -362,12 +375,31 @@ async def update_pipeline_retraining(pipeline_id : int, retraining_type : str, r
 async def update_pipeline_task_reset(pipeline_id :int):
     try:
         sql = """
-                UPDATE pipeline_task set status = 'pending', start_datetime = Null, task_item_job_id=Null, end_datetime = Null WHERE pipeline_id=%s
+                UPDATE pipeline_task set status = 'pending', start_datetime = Null, task_item_job_id=Null, task_item_job_str_id=Null, end_datetime = Null WHERE pipeline_id=%s
             """
         res = await commit_query(query=sql, params=(pipeline_id,))
         return True
     except Exception as e:
-        return False     
+        return False
+
+async def reset_pipeline_tasks_subset(pipeline_id : int, task_ids : List[int]):
+    """SP-7 Jump(노드 재실행) — 특정 task 들만 pending 리셋(나머지는 done 유지 → 런타임이
+    스킵). pipeline_id 로도 스코프해 타 파이프라인 task 오염 방지. 빈 목록이면 no-op."""
+    try:
+        if not task_ids:
+            return True
+        # 정수만 통과(SQL injection 방어 — IN 절은 placeholder 동적 생성).
+        safe_ids = [int(i) for i in task_ids]
+        placeholders = ",".join(["%s"] * len(safe_ids))
+        sql = f"""
+                UPDATE pipeline_task SET status='pending', start_datetime=Null,
+                    task_item_job_id=Null, task_item_job_str_id=Null, end_datetime=Null
+                WHERE pipeline_id=%s AND id IN ({placeholders})
+            """
+        await commit_query(query=sql, params=(pipeline_id, *safe_ids))
+        return True
+    except Exception as e:
+        return False
   
 async def update_pipeline_reset(pipeline_id: int, start_datetime: str = None, dataset_size : int = 0):
     try:

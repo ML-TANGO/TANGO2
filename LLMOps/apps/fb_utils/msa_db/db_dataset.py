@@ -46,8 +46,8 @@ async def get_dataset_async(dataset_id=None, dataset_name=None, workspace_id=Non
             res = await select_query(query=sql, params=(dataset_id), fetch_type=FetchType.ONE)
         if dataset_name is not None:
             if workspace_id is not None:
-                sql += 'WHERE d.name = "%s" AND d.workspace_id = %s'
-                res = await select_query(query=sql, params=(dataset_name, workspace_id), fetch_type=FetchType.ONE) 
+                sql += 'WHERE d.name = %s AND d.workspace_id = %s'
+                res = await select_query(query=sql, params=(dataset_name, workspace_id), fetch_type=FetchType.ONE)
             else:
                 sql += 'WHERE d.name = "%s"' 
                 res = await select_query(query=sql, params=(dataset_name), fetch_type=FetchType.ONE) 
@@ -255,8 +255,9 @@ def insert_dataset(name, workspace_id , create_user_id, access, description):
             sql = "INSERT into datasets(name, workspace_id, create_user_id, access, description) values (%s,%s,%s,%s,%s)"
             cur.execute(sql, (name, workspace_id, create_user_id, access, description))
 
+            new_dataset_id = cur.lastrowid
             conn.commit()
-        return True
+        return new_dataset_id
     except Exception as e:
         traceback.print_exc()
         return False

@@ -4,7 +4,10 @@ SCRIPT=$( readlink -m $( type -p $0 ))
 BASE_DIR=`dirname ${SCRIPT}`
 
 MODE=true # default
-NAMESPACE="jonathan-system"
+# helm release 를 설치할 namespace. 서빙/개발 인스턴스를 한 클러스터에서 나눠 쓰므로
+# env 로 덮어쓸 수 있게 한다(미지정 시 기존 동작 그대로).
+#   예) JF_NAMESPACE=tango-dev ./run_llm.sh install -f ./values_dev.yaml
+NAMESPACE="${JF_NAMESPACE:-jonathan-system}"
 
 while [[ $# -gt 0 ]]; do
   key="$1"
@@ -61,23 +64,35 @@ cd $BASE_DIR
 if [ "$MODE" == "true" ]; then
     helm dependency update llm_model/helm
     helm dependency update llm_playground/helm
-    kubectl create ns jonathan-system-image 2> /dev/null
+    helm dependency update llm_evaluation/helm
+    helm dependency update llm_data_pipeline/helm
+    kubectl create ns ${NAMESPACE}-image 2> /dev/null
 
     helm install -n $NAMESPACE model llm_model/helm      --values $VALUES
     helm install -n $NAMESPACE playground llm_playground/helm       --values $VALUES
+    helm install -n $NAMESPACE evaluation llm_evaluation/helm       --values $VALUES
+    helm install -n $NAMESPACE data-pipeline llm_data_pipeline/helm    --values $VALUES
 
 elif [ "$MODE" == "false" ]; then
     helm uninstall -n $NAMESPACE model
     helm uninstall -n $NAMESPACE playground
+    helm uninstall -n $NAMESPACE evaluation
+    helm uninstall -n $NAMESPACE data-pipeline
 
 elif [ "$MODE" == "upgrade" ]; then
     helm dependency update llm_model/helm
     helm dependency update llm_playground/helm
+    helm dependency update llm_evaluation/helm
+    helm dependency update llm_data_pipeline/helm
 
     helm upgrade -n $NAMESPACE model llm_model/helm        --values $VALUES
     helm upgrade -n $NAMESPACE playground llm_playground/helm --values $VALUES
+    helm upgrade -n $NAMESPACE evaluation llm_evaluation/helm --values $VALUES
+    helm upgrade -n $NAMESPACE data-pipeline llm_data_pipeline/helm --values $VALUES
 
 elif [ "$MODE" == "update" ]; then
-    helm dependency update llm_model/helm   
+    helm dependency update llm_model/helm
     helm dependency update llm_playground/helm
+    helm dependency update llm_evaluation/helm
+    helm dependency update llm_data_pipeline/helm
 fi

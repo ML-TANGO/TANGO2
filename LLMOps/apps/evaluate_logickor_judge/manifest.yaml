@@ -1,0 +1,137 @@
+# evaluate-logickor-judge — LogicKor 생성 + 심판 채점 + 집계(GPU).
+# evaluate-logickor(CPU, 집계 전용)의 상위 단계. 플랫폼은 LOGICKOR_MANIFEST_NAME env 로
+# 둘 중 하나를 고른다(코드 변경 없음). 집계 로직(scoring.py)은 두 이미지가 공유한다.
+apiVersion: tango.acryl.ai/v1
+kind: ExternalContainer
+
+metadata:
+  name: evaluate-logickor-judge
+  version: "0.2.5"
+  vendor: "Acryl (platform-owned)"
+  contact: "platform@acryl.ai"
+  description: |
+    LogicKor 생성 + 심판 채점 + 집계. checkpoint_name 을 주면 그 커밋 체크포인트를 vLLM 으로
+    올려 42문항 × 2턴을 생성하고(ETRI generator 의 chat template·토큰예산·샘플링 그대로,
+    전략은 default 단일), GPU 를 비운 뒤 심판 LLM 을 올려 문항×턴마다 1~10 점을 매기고
+    (ETRI evaluator 프롬프트·파싱 그대로) 카테고리별 격자와 종합 점수까지 산출한다.
+    generate_base_url 을 주면 체크포인트를 올리지 않고 이미 떠 있는 배포에 생성을 위임한다
+    (GPU·가중치 마운트 불필요). 셋 다 생략하면 데이터셋의 미채점 생성물을 채점한다(하위호환).
+
+spec:
+  image: "docker.io/acrylaaai/evaluate-logickor-judge:0.2.5"
+
+  # /hf-cache 는 읽기전용 마운트다. huggingface_hub 은 캐시 히트여도 refs/<rev> 를
+  # 갱신하려 해서 Errno 30 (Read-only file system) 으로 죽는다(2026-08-21 실측).
+  # 오프라인 모드면 ref 갱신·네트워크 조회를 건너뛰고 스냅샷을 그대로 쓴다 —
+  # 사전 캐시 전제(폐쇄망)와도 맞다. 이미지 재빌드 없이 manifest env 로 주입한다.
+  env:
+    HF_HUB_OFFLINE: "1"
+    TRANSFORMERS_OFFLINE: "1"
+
+  job_type: evaluate
+  execution_mode: async
+  port: 8000
+
+  resources:
+    cpu: "4"
+    memory: "32Gi"            # vLLM 가중치 로드 + KV 캐시 호스트측 버퍼
+    gpu: 1                    # 대상 모델 → (해제) → 심판 모델 **순차** 로드라 1장으로 끝난다.
+                              #   동시 로드로 바꾸면 2장이 필요해지고 이 값이 거짓이 된다.
+                              #   generate_base_url + judge_base_url 을 둘 다 주면 이 잡은
+                              #   GPU 를 전혀 쓰지 않지만(HTTP 호출만) 값은 1로 둔다 —
+                              #   매니페스트는 런타임 파라미터를 모른 채 최악(로컬 생성 +
+                              #   로컬 심판)을 보장해야 한다.
+    # gpu > 0 이면 스키마가 gpu_memory 선언을 강제한다. 심판 모델(gemma-4-E4B, 16GB
+    # 가중치)을 vLLM 이 gpu_memory_utilization=0.8 로 올리므로 A100 80GB 한 장 기준
+    # 64Gi 를 잡는다(가중치 + KV 캐시). 더 작은 카드에 스케줄되면 vLLM 이 기동 실패한다.
+    gpu_memory: "64Gi"
+
+  inputs:
+    params:
+      required: false
+      # checkpoint_name        : 생성에 쓸 커밋 이름(단일 세그먼트). 주면 generate 부터 수행.
+      #                          컨테이너가 /models/checkpoints/<name> 으로 해석한다
+      #                          (경로를 직접 받지 않는다 — 마운트 밖 읽기 차단).
+      # use_latest_checkpoint  : checkpoint_name 없이 /model(latest_checkpoint) 사용.
+      # generate_base_url      : 원격 생성 — OpenAI 호환 base URL(예: 플랫폼 배포 shim
+      #                          http://<llm-playground>/api/playgrounds/<id>/openai/v1).
+      #                          주면 대상 모델 vLLM 로드를 건너뛰고 **이미 떠 있는 배포**에
+      #                          42문항 × 2턴 생성을 요청한다(체크포인트 마운트 불필요 →
+      #                          checkpoint_name/use_latest_checkpoint 를 무시한다).
+      #                          2턴 구조·전략 프리픽스·문항은 로컬 경로와 동일하다.
+      #                          ⚠️ chat template 은 이 컨테이너가 적용하지 않는다 —
+      #                          tokenizer 가 없고, 적용 주체가 배포의 서빙 엔진마다 달라
+      #                          (임베드 vLLM=미적용 / llama.cpp·TGI·TensorRT=엔진 적용)
+      #                          여기서 붙이면 후자에서 이중 적용이 된다. 같은 이유로
+      #                          enable_thinking=False 를 걸 수 없다(사고 블록은 걷어내지만
+      #                          그 답변은 빈 출력이 된다 → thinking 은 배포 쪽에서 꺼라).
+      #                          ⚠️ 생성 파라미터(temperature/max_tokens)도 shim 이 무시하고
+      #                          배포 시점 설정을 따른다 → 로컬 vLLM 경로 점수와 직접 비교
+      #                          금지. metrics.generate.mode/endpoint/model/errors/note 로
+      #                          결과에 새겨 추적 가능하게 한다.
+      #                          SSRF 가드는 judge_base_url 과 동일 규칙.
+      # generate_model_len     : 생성 컨텍스트 길이(기본 4096, ETRI 기본값). 원격 경로에서는
+      #                          max_tokens 힌트로만 쓰인다(shim 이 무시할 수 있다).
+      # strategy               : 프롬프트 전략(기본·정본 default).
+      # judge_model            : 심판 모델(프리셋 gemma 또는 HF id/로컬 경로). 이 잡이 직접
+      #                          가중치를 올린다.
+      #                          ⚠️ 플랫폼(llm_evaluation)은 경로를 거부하고 프리셋 이름
+      #                          또는 HF repo id 만 통과시킨다(vLLM 이 로컬 경로도 로드하므로).
+      # judge_base_url         : 원격 심판 — OpenAI 호환 base URL(예: 플랫폼 배포 shim
+      #                          http://<llm-playground>/api/playgrounds/<id>/openai/v1).
+      #                          주면 심판 vLLM 로드를 건너뛰고 이 엔드포인트에 채점을
+      #                          요청한다. 심판 모델은 GET {base}/models 의 data[0].id 로
+      #                          자동감지하므로 judge_model 은 무시된다(둘 다 주면 이쪽이
+      #                          이긴다 — 어떤 모델인지는 엔드포인트가 확정한다).
+      #                          ⚠️ 플랫폼 shim 은 temperature·max_tokens 를 무시하고 배포
+      #                          시점 설정을 따른다 → 심판 배포가 temperature 0 이 아니면
+      #                          점수가 재현되지 않는다. metrics.judge.mode/endpoint/note 로
+      #                          결과에 새겨 추적 가능하게 한다.
+      #                          scheme 은 http/https 만, 경로 '..' 및 자격증명 금지,
+      #                          link-local/multicast 로 resolve 되면 거부(SSRF 가드).
+      # judge_model_len        : 심판 컨텍스트 길이(기본 8192).
+      # judge_max_output_tokens: 심판 1회 출력 상한(기본 1024). 낮으면 평가문이 잘려
+      #                          점수 파싱이 실패한다 → metrics.judge.unscored 로 드러난다.
+      # benchmarks             : [{benchmark: logickor, metric: judge_*}] — 대표 스칼라 축.
+      # generated_subdir       : 채점 전용 모드에서 데이터셋 내 하위 경로로 좁힐 때.
+    dataset:
+      # ⚠️ job_type=evaluate 는 스키마가 required=true 를 강제한다(false 로 두면 등록이
+      #   422 로 거부된다 — 2026-08-21 실측). 생성 모드는 데이터셋을 읽지 않지만
+      #   run_benchmark 가 프로젝트 데이터셋을 항상 넘기므로 계약상 문제는 없다.
+      #   채점 전용 모드에서는 미채점 생성물 jsonl 이 담긴 데이터셋이 실제 입력이다.
+      required: true
+
+  outputs:
+    metrics: true              # /output/metrics.json
+    artifacts: true            # /output/generated/default.jsonl (미채점 생성물)
+                               # /output/evaluated/**.jsonl (심판 평가문 포함)
+                               #   생성물을 남기는 이유: 심판만 바꿔 재채점하는 실험이
+                               #   가능해진다(현 gemma 심판은 gpt-4.1 대비 관대).
+
+  secrets:
+    required: []               # HF_TOKEN 은 공개 심판모델이면 불필요(params 로 전달 가능)
+
+  network:
+    # 심판 모델 가중치를 HF 에서 받는다. 사전 캐시된 환경이면 비워도 된다.
+    # judge_base_url(원격 심판)은 클러스터 **내부** svc 를 가리키므로 이 목록과 무관하다
+    # (프롬프트 최적화 컨테이너가 같은 shim 을 이미 소비해 도달성이 확인돼 있다).
+    egress_whitelist:
+      - huggingface.co
+      - cdn-lfs.huggingface.co
+      - cdn-lfs-us-1.hf.co
+
+  endpoints:
+    info: "/info"
+    health: "/health"
+    live: "/live"
+    run: "/run"
+    jobs: "/jobs/{id}"
+    cancel: "/jobs/{id}/cancel"
+
+  capabilities:
+    estimated_startup_seconds: 240      # 이미지 pull 없음 + 가중치 로드
+    # 생성(42×2) + 심판(42×2) + 모델 로드 2회 — 0.1.x(채점만) 대비 대략 2배로 잡는다.
+    estimated_duration_seconds: 3600
+    timeout_seconds: 14400
+
+  workspace_scope: per-workspace

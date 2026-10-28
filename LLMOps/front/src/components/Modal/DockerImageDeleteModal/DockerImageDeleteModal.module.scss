@@ -1,6 +1,6 @@
-.title {
-  margin: 0;
-}
+// 로컬 `.title { margin: 0 }` 만 있어 h2 가 브라우저 기본 크기로 나왔다.
+// 다른 모달들과 같은 방식으로 공유 `.title` 을 import 해 재사용한다.
+@import '../modal.scss';
 
 .close-btn {
   position: absolute;

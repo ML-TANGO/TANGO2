@@ -1,0 +1,758 @@
+@import '@src/styles/color.scss';
+
+$mono-font: 'Menlo', 'Consolas', 'Monaco', monospace;
+
+.cross-compare {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.title-bar {
+  display: flex;
+  flex-direction: column;
+}
+
+.title {
+  margin: initial;
+  color: $blue107;
+  font-family: SpoqaB;
+  font-size: 24px;
+  line-height: 24px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-title {
+  margin: 0;
+  font-size: 16px;
+  font-family: SpoqaB;
+  color: $normal-text-color;
+}
+
+.loading-state {
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: $sub-text-color;
+  font-size: 14px;
+}
+
+.guide {
+  padding: 16px;
+  border: 1px solid $card-border-color;
+  border-radius: 8px;
+  background-color: $background-color;
+}
+
+/* ── 비교 축 전환(모델 단위 ↔ 런 단위) ─────────────────────── */
+.mode-bar {
+  border-bottom: 1px solid $disable-color;
+}
+
+/* ── 모델 선택 칩 ─────────────────────────────────────────── */
+.model-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid $disable-color;
+  border-radius: 17px;
+  background-color: $mono200;
+  color: $mono206;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background-color 0.15s,
+    color 0.15s;
+
+  &:hover {
+    border-color: $blue103;
+  }
+
+  &.on {
+    border-color: $primary-color;
+    background-color: $background-color;
+    color: $blue105;
+  }
+}
+
+.chip-swatch {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background-color: $mono204;
+}
+
+.chip-id {
+  font-family: $mono-font;
+  font-size: 11px;
+  color: $sub-text-color;
+
+  .chip.on & {
+    color: $primary-color;
+  }
+}
+
+/* ── 비교 행렬 ────────────────────────────────────────────── */
+.matrix-scroll {
+  overflow-x: auto;
+  border: 1px solid $disable-color;
+  border-radius: 8px;
+  background-color: $mono200;
+}
+
+// 자식 결합자로 좁힌다 — 펼침 안에 .runs 표가 중첩되므로 후손 선택자로 두면
+// 행렬 헤더 스타일이 그 표의 헤더까지 덮어쓴다.
+.matrix {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+  font-size: 13px;
+
+  > thead > tr > th {
+    padding: 12px 14px;
+    border-bottom: 1px solid $disable-color;
+    background-color: $mono201;
+    color: $sub-text-color;
+    font-family: SpoqaB;
+    font-size: 12px;
+    white-space: nowrap;
+    vertical-align: bottom;
+  }
+
+  > tbody > tr > th,
+  > tbody > tr > td {
+    border-bottom: 1px solid $mono202;
+  }
+
+  > tbody > tr:last-child > th,
+  > tbody > tr:last-child > td {
+    border-bottom: none;
+  }
+}
+
+.model-head {
+  text-align: center;
+  border-left: 1px solid $mono202;
+}
+
+.model-head-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
+.model-rule {
+  width: 22px;
+  height: 3px;
+  border-radius: 2px;
+  background-color: $mono204; // 색 슬롯이 안 잡힌 모델의 폴백
+}
+
+.model-head-name {
+  color: $normal-text-color;
+  font-size: 12.5px;
+}
+
+.metric-head {
+  min-width: 210px;
+  text-align: left;
+}
+
+.metric-cell {
+  padding: 0;
+  font-weight: normal;
+  text-align: left;
+  vertical-align: top;
+}
+
+.model-cell {
+  padding: 0;
+  border-left: 1px solid $mono202;
+  vertical-align: top;
+}
+
+.row-head {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 14px;
+  min-width: 210px;
+}
+
+.row-head-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.row-name {
+  font-family: SpoqaB;
+  font-size: 13.5px;
+  color: $normal-text-color;
+}
+
+.row-scale {
+  padding: 2px 6px;
+  border-radius: 4px;
+  background-color: $mono202;
+  color: $sub-text-color;
+  font-family: $mono-font;
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+.row-sub {
+  color: $sub-text-color;
+  font-size: 11.5px;
+}
+
+.row-expand {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 2px 0;
+  border: none;
+  background: transparent;
+  color: $primary-color;
+  font-family: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 14px;
+
+  &.empty {
+    justify-content: center;
+    padding: 22px 14px;
+    color: $placeholder-text-color;
+    font-size: 12px;
+  }
+}
+
+.cell-value {
+  color: $normal-text-color;
+  font-family: SpoqaB;
+  font-size: 20px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+
+  .cell.is-best & {
+    color: $lime604;
+  }
+}
+
+.cell-delta {
+  color: $error-color;
+  font-family: SpoqaB;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  min-height: 14px;
+
+  &.best {
+    color: $lime604;
+  }
+}
+
+.cell-bar {
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background-color: $mono202;
+  overflow: hidden;
+}
+
+.cell-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background-color: $mono204; // 색 슬롯이 안 잡힌 모델의 폴백
+}
+
+.cell-from {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: $sub-text-color;
+  font-family: $mono-font;
+  font-size: 10.5px;
+}
+
+/* ── 행 펼침(그 지표에 기여한 전 런) ──────────────────────── */
+.drawer > td {
+  padding: 0;
+  background-color: $mono201;
+  border-top: 1px solid $disable-color;
+}
+
+.drawer-inner {
+  padding: 14px 16px;
+}
+
+.drawer-title {
+  margin: 0 0 10px;
+  color: $sub-text-color;
+  font-family: SpoqaB;
+  font-size: 12px;
+}
+
+.runs {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: $mono200;
+  font-size: 12.5px;
+
+  th {
+    padding: 8px 12px;
+    background-color: $mono202;
+    color: $sub-text-color;
+    font-family: SpoqaB;
+    font-size: 11px;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 8px 12px;
+    border-bottom: 1px solid $mono202;
+  }
+
+  tr:last-child td {
+    border-bottom: none;
+  }
+
+  .right {
+    text-align: right;
+  }
+
+  .mono {
+    font-family: $mono-font;
+    font-size: 11.5px;
+    color: $mono206;
+    white-space: nowrap;
+  }
+}
+
+.run-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 7px;
+  border-radius: 50%;
+  vertical-align: -1px;
+  background-color: $mono204;
+}
+
+/* ── 런 선택(런 단위 축) ───────────────────────────────────
+   날짜만으로는 런을 구분할 수 없어서 모델·체크포인트·벤치마크·점수를 한 줄에 편다.
+   후보 표는 펼침 표(.runs)와 같은 조판을 재사용한다. */
+.cand-scroll {
+  max-height: 380px;
+  overflow-y: auto;
+  border: 1px solid $disable-color;
+  border-radius: 8px;
+  background-color: $mono200;
+}
+
+.cand-group {
+  border-bottom: 1px solid $mono202;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.cand-group-head {
+  box-sizing: border-box;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 14px;
+  background-color: $mono201;
+}
+
+.cand-group-name {
+  color: $normal-text-color;
+  font-family: SpoqaB;
+  font-size: 12.5px;
+}
+
+.cand-group-model {
+  color: $sub-text-color;
+  font-size: 11.5px;
+}
+
+.cand-row {
+  &.on > td {
+    background-color: $background-color;
+  }
+
+  // 점수가 없는 런은 열로 세울 값이 없다 — 담기 불가라는 것을 흐리기로 알린다.
+  &.off > td {
+    color: $placeholder-text-color;
+  }
+}
+
+/* ── 런 열 머리(두 줄: 모델 / 체크포인트·배포) ───────────────
+   같은 모델의 런이 여러 열로 뜨므로 둘째 줄이 없으면 열을 구분할 수 없다. */
+.run-head {
+  min-width: 138px;
+}
+
+.run-head-sub {
+  max-width: 148px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: $sub-text-color;
+  font-family: $mono-font;
+  font-size: 10.5px;
+  font-weight: normal;
+}
+
+/* ── 데이터셋 혼재 경고 ─────────────────────────────────────
+   차단하지 않는다 — 프로젝트를 가로질러 비교하면 정상적으로 생기는 조건이라
+   "직접 견줄 수 없다" 는 사실만 알린다. */
+.warn {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid $orange402;
+  border-left-width: 3px;
+  border-radius: 6px;
+  background-color: $mono201;
+}
+
+.warn-text {
+  color: $orange403;
+  font-family: SpoqaB;
+  font-size: 12.5px;
+}
+
+.warn-list {
+  color: $sub-text-color;
+  font-family: $mono-font;
+  font-size: 11px;
+}
+
+/* ── 평가 대상 열 머리 — 모델 이름 아래 출처(체크포인트/배포) ─────── */
+.model-head-source {
+  max-width: 160px;
+  overflow: hidden;
+  color: $sub-text-color;
+  font-family: $mono-font;
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// 같은 모델의 두 번째 이후 평가 대상 — 색은 모델, 점선은 "다른 체크포인트".
+.model-rule.dashed {
+  height: 0;
+  border-top: 3px dashed;
+  border-radius: 0;
+  background-color: transparent !important;
+}
+
+.model-rule.dashed.sw-0 {
+  border-color: $blue104;
+}
+
+.model-rule.dashed.sw-1 {
+  border-color: $lime603;
+}
+
+.model-rule.dashed.sw-2 {
+  border-color: $orange403;
+}
+
+.model-rule.dashed.sw-3 {
+  border-color: $blue108;
+}
+
+.model-rule.dashed.sw-4 {
+  border-color: $red502;
+}
+
+.model-rule.dashed.sw-5 {
+  border-color: $yellow304;
+}
+
+/* ── 평가 대상 요약(스코어카드) ─────────────────────────────── */
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid $card-border-color;
+  border-radius: 8px;
+  background-color: $mono200;
+}
+
+.summary-title {
+  margin: 0;
+  color: $normal-text-color;
+  font-family: SpoqaB;
+  font-size: 14px;
+}
+
+.summary-empty,
+.summary-note {
+  margin: 0;
+  color: $sub-text-color;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.summary-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.summary-cards {
+  display: grid;
+  flex: 1 1 420px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.summary-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid $mono202;
+  border-radius: 8px;
+  background-color: $background-color;
+}
+
+.summary-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.summary-model {
+  color: $normal-text-color;
+  font-family: SpoqaB;
+  font-size: 13px;
+}
+
+.summary-source {
+  min-width: 0;
+  overflow: hidden;
+  color: $sub-text-color;
+  font-family: $mono-font;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.summary-overall {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.summary-value {
+  color: $primary-color;
+  font-family: SpoqaB;
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.summary-caption,
+.summary-coverage {
+  color: $sub-text-color;
+  font-size: 11.5px;
+}
+
+.summary-cats {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  gap: 3px;
+  list-style: none;
+
+  li {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    color: $normal-text-color;
+    font-size: 12px;
+  }
+}
+
+.summary-cat-value {
+  font-family: $mono-font;
+}
+
+/* ── 레이더(카테고리 평균) ──────────────────────────────────── */
+.radar {
+  display: flex;
+  flex: 0 1 320px;
+  flex-direction: column;
+  align-items: center;
+  margin: 0;
+  gap: 6px;
+}
+
+.radar-svg {
+  width: 100%;
+  max-width: 300px;
+  height: auto;
+  overflow: visible;
+}
+
+.radar-ring {
+  fill: none;
+  stroke: $mono202;
+}
+
+.radar-axis {
+  stroke: $mono202;
+}
+
+.radar-label {
+  fill: $sub-text-color;
+  font-size: 11px;
+}
+
+.radar-series {
+  fill-opacity: 0.12;
+  stroke-width: 2;
+
+  &.dashed {
+    stroke-dasharray: 5 4;
+  }
+}
+
+.radar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 12px;
+  color: $sub-text-color;
+  font-size: 11.5px;
+}
+
+.radar-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+// 범례 표식 — 선 색은 rs-* 의 color(currentColor), 점선은 다른 체크포인트.
+.radar-swatch {
+  width: 16px;
+  height: 0;
+  border-top: 2px solid;
+
+  &.dashed {
+    border-top-style: dashed;
+  }
+}
+
+// 레이더 색 슬롯 — .sw-* 와 같은 순서·같은 색(SVG 는 background 대신 stroke/fill 을 쓴다).
+.rs-0 {
+  color: $blue104;
+  fill: $blue104;
+  stroke: $blue104;
+}
+
+.rs-1 {
+  color: $lime603;
+  fill: $lime603;
+  stroke: $lime603;
+}
+
+.rs-2 {
+  color: $orange403;
+  fill: $orange403;
+  stroke: $orange403;
+}
+
+.rs-3 {
+  color: $blue108;
+  fill: $blue108;
+  stroke: $blue108;
+}
+
+.rs-4 {
+  color: $red502;
+  fill: $red502;
+  stroke: $red502;
+}
+
+.rs-5 {
+  color: $yellow304;
+  fill: $yellow304;
+  stroke: $yellow304;
+}
+
+/* ── 모델 색 슬롯 ─────────────────────────────────────────
+   MAX_MODELS(6) 와 개수를 맞춘다. 색은 color.scss 에 정의된 것만 쓴다. */
+.sw-0 {
+  background-color: $blue104;
+}
+
+.sw-1 {
+  background-color: $lime603;
+}
+
+.sw-2 {
+  background-color: $orange403;
+}
+
+.sw-3 {
+  background-color: $blue108;
+}
+
+.sw-4 {
+  background-color: $red502;
+}
+
+.sw-5 {
+  background-color: $yellow304;
+}

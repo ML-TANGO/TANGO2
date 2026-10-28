@@ -22,10 +22,11 @@ import useCollectMethod from './hooks/useCollectMethod';
 import useInstanceSetting from './hooks/useInstanceSetting';
 import useLocation from './hooks/useLocation';
 import NameInput from './NameInput/NameInput';
-import PublicApiSelect from './PublicApiSelect';
+// [공공 API 미노출] import PublicApiSelect from './PublicApiSelect';
 import TooltipContent from './TooltipContent/TooltipContent';
 
-import { calFooterMessage, getCollectOptions, getPublicApi } from './util';
+// [공공 API 미노출] getPublicApi 제거 (util.js 정의는 유지)
+import { calFooterMessage, getCollectOptions } from './util';
 
 const nameExg = /[\\<>:*?"'|:;`{}^$ &[\]!\uAC00-\uD7A3ㄱ-ㅎㅏ-ㅣ_]/;
 
@@ -85,15 +86,15 @@ export default function DataCollectModal({ data, type }) {
     collectMethodColumn,
     collectMethodList,
     collect_information_list,
-    selectedApiList,
+    // [공공 API 미노출] selectedApiList,
     setDeploymentList,
     handleMethod,
     handleMethodModal,
-    handlePublicApiSelect,
+    // [공공 API 미노출] handlePublicApiSelect,
   } = useCollectMethod('public_api', null, workspaceId);
 
-  // ** [공공 API 데이터 목록]
-  const [publicDataList, setPublicDataList] = useState([]);
+  // ** [공공 API 데이터 목록] — 미노출 (GET collect/public-api 호출 제거)
+  // const [publicDataList, setPublicDataList] = useState([]);
 
   // ** [수집 주기] **
   const [collectCycle, setCollectCycle] = useState({
@@ -210,7 +211,7 @@ export default function DataCollectModal({ data, type }) {
       setDatasetList,
       setDeploymentList,
     );
-    getPublicApi(setPublicDataList);
+    // [공공 API 미노출] getPublicApi(setPublicDataList);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     setDatasetList,
@@ -258,13 +259,14 @@ export default function DataCollectModal({ data, type }) {
         handleSelectedLocation={handleSelectedLocation}
       />
       <CollectMethodRadio value={collectMethod} handleMethod={handleMethod} />
+      {/* [공공 API 미노출] 공공 API 데이터 목록(GET collect/public-api) 섹션
       {collectMethod === 'public_api' && (
         <PublicApiSelect
           options={publicDataList}
           valueList={selectedApiList}
           handleSelected={handlePublicApiSelect}
         />
-      )}
+      )} */}
       <CollectMethodList
         title={collectMethodTitle}
         collectMethodColumn={collectMethodColumn}

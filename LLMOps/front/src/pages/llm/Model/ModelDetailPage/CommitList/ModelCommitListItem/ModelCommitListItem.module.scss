@@ -1,4 +1,5 @@
 @import '@src/styles/color.scss';
+@import '@src/styles/focus.scss';
 
 .container {
   // padding: 32px 24px 0px 24px;
@@ -50,6 +51,116 @@
       }
     }
   }
+  // ── 커밋 체크포인트 스냅샷(Phase 2-C, 파인튜닝 뷰에서 이전) ──────────────────────
+  .ckpt-section {
+    margin-top: 32px;
+  }
+  .ckpt-head {
+    display: flex;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+  .ckpt-title {
+    font-family: SpoqaB;
+    font-size: 16px;
+    color: $mono207;
+  }
+  .ckpt-usage {
+    margin-left: auto;
+    font-family: SpoqaM;
+    font-size: 12px;
+    color: $mono205;
+  }
+  .ckpt-empty {
+    font-family: SpoqaM;
+    font-size: 13px;
+    color: $mono205;
+    padding: 16px 0;
+  }
+  .ckpt-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+  .ckpt-item {
+    border: 1px solid $mono203;
+    border-radius: 10px;
+    padding: 12px 14px;
+    background: $mono200;
+    transition: border-color 0.15s;
+    &:hover { border-color: $blue103; }
+    // best=eval/loss 최저 → 모델 반영본. 그린 강조(학습 시작 blue 와 구분).
+    &--best {
+      border-color: $lime603;
+      background: $lime601;
+      &:hover { border-color: $lime604; }
+    }
+  }
+  .ckpt-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .ckpt-id { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .ckpt-step { font-family: SpoqaB; font-size: 15px; color: $mono206; }
+  .ckpt-epoch { font-family: SpoqaM; font-size: 12px; color: $mono205; }
+  .best-badge {
+    font-family: SpoqaB;
+    font-size: 11px;
+    color: $mono200;
+    background: $lime603;
+    border-radius: 999px;
+    padding: 2px 9px;
+  }
+  .ckpt-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .ckpt-apply {
+    padding: 5px 12px;
+    border-radius: 7px;
+    border: 1px solid $blue103;
+    background: $mono200;
+    font-family: SpoqaM;
+    font-size: 12px;
+    color: $blue104;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+    @include focus-ring;
+    &:hover:not(:disabled) { border-color: $blue102; background: $blue101; color: $mono200; }
+    &:disabled { opacity: 0.45; cursor: default; }
+  }
+  .ckpt-del {
+    padding: 5px 12px;
+    border-radius: 7px;
+    border: 1px solid $mono203;
+    background: $mono200;
+    font-family: SpoqaM;
+    font-size: 12px;
+    color: $mono205;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+    @include focus-ring;
+    &:hover:not(:disabled) { border-color: $red502; color: $red502; }
+    &:disabled { opacity: 0.45; cursor: default; }
+  }
+  .ckpt-metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    font-family: SpoqaM;
+    font-size: 12px;
+    color: $mono205;
+    b { font-family: SpoqaB; color: $mono206; font-weight: normal; }
+  }
+  .ckpt-hint {
+    margin-top: 12px;
+    font-family: SpoqaM;
+    font-size: 12px;
+    color: $mono205;
+    line-height: 1.5;
+  }
+
   .graph {
     margin-top: 32px;
     width: 100%;

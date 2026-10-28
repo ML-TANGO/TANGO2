@@ -1,0 +1,6 @@
+fastapi>=0.110,<1
+uvicorn>=0.27,<1
+# 원격 생성(배포 위임, remote.py) 의 HTTP 클라이언트. 0.2.4 신규.
+# 지금은 datasets 가 transitive 로 끌어와서(0.28.1 실측) 없어도 import 는 되지만,
+# 우리가 직접 쓰는 의존을 남의 전이의존에 맡기면 datasets 가 끊는 날 조용히 깨진다.
+httpx>=0.27,<1

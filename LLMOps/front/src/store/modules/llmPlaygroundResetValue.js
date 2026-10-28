@@ -73,6 +73,7 @@ export const originLLMPlaygroundState = {
   },
   model: {
     model_type: '',
+    serving_system: 'vllm',
     model_huggingface_id: '',
     model_allm_id: '',
     model_allm_name: '',

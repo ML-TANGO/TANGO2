@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: jfb-{{ .Values.global.jfb.settings.marker_db.namespace }}-mysql-db-pv
+spec:
+  capacity:
+    storage: 100Gi
+  accessModes:
+    - ReadWriteOnce
+  claimRef:
+    namespace: {{ .Values.global.jfb.settings.marker_db.namespace }}
+    name: marker-mysql-db-pvc
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: "" 
+  {{- if eq .Values.global.jfb.volume.markerData.type "nfs" }}
+  nfs:
+    server: {{ .Values.global.jfb.volume.markerData.server }}
+    path: {{ .Values.global.jfb.volume.markerData.path }}
+  {{- else if eq .Values.global.jfb.volume.markerData.type "hostPath" }}
+  hostPath:
+    path: {{ .Values.global.jfb.volume.markerData.path }}
+  {{- end }}
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: marker-mysql-db-pvc
+  namespace: {{ .Values.global.jfb.settings.marker_db.namespace }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: ""

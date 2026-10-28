@@ -29,7 +29,13 @@
     echo "============================================"
     cd $JF_HOME
     {{ $.Values.spec.containers.command }}
+    # 전처리 코드의 종료코드를 붙잡아 둔다. sleep 은 로그 플러시용이라 남기지만,
+    # 서브셸의 마지막 문이 sleep 이면 그 0 이 종료코드를 덮어 실패한 잡이
+    # 성공(done)으로 보고된다. 학습 차트(project_job/_command.tpl)는 명령이
+    # 마지막이라 원래 정상 전파된다 — 그 동작에 맞춘다.
+    _rc=$?
     sleep 10
+    exit $_rc
     )
     {{- else }}
     while true; do sleep 30; done;

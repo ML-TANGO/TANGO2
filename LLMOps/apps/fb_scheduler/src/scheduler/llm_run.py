@@ -11,29 +11,32 @@ from utils.kube import PodName
 from datetime import datetime
 
 import re
+import os
 import sys
 import subprocess
 import json
 
 FINE_TUNING_SCRIPT_NAME = "/llm_model_fine_tuning.py"
+# 내부 VLM 2-stage 파인튜닝(LLaVA류) — fine_tuning_config.vlm==1 일 때 텍스트 FT 대신 선택.
+VLM_FINE_TUNING_SCRIPT_NAME = "/llm_model_vlm_fine_tuning.py"
 
 def create_fine_tuning_pod(fine_tuning_pod : FineTuningPodInfo):
     try:
         os.chdir("/app/helm_chart")
-        training_command = f' --set command="{fine_tuning_pod.command}"'
+        training_command = f" --set command={common.helm_set_value(fine_tuning_pod.command)}"
         labels_command=""
         for key, val in fine_tuning_pod.labels.model_dump().items():
             if val:
-                labels_command += f" --set labels.{key}={val}"
+                labels_command += f" --set labels.{key}={common.helm_set_value(val)}"
         
         env_command=""
         for key, val in fine_tuning_pod.env.model_dump().items():
             if val:
-                env_command += f" --set env.{key}={val}"
+                env_command += f" --set env.{key}={common.helm_set_value(val)}"
             
         resource_limit_command=""
         for key, val in fine_tuning_pod.resource.model_dump().items():
-            resource_limit_command += f" --set resource.limits.{key}={val}"
+            resource_limit_command += f" --set resource.limits.{key}={common.helm_set_value(val)}"
             
         rdma_command = ""
         if settings.JF_RDMA_ENABLED:
@@ -55,28 +58,28 @@ def create_fine_tuning_pod(fine_tuning_pod : FineTuningPodInfo):
         
         nodes_command = ""
         for index, node in enumerate(fine_tuning_pod.cluster):
-            nodes_command += f" --set cluster[{index}].node_name={node.node_name}"
-            nodes_command += f' --set cluster[{index}].device.type="{node.device.device_type}"'
-            nodes_command += f' --set cluster[{index}].device.model="{node.device.model}"'
-            nodes_command += f" --set cluster[{index}].device.count={node.device.count}"
-            nodes_command += f' --set cluster[{index}].device.uuids="{node.device.uuids}"'
-            nodes_command += f' --set cluster[{index}].device.ids="{node.device.ids}"'
+            nodes_command += f" --set cluster[{index}].node_name={common.helm_set_value(node.node_name)}"
+            nodes_command += f" --set cluster[{index}].device.type={common.helm_set_value(node.device.device_type)}"
+            nodes_command += f" --set cluster[{index}].device.model={common.helm_set_value(node.device.model)}"
+            nodes_command += f" --set cluster[{index}].device.count={common.helm_set_value(node.device.count)}"
+            nodes_command += f" --set cluster[{index}].device.uuids={common.helm_set_value(node.device.uuids)}"
+            nodes_command += f" --set cluster[{index}].device.ids={common.helm_set_value(node.device.ids)}"
         namespace = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=fine_tuning_pod.labels.workspace_id)
-        command=f"""helm install {fine_tuning_pod.helm_repo_name} {fine_tuning_pod.labels.work_func_type}/ \
-                -n {namespace} \
-                --set namespace={namespace} \
-                --set pod_name={fine_tuning_pod.pod_name} \
-                --set image={fine_tuning_pod.image} \
+        command=f"""helm install {common.shell_arg(fine_tuning_pod.helm_repo_name)} {fine_tuning_pod.labels.work_func_type}/ \
+                -n {common.shell_arg(namespace)} \
+                --set namespace={common.shell_arg(namespace)} \
+                --set pod_name={common.helm_set_value(fine_tuning_pod.pod_name)} \
+                --set image={common.helm_set_value(fine_tuning_pod.image)} \
                 --set total_device_count={fine_tuning_pod.total_device_count} \
-                --set spec.hostname={fine_tuning_pod.hostname} \
-                --set dataset.access={fine_tuning_pod.dataset_access} \
-                --set dataset.name={fine_tuning_pod.dataset_name} \
-                --set labels.helm_name={fine_tuning_pod.helm_repo_name} \
+                --set spec.hostname={common.helm_set_value(fine_tuning_pod.hostname)} \
+                --set dataset.access={common.helm_set_value(fine_tuning_pod.dataset_access)} \
+                --set dataset.name={common.helm_set_value(fine_tuning_pod.dataset_name)} \
+                --set labels.helm_name={common.helm_set_value(fine_tuning_pod.helm_repo_name)} \
                 {labels_command} {env_command} {resource_limit_command} {training_command} \
                 {rdma_command} {nodes_command} \
                 """
         if fine_tuning_pod.cpu_instance_name:
-            command += f"  --set spec.cpu_instance_name={fine_tuning_pod.cpu_instance_name}"
+            command += f"  --set spec.cpu_instance_name={common.helm_set_value(fine_tuning_pod.cpu_instance_name)}"
         
         print(command, file=sys.stderr)
         result = subprocess.run(
@@ -101,11 +104,51 @@ def create_fine_tuning_pod(fine_tuning_pod : FineTuningPodInfo):
 def fine_tuning_command(model_name : str, dataset_name : str, dataset_file_path: str,\
     fine_tuning_config : dict, used_dist : int = 0):
     
-    script_path = PATH.JF_POD_MODEL_FINE_TUNING_SCRIPT_PATH + FINE_TUNING_SCRIPT_NAME
+    # VLM 2-stage 면 별도 스크립트 선택(텍스트 FT 무손상). vlm 은 셀렉터일 뿐 텍스트 스크립트
+    # 인자로는 넘기지 않는다(텍스트 스크립트는 parse_args 엄격이라 미지정 인자에 실패).
+    # vlm 은 0/1 정수 셀렉터. 문자열 "0" 도 안전하게 거르도록 int 정규화(bool("0")==True 회피).
+    try:
+        is_vlm = int(fine_tuning_config.get("vlm") or 0) == 1
+    except (TypeError, ValueError):
+        is_vlm = False
+    # 셸 커맨드에 보간되므로 유한 float 으로 검증(DTO 우회 직접 DB 쓰기 등 방어).
+    try:
+        vlm_stage1_epochs = float(fine_tuning_config.get("vlm_stage1_epochs") or 1.0)
+        if vlm_stage1_epochs < 0 or vlm_stage1_epochs != vlm_stage1_epochs:    # 음수/NaN 거부
+            vlm_stage1_epochs = 1.0
+    except (TypeError, ValueError):
+        vlm_stage1_epochs = 1.0
+    # VLM 추가 하이퍼파라미터 — 셸 보간되므로 유한/안전값으로 검증(DTO 우회 직접쓰기 방어).
+    # FineTuningParam(text 스키마)에 없으므로 raw dict 에서 뽑아 is_vlm 일 때만 주입.
+    def _vlm_num(key, default, cast):
+        try:
+            raw = fine_tuning_config.get(key)
+            v = cast(raw if raw is not None else default)    # 명시적 0.0(dropout/wd 등) 보존
+            return v if (v == v and v >= 0) else default     # NaN/음수 거부
+        except (TypeError, ValueError):
+            return default
+    vlm_stage1_lr = _vlm_num("vlm_stage1_lr", 0.0, float)        # 0=learning_rate 공용
+    vlm_batch_size = max(1, _vlm_num("vlm_batch_size", 1, int))
+    vlm_weight_decay = _vlm_num("vlm_weight_decay", 0.0, float)
+    vlm_lora_r = max(1, _vlm_num("vlm_lora_r", 8, int))
+    vlm_lora_alpha = max(1, _vlm_num("vlm_lora_alpha", 16, int))
+    vlm_lora_dropout = _vlm_num("vlm_lora_dropout", 0.05, float)
+    _tgt_raw = str(fine_tuning_config.get("vlm_lora_target_modules") or "")
+    vlm_lora_target_modules = _tgt_raw if re.fullmatch(r"[A-Za-z0-9_,]*", _tgt_raw) else ""
+    vlm_max_samples = max(0, _vlm_num("vlm_max_samples", 0, int))      # 0=전체, 대용량셋 데모 캡
+    # 이미지 루트(셸/helm 안전 문자만) — 절대경로(/)·상위참조(..)는 거부(보안리뷰 H-1, defense-in-depth;
+    # 엔진 _resolve_image 도 containment 하지만 스케줄러 레이어를 진짜 방어막으로).
+    _imgf_raw = str(fine_tuning_config.get("vlm_image_folder") or "")
+    vlm_image_folder = _imgf_raw if (re.fullmatch(r"[A-Za-z0-9_.-][A-Za-z0-9_./-]*", _imgf_raw)
+                                     and ".." not in _imgf_raw and not _imgf_raw.startswith("/")) else ""
+    script_name = VLM_FINE_TUNING_SCRIPT_NAME if is_vlm else FINE_TUNING_SCRIPT_NAME
+    script_path = PATH.JF_POD_MODEL_FINE_TUNING_SCRIPT_PATH + script_name
     config_path = None
     if fine_tuning_config["fine_tuning_type"] == TYPE.FINE_TUNING_ADVANCED:
-        # config_path = PATH.JF_POD_MODEL_CONFIG_FILE_PATH.format(MODEL_NAME=model_name, FILE_NAME=fine_tuning_config["config_file_name"]) 
-        config_path = fine_tuning_config["config_file_name"]
+        # config_path = PATH.JF_POD_MODEL_CONFIG_FILE_PATH.format(MODEL_NAME=model_name, FILE_NAME=fine_tuning_config["config_file_name"])
+        # config_file_name 은 --config_path 로 명령에 보간 → basename + 파일명 화이트리스트로 셸 인젝션 차단(보안리뷰 C-2).
+        _cfg_raw = os.path.basename(str(fine_tuning_config.get("config_file_name") or ""))
+        config_path = _cfg_raw if re.fullmatch(r"[A-Za-z0-9._-]+", _cfg_raw) else None
     dataset_path = PATH.JF_POD_MODEL_FINE_TUNING_DATASET_PATH.format(DATASET_NAME=dataset_name, FILE_PATH=dataset_file_path)
         
     fine_tuning_config = FineTuningParam(**fine_tuning_config)
@@ -116,6 +159,22 @@ def fine_tuning_command(model_name : str, dataset_name : str, dataset_file_path:
     
     if config_path is not None:
         params += f" --config_path={config_path}"
+    # VLM stage1(projector) epoch 은 FineTuningParam 에 없으므로 VLM 일 때만 별도 주입.
+    if is_vlm:
+        params += f" --vlm_stage1_epochs={vlm_stage1_epochs}"
+        params += (f" --vlm_stage1_lr={vlm_stage1_lr} --vlm_batch_size={vlm_batch_size}"
+                   f" --vlm_weight_decay={vlm_weight_decay} --vlm_lora_r={vlm_lora_r}"
+                   f" --vlm_lora_alpha={vlm_lora_alpha} --vlm_lora_dropout={vlm_lora_dropout}")
+        if vlm_lora_target_modules:
+            # command 는 FT helm install 에 --set command=... 로 통째 전달되며, sink(create_fine_tuning_pod)
+            # 에서 common.helm_set_value 가 helm 콤마 이스케이프(\,)를 단일 적용한다. 여기서 또 이스케이프하면
+            # 이중(\\,)이 되어 helm 파싱이 깨지므로(q_proj,v_proj → "v_proj has no value") raw 로 넘긴다.
+            params += f" --vlm_lora_target_modules={vlm_lora_target_modules}"
+        # 대용량 VLM 데이터셋(예: CC3M 595K) 캡 + 이미지 루트(미지정 시 엔진이 직속→images/ 자동 폴백).
+        # image_folder 는 콤마 없는 경로 문자만 통과(위 정규식) → helm --set 콤마 이슈 없음.
+        params += f" --max_samples={vlm_max_samples}"
+        if vlm_image_folder:
+            params += f" --image_folder={vlm_image_folder}"
     # else:
     #     ds_config_path="/fine_tuning/ds_config.json"
     # if used_dist:
@@ -171,7 +230,7 @@ def create_fine_tuning(pod_info: dict):
                 device=Accelerator(
                     device_type=resource_type,
                     model=model,
-                    uuids = common.escape_special_chars(",".join(gpu_uuids)),
+                    uuids = ",".join(gpu_uuids),
                     ids = ".".join(map(str, gpu_ids)),
                     count = len(gpu_uuids)
                 )

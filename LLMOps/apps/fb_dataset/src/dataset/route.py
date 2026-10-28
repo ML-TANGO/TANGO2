@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Request, Path, Form, UploadFile, BackgroundTasks
 from utils.settings import LOGIN_METHOD
 from typing import List, Annotated, Optional
+from pydantic import BaseModel
 from upload import model
 from dataset import model
 from upload import service as upload_svc 
@@ -68,11 +69,26 @@ def create_dataset(workspace_id : Annotated[int, Form()],
         user_name, _ = get_auth()
         res = dataset_svc.create_dataset(body=args, headers_user=user_name)
         if res:
-            return response(status = 1, message = 'Dataset Create Complete')
+            return response(status = 1, result = res, message = 'Dataset Create Complete')
         else:
             raise Exception("Dataset DB Insert Error")
     except Exception as e:
         return response(status = 0, message = f"Dataset Create Fail '{e}' ")
+
+
+class RegisterPathModel(BaseModel):
+    workspace_id: int
+    dataset_name: str
+    job_str_id: str  # source 는 caller 가 임의 경로 지정 불가 — job 출력에서 서버가 구성(보안)
+    access: str = "0"
+    description: Optional[str] = ""
+    create_user_id: Optional[int] = None
+
+
+# 내부용 — 이미 NFS 에 있는 파일을 새 데이터셋으로 등록(fb_synthesis 등 다른 서비스가 호출).
+@dataset.post("/register-path")
+def register_dataset_from_path(body: RegisterPathModel):
+    return dataset_svc.register_dataset_from_path(body.dict())
 
     
     

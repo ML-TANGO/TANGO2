@@ -1,0 +1,93 @@
+@import '@src/styles/color.scss';
+
+// 실행 모달 폼 규격은 세 실행 모달(정답 대조·LLM 심사·전문가)이 한 벌을 나눠 쓴다.
+@import '../_runModal.scss';
+
+.expert {
+  padding: 24px 4px;
+  overflow-y: auto;
+}
+
+.loading {
+  display: flex;
+  min-height: 120px;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: $sub-text-color;
+  font-size: 15px;
+}
+
+/* 단일 항목 리뷰 뷰 */
+.review-head {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  background-color: $mono200;
+}
+
+.review-body {
+  margin-bottom: 24px;
+}
+
+.review-content {
+  padding: 24px;
+}
+
+.sample-badge {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.input-block,
+.output-block {
+  margin: 4px 0 16px;
+}
+
+.input-label,
+.output-label {
+  display: block;
+  margin-bottom: 8px;
+  color: $sub-text-color;
+  font-family: SpoqaB;
+  font-size: 13px;
+}
+
+.input-text {
+  padding: 12px 14px;
+  border-radius: 4px;
+  background-color: $background-color;
+  color: $normal-text-color;
+  font-size: 16px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.output-text {
+  color: $normal-text-color;
+  font-size: 16px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.rate-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid $mono203;
+}
+
+.audit-line {
+  margin-top: 12px;
+  color: $sub-text-color;
+  font-size: 13px;
+}

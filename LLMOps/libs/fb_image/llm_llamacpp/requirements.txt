@@ -1,0 +1,10 @@
+# 플랫폼 서빙 레이어(FastAPI wrapper) 의존성. 버전 range-pin(공급망/브레이킹 릴리스 회귀 방지, S-6).
+# ⚠️ torch/transformers/gguf/huggingface_hub 는 베이스(llama.cpp:full)가 제공 — 여기서 재핀 금지(충돌 방지).
+# 서빙 계약 복제에 필요한 것만: FastAPI 스택 + httpx(RAG DNS) + aiofiles(dataset) + aiomysql(db.py).
+fastapi>=0.110,<1.0
+uvicorn[standard]>=0.29,<1.0
+httpx>=0.27,<1.0
+aiofiles>=23.0,<25.0
+aiomysql>=0.2.0,<1.0
+# LoRA 커밋 base+adapter merge(H1)용. 베이스 transformers 와 호환되는 버전을 이미지 빌드 시 smoke 확인.
+peft>=0.11.0,<1.0

@@ -15,14 +15,19 @@
 #     main()
 
 from scheduler.scheduler import run_scheduler, create_topic
+from scheduler.dto import ExternalPodInfo
+from scheduler.external_run import create_external_pod
+from scheduler.helm_run import delete_helm_external
 from utils import topic_key
 import threading
 import time
 import asyncio
 import logging
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 from utils.connection_manager import connection_manager
 
 logger = logging.getLogger("scheduler-server")
@@ -45,6 +50,40 @@ async def readiness_check():
         return JSONResponse(status_code=200, content={"status": "ready", "redis_healthy": connection_manager.redis_healthy})
     except Exception as e:
         return JSONResponse(status_code=503, content={"status": "not ready", "redis_healthy": False, "error": str(e)})
+
+
+# ── External container s2s endpoints (called by apps/fb_external_container) ──
+# A thin HTTP shim around the existing external_run / helm_run functions.
+# Kafka-based triggering is the long-term pattern (consistent with the rest
+# of fb_scheduler), but HTTP keeps the SP-Ext.8 lifecycle simple while we
+# bring the new external container path up; swap to a topic later via the
+# same SchedulerClient interface on the caller side.
+
+class ExternalUninstallRequest(BaseModel):
+    helm_release: str = Field(min_length=1)
+    namespace: str = Field(min_length=1)
+
+
+@health_app.post("/external/launch")
+async def external_launch(pod_info: ExternalPodInfo):
+    """Run helm install for an external partner container."""
+    # SP-Ext Phase 2: 동기 blocking helm 호출을 스레드풀로 offload → 느린 helm(NFS/API
+    # 압력)이 이벤트루프를 막아 /health·/ready 가 죽고 scheduler 가 재시작되며 오펀을
+    # 양산하던 것을 차단. subprocess timeout 과 함께 이중 방어.
+    ok, msg = await run_in_threadpool(create_external_pod, pod_info)
+    if not ok:
+        raise HTTPException(status_code=500, detail=f"helm install failed: {msg}")
+    return {"ok": True, "stdout": msg}
+
+
+@health_app.post("/external/uninstall")
+async def external_uninstall(payload: ExternalUninstallRequest):
+    """Run helm uninstall to clean up an external partner release."""
+    # SP-Ext Phase 2: uninstall 도 스레드풀 offload(위 launch 와 동일 이유).
+    ok, msg = await run_in_threadpool(delete_helm_external, payload.helm_release, payload.namespace)
+    if not ok:
+        raise HTTPException(status_code=500, detail=f"helm uninstall failed: {msg}")
+    return {"ok": True, "stdout": msg}
 
 def run_health_server():
     """Health check 서버를 별도 스레드에서 실행"""

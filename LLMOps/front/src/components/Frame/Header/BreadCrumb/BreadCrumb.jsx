@@ -83,7 +83,7 @@ function BreadCrumb() {
           <div className={cx('path-wrapper')}>
             <div className={cx('dropdown-wrapper')}>
               <img src={PathIcon} alt='path-icon' />
-              <span>현재 워크스페이스</span>
+              <span>{t('breadCrumb.currentWorkspace.label')}</span>
               <div className={cx('dropdown-cont')} ref={ref}>
                 <div className={cx('select-cont')}>{selectedWs.label}</div>
                 <button

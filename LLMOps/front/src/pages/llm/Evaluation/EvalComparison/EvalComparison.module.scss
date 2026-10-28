@@ -1,0 +1,42 @@
+@import '@src/styles/color.scss';
+
+.comparison {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.table-wrap {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.model-cell {
+  color: $normal-text-color;
+  font-family: SpoqaB;
+}
+
+.metric-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  &.best {
+    color: $lime604;
+    font-family: SpoqaB;
+  }
+}
+
+.action-cell {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.guide {
+  padding: 16px;
+  border: 1px solid $card-border-color;
+  border-radius: 8px;
+  background-color: $background-color;
+}

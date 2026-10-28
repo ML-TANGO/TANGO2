@@ -1,0 +1,73 @@
+@import '@src/styles/color.scss';
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* [모델] 탭 — 단일 배포 상세(PlaygroundDetail .model-cont)와 동일한 3열 그리드.
+   LLM1 | LLM2 | 자원. align-items:start 로 짧은 열이 늘어나 빈 공간이 생기는 걸 막는다. */
+.model-cont {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+}
+
+@media (max-width: 1024px) {
+  .model-cont {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 한 역할(모델 선택 + 생성 파라미터)을 한 열에 세로로 쌓는다. */
+.role-col {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  margin: 0;
+
+  > div {
+    min-width: 0;
+  }
+
+  dt {
+    margin-bottom: 8px;
+    color: $mono205;
+    font-size: 13px;
+  }
+
+  dd {
+    margin: 0;
+    color: $mono207;
+    overflow-wrap: anywhere;
+  }
+}
+
+.note {
+  margin: 0;
+  color: $mono205;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.warn {
+  margin: 0;
+  color: $red502;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+@media (max-width: 900px) {
+  .info-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

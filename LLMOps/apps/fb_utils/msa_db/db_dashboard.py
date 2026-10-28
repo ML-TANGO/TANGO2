@@ -264,6 +264,32 @@ async def get_workspace_instance_list_new(workspace_id: int):
         return []
         
 
+async def get_workspace_instance_capacity(workspace_id: int):
+    """워크스페이스 인스턴스 + **GPU 한 장당 VRAM(MiB)**.
+
+    `instance` 표에는 VRAM 칸이 없다(gpu_allocate 는 장수지 용량이 아니다). 실제 용량은
+    같은 resource_group 에 묶인 `node_gpu.gpu_memory` 에만 있으므로 조인해서 함께 준다.
+    자동 배포가 "이 모델이 이 인스턴스에 올라가는가"를 띄우기 전에 판단하려면 이 값이 필요하다.
+
+    한 그룹 안에 용량이 다른 GPU 가 섞여 있으면 **가장 작은 것**을 쓴다 — 스케줄러가 어느
+    장을 줄지 고를 수 없으므로, 큰 쪽을 가정하면 작은 장에 걸렸을 때 OOM 으로 죽는다.
+    """
+    try:
+        sql = """
+            SELECT wi.instance_allocate, i.*, rg.name AS gpu_resource_group_name,
+                   (SELECT MIN(ng.gpu_memory) FROM node_gpu ng
+                     WHERE ng.resource_group_id = i.gpu_resource_group_id) AS gpu_memory_mb
+            FROM workspace_instance wi
+            JOIN instance i ON wi.instance_id = i.id
+            LEFT JOIN resource_group rg ON rg.id = i.gpu_resource_group_id
+            WHERE wi.workspace_id = %s
+            """
+        return await select_query(sql, params=[workspace_id]) or []
+    except Exception:
+        traceback.print_exc()
+        return []
+
+
 def get_workspace_instance_list(workspace_id : int):
     try:
         with get_db() as conn:

@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallowEqual, useDispatch, useSelector } from 'react-redux';
 import { useRouteMatch } from 'react-router-dom';
@@ -17,7 +17,7 @@ import { STATUS_SUCCESS } from '@src/network';
 import PlaygroundFrame from '../PlaygroundFrame';
 import { calIsDeployLoading } from '../PlaygroundHeader/PlaygroundHeader';
 
-import { calPlusNineHours, copyToClipboardWithToast } from '@src/utils';
+import { calPlusNineHours } from '@src/utils';
 
 import classNames from 'classnames/bind';
 import style from './PlaygroundInfo.module.scss';
@@ -70,6 +70,7 @@ const PlaygroundInfo = React.memo(() => {
     update_datetime,
     access,
     users,
+    deployment_id,
   } = useSelector((state) => state.llmPlayground.info, shallowEqual);
   const { accellator, isAccellator } = useSelector(
     (state) => state.llmPlayground,
@@ -82,12 +83,6 @@ const PlaygroundInfo = React.memo(() => {
     (state) => state.llmPlayground.status,
     shallowEqual,
   );
-
-  const { format, method, url } = useSelector(
-    (state) => state.llmPlayground.info_request,
-    shallowEqual,
-  );
-  const formatJson = JSON.stringify(format, null, 2);
 
   const [isDescription, setIsDescription] = useState(false);
   const isDisabled = calIsDeployLoading(statusType);
@@ -114,14 +109,6 @@ const PlaygroundInfo = React.memo(() => {
       setIsLoadingAccel(false);
     }
   };
-
-  const handleCopy = useCallback(() => {
-    if (!method) {
-      toast.error('배포를 활성화해주세요.');
-      return;
-    }
-    copyToClipboardWithToast(url);
-  }, [method, url]);
 
   return (
     <div className={cx('info-wrapper', isDisabled && 'disabled')}>
@@ -174,6 +161,7 @@ const PlaygroundInfo = React.memo(() => {
                   update_datetime,
                   users,
                   access,
+                  deployment_id, // 통째교체 reducer 에서 게시 섹션 id 유실 방지
                 })
               }
               customStyle={{
@@ -191,6 +179,10 @@ const PlaygroundInfo = React.memo(() => {
                 {description.length}/1000
               </span>
             )}
+          </div>
+          <div className={cx('flex-16')}>
+            <span className={cx('label')}>배포 유형</span>
+            <span className={cx('value')}>클러스터</span>
           </div>
           <div className={cx('flex-16')}>
             <span className={cx('label')}>{t('accessType.label')}</span>
@@ -216,46 +208,6 @@ const PlaygroundInfo = React.memo(() => {
             <span className={cx('value')}>
               {calPlusNineHours(update_datetime)}
             </span>
-          </div>
-          <div className={cx('border')} />
-          <div className={cx('request-url-cont')}>
-            <div className={cx('label-cont')}>
-              <span className={cx('label')}>Request URL</span>
-              <button
-                onClick={handleCopy}
-                aria-label='URL 복사 버튼'
-                disabled={isDisabled}
-                className={cx('button')}
-              >
-                <img
-                  className={cx('copy-img')}
-                  src='/src/static/images/icon/copy-icon2.svg'
-                  alt=''
-                />
-              </button>
-            </div>
-            <div
-              className={cx('url-paragraph')}
-              style={{ textWrap: 'wrap', color: !method && '#c1c1c1' }}
-            >
-              {method
-                ? `[${method}] ${url}`
-                : '배포가 활성화되면 Request URL이 생성됩니다.'}
-            </div>
-            <div className={cx('flex-8')}>
-              <span className={cx('label')}>요청 JSON 포맷</span>
-              {statusType === 'stop' && (
-                <div className={cx('stop-json-cont')}>
-                  배포가 활상화되면 JSON 포맷이 생성됩니다.
-                </div>
-              )}
-              {statusType !== 'stop' && (
-                <Textarea
-                  value={formatJson}
-                  customStyle={{ color: '#747474', height: '292px' }}
-                />
-              )}
-            </div>
           </div>
         </div>
       </PlaygroundFrame>

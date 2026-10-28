@@ -1,7 +1,39 @@
+.tab-bar {
+  margin-bottom: 24px;
+}
+
 .content-cont {
   display: grid;
   gap: 24px;
   grid-template-columns: repeat(auto-fit, minmax(344px, 1fr));
+}
+
+/* 모델 탭: 3열 그리드 (모델 | 파라미터 | 인스턴스+API 호출 세로 스택) */
+.model-cont {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* 각 열 내용 높이 그대로 위 정렬 — 늘어난 빈 공간(아래 blank) 방지 */
+  align-items: start;
+}
+
+@media (max-width: 1024px) {
+  .model-cont {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 3번째 열: 인스턴스(위) / 배포정보(아래) 를 동일 높이로 반반 + 사이 간격 */
+.stacked-col {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+}
+
+/* 강제 50:50 대신 내용 기준 높이 — 인스턴스(짧음)는 작게, API 호출(김)은 커져 넘침 방지 */
+.stacked-col > * {
+  flex: 0 0 auto;
 }
 
 @media (min-width: 768px) and (max-width: 1730px) {

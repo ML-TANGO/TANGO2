@@ -1,0 +1,26 @@
+# remote-api-proxy chart values — 전부 placeholder 다.
+# llm_playground/src/playground/service.py 의 _install_remote_api_proxy 가
+# helm --set 으로 채운다(그쪽이 정본).
+namespace: ""
+name: ""            # release/pod/service 공통 base name
+image: ""
+imagePullPolicy: IfNotPresent
+port: 8000
+
+# 외부 LLM 구성 — 키는 여기 오지 않는다(아래 secretName 참조).
+provider: ""
+model: ""
+baseUrl: ""
+
+# API 키를 담은 K8s Secret 이름. 비우면 키 없이 뜬다(엔드포인트 provider).
+# 값은 helm values/PodSpec 평문이 아니라 valueFrom.secretKeyRef 로만 들어간다.
+secretName: ""
+secretKey: "API_KEY"
+
+resources:
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+  requests:
+    cpu: "50m"
+    memory: "128Mi"

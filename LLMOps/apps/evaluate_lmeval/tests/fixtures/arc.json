@@ -1,0 +1,20 @@
+{
+ "results": {
+  "arc_challenge": {
+   "name": "arc_challenge",
+   "alias": "arc_challenge",
+   "sample_len": 20,
+   "acc,none": 0.4,
+   "acc_stderr,none": 0.11239029738980327,
+   "acc_norm,none": 0.4,
+   "acc_norm_stderr,none": 0.11239029738980327
+  }
+ },
+ "groups": {},
+ "n-samples": {
+  "arc_challenge": {
+   "original": 1172,
+   "effective": 20
+  }
+ }
+}

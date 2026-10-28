@@ -36,6 +36,7 @@ const NewDatasetSearch = ({
   setSelectedData,
   firstDisabled = false,
   canFileSelect = true,
+  defaultToRoot = false,
 }) => {
   const { t } = useTranslation();
   const { auth } = useSelector((state) => ({
@@ -134,7 +135,13 @@ const NewDatasetSearch = ({
     if (!selectDataset.id) return;
     setCurrentDepth((prev) => 0);
     setPrevFolder((prev) => []);
-    setSelectedData({ name: '', fullPath: '' });
+    // defaultToRoot: 데이터셋 루트(전체 폴더)를 기본 선택(fullPath='') — SDS 등 전체 디렉토리 대상 전처리용.
+    // 스케줄러가 --input_data=/dataset/{fullPath} 로 주입하므로 fullPath='' → /dataset(루트).
+    setSelectedData(
+      defaultToRoot
+        ? { name: '(전체 폴더)', fullPath: '' }
+        : { name: '', fullPath: '' },
+    );
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectDataset]);

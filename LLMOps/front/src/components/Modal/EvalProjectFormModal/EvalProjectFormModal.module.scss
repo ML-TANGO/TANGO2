@@ -1,0 +1,38 @@
+@import '@src/styles/color.scss';
+
+// NewStyleModalFrame 안에 들어가는 폼 레이아웃 스타일.
+// 이름 칸은 디자인시스템 컴포넌트(InputText)라 별도 스타일이 필요 없고, 행 간격만
+// 학습 모달(.row 32px)과 동일하게 맞춘다. 평가 유형은 디자인시스템 Radio 가로 나열이라
+// 컨트롤 자체는 그릴 것이 없고, 고른 유형의 설명 한 줄만 여기서 세운다.
+
+.form {
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  margin-bottom: 32px;
+  &:last-child {
+    margin-bottom: 0px;
+  }
+}
+
+// 유형 라디오 — 아래 힌트 줄과 붙여 한 덩어리로 읽히게 간격을 좁게 준다.
+.type-radio {
+  margin-bottom: 8px;
+
+  // 유형이 4종이 되면서 모달을 좁히면(resize) 한 줄을 넘는다 — 디자인시스템 Radio 의 ul 은
+  // 줄바꿈이 없어 넘쳐 버리므로 여기서만 접게 한다. 기본 폭(664px)에서는 한 줄 그대로다.
+  ul {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+}
+
+// 고른 유형의 채점 방식 한 줄. 라디오 바로 아래 회색 보조문.
+.type-hint {
+  margin: 0;
+  color: $mono205;
+  font-size: 13px;
+  line-height: 20px;
+}

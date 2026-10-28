@@ -1,0 +1,3 @@
+# SP-1 FastAPI 래퍼 deps. 나머지(torch/vllm/transformers)는 ETRI 스냅샷이 담당한다.
+fastapi>=0.111.0,<1.0.0
+uvicorn[standard]>=0.29.0,<1.0.0

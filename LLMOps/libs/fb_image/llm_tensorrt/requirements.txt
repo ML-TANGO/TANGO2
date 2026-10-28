@@ -1,0 +1,9 @@
+# 플랫폼 서빙 레이어(FastAPI shim) 의존성. 버전 range-pin(공급망/브레이킹 릴리스 회귀 방지).
+# ⚠️ TensorRT-LLM 이미지(tritonserver:*-trtllm-python-py3)는 torch/transformers/tensorrt_llm 를
+#    이미 제공 → 여기서 재핀 금지(충돌 방지). shim(8555 FastAPI) 의존성만 설치.
+#    fastapi/uvicorn/httpx 는 베이스가 이미 끌어올 수 있으나(idempotent), aiofiles/aiomysql 은 없어 명시.
+fastapi>=0.110,<1.0
+uvicorn[standard]>=0.29,<1.0
+httpx>=0.27,<1.0
+aiofiles>=23.0,<25.0
+aiomysql>=0.2.0,<1.0

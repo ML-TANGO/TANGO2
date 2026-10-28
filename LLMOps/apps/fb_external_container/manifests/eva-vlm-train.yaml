@@ -1,0 +1,195 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# eva-vlm-train.yaml — 부팅 시드 manifest (SDS-VLM 4-phase 파인튜닝, async)
+#
+# 이 디렉터리는 fb_external_container 부팅 시 레지스트리에 멱등 시드된다
+# (src/manifest/seed.py). manifest 등록이 런타임 POST 뿐이라 신규 설치마다
+# 레지스트리가 비어 SDS 학습 화면이 뜨지 않던 드리프트를 여기서 끊는다.
+#
+# 짝: eva-vlm-infer.yaml — 같은 service_family/contract_version/image 로
+# 페어 등록되어야 학습 완료 후 추론 pod `/deploy` reload 가 동작한다.
+#
+# 🔴 판본 주의 — 이 1.1.0 판본으로는 **학습이 돌지 않는다**(2026-09-01 실측).
+# recipe(4-phase) 자체는 acryl-patched-v11 이미지에서 검증된 것을 공개 표준 이미지
+# (yvvyee/eva-vlm-backend:1.1.0) 기준으로 옮긴 것인데, 그 공개 이미지는 `/health` 를
+# **모델 적재 여부로 게이팅**한다: 가중치가 없으면 {"model_loaded":false} 와 함께 503 을
+# 돌려주고, 그러면 readiness 가 영원히 통과하지 못해 플랫폼이 /train 을 부르지 못하는
+# 교착에 빠진다(파드 로그가 /health 503 으로만 도배된다).
+#
+# 따라서 실학습에는 내부 패치 판본(1.0.0-acryl-patched-v11)을 쓴다 —
+# SDS_MANIFEST_VERSION env(= helm values global.jfb.sds_manifest_version)로 지정하고
+# 그 manifest 를 레지스트리에 등록한다. 이 1.1.0 시드는 신규 설치에서 SDS 화면·레시피
+# 계약이 비어 보이지 않게 하는 용도로만 의미가 있다.
+#
+# 어느 판본이든 `/hf-cache` 에 아래 두 가중치가 **미리 스테이징**돼 있어야 한다
+# (manifest env 가 HF_HUB_OFFLINE=1 이라 런타임 다운로드가 없다):
+#   openai/clip-vit-large-patch14-336, meta-llama/Llama-3.1-8B-Instruct
+#   → devops/hf-prefetch/run.sh <workspace-namespace>
+# ─────────────────────────────────────────────────────────────────────────────
+
+apiVersion: tango.acryl.ai/v1
+kind: ExternalContainer
+
+metadata:
+  name: eva-vlm-train
+  version: "1.1.0"
+  vendor: "ETRI (한국전자통신연구원)"
+  provider: ETRI
+  contact: "yvvyee@etri.re.kr"
+  description: |
+    SDS-VLM 4-phase 파인튜닝 학습 (LoRA + projector).
+    recipe params 는 배포 컨테이너 TrainParams 계약(v8 schemas.py)에 정합.
+
+spec:
+  env:
+    EVA_CHECKPOINTS_ROOT: "/output"
+    HF_HOME: "/hf-cache"
+    HF_HUB_CACHE: "/hf-cache/hub"
+    TRANSFORMERS_CACHE: "/hf-cache"
+    XDG_CACHE_HOME: "/hf-cache"
+    HF_HUB_OFFLINE: "1"
+    TRANSFORMERS_OFFLINE: "1"
+    HOME: "/tmp"
+    TRITON_CACHE_DIR: "/tmp/triton"
+    TORCH_HOME: "/tmp/torch"
+    MPLCONFIGDIR: "/tmp/matplotlib"
+
+  image: docker.io/yvvyee/eva-vlm-backend:1.1.0
+
+  job_type: train
+  execution_mode: async
+  port: 8000
+  workspace_scope: per-workspace
+
+  resources:
+    cpu: "8"
+    memory: "64Gi"
+    gpu: 1
+    gpu_memory: "40Gi"
+    accelerator: nvidia
+
+  inputs:
+    base_model:
+      required: true
+    dataset:
+      required: true
+    params:
+      required: true
+
+  outputs:
+    metrics: true
+    model: true
+    dataset: false
+    artifacts: true
+
+  secrets:
+    required: []
+
+  network:
+    egress_whitelist:
+      - "huggingface.co"
+      - "hf.co"
+
+  endpoints:
+    info: /info
+    health: /health
+    run: /train
+    jobs: /train/status?job_id={id}
+    cancel: /train/stop?job_id={id}
+
+  capabilities:
+    supported_models:
+      - llama-3.1-8b
+      - qwen3-8b
+    min_gpu_memory_gb: 24
+    estimated_startup_seconds: 300
+    estimated_duration_seconds: 7200
+    timeout_seconds: 604800
+
+  service_family: eva-vlm
+  contract_version: "1.1.0"
+  model_artifact_format: "projector.bin + LoRA adapter"
+  checkpoint_namespace: sds-marine
+
+  # ── SP-10 다단계 학습 레시피 (배포 v8 TrainParams 계약 정합) ──────────────────
+  # 필수 필드: phase(Literal projector|lora|lora_marine|lora_sds) / llm_model_path /
+  # output_checkpoint_name. llm_model_path 는 HF id — 컨테이너가 /hf-cache(offline)
+  # 에서 로드(EVA_LLM_MODEL_PATH 선례). output_checkpoint_name={phase.id} 로 두어
+  # auto-commit 의 output_subdir(=phase.id) 과 일치시킴. sds_scenario 는 v8 train.py
+  # 가 미지원(argparse 없음) → 설정 금지, 시나리오는 data_path(사전변환 JSON)로 선택.
+  recipe:
+    label: "SDS-VLM 4-phase 파인튜닝"
+    phases:
+      - id: projector
+        label: "Phase 1 · Projector 정렬 (CC3M)"
+        description: "CLIP↔LLM projector 사전학습 (vision·LLM 동결)."
+        params:
+          phase: projector
+          llm_model_path: "meta-llama/Llama-3.1-8B-Instruct"
+          output_checkpoint_name: projector
+          data_path: "/dataset/cc3m/chat.json"
+          image_dir: "/dataset/cc3m/images"
+          num_epochs: 1
+          max_steps: 5000
+          learning_rate: 0.001
+          batch_size: 8
+          grad_accum: 4
+          _dataset: {name: cc3m, access: "1"}
+
+      - id: lora
+        label: "Phase 2 · CC3M LoRA"
+        description: "projector + LLM(LoRA) 일반 시각-언어 파인튜닝 (CLIP 동결)."
+        chain_from: projector
+        chain_inputs:
+          projector_path: "/models/checkpoints/{checkpoint_name}/projector.bin"
+        params:
+          phase: lora
+          llm_model_path: "meta-llama/Llama-3.1-8B-Instruct"
+          output_checkpoint_name: lora
+          data_path: "/dataset/cc3m/chat.json"
+          image_dir: "/dataset/cc3m/images"
+          num_epochs: 3
+          learning_rate: 0.0002
+          lora_r: 128
+          lora_alpha: 256
+          batch_size: 4
+          grad_accum: 4
+          _dataset: {name: cc3m, access: "1"}
+
+      - id: lora_marine
+        label: "Phase 3 · 해양 텍스트 계속학습"
+        description: "해양 도메인 텍스트 LoRA 계속학습 (텍스트 전용)."
+        chain_from: lora
+        chain_inputs:
+          resume_lora_path: "/models/checkpoints/{checkpoint_name}"
+        params:
+          phase: lora_marine
+          llm_model_path: "meta-llama/Llama-3.1-8B-Instruct"
+          output_checkpoint_name: lora_marine
+          marine_data_path: "/dataset/llamarine/data/train-00000-of-00001.parquet"
+          num_epochs: 1
+          learning_rate: 0.00005
+          batch_size: 2
+          grad_accum: 8
+          _dataset: {name: llamarine, access: "1"}
+
+      - id: lora_sds
+        label: "Phase 4 · SDS 도메인 특화"
+        description: "SDS 해상상황 도메인 특화 LoRA (한글 시나리오). 대화라벨·이미지 모두 /dataset/sds_train 마운트(학습 전용 9k)."
+        chain_from: lora_marine
+        chain_inputs:
+          resume_lora_path: "/models/checkpoints/{checkpoint_name}"
+        params:
+          phase: lora_sds
+          llm_model_path: "meta-llama/Llama-3.1-8B-Instruct"
+          output_checkpoint_name: lora_sds
+          # 이미지 내장 sds_train_ko.json(10k 전량)을 쓰면 평가 세트 1k 가 학습에 들어가
+          # 점수가 부풀려진다 — 학습 전용 9k 를 마운트해서 읽는다(sds_eval 과 교집합 0).
+          data_path: "/dataset/sds_train/sds_train_ko_9k.json"
+          image_dir: "/dataset/sds_train"
+          num_epochs: 10
+          learning_rate: 0.0002
+          batch_size: 1
+          grad_accum: 2
+          _dataset: {name: sds_train, access: "1"}
+
+

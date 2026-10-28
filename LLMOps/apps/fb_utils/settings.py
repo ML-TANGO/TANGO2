@@ -10,6 +10,10 @@ PASSWORD_KEY = "$6$"
 ADMIN_NAME = "admin"
 ADMIN_TYPE = 0
 JF_SYSTEM_NAMESPACE = os.getenv('JF_SYSTEM_NAMESPACE', None)
+# 인스턴스 분리(서빙 jonathan-system / 개발 tango-dev)용 파생 기준값.
+# JF_SYSTEM_NAMESPACE 가 안 주입되는 경로(단독 스크립트·일부 잡)에서는 기존 리터럴로
+# 폴백하므로 기존 배포 동작은 바뀌지 않는다. namespace 를 끼우는 상수/기본값은 모두 이 값을 쓴다.
+SYSTEM_NAMESPACE = JF_SYSTEM_NAMESPACE or "jonathan-system"
 # [Maria DB Settings]
 JF_DB_HOST = os.getenv('JF_DB_HOST',None)
 JF_DB_PORT = int(os.getenv('JF_DB_PORT',0))
@@ -30,7 +34,12 @@ DOCKER_REGISTRY_URL = os.getenv('DOCKER_REGISTRY_URL', None) # '192.168.1.13:500
 SYSTEM_DOCKER_REGISTRY_URL = os.getenv('SYSTEM_DOCKER_REGISTRY_URL', None) # '192.168.1.13:5000/' # Should be an empty string or finished with slash(`/')
 if SYSTEM_DOCKER_REGISTRY_URL:
     JF_DEFAULT_UBUNTU_20_IMAGE = SYSTEM_DOCKER_REGISTRY_URL + "jfb/" +  'jbi_ubuntu-20.04.6:latest'
-    JF_DEFAULT_UBUNTU_22_IMAGE = SYSTEM_DOCKER_REGISTRY_URL + "jfb/" +  'jbi_ubuntu-22.04.6:latest'
+    # built-in 전처리/pipeline 기본 실행 이미지. 기존 jfb/jbi_ubuntu(사내 레지스트리·pull불가)
+    # 대신 docker.io/acrylaaai 게시 lean 베이스(python3+pandas/pyarrow/pillow/numpy). 소스=libs/fb_image/preprocessing.
+    # FORMAT_CONVERT(데이터 포맷 변환) 포함 활성 빌트인 4종이 이 베이스에서 실행(스크립트는 NFS /built_in 마운트).
+    # v2.2.0: 데이터 파이프라인 노드용 imagehash(pHash 중복제거)·pymupdf(PDF 페이지화) 추가.
+    # 기존 4핀(pandas/pyarrow/pillow/numpy)은 그대로라 빌트인 4종에 영향 없음.
+    JF_DEFAULT_UBUNTU_22_IMAGE = SYSTEM_DOCKER_REGISTRY_URL + "acrylaaai/genai-platform-builtin-preprocess:tango_v2.4.0"
 DOCKER_REGISTRY_PROTOCOL = os.getenv('DOCKER_REGISTRY_PROTOCOL', "http://") # "http://" | "https://"
 SYSTEM_DOCKER_REGISTRY_PROTOCOL = os.getenv('SYSTEM_DOCKER_REGISTRY_PROTOCOL', "http://")
 IMAGE_NAMESPACE = f"{JF_SYSTEM_NAMESPACE}-image" if JF_SYSTEM_NAMESPACE else "default-image"
@@ -47,7 +56,31 @@ HOST_BASE_DOCKERFILE_PATH = '/jfbcore/jf-data/images' # in host
 JF_DEFAULT_UBUNTU_20="JBI_Ubuntu-20.04.6"
 JF_DEFAULT_UBUNTU_22="JBI_Ubuntu-22.04.4"
 DEPLOYMENT_LLM_IMAGE="acrylaaai/llm_deployment:dev"
-ANALYZER_IMAGE="jfb/analyzer:0.0.1"
+# [멀티엔진 서빙 로드맵 Phase 2] llama.cpp 서빙 이미지(별도 서빙-레이어, FROM ghcr.io/ggml-org/llama.cpp:full).
+DEPLOYMENT_LLM_LLAMACPP_IMAGE="acrylaaai/llm_deployment_llamacpp:dev"
+# [멀티엔진 서빙 로드맵 Phase 3 / Tier B] TGI 서빙 이미지(별도 HTTP 서버, FROM ghcr.io/huggingface/text-generation-inference).
+DEPLOYMENT_LLM_TGI_IMAGE="acrylaaai/llm_deployment_tgi:dev"
+# [멀티엔진 서빙 로드맵 Phase 3 / Tier B] Ollama 서빙 이미지(별도 HTTP 서버, FROM ollama/ollama). safetensors→모델스토어 등록 후 /api/chat 서빙.
+DEPLOYMENT_LLM_OLLAMA_IMAGE="acrylaaai/llm_deployment_ollama:dev"
+# [멀티엔진 서빙 로드맵 Phase 3 / Tier B] Triton 서빙 이미지(NVIDIA Triton + vLLM backend, FROM nvcr.io/nvidia/tritonserver:*-vllm-python-py3). model repository + KServe generate.
+DEPLOYMENT_LLM_TRITON_IMAGE="acrylaaai/llm_deployment_triton:dev"
+# [멀티엔진 서빙 로드맵 Phase 3 / Tier B] TensorRT-LLM 서빙 이미지(FROM nvcr.io/nvidia/tritonserver:*-trtllm-python-py3). trtllm-serve OpenAI 호환 서버(PyTorch 백엔드 = HF 직접, AOT 컴파일 불요).
+DEPLOYMENT_LLM_TENSORRT_IMAGE="acrylaaai/llm_deployment_tensorrt:dev"
+# 서빙 엔진별 배포 이미지 맵. vLLM(GPU/CPU 폴백) + llama.cpp(GGUF 직접 / HF 온더플라이 변환) + TGI/Ollama/Triton/TensorRT(HF/safetensors).
+# vLLM 서빙이 확보할 GPU 메모리 비율(전체 용량 기준). vLLM 은 이 값을 **여유 메모리**와
+# 비교해 검사하므로, 서빙과 물리 노드를 공유해 GPU 가 부분 점유된 클러스터에서는 0.90 으로
+# 기동이 거부된다. 클러스터별로 env 로 낮춘다(기본은 종전과 같은 0.90).
+DEPLOYMENT_LLM_GPU_MEMORY_UTILIZATION = float(os.getenv("DEPLOYMENT_LLM_GPU_MEMORY_UTILIZATION") or 0.90)
+SERVING_ENGINE_IMAGE_MAP = {"vllm": DEPLOYMENT_LLM_IMAGE, "llama_cpp": DEPLOYMENT_LLM_LLAMACPP_IMAGE, "tgi": DEPLOYMENT_LLM_TGI_IMAGE, "ollama": DEPLOYMENT_LLM_OLLAMA_IMAGE, "triton": DEPLOYMENT_LLM_TRITON_IMAGE, "tensorrt": DEPLOYMENT_LLM_TENSORRT_IMAGE}
+# 지금 실제 지원하는 서빙 엔진(그 외 값은 서버측 거부).
+SUPPORTED_SERVING_SYSTEMS = ("vllm", "llama_cpp", "tgi", "ollama", "triton", "tensorrt")
+def resolve_serving_system(value):
+    # 읽기 시점 정규화(defense-in-depth): None/미지원 → vllm(fail-safe). 쓰기 경로는 reject.
+    v = value or "vllm"
+    return v if v in SUPPORTED_SERVING_SYSTEMS else "vllm"
+# 데이터셋 분석 워커 pod 이미지. 기존 jfb/analyzer(사내 레지스트리·pull불가 → ImagePullBackOff)
+# 대신 docker.io/acrylaaai 게시 이미지. 소스=libs/fb_image/analyzer.
+ANALYZER_IMAGE="acrylaaai/genai-platform-analyzer:tango_v2.0.1"
 
 
 
@@ -113,6 +146,10 @@ JF_VOLUME_DATA_SERVER = os.getenv('JF_VOLUME_DATA_SERVER', None)
 JF_VOLUME_BIN_TYPE = os.getenv('JF_VOLUME_BIN_TYPE', None)
 JF_VOLUME_BIN_PATH = os.getenv('JF_VOLUME_BIN_PATH', None)
 JF_VOLUME_BIN_SERVER = os.getenv('JF_VOLUME_BIN_SERVER', None)
+# 외부 컨테이너 잡 공유 HF 캐시 — 워크스페이스 차트가 hf-model-cache-pvc 를 만든다(값이 비면 안 만듦)
+JF_VOLUME_HF_CACHE_TYPE = os.getenv('JF_VOLUME_HF_CACHE_TYPE', '')
+JF_VOLUME_HF_CACHE_PATH = os.getenv('JF_VOLUME_HF_CACHE_PATH', '')
+JF_VOLUME_HF_CACHE_SERVER = os.getenv('JF_VOLUME_HF_CACHE_SERVER', '')
 JF_VOLUME_WORKSPACE_STORAGE_CLASS_NAME = os.getenv('JF_VOLUME_WORKSPACE_STORAGE_CLASS_NAME', None)
 
 
@@ -151,7 +188,104 @@ JF_KONG_PROXY_DNS = os.getenv('JF_KONG_PROXY_DNS', None)
 # [INGRESS MANAGEMENT]
 JF_INGRESS_MANAGEMENT_SVC_HOST = os.getenv('JFB_APP_INGRESS_MANAGEMENT_SVC_SERVICE_HOST', None)
 JF_INGRESS_MANAGEMENT_SVC_PORT = os.getenv('JFB_APP_INGRESS_MANAGEMENT_SVC_SERVICE_PORT', None)
-JF_INGRESS_MANAGEMENT_DNS = f"{JF_INGRESS_MANAGEMENT_SVC_HOST}:{JF_INGRESS_MANAGEMENT_SVC_PORT}"
+# 위 두 값은 kubelet 이 넣어주는 service-link env 로, "파드 생성 시점에 이미 존재하는
+# Service" 만 주입된다. run.sh 의 설치 순서상 user 차트가 ingress_management 보다 먼저
+# 설치되므로 신규 설치에서는 항상 미주입 → "http://None:None/api/ingress/auth" 로 로그인 실패.
+# env 가 있으면 기존 값을 그대로 쓰고, 없을 때만 클러스터 DNS 로 폴백한다
+# (LLM_PLAYGROUND_DNS 등 다른 상수와 같은 방식).
+if JF_INGRESS_MANAGEMENT_SVC_HOST and JF_INGRESS_MANAGEMENT_SVC_PORT:
+    JF_INGRESS_MANAGEMENT_DNS = f"{JF_INGRESS_MANAGEMENT_SVC_HOST}:{JF_INGRESS_MANAGEMENT_SVC_PORT}"
+else:
+    JF_INGRESS_MANAGEMENT_DNS = os.getenv(
+        'JF_INGRESS_MANAGEMENT_DNS',
+        f'jfb-app-ingress-management-svc.{SYSTEM_NAMESPACE}.svc.cluster.local',
+    )
+
+# [EXTERNAL CONTAINER]
+# fb_external_container service (SP-Ext.2) — domain BFFs route partner
+# container traffic here. Default points at the in-cluster ClusterIP; set
+# explicitly to override per environment.
+# ⚠️ 기본값은 실제 배포되는 Service 이름과 같아야 한다. 이전 기본값
+# 'fb-external-container...:8000' 은 어떤 환경에도 그런 Service 가 없어서(실 이름은
+# jfb-app-external-container-svc, port 80) env 오버라이드가 없는 인스턴스에서는 BFF 가
+# 외부 컨테이너 잡을 아예 띄울 수 없었다(NXDOMAIN). 다른 서비스 DNS 기본값
+# (LLM_PLAYGROUND_DNS = jfb-llm-playground-svc...)과 같은 규약으로 맞춘다.
+FB_EXTERNAL_CONTAINER_URL = os.getenv(
+    'FB_EXTERNAL_CONTAINER_URL',
+    f'http://jfb-app-external-container-svc.{SYSTEM_NAMESPACE}.svc.cluster.local',
+)
+
+# [LLM PLAYGROUND] — A4 실 모델출력 배선. 배포(running) 모델의 추론 test_url 해석을
+# playground s2s(get_test_options)에 위임하기 위한 ClusterIP DNS.
+LLM_PLAYGROUND_DNS = os.getenv(
+    'LLM_PLAYGROUND_DNS',
+    f'jfb-llm-playground-svc.{SYSTEM_NAMESPACE}.svc.cluster.local',
+)
+
+# convert(양자화·포팅, SP-4) job 이 사용할 외부 컨테이너 manifest.
+# mock-convert(SP-4 Step1)로 시작 — 실제 llama.cpp convert 컨테이너 도착 시
+# 동일 계약(job_type=convert, /model 입력, /output 포팅 패키지)이라 env 만
+# 교체하면 플랫폼 코드 변경 없이 전환된다.
+CONVERT_MANIFEST_NAME = os.getenv('CONVERT_MANIFEST_NAME', 'mock-convert')
+CONVERT_MANIFEST_VERSION = os.getenv('CONVERT_MANIFEST_VERSION', '1.0.0')
+
+# 프롬프트 최적화(fewshot-prompt-optimizer, ETRI) 외부 컨테이너 manifest.
+#   convert 와 동일 관행 — 컨테이너 버전이 올라가도 env 만 바꾸면 코드 변경 없이 전환된다.
+PROMPT_OPT_MANIFEST_NAME = os.getenv('PROMPT_OPT_MANIFEST_NAME', 'fewshot-prompt-optimizer')
+PROMPT_OPT_MANIFEST_VERSION = os.getenv('PROMPT_OPT_MANIFEST_VERSION', '1.0.0')
+
+# evaluate(자동평가, SP-5) job 이 사용할 외부 컨테이너 manifest.
+# 기본=플랫폼 소유 evaluate-selfmetric(자체 메트릭). 고려대 평가 plugin(⑪) 도착 시
+# 동일 계약(job_type=evaluate, /model+/dataset 입력, /output/metrics.json)이라
+# env 만 교체하면 플랫폼 코드 변경 없이 전환된다.
+EVALUATE_MANIFEST_NAME = os.getenv('EVALUATE_MANIFEST_NAME', 'evaluate-selfmetric')
+EVALUATE_MANIFEST_VERSION = os.getenv('EVALUATE_MANIFEST_VERSION', '1.0.0')
+
+# benchmark(벤치마크 평가, llm_evaluation) job 이 사용할 외부 컨테이너 manifest.
+# 기본 = evaluate-lmeval(lm-evaluation-harness 실채점, GPU 1장, 로컬 가중치 — 2026-09-28).
+# 그 전의 기본이던 evaluate-benchmark-mock(해시 점수) 0.2.0 은 롤백용으로 등록돼 있다 — env
+# 로 되돌릴 수 있지만 mock 은 모르는 id(arc_easy 등 신규 9 종·custom)를 걸러 버리므로 FE
+# 카탈로그도 함께 되돌려야 한다. ⚠️ 로컬 가중치 경로(llm_evaluation LOCAL_WEIGHTS_MANIFEST_KEYS)
+# 라 mock 으로 되돌려도 체크포인트를 마운트한다(mock 은 무시한다 — 해가 없다).
+BENCHMARK_MANIFEST_NAME = os.getenv('BENCHMARK_MANIFEST_NAME', 'evaluate-lmeval')
+BENCHMARK_MANIFEST_VERSION = os.getenv('BENCHMARK_MANIFEST_VERSION', '0.1.2')
+# humaneval 전용 — 모델 생성 코드를 실행해 채점하는 격리 매니페스트(같은 이미지, 코드 실행 on).
+BENCHMARK_CODE_MANIFEST_NAME = os.getenv('BENCHMARK_CODE_MANIFEST_NAME', 'evaluate-lmeval-code')
+BENCHMARK_CODE_MANIFEST_VERSION = os.getenv('BENCHMARK_CODE_MANIFEST_VERSION', '0.1.2')
+
+# LogicKor 실채점 컨테이너 — mock 과 달리 실제 심판 점수를 산출한다. 벤치마크 'logickor'
+# 를 고른 런만 이 manifest 로 라우팅된다(service.run_benchmark 의
+# REAL_BENCHMARK_MANIFEST_KEY). 한 런 = 컨테이너 하나라 mock 벤치마크와 섞어 돌릴 수 없다.
+#
+# 기본 = evaluate-logickor-judge (GPU 1장). 미채점 생성물(generator 산출 jsonl)을 받아
+# 심판 LLM 으로 문항×턴마다 1~10 점을 매기고 집계까지 한다 — 사용자가 올리는 데이터셋이
+# '모델 답변'이면 이쪽이어야 한다.
+# 입력이 **이미 채점된** jsonl(judge_score 포함)이면 심판을 건너뛰는 집계 전용 컨테이너로
+# env 만 내리면 된다(GPU 0, 기동 5초):
+#   LOGICKOR_MANIFEST_NAME=evaluate-logickor  LOGICKOR_MANIFEST_VERSION=0.1.0
+# 두 이미지는 같은 집계 로직(apps/evaluate_logickor/scoring.py)을 공유해 출력 계약이 같다.
+LOGICKOR_MANIFEST_NAME = os.getenv('LOGICKOR_MANIFEST_NAME', 'evaluate-logickor-judge')
+LOGICKOR_MANIFEST_VERSION = os.getenv('LOGICKOR_MANIFEST_VERSION', '0.2.5')
+
+# MixATIS 다중의도·슬롯 채점 컨테이너(apps/evaluate_intent). 벤치마크 'mixatis' 를 고른
+# 런만 이 manifest 로 라우팅된다(service.run_benchmark 의 REAL_BENCHMARK_MANIFEST_KEY).
+# LogicKor 와 달리 심판 LLM 이 없어 결정론적이다 — 재실행하면 같은 값이 나오므로
+# 이식본과 원본의 숫자를 직접 대조해 검증할 수 있다.
+MIXATIS_MANIFEST_NAME = os.getenv('MIXATIS_MANIFEST_NAME', 'evaluate-intent')
+MIXATIS_MANIFEST_VERSION = os.getenv('MIXATIS_MANIFEST_VERSION', '0.2.5')
+
+# SDS 도메인(3.5) 모델 생성 시 자동 바인딩되는 외부 컨테이너 manifest 의 고정 버전.
+# 사용자는 모델 생성에서 domain=SDS 만 고르고 버전은 안 고른다 → create_model 이
+# 이 상수로 external_manifest_name/version 을 해석. 바인딩 버전은 **env 로 flip**
+# (FE 리빌드/코드 커밋 없이). 아래는 fresh-install 용 기본값(canonical base)일 뿐,
+# 실 클러스터는 env `SDS_MANIFEST_VERSION` 로 운영 버전을 지정한다
+# (예: 운영 클러스터 = `1.0.0-acryl-patched-v11`, 내부 패치 이미지). recipe 가
+# 있는 버전이어야 FT 탭이 master-detail(레시피 파이프라인)로 렌더된다 — 기본값을
+# 1.1.0 으로 두는 이유가 이것이다. 1.1.0 은 fb_external_container 가 부팅 시
+# 시드하는 표준 판본(apps/fb_external_container/manifests/)이라 신규 설치에서도
+# recipe 가 항상 존재한다. recipe 없는 1.0.0 을 가리키면 화면이 raw-params 로 떨어진다.
+SDS_MANIFEST_NAME = os.getenv('SDS_MANIFEST_NAME', 'eva-vlm-train')
+SDS_MANIFEST_VERSION = os.getenv('SDS_MANIFEST_VERSION', '1.1.0')
 
 # [KAFKA]
 JF_KAFKA_DNS = os.getenv('JF_KAFKA_DNS', None)

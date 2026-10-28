@@ -156,6 +156,9 @@ function DatasetDetailPage({ trackingEvent }) {
   const [disabledDecompress, setDisabledDecompress] = useState(true); // 압축해제 불가
   const [decompressing, setDecompressing] = useState(false); // 압축해제 중
   const [deleting, setDeleting] = useState(false); // 삭제 중
+  const [converting, setConverting] = useState(false); // 포맷 변환 요청 중
+  // 진행 중/직전 포맷 변환 잡. { id, name, preprocessingId, status, reason, finished, failed }
+  const [convertJob, setConvertJob] = useState(null);
   const [destinationPath, setDestinationPath] = useState(''); // 이동/복사 경로
   const [newFolder, setNewFolder] = useState(''); // 이동/복사 새폴더
   const [isCopy, setIsCopy] = useState(false); // 복사본 만들기 여부
@@ -1239,6 +1242,140 @@ function DatasetDetailPage({ trackingEvent }) {
    *
    * @returns
    */
+  /**
+   * 포맷 변환 (빌트인 전처리 FORMAT_CONVERT) 실행 — 선택 파일 1개 대상.
+   *
+   * 1) preprocessing/format-convert/ensure 로 워크스페이스 전용 전처리 프로젝트 확보(멱등)
+   * 2) preprocessing/jobs/run 으로 잡 실행 (GPU 미요청 = gpu_count 기본 0,
+   *    image_id 미지정 = 빌트인 전처리 기본 이미지)
+   *
+   * ⚠️ dataset_data_path 는 반드시 "파일" 경로. format_convert.py 가 입력의 dirname 에
+   * 결과를 쓰기 때문에 폴더/데이터셋 루트를 넘기면 결과가 상위에 생긴다(버튼 단계에서 차단).
+   */
+  const onFormatConvert = async (builtInParam) => {
+    const target = selectedRows.length === 1 ? selectedRows[0] : null;
+    // 폴더/루트를 넘기면 결과가 상위 디렉터리에 생기므로 "파일" 만 허용(버튼도 동일 가드).
+    if (!target || target.type !== 'file' || !workspaceId) return;
+    await runBuiltInConvert({
+      ensureUrl: 'preprocessing/format-convert/ensure',
+      datasetDataPath: extractPath(`${path.join('/')}/${target.name}`),
+      builtInParam,
+    });
+  };
+
+  /**
+   * SDS → LLaVA 변환 실행 — 포맷 변환과 같은 "프로젝트 없이 데이터셋에서 바로" 흐름.
+   *
+   * 포맷 변환과 다른 점은 대상이 **디렉터리**라는 것 하나다. sds_llava_convert.py 는
+   * 입력 디렉터리를 스캔해(시나리오 subdir 또는 png/·csv/ 타입별 디렉터리) 그 안에
+   * sidecar JSON 을 쓴다. 선택이 없으면 현재 탐색 경로(= 데이터셋 루트 포함)를 대상으로
+   * 삼는다 — 데이터셋 전체 변환이 기본 사용법이기 때문.
+   */
+  const onSdsConvert = async (builtInParam) => {
+    if (!workspaceId) return;
+    const target = selectedRows.length === 1 ? selectedRows[0] : null;
+    if (target && target.type !== 'dir') return;
+    const base = path.join('/');
+    const rel = target ? `${base}/${target.name}` : base;
+    await runBuiltInConvert({
+      // extractPath 는 루트('' 또는 '/')에서 null 을 돌려준다. 스케줄러가
+      // `--input_data=/dataset/{path}` 로 조립하므로 루트는 빈 문자열이어야
+      // `/dataset/` = 데이터셋 루트가 된다(null 이면 경로가 깨진다).
+      ensureUrl: 'preprocessing/sds-convert/ensure',
+      datasetDataPath: extractPath(rel) || '',
+      builtInParam,
+    });
+  };
+
+  /**
+   * 데이터셋 상세에서 바로 실행하는 빌트인 변환 공통 러너.
+   *
+   * 1) <ensureUrl> 로 워크스페이스 전용 전처리 프로젝트 확보(멱등)
+   * 2) preprocessing/jobs/run 으로 잡 실행 (GPU 미요청, 빌트인 기본 이미지)
+   * 진행 상태 폴링/시스템 로그는 변환 종류와 무관하게 convertJob 하나로 공유한다.
+   */
+  const runBuiltInConvert = async ({ ensureUrl, datasetDataPath, builtInParam }) => {
+    setConverting(true);
+    try {
+      const ensureRes = await callApi({
+        url: ensureUrl,
+        method: 'post',
+        body: { workspace_id: Number(workspaceId) },
+      });
+
+      if (ensureRes.status !== STATUS_SUCCESS) {
+        errorToastMessage(ensureRes);
+        return;
+      }
+
+      const preprocessingId = ensureRes.result?.preprocessing_id;
+      if (!preprocessingId) {
+        toast.error(
+          t('formatConvertFailed.message', '포맷 변환에 실패했습니다.'),
+        );
+        return;
+      }
+
+      const jobName = `fmt-convert-${Date.now()}`;
+      const runRes = await callApi({
+        url: 'preprocessing/jobs/run',
+        method: 'post',
+        body: {
+          preprocessing_id: Number(preprocessingId),
+          job_name: jobName,
+          dataset_id: Number(datasetId),
+          // 스케줄러가 --input_data=/dataset/{dataset_data_path} 로 주입하므로
+          // 선행 '/' 없는 상대 경로(NewDatasetSearch 의 full_path 와 동일 규약).
+          dataset_data_path: datasetDataPath,
+          built_in_param: builtInParam,
+          get_job_id: 1,
+        },
+      });
+
+      if (runRes.status !== STATUS_SUCCESS || !runRes.result) {
+        errorToastMessage(runRes);
+        return;
+      }
+
+      setConvertJob({
+        id: runRes.result,
+        name: jobName,
+        preprocessingId: Number(preprocessingId),
+        status: 'pending',
+        reason: '',
+        finished: false,
+        failed: false,
+      });
+      defaultSuccessToastMessage('request');
+    } finally {
+      setConverting(false);
+    }
+  };
+
+  /**
+   * 포맷 변환 시스템 로그 — 기존 범용 모달(job_id 만 받는 계약) 재사용.
+   */
+  const onOpenConvertLog = (job) => {
+    if (!job?.id) return;
+    dispatch(
+      openModal({
+        modalType: 'DATASET_PROCESS_SYSTEM_LOG',
+        modalData: {
+          submit: {
+            text: 'confirm.label',
+            func: () => {
+              dispatch(closeModal('DATASET_PROCESS_SYSTEM_LOG'));
+            },
+          },
+          cancel: { text: 'cancel.label' },
+          id: job.id,
+          status: job.status,
+          name: job.name,
+        },
+      }),
+    );
+  };
+
   const onDecompressFile = async () => {
     // setDecompressing(true);
 
@@ -2190,6 +2327,64 @@ function DatasetDetailPage({ trackingEvent }) {
     }
   }, 1000);
 
+  /**
+   * 포맷 변환 진행 상태 폴링.
+   * - 시작: 잡을 실행해 convertJob 이 세팅된 시점
+   * - 중단: 잡이 종료 상태(finished/failed)로 판정된 시점 + 언마운트
+   * BE 변경 없이 기존 GET preprocessing/jobs?preprocessing_id= 를 재사용하고 잡 id 로 매칭.
+   * 결과 파일은 상위의 1초 목록 폴링(useIntervalParam)이 자동으로 노출한다.
+   */
+  const convertJobId = convertJob?.id;
+  const convertProjectId = convertJob?.preprocessingId;
+  const convertSettled =
+    !convertJob || convertJob.finished || convertJob.failed;
+
+  useEffect(() => {
+    if (!convertJobId || !convertProjectId || convertSettled) return undefined;
+
+    const RUNNING_STATUS = ['pending', 'installing', 'running', 'scheduling'];
+    let cancelled = false;
+
+    const fetchConvertStatus = async () => {
+      const response = await callApi({
+        url: `preprocessing/jobs?preprocessing_id=${convertProjectId}`,
+        method: 'get',
+      });
+      if (cancelled || response.status !== STATUS_SUCCESS) return;
+
+      const job = (response.result?.list || []).find(
+        (v) => Number(v.id) === Number(convertJobId),
+      );
+      if (!job) return;
+
+      const status = job.status?.status || '';
+      const reason = job.status?.reason || '';
+      const isRunning = RUNNING_STATUS.includes(status);
+      const failed = !isRunning && (status === 'error' || status === 'failed');
+
+      setConvertJob((prev) => {
+        if (!prev || Number(prev.id) !== Number(convertJobId)) return prev;
+        const finished = !isRunning && !failed;
+        if (
+          prev.status === status &&
+          prev.reason === reason &&
+          prev.finished === finished &&
+          prev.failed === failed
+        ) {
+          return prev; // 변화 없으면 동일 참조 유지 (불필요한 리렌더/재폴링 방지)
+        }
+        return { ...prev, status, reason, finished, failed };
+      });
+    };
+
+    fetchConvertStatus();
+    const interval = setInterval(fetchConvertStatus, 3000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [convertJobId, convertProjectId, convertSettled]);
+
   useEffect(() => {
     if (location.state?.fromUploadAlarm) {
       fromUploadAlarm();
@@ -2248,6 +2443,18 @@ function DatasetDetailPage({ trackingEvent }) {
       paginationResetDefaultPage={paginationResetDefaultPage}
       historyForward={historyForward}
       onFileUpload={onFileUpload}
+      onDropUpload={(fileList) =>
+        onSubmitUpload({
+          files: [...fileList],
+          uploadType: 0,
+          // 드롭 업로드는 모달 중복검사 UI 를 안 거치므로, 동명 파일을 덮어쓰지 않고
+          // 복사(백엔드 duplicate 리네임)로 처리 — 데이터 손실/손상 방지(리뷰 HIGH).
+          checkedFileList: [...fileList].map((f) => ({
+            fileName: f.name,
+            overwrite: false,
+          })),
+        })
+      }
       onCreateFolder={onCreateFolder}
       onFileDownload={onFileDownload}
       onGoogleDriveUpload={onGoogleDriveUpload}
@@ -2275,6 +2482,11 @@ function DatasetDetailPage({ trackingEvent }) {
       isFetchingDetail={isFetchingDetail}
       rowClickFetching={rowClickFetching}
       fromUploadFetching={fromUploadFetching}
+      onFormatConvert={onFormatConvert}
+      onSdsConvert={onSdsConvert}
+      converting={converting}
+      convertJob={convertJob}
+      onOpenConvertLog={onOpenConvertLog}
     />
   );
 }

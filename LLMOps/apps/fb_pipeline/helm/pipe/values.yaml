@@ -1,0 +1,16 @@
+namespace: jonathan-system
+pod_name: pipeline-test
+labels:
+  pipeline_id: 1
+  workspace_id: 39
+  owner_name: wyatt
+  helm_name: ""
+dataset:
+  workspace_name:
+  access:
+  dataset_name:
+  volume_name:
+# SP-7 Jump(노드 재실행) — 일반 실행은 빈 값(전체 리셋). 재실행 시 start_pipeline 이
+# helm install --set rerun_from_task_id={task_id} 로 주입.
+rerun_from_task_id: ""
+image: 192.168.1.150:30500/jfb-system/pipeline_app:0.2.0

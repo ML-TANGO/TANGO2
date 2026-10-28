@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: jfb-evaluation-sa
+  namespace: {{ .Values.global.jfb.namespace }}
+
+---
+# 최소 권한(least-privilege) — llm_evaluation 은 오케스트레이션 BFF.
+# K8s 잡/팟/배포 생성은 fb_external_container 에 HTTP 위임하고, 자신은 DB(fb_utils)+
+# NFS+외부 HTTP 만 사용 → 직접 K8s API 호출 없음(코드 import 체인 검증). 따라서
+# 플랫폼 표준 wildcard ClusterRole(다른 LLM 서비스 패턴) 대신, 네임스페이스 한정
+# read-only Role 만 부여(부수적 in-namespace 조회 margin). cluster-scope·rbac mint·
+# secrets·wildcard 전부 제거(보안 리뷰 HIGH 해소).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: jfb-evaluation-role
+  namespace: {{ .Values.global.jfb.namespace }}
+rules:
+- apiGroups: [""]
+  resources: ["pods", "configmaps"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: jfb-evaluation-role-binding
+  namespace: {{ .Values.global.jfb.namespace }}
+subjects:
+- kind: ServiceAccount
+  name: jfb-evaluation-sa
+  namespace: {{ .Values.global.jfb.namespace }}
+roleRef:
+  kind: Role
+  name: jfb-evaluation-role
+  apiGroup: rbac.authorization.k8s.io

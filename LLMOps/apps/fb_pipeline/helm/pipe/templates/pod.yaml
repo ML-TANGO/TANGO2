@@ -1,0 +1,104 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  annotations:
+    acryl.ai/appType: user
+  labels:
+    {{- range $key, $val := .Values.labels }}
+    {{ $key }}: {{ $val | quote }}
+    {{- end }}
+    role: "jfb-user-function"
+  name: {{ .Values.pod_name }}
+  namespace: {{ .Values.namespace }}
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      serviceAccountName: jfb-pipeline-sa
+      containers:
+        - name: "pipeline"
+          command:
+            - /bin/bash
+            - -c
+            - |
+              cd /src 
+              python3 pipeline.py
+          env:
+            - name: PIPELINE_ID
+              value: {{ .Values.labels.pipeline_id | quote }}
+            - name: WORKSPACE_ID
+              value: {{ .Values.labels.workspace_id | quote }}
+            - name: OWNER_NAME
+              value: {{ .Values.labels.owner_name | quote }}
+            # SP-7 Jump(노드 재실행) — 설정 시 해당 노드부터 단일패스 재실행(전체 리셋 스킵).
+            - name: RERUN_FROM_TASK
+              value: {{ .Values.rerun_from_task_id | default "" | quote }}
+          envFrom:
+            - configMapRef:
+                name: jfb-settings
+          image: {{ .Values.image }}
+          imagePullPolicy: IfNotPresent
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - echo START
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - echo END
+          resources:
+            limits:
+              cpu: "2.4"
+              memory: "0.4Gi"
+            requests:
+              cpu: "1.2"
+              memory: "0.2Gi"
+          securityContext:
+            capabilities:
+              add:
+                - IPC_LOCK
+            privileged: false # Confirm if you want privileged mode or not
+            runAsGroup: 0
+            runAsUser: 0
+          volumeMounts:
+            # - name: jf-utils
+            #   mountPath: /src/utils
+            - name: storage-local-nfs
+              mountPath: /dataset
+              subPath: data/{{ .Values.dataset.workspace_name }}/{{ .Values.dataset.access }}/{{ .Values.dataset.dataset_name}}
+            - name: jf-pipeline
+              mountPath: /src/pipeline.py
+              subPath: pipeline.py
+              readOnly: true
+            - name: jf-pipeline
+              mountPath: /src/settings.py
+              subPath: settings.py
+              readOnly: true
+            - name: jf-pipeline
+              mountPath: /src/db.py
+              subPath: db.py
+              readOnly: true
+            - name: jf-pipeline
+              mountPath: /src/redis_con.py
+              subPath: redis_con.py
+              readOnly: true
+      dnsPolicy: ClusterFirst
+      enableServiceLinks: true
+      hostIPC: true
+      terminationGracePeriodSeconds: 0
+      volumes:
+        - name: jf-pipeline
+          configMap:
+            name: {{ .Values.pod_name }}
+        - name: {{ .Values.dataset.volume_name }}  
+          persistentVolumeClaim:                                                                                     
+            claimName: {{ .Values.dataset.volume_name }}
+        # - name: jf-utils
+        #   persistentVolumeClaim:
+        #     claimName: jf-src-utils-pvc
+      restartPolicy: Never

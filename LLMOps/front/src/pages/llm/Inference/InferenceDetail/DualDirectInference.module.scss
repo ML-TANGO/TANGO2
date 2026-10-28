@@ -1,0 +1,93 @@
+@import '@src/styles/color.scss';
+
+// 폭 제한은 부모(InferenceDetail .content-cont)가 소유 → 여기서 max-width 를 두지 않는다.
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+// 플랫폼 카드 idiom(형제 배포 상세 .card 동형). 카드 안에 또 카드를 두지 않는다.
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  padding: 24px;
+  border: 1px solid $blue102;
+  border-radius: 16px;
+  background: $mono200;
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.card-title {
+  margin: 0;
+  color: $mono207;
+  font-family: SpoqaB;
+  font-size: 18px;
+  line-height: 18px;
+}
+
+// 우측 액션(도메인 최적화 토글) — 제목/배지와 같은 줄 끝.
+.head-actions {
+  margin-left: auto;
+}
+
+// 도메인 최적화 예시 묶음 — 카드 안쪽 보조 표면(카드 중첩 금지 → 옅은 배경 + 작은 radius).
+.domain-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid $mono203;
+  border-radius: 8px;
+  background: $mono201;
+}
+
+.qa-set {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.qa-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  .qa-index {
+    color: $mono205;
+    font-family: SpoqaM;
+    font-size: 13px;
+    line-height: 13px;
+  }
+}
+
+.qa-add {
+  align-self: flex-start;
+}
+
+.run-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.result {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.result-body {
+  color: $mono207;
+  font-size: 14px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

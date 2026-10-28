@@ -25,7 +25,7 @@ func (s *ImageServer) AllLogsQuery(ctx context.Context, query string) (*pb.Summa
 	//log.Printf("%s", query)
 	res, err := s.esClient.Search(
 		s.esClient.Search.WithContext(ctx),
-		s.esClient.Search.WithIndex("*-all"),
+		s.esClient.Search.WithIndex("*-all", "jonathan-*-20*", "system-*-20*", "thirdparty-20*", "congregate_failed-20*"),
 		s.esClient.Search.WithBody(strings.NewReader(query)),
 		s.esClient.Search.WithTrackTotalHits(true),
 		s.esClient.Search.WithPretty(),

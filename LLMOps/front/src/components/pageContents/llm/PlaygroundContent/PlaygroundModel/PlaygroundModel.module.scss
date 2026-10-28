@@ -1,5 +1,67 @@
 @import '@src/styles/color.scss';
 
+// 서빙 엔진 셀렉터 (멀티엔진 로드맵 Phase 1)
+.engine-select {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 24px;
+
+  .engine-label {
+    color: $mono205;
+    font-family: SpoqaM;
+    font-size: 14px;
+  }
+
+  .engine-options {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+
+  .engine-opt {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border: 1px solid $mono203;
+    border-radius: 8px;
+    background: $mono200;
+    color: $mono206;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, color 0.15s;
+
+    &:focus-visible {
+      outline: 2px solid $blue104;
+      outline-offset: 2px;
+    }
+
+    &.selected {
+      border-color: $blue104;
+      background: rgba($blue104, 0.08);
+      color: $blue104;
+    }
+
+    &.disabled {
+      cursor: not-allowed;
+      color: $mono204;
+      background: $mono202;
+    }
+
+    .badge {
+      font-size: 11px;
+      font-weight: 500;
+      padding: 1px 6px;
+      border-radius: 8px;
+      background: $mono202;
+      color: $mono205;
+    }
+  }
+}
+
 .flex-32 {
   display: flex;
   flex-direction: column;
@@ -144,7 +206,8 @@
   background-color: initial;
   cursor: pointer;
 
-  &:focus {
+  // 마우스 클릭에는 링이 뜨지 않도록 :focus-visible 사용(위 .engine-opt 와 동일 관례).
+  &:focus-visible {
     outline: 1px solid $blue104;
     border-radius: 8px;
     outline-offset: 1px;

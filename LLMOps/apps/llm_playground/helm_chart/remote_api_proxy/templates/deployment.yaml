@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ .Values.name }}
+    jfb-type: remote-api-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.name }}
+        jfb-type: remote-api-proxy
+    spec:
+      containers:
+        - name: proxy
+          image: {{ .Values.image }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          ports:
+            - containerPort: {{ .Values.port }}
+          env:
+            - name: REMOTE_PROVIDER
+              value: {{ .Values.provider | quote }}
+            - name: REMOTE_MODEL
+              value: {{ .Values.model | quote }}
+            - name: REMOTE_BASE_URL
+              value: {{ .Values.baseUrl | quote }}
+            {{- if .Values.secretName }}
+            # 키는 Secret 에서만 온다 — helm values/PodSpec/release manifest 어디에도
+            # 평문으로 남지 않는다(SP-3 하드닝과 같은 규약).
+            - name: API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secretName }}
+                  key: {{ .Values.secretKey }}
+            {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: {{ .Values.port }}
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          resources:
+{{ toYaml .Values.resources | indent 12 }}

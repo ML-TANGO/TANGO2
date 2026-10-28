@@ -6,3 +6,74 @@
   gap: 32px;
   margin-top: 24px;
 }
+
+.head-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* SP-8 통합 노드 뷰 — stat grid */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+}
+.stat-box {
+  background: #fff;
+  border: 1px solid #ececec;
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+.stat-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #747474;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  margin-top: 4px;
+
+  &.edge {
+    color: #b87900;
+  }
+}
+.stat-on {
+  font-size: 11px;
+  font-weight: 700;
+  color: #0fa755;
+}
+.stat-off {
+  font-size: 11px;
+  font-weight: 700;
+  color: #9a9a9a;
+}
+
+/* 세그먼트 토글 */
+.segments {
+  display: flex;
+  gap: 6px;
+}
+.segment {
+  height: 32px;
+  padding: 0 16px;
+  border: 1px solid #dbdbdb;
+  background: #fff;
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #747474;
+  cursor: pointer;
+
+  &.active {
+    border-color: #2d76f8;
+    background: #e6efff;
+    color: #2d76f8;
+  }
+  &:focus-visible {
+    outline: 2px solid #2d76f8;
+    outline-offset: 1px;
+  }
+}

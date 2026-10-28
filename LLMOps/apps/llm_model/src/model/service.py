@@ -1,6 +1,7 @@
 
 
 import os
+import re
 import json
 import asyncio
 import aiofiles
@@ -26,11 +27,18 @@ from aiopath import AsyncPath
 from utils import redis_key, TYPE, PATH, settings, common, topic_key, workspace_resource
 from utils.redis import get_redis_client_async
 from utils.llm_db import db_model
-from utils.msa_db import db_workspace, db_user, db_instance
+from utils.msa_db import db_workspace, db_user, db_instance, db_edge
+from utils.access_check import is_workspace_user
 from model.dto import FineTuningConfig, FineTuningPodInfo
 from utils.crypt import session_cipher, front_cipher
 # from utils.mongodb_async import urls_collection
-from utils.kube import PodName
+from utils.kube import PodName, create_or_replace_secret, delete_secret
+
+
+def _redact_secrets(cmd: str) -> str:
+    """helm 명령 로깅 시 토큰/시크릿 마스킹. HF 토큰은 저장은 암호화돼 있으나
+    helm --set command.token=... 에는 복호화된 평문이 들어가므로 stdout/EFK 유출 방지."""
+    return re.sub(r'(command\.token=)"[^"]*"', r'\1"***"', cmd)
 
 
 async def is_folder_empty(folder_path):
@@ -67,6 +75,79 @@ async def check_healthz():
 #     return None
     
 
+# ── SSE tfevents 읽기 캐시 (NFS 과부하 완화, SP-Ext) ──────────────────────
+# sse-graph/sse-time 은 3s(외부)·1s(내부) 루프에서 매 틱 tfevents 파일 전체를
+# EventAccumulator.Reload() 로 재파싱한다. 학습 중 events 파일은 계속 커지고,
+# 뷰를 연 클라이언트마다 독립 파싱하므로 NFS 읽기가 (파일크기 × 빈도 × 클라이언트)
+# 로 증폭된다. events 파일의 (경로, 크기, mtime) 서명이 바뀔 때만 재파싱하고 결과를
+# 프로세스 전역으로 공유해(같은 job 을 보는 N 클라이언트가 1회 파싱을 공유) 완화한다.
+_TFEVENTS_MEMO: dict = {}
+_TFEVENTS_MEMO_MAX = 128
+
+
+def tfevents_signature(log_dir):
+    """log_dir 내 모든 events.out.tfevents.* 의 집계 지문 (파일수, 총 size, 최신 mtime).
+
+    EventAccumulator.Reload() 는 디렉토리의 events 파일 전체를 병합해 읽으므로,
+    '최신 파일 하나'가 아니라 파일 집합 전체를 지문으로 삼아야 한 run 에 events
+    파일이 여러 개 공존해도(스테이지 전환/학습 재개) 갱신을 놓치지 않는다. events 는
+    append-only 라 어떤 파일이 커지거나 새 파일이 생기면 총 size 또는 최신 mtime 이
+    반드시 바뀐다. 파일이 없거나 log_dir 접근 불가면 None (호출부는 빈 결과로 처리).
+    """
+    try:
+        count = 0
+        total_size = 0
+        latest_m = -1.0
+        for name in os.listdir(log_dir):
+            if "tfevents" not in name:
+                continue
+            p = os.path.join(log_dir, name)
+            try:
+                st = os.stat(p)
+            except OSError:
+                continue
+            count += 1
+            total_size += st.st_size
+            if st.st_mtime > latest_m:
+                latest_m = st.st_mtime
+        if count == 0:
+            return None
+        return (count, total_size, latest_m)
+    except OSError:
+        return None
+
+
+def tfevents_memo_get(key, sig):
+    """서명이 일치하면 캐시값, 아니면 None."""
+    hit = _TFEVENTS_MEMO.get(key)
+    if hit is not None and hit[0] == sig:
+        return hit[1]
+    return None
+
+
+def tfevents_memo_put(key, sig, value):
+    """캐시 저장(간단 FIFO 상한 — 동시 학습 job 수 방어)."""
+    if key not in _TFEVENTS_MEMO and len(_TFEVENTS_MEMO) >= _TFEVENTS_MEMO_MAX:
+        _TFEVENTS_MEMO.pop(next(iter(_TFEVENTS_MEMO)), None)
+    _TFEVENTS_MEMO[key] = (sig, value)
+
+
+def _downsample_series(steps, values, max_steps):
+    """steps/values 를 max_steps 개로 축약(구간 평균) — SSE 페이로드 크기 상한.
+    max_steps 이하면 원본 그대로. events 파싱과 trainer_state 폴백이 같은 해상도를
+    내도록 두 경로가 공유한다."""
+    if len(steps) <= max_steps:
+        return steps, values
+    indices = np.linspace(0, len(steps) - 1, max_steps, dtype=int)
+    return (
+        [steps[i] for i in indices],
+        [
+            np.mean(values[indices[j]:indices[j + 1]]) if j + 1 < len(indices) else np.mean(values[indices[j]:])
+            for j in range(len(indices))
+        ],
+    )
+
+
 async def parse_tensorboard_scalars_async(log_dir, max_steps=20):
     """
     TensorBoard 로그 디렉토리에서 스칼라 태그들을 파싱하여 각 태그의 x, y 데이터를 딕셔너리 형태로 반환합니다 (async 버전).
@@ -76,6 +157,16 @@ async def parse_tensorboard_scalars_async(log_dir, max_steps=20):
         log_dir (str): TensorBoard 로그 디렉토리 경로.
         max_steps (int, optional): 출력할 최대 스텝의 개수. 기본값은 100입니다.
     """
+    # NFS 부하 완화: events 파일 서명이 직전 파싱과 같으면 재파싱 없이 공유 캐시 반환
+    # (학습 중 커지는 tfevents 를 3s/1s 루프 × 클라이언트마다 재읽던 것을 제거).
+    sig = await asyncio.to_thread(tfevents_signature, log_dir)
+    if sig is None:
+        return {}, 0
+    memo_key = ("scalars", log_dir, max_steps)
+    cached = tfevents_memo_get(memo_key, sig)
+    if cached is not None:
+        return cached
+
     # 이벤트 어큐뮬레이터 로드
     ea = event_accumulator.EventAccumulator(log_dir)
     await asyncio.to_thread(ea.Reload)
@@ -98,20 +189,166 @@ async def parse_tensorboard_scalars_async(log_dir, max_steps=20):
             for event in events
         ]
        
-        latest_steps = steps[-1]
+        # 태그별 max step 의 최댓값(eval/loss 등 희소 태그가 마지막에 처리돼도 진행률이 역행하지 않게).
+        latest_steps = max(latest_steps, steps[-1])
 
         # 스텝 수를 최대 max_steps로 제한하고 평균값 계산
-        if len(steps) > max_steps:
-            indices = np.linspace(0, len(steps) - 1, max_steps, dtype=int)
-            steps = [steps[i] for i in indices]
-            values = [
-                np.mean(values[indices[j]:indices[j + 1]]) if j + 1 < len(indices) else np.mean(values[indices[j]:])
-                for j in range(len(indices))
-            ]
+        steps, values = _downsample_series(steps, values, max_steps)
 
         parsed_data[tag] = {'steps': steps, 'values': values}
 
-    return parsed_data, latest_steps
+    result = (parsed_data, latest_steps)
+    tfevents_memo_put(memo_key, sig, result)
+    return result
+
+
+# ── SP-5 ⑩ 체크포인트 점 마킹 ────────────────────────────────────────────────
+# Trainer 는 체크포인트를 `checkpoint-<step>` 디렉토리로 저장(HF 관례). 학습 그래프
+# 위에 그 step 을 점으로 표시(best 강조)하기 위해 step 목록을 해석한다.
+_CHECKPOINT_DIR_RE = re.compile(r"^checkpoint-(\d+)$")
+
+
+def _scan_checkpoint_steps_sync(checkpoint_root: str) -> list:
+    steps = []
+    try:
+        for name in os.listdir(checkpoint_root):
+            m = _CHECKPOINT_DIR_RE.match(name)
+            if m and os.path.isdir(os.path.join(checkpoint_root, name)):
+                steps.append(int(m.group(1)))
+    except OSError:
+        pass
+    return sorted(set(steps))
+
+
+async def _resolve_checkpoint_steps(checkpoint_root: str, save_steps=None, latest_step=None) -> list:
+    """⑩ — 저장된 체크포인트 step 목록. `checkpoint-<step>` 디렉토리 스캔(실제 저장분).
+    디렉토리가 없으면 save_steps 배수로 추정(학습 진행 중 아직 미저장)."""
+    if checkpoint_root:
+        steps = await asyncio.to_thread(_scan_checkpoint_steps_sync, checkpoint_root)
+        if steps:
+            return steps
+    try:
+        save_steps = int(save_steps) if save_steps else 0
+        latest_step = int(latest_step) if latest_step else 0
+    except (TypeError, ValueError):
+        save_steps = latest_step = 0
+    if save_steps > 0 and latest_step > 0:
+        return list(range(save_steps, latest_step + 1, save_steps))
+    return []
+
+
+# ── trainer_state.json 폴백 (events 없는 파트너 학습) ────────────────────────
+# 파트너 스크립트가 TensorBoard 를 켜지 않으면 events 파일이 없어 그래프 소스가
+# 사라진다(eva-vlm 의 train_text_lora.py = `report_to="none"`, phase `lora_marine`
+# 전용 분기). HF Trainer 가 체크포인트마다 남기는 trainer_state.json 의 log_history
+# 는 같은 지표를 logging_steps 주기로 담고 있어 동일 태그로 환산할 수 있다.
+# 한계: save_steps 주기로만 갱신 → 마지막 체크포인트 이후 구간은 빠진다(정확한
+# 해상도는 컨테이너측 report_to 패치가 정답, 이건 소급·내성용 폴백).
+_TRAINER_STATE_FIELD_TAGS = (
+    ("loss", "train/loss"),
+    ("grad_norm", "train/grad_norm"),
+    ("learning_rate", "train/learning_rate"),
+    ("eval_loss", "eval/loss"),
+)
+
+
+def _trainer_state_path_sync(output_dir: str) -> Optional[str]:
+    """최고 step 체크포인트의 trainer_state.json — log_history 가 가장 완전(list_checkpoints 와 동일 관례)."""
+    steps = _scan_checkpoint_steps_sync(output_dir)
+    if not steps:
+        return None
+    path = os.path.join(output_dir, f"checkpoint-{steps[-1]}", "trainer_state.json")
+    return path if os.path.isfile(path) else None
+
+
+def _trainer_state_signature(path: str):
+    """memo 서명 — 체크포인트가 새로 저장되면 경로/크기/mtime 중 하나는 반드시 바뀐다."""
+    try:
+        st = os.stat(path)
+    except OSError:
+        return None
+    return (path, st.st_size, st.st_mtime)
+
+
+async def parse_trainer_state_scalars_async(output_dir, max_steps=20):
+    """`parse_tensorboard_scalars_async` 와 동일한 (parsed, latest_step) 계약의 폴백.
+
+    반환 태그도 FINE_TUNING_LOG_TAGS 로 맞춰 프론트 차트 계약이 바뀌지 않는다.
+    """
+    path = await asyncio.to_thread(_trainer_state_path_sync, output_dir)
+    if not path:
+        return {}, 0
+    sig = await asyncio.to_thread(_trainer_state_signature, path)
+    if sig is None:
+        return {}, 0
+    memo_key = ("trainer_state", output_dir, max_steps)
+    cached = tfevents_memo_get(memo_key, sig)
+    if cached is not None:
+        return cached
+
+    try:
+        raw = await asyncio.to_thread(_read_text_capped, path)
+        log_history = json.loads(raw).get("log_history") or []
+    except (OSError, ValueError):
+        return {}, 0
+
+    parsed_data = {}
+    latest_steps = 0
+    for field, tag in _TRAINER_STATE_FIELD_TAGS:
+        if tag not in TYPE.FINE_TUNING_LOG_TAGS:
+            continue
+        steps, values = [], []
+        for h in log_history:
+            step, value = h.get("step"), h.get(field)
+            if step is None or isinstance(value, bool) or not isinstance(value, (int, float)):
+                continue
+            # events 경로와 같은 규칙으로 비정상 값을 0.0 으로 정규화한다. 정규화하지
+            # 않으면 json.dumps 가 비표준 NaN/Infinity 를 SSE 에 실어 프런트
+            # JSON.parse 가 그 메시지를 통째로 버린다(차트가 조용히 안 갱신됨).
+            value = float(value)
+            if not math.isfinite(value):
+                value = 0.0
+            steps.append(int(step))
+            values.append(value)
+        if not steps:
+            continue
+        latest_steps = max(latest_steps, steps[-1])
+        steps, values = _downsample_series(steps, values, max_steps)
+        parsed_data[tag] = {'steps': steps, 'values': values}
+
+    result = (parsed_data, latest_steps)
+    tfevents_memo_put(memo_key, sig, result)
+    return result
+
+
+async def _model_checkpoint_steps(model_info: dict, workspace_info: dict, latest_step) -> list:
+    """내부 학습 모델의 체크포인트 step — latest_checkpoint 디렉토리 스캔 + save_steps 추정."""
+    try:
+        ckpt_root = PATH.JF_MODEL_LATEST_CHECKPOINT_PATH.format(
+            STORAGE_NAME=workspace_info["main_storage_name"],
+            WORKSPACE_NAME=workspace_info["name"], MODEL_NAME=model_info["name"],
+        )
+    except Exception:
+        ckpt_root = None
+    save_steps = None
+    try:
+        cfg = json.loads(model_info.get("latest_fine_tuning_config") or "{}")
+        save_steps = cfg.get("save_steps")
+    except (TypeError, json.JSONDecodeError):
+        pass
+    # save_total_limit=1 이라 디스크엔 최신 ckpt 디렉토리 1개만 남는다 → 스캔만으론
+    # 마커가 1개뿐. 저장이 일어난 위치(save_steps 배수)를 추정치로 합쳐(union) 모든
+    # 저장 시점을 표시한다.
+    scanned = await asyncio.to_thread(_scan_checkpoint_steps_sync, ckpt_root) if ckpt_root else []
+    steps = set(scanned)
+    try:
+        ss = int(save_steps) if save_steps else 0
+        ls = int(latest_step) if latest_step else 0
+    except (TypeError, ValueError):
+        ss = ls = 0
+    if ss > 0 and ls > 0:
+        steps.update(range(ss, ls + 1, ss))
+    return sorted(steps)
 
 
 
@@ -168,7 +405,8 @@ async def delete_helm_repo(
         return False, str(e)
 
 async def create_model_helm(workspace_id : int, model_id : int, model_name:str, commit_model : str = None , commit_name : str = None,\
-    huggingface_model_id : str = None, huggingface_token : str = None, save_commit_name : str = None) -> Tuple[bool, str]:
+    huggingface_model_id : str = None, huggingface_token : str = None, save_commit_name : str = None,
+    compose_vlm : bool = False, compose_dtype : str = "bfloat16") -> Tuple[bool, str]:
     """
     model_name : commit 되는 모델이 저장되는 모델
     commit_model : commit 하려는 모델 이름
@@ -177,10 +415,55 @@ async def create_model_helm(workspace_id : int, model_id : int, model_name:str, 
     """
     try:
         namespace = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=workspace_id)
+        # 셸 인젝션·경로 탈출 방어(보안리뷰) — 모델명/커밋명은 아래 helm --set f-string(shell=True) + NFS
+        # 경로 세그먼트로 들어간다. create_model/create_commit_model 에서 이미 allowlist 를 걸지만, 모든 호출
+        # 경로(compose/커스텀 체크포인트 ingestion 등)를 셸 경계에서 재차 봉쇄(promote_model_helm 동일 패턴).
+        # '..'·셸 메타문자 차단. (save_commit_name=source_model 도 통과.) 주의: huggingface_model_id 는 HF repo
+        # id('/'·','·'@' 포함)라 별도 charset 필요 → 이번 범위 외(별도 처리 권장).
+        for _seg, _label in ((model_name, "model_name"), (commit_model, "commit_model"),
+                             (commit_name, "commit_name"), (save_commit_name, "save_commit_name")):
+            if _seg is None:
+                continue
+            if not re.fullmatch(r'[A-Za-z0-9._-]{1,80}', _seg) or '..' in _seg:
+                print(f"Error: invalid {_label} for helm launch: {_seg!r}")
+                return False, f"invalid {_label}"
+        # huggingface_model_id 는 --set command.model_id 로 셸 f-string 에 보간됨(download·compose). HF repo id
+        # 라 '/'(namespace)·','(compose '{vision},{llm}') 허용하되 셸 메타문자($ ` " ; | & 공백 등)·'..' 차단.
+        # create_model 진입부에서 이미 검증하지만(다운로드 1440·compose 1394), 셸 경계에서 재봉쇄(defense-in-depth,
+        # model_name 과 동일 패턴; 미래 호출자 대비). 콤마는 셸 메타문자 아님(helm --set 용 이스케이프는 아래서 처리).
+        if huggingface_model_id is not None:
+            if not re.fullmatch(r'[A-Za-z0-9._/,-]{1,200}', huggingface_model_id) or '..' in huggingface_model_id:
+                print(f"Error: invalid huggingface_model_id for helm launch: {huggingface_model_id!r}")
+                return False, "invalid huggingface_model_id"
         command = ""
         mode = ""
+        # HF 토큰을 helm --set(release secret)·pod command 평문 대신 사전 생성 K8s Secret→env(HF_TOKEN)
+        # 으로 주입(보안리뷰 C-4). 토큰 없으면(offline/nexus) Secret 미생성 → tokenSecretName="".
+        token_secret_name = ""
+        if huggingface_token:
+            token_secret_name = f"hf-token-{model_id}".lower()
+            try:
+                create_or_replace_secret(namespace=namespace, name=token_secret_name,
+                                         string_data={"token": huggingface_token})
+            except Exception as e:
+                print(f"Error: failed to create HF token secret: {e}")
+                return False, "HF 토큰 시크릿 생성 실패"
+        command += f' --set command.tokenSecretName="{token_secret_name}"'
         command += f' --set command.latest_checkpoint_path="{PATH.JF_POD_MODEL_LATEST_CHECKPOINT_PATH.format(MODEL_NAME=model_name)}"'
-        if commit_model:
+        if compose_vlm:
+            # 멀티모달: 비전+LLM 두 HF id("{vision},{llm}") → LLaVA 조립(projector 자동생성).
+            mode = "compose_vlm"
+            # helm --set 는 콤마를 key 구분자로 해석 → "{vision},{llm}" 의 콤마를 \, 로 이스케이프
+            # (HF repo id 자체엔 콤마 없음). 안 하면 "key has no value" 로 helm install 실패.
+            escaped_id = (huggingface_model_id or '').replace(',', '\\,')
+            command += f' --set command.model_id="{escaped_id}"'
+            # command.token 평문 --set 제거 — 토큰은 tokenSecretName Secret→env(HF_TOKEN)로 주입(C-4).
+            command += f' --set command.dst_model_path="{PATH.JF_POD_MODEL_SOURCE_MODEL_PATH.format(MODEL_NAME=model_name)}"'
+            command += f' --set command.dtype="{compose_dtype}"'
+            # 두 모델 RAM 적재(최대 ~8B) → 다운로드 기본 한도(6Gi) 초과. compose 전용 상향.
+            command += ' --set resources.limits.memory=32Gi --set resources.requests.memory=24Gi'
+            command += ' --set resources.limits.cpu=2 --set resources.requests.cpu=1'
+        elif commit_model:
             mode = "copy_commit_model"
             
             if save_commit_name is None: # model 생성
@@ -199,7 +482,7 @@ async def create_model_helm(workspace_id : int, model_id : int, model_name:str, 
         elif huggingface_model_id:
             mode = "download_model"
             command += f' --set command.model_id="{huggingface_model_id}"'
-            command += f' --set command.token="{huggingface_token}"'
+            # command.token 평문 --set 제거 — 토큰은 tokenSecretName Secret→env(HF_TOKEN)로 주입(C-4).
             command += f' --set command.dst_model_path="{PATH.JF_POD_MODEL_SOURCE_MODEL_PATH.format(MODEL_NAME=model_name)}"'
             # command += f' --set command.tokenizer_dir="{PATH.JF_POD_MODEL_TOKENIZER_PATH.format(MODEL_NAME=model_name)}"'
             
@@ -209,7 +492,8 @@ async def create_model_helm(workspace_id : int, model_id : int, model_name:str, 
             save_commit_name = TYPE.MODEL_FIRST_COMMIT_NAME
 
         helm_name = TYPE.MODEL_COMMIT_JOB_HELM_NAME.format(MODEL_ID=model_id)
-        image = settings.SYSTEM_DOCKER_REGISTRY_URL + "acrylaaai/llm-finetune:dev"
+        # compose_vlm 은 transformers/torch 가 필요 → FT 이미지(transformers 4.52.4) 사용(경량 다운로드 이미지 X).
+        image = settings.FINE_TUNING_IMAGE if compose_vlm else settings.SYSTEM_DOCKER_REGISTRY_URL + "acrylaaai/llm-finetune:dev"
         helm_command = f"""helm install {helm_name} ./model_download \
             -n {namespace}  \
             --set namespace="{namespace}" \
@@ -223,14 +507,14 @@ async def create_model_helm(workspace_id : int, model_id : int, model_name:str, 
             --set command.mode="{mode}" \
             {command} \
         """
-        
-        print(helm_command)
+
+        print(_redact_secrets(helm_command))
         process = await asyncio.create_subprocess_shell(
             helm_command,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        
+
         stdout, stderr = await process.communicate()
 
         if process.returncode == 0:
@@ -241,11 +525,80 @@ async def create_model_helm(workspace_id : int, model_id : int, model_name:str, 
                 return True, ""
             print(stdout)
             print(err_msg)
-            print(command)
+            print(_redact_secrets(command))
             return False, err_msg
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
         return False, str(e)
+
+async def promote_model_helm(workspace_id: int, model_id: int, model_name: str, src_commit_name: str,
+                             best_step: int, target_step: int, new_commit_name: str) -> Tuple[bool, str]:
+    """Phase 2-C promote 잡 런치 — 커밋의 step 체크포인트를 새 버전으로 재머지(LoRA cat 델타 산술).
+    입력: commit_models/<src>(merged=base+best_delta) + commit_checkpoints/<src>/adapters/{best,target}.
+    출력: commit_models/<new>(=base+target_delta) + commit_logs/<new>. 서빙(latest_checkpoint) 미변경(비파괴).
+    peft 필요 → FT 이미지. create_model_helm 과 동일 subprocess/멱등 처리."""
+    try:
+        namespace = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=workspace_id)
+        mode = "promote_checkpoint"
+        # 셸 인젝션·경로 탈출 차단(보안리뷰) — 이 값들은 helm --set f-string(subprocess_shell) + NFS 경로
+        # 세그먼트로 들어간다. model_name 은 플랫폼 차원 allowlist 미적용(create_model)이고, src_commit_name
+        # 은 구 커밋이 비검증일 수 있어 여기서 재검증(C-1/C-2·commit_name 하드닝 동일 클래스). best/target 은
+        # 아래 f-string 에서 int() 강제라 안전.
+        for _seg, _label in ((model_name, "model_name"), (src_commit_name, "src_commit_name"),
+                             (new_commit_name, "new_commit_name")):
+            if not re.fullmatch(r'[A-Za-z0-9._-]{1,80}', _seg or '') or '..' in (_seg or ''):
+                print(f"Error: invalid {_label} for promote: {_seg!r}")
+                return False, f"invalid {_label}"
+        ckpt_adapters = PATH.JF_POD_MODEL_COMMIT_CHECKPOINT_PATH.format(MODEL_NAME=model_name) + f"/{src_commit_name}/adapters"
+        command = ""
+        # 새 커밋만 생성(비파괴) → latest_checkpoint 빈 값 = 엔진이 서빙 복사 skip.
+        command += ' --set command.latest_checkpoint_path=""'
+        command += f' --set command.src_model_path="{PATH.JF_POD_MODEL_COMMIT_MODEL_PATH.format(MODEL_NAME=model_name, COMMIT_NAME=src_commit_name)}"'
+        command += f' --set command.best_adapter_path="{ckpt_adapters}/checkpoint-{int(best_step)}"'
+        command += f' --set command.target_adapter_path="{ckpt_adapters}/checkpoint-{int(target_step)}"'
+        command += f' --set command.dst_model_path="{PATH.JF_POD_MODEL_COMMIT_MODEL_PATH.format(MODEL_NAME=model_name, COMMIT_NAME=new_commit_name)}"'
+        command += f' --set command.dst_log_dir="{PATH.JF_POD_MODEL_COMMIT_LOG_PATH.format(MODEL_NAME=model_name, COMMIT_NAME=new_commit_name)}"'
+        command += f' --set command.src_model_log_path="{PATH.JF_POD_MODEL_COMMIT_LOG_PATH.format(MODEL_NAME=model_name, COMMIT_NAME=src_commit_name)}"'
+
+        os.chdir("/app/helm/")
+        helm_name = TYPE.MODEL_COMMIT_JOB_HELM_NAME.format(MODEL_ID=model_id)
+        image = settings.FINE_TUNING_IMAGE   # promote = 모델 로드+PEFT merge → FT 이미지
+        helm_command = f"""helm install {helm_name} ./model_download \
+            -n {namespace}  \
+            --set namespace="{namespace}" \
+            --set image="{image}" \
+            --set labels.model_id={model_id} \
+            --set labels.workspace_id={workspace_id} \
+            --set labels.model_commit_type="{mode}" \
+            --set labels.helm_name={helm_name} \
+            --set labels.pod_type={TYPE.FINE_TUNING_TYPE} \
+            --set labels.work_func_type="commit" \
+            --set command.mode="{mode}" \
+            --set resources.limits.memory=32Gi --set resources.requests.memory=24Gi \
+            --set resources.limits.cpu=2 --set resources.requests.cpu=1 \
+            {command} \
+        """
+        print(_redact_secrets(helm_command))    # create_model_helm 과 동일 마스킹(로그 위생, 리뷰 HIGH)
+        process = await asyncio.create_subprocess_shell(
+            helm_command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await process.communicate()
+        if process.returncode == 0:
+            return 1, stdout
+        err_msg = stderr.decode().strip()
+        # promote 맥락: release 이미 존재 = 다른 커밋/promote 잡 실행 중 → 실패로 처리(호출부 롤백). create_model_helm
+        # 의 멱등(True) 처리와 다름 — promote 는 commit_status 게이트로 재시도가 막히므로 collision=경쟁 상황.
+        if "cannot re-use a name that is still in use" in err_msg:
+            return False, "another commit/promote job is running"
+        print(stdout)
+        print(err_msg)
+        return False, err_msg
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+        return False, str(e)
+
 
 async def load_or_stop_helm(workspace_id : int, model_id: int, latest_checkpoint_path : str, tmp_model_path: str = None, load_commit_model_path : str = None):
     try:
@@ -276,14 +629,14 @@ async def load_or_stop_helm(workspace_id : int, model_id: int, latest_checkpoint
             --set command.mode="{mode}" \
             {command} \
         """
-        
-        print(helm_command)
+
+        print(_redact_secrets(helm_command))
         process = await asyncio.create_subprocess_shell(
             helm_command,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        
+
         stdout, stderr = await process.communicate()
 
         if process.returncode == 0:
@@ -294,7 +647,7 @@ async def load_or_stop_helm(workspace_id : int, model_id: int, latest_checkpoint
                 return True, ""
             print(stdout)
             print(err_msg)
-            print(command)
+            print(_redact_secrets(command))
             return False, err_msg
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
@@ -309,7 +662,10 @@ async def create_model_folder(storage_name : str, workspace_name : str , model_n
     model_log_dir = PATH.JF_MODEL_LOG_PATH.format(STORAGE_NAME=storage_name, WORKSPACE_NAME=workspace_name, MODEL_NAME=model_name)
     model_commit_log_dir = PATH.JF_MODEL_COMMIT_LOG_PATH.format(STORAGE_NAME=storage_name, WORKSPACE_NAME=workspace_name, MODEL_NAME=model_name)
     model_latest_checkpoint_dir = PATH.JF_MODEL_LATEST_CHECKPOINT_PATH.format(STORAGE_NAME=storage_name, WORKSPACE_NAME=workspace_name, MODEL_NAME=model_name)
-    paths = [model_commit_dir, model_source_dir, model_config_dir, model_log_dir, model_commit_log_dir, model_latest_checkpoint_dir]
+    # 체크포인트 레지스트리(Phase1) 디렉터리 — fine_tuning 차트의 /checkpoints subPath 가 마운트되므로
+    # 모델 생성 시 미리 생성(subPath 자동생성 안 되는 클러스터에서 마운트 실패 방지, codex MEDIUM).
+    model_checkpoints_dir = os.path.join(os.path.dirname(model_latest_checkpoint_dir), "checkpoints")
+    paths = [model_commit_dir, model_source_dir, model_config_dir, model_log_dir, model_commit_log_dir, model_latest_checkpoint_dir, model_checkpoints_dir]
     
     # mkdir
     for path in paths:
@@ -331,6 +687,18 @@ async def delete_model_folder(storage_name: str, workspace_name: str, model_name
         WORKSPACE_NAME=workspace_name,
         MODEL_NAME=model_name
     )
+
+    # rm -rf 전 경로 가드 — DB 값(storage/workspace/model_name)에 ../ 나 절대경로가
+    # 섞이면 임의 경로 삭제. 반드시 워크스페이스 models 루트 하위로 한정.
+    models_root = os.path.realpath(PATH.JF_MAIN_MODEL_PATH.format(
+        STORAGE_NAME=storage_name, WORKSPACE_NAME=workspace_name, MODEL_NAME="",
+    ).rstrip("/"))
+    real_target = os.path.realpath(model_dir_path)
+    if (not model_name or "/" in model_name or model_name in (".", "..")
+            or os.path.commonpath([real_target, models_root]) != models_root
+            or real_target == models_root):
+        print(f"refusing rm -rf on unsafe model path: {model_dir_path!r}")
+        return False
 
     try:
         # subprocess를 사용하여 rm -rf 실행
@@ -361,6 +729,54 @@ async def delete_commit_model_folder(storage_name : str, workspace_name : str, m
     return True
 
 
+def _commit_checkpoints_dir(storage_name: str, workspace_name: str, model_name: str, commit_name: str) -> Tuple[str, str]:
+    """(base, dst) — commit_checkpoints 베이스와 그 하위 <commit_name> 스냅샷 경로. commit_name 은
+    create_commit_model 의 allowlist(영문/숫자/._-, '..' 금지)를 이미 통과하지만, 베이스 이탈은
+    방어적으로 호출부에서 _is_under 로 재확인."""
+    base = PATH.JF_MODEL_COMMIT_CHECKPOINT_PATH.format(
+        STORAGE_NAME=storage_name, WORKSPACE_NAME=workspace_name, MODEL_NAME=model_name)
+    return base, os.path.join(base, commit_name)
+
+
+async def snapshot_commit_checkpoints(storage_name: str, workspace_name: str, model_name: str, commit_name: str) -> bool:
+    """커밋 시점에 학습 체크포인트(어댑터 레지스트리)를 커밋(버전)에 귀속 — models/<name>/checkpoints/
+    전체(adapters/ + VLM _projector.pt 등)를 commit_checkpoints/<commit>/ 로 서버측 스냅샷.
+    어댑터가 작아(LoRA 수MB×N + projector) 커밋당 ~50MB. 별도 top-level 디렉터리라 커밋 헬름 잡
+    (commit_models, latest_checkpoint→merged)과 레이스 없음. 체크포인트 부재/빈 경우 graceful skip
+    (커밋 자체는 성공). 경로는 commit_checkpoints 베이스 하위로 봉쇄."""
+    model_root = os.path.dirname(PATH.JF_MODEL_LATEST_CHECKPOINT_PATH.format(
+        STORAGE_NAME=storage_name, WORKSPACE_NAME=workspace_name, MODEL_NAME=model_name))
+    src = os.path.join(model_root, "checkpoints")
+    base, dst = _commit_checkpoints_dir(storage_name, workspace_name, model_name, commit_name)
+    # src·dst 모두 베이스 하위로 봉쇄(방어적 일관성, 리뷰 MEDIUM). commit_name 은 호출부 allowlist 통과본.
+    if "/" in commit_name or commit_name in (".", "..") or not _is_under(dst, base) or not _is_under(src, model_root):
+        raise Exception("Error: invalid commit checkpoint path")
+    # 어댑터 디렉터리가 없으면 스냅샷할 게 없음(외부/구 모델, full-merge-only 등) → graceful skip.
+    if not await asyncio.to_thread(os.path.isdir, os.path.join(src, "adapters")):
+        return False
+    await asyncio.to_thread(os.makedirs, base, exist_ok=True)
+    if await asyncio.to_thread(os.path.isdir, dst):    # 중복 커밋명은 상위에서 막지만 방어적 정리.
+        await asyncio.to_thread(common.rm_rf, dst)
+    # symlinks=True: src 내 심링크를 (대상 내용 복제 대신) 링크로 보존 → 학습 파드가 심어둔 심링크를 통한
+    # NFS 임의 파일 내용 유출 차단(보안리뷰 H-2). ignore_dangling_symlinks: 끊긴 링크는 무시(복사 실패 방지).
+    await asyncio.to_thread(shutil.copytree, src, dst, symlinks=True, ignore_dangling_symlinks=True)
+    return True
+
+
+async def delete_commit_checkpoints_folder(storage_name: str, workspace_name: str, model_name: str, commit_name: str) -> bool:
+    """커밋 롤백/삭제 시 commit_checkpoints/<commit> 스냅샷 정리. 베이스 이탈 차단."""
+    base, dst = _commit_checkpoints_dir(storage_name, workspace_name, model_name, commit_name)
+    if "/" in commit_name or commit_name in (".", "..") or not _is_under(dst, base):
+        return False
+    try:
+        if await asyncio.to_thread(os.path.isdir, dst):
+            await asyncio.to_thread(common.rm_rf, dst)
+    except Exception:
+        traceback.print_exc()
+        return False
+    return True
+
+
 async def check_file_exists(file_path: str) -> bool:
     """
     비동기적으로 파일이 존재하는지 확인하는 함수.
@@ -370,6 +786,61 @@ async def check_file_exists(file_path: str) -> bool:
     """
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, os.path.exists, file_path)
+
+
+def _is_under(path: str, root: str) -> bool:
+    """path 가 root 디렉터리 내부인지(traversal 차단). SSE TB 로그 경로 봉쇄용(보안리뷰 M-4)."""
+    try:
+        rp, rr = os.path.realpath(path), os.path.realpath(root)
+        return os.path.commonpath([rp, rr]) == rr
+    except (ValueError, OSError):
+        return False
+
+
+def is_admin_user_id(user_id: int) -> bool:
+    """관리자 판정 — utils/resource.py 의 is_admin_user() 와 같은 기준(user_type==0)."""
+    try:
+        user = db_user.get_user(user_id=user_id)
+        return bool(user) and user.get("user_type") == 0
+    except Exception:
+        traceback.print_exc()
+        return False
+
+
+async def user_can_access_model(user_id: int, model_id: int) -> bool:
+    """모델 접근 권한 **정본** — 아래 넷 중 하나면 접근 가능(2026-07-27 결정).
+
+    1. 관리자(user_type=0) — 운영 점검용 전역 예외
+    2. 소유자(create_user_id)
+    3. 공개(access=1) + 같은 워크스페이스 구성원
+    4. 비공개(access=0) 면 모델 멤버 목록(user_model)에 포함된 사용자
+
+    즉 "공개면 워크스페이스 사람 누구나, 비공개면 소유자·명시 멤버만".
+
+    ⚠️ ``access`` 는 오래 dead 였던 필드다: ``db_model.get_model`` 의 SELECT 에
+    ``m.access`` 가 없어 항상 None 이었고, 그 탓에 예전 공유 분기가 무력화돼
+    "공유로 바꿨는데도 소유자만 접근" 증상을 냈다. 지금은 SELECT 에 추가해 3번이
+    실제로 동작한다 — get_model 에서 access 를 빼면 이 게이트가 조용히 어긋난다(짝).
+
+    ⚠️ 이 규칙은 3곳이 동일해야 한다: 여기(BE 게이트) / ``get_models`` 의 is_access
+    (목록 플래그 — FE 카드 회색처리·진입 차단의 근거) / 상세 진입 라우트 게이트.
+    SSE(학습 그래프/시간/상태)·체크포인트 계열 라우트 게이팅(보안리뷰 H-3)에 쓰인다."""
+    if not user_id:
+        return False
+    if is_admin_user_id(user_id):
+        return True
+    model = await db_model.get_model(model_id=model_id)
+    if not model:
+        return False
+    if model.get("create_user_id") == user_id:
+        return True
+    if model.get("access") == 1:
+        # 공개 모델 — 같은 워크스페이스 구성원이면 누구나. (워크스페이스 밖 사용자는 차단:
+        # 무조건 True 로 열면 다른 워크스페이스 사용자에게도 노출된다.)
+        return is_workspace_user(user_id=user_id, workspace_id=model["workspace_id"])
+    # 비공개(또는 예상 밖 값) — 명시된 모델 멤버만. fail-closed.
+    members = await db_model.get_model_user_list(model_id=model_id)
+    return user_id in [m["user_id"] for m in members]
 
 
 async def move_checkpoint_files_to_parent(path):
@@ -489,14 +960,22 @@ async def get_instance_list(workspace_id : int) -> List[dict]:
         instance["available_instance"] = instance["instance_allocate"]
     return instance_list
 
-async def get_models_by_huggingface(model_name : str = None, huggingface_token : str = None, private : int = 0) -> List[str]:
+async def get_models_by_huggingface(model_name : str = None, huggingface_token : str = None, private : int = 0, model_kind : str = 'text') -> List[str]:
     api = HfApi()
-    
+
+    # model_kind 별 HF pipeline_tag 필터 — 멀티모달(VLM) 비전 인코더 슬롯은 CLIP/SigLIP
+    # (zero-shot-image-classification) 를 검색해야 한다(text-generation 필터로는 안 잡힘).
+    # 그 외(단일 모델 / LLM 슬롯)는 기존대로 text-generation transformers.
+    if (model_kind or 'text').strip().lower() == 'vision':
+        hf_filter = ["zero-shot-image-classification"]
+    else:
+        hf_filter = ["text-generation", "transformers"]
+
     if private:
         huggingface_token = front_cipher.decrypt(huggingface_token)
-        models = api.list_models(limit=10, filter=["text-generation", "transformers"], search=model_name, expand=["private"], token=huggingface_token)
+        models = api.list_models(limit=10, filter=hf_filter, search=model_name, expand=["private"], token=huggingface_token)
     else:
-        models = api.list_models(limit=10, filter=["text-generation", "transformers"], search=model_name)
+        models = api.list_models(limit=10, filter=hf_filter, search=model_name)
     parse_model_ids = [ model.id for model in models]
     return parse_model_ids
 
@@ -592,9 +1071,17 @@ async def add_dataset(model_id: int, dataset_id : int, training_data_path : str)
     workspace_info = await db_model.get_workspace_model(workspace_id=dataset_info["workspace_id"])
     training_data_full_path = PATH.JF_DATA_DATASET_DATA_PATH.format(STORAGE_NAME=workspace_info["data_storage_name"] ,WORKSPACE_NAME=workspace_info["name"] , \
             ACCESS=dataset_info["access"] , DATASET_NAME=dataset_info["name"], DATA_PATH=training_data_path)
-    if check_file_exists(file_path=training_data_full_path):
+    # training_data_path traversal(`../`) 차단 — 데이터셋 루트 내부로 봉쇄(codex: 검증이 no-op 였음).
+    dataset_root = PATH.JF_DATA_DATASET_PATH.format(STORAGE_NAME=workspace_info["data_storage_name"], WORKSPACE_NAME=workspace_info["name"],
+            ACCESS=dataset_info["access"], DATASET_NAME=dataset_info["name"])
+    _real_full = os.path.realpath(training_data_full_path)
+    _real_root = os.path.realpath(dataset_root)
+    if os.path.commonpath([_real_full, _real_root]) != _real_root:
+        return False
+    # ⚠️ check_file_exists 는 async — await 누락 시 코루틴이 항상 truthy 가 되어 검증이 무력화됐음(codex).
+    if await check_file_exists(file_path=training_data_full_path):
         await db_model.create_fine_tuning_dataset(training_data_path=training_data_path, dataset_id=dataset_id, model_id=model_id)
-    
+
         return True
     return False
 #==========
@@ -619,15 +1106,42 @@ async def get_models(workspace_id : int, header_user_id : int) -> List[dict]:
     favorites_model = await db_model.get_favorite_models(header_user_id)
 
     favorites_model_id = [model["model_id"] for model in favorites_model]
-    
+
+    # 목록의 is_access 는 user_can_access_model 과 **동일 규칙**이어야 한다
+    # (관리자 OR 소유자 OR (공개 AND 워크스페이스 구성원) OR 모델 멤버).
+    # 관리자/워크스페이스 멤버십은 이 목록 안에서 모델마다 같으니(단일 workspace_id) 1회만 조회.
+    is_admin = is_admin_user_id(header_user_id) if header_user_id else False
+    in_workspace = (
+        is_workspace_user(user_id=header_user_id, workspace_id=workspace_id)
+        if header_user_id
+        else False
+    )
+
     async def process_model(model):
         private_users  = await db_model.get_model_user_list(model_id=model["id"])
         res = {
             "id" : model["id"],
             "name" : model["name"],
             "bookmark" : model["id"] in favorites_model_id,
-            "is_access" :  True if model["access"] == 1 or header_user_id in [user["user_id"] for user in private_users]  else False,
+            # 상세 진입 가능 여부 — FE 가 이 값으로 카드 회색처리/클릭·수정 차단을 한다.
+            # user_can_access_model 과 동일 규칙: 관리자 OR 소유자 OR
+            # (공개 AND 워크스페이스 구성원) OR 모델 멤버.
+            "is_access" :  True if (
+                is_admin
+                or model["create_user_id"] == header_user_id
+                or (model["access"] == 1 and in_workspace)
+                or header_user_id in [user["user_id"] for user in private_users]
+            ) else False,
             "users" : private_users,
+            # 공개(1)/비공개(0) 원본값. is_access 는 "내가 접근 가능한가"라는 파생 판정이라
+            # 모델 자체의 공개 설정과 의미가 다르다. 이 값을 안 내려주면 수정 모달이 프리필할
+            # 근거가 없어 is_access 로 대신 채우게 되고, 저장 시 비공개 모델이 공개로 덮인다.
+            "access" : model["access"],
+            # 소유자 id. FE 는 이걸로 owner 를 식별한다(이전엔 create_user_name 문자열 매칭이라
+            # 동명이인·개명에 취약했고, 매칭 실패 시 owner 가 undefined 로 빠졌다).
+            # users(user_model 멤버)에 소유자는 포함되지 않는다 — 소유자 권한은 멤버십이 아니라
+            # create_user_id 로 부여되므로(위 is_access 규칙) 별도 필드로 내려준다.
+            "create_user_id" : model["create_user_id"],
             "status" : {
                 "fine_tuning" : model["latest_fine_tuning_status"],
                 "commit" : model["commit_status"]
@@ -635,7 +1149,11 @@ async def get_models(workspace_id : int, header_user_id : int) -> List[dict]:
             "create_user_name" : model["create_user_name"],
             "update_datetime" : model["update_datetime"],
             "create_datetime" : model["create_datetime"],
-            "description" : model["description"]
+            "description" : model["description"],
+            # 목록 카드 타입 칩용 — 멀티모달 판별(load_type='multimodal' 내부 VLM / domain='SDS' 외부).
+            "training_type" : model.get("training_type"),
+            "load_type" : model.get("load_type"),
+            "domain" : model.get("domain"),
         }
         if model_pod_status.get(TYPE.FINE_TUNING_TYPE, {}):
             if model_pod_status[TYPE.FINE_TUNING_TYPE].get(str(model["id"]),{}):
@@ -749,7 +1267,14 @@ async def create_commit_model(commit_name : str, commit_message : str, model_id 
     tmp_path = PATH.JF_MODEL_TMP_PATH.format(STORAGE_NAME=workspace_info["main_storage_name"], WORKSPACE_NAME=workspace_info["name"], MODEL_NAME=model_info["name"])
     if not model_info:
         raise Exception(f"Error: not exist model")
-    
+
+    # commit_name 은 create_model_helm 의 helm --set f-string(shell=True 실행) + NFS 경로
+    # (commit_models/<name>, commit_logs/<name>)에 그대로 들어간다. FE 정규식이 일부 특수문자만
+    # 막고 '/'·'..' 는 통과(직접 API 호출은 FE 우회) → 서버측 allowlist 로 셸 인젝션·경로 탈출 차단
+    # (보안리뷰 Finding1; C-1/C-2 RCE 하드닝과 동일 클래스). 영문/숫자/._- 1~50자, '..' 금지.
+    if not re.fullmatch(r'[A-Za-z0-9._-]{1,50}', commit_name or '') or '..' in (commit_name or ''):
+        raise Exception("Error: invalid commit name (영문/숫자/._- 1~50자, '..' 불가)")
+
     # duplicate check
     if await db_model.check_commit_model_by_name(model_id=model_id, commit_name=commit_name):
         raise Exception(f"Error: duplicate commit model name")
@@ -784,32 +1309,370 @@ async def create_commit_model(commit_name : str, commit_message : str, model_id 
                     save_commit_name=commit_name)
             if res:
                 await db_model.update_model_commit_status(commit_status=TYPE.KUBE_POD_STATUS_RUNNING, model_id=model_id, latest_commit_id=commit_model_id, commit_type=TYPE.COMMIT_TYPE_COMMIT)
-            
+                # 학습 체크포인트(어댑터 레지스트리)를 이 커밋(버전)에 귀속(Phase 2-C) — best-effort.
+                # 스냅샷 실패는 커밋을 막지 않음(commit_models 머티리얼라이즈가 핵심 경로). 체크포인트
+                # 부재(외부/구 모델)는 graceful skip.
+                try:
+                    await snapshot_commit_checkpoints(storage_name=workspace_info["main_storage_name"], workspace_name=workspace_info["name"], model_name=model_info["name"], commit_name=commit_name)
+                except Exception:
+                    traceback.print_exc()
+
             return res
         return False
-            
+
     except Exception as e:
         if commit_model_id:
             await db_model.delete_commit_model(commit_model_id=commit_model_id)
             workspace_info = await db_model.get_workspace_model(workspace_id=model_info["workspace_id"])
             await delete_commit_model_folder(storage_name=workspace_info["main_storage_name"], workspace_name=workspace_info["name"], model_name=model_info["name"], commit_name=commit_name)
+            await delete_commit_checkpoints_folder(storage_name=workspace_info["main_storage_name"], workspace_name=workspace_info["name"], model_name=model_info["name"], commit_name=commit_name)
         return False
             
+def _ckpt_metric(log_history, step, field):
+    """log_history(체크포인트 trainer_state.json)에서 step 이하 최신 non-None field 값.
+    train loss/grad 는 logging_steps 주기라 save 주기와 어긋남 → nearest-prior. eval_loss 는 보통 save
+    주기와 일치(정확). 작은 리스트라 선형 스캔."""
+    found = None
+    for h in (log_history or []):
+        s = h.get("step")
+        if s is None or s > step:
+            continue
+        v = h.get(field)
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            found = v
+    return found
+
+
+def _read_text_capped(path: str, cap: int = 4 * 1024 * 1024) -> str:
+    """trainer_state.json 등 파드-기록 파일 읽기 — context-manager(FD 누수 방지, 리뷰 MEDIUM) +
+    크기 cap(악성/거대 출력 메모리 DoS 차단, 보안 LOW; 정상 trainer_state 는 수 KB). 초과 시 예외."""
+    with open(path, encoding="utf-8") as f:
+        data = f.read(cap + 1)
+    if len(data) > cap:
+        raise ValueError("file too large")
+    return data
+
+
+async def list_checkpoints(model_id: int, commit_name: str = None) -> dict:
+    """체크포인트 레지스트리 — checkpoint-{step} 어댑터 나열. commit_name 없으면 라이브 학습본
+    (models/{name}/checkpoints/adapters), 있으면 커밋 스냅샷(commit_checkpoints/{commit}/adapters,
+    Phase 2-C — 커밋=버전에 귀속). 메트릭/best 는 최고 step 체크포인트의 trainer_state.json
+    (가장 완전한 log_history + best_model_checkpoint)에서 추출. 크기=adapter 가중치(실 산출물)."""
+    model_info = await db_model.get_model(model_id=model_id)
+    if not model_info:
+        raise Exception("Error: not exist model")
+    workspace_info = await db_model.get_workspace_model(workspace_id=model_info["workspace_id"])
+    model_root = os.path.dirname(PATH.JF_MODEL_LATEST_CHECKPOINT_PATH.format(
+        STORAGE_NAME=workspace_info["main_storage_name"], WORKSPACE_NAME=workspace_info["name"],
+        MODEL_NAME=model_info["name"]))
+    empty = {"list": [], "best_step": None, "steps_per_epoch": model_info.get("steps_per_epoch") or 0}
+    if commit_name:
+        # Phase 2-C: 커밋별 스냅샷. commit_name 은 라우트에서 DB(get_commit_model)로 해소되지만 방어적 봉쇄.
+        if "/" in commit_name or commit_name in (".", ".."):
+            return empty
+        _ckpt_base, _commit_dir = _commit_checkpoints_dir(workspace_info["main_storage_name"], workspace_info["name"],
+                                                          model_info["name"], commit_name)
+        adapters_dir = os.path.join(_commit_dir, "adapters")
+        _containment_root = _ckpt_base    # 커밋 스냅샷은 commit_checkpoints 베이스 하위로 봉쇄(의도 명확)
+    else:
+        adapters_dir = os.path.join(model_root, "checkpoints", "adapters")
+        _containment_root = model_root
+    if not _is_under(adapters_dir, _containment_root):    # 경로 봉쇄(방어)
+        return empty
+    try:
+        entries = await asyncio.to_thread(os.listdir, adapters_dir)
+    except (FileNotFoundError, NotADirectoryError):
+        return empty
+    ckpt_names = sorted(
+        [e for e in entries if e.startswith("checkpoint-") and e[len("checkpoint-"):].isdigit()],
+        key=lambda e: int(e[len("checkpoint-"):]))
+    if not ckpt_names:
+        return empty
+    best_step, log_history = None, []
+    ts_path = os.path.join(adapters_dir, ckpt_names[-1], "trainer_state.json")
+    try:
+        ts = json.loads(await asyncio.to_thread(_read_text_capped, ts_path))
+        bmc = ts.get("best_model_checkpoint") or ""
+        base = os.path.basename(bmc)
+        if base.startswith("checkpoint-") and base[len("checkpoint-"):].isdigit():
+            best_step = int(base[len("checkpoint-"):])
+        log_history = ts.get("log_history") or []
+    except Exception:
+        pass
+    out = []
+    for name in ckpt_names:
+        step = int(name[len("checkpoint-"):])
+        fpath = os.path.join(adapters_dir, name)
+        try:
+            saved_at = int(await asyncio.to_thread(os.path.getmtime, fpath))
+        except OSError:
+            saved_at = None
+        try:
+            size_bytes = await asyncio.to_thread(os.path.getsize, os.path.join(fpath, "adapter_model.safetensors"))
+        except OSError:
+            size_bytes = None    # full-FT 는 adapter 파일 없음 → None(FE 가 폴더 표기)
+        out.append({
+            "step": step,
+            "epoch": _ckpt_metric(log_history, step, "epoch"),
+            "loss": _ckpt_metric(log_history, step, "loss"),
+            "grad_norm": _ckpt_metric(log_history, step, "grad_norm"),
+            "learning_rate": _ckpt_metric(log_history, step, "learning_rate"),
+            "eval_loss": _ckpt_metric(log_history, step, "eval_loss"),
+            "size_bytes": size_bytes,
+            "saved_at": saved_at,    # epoch seconds
+            "is_best": (best_step is not None and step == best_step),
+        })
+    return {"list": out, "best_step": best_step, "steps_per_epoch": model_info.get("steps_per_epoch") or 0}
+
+
+async def delete_checkpoint(model_id: int, step: int, commit_name: str = None) -> bool:
+    """체크포인트(어댑터) 폴더 삭제 — 경로는 adapters_dir 봉쇄, step int 강제(인젝션 차단).
+    라이브 학습본(commit_name 없음)은 학습/커밋 active 중 거부(trainer rotation 레이스 회피).
+    커밋 스냅샷(commit_name)은 frozen(트레이너 미관여)이라 active-gate 불요(Phase 2-C)."""
+    model_info = await db_model.get_model(model_id=model_id)
+    if not model_info:
+        raise Exception("Error: not exist model")
+    workspace_info = await db_model.get_workspace_model(workspace_id=model_info["workspace_id"])
+    model_root = os.path.dirname(PATH.JF_MODEL_LATEST_CHECKPOINT_PATH.format(
+        STORAGE_NAME=workspace_info["main_storage_name"], WORKSPACE_NAME=workspace_info["name"],
+        MODEL_NAME=model_info["name"]))
+    if commit_name:
+        if "/" in commit_name or commit_name in (".", ".."):
+            raise Exception("Error: invalid commit name")
+        _, _commit_dir = _commit_checkpoints_dir(workspace_info["main_storage_name"], workspace_info["name"],
+                                                 model_info["name"], commit_name)
+        adapters_dir = os.path.join(_commit_dir, "adapters")
+    else:
+        # active(학습/커밋 진행) 중 삭제 차단 — trainer rotation 과 레이스 회피. scheduling 까지 포함(현재
+        # FT 가 안 쓰지만 방어; error/done/stop 은 허용=정리 가능, 그래서 인라인 set 사용·KUBER_RUNNING_STATUS X).
+        _active = (TYPE.KUBE_POD_STATUS_RUNNING, TYPE.KUBE_POD_STATUS_PENDING,
+                   TYPE.KUBE_POD_STATUS_INSTALLING, TYPE.KUBE_POD_STATUS_SCHEDULING)
+        if model_info.get("latest_fine_tuning_status") in _active \
+           or model_info.get("commit_status") == TYPE.KUBE_POD_STATUS_RUNNING:
+            raise Exception("Error: cannot delete checkpoint while training/commit is active")
+        adapters_dir = os.path.join(model_root, "checkpoints", "adapters")
+    target = os.path.join(adapters_dir, "checkpoint-{}".format(int(step)))    # int 강제 → 경로 인젝션 차단
+    if not _is_under(target, adapters_dir):
+        raise Exception("Error: invalid checkpoint path")
+    if not await asyncio.to_thread(os.path.isdir, target):
+        raise Exception("Error: checkpoint not found")
+    await asyncio.to_thread(common.rm_rf, target)
+    return True
+
+
+async def _resolve_commit_name(model_id: int, commit_id: int) -> str:
+    """commit_id → commit_name 해소 + commit 이 해당 model 소속인지 검증(교차참조 차단). Phase 2-C."""
+    commit = await db_model.get_commit_model(commit_id=commit_id)
+    if not commit or commit.get("model_id") != model_id:
+        raise Exception("Error: commit not found for model")
+    return commit["name"]
+
+
+async def list_commit_checkpoints(model_id: int, commit_id: int) -> dict:
+    """커밋(버전)에 귀속된 체크포인트 스냅샷 나열(Phase 2-C)."""
+    commit_name = await _resolve_commit_name(model_id=model_id, commit_id=commit_id)
+    return await list_checkpoints(model_id=model_id, commit_name=commit_name)
+
+
+async def delete_commit_checkpoint(model_id: int, commit_id: int, step: int) -> bool:
+    """커밋 스냅샷에서 체크포인트 삭제(Phase 2-C) — 커밋 frozen 이라 active-gate 불요."""
+    commit_name = await _resolve_commit_name(model_id=model_id, commit_id=commit_id)
+    return await delete_checkpoint(model_id=model_id, step=step, commit_name=commit_name)
+
+
+async def promote_commit_checkpoint(model_id: int, commit_id: int, step: int, create_user_id: int) -> bool:
+    """커밋의 특정 step 체크포인트를 새 버전으로 promote(Phase 2-C, "수동 best 적용").
+
+    base 스냅샷 없이 LoRA 델타 산술(스파이크 검증, cat): 새 commit_model `<src>-step<step>` row 생성 →
+    promote 잡(commit_models/<src> + adapters{best,target} → cat[-best,+target] merge → commit_models/<new>).
+    비파괴(서빙 latest_checkpoint 미변경). 실패 시 row+폴더 롤백. commit_status RUNNING 중엔 거부."""
+    model_info = await db_model.get_model(model_id=model_id)
+    if not model_info:
+        raise Exception("Error: not exist model")
+    if model_info.get("commit_status") == TYPE.KUBE_POD_STATUS_RUNNING:
+        raise Exception("Error: commit/promote already running")
+    commit = await db_model.get_commit_model(commit_id=commit_id)
+    if not commit or commit.get("model_id") != model_id:
+        raise Exception("Error: commit not found for model")
+    src_commit_name = commit["name"]
+
+    # 커밋 스냅샷에서 best/target step 검증.
+    ck = await list_checkpoints(model_id=model_id, commit_name=src_commit_name)
+    best_step = ck.get("best_step")
+    steps = {c["step"] for c in ck.get("list", [])}
+    if best_step is None:
+        raise Exception("Error: 이 커밋엔 best 체크포인트가 없어 promote 할 수 없습니다")
+    if int(best_step) not in steps:
+        # trainer_state 가 가리키는 best 어댑터가 스냅샷에서 삭제됨 → 재머지 불가(엔진이 best adapter 로드 실패).
+        raise Exception("Error: best 체크포인트 어댑터가 스냅샷에 없어 promote 할 수 없습니다")
+    if int(step) not in steps:
+        raise Exception("Error: target step 이 커밋 스냅샷에 없습니다")
+    if int(step) == int(best_step):
+        raise Exception("Error: 이미 best 인 체크포인트입니다")
+
+    new_commit_name = "{}-step{}".format(src_commit_name, int(step))
+    # create_commit_model 과 동일 allowlist(셸/경로 하드닝) — src + 접미사가 50자/charset 넘으면 거부.
+    if not re.fullmatch(r'[A-Za-z0-9._-]{1,50}', new_commit_name) or '..' in new_commit_name:
+        raise Exception("Error: promote 커밋명 '{}'이 유효하지 않습니다({}자, 영문/숫자/._- 50자 이내). "
+                        "원본 커밋명을 짧게 만들거나 step 을 확인하세요.".format(new_commit_name, len(new_commit_name)))
+    if await db_model.check_commit_model_by_name(model_id=model_id, commit_name=new_commit_name):
+        raise Exception("Error: 이미 promote 된 버전이 있습니다")
+
+    workspace_info = await db_model.get_workspace_model(workspace_id=model_info["workspace_id"])
+    new_commit_id = None
+    try:
+        new_commit_id = await db_model.create_commit_model(
+            model_id=model_id, workspace_id=model_info["workspace_id"], create_user_id=create_user_id,
+            fine_tuning_config=commit.get("fine_tuning_config") or "{}",
+            commit_message="promote step {} (from '{}')".format(int(step), src_commit_name),
+            name=new_commit_name, model_description=model_info["description"],
+            steps_per_epoch=model_info["steps_per_epoch"])
+        if not new_commit_id:
+            return False
+        res, message = await promote_model_helm(
+            workspace_id=model_info["workspace_id"], model_id=model_id, model_name=model_info["name"],
+            src_commit_name=src_commit_name, best_step=int(best_step), target_step=int(step),
+            new_commit_name=new_commit_name)
+        if res:
+            await db_model.update_model_commit_status(commit_status=TYPE.KUBE_POD_STATUS_RUNNING,
+                model_id=model_id, latest_commit_id=new_commit_id, commit_type=TYPE.COMMIT_TYPE_COMMIT)
+            return res
+        # 잡 런치 실패(False 반환) → 고아 row/폴더 롤백(throw 경로와 동일; 재시도 차단·목록 노출 방지, 리뷰 HIGH).
+        await db_model.delete_commit_model(commit_model_id=new_commit_id)
+        await delete_commit_model_folder(storage_name=workspace_info["main_storage_name"], workspace_name=workspace_info["name"], model_name=model_info["name"], commit_name=new_commit_name)
+        await delete_commit_checkpoints_folder(storage_name=workspace_info["main_storage_name"], workspace_name=workspace_info["name"], model_name=model_info["name"], commit_name=new_commit_name)
+        return False
+    except Exception as e:
+        if new_commit_id:
+            await db_model.delete_commit_model(commit_model_id=new_commit_id)
+            await delete_commit_model_folder(storage_name=workspace_info["main_storage_name"], workspace_name=workspace_info["name"], model_name=model_info["name"], commit_name=new_commit_name)
+            await delete_commit_checkpoints_folder(storage_name=workspace_info["main_storage_name"], workspace_name=workspace_info["name"], model_name=model_info["name"], commit_name=new_commit_name)
+        traceback.print_exc()
+        return False
+
+
 async def create_model(workspace_id : int, model_name : str, description : str, create_user_id : int, private : int, huggingface_model_id : str = None, \
-    commit_model_id : int = None, huggingface_token : str = None, access : int = 0, users_id : List[int] = []) -> bool:
+    commit_model_id : int = None, huggingface_token : str = None, access : int = 0, users_id : List[int] = [], \
+    training_type : str = 'internal', external_manifest_name : str = None, external_manifest_version : str = None,
+    domain : str = None, load_type : str = None) -> bool:
     commit_model_info = {}
     model_id = None
     huggingface_git = None
+    workspace_info = {}  # except 핸들러에서 미바인딩(NameError) 방지(리뷰 HIGH)
     try:
+        # ── domain(3.5) 분류 → 학습 백엔드 라우팅. SDS=외부컨테이너(고정 manifest),
+        # SDM/SDF=현재 비활성. 사용자는 domain 만 고르고 버전은 안 고른다 → 여기서
+        # settings 상수로 manifest 바인딩을 해석(단일 지점, FE 미관여).
+        if domain:
+            domain = str(domain).strip().upper()
+            if domain == 'SDS':
+                training_type = 'external'
+                external_manifest_name = settings.SDS_MANIFEST_NAME
+                external_manifest_version = settings.SDS_MANIFEST_VERSION
+            elif domain in ('SDM', 'SDF'):
+                raise Exception(f"Error: domain '{domain}' is not yet supported")
+            else:
+                raise Exception(f"Error: unknown domain '{domain}'")
+        # model_name 은 이후 create_model_helm 의 helm --set f-string(shell=True) + NFS 경로 세그먼트에
+        # 그대로 들어간다. FE 우회 직접 API 호출로 `$(...)`·백틱 등을 이름에 넣으면 helm 잡 런치 파드(kube/helm
+        # 자격증명)에서 RCE. 생성 시점에 차단(commit_name allowlist·C-1/C-2 와 동일 클래스). 영문/숫자/._- 1~50자.
+        if not re.fullmatch(r'[A-Za-z0-9._-]{1,50}', model_name or '') or '..' in (model_name or ''):
+            raise Exception("Error: invalid model name (영문/숫자/._- 1~50자, '..' 불가)")
         # check duplicate model name
         if await db_model.check_model_by_model_name(model_name=model_name, workspace_id=workspace_id):
             raise Exception(f"Error: model name duplicated")
-        
+
         workspace_info = await db_model.get_workspace_model(workspace_id=workspace_id)
-        
+
+        # ── External partner-container training model.
+        # Metadata-only row: helm/serve/commit pipelines belong to the partner
+        # pod (ETRI eva-vlm etc.), so the platform skips them here. The user
+        # opens the model detail → 외부 학습 탭 → "학습 시작" 버튼 which calls
+        # POST /api/external/jobs and then PATCH /models/{id}/external-job to
+        # bind the resulting job_id back.
+        if training_type == 'external':
+            if not external_manifest_name or not external_manifest_version:
+                raise Exception("Error: external_manifest_name/version required for external training_type")
+            model_id = await db_model.create_model(
+                workspace_id=workspace_id,
+                name=model_name,
+                create_user_id=create_user_id,
+                description=description,
+                huggingface_git='',  # NOT NULL column on legacy schema
+                access=access,
+                training_type='external',
+                external_manifest_name=external_manifest_name,
+                external_manifest_version=external_manifest_version,
+                domain=domain,  # SDS 등(없으면 None=NULL). legacy 직접 manifest 선택은 domain 미전송.
+            )
+            if model_id and users_id:
+                await db_model.create_model_user_list(model_id=model_id, user_list=users_id)
+            return bool(model_id)
+
+        # ── Multimodal(VLM) — 비전 인코더 + LLM 두 HF 모델. 텍스트 모델과 동일하게 생성 시
+        # NFS 에 받아둠: 메타행 생성(load_type='multimodal', hf_id="{vision},{llm}") → compose_vlm
+        # 잡(둘 다 다운로드 + LLaVA 조립, projector 자동생성) → NFS source/latest_checkpoint 적재
+        # → 초기 커밋. FT 가 /model(=latest_checkpoint) 로 읽음. 조립=llm_model_download.py
+        # compose_vlm 서브커맨드(FT 이미지=transformers 4.52.4).
+        if (load_type or '').strip().lower() == 'multimodal':
+            # 정확히 2개 모델 id("{vision},{llm}") 강제 — partition(첫 콤마)은 "a,b,c" 를
+            # 통과시켜 llm_id="b,c" 로 오파싱하므로 split 로 part 개수까지 검증(리뷰 MED).
+            parts = [p.strip() for p in (huggingface_model_id or '').split(',')]
+            if len(parts) != 2 or not all(parts):
+                raise Exception("Error: multimodal requires huggingface_model_id='{vision},{llm}' (정확히 2개)")
+            vision_id, llm_id = parts
+            # 셸/helm 인젝션 차단 — HF repo id 는 'org/name'(안전 문자만)만 허용(리뷰 CRITICAL).
+            # 이후 helm --set / bash -c 로 보간되므로 $()·백틱·공백 등 메타문자 원천 차단.
+            _hf_id_re = re.compile(r'^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$')
+            if not (_hf_id_re.match(vision_id) and _hf_id_re.match(llm_id)):
+                raise Exception("Error: invalid HF model id — expected 'org/name' for each of {vision},{llm}")
+            normalized_hf_id = f"{vision_id},{llm_id}"
+            # 토큰 resolve — 단일-HF 경로와 동형. public=회사 토큰, private=복호화.
+            # (Phase 3 base pull 대비 저장. 슬롯별 private 토큰 분리는 후속 — FE 가 병합 전송.)
+            if not private:
+                resolved_token = settings.HUGGINGFACE_TOKEN
+            else:
+                resolved_token = front_cipher.decrypt(huggingface_token)
+            model_id = await db_model.create_model(
+                workspace_id=workspace_id,
+                name=model_name,
+                create_user_id=create_user_id,
+                huggingface_model_id=normalized_hf_id,  # "{vision},{llm}" (정규화)
+                huggingface_token=resolved_token,
+                huggingface_git='',  # NOT NULL — 실제 git/다운로드는 학습 시점 해석
+                description=description,
+                access=access,
+                load_type='multimodal',
+            )
+            if model_id and users_id:
+                await db_model.create_model_user_list(model_id=model_id, user_list=users_id)
+            # 텍스트 흐름과 동일: 폴더 생성 → compose_vlm 잡(비전+LLM→LLaVA) → 초기 커밋.
+            await create_model_folder(storage_name=workspace_info["main_storage_name"],
+                                      workspace_name=workspace_info["name"], model_name=model_name)
+            res, message = await create_model_helm(
+                workspace_id=workspace_id, model_id=model_id, model_name=model_name,
+                huggingface_model_id=normalized_hf_id, huggingface_token=resolved_token,
+                compose_vlm=True)
+            if res == False:
+                import sys
+                print(f"Error: {message}", file=sys.stderr)
+                raise Exception
+            commit_id = await db_model.create_commit_model(
+                model_id=model_id, create_user_id=create_user_id, workspace_id=workspace_id,
+                fine_tuning_config=FineTuningConfig().model_dump_json(), commit_message="",
+                name=TYPE.MODEL_FIRST_COMMIT_NAME, model_description=description)
+            await db_model.update_model_commit_status(
+                commit_status=TYPE.KUBE_POD_STATUS_RUNNING, model_id=model_id,
+                latest_commit_id=commit_id, commit_type=TYPE.COMMIT_TYPE_DOWNLOAD)
+            return bool(model_id)
+
         if huggingface_model_id: # huggingface model download
+            # repo-id 형식 검증(보안 M-3) — 멀티모달 경로와 동형이되, 단일 HF id 는 'name' 또는
+            # 'org/name' 둘 다 유효(예: gpt2 / Qwen/Qwen2.5)하므로 슬래시는 선택. 셸/경로 인젝션 방어.
+            if not re.fullmatch(r'[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)?', huggingface_model_id or ''):
+                raise Exception(f"Error: invalid huggingface_model_id '{huggingface_model_id}'")
             # 유효한 token인지 확인하는 작업 필요
-            if not private: # 퍼블릭일 경우 회사 계정을 사용 
+            if not private: # 퍼블릭일 경우 회사 계정을 사용
                 huggingface_token = settings.HUGGINGFACE_TOKEN
             else:
                 huggingface_token = front_cipher.decrypt(huggingface_token)
@@ -858,6 +1721,1653 @@ async def create_model(workspace_id : int, model_name : str, description : str, 
             await delete_model_folder(storage_name=workspace_info["main_storage_name"], workspace_name=workspace_info["name"], model_name=model_name)
         return False
 
+async def get_model_summary(model_id : int) -> dict:
+    """Lightweight single-model fetch for ModelDetailPage's redirect logic.
+
+    Returns the raw db_model.get_model row (id/name/training_type/external_*
+    /huggingface_*). The frontend uses training_type to decide whether to
+    redirect into the 외부 학습 탭 or the default Information 탭.
+    """
+    return await db_model.get_model(model_id=model_id)
+
+
+async def bind_external_job(model_id : int, external_job_id : str) -> bool:
+    """Persist the partner-container job_id onto the model row.
+
+    Called right after the frontend's "학습 시작" button triggers
+    POST /api/external/jobs and the BFF returns a job_id. The detail page
+    reads model.external_job_id to drive the existing SSE/log endpoints.
+    """
+    await db_model.update_model_external_job(model_id=model_id, external_job_id=external_job_id)
+    return True
+
+
+# SDS(eva-vlm) 양자화 단위 — convert 컨테이너(apps/convert/eva_vlm.py)가 커밋 루트에서
+# base 에 LoRA 를 merge 하고 CLIP+projector 로 mmproj 를 만든다. projector.bin·vlm_config.json 은
+# 필수, 어댑터는 선택(projector 단계 커밋은 base LLM 그대로). 서빙 단위(_EVA_SERVABLE_FILES)와 다르다.
+_EVA_QUANTIZABLE_FILES = ("projector.bin", "vlm_config.json")
+# convert 컨테이너(eva_vlm.resolve_checkpoint)와 같은 커밋명 규칙 — 여기서 먼저 걸러야 40Gi 파드를
+# 띄운 뒤에야 실패하는 일이 없다.
+_CONVERT_CKPT_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+def _is_eva_vlm_model(model_info: dict) -> bool:
+    """커밋 단위(LoRA+projector) 양자화 대상 — eva-vlm manifest 로 학습·서빙되는 external 모델만.
+    다른 external 모델(merged latest_checkpoint 를 가진 협력기관 모델 등)은 기존 /model 경로 그대로."""
+    return ((model_info.get("training_type") or "internal") == "external"
+            and "eva-vlm" in (model_info.get("external_manifest_name") or ""))
+
+
+def _eva_commit_status_sync(path: str):
+    """(양자화 가능, LoRA 포함, 사유). 어댑터가 있으면 가중치는 safetensors 여야 한다(.bin 은 거부)."""
+    if not all(os.path.isfile(os.path.join(path, f)) for f in _EVA_QUANTIZABLE_FILES):
+        return False, False, "vlm_config.json 또는 projector.bin 이 없는 커밋입니다"
+    has_adapter_cfg = os.path.isfile(os.path.join(path, "adapter_config.json"))
+    has_adapter = os.path.isfile(os.path.join(path, "adapter_model.safetensors"))
+    if has_adapter_cfg and not has_adapter:
+        return False, False, "adapter_model.safetensors 가 없는 커밋입니다"
+    return True, has_adapter_cfg, None
+
+
+async def _external_quantize_commits(model_id: int, model_info: dict):
+    """external 모델 커밋별 양자화 가능 여부 + 기본 선택(best 마커 커밋 → 가능한 최신 커밋)."""
+    workspace_info = await db_model.get_workspace_model(workspace_id=model_info["workspace_id"])
+    model_root = _external_model_root(
+        workspace_info["main_storage_name"], workspace_info["name"], model_info["name"])
+    commits_base = os.path.realpath(os.path.join(model_root, "commit_models"))
+    best = await asyncio.to_thread(_read_external_best, model_root)
+    rows = []
+    for c in (await db_model.get_commit_models(model_id=model_id)) or []:
+        name = c.get("name")
+        if not name or "/" in name or name in (".", ".."):
+            continue
+        commit_dir = os.path.join(commits_base, name)
+        if not _is_under(commit_dir, commits_base):
+            continue
+        if _CONVERT_CKPT_NAME_RE.match(name):
+            ok, has_lora, reason = await asyncio.to_thread(_eva_commit_status_sync, commit_dir)
+        else:
+            ok, has_lora, reason = False, False, "양자화할 수 없는 커밋 이름 형식입니다"
+        rows.append({
+            "commit_id": c["id"],
+            "commit_name": name,
+            "commit_datetime": c.get("commit_datetime"),
+            "quantizable": ok,
+            "has_lora": has_lora,
+            "reason": reason,
+            # best 가 중간 step(checkpoint-N)이면 커밋 루트(최종본)와 다른 모델이다 — 루트일 때만 best.
+            "is_best": bool(best and best.get("commit_name") == name
+                            and int(best.get("step", -1)) == _EXTERNAL_FINAL_STEP),
+        })
+    default = next((r["commit_id"] for r in rows if r["is_best"] and r["quantizable"]), None)
+    if default is None:
+        candidates = [r["commit_id"] for r in rows if r["quantizable"]]
+        default = max(candidates) if candidates else None
+    return rows, default
+
+
+async def list_quantize_commits(model_id: int) -> dict:
+    """양자화 모달의 커밋 선택지. SDS(external) 모델만 커밋을 고른다 — 내부 모델은
+    merged latest_checkpoint 하나라 선택지가 없다."""
+    model_info = await db_model.get_model(model_id=model_id)
+    if not model_info:
+        raise Exception(f"model {model_id} not found")
+    if not _is_eva_vlm_model(model_info):
+        return {"external": False, "commits": [], "default_commit_id": None}
+    rows, default = await _external_quantize_commits(model_id, model_info)
+    return {"external": True, "commits": rows, "default_commit_id": default}
+
+
+async def quantize_model(model_id : int, target_quant : str,
+                         target_device : Optional[str] = None,
+                         prune : bool = False,
+                         commit_id : Optional[int] = None) -> dict:
+    """학습 완료 모델을 GGUF 로 양자화하는 convert job 을 띄운다 (SP-4 / 3.9).
+
+    Why
+    ---
+    ⑫ 양자화 + ⑬ 포팅은 `job_type=convert` 외부 컨테이너에 위임한다
+    (fb_porting 신규 서비스 회피, SP-4 J-1). 명시 버튼 트리거 — auto-chain 아님.
+
+    How
+    ---
+    merged 모델(`models/<name>/latest_checkpoint`)을 컨테이너 `/model` 로 주입해야
+    하는데, 이는 lifecycle 의 reserved param `_base_model={"name": ...}` 가
+    `inputs.base_model.name` 으로 들어올려지면 pod chart 가 자동 마운트한다
+    (SP-Ext launch/lifecycle 재사용 — fb_external_container 코드 변경 0).
+    convert 는 가중치 commit 이 아니므로 auto-commit(train/batch) 게이트와
+    자연히 분리된다 (SP-4 §4.3).
+
+    결과 포팅 패키지(GGUF + inference.py + run.sh + config.json)는
+    `jobs/<job_id>/output/` 에 떨어지고, FE 는 반환된 job_id 로 기존
+    `GET /api/external/jobs/{job_id}` 폴링 + 패키지 다운로드를 한다.
+    """
+    from external.proxy import ExternalContainerClient, ExternalContainerError
+    import httpx
+
+    model_info = await db_model.get_model(model_id=model_id)
+    if not model_info:
+        raise Exception(f"model {model_id} not found")
+    model_name = model_info["name"]
+    workspace_id = int(model_info["workspace_id"])
+
+    # SDS(external): latest_checkpoint 가 비어 있다(커밋에 어댑터+projector 만). 고른 커밋을
+    # convert 가 /models/checkpoints/<커밋> 에서 merge·mmproj 하도록 이름만 넘긴다.
+    checkpoint_name = None
+    if _is_eva_vlm_model(model_info):
+        if prune:
+            raise Exception("SDS(외부 학습) 모델 양자화는 프루닝을 지원하지 않습니다")
+        rows, default = await _external_quantize_commits(model_id, model_info)
+        target = commit_id if commit_id is not None else default
+        chosen = next((r for r in rows if r["commit_id"] == target), None)
+        if not chosen:
+            raise Exception("양자화할 커밋을 찾을 수 없습니다 — 학습이 끝난 커밋이 있는지 확인하세요")
+        if not chosen["quantizable"]:
+            raise Exception(f"커밋 {chosen['commit_name']}: {chosen['reason']}")
+        checkpoint_name = chosen["commit_name"]
+
+    # reserved key `_base_model` → lifecycle 가 /model = models/<name>/latest_checkpoint
+    # 마운트(+ /models/checkpoints = commit_models RO). target_quant/model_name 은 convert
+    # 컨테이너가 /input/params.json 으로 수신.
+    params = {
+        "_base_model": {"name": model_name},
+        "target_quant": target_quant,
+        "model_name": model_name,
+    }
+    if checkpoint_name:
+        params["checkpoint_name"] = checkpoint_name
+    if target_device:
+        params["target_device"] = target_device
+    # 4.7 프루닝 placeholder — 실제 프루닝은 엣지 convert 컨테이너 도착 시. 지금은
+    # 계약(params 전달 + lineage 기록)만 둔다. mock-convert 는 이 키를 무시한다.
+    if prune:
+        params["prune"] = True
+
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as http:
+            client = ExternalContainerClient(
+                base_url=settings.FB_EXTERNAL_CONTAINER_URL,
+                client=http,
+            )
+            raw = await client.start_job(
+                manifest_name=settings.CONVERT_MANIFEST_NAME,
+                manifest_version=settings.CONVERT_MANIFEST_VERSION,
+                workspace_id=workspace_id,
+                params=params,
+            )
+    except ExternalContainerError as e:
+        raise Exception(f"convert job launch failed ({e.status_code}): {e}") from e
+
+    # start_job 응답은 fb_external_container 의 {"job_id": ...} (202). envelope 변종 방어.
+    job_id = raw.get("job_id") or (raw.get("result") or {}).get("job_id")
+    if not job_id:
+        # job_id 없으면 launch 실패로 간주 — status=1 성공으로 위장하면 FE 가
+        # /jobs/null 을 무한 폴링한다. 명시적 실패로 올린다.
+        raise Exception(f"convert job launched but no job_id in response: {raw!r}")
+
+    # 4.6 lineage — 양자화 시도 기록(launch 시점, status=running). 완료 시
+    # list_quantize_package 가 gguf 경로로 마감. DB 실패가 launch 를 막지 않도록 guard.
+    if job_id:
+        try:
+            await db_model.insert_quantize_lineage(
+                source_model_id=model_id, workspace_id=workspace_id,
+                job_str_id=job_id, quantization_type=target_quant,
+                target_device=target_device, prune=prune,
+            )
+        except Exception:
+            traceback.print_exc()
+
+    return {
+        "model_id": model_id,
+        "model_name": model_name,
+        "workspace_id": workspace_id,
+        "target_quant": target_quant,
+        "target_device": target_device,
+        "prune": prune,
+        "checkpoint_name": checkpoint_name,
+        "manifest_name": settings.CONVERT_MANIFEST_NAME,
+        "manifest_version": settings.CONVERT_MANIFEST_VERSION,
+        "job_id": job_id,
+    }
+
+
+# convert job_id 는 외부 컨테이너가 발급(uuid/hex). 경로 조작 방지: 형식 검증 + base 이탈 차단.
+_QUANTIZE_JOB_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+
+
+async def _quantize_output_dir(model_id: int, job_id: str) -> str:
+    """convert job 의 포팅 패키지 디렉토리(`jobs/<job_id>/output`)를 안전하게 해석.
+
+    model_id → workspace 로 storage 경로를 잡고(commit_external_artifacts 와 동일
+    패턴), job_id 는 화이트리스트 정규식 + commonpath 로 base(jobs) 이탈을 막는다.
+    """
+    if not job_id or not _QUANTIZE_JOB_ID_RE.match(job_id):
+        raise ValueError(f"invalid job_id: {job_id!r}")
+    model_info = await db_model.get_model(model_id=model_id)
+    if not model_info:
+        raise Exception(f"model {model_id} not found")
+    ws = await db_model.get_workspace_model(workspace_id=int(model_info["workspace_id"]))
+    if not ws:
+        raise Exception(f"workspace for model {model_id} not found")
+    main_root = PATH.JF_MAIN_STORAGE_PATH.format(
+        STORAGE_NAME=ws["main_storage_name"], WORKSPACE_NAME=ws["name"],
+    )
+    jobs_base = os.path.realpath(os.path.join(main_root, "jobs"))
+    output_dir = os.path.join(jobs_base, job_id, "output")
+    if os.path.commonpath([os.path.realpath(output_dir), jobs_base]) != jobs_base:
+        raise ValueError("output path escapes jobs base")
+    return output_dir
+
+
+def _package_model_gguf(output_dir: str):
+    """(본체 GGUF 이름, metadata). metadata.model_file 우선 — SDS 패키지는 mmproj GGUF 가 같이 있어
+    정렬 순서로 고르면 비전 파일을 본체로 오인한다. model_file 이 없는 구 패키지·미완료 출력은
+    'mmproj' 접두를 뺀 첫 GGUF. 심링크로 output 밖을 가리키는 파일은 고르지 않는다."""
+    meta = {}
+    try:
+        with open(os.path.join(output_dir, "metadata.json"), encoding="utf-8") as f:
+            meta = json.load(f) or {}
+    except (OSError, ValueError):
+        meta = {}
+    candidates = []
+    name = meta.get("model_file") if isinstance(meta, dict) else None
+    if isinstance(name, str) and name == os.path.basename(name) and name.endswith(".gguf"):
+        candidates.append(name)
+    candidates += [fn for fn in sorted(os.listdir(output_dir))
+                   if fn.endswith(".gguf") and not fn.startswith("mmproj")]
+    for fn in candidates:
+        fp = os.path.join(output_dir, fn)
+        if os.path.isfile(fp) and _is_under(fp, output_dir):
+            return fn, (meta if isinstance(meta, dict) else {})
+    return None, (meta if isinstance(meta, dict) else {})
+
+
+async def list_quantize_package(model_id: int, job_id: str) -> dict:
+    """포팅 패키지 파일 목록(name/bytes). 미완료 시 ready=False.
+
+    패키지가 준비되면 4.6 lineage 를 lazy 마감(status=completed + gguf 경로).
+    FE 가 완료 시 이 호출을 하므로 별도 완료 hook 없이 idempotent 하게 기록된다.
+    """
+    output_dir = await _quantize_output_dir(model_id, job_id)
+    if not os.path.isdir(output_dir):
+        return {"job_id": job_id, "files": [], "ready": False}
+    out_real = os.path.realpath(output_dir)
+    files = []
+    for fn in sorted(os.listdir(output_dir)):
+        fp = os.path.join(output_dir, fn)
+        # 심링크가 output_dir 밖을 가리키면 제외(악의적/손상 산출물이 임의 파일을
+        # listing/zip 으로 유출하는 것 차단).
+        if os.path.commonpath([os.path.realpath(fp), out_real]) != out_real:
+            continue
+        if os.path.isfile(fp):
+            files.append({"name": fn, "bytes": os.path.getsize(fp)})
+    # convert 는 metadata.json 을 패키지 마지막에 쓴다 — GGUF 만 보이는 변환 중 상태를 완료로 오인하면
+    # lineage 가 미완성 파일로 마감되고(엣지 배포 대상이 된다) mmproj 판별도 metadata 없이 지나간다.
+    ready = any(f["name"] == "metadata.json" for f in files)
+    gguf_name, _meta = _package_model_gguf(output_dir) if ready else (None, {})
+    if ready:
+        try:
+            gguf_path = f"jobs/{job_id}/output/{gguf_name}" if gguf_name else f"jobs/{job_id}/output"
+            await db_model.complete_quantize_lineage(
+                job_str_id=job_id, gguf_path=gguf_path, source_model_id=model_id)
+        except Exception:
+            traceback.print_exc()
+    return {"job_id": job_id, "files": files, "ready": ready}
+
+
+async def mark_quantize_lineage(model_id: int, job_id: str, status: str) -> dict:
+    """convert 실패/취소를 lineage 에 반영 — 4.6 정확성. FE 가 terminal(failed/cancelled)
+    감지 시 호출(완료는 list_quantize_package 가 lazy 마감). 화이트리스트 검증 +
+    source_model_id 바인딩(다른 모델 job 마킹 차단)."""
+    if status not in ("failed", "cancelled"):
+        raise ValueError(f"invalid lineage status: {status!r}")
+    await db_model.update_quantize_lineage_status(
+        job_str_id=job_id, status=status, source_model_id=model_id)
+    return {"job_id": job_id, "status": status}
+
+
+async def list_quantize_lineage(model_id: int) -> dict:
+    """원본 모델의 양자화 이력(원본+양자화 파라미터) 조회 — 4.6."""
+    rows = await db_model.list_quantize_lineage(source_model_id=model_id)
+    return {
+        "model_id": model_id,
+        "lineage": [
+            {
+                "id": r["id"],
+                "job_id": r["job_str_id"],
+                "quantization_type": r["quantization_type"],
+                "target_device": r["target_device"],
+                "prune": bool(r["prune"]),
+                "gguf_path": r["gguf_path"],
+                "status": r["status"],
+                "create_datetime": r["create_datetime"],
+            }
+            for r in rows
+        ],
+    }
+
+
+# 엣지 워커가 lineage 를 띄워 둔(또는 정리 전인) 상태 — FE stoppable·워커 삭제 게이트와 같은 집합.
+_EDGE_LINEAGE_LIVE_STATES = ("running", "deploying", "error")
+_EXTERNAL_TERMINAL_STATUSES = ("completed", "failed", "cancelled")
+
+
+async def _convert_job_active(job_id: str) -> bool:
+    """convert job 이 아직 도는지 BFF 에 묻는다 — lineage 행 상태는 근거가 못 된다(완료는 lazy 마감이고,
+    failed/cancelled 는 FE 가 lineage-status 로 새긴다). BFF 가 모르는 job(404)·끝난 job 이면 False.
+    확인할 수 없으면(도달 불가·5xx) 삭제를 막는다."""
+    from external.proxy import ExternalContainerClient, ExternalContainerError
+    import httpx
+
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as http:
+            raw = await ExternalContainerClient(
+                base_url=settings.FB_EXTERNAL_CONTAINER_URL, client=http).get_job(job_id)
+    except ExternalContainerError as e:
+        if e.status_code == 404:
+            return False
+        raise Exception("Error: 양자화 작업 상태를 확인할 수 없습니다. 잠시 후 다시 시도하세요") from e
+    status = ((raw or {}).get("result") or {}).get("status")
+    return status not in _EXTERNAL_TERMINAL_STATUSES
+
+
+async def _quantize_delete_blocker(job_id: str, lineage_id: int):
+    """양자화 산출물을 지우면 안 되는 사유(없으면 None) — 이력 단건 삭제와 모델 삭제가 같은 가드를 쓴다.
+
+    ⚠️ 남는 창: 이 검사 뒤 rm 전에 엣지 배포가 같은 lineage 를 인가하면 디바이스 다운로드가
+    404 로 실패한다(배포 error 로 드러남 — 조용한 손상은 없다). 막으려면 fb_resource 와 공유 락이 필요.
+    """
+    if await _convert_job_active(job_id):
+        return "양자화가 진행 중입니다. 작업을 취소한 뒤 삭제하세요"
+    # 인가(deploy_lineage_id)는 stop 뒤에도 남으므로 상태로 거른다.
+    workers = await asyncio.to_thread(db_edge.list_edge_workers_by_lineage, lineage_id)
+    live = [w for w in workers if w.get("deploy_state") in _EDGE_LINEAGE_LIVE_STATES]
+    if live:
+        names = ", ".join(str(w.get("name") or w.get("device_id")) for w in live)
+        return f"엣지 디바이스에 배포 중입니다({names}). 배포를 중지한 뒤 삭제하세요"
+    return None
+
+
+async def delete_quantize_lineage(model_id: int, job_id: str) -> dict:
+    """양자화 이력 1건 삭제 — 패키지 디렉터리(jobs/<job_id>) 통째 rm 후 lineage 행.
+
+    거절: convert job 이 아직 진행 중 / 엣지 워커가 이 lineage 로 배포 중(먼저 중지).
+    Playground 서빙 등록본(register_quantized_servable)은 GGUF 복사본이라 영향이 없다.
+    디렉터리를 먼저 지우므로 중간에 실패해도 같은 호출을 다시 하면 이어서 정리된다.
+    """
+    output_dir = await _quantize_output_dir(model_id, job_id)   # job_id 형식 + jobs base 봉쇄
+    row = await db_model.get_quantize_lineage_by_job(job_str_id=job_id, source_model_id=model_id)
+    if not row:
+        raise Exception("Error: 양자화 이력을 찾을 수 없습니다")
+    blocker = await _quantize_delete_blocker(job_id, row["id"])
+    if blocker:
+        raise Exception(f"Error: {blocker}")
+    job_dir = os.path.dirname(output_dir)
+    jobs_base = os.path.dirname(job_dir)
+    if not _is_under(job_dir, jobs_base) or os.path.realpath(job_dir) == os.path.realpath(jobs_base):
+        raise Exception("Error: invalid package path")
+    await asyncio.to_thread(common.rm_rf, job_dir)
+    await db_model.delete_quantize_lineage(lineage_id=row["id"], source_model_id=model_id)
+    return {"job_id": job_id, "lineage_id": row["id"], "deleted": True}
+
+
+async def _quantize_job_dirs(model_id: int) -> list:
+    """모델의 양자화 패키지 디렉터리 목록 — 모델 삭제가 FK CASCADE 로 lineage 행을 지우기 전에 잡아 둔다.
+    진행 중이거나 엣지 배포 중인 산출물이 하나라도 있으면 이력 단건 삭제와 같은 사유로 거절한다."""
+    dirs = []
+    for r in await db_model.list_quantize_lineage(source_model_id=model_id):
+        blocker = await _quantize_delete_blocker(r["job_str_id"], r["id"])
+        if blocker:
+            raise Exception(f"Error: 양자화 결과를 지울 수 없어 모델을 삭제할 수 없습니다 — {blocker}")
+        try:
+            dirs.append(os.path.dirname(await _quantize_output_dir(model_id, r["job_str_id"])))
+        except Exception:
+            traceback.print_exc()
+    return dirs
+
+
+# 4.5 타겟 디바이스 → 권장 양자화 매핑. device(ORIN/RPi+Hailo/PC) → 권장 Q.
+# 비트수↓ = 용량↓·디바이스 친화↑·정확도↓. (SP-6/Runtime edge spec 정합)
+_DEVICE_QUANT_MAP = [
+    {"key": "jetson-orin", "label": "Jetson Orin", "recommended": "q4",
+     "reason": "엣지 GPU·제한 메모리 — 작은 용량 우선"},
+    {"key": "rpi-hailo", "label": "Raspberry Pi + Hailo", "recommended": "q4",
+     "reason": "초경량 엣지 — 최소 용량"},
+    {"key": "rtx-3090", "label": "PC (RTX/GPU)", "recommended": "q6",
+     "reason": "여유 메모리 — 정확도 우선"},
+    {"key": "server", "label": "Server", "recommended": "q6",
+     "reason": "충분한 메모리 — 정확도 우선"},
+]
+
+
+def get_quantize_device_recommendations() -> dict:
+    """device→권장 Q 매핑 (FE 배지/자동제안용). 알 수 없는 device 는 q5 기본."""
+    return {"default": "q5", "devices": _DEVICE_QUANT_MAP}
+
+
+# ── SP-5 자동평가 (v0.4 3.8) ────────────────────────────────────────────────
+
+# params 로 들어온 metric_set 정제용 화이트리스트(주입/오타 방지).
+_EVAL_METRICS = ("bleu", "rouge", "perplexity")
+# evaluate job_id 는 외부 컨테이너 발급(uuid/hex). 경로조작 방지: 형식 검증.
+_EVAL_JOB_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+# 모델/데이터셋 이름은 pod subPath(/dataset/<name>, models/<name>/...) 의 단일 segment 로
+# 들어가므로 path 조작 문자를 거부(잘못된 마운트/이탈 방지). 플랫폼 생성 이름은 통과.
+_EVAL_SAFE_SEGMENT_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+
+
+async def evaluate_model(model_id: int, dataset_id: int,
+                         metric_set: Optional[List[str]] = None,
+                         max_samples: Optional[int] = None) -> dict:
+    """학습 완료 모델을 평가 데이터셋으로 채점하는 evaluate job 을 띄운다 (SP-5 / 3.8).
+
+    convert(SP-4)와 동형 — `job_type=evaluate` 외부 컨테이너에 위임(fb_evaluate 신규
+    서비스 회피). 명시 버튼 트리거. reserved `_base_model`→/model(평가 대상),
+    `_dataset`→/dataset/<name>(평가셋). 결과 metrics.json 은 jobs/<job_id>/output/
+    에 떨어지고 get_eval_result 가 lazy 로 eval_result 를 마감(quantize 패키지와
+    동형 — fb_external_container 코드 변경 0).
+    """
+    from external.proxy import ExternalContainerClient, ExternalContainerError
+    import httpx
+
+    model_info = await db_model.get_model(model_id=model_id)
+    if not model_info:
+        raise Exception(f"model {model_id} not found")
+    model_name = model_info["name"]
+    workspace_id = int(model_info["workspace_id"])
+
+    dataset_info = await db_model.get_dataset_model(dataset_id=dataset_id)
+    if not dataset_info:
+        raise Exception(f"dataset {dataset_id} not found")
+    # 평가셋이 모델과 같은 워크스페이스인지 — 교차 워크스페이스 마운트 차단(ACL).
+    if int(dataset_info["workspace_id"]) != workspace_id:
+        raise Exception("dataset and model belong to different workspaces")
+    # name 은 pod subPath 의 단일 segment(/dataset/<name>, models/<name>) 로 들어가므로
+    # path 조작 문자를 거부(잘못된 경로 마운트/이탈 방지). access 는 traversal 만 차단.
+    ds_name = str(dataset_info["name"])
+    if not _EVAL_SAFE_SEGMENT_RE.match(ds_name) or not _EVAL_SAFE_SEGMENT_RE.match(model_name):
+        raise Exception("model/dataset name has unsafe characters for container mount")
+    if ".." in str(dataset_info.get("access") or ""):
+        raise Exception("dataset access path is unsafe")
+
+    metrics = [m for m in (metric_set or list(_EVAL_METRICS)) if m in _EVAL_METRICS] or list(_EVAL_METRICS)
+    metric_csv = ",".join(metrics)
+
+    # reserved key → lifecycle 가 /model + /dataset/<name> 마운트.
+    # metric_set/max_samples 는 evaluate 컨테이너가 /input/params.json 으로 수신.
+    params = {
+        "_base_model": {"name": model_name},
+        "_dataset": {"name": dataset_info["name"], "access": dataset_info["access"]},
+        "metric_set": metrics,
+    }
+    if max_samples:
+        params["max_samples"] = int(max_samples)
+
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as http:
+            client = ExternalContainerClient(
+                base_url=settings.FB_EXTERNAL_CONTAINER_URL, client=http)
+            raw = await client.start_job(
+                manifest_name=settings.EVALUATE_MANIFEST_NAME,
+                manifest_version=settings.EVALUATE_MANIFEST_VERSION,
+                workspace_id=workspace_id, params=params)
+    except ExternalContainerError as e:
+        raise Exception(f"evaluate job launch failed ({e.status_code}): {e}") from e
+
+    job_id = raw.get("job_id") or (raw.get("result") or {}).get("job_id")
+    if not job_id:
+        # job_id 없으면 launch 실패로 간주(FE 가 /jobs/null 무한 폴링 방지).
+        # raw 응답(내부 URL/스택 가능)을 API 로 누출하지 않고 서버 로그로만.
+        print(f"evaluate launch: no job_id in response: {raw!r}")
+        raise Exception("evaluate job launched but no job_id in response")
+
+    # 평가 시도 기록(launch 시점, status=running). 완료 시 get_eval_result 가
+    # metrics 로 마감. DB 실패가 launch 를 막지 않도록 guard.
+    try:
+        await db_model.insert_eval_result(
+            source_model_id=model_id, workspace_id=workspace_id,
+            job_str_id=job_id, dataset_id=dataset_id,
+            dataset_name=dataset_info["name"], metric_set=metric_csv)
+    except Exception:
+        traceback.print_exc()
+
+    return {
+        "model_id": model_id, "model_name": model_name, "workspace_id": workspace_id,
+        "dataset_id": dataset_id, "dataset_name": dataset_info["name"],
+        "metric_set": metrics,
+        "manifest_name": settings.EVALUATE_MANIFEST_NAME,
+        "manifest_version": settings.EVALUATE_MANIFEST_VERSION,
+        "job_id": job_id,
+    }
+
+
+async def _eval_output_dir(model_id: int, job_id: str) -> str:
+    """evaluate job 의 결과 디렉토리(jobs/<job_id>/output)를 안전 해석(_quantize_output_dir 동형)."""
+    if not job_id or not _EVAL_JOB_ID_RE.match(job_id):
+        raise ValueError(f"invalid job_id: {job_id!r}")
+    model_info = await db_model.get_model(model_id=model_id)
+    if not model_info:
+        raise Exception(f"model {model_id} not found")
+    ws = await db_model.get_workspace_model(workspace_id=int(model_info["workspace_id"]))
+    if not ws:
+        raise Exception(f"workspace for model {model_id} not found")
+    main_root = PATH.JF_MAIN_STORAGE_PATH.format(
+        STORAGE_NAME=ws["main_storage_name"], WORKSPACE_NAME=ws["name"],
+    )
+    jobs_base = os.path.realpath(os.path.join(main_root, "jobs"))
+    output_dir = os.path.join(jobs_base, job_id, "output")
+    if os.path.commonpath([os.path.realpath(output_dir), jobs_base]) != jobs_base:
+        raise ValueError("output path escapes jobs base")
+    return output_dir
+
+
+async def get_eval_result(model_id: int, job_id: str) -> dict:
+    """평가 job 의 metrics.json 을 읽어 반환 + 완료 시 eval_result lazy 마감.
+
+    FE 가 폴링하다 ready=True 면 eval_result.status=completed + metrics 기록(별도
+    완료 hook 없이 idempotent). metrics.json 미존재(미완료/실패)면 ready=False.
+    """
+    output_dir = await _eval_output_dir(model_id, job_id)
+    out_real = os.path.realpath(output_dir)
+    metrics_path = os.path.join(output_dir, "metrics.json")
+    # 심링크가 output_dir 밖을 가리키면 거부(임의 파일 읽기 차단).
+    if os.path.commonpath([os.path.realpath(metrics_path), out_real]) != out_real:
+        raise ValueError("metrics path escapes output dir")
+    if not os.path.isfile(metrics_path):
+        return {"job_id": job_id, "metrics": None, "ready": False}
+    # 크기 가드 — metrics dict 은 수 KB. NFS 산출물이라 (손상/악의적) 대용량 파일을
+    # json.load 로 통째로 메모리에 올리면 OOM + DB JSON 컬럼 폭증. 1MB 초과 거부.
+    try:
+        if os.path.getsize(metrics_path) > 1 * 1024 * 1024:
+            raise ValueError(f"metrics.json too large for job {job_id}")
+    except OSError:
+        return {"job_id": job_id, "metrics": None, "ready": False}
+    try:
+        with open(metrics_path, encoding="utf-8") as f:
+            metrics = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {"job_id": job_id, "metrics": None, "ready": False}
+    try:
+        await db_model.complete_eval_result(
+            job_str_id=job_id, metrics_json=json.dumps(metrics), source_model_id=model_id)
+    except Exception:
+        traceback.print_exc()
+    return {"job_id": job_id, "metrics": metrics, "ready": True}
+
+
+async def mark_eval_status(model_id: int, job_id: str, status: str) -> dict:
+    """평가 실패/취소를 eval_result 에 반영(완료는 get_eval_result 가 lazy 마감).
+    화이트리스트 검증 + source_model_id 바인딩(다른 모델 job 마킹 차단)."""
+    if status not in ("failed", "cancelled"):
+        raise ValueError(f"invalid eval status: {status!r}")
+    # get_eval_result 와 대칭으로 job_id 형식 검증(과대 길이/비정상 입력 차단).
+    if not job_id or not _EVAL_JOB_ID_RE.match(job_id):
+        raise ValueError(f"invalid job_id: {job_id!r}")
+    await db_model.update_eval_result_status(
+        job_str_id=job_id, status=status, source_model_id=model_id)
+    return {"job_id": job_id, "status": status}
+
+
+async def list_eval_results(model_id: int) -> dict:
+    """모델의 평가 이력 + 메트릭별 best 마킹(비교표 ⑪). SDM 도메인 키(AUC/Dice 등)는
+    자유 dict 그대로 노출(고정 스키마 X — normalize/dto 자유 result 정합, 4.6).
+    벤치마크(llm_evaluation) 런도 동일 eval_result 에 누적 → 공용 빌더로 nested averages
+    평탄화 포함(§14.12, llm_evaluation 과 동일 shape)."""
+    rows = await db_model.list_eval_results(source_model_id=model_id)
+    return {"model_id": model_id, **db_model.build_eval_comparison(rows)}
+
+
+async def get_quantize_package_path(model_id: int, job_id: str,
+                                    filename: Optional[str] = None) -> Tuple[str, str, str]:
+    """다운로드용 (절대경로, 다운로드 파일명, media_type) 반환.
+
+    filename 지정 → 해당 파일 1개(FileResponse 가 대용량 gguf 도 stream).
+    filename 생략 → 패키지 전체 zip(ZIP_STORED — gguf 는 이미 압축돼 무의미).
+    호출측이 zip 임시파일을 전송 후 삭제(BackgroundTask)한다.
+    """
+    import zipfile
+    import tempfile
+
+    output_dir = await _quantize_output_dir(model_id, job_id)
+    if not os.path.isdir(output_dir):
+        raise Exception("quantize package not found (convert job not completed?)")
+    out_real = os.path.realpath(output_dir)
+
+    if filename:
+        if "/" in filename or "\\" in filename or filename in ("", ".", ".."):
+            raise ValueError(f"invalid filename: {filename!r}")
+        fp = os.path.realpath(os.path.join(output_dir, filename))
+        if os.path.commonpath([fp, out_real]) != out_real:
+            raise ValueError("file path escapes package dir")
+        if not os.path.isfile(fp):
+            raise Exception(f"file not found in package: {filename}")
+        return fp, filename, "application/octet-stream"
+
+    model_info = await db_model.get_model(model_id=model_id)
+    model_name = (model_info or {}).get("name", "model")
+    # 요청별 unique 임시 zip (동시 다운로드가 같은 파일을 덮어쓰지/지우지 않게).
+    fd, tmp_zip = tempfile.mkstemp(prefix=f"quantize-{model_id}-{job_id[:8]}-", suffix=".zip")
+    os.close(fd)
+
+    def _build_zip() -> None:
+        # ZIP_STORED — gguf 는 이미 압축돼 무의미. 심링크 escape 제외.
+        with zipfile.ZipFile(tmp_zip, "w", zipfile.ZIP_STORED) as zf:
+            for fn in sorted(os.listdir(output_dir)):
+                fp = os.path.join(output_dir, fn)
+                if os.path.commonpath([os.path.realpath(fp), out_real]) != out_real:
+                    continue
+                if os.path.isfile(fp):
+                    zf.write(fp, arcname=fn)
+
+    # 대용량 gguf zip 은 이벤트루프 블로킹 → thread 로.
+    await asyncio.to_thread(_build_zip)
+    return tmp_zip, f"{model_name}-{job_id[:8]}-package.zip", "application/zip"
+
+
+async def commit_external_artifacts(model_id : int, job_id : str,
+                                    output_subdir : str,
+                                    partner_metadata : dict = None,
+                                    commit_name : str = None,
+                                    commit_message : str = None) -> dict:
+    """External 학습 종료 후 결과물을 platform 의 commit_model 패턴에 통합한다.
+
+    Why
+    ---
+    Internal LLM 학습은 model_helm + commit_model row 를 자동 생성하지만,
+    external (협력기관 컨테이너) 학습은 partner pod 의 /output/<ckpt> 에 결과를
+    남기고 끝낸다. operator UX 통일을 위해 그 결과를 internal 과 동일한 layout
+    (`workspace/models/<external_name>/commit_models/<commit>/`) 으로 옮기고
+    `commit_model` 테이블 row 를 만들어 frontend Commit List 탭이 자동 표시되게.
+
+    Steps
+    -----
+    1. model row 조회 + training_type='external' 검증
+    2. src : `JF_MAIN_STORAGE_PATH/jobs/<job_id>/output/<output_subdir>/`
+       dst : `JF_MAIN_MODEL_PATH/commit_models/<commit_name>/`
+       (parent mkdir + shutil.move)
+    3. `commit_model` row insert (fine_tuning_config = partner_metadata json)
+    4. `model.latest_commit_id` update
+
+    fb_external_container 의 JobTracker terminal=COMPLETED hook 에서 호출된다.
+    수동 호출도 가능 (검증용).
+    """
+    import shutil
+    model_info = await db_model.get_model(model_id=model_id)
+    if not model_info:
+        raise Exception(f"model {model_id} not found")
+    if (model_info.get("training_type") or "internal") != "external":
+        raise Exception(f"model {model_id} is not training_type='external'")
+
+    workspace_info = await db_model.get_workspace_model(workspace_id=model_info["workspace_id"])
+    storage_name = workspace_info["main_storage_name"]
+    workspace_name = workspace_info["name"]
+
+    # commit_name: 사용자 지정 또는 job_id 앞 8자 + output_subdir 조합
+    if not commit_name:
+        # suffix: random job_id 대신 timestamp — 시간 순 자연 정렬 + 가독성.
+        # 동일 output_subdir 의 동시 학습은 운영상 거의 없으니 sec 단위로 충분.
+        ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        commit_name = f"{output_subdir}-{ts}"
+
+    # NFS path resolve (llm_model pod 안 mount = /jf-data/<storage>/main/<workspace>)
+    main_root = PATH.JF_MAIN_STORAGE_PATH.format(
+        STORAGE_NAME=storage_name, WORKSPACE_NAME=workspace_name,
+    )
+    src_dir = os.path.join(main_root, "jobs", job_id, "output", output_subdir)
+    model_root = PATH.JF_MAIN_MODEL_PATH.format(
+        STORAGE_NAME=storage_name, WORKSPACE_NAME=workspace_name,
+        MODEL_NAME=model_info["name"],
+    )
+    commit_dir = os.path.join(model_root, "commit_models", commit_name)
+
+    # 경로조작 방지 — job_id/output_subdir/commit_name 에 ../ 절대경로가 섞이면
+    # shutil.move 가 다른 워크스페이스 디렉토리를 이동(교차테넌트 유출/파괴). 화이트리스트
+    # + commonpath 로 jobs/commit_models 베이스 이탈 차단.
+    if not job_id or not _QUANTIZE_JOB_ID_RE.match(job_id):
+        raise Exception(f"invalid job_id: {job_id!r}")
+    for _seg, _label in ((output_subdir, "output_subdir"), (commit_name, "commit_name")):
+        if not _seg or "/" in _seg or "\\" in _seg or _seg in (".", ".."):
+            raise Exception(f"invalid {_label}: {_seg!r}")
+    _jobs_base = os.path.realpath(os.path.join(main_root, "jobs"))
+    _commits_base = os.path.realpath(os.path.join(model_root, "commit_models"))
+    if os.path.commonpath([os.path.realpath(src_dir), _jobs_base]) != _jobs_base:
+        raise Exception("source path escapes jobs base")
+    if os.path.commonpath([os.path.realpath(commit_dir), _commits_base]) != _commits_base:
+        raise Exception("commit path escapes commit_models base")
+
+    if not os.path.exists(src_dir):
+        raise Exception(f"source artifacts not found at {src_dir}")
+    if os.path.exists(commit_dir):
+        raise Exception(f"commit dir already exists: {commit_dir}")
+
+    # parent dirs (models/<name>/commit_models/) 가 외부 모델은 처음엔 없을 수 있다.
+    os.makedirs(os.path.dirname(commit_dir), exist_ok=True)
+    shutil.move(src_dir, commit_dir)
+
+    # fine_tuning_config 에 partner metadata 보존 (manifest 의 partner-specific
+    # 구조를 그대로 JSON 으로 — internal LLM 의 FineTuningConfig 와 schema 다르지만
+    # frontend Commit List 탭은 read-only 라 호환).
+    ft_config_json = json.dumps(partner_metadata or {}, ensure_ascii=False)
+
+    commit_id = await db_model.create_commit_model(
+        name=commit_name,
+        model_id=model_id,
+        workspace_id=model_info["workspace_id"],
+        create_user_id=model_info["create_user_id"],
+        fine_tuning_config=ft_config_json,
+        commit_message=(commit_message or f"external training {job_id[:8]}"),
+        model_description=(model_info.get("description") or ""),
+    )
+
+    # update model 의 latest_commit_id (model.update_model_commit_id 사용)
+    await db_model.update_model_commit_id(latest_commit_id=commit_id, model_id=model_id)
+
+    return {
+        "commit_id": commit_id,
+        "commit_name": commit_name,
+        "commit_dir": commit_dir,
+        "src_dir": src_dir,
+    }
+
+
+async def register_quantized_servable(model_id: int, job_id: str,
+                                      model_name: str,
+                                      commit_name: str = None,
+                                      commit_message: str = None) -> dict:
+    """[멀티엔진 Phase 2 C-B] 양자화 GGUF 를 llama.cpp 직접 서빙용 commit 모델로 등록.
+
+    Why
+    ---
+    convert(양자화) job 은 GGUF 를 `jobs/<job_id>/output/` 에 남기지만, 배포는
+    `models/<allm>/commit_models/<commit>/` 를 `/model` 로 마운트한다(위치 상이 =
+    GGUF servable 갭). 이 함수가 GGUF 를 배포 마운트 위치로 복사하고 model +
+    commit_model row 를 만들어, Playground 에서 serving_system=llama_cpp,
+    model_type=commit 으로 배포하면 playground_llamacpp.py 가 /model/*.gguf 를
+    변환 없이 직접 서빙한다.
+
+    commit_external_artifacts 패턴을 미러링하되 (a) 원본(vLLM-precision) 과 분리된
+    신규 servable model 을 만들고, (b) 다운로드 패키지를 보존하려 move 가 아닌
+    copy2 를 쓴다.
+    """
+    import shutil
+    # 1. GGUF 소스 해석 — job_id 화이트리스트 + commonpath 는 _quantize_output_dir 재사용.
+    output_dir = await _quantize_output_dir(model_id, job_id)
+    if not os.path.isdir(output_dir):
+        raise Exception(f"quantize package not ready: {output_dir}")
+    gguf_name, package_meta = _package_model_gguf(output_dir)
+    if not gguf_name:
+        raise Exception(f"no .gguf found in {output_dir}")
+    # SDS(eva-vlm) 패키지는 mmproj(비전)가 있어야 동작한다 — llama.cpp 서빙은 아직 이미지 입력·
+    # --mmproj 를 받지 않아 등록하면 이미지를 못 보는 텍스트 모델이 된다. 패키지 다운로드로만 쓴다.
+    if package_meta.get("mmproj_file"):
+        raise Exception("SDS(VLM) 양자화 패키지는 아직 llama.cpp 서빙 등록을 지원하지 않습니다 — 패키지를 내려받아 사용하세요")
+
+    src_model = await db_model.get_model(model_id=model_id)
+    if not src_model:
+        raise Exception(f"model {model_id} not found")
+    workspace_id = src_model["workspace_id"]
+    create_user_id = src_model["create_user_id"]
+    ws = await db_model.get_workspace_model(workspace_id=int(workspace_id))
+    if not ws:
+        raise Exception(f"workspace for model {model_id} not found")
+    storage_name = ws["main_storage_name"]
+    workspace_name = ws["name"]
+
+    # 2. dest name 검증 — create_model 과 동일 allowlist + 정확일치 '.'/'..' 거부.
+    #    부분문자열 '..' 체크만으론 model_name='.' 이 통과해 models/./commit_models 로 한 단계
+    #    얕게 쓰이는 우회가 있었음(보안 리뷰) → 형제 commit_name 규약처럼 정확일치도 거부.
+    if (not re.fullmatch(r'[A-Za-z0-9._-]{1,50}', model_name or '')
+            or model_name in ('.', '..') or '..' in model_name):
+        raise Exception("invalid model_name (영문/숫자/._- 1~50자, '.'/'..' 불가)")
+    if await db_model.check_model_by_model_name(model_name=model_name, workspace_id=workspace_id):
+        raise Exception(f"model name duplicated: {model_name}")
+    if not commit_name:
+        ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        commit_name = f"gguf-{ts}"
+    # commit_name 도 model_name 과 동일 charset allowlist. helm --set 은 helm_dto 의 shlex.quote 로
+    #   셸-무해화되지만(codex CRITICAL 은 그 하드닝 미고려 오탐), 방어심화 + helm 파싱 안전 + 컨벤션 정합.
+    if (not re.fullmatch(r'[A-Za-z0-9._-]{1,64}', commit_name or '')
+            or commit_name in ('.', '..')):
+        raise Exception(f"invalid commit_name: {commit_name!r}")
+
+    # 3. dest 경로 + commonpath 이탈 차단(commit_external_artifacts 와 동일 클래스).
+    model_root = PATH.JF_MAIN_MODEL_PATH.format(
+        STORAGE_NAME=storage_name, WORKSPACE_NAME=workspace_name, MODEL_NAME=model_name,
+    )
+    commit_dir = os.path.join(model_root, "commit_models", commit_name)
+    _commits_base = os.path.realpath(os.path.join(model_root, "commit_models"))
+    if os.path.commonpath([os.path.realpath(commit_dir), _commits_base]) != _commits_base:
+        raise Exception("commit path escapes commit_models base")
+    if os.path.exists(commit_dir):
+        raise Exception(f"commit dir already exists: {commit_dir}")
+
+    # 4-6. servable model row → GGUF 복사 → commit_model row. 부분실패 시 orphan(재시도 dedup
+    #      차단) 방지 롤백 — svc.create_model 실패 정리 패턴(service.py:1561-1567) 미러.
+    new_model_id = None
+    made_dir = False
+    try:
+        # 4. 신규 servable model row (원본과 분리 → 독립 배포 엔트리).
+        new_model_id = await db_model.create_model(
+            workspace_id=workspace_id,
+            name=model_name,
+            create_user_id=create_user_id,
+            description=f"quantized GGUF from model {model_id} (job {job_id[:8]})",
+            huggingface_git='',  # NOT NULL column on legacy schema
+            access=src_model.get("access", 1),
+        )
+        if not new_model_id:
+            raise Exception("failed to create servable model row")
+
+        # 5. GGUF 복사 — move 아님(다운로드 패키지 원본 보존). 멀티-GB NFS copy 는 이벤트루프를
+        #    블록하므로 to_thread(대용량 gguf zip 을 to_thread 로 돌리는 _build_zip 선례와 동일).
+        os.makedirs(commit_dir, exist_ok=True)
+        made_dir = True
+        await asyncio.to_thread(
+            shutil.copy2, os.path.join(output_dir, gguf_name), os.path.join(commit_dir, gguf_name))
+
+        # 6. commit_model row + latest_commit_id (배포가 allm_name/commit_name 을 여기서 deref).
+        ft_config_json = json.dumps(
+            {"source_model_id": model_id, "job_id": job_id, "gguf": gguf_name}, ensure_ascii=False)
+        commit_id = await db_model.create_commit_model(
+            name=commit_name,
+            model_id=new_model_id,
+            workspace_id=workspace_id,
+            create_user_id=create_user_id,
+            fine_tuning_config=ft_config_json,
+            commit_message=(commit_message or f"quantized gguf {job_id[:8]}"),
+            model_description=(src_model.get("description") or ""),
+        )
+        await db_model.update_model_commit_id(latest_commit_id=commit_id, model_id=new_model_id)
+    except Exception:
+        traceback.print_exc()
+        # 부분 생성물 정리 — model row + 방금 만든 models/<name>/ 트리 제거(재시도 dedup 차단 해소).
+        if new_model_id:
+            try:
+                await db_model.delete_model(model_id=new_model_id)
+            except Exception:
+                traceback.print_exc()
+        if made_dir:
+            try:
+                await delete_model_folder(storage_name=storage_name,
+                                          workspace_name=workspace_name, model_name=model_name)
+            except Exception:
+                traceback.print_exc()
+        raise
+
+    return {
+        "model_id": new_model_id,
+        "model_name": model_name,
+        "commit_id": commit_id,
+        "commit_name": commit_name,
+        "commit_dir": commit_dir,
+        "gguf": gguf_name,
+    }
+
+
+# ── SDS(external) 체크포인트 관리 (P1: 목록/메타데이터/삭제/best 마커) ──────────
+# 내부 엔진은 커밋 스냅샷을 commit_checkpoints/<c>/adapters/checkpoint-<step>/ 로 보존하지만,
+# external(SDS)은 commit_external_artifacts 가 파트너 output 트리를 통째로 옮겨
+# commit_models/<commit>/checkpoint-<step>/ (HF Trainer 표준 레이아웃) 에 남긴다. 컨테이너엔
+# 체크포인트 목록/삭제 API 가 없어(/models·/deploy 만) 플랫폼이 NFS 를 직독한다.
+# best = 모델레벨 마커파일. 실제 서빙 전환(best→deploy)은 P2.
+
+_EXTERNAL_BEST_MARKER = ".best_checkpoint.json"
+
+# recipe phase → 프론트 stage 태그 텍스트(phase별). 미매핑/미상은 'LLM'(서빙 가능 계열).
+_SDS_PHASE_TAG = {
+    "projector":   "프로젝터",
+    "lora":        "LoRA",
+    "lora_marine": "해양 LoRA",
+    "lora_sds":    "SDS",
+}
+
+
+def _external_model_root(storage_name: str, workspace_name: str, model_name: str) -> str:
+    return PATH.JF_MAIN_MODEL_PATH.format(
+        STORAGE_NAME=storage_name, WORKSPACE_NAME=workspace_name, MODEL_NAME=model_name)
+
+
+def _external_best_marker_file(model_root: str) -> str:
+    return os.path.join(model_root, _EXTERNAL_BEST_MARKER)
+
+
+# EVA infer 로더 계약(컨테이너 api/model_manager._load_checkpoint) — projector.bin 이 없으면
+# FileNotFoundError, adapter_config.json 이 없으면 has_lora=False 로 base+projector 만 조용히
+# 로드된다. 즉 '서빙 가능한 단위'는 두 파일을 모두 가진 디렉터리뿐이다.
+# SDS VLM 트레이너(train.py VLMTrainer._save_checkpoint)는 이 둘을 런 루트(= 커밋 루트)에 쓰고
+# checkpoint-<step>/ 에는 HF Trainer 기본 덤프(model.safetensors)만 남긴다 → per-step 디렉터리는
+# 서빙 불가이고 커밋 루트가 실제 서빙 단위다. 컨테이너 list_checkpoints 도 루트만 스캔한다.
+_EVA_SERVABLE_FILES = ("projector.bin", "adapter_config.json")
+
+# 커밋 루트(= 학습 완료본)를 목록/best/서빙에서 가리키는 step 센티넬. HF Trainer 의 실제 step 은
+# 항상 1 이상이라 0 과 충돌하지 않는다.
+_EXTERNAL_FINAL_STEP = 0
+
+
+def _eva_servable_sync(path: str) -> bool:
+    return all(os.path.exists(os.path.join(path, f)) for f in _EVA_SERVABLE_FILES)
+
+
+def _external_ckpt_dir(model_root: str, commit_name: str, step: int) -> str:
+    """(commit, step) → 실제 디렉터리. step==_EXTERNAL_FINAL_STEP 이면 커밋 루트(최종 산출물)."""
+    base = os.path.join(model_root, "commit_models", commit_name)
+    if int(step) == _EXTERNAL_FINAL_STEP:
+        return base
+    return os.path.join(base, "checkpoint-{}".format(int(step)))
+
+
+def _dir_size_bytes(path: str) -> int:
+    """디렉토리 전체 크기(메타데이터만, 파일 내용 미read). SDS 체크포인트는 full 모델이라 폴더 du."""
+    total = 0
+    for root, _dirs, files in os.walk(path):
+        for f in files:
+            try:
+                total += os.path.getsize(os.path.join(root, f))
+            except OSError:
+                pass
+    return total
+
+
+# du 캐시 — SDS 체크포인트는 커밋 후 frozen(mtime 불변)이라 dir mtime 이 같으면 재사용.
+# 매 GET 마다 멀티-GB 트리를 재귀 walk 하던 NFS 과부하(이 코드베이스의 기존 이력)를 완화한다.
+# 프로세스-로컬(재시작/멀티-pod 는 1회 재계산) — 정합성 위해 mtime 서명으로 무효화.
+_dir_size_cache = {}    # (path, sizer) -> (mtime, size_bytes)
+
+
+def _commit_root_size_bytes(path: str) -> int:
+    """커밋 루트의 '직속 파일'만 합산 — 최종 산출물(projector.bin/adapter/토크나이저)은 전부 루트
+    직속이다. 재귀하지 않는 이유: checkpoint-<step>/ 는 각 step 행이 따로 계상(이중계상)하고,
+    runs/(TensorBoard) 같은 나머지 하위 트리는 서빙 아티팩트가 아니면서 매 목록 조회마다
+    재귀 walk 비용만 만든다(이 리포의 NFS 과부하 이력). scandir 비재귀 = 심링크 추종도 없음."""
+    total = 0
+    try:
+        entries = list(os.scandir(path))
+    except OSError:
+        return 0
+    for e in entries:
+        try:
+            if e.is_file(follow_symlinks=False):
+                total += e.stat(follow_symlinks=False).st_size
+        except OSError:
+            pass
+    return total
+
+
+def _cached_dir_size(path: str, sizer=_dir_size_bytes) -> int:
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        return 0
+    key = (path, sizer)    # 같은 경로를 다른 sizer 로도 재므로 키에 포함(함수 객체 = 동명 충돌 없음)
+    hit = _dir_size_cache.get(key)
+    if hit and hit[0] == mtime:
+        return hit[1]
+    size = sizer(path)
+    _dir_size_cache[key] = (mtime, size)
+    return size
+
+
+# 모델별 직렬화 락 — best 마커 read-check 와 삭제/재지정 사이 TOCTOU(동시 요청 시 방금 best 로
+# 지정된 체크포인트가 삭제돼 마커가 stale) 방지. 프로세스-로컬(단일 운영자 전제, cross-pod 는 P2).
+_external_model_locks = {}    # model_id -> asyncio.Lock
+
+
+def _external_model_lock(model_id: int):
+    lock = _external_model_locks.get(model_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _external_model_locks[model_id] = lock
+    return lock
+
+
+# serve(배포 전환) 전용 락 — set-best/delete 락과 분리. 이유: serve 는 파트너 /deploy(가중치
+# 재로드)로 락을 최대 600s 보유하므로, 공유 락이면 그 동안 set-best/delete 가 600s 블록된다.
+# 전용 락 + fail-fast 로 serve-vs-serve(재로드 중첩·자원 증폭)만 차단한다.
+_external_serve_locks = {}    # model_id -> asyncio.Lock
+
+
+def _external_serve_lock(model_id: int):
+    lock = _external_serve_locks.get(model_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _external_serve_locks[model_id] = lock
+    return lock
+
+
+def _sds_phase_of(fine_tuning_config):
+    """커밋 fine_tuning_config(JSON str = partner_metadata) 에서 recipe phase 추출. 없으면 None."""
+    try:
+        cfg = json.loads(fine_tuning_config) if isinstance(fine_tuning_config, str) else (fine_tuning_config or {})
+    except Exception:
+        return None
+    if not isinstance(cfg, dict):
+        return None
+    phase = cfg.get("phase")
+    if not phase and isinstance(cfg.get("params"), dict):
+        phase = cfg["params"].get("phase")
+    return phase if isinstance(phase, str) else None
+
+
+def _read_external_best(model_root: str):
+    """모델레벨 best 마커 읽기 → {commit_name, step} 또는 None."""
+    try:
+        with open(_external_best_marker_file(model_root), "r") as f:
+            data = json.loads(f.read())
+        if isinstance(data, dict) and data.get("commit_name") and data.get("step") is not None:
+            return {"commit_name": data["commit_name"], "step": int(data["step"])}
+    except Exception:
+        pass
+    return None
+
+
+def _write_external_best(model_root: str, commit_name: str, step: int) -> None:
+    os.makedirs(model_root, exist_ok=True)
+    with open(_external_best_marker_file(model_root), "w") as f:
+        f.write(json.dumps({"commit_name": commit_name, "step": int(step)}, ensure_ascii=False))
+
+
+# P2: best(의도) 와 별개로 "실제 서빙 중"(state)을 기록 — /deploy 성공 후에만 기록해
+# FE 가 '★BEST'(마커) vs '서빙 중'(실 반영)을 구분. best 재지정만으론 서빙 안 바뀜.
+_EXTERNAL_SERVED_MARKER = ".served_checkpoint.json"
+
+
+def _external_served_marker_file(model_root: str) -> str:
+    return os.path.join(model_root, _EXTERNAL_SERVED_MARKER)
+
+
+def _read_external_served(model_root: str):
+    try:
+        with open(_external_served_marker_file(model_root), "r") as f:
+            data = json.loads(f.read())
+        if isinstance(data, dict) and data.get("commit_name") and data.get("step") is not None:
+            return {"commit_name": data["commit_name"], "step": int(data["step"])}
+    except Exception:
+        pass
+    return None
+
+
+def _write_external_served(model_root: str, commit_name: str, step: int) -> None:
+    os.makedirs(model_root, exist_ok=True)
+    with open(_external_served_marker_file(model_root), "w") as f:
+        f.write(json.dumps({"commit_name": commit_name, "step": int(step)}, ensure_ascii=False))
+
+
+def _clear_external_served(model_root: str) -> None:
+    try:
+        os.remove(_external_served_marker_file(model_root))
+    except OSError:
+        pass
+
+
+async def list_external_checkpoints(model_id: int) -> dict:
+    """SDS(external) 모델의 커밋들에 저장된 per-step 체크포인트를 flat 하게 나열(P1).
+    각 커밋 commit_models/<commit>/checkpoint-<step>/ 를 스캔 → trainer_state.json(loss/grad/epoch)
+    + du(크기) + mtime(시각) + phase 태그 + best(마커) 로 반환. 컨테이너 아닌 플랫폼 NFS 직독.
+    정렬은 목업과 동일(proj 먼저 → llm, 각 그룹 step 오름차순)."""
+    model_info = await db_model.get_model(model_id=model_id)
+    if not model_info:
+        raise Exception("Error: not exist model")
+    if (model_info.get("training_type") or "internal") != "external":
+        # external 전용 — 내부/멀티모달은 기존 commit 체크포인트 UI 사용.
+        return {"list": [], "best": None, "storage": {"used_bytes": 0}}
+    workspace_info = await db_model.get_workspace_model(workspace_id=model_info["workspace_id"])
+    model_root = _external_model_root(workspace_info["main_storage_name"], workspace_info["name"], model_info["name"])
+    commits_base = os.path.realpath(os.path.join(model_root, "commit_models"))
+    best = await asyncio.to_thread(_read_external_best, model_root)
+    served = await asyncio.to_thread(_read_external_served, model_root)
+
+    commits = await db_model.get_commit_models(model_id=model_id)
+    out, total_bytes = [], 0
+    for c in (commits or []):
+        commit_name = c.get("name")
+        if not commit_name or "/" in commit_name or commit_name in (".", ".."):
+            continue
+        commit_dir = os.path.join(model_root, "commit_models", commit_name)
+        if not _is_under(commit_dir, commits_base):    # 경로 봉쇄(방어)
+            continue
+        try:
+            entries = await asyncio.to_thread(os.listdir, commit_dir)
+        except (FileNotFoundError, NotADirectoryError):
+            continue
+        ckpt_names = sorted(
+            [e for e in entries if e.startswith("checkpoint-") and e[len("checkpoint-"):].isdigit()],
+            key=lambda e: int(e[len("checkpoint-"):]))
+        # 각 checkpoint-<step> 도 심볼릭 escape 방어(list 도 set/delete 와 동일 봉쇄) — realpath 로
+        # 트리 밖을 가리키는 링크 차단. 반신뢰 external 컨테이너가 심은 심링크로 read/du 가 밖으로 새는 것 방지.
+        ckpt_names = [n for n in ckpt_names if _is_under(os.path.join(commit_dir, n), commits_base)]
+        # 커밋 루트가 EVA 로더 계약을 만족하면 '최종' 행으로 함께 노출 — SDS VLM 트레이너가 실
+        # 산출물(projector.bin + LoRA)을 런 루트에 쓰므로 서빙 가능한 단위는 per-step 이 아니라 이쪽.
+        root_servable = await asyncio.to_thread(_eva_servable_sync, commit_dir)
+        if not ckpt_names and not root_servable:
+            continue
+        # phase 태그 — 커밋 full row 의 fine_tuning_config(partner_metadata) 파싱.
+        full = await db_model.get_commit_model(commit_id=c["id"])
+        phase = _sds_phase_of((full or {}).get("fine_tuning_config"))
+        stage_key = "proj" if phase == "projector" else "llm"
+        stage_label = _SDS_PHASE_TAG.get(phase or "", "LLM")
+        # 메트릭: 최고 step 의 trainer_state.json(가장 완전한 log_history).
+        log_history = []
+        if ckpt_names:
+            ts_path = os.path.join(commit_dir, ckpt_names[-1], "trainer_state.json")
+            try:
+                ts = json.loads(await asyncio.to_thread(_read_text_capped, ts_path))
+                log_history = ts.get("log_history") or []
+            except Exception:
+                pass
+        for name in ckpt_names:
+            step = int(name[len("checkpoint-"):])
+            cdir = os.path.join(commit_dir, name)
+            try:
+                saved_at = int(await asyncio.to_thread(os.path.getmtime, cdir))
+            except OSError:
+                saved_at = None
+            size_bytes = await asyncio.to_thread(_cached_dir_size, cdir)
+            total_bytes += size_bytes
+            out.append({
+                "commit_id": c["id"],
+                "commit_name": commit_name,
+                "step": step,
+                "is_final": False,
+                "epoch": _ckpt_metric(log_history, step, "epoch"),
+                "loss": _ckpt_metric(log_history, step, "loss"),
+                "grad_norm": _ckpt_metric(log_history, step, "grad_norm"),
+                "size_bytes": size_bytes,
+                "saved_at": saved_at,            # epoch seconds
+                "stage": stage_key,              # 'proj' | 'llm'
+                "stage_label": stage_label,      # 프론트 태그 텍스트(phase별)
+                "is_best": bool(best and best.get("commit_name") == commit_name
+                                and int(best.get("step", -1)) == step),
+                "is_served": bool(served and served.get("commit_name") == commit_name
+                                  and int(served.get("step", -1)) == step),
+            })
+        if root_servable:
+            # 최종 산출물 행 — 실제 서빙 단위. 메트릭은 마지막 step 기준(= 학습 종료 시점).
+            last_step = int(ckpt_names[-1][len("checkpoint-"):]) if ckpt_names else 0
+            try:
+                root_saved_at = int(await asyncio.to_thread(os.path.getmtime, commit_dir))
+            except OSError:
+                root_saved_at = None
+            root_bytes = await asyncio.to_thread(_cached_dir_size, commit_dir, _commit_root_size_bytes)
+            total_bytes += root_bytes
+            out.append({
+                "commit_id": c["id"],
+                "commit_name": commit_name,
+                "step": _EXTERNAL_FINAL_STEP,
+                "is_final": True,
+                "epoch": _ckpt_metric(log_history, last_step, "epoch"),
+                "loss": _ckpt_metric(log_history, last_step, "loss"),
+                "grad_norm": _ckpt_metric(log_history, last_step, "grad_norm"),
+                "size_bytes": root_bytes,
+                "saved_at": root_saved_at,
+                "stage": stage_key,
+                "stage_label": stage_label,
+                "is_best": bool(best and best.get("commit_name") == commit_name
+                                and int(best.get("step", -1)) == _EXTERNAL_FINAL_STEP),
+                "is_served": bool(served and served.get("commit_name") == commit_name
+                                  and int(served.get("step", -1)) == _EXTERNAL_FINAL_STEP),
+            })
+    # 최종 행은 같은 stage 그룹의 per-step 행 뒤로 — step 센티넬 0 이 맨 앞으로 오지 않게.
+    out.sort(key=lambda r: (0 if r["stage"] == "proj" else 1,
+                            1 if r.get("is_final") else 0, r["step"]))
+    return {"list": out, "best": best, "served": served, "storage": {"used_bytes": total_bytes}}
+
+
+async def set_external_best_checkpoint(model_id: int, commit_id: int, step: int) -> dict:
+    """SDS 체크포인트 best 지정 — 모델레벨 마커파일에 (commit_name, step) 기록(P1).
+    실제 서빙 전환(best→/external/deploy)은 P2. 대상 체크포인트 실재 + commit↔model 소속 검증."""
+    model_info = await db_model.get_model(model_id=model_id)
+    if not model_info or (model_info.get("training_type") or "internal") != "external":
+        raise Exception("Error: not an external model")
+    commit = await db_model.get_commit_model(commit_id=commit_id)
+    if not commit or commit.get("model_id") != model_id:
+        raise Exception("Error: commit not found for model")
+    commit_name = commit["name"]
+    if not commit_name or "/" in commit_name or commit_name in (".", ".."):
+        raise Exception("Error: invalid commit name")
+    workspace_info = await db_model.get_workspace_model(workspace_id=model_info["workspace_id"])
+    model_root = _external_model_root(workspace_info["main_storage_name"], workspace_info["name"], model_info["name"])
+    commits_base = os.path.realpath(os.path.join(model_root, "commit_models"))
+    target = _external_ckpt_dir(model_root, commit_name, int(step))
+    if not _is_under(target, commits_base):
+        raise Exception("Error: invalid checkpoint path")
+    # 삭제와 동일 락으로 직렬화 — 마커 write 와 delete 의 best-check 사이 TOCTOU 방지.
+    async with _external_model_lock(model_id):
+        if not await asyncio.to_thread(os.path.isdir, target):
+            raise Exception("Error: checkpoint not found")
+        # 최종(커밋 루트)은 로더 계약을 만족할 때만 best 로 허용 — 목록은 이미 그런 커밋만 '최종'
+        # 행으로 내리지만, API 직접 호출로 계약 불만족 커밋이 best 가 되면 이후 서빙이 혼란스럽게 실패.
+        if (int(step) == _EXTERNAL_FINAL_STEP
+                and not await asyncio.to_thread(_eva_servable_sync, target)):
+            raise Exception("Error: 이 커밋에는 서빙 가능한 학습 산출물(projector.bin + "
+                            "adapter_config.json)이 없습니다")
+        await asyncio.to_thread(_write_external_best, model_root, commit_name, int(step))
+    return {"commit_name": commit_name, "step": int(step)}
+
+
+async def serve_external_best_checkpoint(model_id: int) -> dict:
+    """P2: 현재 best 로 지정된 SDS 체크포인트를 실행 중 infer pod 에 in-pod 로드해 서빙 전환.
+    컨테이너 /deploy 는 checkpoint_name 을 EVA_CHECKPOINTS_ROOT(=commit_models RO 마운트) 기준
+    상대경로로 os.path.join 하므로 커밋 루트도 `<commit>/checkpoint-<step>` 하위경로도 지목 가능하다
+    (컨테이너 무변경). 다만 **로드 가능 여부는 경로가 아니라 아티팩트가 정한다**.
+    비자명:
+    - 서빙 단위 = projector.bin + adapter_config.json 을 모두 가진 디렉터리(_EVA_SERVABLE_FILES).
+      SDS VLM 트레이너가 이 둘을 런 루트(= 커밋 루트)에 쓰므로 per-step 디렉터리는 대개 서빙 불가
+      → 계약 불만족이면 같은 커밋의 루트로 폴백한다(그래도 불만족이면 거부).
+    - ETRIAdapter.deploy 는 payload 를 envelope 로 감싸지 않음(start_job 과 비대칭) → 호출측이
+      full envelope `{workspace_id, project_id, params:{checkpoint_name}}` 를 직접 구성.
+    - 재로드 동기 1~5분 → deploy timeout 상향(600s).
+    - deploy 성공 후에만 served 마커 기록(best=의도 vs served=실 반영 구분).
+    """
+    model_info = await db_model.get_model(model_id=model_id)
+    if not model_info or (model_info.get("training_type") or "internal") != "external":
+        raise Exception("Error: not an external model")
+    workspace_info = await db_model.get_workspace_model(workspace_id=model_info["workspace_id"])
+    model_root = _external_model_root(workspace_info["main_storage_name"], workspace_info["name"], model_info["name"])
+    commits_base = os.path.realpath(os.path.join(model_root, "commit_models"))
+
+    # serve-vs-serve 직렬화(전용 락 + fail-fast) — 공유 infer pod 가중치 재로드는 1~5분·GPU 점유·
+    # 커넥션 600s 라 중첩 호출 시 재로드 레이스/자원 증폭/served 마커 desync. FE busy 는 탭-로컬
+    # 이라 curl/멀티탭에 무력 → 서버측 게이트. 이미 진행 중이면 대기 없이 거부(pile-up 방지).
+    from external.proxy import ExternalContainerClient, ExternalContainerError
+    import httpx
+
+    # serve-vs-serve 직렬화(전용 락 + fail-fast) — 재로드 1~5분·GPU·600s 커넥션이라 중첩 시
+    # 재로드 레이스/자원 증폭. 이미 진행 중이면 대기 없이 거부(pile-up 방지). FE busy 는 탭-로컬.
+    serve_lock = _external_serve_lock(model_id)
+    if serve_lock.locked():
+        raise Exception("Error: 이미 서빙 전환이 진행 중입니다. 완료 후 다시 시도하세요")
+    async with serve_lock:
+        # 마커 상태 조작(best 읽기 + 서빙 대상 '예약')은 delete/set-best 와 동일한 model lock 하에서
+        # 원자적으로 처리한다. 그래야 락 밖에서 도는 600s deploy 중에 delete 가 in-flight 타깃을
+        # 지우거나(served 는 이 시점에 이미 기록됨 → delete 의 served 가드가 보호) served 마커가
+        # delete 의 read/rm 과 경합하지 않는다. 실패 시 이전 served 로 롤백.
+        async with _external_model_lock(model_id):
+            best = await asyncio.to_thread(_read_external_best, model_root)
+            if not best:
+                raise Exception("Error: 먼저 서빙할 체크포인트를 best 로 지정하세요")
+            commit_name, step = best["commit_name"], int(best["step"])
+            if not commit_name or "/" in commit_name or commit_name in (".", ".."):
+                raise Exception("Error: invalid commit name")
+
+            # 경로 봉쇄 + 실재 확인(checkpoint_name 이 파트너 HTTP 로 흐르므로 방어).
+            target = _external_ckpt_dir(model_root, commit_name, step)
+            if not _is_under(target, commits_base):
+                raise Exception("Error: invalid checkpoint path")
+            if not await asyncio.to_thread(os.path.isdir, target):
+                raise Exception("Error: 서빙할 체크포인트가 존재하지 않습니다")
+
+            # 서빙 게이트(fail-closed·아티팩트 기반) — phase 필드는 구커밋/미기록 시 None 이라 신뢰 불가.
+            # 컨테이너 _load_checkpoint 계약 전체를 요구한다: projector.bin 이 없으면 FileNotFoundError,
+            # adapter_config.json 이 없으면 base+projector 만 조용히 로드 → 둘 다 있어야 서빙 단위.
+            # per-step 이 계약 불만족이면(=SDS VLM 트레이너의 기본 레이아웃) 같은 커밋의 루트로 폴백.
+            serve_step = int(step)
+            if not await asyncio.to_thread(_eva_servable_sync, target):
+                root_dir = _external_ckpt_dir(model_root, commit_name, _EXTERNAL_FINAL_STEP)
+                if not _is_under(root_dir, commits_base):
+                    raise Exception("Error: invalid checkpoint path")
+                if not await asyncio.to_thread(_eva_servable_sync, root_dir):
+                    raise Exception("Error: 이 커밋에는 서빙 가능한 학습 산출물(projector.bin + "
+                                    "adapter_config.json)이 없습니다. 언어모델(LoRA) 단계 커밋의 "
+                                    "'최종' 체크포인트를 best 로 지정하세요")
+                target, serve_step = root_dir, _EXTERNAL_FINAL_STEP
+
+            # deploy '전에' served 를 대상으로 선기록(예약) — delete 의 served 가드가 in-flight
+            # 타깃을 보호하도록. 실패 롤백용으로 이전값 보관. (여기까지 model lock 하 = delete/set-best 와 원자.)
+            prev_served = await asyncio.to_thread(_read_external_served, model_root)
+            await asyncio.to_thread(_write_external_served, model_root, commit_name, serve_step)
+
+        # full envelope 구성(etri_vlm.deploy 는 payload 를 그대로 파트너로 전달). deploy 는 model
+        # lock 밖 — 600s 동안 delete/set-best 를 블록하지 않되, 위 served 예약이 타깃을 보호한다.
+        checkpoint_name = (commit_name if serve_step == _EXTERNAL_FINAL_STEP
+                           else "{}/checkpoint-{}".format(commit_name, serve_step))
+        envelope = {
+            "workspace_id": str(model_info["workspace_id"]),
+            "project_id": str(model_id),
+            "params": {"checkpoint_name": checkpoint_name},
+        }
+        try:
+            async with httpx.AsyncClient(timeout=600.0) as hc:
+                client = ExternalContainerClient(base_url=settings.FB_EXTERNAL_CONTAINER_URL, client=hc)
+                raw = await client.deploy(
+                    manifest_name=settings.SDS_MANIFEST_NAME,
+                    manifest_version=settings.SDS_MANIFEST_VERSION,
+                    workspace_id=model_info["workspace_id"],
+                    payload=envelope,
+                    timeout=600.0,
+                )
+        except ExternalContainerError as exc:
+            # deploy 실패 → served 예약 롤백(성공 안 했는데 served 로 남지 않게), model lock 하.
+            async with _external_model_lock(model_id):
+                if prev_served:
+                    await asyncio.to_thread(_write_external_served, model_root,
+                                            prev_served["commit_name"], int(prev_served["step"]))
+                else:
+                    await asyncio.to_thread(_clear_external_served, model_root)
+            _msg = str(exc)
+            if "404" in _msg:
+                raise Exception("Error: 실행 중인 추론(infer) pod 를 찾을 수 없습니다. 먼저 이 모델을 배포하세요")
+            raise Exception("Error: 서빙 전환 실패: {}".format(_msg[:200]))
+    return {"commit_name": commit_name, "step": serve_step, "checkpoint_name": checkpoint_name, "result": raw}
+
+
+async def delete_external_checkpoint(model_id: int, commit_id: int, step: int) -> bool:
+    """SDS 체크포인트 삭제 — commit_models/<commit>/checkpoint-<step>/ 통째 rm(commonpath 봉쇄 +
+    step int 강제). 현재 best(서빙 후보)는 삭제 거부 — 다른 것을 best 로 지정한 뒤 삭제."""
+    model_info = await db_model.get_model(model_id=model_id)
+    if not model_info or (model_info.get("training_type") or "internal") != "external":
+        raise Exception("Error: not an external model")
+    commit = await db_model.get_commit_model(commit_id=commit_id)
+    if not commit or commit.get("model_id") != model_id:
+        raise Exception("Error: commit not found for model")
+    commit_name = commit["name"]
+    if not commit_name or "/" in commit_name or commit_name in (".", ".."):
+        raise Exception("Error: invalid commit name")
+    workspace_info = await db_model.get_workspace_model(workspace_id=model_info["workspace_id"])
+    model_root = _external_model_root(workspace_info["main_storage_name"], workspace_info["name"], model_info["name"])
+    commits_base = os.path.realpath(os.path.join(model_root, "commit_models"))
+    # 최종(커밋 루트)은 삭제 대상이 아니다 — rm 하면 커밋 자체가 날아간다(버전 삭제로 처리).
+    if int(step) == _EXTERNAL_FINAL_STEP:
+        raise Exception("Error: 최종 산출물은 개별 삭제할 수 없습니다. 커밋(버전) 삭제를 사용하세요")
+    target = _external_ckpt_dir(model_root, commit_name, int(step))
+    if not _is_under(target, commits_base):
+        raise Exception("Error: invalid checkpoint path")
+    # best-check ~ rm 을 모델 락으로 원자화 — 동시 set-best 가 이 체크포인트를 best 로 만든 뒤
+    # 삭제되어 마커가 stale 되는 TOCTOU 방지(마커는 P2 서빙 대상 포인터).
+    async with _external_model_lock(model_id):
+        best = await asyncio.to_thread(_read_external_best, model_root)
+        if best and best.get("commit_name") == commit_name and int(best.get("step", -1)) == int(step):
+            raise Exception("Error: best 체크포인트는 삭제할 수 없습니다. 다른 체크포인트를 best 로 지정한 뒤 삭제하세요")
+        # 현재 서빙 중(served)인 체크포인트도 삭제 거부 — served≠best 일 수 있어 best 가드만으론 부족.
+        # 삭제 시 infer pod 메모리엔 남아도 마커가 stale·재시작 시 로드 실패.
+        served = await asyncio.to_thread(_read_external_served, model_root)
+        if served and served.get("commit_name") == commit_name and int(served.get("step", -1)) == int(step):
+            raise Exception("Error: 현재 서빙 중인 체크포인트는 삭제할 수 없습니다. 다른 체크포인트로 서빙 전환한 뒤 삭제하세요")
+        if not await asyncio.to_thread(os.path.isdir, target):
+            raise Exception("Error: checkpoint not found")
+        await asyncio.to_thread(common.rm_rf, target)
+    return True
+
+
+# ── 3.6 Custom 모델: by-reference 체크포인트 ingestion (런타임-바운드) ──────────
+# 기관(예: 에이브노틱스)이 Nexus/HF 에 올린 커스텀 체크포인트를 레퍼런스로 당겨와
+# 검증 후 commit_models 에 머티리얼라이즈한다. **사용자 파일 업로드 X(운영자 매개)** —
+# 플랫폼 no-code/'정해진 모델만' 본질 유지. commit_external_artifacts 와 동일 layout
+# 으로 떨어져 이후 eval(SP-5)/quantize(SP-4)/edge-deploy(SP-6/8) 가 그대로 동작.
+# 1차 타깃 런타임 = EVA infer 호환(LoRA adapter + projector). 범용 loader 는 후속.
+_CKPT_REF_TYPES = ("hf", "url")
+_CKPT_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+# EVA 로더 계약 — 각 그룹에서 하나라도 없으면 EVA 가 로드 못 함 → 등록 거부(controlled).
+_EVA_REQUIRED_GROUPS = (
+    ("adapter_config.json",),
+    ("adapter_model.safetensors", "adapter_model.bin", "pytorch_model.bin"),
+)
+
+
+def _validate_eva_checkpoint_layout(root: str) -> None:
+    """EVA infer 로더가 기대하는 최소 아티팩트 존재 검증. 미충족 시 예외(등록 거부)."""
+    present = set(os.listdir(root)) if os.path.isdir(root) else set()
+    missing = [
+        " | ".join(group)
+        for group in _EVA_REQUIRED_GROUPS
+        if not any(f in present for f in group)
+    ]
+    if missing:
+        raise Exception(
+            "custom checkpoint does not match EVA loader contract; "
+            f"missing required artifact(s): {missing}; found={sorted(present)[:20]}"
+        )
+
+
+# 리소스/DoS 가드 (untrusted 아티팩트). 운영 정책에 맞게 조정 가능.
+_MAX_INGEST_BYTES = 50 * 1024 ** 3      # 단일 ingestion 총량 상한(NFS 보호)
+_MAX_ARCHIVE_FILES = 50000              # decompression-bomb(파일수) 가드
+# EVA 가 로드하는 파일만 받도록 HF allow_patterns — 불필요 대용량 동반파일 차단.
+_EVA_ALLOW_PATTERNS = ["*.json", "*.safetensors", "*.bin", "*.model", "*.txt", "projector*", "*.py"]
+
+
+def _check_pull_url_safe(url: str) -> None:
+    """SSRF 가드 — http/https 만 허용 + 호스트가 사설/루프백/링크로컬/메타데이터/
+    예약 IP 로 해석되면 거부(DNS 해석 후 검사). admin-gated 이나 심층방어."""
+    import ipaddress, socket
+    from urllib.parse import urlparse
+    p = urlparse(url)
+    if p.scheme not in ("http", "https"):
+        raise Exception(f"url scheme not allowed: {p.scheme!r} (http/https only)")
+    host = p.hostname or ""
+    if not host:
+        raise Exception("url has no host")
+    try:
+        infos = socket.getaddrinfo(host, p.port or (443 if p.scheme == "https" else 80))
+    except Exception:
+        raise Exception(f"cannot resolve url host: {host!r}")
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_reserved or ip.is_multicast or ip.is_unspecified):
+            raise Exception(f"url resolves to blocked address {ip} (SSRF guard)")
+
+
+def _sanitize_ref_for_storage(ref: str, ref_type: str) -> str:
+    """provenance 저장용 ref 정제 — URL 의 userinfo(creds) + query(서명토큰) 제거."""
+    if ref_type != "url":
+        return ref
+    from urllib.parse import urlparse, urlunparse
+    try:
+        p = urlparse(ref)
+        netloc = p.hostname or ""
+        if p.port:
+            netloc += f":{p.port}"
+        return urlunparse((p.scheme, netloc, p.path, "", "", ""))
+    except Exception:
+        return ref
+
+
+def _safe_extract_archive(archive_path: str, dest: str) -> None:
+    """Zip-slip/Tar-slip + decompression-bomb 방지 추출 — untrusted 아카이브.
+    모든 멤버(디렉터리 포함) 경로가 dest 안에 머무는지 검증 + 절대경로/`..`/링크/
+    비정규 파일 거부 + 압축해제 총량·파일수 상한. (shutil.unpack_archive 사용 금지.)"""
+    import tarfile, zipfile
+    dest_real = os.path.realpath(dest)
+
+    def _within(name: str) -> bool:
+        target = os.path.realpath(os.path.join(dest, name))
+        return target == dest_real or target.startswith(dest_real + os.sep)
+
+    def _check_name(name: str, label: str) -> None:
+        if os.path.isabs(name) or ".." in name.replace("\\", "/").split("/") or not _within(name):
+            raise Exception(f"unsafe archive member ({label}): {name!r}")
+
+    if archive_path.endswith(".zip"):
+        with zipfile.ZipFile(archive_path) as zf:
+            infos = zf.infolist()
+            if len(infos) > _MAX_ARCHIVE_FILES:
+                raise Exception("archive has too many entries (decompression-bomb guard)")
+            total = 0
+            for zi in infos:
+                _check_name(zi.filename, "zip-slip")  # 디렉터리 엔트리도 검사
+                total += zi.file_size
+                if total > _MAX_INGEST_BYTES:
+                    raise Exception("archive uncompressed size exceeds limit (bomb guard)")
+            zf.extractall(dest)
+    else:
+        with tarfile.open(archive_path) as tf:
+            members = tf.getmembers()
+            if len(members) > _MAX_ARCHIVE_FILES:
+                raise Exception("archive has too many entries (decompression-bomb guard)")
+            total = 0
+            for m in members:
+                if not (m.isfile() or m.isdir()):  # 링크/디바이스/FIFO 등 비정규 거부
+                    raise Exception(f"archive contains non-regular member (rejected): {m.name!r}")
+                _check_name(m.name, "tar-slip")
+                total += m.size
+                if total > _MAX_INGEST_BYTES:
+                    raise Exception("archive uncompressed size exceeds limit (bomb guard)")
+            try:
+                tf.extractall(dest, filter="data")  # Python 3.12+ 추가 방어
+            except TypeError:
+                tf.extractall(dest)
+
+
+async def ingest_external_checkpoint(
+    workspace_id: int, model_id: int,
+    target_manifest_name: str, target_manifest_version: str,
+    ref_type: str, ref: str, token: str = None,
+    commit_name: str = None, description: str = None, metadata: dict = None,
+) -> dict:
+    """기관 제공 커스텀 체크포인트를 by-reference pull → 검증 → commit_models 머티리얼.
+
+    런타임-바운드(모델은 training_type='external' + 그 모델에 묶인 manifest 에만).
+    토큰은 pull 에만 쓰고 절대 저장/로그하지 않는다(provenance 엔 정제된 ref 만).
+    """
+    if ref_type not in _CKPT_REF_TYPES:
+        raise Exception(f"unsupported ref_type: {ref_type!r} (allowed: {_CKPT_REF_TYPES})")
+    if not ref:
+        raise Exception("ref (checkpoint reference) is required")
+
+    model_row = await db_model.get_model(model_id=model_id)
+    if not model_row:
+        raise Exception(f"model {model_id} not found")
+    if (model_row.get("training_type") or "internal") != "external":
+        raise Exception(f"model {model_id} is not training_type='external' (runtime-bound only)")
+    # 테넌트 격리 — 경로/소유 workspace 는 caller body 가 아니라 model row 가 권위.
+    model_ws = model_row.get("workspace_id")
+    if workspace_id != model_ws:
+        raise Exception(f"workspace_id {workspace_id} does not match model {model_id} workspace {model_ws}")
+    # 런타임 바인딩 강제 — 모델에 묶인 manifest 와 타깃 런타임이 일치해야 한다.
+    if model_row.get("external_manifest_name") and target_manifest_name != model_row.get("external_manifest_name"):
+        raise Exception(
+            f"target_manifest {target_manifest_name!r} != model's bound runtime "
+            f"{model_row.get('external_manifest_name')!r}"
+        )
+
+    workspace_info = await db_model.get_workspace_model(workspace_id=model_ws)
+    storage_name = workspace_info["main_storage_name"]
+    workspace_name = workspace_info["name"]
+
+    if not commit_name:
+        commit_name = "custom-" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    if not _CKPT_NAME_RE.match(commit_name):
+        raise Exception(f"invalid commit_name (slug required): {commit_name!r}")
+    # DB 레벨 중복 사전 체크(파일시스템 race 완화; 최종 arbitration 은 DB unique).
+    if await db_model.check_commit_model_by_name(commit_name=commit_name, model_id=model_id):
+        raise Exception(f"commit_name already registered: {commit_name!r}")
+
+    if ref_type == "url":
+        _check_pull_url_safe(ref)  # SSRF 가드
+
+    main_root = PATH.JF_MAIN_STORAGE_PATH.format(STORAGE_NAME=storage_name, WORKSPACE_NAME=workspace_name)
+    model_root = PATH.JF_MAIN_MODEL_PATH.format(
+        STORAGE_NAME=storage_name, WORKSPACE_NAME=workspace_name, MODEL_NAME=model_row["name"],
+    )
+    commit_dir = os.path.join(model_root, "commit_models", commit_name)
+    _commits_base = os.path.realpath(os.path.join(model_root, "commit_models"))
+    if os.path.commonpath([os.path.realpath(commit_dir), _commits_base]) != _commits_base:
+        raise Exception("commit path escapes commit_models base")
+    if os.path.exists(commit_dir):
+        raise Exception(f"commit dir already exists: {commit_dir}")
+
+    # staging 으로 pull → 검증 → commit_dir 이동(부분 산출물이 commit_models 에 안 남게).
+    staging = os.path.join(main_root, "jobs", f"_ingest-{commit_name}-{uuid.uuid4().hex[:8]}")
+    commit_id = None
+    try:
+        os.makedirs(staging, exist_ok=True)
+        if ref_type == "hf":
+            def _pull_hf():
+                from huggingface_hub import snapshot_download
+                snapshot_download(repo_id=ref, local_dir=staging, token=token or None,
+                                  allow_patterns=_EVA_ALLOW_PATTERNS)
+                # 다운로드 총량 상한 검사(NFS 보호).
+                total = 0
+                for r_, _d, fs in os.walk(staging):
+                    for fn in fs:
+                        total += os.path.getsize(os.path.join(r_, fn))
+                if total > _MAX_INGEST_BYTES:
+                    raise Exception("hf download exceeds size limit")
+            await asyncio.to_thread(_pull_hf)
+        elif ref_type == "url":
+            def _pull_url():
+                import requests, re as _re
+                headers = {"Authorization": f"Bearer {token}"} if token else {}
+                # allow_redirects=False — 리다이렉트로 내부 타깃 우회 차단(직접 URL 권장).
+                with requests.get(ref, headers=headers, stream=True, timeout=600,
+                                  allow_redirects=False) as r:
+                    if r.is_redirect or r.status_code in (301, 302, 303, 307, 308):
+                        raise Exception("url redirect not allowed (provide a direct URL)")
+                    r.raise_for_status()
+                    cd = r.headers.get("content-disposition", "")
+                    mt = _re.search(r'filename\*?=(?:UTF-8\'\')?"?([^";]+)"?', cd)
+                    fname = (mt.group(1).strip() if mt
+                             else (ref.split("?")[0].rstrip("/").split("/")[-1] or "artifact.bin"))
+                    fname = os.path.basename(fname) or "artifact.bin"
+                    dest = os.path.join(staging, fname)
+                    total = 0
+                    with open(dest, "wb") as f:
+                        for chunk in r.iter_content(chunk_size=1 << 20):
+                            if chunk:
+                                total += len(chunk)
+                                if total > _MAX_INGEST_BYTES:
+                                    raise Exception("download exceeds size limit")
+                                f.write(chunk)
+                    if fname.endswith((".tar", ".tar.gz", ".tgz", ".zip")):
+                        _safe_extract_archive(dest, staging)  # zip/tar-slip + bomb 방어
+                        os.remove(dest)
+            await asyncio.to_thread(_pull_url)
+
+        # 중첩 단일 디렉터리(예: HF repo 폴더)면 그 안을 검사/이동. symlink 면 거부.
+        _root = staging
+        entries = [e for e in os.listdir(staging) if not e.startswith(".")]
+        if len(entries) == 1 and os.path.isdir(os.path.join(staging, entries[0])):
+            cand = os.path.join(staging, entries[0])
+            if os.path.islink(cand):
+                raise Exception("top-level entry is a symlink — rejected")
+            _root = cand
+        _validate_eva_checkpoint_layout(_root)  # 검증 게이트 — 미충족 시 예외
+
+        provenance = {
+            "source": "custom_checkpoint_by_reference",
+            "ref_type": ref_type,
+            "ref": _sanitize_ref_for_storage(ref, ref_type),  # creds/query 제거, 토큰 저장 X
+            "target_manifest": f"{target_manifest_name}@{target_manifest_version}",
+            "validated": "eva_loader_contract",
+        }
+        if isinstance(metadata, dict):
+            for k, v in metadata.items():
+                provenance.setdefault(k, v)
+
+        os.makedirs(os.path.dirname(commit_dir), exist_ok=True)
+        # move + DB insert 를 한 단위로 — DB 실패 시 commit_dir orphan/이름 블랙리스트 방지.
+        try:
+            shutil.move(_root, commit_dir)
+            commit_id = await db_model.create_commit_model(
+                name=commit_name, model_id=model_id, workspace_id=model_ws,
+                create_user_id=model_row.get("create_user_id"),
+                fine_tuning_config=json.dumps(provenance, ensure_ascii=False),
+                commit_message=(description or f"custom checkpoint ({ref_type})"),
+                model_description=(model_row.get("description") or ""),
+            )
+            await db_model.update_model_commit_id(latest_commit_id=commit_id, model_id=model_id)
+        except Exception:
+            if os.path.isdir(commit_dir):
+                shutil.rmtree(commit_dir, ignore_errors=True)
+            raise
+    finally:
+        if os.path.isdir(staging):
+            shutil.rmtree(staging, ignore_errors=True)
+
+    return {"commit_id": commit_id, "commit_name": commit_name, "commit_dir": commit_dir, "validated": True}
+
+
+async def ingest_external_checkpoint_safe(**kwargs) -> None:
+    """BackgroundTask 래퍼 — 예외를 삼키지 않고 로깅(운영자가 commit 목록으로 결과 확인)."""
+    try:
+        res = await ingest_external_checkpoint(**kwargs)
+        print(f"[ingest_external_checkpoint] ok: {res.get('commit_name')}")
+    except Exception as e:
+        print(f"[ingest_external_checkpoint] FAILED model_id={kwargs.get('model_id')} "
+              f"ref_type={kwargs.get('ref_type')} error={e!r}")
+        traceback.print_exc()
+
+
 async def delete_model(model_id : int) -> bool:
     
     model_info = await db_model.get_model(model_id=model_id)
@@ -875,12 +3385,29 @@ async def delete_model(model_id : int) -> bool:
         if model_pod_status[TYPE.FINE_TUNING_TYPE].get(str(model_id),{}):
             raise Exception(f"현재 파인튜닝중입니다. 해당 작업을 종료 후 진행해 주세요.")
 
+    # 양자화 패키지(jobs/<job_id>)는 models/<name> 밖이라 delete_model_folder 가 못 지우고,
+    # lineage 행은 FK CASCADE 로 함께 사라져 경로를 잃는다 — 행이 남아 있을 때 잡아 둔다.
+    # 진행 중·엣지 배포 중이면 여기서 거절된다(아래 helm·secret 정리보다 먼저 — 반쯤 지워진 모델 방지).
+    quantize_dirs = await _quantize_job_dirs(model_id)
+
     # 해당 모델을 다운 받고 있을 경우
     model_commit_helm_repo_name = TYPE.MODEL_COMMIT_JOB_HELM_NAME.format(MODEL_ID=model_id)
     await delete_helm_repo(helm_repo_name=model_commit_helm_repo_name, workspace_id=model_info["workspace_id"])
 
+    # compose/download 때 만든 HF 토큰 Secret(C-4) 정리 — 모델 삭제 시 함께 제거(누적 방지, 없으면 무시).
+    try:
+        delete_secret(namespace=TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=model_info["workspace_id"]),
+                      name=f"hf-token-{model_id}")
+    except Exception as e:
+        print(f"Warning: failed to delete HF token secret for model {model_id}: {e}")
+
     await db_model.delete_model(model_id=model_id)
     await delete_model_folder(storage_name=workspace_info["main_storage_name"], workspace_name=workspace_info["name"], model_name=model_info["name"])
+    for d in quantize_dirs:
+        try:
+            await asyncio.to_thread(common.rm_rf, d)
+        except Exception as e:
+            print(f"Warning: failed to delete quantize package {d} for model {model_id}: {e}")
     
     return True
 
@@ -901,9 +3428,142 @@ async def delete_model_configuration(model_config_id : int) -> bool:
         return True
     return False
 
+async def _resolve_external_steps_per_epoch(model_info: dict, job_id: str) -> int:
+    """External training 의 total_steps 추정 — frontend "1 Epoch = N steps" 표시용.
+
+    Source priority:
+      1) fb_external_container detail 의 partner total_steps (학습 active 일 때)
+      2) commit_models 의 events.out.tfevents 의 train/loss last step (cleanup 후)
+      3) 둘 다 없으면 0
+    """
+    import os, glob as _glob
+    from utils import settings, PATH
+    import httpx
+
+    # 1. fb_external_container detail 시도 (tracker active)
+    try:
+        url = f"{settings.FB_EXTERNAL_CONTAINER_URL.rstrip('/')}/api/v1/jobs/{job_id}"
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(url)
+        if resp.status_code == 200:
+            detail = resp.json()
+            r = (detail.get("result") or {}).get("result") or {}
+            total = r.get("total_steps") or 0
+            if total and int(total) > 0:
+                return int(total)
+    except Exception:
+        pass
+
+    # 2. commit_models events fallback
+    try:
+        workspace_info = await db_model.get_workspace_model(
+            workspace_id=int(model_info["workspace_id"]),
+        )
+        if workspace_info and model_info.get("latest_commit_id"):
+            commit_row = await db_model.get_commit_model(commit_id=model_info["latest_commit_id"])
+            if commit_row:
+                main_root = PATH.JF_MAIN_STORAGE_PATH.format(
+                    STORAGE_NAME=workspace_info["main_storage_name"],
+                    WORKSPACE_NAME=workspace_info["name"],
+                )
+                runs_dir = (
+                    f"{main_root}/models/{model_info['name']}/commit_models/"
+                    f"{commit_row['name']}/runs"
+                )
+                if os.path.exists(runs_dir):
+                    run_paths = sorted(
+                        _glob.glob(os.path.join(runs_dir, "*")),
+                        key=os.path.getmtime,
+                        reverse=True,
+                    )
+                    if run_paths:
+                        parsed, latest_step = await parse_tensorboard_scalars_async(
+                            log_dir=run_paths[0], max_steps=50,
+                        )
+                        if latest_step and int(latest_step) > 0:
+                            return int(latest_step)
+    except Exception:
+        pass
+
+    return 0
+
+
 async def get_model_fine_tuning(model_id : int) -> dict:
-    
+
     model_info = await db_model.get_model(model_id=model_id)
+
+    # 외부 학습 모델은 dataset/commit/configuration 파이프라인이 없다.
+    # FineTuning 탭은 진입 시 frontend 에서 외부 학습 탭으로 redirect 하지만,
+    # backend 호출이 leakage 로 들어와도 minimal payload 만 반환해 IndexError/
+    # TypeError 를 회피한다.
+    if (model_info or {}).get("training_type") == "external":
+        # steps_per_epoch — frontend FineTuningGraph 의 "1 Epoch = N steps" 표시용.
+        # partner /train/status 의 total_steps (학습 시작 시 정확) 우선,
+        # tracker cleanup 후엔 events.out.tfevents 의 train/loss last step fallback.
+        steps_per_epoch = 0
+        job_id = model_info.get("external_job_id")
+        if job_id:
+            steps_per_epoch = await _resolve_external_steps_per_epoch(model_info, job_id)
+        return {
+            "model_id" : model_info["id"],
+            "model_name" : model_info["name"],
+            "training_type" : "external",
+            "external_manifest_name" : model_info.get("external_manifest_name"),
+            "external_manifest_version" : model_info.get("external_manifest_version"),
+            "external_job_id" : model_info.get("external_job_id"),
+            "steps_per_epoch" : steps_per_epoch,
+            "commit_model_count" : 0,
+            "model_datasets" : [],
+            "model_config_file_list" : [],
+            "latest_commit_info" : None,
+            "resource_info" : None,
+            "fine_tuning_config" : None,
+        }
+
+    # 멀티모달(VLM) 모델은 메타데이터-only 행(commit/folder 없음, training_type='internal').
+    # 내부 FT 경로가 latest_commit_id(=NULL) 를 deref 하면 TypeError(리뷰 CRITICAL) →
+    # external 과 동형으로 minimal payload 조기 반환. (Phase 2 에서 Multimodal 탭 전용 surface)
+    if (model_info or {}).get("load_type") == "multimodal":
+        # 데이터셋 바인딩은 commit deref 와 무관 → 실제 조회해 surface(스텁이 []로 하드코딩해
+        # 바인딩돼도 "없음"으로 보이던 버그 수정). commit/folder 의존 필드만 None 유지.
+        mm_datasets = await db_model.get_model_datasets(model_id=model_id)
+        mm_dataset_parse = []
+        for md in mm_datasets:
+            dpath = md["training_data_path"]
+            full = PATH.JF_DATA_DATASET_DATA_PATH.format(STORAGE_NAME=md["data_storage_name"],
+                WORKSPACE_NAME=md["workspace_name"], ACCESS=md["access"],
+                DATASET_NAME=md["dataset_name"], DATA_PATH=dpath)
+            mm_dataset_parse.append({
+                "id": md["id"], "dataset_name": md["dataset_name"],
+                "model_file_path": dpath, "data_exist": await check_file_exists(file_path=full),
+            })
+        # 자원 섹션(InstanceSetting) 용 실측값 — 아래 하우스(single LLM) 경로와 동일한 3단계.
+        # MM 은 하우스와 같은 POST models/fine-tuning/run → running_fine_tuning →
+        # update_model_fine_tuning_instance 를 타므로 model 행에 instance_id/instance_count 가
+        # 영속돼 값이 실재한다(external 은 external_job_id 만 쓰므로 None 유지가 맞다).
+        # instance_id 미배정(학습 이력 없음) 이면 하우스와 동일하게 {} → FE 가드가 대시 표시.
+        instance_info = db_instance.get_instance(instance_id=model_info["instance_id"])
+        resource_info = await workspace_resource.get_workspace_instance_total_info(instance_id=model_info["instance_id"], workspace_id=model_info["workspace_id"], instance_allocate=model_info["instance_count"], resource_limit=[{
+            "cpu_limit" : instance_info["cpu_allocate"]*model_info["instance_count"],
+            "ram_limit" : instance_info["ram_allocate"]*model_info["instance_count"],
+        }]) if  model_info["instance_id"] else {}
+        return {
+            "model_id" : model_info["id"],
+            "model_name" : model_info["name"],
+            "training_type" : "internal",
+            "load_type" : "multimodal",
+            "huggingface_model_id" : model_info.get("huggingface_model_id"),
+            # 엔진이 update_steps_per_epoch 로 기록한 실값(=샘플수). FineTuningGraph "1 Epoch = N steps"
+            # + sse-time 진행률 분모. 스텁 0 하드코딩이 "1 Epoch = 0 steps" 로 보이던 버그 수정.
+            "steps_per_epoch" : model_info.get("steps_per_epoch") or 0,
+            "commit_model_count" : 0,
+            "model_datasets" : mm_dataset_parse,
+            "model_config_file_list" : [],
+            "latest_commit_info" : None,
+            "resource_info" : resource_info,
+            "fine_tuning_config" : None,
+        }
+
     workspace_info = await db_model.get_workspace_model(workspace_id=model_info["workspace_id"])
     if model_info["latest_fine_tuning_config"] is None:
         fine_tuning_config = FineTuningConfig().model_dump()
@@ -981,9 +3641,21 @@ async def get_model_fine_tuning(model_id : int) -> dict:
         "latest_commit_info" : {
             "id" : latest_commit_info["id"],
             "name" : latest_commit_info["name"]
-        }
+        },
+        # External training marker — FineTuning 탭의 frontend 가 이 값을 보고
+        # 외부 학습 모델이면 안내 + 외부 학습 탭으로 redirect 한다.
+        "training_type" : model_info.get("training_type") or "internal",
+        "external_manifest_name" : model_info.get("external_manifest_name"),
+        "external_manifest_version" : model_info.get("external_manifest_version"),
+        "external_job_id" : model_info.get("external_job_id"),
         # "fine_tuning_log" : log_parser
     }
+
+async def get_fine_tuning_status(model_id : int) -> dict:
+    # GenAI 통합 파이프라인 런타임의 internal FT 진행 폴링용 경량 s2s 조회.
+    # latest_fine_tuning_status (pending/running/done/stop/error) 만 반환.
+    model_info = await db_model.get_model(model_id=model_id)
+    return {"status": (model_info or {}).get("latest_fine_tuning_status")}
 
 async def running_fine_tuning(model_id : int, model_dataset_id : int, instance_id : int, instance_count : int,\
     gpu_count : int, fine_tuning_config : FineTuningConfig = FineTuningConfig()) -> True:
@@ -996,9 +3668,17 @@ async def running_fine_tuning(model_id : int, model_dataset_id : int, instance_i
     # 3. pod info에 추가 
     redis_client = await get_redis_client_async()
     model_info = await db_model.get_model(model_id=model_id)
+    # 멀티모달(VLM): 생성 시 compose_vlm 잡이 비전+LLM 을 LLaVA 로 조립해 NFS(latest_checkpoint)
+    # 적재 + 초기 커밋 생성 → 일반 FT 경로 진입 가능. VLM 2-stage 엔진을 타도록 vlm=1 강제
+    # (FE config 누락 방어; 스케줄러가 vlm=1 → VLM 스크립트 디스패치).
+    if (model_info or {}).get("load_type") == "multimodal":
+        fine_tuning_config.vlm = 1
+        # vlm_stage1_epochs=0 은 FE 의 "stage1(projector) 스킵" 의도 → 보존. 미전송(None)만 기본값.
+        if getattr(fine_tuning_config, "vlm_stage1_epochs", None) is None:
+            fine_tuning_config.vlm_stage1_epochs = 1.0
     workspace_info = await db_model.get_workspace_model(workspace_id=model_info["workspace_id"])
-    
-    model_pod_status = await redis_client.hget(redis_key.WORKSPACE_PODS_STATUS, model_info["workspace_id"]) 
+
+    model_pod_status = await redis_client.hget(redis_key.WORKSPACE_PODS_STATUS, model_info["workspace_id"])
     if model_pod_status:
         model_pod_status = json.loads(model_pod_status)
     else:
@@ -1300,15 +3980,22 @@ async def sse_get_fine_tuning_result_graph(model_id : int, request : Request):
                     workspace_info = await db_model.get_workspace_model(workspace_id=model_info["workspace_id"])
                     log_path = PATH.JF_MODEL_LOG_PATH.format(STORAGE_NAME=workspace_info["main_storage_name"], \
                         WORKSPACE_NAME=workspace_info["name"], MODEL_NAME=model_info["name"])
-                    
+                    # 모델명 traversal 방어 — 로그 경로가 워크스페이스 models 루트 밖이면 거부(보안 M-4).
+                    _models_root = PATH.JF_MAIN_STORAGE_PATH.format(STORAGE_NAME=workspace_info["main_storage_name"], WORKSPACE_NAME=workspace_info["name"]) + "/models"
+                    if not _is_under(log_path, _models_root):
+                        break
+
                     result = None
                     if model_info["steps_per_epoch"]:
                         try:
-                            log_parser, _ = await parse_tensorboard_scalars_async(log_dir=log_path)
+                            log_parser, latest_step = await parse_tensorboard_scalars_async(log_dir=log_path)
                             # 파싱 결과가 비어있지 않은 경우에만 사용
                             if log_parser and len(log_parser) > 0:
+                                # ⑩ 체크포인트 step 점 마킹(저장 디렉토리 스캔 + save_steps 추정).
+                                ckpt_steps = await _model_checkpoint_steps(model_info, workspace_info, latest_step)
                                 result = {
-                                    "graph" : log_parser
+                                    "graph" : log_parser,
+                                    "checkpoints" : ckpt_steps,
                                 }
                             else:
                                 # 파싱 결과가 비어있으면 이전 결과 유지
@@ -1374,14 +4061,37 @@ async def sse_get_fine_tuning_time(model_id : int, request : Request):
             workspace_info = await db_model.get_workspace_model(workspace_id=model_info["workspace_id"])
             log_path = PATH.JF_MODEL_LOG_PATH.format(STORAGE_NAME=workspace_info["main_storage_name"], \
                 WORKSPACE_NAME=workspace_info["name"], MODEL_NAME=model_info["name"])
+            # 모델명 traversal 방어 — 로그 경로가 워크스페이스 models 루트 밖이면 거부(보안 M-4).
+            _models_root = PATH.JF_MAIN_STORAGE_PATH.format(STORAGE_NAME=workspace_info["main_storage_name"], WORKSPACE_NAME=workspace_info["name"]) + "/models"
+            if not _is_under(log_path, _models_root):
+                break
             config_json =model_info.get("latest_fine_tuning_config") if model_info.get("latest_fine_tuning_config") else "{}"
             config = json.loads(config_json)
             
             if model_info["steps_per_epoch"]:
-                total_step = model_info["steps_per_epoch"] * config["num_train_epochs"]
+                spe = model_info["steps_per_epoch"]
+                # VLM 2-stage 는 stage1(projector)+stage2(LM) 가 단일 연속 step 타임라인(엔진이 step
+                # 누적 기록) → 전체 epoch = stage2(num_train_epochs) + stage1(vlm_stage1_epochs).
+                # 텍스트 FT(vlm 미설정)는 num_train_epochs 그대로 → 동작 불변.
+                total_epochs = config.get("num_train_epochs", 0) or 0
+                if config.get("vlm"):
+                    s1 = config.get("vlm_stage1_epochs", 0) or 0
+                    if s1 and s1 > 0:
+                        total_epochs += s1
+                total_step = spe * total_epochs if total_epochs else spe
                 _, latest_steps = await parse_tensorboard_scalars_async(log_dir=log_path)
                 latest_step = latest_steps
-                if latest_steps:
+                if latest_steps and total_step and latest_step >= total_step:
+                    # 완료 도달 — calculate_remaining_time_with_ema 는 total<=current 에서 ValueError 를
+                    # 던져 SSE 스트림이 100% 직전에 끊겼음(codex). EMA 호출 없이 완료 페이로드 반환.
+                    result = {
+                        "total_epoch" : total_epochs,
+                        "start_datetime" : model_info["start_datetime"],
+                        "progress_epoch" : total_epochs,
+                        "percent" : 100,
+                        "remaining_time" : 0,
+                    }
+                elif latest_steps:
                     remaining_time, new_time_per_step = calculate_remaining_time_with_ema(
                         start_time=datetime.datetime.strptime(model_info["start_datetime"], TYPE.TIME_DATE_FORMAT),
                         current_time=datetime.datetime.now().timestamp(),
@@ -1392,15 +4102,16 @@ async def sse_get_fine_tuning_time(model_id : int, request : Request):
                     )
                     last_time_per_step = new_time_per_step
                     result = {
-                        "total_epoch" : config.get("num_train_epochs", 0),
+                        "total_epoch" : total_epochs,
                         "start_datetime" : model_info["start_datetime"],
-                        "progress_epoch" : latest_step//total_step,
-                        "percent" : round((latest_step/total_step) * 100, 2),
+                        # 완료 epoch 수(기존 latest_step//total_step 은 완료 직전까지 0 인 버그) → //spe.
+                        "progress_epoch" : min(total_epochs, latest_step // spe) if spe else 0,
+                        "percent" : round(min(100.0, (latest_step / total_step) * 100), 2) if total_step else 0,
                         "remaining_time" : remaining_time,
                     }
                 else:
                     result = {
-                        "total_epoch" : config.get("num_train_epochs", 0),
+                        "total_epoch" : total_epochs,
                         "start_datetime" : model_info["start_datetime"],
                         "progress_epoch" : 0,
                         "percent" : 0,

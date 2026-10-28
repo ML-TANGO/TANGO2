@@ -21,10 +21,31 @@
   box-sizing: border-box;
   cursor: pointer;
 
-  &:focus {
+  // 마우스 클릭에는 링이 뜨지 않도록 :focus-visible 사용.
+  &:focus-visible {
     outline: 1px solid $blue104;
     border-radius: 8px;
     outline-offset: 1px;
+  }
+
+  // 접근 불가 카드 — 목록에는 남기되 "들어갈 수 없음"을 시각적으로 명시.
+  // grayscale 은 이 파일의 기존 관례(.active.stop::before)를 따른다.
+  // 카드 내부 버튼(수정/삭제/즐겨찾기)도 함께 비활성화해 오조작을 막고,
+  // 클릭은 카드 루트로만 전달돼 안내 토스트가 뜬다.
+  &.no-access {
+    cursor: not-allowed;
+    filter: grayscale(1);
+    opacity: 0.5;
+
+    // 포커스 링은 지우지 않는다 — 이 카드는 여전히 <button> 이라 Tab 으로 도달하고
+    // Enter/Space 로 활성화된다(클릭 시 "접근 권한이 없습니다" 안내가 뜨는 의도된 동작).
+    // outline: none 을 주면 키보드 사용자가 포커스 위치를 알 수 없다(WCAG 2.4.7).
+
+    .btn-cont {
+      // 마우스 오조작만 막는다. 키보드 도달은 못 막으므로 실제 차단은 핸들러에서 한다
+      // (Model.jsx 의 moveToModelDetail·handleEdit·modelDelete 의 isAccess 가드).
+      pointer-events: none;
+    }
   }
 
   &.active {
@@ -89,6 +110,91 @@
         width: 16px;
         height: 16px;
       }
+      // D6 v3 (Option A): 배포 상태 배지 — 점(dot)+라벨. 색상은 status 별 modifier.
+      .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-family: SpoqaM;
+        font-size: 12px;
+        line-height: 12px;
+        color: $mono204;
+
+        &::before {
+          content: '';
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background-color: currentColor;
+        }
+
+        &.running {
+          color: $lime604;
+        }
+        &.pending {
+          color: $blue104;
+        }
+        &.stopped {
+          color: $mono204;
+        }
+        &.error {
+          color: $red502;
+        }
+        // 평가 런이 끝난 상태 — 살아 있는 running(초록)과 구분되는 종료 색.
+        &.completed {
+          color: $blue104;
+        }
+      }
+      .type-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 8px;
+        border-radius: 6px;
+        font-family: SpoqaM;
+        font-size: 11px;
+        line-height: 11px;
+        border: 1px solid $mono203;
+        background: $mono201;
+        color: $mono205;
+
+        &.cluster {
+          border-color: rgba($blue104, 0.4);
+          background: rgba($blue104, 0.08);
+          color: $blue104;
+        }
+        &.edge {
+          border-color: rgba($lime604, 0.4);
+          background: rgba($lime604, 0.1);
+          color: $lime604;
+        }
+        // 모델 타입 칩 — 멀티모달(액센트) / 단일(중립).
+        &.multimodal {
+          border-color: rgba($blue104, 0.4);
+          background: rgba($blue104, 0.08);
+          color: $blue104;
+        }
+        &.single {
+          border-color: $mono203;
+          background: $mono201;
+          color: $mono205;
+        }
+        // 평가 유형 칩 — 공용 기본값과 기존 모델/배포 kind 는 유지하고 평가 kind 만 추가한다.
+        &.benchmark {
+          border-color: rgba($blue104, 0.4);
+          background: rgba($blue104, 0.08);
+          color: $blue104;
+        }
+        &.judge {
+          border-color: rgba($orange403, 0.4);
+          background: rgba($orange403, 0.08);
+          color: $orange403;
+        }
+        &.expert {
+          border-color: rgba($lime604, 0.4);
+          background: rgba($lime604, 0.1);
+          color: $lime604;
+        }
+      }
     }
     .btn-cont {
       display: flex;
@@ -102,7 +208,8 @@
         height: 24px;
         border: none;
         background-color: initial;
-        &:focus {
+        // 마우스 클릭에는 링이 뜨지 않도록 :focus-visible 사용.
+        &:focus-visible {
           outline: 1px solid $blue104;
           border-radius: 8px;
           outline-offset: 1px;

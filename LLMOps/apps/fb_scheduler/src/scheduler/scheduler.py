@@ -243,6 +243,27 @@ def get_used_gpu_uuid(label_select: str):
                         used_gpu_uuid.append(db_node.get_node_gpu(gpu_id=gpu_id)["gpu_uuid"])
     return list(set(used_gpu_uuid))
 
+def _is_registered_gpu(gpu_uuid : str) -> bool:
+    """이 설치의 자원 풀(node_gpu)에 등록된 GPU 인가.
+
+    Redis 의 GPU 풀은 DCGM(Prometheus)에서 오므로 **노드의 물리 GPU 전부**를 담는다.
+    한 노드에 두 설치(운영 서빙 / 개발)가 얹혀 있으면 상대 설치가 쓰는 GPU 도 그 풀에
+    들어오는데, `used_info` 는 이 설치가 스스로 배정한 기록이라 상대의 사용을 모른다.
+
+    등록되지 않은 GPU 를 후보로 내보내면 뒤에서 조용히 사라진다: llm_run 이 uuid 를
+    node_gpu 로 검증하며 버리고, 그러면 NVIDIA_VISIBLE_DEVICES 가 비어 파드가 **노드의
+    GPU 전부를 보게** 된다. 그 파드는 남의 GPU 를 물고 OOM 으로 죽으면서도 k8s 로는
+    Running 이라 원인이 어디에도 남지 않는다(실측: cuda:0 여유 6.16GB → 엔진 초기화 실패).
+
+    같은 이름의 함수가 scheduler_update.py 에도 있다(구 사본). 실행되는 것은 이 쪽이다
+    — main.py 가 scheduler.scheduler 를 임포트한다.
+    """
+    try:
+        return bool(db_node.get_node_gpu(gpu_uuid=gpu_uuid))
+    except Exception:
+        return False
+
+
 def get_available_gpus_by_model(model_name, data, instance_id):
     node_list = db_node.get_node_instance_list(instance_id=instance_id)
     node_name_list = [node["node_name"] for node in node_list]
@@ -252,6 +273,7 @@ def get_available_gpus_by_model(model_name, data, instance_id):
         for node_name, gpus in data.items()
         for gpu_uuid, gpu in gpus.items()
         if gpu['model_name'] == model_name and not gpu['used_info'] and node_name in node_name_list
+           and _is_registered_gpu(gpu_uuid)
     ]
     return available_gpus
 
@@ -262,11 +284,21 @@ def acked(err, msg):
         print("Message produced: %s" % (str(msg)))
 
 def try_json_deserializer(data):
+    """Kafka message → dict. tombstone / 빈 페이로드 / 디코드 실패 시 None.
+
+    이전 구현은 except 안에서 같은 `json.loads(data)` 를 또 호출해 traceback
+    raise → consumer reinitialize 무한 loop. fix: graceful None 반환 후
+    caller 에서 skip.
+    """
+    if data is None or data == b"" or data == "":
+        return None
     try:
-        return json.loads(data.decode('utf-8'))
-    except (json.JSONDecodeError, AttributeError):
-        print("디코드 오류", file=sys.stderr)
+        if isinstance(data, (bytes, bytearray)):
+            return json.loads(data.decode("utf-8"))
         return json.loads(data)
+    except (json.JSONDecodeError, AttributeError, UnicodeDecodeError) as e:
+        print(f"디코드 오류 (skip): {e}", file=sys.stderr)
+        return None
 
 def get_gpu_auto_select(gpu_count: int, pod_count: int, gpu_data: list):
     # 결과를 저장할 리스트
@@ -422,6 +454,11 @@ def kafka_consume_msgs(consumer, kafka_admin, redis_client, type_id_map):
         
         for msg in msgs:
             pod_info = try_json_deserializer(msg.value())
+            if pod_info is None:
+                # tombstone / 디코드 실패 — skip 후 다음 메시지 처리 (consumer
+                # 재초기화 loop 방지)
+                logging.info("kafka message decode failed or empty, skipping")
+                continue
             logging.info(f"[kafka polled msg] pod_info: {json.dumps(pod_info, ensure_ascii=False)}")
             # 메시지에서 workspace_id 추출
             ws_id = pod_info.get("workspace_id") or pod_info.get("metadata_workspace_id")

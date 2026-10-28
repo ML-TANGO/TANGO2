@@ -1,0 +1,7 @@
+# SP-1 FastAPI 래퍼 deps. torch/transformers/gguf/numpy 는 베이스 이미지
+# (ghcr.io/ggml-org/llama.cpp:full) 가 제공하므로 여기 명시하지 않는다.
+fastapi>=0.111.0,<1.0.0
+uvicorn[standard]>=0.29.0,<1.0.0
+pydantic>=2.0.0,<3.0.0
+# SDS(eva-vlm) LoRA merge — 어댑터 저장 버전(peft 0.18.1)과 맞춘다.
+peft==0.18.1

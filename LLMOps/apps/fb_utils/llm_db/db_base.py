@@ -116,33 +116,33 @@ def get_conn_dummy_db():
 
 @contextmanager
 def get_db_top():
+    conn = None
     try:
-        conn = None
         conn, *_ = get_conn_db_top()
         yield conn
     finally:
-        conn.close()
-        pass
+        if conn is not None:
+            conn.close()
 
 @contextmanager
 def get_db():
+    conn = None
     try:
-        conn = None
         conn, *_ = get_conn_db()
         yield conn
     finally:
-        conn.close()
-        pass
+        if conn is not None:
+            conn.close()
 
 @contextmanager
 def get_dummy_db():
+    conn = None
     try:
-        conn = None
         conn, *_ = get_conn_dummy_db()
         yield conn
     finally:
-        conn.close()
-        pass
+        if conn is not None:
+            conn.close()
 
 def set_db_max_connections(max_connections):
     """

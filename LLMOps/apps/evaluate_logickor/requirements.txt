@@ -1,0 +1,6 @@
+# SP-1 FastAPI 래퍼 deps 만. 집계는 표준 라이브러리(json/glob)로 하므로 torch·transformers·
+# vllm·pandas 가 전부 불필요하다 — LogicKor 생성·심판 단계의 무거운 핀과 이 이미지를
+# 분리해 두는 것이 이 컨테이너의 요점이다.
+fastapi>=0.111.0,<1.0.0
+uvicorn[standard]>=0.29.0,<1.0.0
+pydantic>=2.0.0,<3.0.0

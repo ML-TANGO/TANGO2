@@ -1,4 +1,6 @@
 import sys, os, traceback, re, uvicorn, aiofiles, os, time, httpx, traceback
+import base64, binascii
+from io import BytesIO
 from fastapi import FastAPI, Request, HTTPException
 from contextlib import asynccontextmanager
 sys.path.append('/addlib')
@@ -14,7 +16,7 @@ import torch
 from vllm import LLM, AsyncEngineArgs, AsyncLLMEngine, SamplingParams
 from peft import PeftModel 
 from huggingface_hub import login
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, AutoProcessor
 import ray
 from langchain_core.load import dumpd, dumps, load, loads
 from langchain_core.prompts import PromptTemplate
@@ -28,11 +30,50 @@ LLM_TOKENIZER = None
 LLM_MODEL = None  # CPU 모드용 transformers 모델
 USE_TRANSFORMERS_DIRECT = False  # CPU 모드 플래그
 
+# ── VLM(이미지 입력) 지원 ────────────────────────────────────────────────────
+# 모델이 이미지를 받을 수 있는지는 AutoProcessor 에 image_processor 가 붙는지로 판별한다.
+# config 의 model_type 목록으로 가르면 새 아키텍처가 나올 때마다 목록을 쫓아다녀야 한다.
+LLM_PROCESSOR = None
+IS_VLM = False
+# 한 요청에 넣을 수 있는 이미지 수. vLLM 은 기본 1장이라 명시하지 않으면 2장째에서 거부한다.
+# 이미지 토큰은 수백~수천 개라 max_model_len(8192 cap) 을 빠르게 먹는다 — 늘릴 때 함께 본다.
+MAX_IMAGES_PER_PROMPT = int(os.environ.get("LLM_MAX_IMAGES_PER_PROMPT") or 4)
+# 이미지 1장의 원본 바이트 상한. 프레임 한 장이 수십 KB~수 MB 라 넉넉히 두되,
+# 무제한이면 요청 하나가 파드 메모리를 밀어낸다.
+MAX_IMAGE_BYTES = int(os.environ.get("LLM_MAX_IMAGE_BYTES") or 12 * 1024 * 1024)
+
+# vLLM 이 확보할 GPU 메모리 비율. 기본값은 종전과 같은 0.90 이다.
+# 이 값은 **전체 용량 기준**인데 vLLM 은 **여유 메모리**와 비교해 검사하므로, 다른
+# 워크로드가 같은 GPU 를 조금이라도 쓰고 있으면 기동이 거부된다. 서빙과 물리 노드를
+# 공유하는 클러스터에서는 낮춰 띄울 수 있어야 한다.
+GPU_MEMORY_UTILIZATION = float(os.environ.get("LLM_GPU_MEMORY_UTILIZATION") or 0.90)
+
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
+def _load_processor(model_ref, auth_token):
+    """(processor, is_vlm). 이미지를 받을 수 있는 모델이면 processor 를 함께 쥔다.
+
+    VLM 은 토크나이저만으로 프롬프트를 만들 수 없다 — 모델마다 이미지 자리표시자와
+    chat template 이 달라(LLaVA `<image>`, Qwen-VL `<|vision_start|>` …) processor 의
+    apply_chat_template 에 맡겨야 계열이 늘어도 이 코드가 그대로 돈다.
+
+    텍스트 모델에서는 processor 로딩이 실패하거나 image_processor 가 없다 → is_vlm=False
+    로 떨어지고 기존 동작이 그대로 유지된다.
+    """
+    try:
+        proc = AutoProcessor.from_pretrained(model_ref, token=auth_token, trust_remote_code=True)
+    except Exception as e:
+        print(f"[vlm] processor 없음 → 텍스트 모델로 취급: {type(e).__name__}: {e}")
+        return None, False
+    has_image = getattr(proc, "image_processor", None) is not None
+    print(f"[vlm] processor 로드됨 (image_processor={'있음' if has_image else '없음'})")
+    return proc, bool(has_image)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global LIFESPAN_STATUS, LLM_ENGINE, LLM_SAMPLING_PARAM, LLM_TOKENIZER
+    global LLM_PROCESSOR, IS_VLM
     try:
         # model =========================================================
         model_type = settings.LLM_MODEL_TYPE 
@@ -52,6 +93,7 @@ async def lifespan(app: FastAPI):
                 LLM_TOKENIZER = AutoTokenizer.from_pretrained(input_model, token=input_auth)
             except:
                 pass
+            LLM_PROCESSOR, IS_VLM = _load_processor(input_model, input_auth)
 
         elif model_type == "commit":
             input_model = "/model"
@@ -66,6 +108,11 @@ async def lifespan(app: FastAPI):
                 LLM_TOKENIZER = AutoTokenizer.from_pretrained(input_tokenizer)
             except:
                 pass
+            # 프로세서는 모델 디렉터리에서 찾는다 — 이미지 전처리 설정(preprocessor_config.json)이
+            # 토크나이저가 아니라 모델 쪽에 붙는다. 없으면 /tokenizer 로 한 번 더 시도.
+            LLM_PROCESSOR, IS_VLM = _load_processor(input_model, None)
+            if not IS_VLM:
+                LLM_PROCESSOR, IS_VLM = _load_processor(input_tokenizer, None)
 
         # lora
         if enable_lora:
@@ -142,15 +189,54 @@ async def lifespan(app: FastAPI):
                 pipeline_parallel_size = gpu_server_count
 
             print('----------------------')
-            # max_model_len 자동 계산: 큰 모델의 경우 KV cache 크기 제한
-            # GPU blocks에서 사용 가능한 토큰 수 기반으로 설정
-            max_model_len = 96  # 기본값: 32K tokens (대부분의 use case에 충분)
-            
+            # max_model_len: 모델 config 에서 자동 유도하되 상한 cap.
+            #   - cap 이유: 32K/128K 컨텍스트 모델은 KV cache 가 GPU 메모리를 넘겨 기동 실패.
+            #   - config 값이 cap 보다 작으면(짧은 컨텍스트 모델) 그 값을 그대로 사용해야 함
+            #     (모델 한도를 넘겨 지정하면 vLLM 이 기동 시 거부).
+            #   과거 상수 96 하드코딩 → 96 토큰 초과 프롬프트가 전부 ValueError 로 실패했음.
+            MAX_MODEL_LEN_CAP = 8192
+            max_model_len = MAX_MODEL_LEN_CAP
+            try:
+                from transformers import AutoConfig
+                # gated/private HF repo 는 토큰 없으면 401 → 조용히 cap 폴백되어
+                # 모델 실한도보다 큰 값을 지정하게 됨(vLLM 기동 거부). 토크나이저와 동일 토큰 사용.
+                _cfg = AutoConfig.from_pretrained(
+                    input_model,
+                    token=input_auth if model_type == "huggingface" else None,
+                    trust_remote_code=True)
+                # config 필드명은 모델 계열마다 다름 — 대표 alias 를 순서대로 확인
+                #   (미인식 시 cap 폴백 → 짧은 컨텍스트 모델이면 vLLM 기동 거부되므로 넓게 커버)
+                _model_max = None
+                for _k in ("max_position_embeddings", "max_sequence_length",
+                           "max_seq_len", "seq_length", "n_positions", "model_max_length"):
+                    _v = getattr(_cfg, _k, None)
+                    if isinstance(_v, int) and _v > 0:
+                        _model_max = _v
+                        break
+                if isinstance(_model_max, int) and _model_max > 0:
+                    max_model_len = min(_model_max, MAX_MODEL_LEN_CAP)
+            except Exception:
+                traceback.print_exc()
+                print(f"max_model_len 자동 유도 실패 → cap({MAX_MODEL_LEN_CAP}) 사용")
+            print(f"max_model_len = {max_model_len}")
+
+
+            try:
+                _free, _total = torch.cuda.mem_get_info(device_id)
+                _need = GPU_MEMORY_UTILIZATION * _total
+                print(f"[gpu] free={_free/2**30:.1f}GiB / total={_total/2**30:.1f}GiB, "
+                      f"요구={_need/2**30:.1f}GiB (utilization={GPU_MEMORY_UTILIZATION})")
+                if _need > _free:
+                    print("[gpu] 경고: 요구량이 여유 메모리를 넘습니다 — 같은 GPU 를 쓰는 다른 "
+                          "워크로드가 있으면 LLM_GPU_MEMORY_UTILIZATION 을 낮춰야 기동됩니다")
+            except Exception:
+                pass
+
             engine_args = AsyncEngineArgs(
                 model=input_model,
                 # quantization="AWQ",
                 tensor_parallel_size=tensor_parallel_size, # 노드 당 gpu 수
-                gpu_memory_utilization=0.90, # gpu 메모리 사용량
+                gpu_memory_utilization=GPU_MEMORY_UTILIZATION, # gpu 메모리 사용량
                 trust_remote_code=True,
                 enable_prefix_caching=True,
                 dtype=gpu_dtype,
@@ -158,8 +244,14 @@ async def lifespan(app: FastAPI):
                 distributed_executor_backend=distributed_executor_backend,
                 pipeline_parallel_size=pipeline_parallel_size, # 노드수
                 max_model_len=max_model_len,  # KV cache OOM 방지
+                # VLM 은 명시하지 않으면 이미지 1장까지만 받는다(2장째부터 요청 거부).
+                # 텍스트 모델에 이 인자를 주면 vLLM 이 거부하므로 VLM 일 때만 붙인다.
+                **({"limit_mm_per_prompt": {"image": MAX_IMAGES_PER_PROMPT}} if IS_VLM else {}),
                 # ray일때 device는 자동
             )
+            if IS_VLM:
+                print(f"[vlm] 멀티모달 서빙 활성 — 이미지 최대 {MAX_IMAGES_PER_PROMPT}장/요청, "
+                      f"max_model_len={max_model_len}")
             # TODO !!!!
             # pipeline_parallel_size 노드수
             # tensor_parallel_size 노드 당 gpu수
@@ -243,7 +335,55 @@ async def get_dataset_input(dataset_id, filename):
 # =======================================================================
 # playground 
 # =======================================================================
-async def run_playground(test_input, session_id, db_id):
+def _decode_images(raw_images):
+    """[base64 | data URI] → [PIL.Image]. 못 읽는 항목은 그 자리에서 거부한다.
+
+    조용히 건너뛰면 모델이 이미지를 못 본 채로 그럴듯한 답을 지어내고, 화면에는
+    정상 응답으로 보인다 — 이미지 기반 생성에서 가장 위험한 실패 방식이다.
+    """
+    from PIL import Image
+    images = []
+    for i, item in enumerate(raw_images or []):
+        if not isinstance(item, str) or not item.strip():
+            raise ValueError(f"images[{i}]: 빈 값이거나 문자열이 아닙니다")
+        payload = item.strip()
+        if payload.startswith("data:"):
+            # data:image/jpeg;base64,XXXX — 헤더를 떼고 본문만 쓴다
+            _, _, payload = payload.partition(",")
+        try:
+            blob = base64.b64decode(payload, validate=True)
+        except (binascii.Error, ValueError) as e:
+            raise ValueError(f"images[{i}]: base64 로 읽지 못했습니다 ({e})")
+        if len(blob) > MAX_IMAGE_BYTES:
+            raise ValueError(f"images[{i}]: 이미지가 너무 큽니다 "
+                             f"({len(blob)} bytes > {MAX_IMAGE_BYTES})")
+        try:
+            img = Image.open(BytesIO(blob))
+            img.load()
+        except Exception as e:
+            raise ValueError(f"images[{i}]: 이미지로 열지 못했습니다 ({type(e).__name__}: {e})")
+        images.append(img.convert("RGB"))
+    if len(images) > MAX_IMAGES_PER_PROMPT:
+        raise ValueError(f"이미지가 {len(images)}장입니다 — 한 요청에 최대 "
+                         f"{MAX_IMAGES_PER_PROMPT}장까지 (LLM_MAX_IMAGES_PER_PROMPT 로 조정)")
+    return images
+
+
+def _build_vlm_prompt(text, images):
+    """모델의 chat template 로 이미지 자리표시자를 박은 프롬프트 문자열.
+
+    자리표시자를 우리가 직접 넣지 않는 이유: LLaVA 는 `<image>`, Qwen-VL 은
+    `<|vision_start|>…` 처럼 계열마다 다르고 개수·위치 규칙도 다르다. processor 가
+    그 규칙을 안다.
+    """
+    content = [{"type": "image"} for _ in images]
+    content.append({"type": "text", "text": text})
+    messages = [{"role": "user", "content": content}]
+    return LLM_PROCESSOR.apply_chat_template(
+        messages, add_generation_prompt=True, tokenize=False)
+
+
+async def run_playground(test_input, session_id, db_id, images=None):
     """result stream 방식?"""
     result = None
     global LLM_ENGINE, LLM_SAMPLING_PARAM, LLM_MODEL, USE_TRANSFORMERS_DIRECT, LLM_TOKENIZER
@@ -320,6 +460,22 @@ async def run_playground(test_input, session_id, db_id):
             generated_tokens = outputs[0][inputs['input_ids'].shape[1]:]
             result = LLM_TOKENIZER.decode(generated_tokens, skip_special_tokens=True).strip()
             
+        elif images:
+            # GPU 모드 + 이미지 = VLM. 이미지가 왔는데 모델이 못 받으면 여기서 끊는다 —
+            # 이미지를 버리고 텍스트만으로 답하면 사람은 모델이 이미지를 봤다고 믿는다.
+            if not IS_VLM:
+                raise RuntimeError(
+                    "이 모델은 이미지 입력을 받지 못합니다(멀티모달 프로세서 없음). "
+                    "VLM 모델로 배포하거나 이미지 없이 요청하세요.")
+            prompt_string = _build_vlm_prompt(test_input, images)
+            result_generator = LLM_ENGINE.generate(
+                {"prompt": prompt_string, "multi_modal_data": {"image": images}},
+                sampling_params=LLM_SAMPLING_PARAM, request_id=session_id)
+            outputs = None
+            async for r in result_generator:
+                outputs = r
+            result = outputs.outputs[0].text.strip()
+
         else:
             # GPU 모드: vLLM 사용
             if settings.LLM_RUN_PROMPT:
@@ -383,6 +539,25 @@ async def post_llm(request: Request):
     test_dataset_filename = data.get("test_dataset_filename")
     test_question = data.get("test_question")
     session_id = data.get("session_id") # history 관리
+    # 프롬프트 최적화 산출물(선택). 플랫폼이 활성 최적화를 실어 보내면 샘플마다 앞에 붙인다.
+    #   질문 1건은 플랫폼이 이미 조립해 test_question 으로 주지만, 데이터셋 일괄은
+    #   여기(래퍼)가 데이터셋을 직접 읽어 샘플을 만들므로 플랫폼에 조립 지점이 없다
+    #   → 그 조립을 여기서 한다. 없으면(None) 종전과 완전히 동일하게 동작한다.
+    system_prompt = data.get("system_prompt")
+    # 이미지 입력(선택). 서빙 파드에는 데이터셋 마운트가 없으므로 호출부가 base64 로 실어 보낸다.
+    #   images: ["<base64>", "data:image/jpeg;base64,..."]
+    # 없으면(None) 종전과 완전히 동일하게 텍스트 경로로 동작한다.
+    raw_images = data.get("images") or []
+    try:
+        images = _decode_images(raw_images)
+    except ValueError as e:
+        # 잘못된 이미지는 400 으로 즉시 돌려준다 — 무시하고 텍스트로 답하면 호출부가
+        # 이미지를 반영한 결과로 오해한다.
+        raise HTTPException(status_code=400, detail=str(e))
+    if images and not IS_VLM:
+        raise HTTPException(
+            status_code=400,
+            detail="이 모델은 이미지 입력을 받지 못합니다(멀티모달 프로세서 없음).")
     try:
         # test input
         if test_type == "dataset":
@@ -396,7 +571,12 @@ async def post_llm(request: Request):
             _, db_id = await db.insert_playground_test(playground_id=settings.LLM_PLAYGROUND_ID, type=test_type)
             start_time = time.time()
             # test
-            output = await run_playground(test_input=_input, session_id=session_id, db_id=db_id)
+            #   조립 형식은 플랫폼 _apply_active_prompt_optimization 과 반드시 같아야 한다 —
+            #   컨테이너 산출물이 "Query: …\nResponse: …" 쌍으로 끝나므로 사용자 입력도
+            #   같은 형식으로 이어야 few-shot 패턴이 유지된다.
+            _prompt = f"{system_prompt}\n\nQuery: {_input}\nResponse:" if system_prompt else _input
+            output = await run_playground(test_input=_prompt, session_id=session_id,
+                                          db_id=db_id, images=images)
             end_time = time.time()
             # result
             data = {

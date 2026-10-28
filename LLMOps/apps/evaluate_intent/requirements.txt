@@ -1,0 +1,19 @@
+# MixATIS 평가 런타임. LogicKor 채점기와 달리 vLLM 이 없다 —
+# 원본이 transformers generate(greedy) 로 재고, 지표 정의가 거기 묶여 있기 때문이다.
+# 엔진을 바꾸면 샘플링·패딩 처리가 달라져 점수가 갈린다.
+#
+# ⚠️ transformers 상한 필수: 5.x 는 TrainingArguments 에서 warmup_ratio 를 제거했고
+#    (2026-08-25 실측) 원본 학습 스크립트와 계열을 맞추기 위해 4.x 로 고정한다.
+#    torch 2.5+ 는 bitsandbytes 4bit 로더가 쓰는 nn.Module.set_submodule() 때문에 필요.
+--extra-index-url https://download.pytorch.org/whl/cu121
+torch==2.5.1
+transformers>=4.51.0,<5
+accelerate>=0.30.0
+# use_4bit 파라미터를 쓸 때만 필요하지만, 런타임에 없으면 그 경로가 죽으므로 함께 넣는다.
+bitsandbytes>=0.43.0
+# 0.2.0 학습 단계(LoRA SFT)와 평가 시 어댑터 로드 양쪽에 필요하다.
+# 원본 train_qwen3_mixatis.py 와 evaluate_qwen3_mixatis.py 가 같은 하한을 쓴다.
+peft>=0.11.0
+# 원본 학습 스크립트가 `from datasets import Dataset` 로 토큰화 데이터셋을 만든다.
+# 평가만 하던 0.1.0 에는 필요 없어 빠져 있었다(0.2.0 이미지 검증에서 ModuleNotFoundError).
+datasets>=2.18.0

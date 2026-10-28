@@ -14,5 +14,5 @@ spec:
             name: {{ .Values.global.jfb.name.model }}-svc
             port:
               number: 80
-        path: /api/(models)(.*)
+        path: /api/(models|external)(.*)
         pathType: Prefix

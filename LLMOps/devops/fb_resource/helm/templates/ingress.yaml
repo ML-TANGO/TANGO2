@@ -14,5 +14,31 @@ spec:
             name: {{ .Values.global.jfb.name.resource }}-svc
             port:
               number: 80
-        path: /api/(storage|gpu|networks|nodes|pod|resources|records)(.*)
+        path: /api/(storage|gpu|networks|nodes|pod|resources|records|edge/workers|edge/labels|edge/ops-token)(.*)
+        pathType: Prefix
+---
+# SP-8 §5.3 — 디바이스-facing heartbeat 전용 라우트. 위 admin 라우트(세션/key-auth)와
+# 분리해야 하는 이유: device 는 Kong consumer 자격이 없고 자체 Bearer 토큰만 가짐 →
+# 이 라우트는 fb_ingress_management ALLOWED_PATH 에 등록해 key-auth 를 면제하고
+# (백엔드 Bearer 검증이 실 게이트), rate-limiting + request-size-limiting 로 익명
+# 인터넷 표면을 방어한다. ⚠️ 라이브 apply 는 실 device 연동(2차년도) 시점까지 보류.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Values.global.jfb.name.resource }}-device-api
+  namespace: {{ .Values.global.jfb.namespace }}
+  annotations:
+    konghq.com/regex-priority: "15"   # admin 라우트보다 우선(경로 겹침 방지)
+    konghq.com/plugins: "edge-device-rate-limit,edge-device-size-limit"
+spec:
+  ingressClassName: {{ .Values.global.jfb.settings.external.ingressClassName }}
+  rules:
+  - http:
+      paths:
+      - backend:
+          service:
+            name: {{ .Values.global.jfb.name.resource }}-svc
+            port:
+              number: 80
+        path: /api/edge/devices(.*)
         pathType: Prefix

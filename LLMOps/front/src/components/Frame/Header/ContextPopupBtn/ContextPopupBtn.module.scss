@@ -13,7 +13,9 @@
   margin: 0;
   border: none;
   background-color: transparent;
-  box-sizing: none;
+  // `none` 은 무효 값이라 무시돼 content-box(48+padding=78px)로 렌더됐다.
+  // 팝업이 `top: 48px` 를 전제하므로(Popup/UserSettingsPopup) border-box 가 의도.
+  box-sizing: border-box;
   overflow: hidden;
   cursor: pointer;
   .arrow {

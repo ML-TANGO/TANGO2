@@ -210,10 +210,26 @@ async def get_preprocessing_file_list(preprocessing_id: int, is_dist : bool = Fa
         return response(status=0, message=str(e), result=[])
 
 @options.get("/preprocessing/data", summary='데이터셋 데이터 - 데이터셋 -> 데이터', tags=TAG_PREPROCESSING)
-async def get_dataset_data_option(dataset_id: int, search: str = None):
+async def get_dataset_data_option(dataset_id: int, search: str = None, extension: str = None):
+    """데이터셋 안의 데이터 목록.
+
+    `extension` 이 없으면 기존 그대로 계층(hierarchy) 트리를 준다 — 기존 호출부 무변경.
+
+    `extension`(쉼표구분, 예: `.json`)을 주면 **데이터셋 루트의 해당 확장자 파일만**
+    평면 목록으로 준다(get_data_root_files). 계층 응답은 최상위 항목이 수백 개인
+    데이터셋에서 수 분이 걸리고(실측 3분+ 미완) 디렉터리당 cap 이 정렬 전에 걸려
+    정작 찾는 json 이 빠진다(실측 0건). `search` 는 이 분기에서 쓰지 않는다 —
+    평면 glob 경로는 traversal 이 재현돼(하위 디렉터리명 + `../`) 쓰지 않는다.
+    """
     try:
         # cr=CustomResource()
-        res = await svc.get_dataset_data_list(dataset_id=dataset_id, search=search, hierarchy=True)
+        extension_list = [e.strip() for e in extension.split(",") if e.strip()] if extension else []
+        res = await svc.get_dataset_data_list(
+            dataset_id=dataset_id,
+            extension_list=extension_list,
+            search=search,
+            hierarchy=not extension_list,
+        )
         return response(status=1, result=res)
     except Exception as e:
         traceback.print_exc()

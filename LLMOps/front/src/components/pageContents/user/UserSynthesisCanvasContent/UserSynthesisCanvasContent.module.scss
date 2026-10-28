@@ -1,0 +1,93 @@
+@import '@src/styles/color.scss';
+@import '@src/styles/focus.scss';
+
+.cont {
+  padding: 32px 40px;
+}
+
+.back-to-list {
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  width: max-content;
+
+  padding: 0;
+  border: 0;
+  background: none;
+  appearance: none;
+  cursor: pointer;
+
+  @include focus-ring;
+
+  .back-btn-image {
+    width: 16px;
+    height: 16px;
+  }
+  .back-btn-label {
+    font-size: 16px;
+    font-style: normal;
+    font-weight: 700;
+    line-height: 16px;
+    color: $mono208;
+    font-family: SpoqaB;
+    margin-left: 4px;
+  }
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.title {
+  font-size: 24px;
+  font-weight: 700;
+  color: $blue107;
+}
+
+.status {
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7280;
+
+  &.running { color: #8b5cf6; }
+  &.completed { color: #00c775; }
+  &.failed { color: #ef4444; }
+}
+
+.desc {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 8px 0 20px;
+}
+
+.canvas {
+  height: 480px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fafafa;
+}
+
+.node {
+  text-align: center;
+}
+
+.node-key {
+  font-size: 12px;
+  font-weight: 700;
+  color: #8b5cf6;
+}
+
+.node-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 2px 0;
+}
+
+.node-desc {
+  font-size: 11px;
+  color: #9ca3af;
+}

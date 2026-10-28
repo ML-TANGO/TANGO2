@@ -6,7 +6,6 @@ import { useDispatch } from 'react-redux';
 
 // Actions
 import { closeModal } from '@src/store/modules/modal';
-import useIntervalCall from '@src/hooks/useIntervalCall';
 
 // Network
 import { callApi, network, STATUS_SUCCESS } from '@src/network';
@@ -18,34 +17,52 @@ import classNames from 'classnames/bind';
 import style from './FineTuningSystemLogModal.module.scss';
 
 const cx = classNames.bind(style);
+const SYSTEM_LOG_REQUEST_TIMEOUT_MS = 12000;
 
 const FineTuningSystemLogModal = ({ data, type }) => {
   // External-mode callers pass `{ jobId, manifestName, mode: 'external' }`;
   // internal callers pass `{ modelId, modelName }` and `mode` defaults to 'internal'.
   // For external v1.0.0 the BFF returns a platform-side placeholder string —
   // raw partner log streaming lands when ETRI v1.0.1 exposes /train/log.
-  const { modelId, modelName, jobId, manifestName, mode = 'internal' } = data;
+  // 레시피 호출자는 `{ modelId, phaseId, mode: 'external' }` 를 함께 넘긴다 — 조회
+  // 단위가 job 이 아니라 phase 라, 활성 job 이 없는(=이미 끝난) phase 도 열려야 한다.
+  const {
+    modelId,
+    modelName,
+    jobId,
+    manifestName,
+    phaseId,
+    mode = 'internal',
+  } = data;
   const isExternal = mode === 'external';
-  const targetId = isExternal ? jobId : modelId;
+  const isPhase = isExternal && Boolean(phaseId);
+  // phase 모드의 조회 키는 modelId 다(jobId 는 없을 수 있다) — jobId 로 두면
+  // 아래 `!targetId` 가드에서 조기 반환돼 완료 phase 가 빈 화면이 된다.
+  const targetId = isPhase || !isExternal ? modelId : jobId;
   const displayName = isExternal ? manifestName : modelName;
   const dispatch = useDispatch();
   const isFirstFetch = useRef(true);
   const isPendingRef = useRef(false);
   const [log, setLog] = useState('');
+  // 실제 로그 여부 — BFF 가 실 파일을 읽었을 때만 'showing last N lines' 헤더를 붙인다.
+  // 로그가 없어 안내 문구만 온 경우(구버전 컨테이너 런 등)는 내려받을 파일이 없으므로
+  // 다운로드를 막는다. 조회 갱신 로직도 같은 신호로 placeholder 를 판별한다.
+  const hasRealLog =
+    !isExternal || (typeof log === 'string' && log.includes('showing last'));
   const [loading, setLoading] = useState(true);
-  const [footerMessage, setFooterMessage] = useState('');
-  const [isPending, setIsPending] = useState(false);
+  const footerMessage = '';
 
   const { t } = useTranslation();
 
   const onClickDownload = async () => {
-    if (isExternal) {
-      // v1.0.0 BFF doesn't expose a download endpoint; the button is disabled,
-      // so this branch is defensive only.
-      return;
-    }
+    // 조회는 모달 폴링용이라 마지막 200 줄만 받는다. 다운로드는 전문을 받아야 하므로
+    // 별도 endpoint 를 탄다 — external 도 내부와 같은 응답 헬퍼를 쓰므로 처리가 같다.
     const { data, status } = await network.callApiWithPromise({
-      url: `models/fine-tuning/system-log/download?model_id=${modelId}`,
+      url: isPhase
+        ? `external/models/${modelId}/phases/${phaseId}/system-log/download`
+        : isExternal
+          ? `external/jobs/${jobId}/system-log/download`
+          : `models/fine-tuning/system-log/download?model_id=${modelId}`,
       method: 'GET',
     });
 
@@ -53,7 +70,11 @@ const FineTuningSystemLogModal = ({ data, type }) => {
       const url = window.URL.createObjectURL(new Blob([data]));
       const link = document.createElement('a');
       link.href = url;
-      link.download = `[Finetuning]No.${modelId}.log`;
+      link.download = isPhase
+        ? `[Phase]${phaseId}.log`
+        : isExternal
+          ? `[External]${jobId}.log`
+          : `[Finetuning]No.${modelId}.log`;
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
@@ -66,31 +87,82 @@ const FineTuningSystemLogModal = ({ data, type }) => {
   const getSystemLog = useCallback(async () => {
     if (isPendingRef.current) return;
     isPendingRef.current = true;
-    setIsPending(true);
     if (isFirstFetch.current) {
       setLoading(true);
     }
-    const url = isExternal
-      ? `external/jobs/${targetId}/system-log`
-      : `models/fine-tuning/system-log?model_id=${targetId}`;
-    const response = await callApi({
-      url,
-      method: 'get',
-    });
-
-    const { status, result, message, error } = response;
-
-    if (status === STATUS_SUCCESS) {
-      setLog(result);
-    } else {
-      errorToastMessage(error, message);
+    if (!targetId) {
+      setLog('');
+      if (isFirstFetch.current) {
+        setLoading(false);
+        isFirstFetch.current = false;
+      }
+      isPendingRef.current = false;
+      return;
     }
-    if (isFirstFetch.current) {
-      setLoading(false);
-      isFirstFetch.current = false;
+    const url = isPhase
+      ? `external/models/${targetId}/phases/${phaseId}/system-log`
+      : isExternal
+        ? `external/jobs/${targetId}/system-log`
+        : `models/fine-tuning/system-log?model_id=${targetId}`;
+    const controller = new AbortController();
+    let didTimeout = false;
+    const timeoutId = setTimeout(() => {
+      didTimeout = true;
+      controller.abort();
+    }, SYSTEM_LOG_REQUEST_TIMEOUT_MS);
+
+    try {
+      const response = await callApi({
+        url,
+        method: 'get',
+        signal: controller.signal,
+      });
+
+      const { status, result, message, error } = response;
+
+      if (status === STATUS_SUCCESS) {
+        // 동시 폴링 부하로 간헐적으로 placeholder(train.log 미발견)가 올 수 있다.
+        // 실제 로그(BFF 헤더에 'showing last')이거나 아직 표시할 로그가 없을 때만
+        // 갱신 — placeholder/빈값으로 이미 표시 중인 실제 로그를 덮어쓰지 않는다
+        // (flicker 방지).
+        setLog((prev) => {
+          if (!result) return prev;
+          if (!isExternal) return result;
+          const prevIsTimeout =
+            typeof prev === 'string' &&
+            prev.startsWith('[platform] system-log request timed out');
+          if (
+            result.includes('showing last') ||
+            !prev ||
+            prev.length === 0 ||
+            prevIsTimeout
+          ) {
+            return result;
+          }
+          return prev;
+        });
+      } else if (didTimeout) {
+        setLog((prev) =>
+          prev && prev.length > 0
+            ? prev
+            : `[platform] system-log request timed out after ${
+                SYSTEM_LOG_REQUEST_TIMEOUT_MS / 1000
+              }s.\nThe backend is still reachable only after the log endpoint responds.`,
+        );
+      } else {
+        errorToastMessage(error, message);
+      }
+    } finally {
+      clearTimeout(timeoutId);
+      if (isFirstFetch.current) {
+        setLoading(false);
+        isFirstFetch.current = false;
+      }
+      isPendingRef.current = false;
     }
-    isPendingRef.current = false;
-  }, [targetId, isExternal]);
+  // phase 모드에선 targetId 가 modelId 라 phase 를 바꿔도 안 변한다 — phaseId/isPhase 를
+  // 빼면 (이 모달은 최소화해도 언마운트되지 않으므로) 이전 phase 로그를 계속 폴링한다.
+  }, [targetId, isExternal, isPhase, phaseId]);
 
   useEffect(() => {
     getSystemLog();
@@ -99,7 +171,7 @@ const FineTuningSystemLogModal = ({ data, type }) => {
       if (!isPendingRef.current) {
         getSystemLog();
       }
-    }, 1000);
+    }, 3000);
 
     return () => clearInterval(intervalId);
   }, [getSystemLog]);
@@ -127,9 +199,7 @@ const FineTuningSystemLogModal = ({ data, type }) => {
             size='l'
             colorType='skyblue'
             label={t('logDownload.label')}
-            disabled={
-              isExternal || loading || !log || log.length === 0
-            }
+            disabled={loading || !log || log.length === 0 || !hasRealLog}
             onClick={onClickDownload}
           />
         </div>

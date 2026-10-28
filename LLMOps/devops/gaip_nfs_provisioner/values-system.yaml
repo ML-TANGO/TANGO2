@@ -9,9 +9,9 @@ imagePullSecrets: []
 
 nfs:
   # *********** JFB CUSTOM ***********
-  server: 
-  path: 
-  mountOptions: 
+  server: <NFS_SERVER_IP>                      # [필수] NFS 서버 IP
+  path: <NFS_PROVISIONER_SYSTEM_PATH>          # [필수] 시스템 PVC 가 만들어질 NFS export 경로
+  mountOptions:
   volumeName: jonathan-system
   # Reclaim policy for the main nfs volume
   reclaimPolicy: Retain

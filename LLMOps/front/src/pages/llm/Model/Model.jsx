@@ -70,6 +70,12 @@ function Model() {
     if (status === STATUS_SUCCESS) {
       if (result) {
         const newModels = result.map((v) => {
+          // 카드 타입 칩: 멀티모달(내부 VLM=load_type / 도메인 SDS=domain) vs 단일(single).
+          // training_type='external' 자체로 판별하지 않음 — 추후 SDM/SDF 도 external 이라 오분류 방지.
+          const kind =
+            v.load_type === 'multimodal' || v.domain === 'SDS'
+              ? 'multimodal'
+              : 'single';
           return {
             ...v,
             createTime: v.create_datetime,
@@ -79,8 +85,14 @@ function Model() {
             subTitle: v.description,
             isBookMark: v.bookmark,
             isAccess: v.is_access ? 1 : 0,
+            // 자물쇠 표식은 원본 access(0=비공개)로 판정한다. 위 isAccess 는 "내가
+            // 접근 가능한가"라 접근 가능한 비공개 모델에는 자물쇠가 뜨지 않았다.
+            // (회색처리·클릭차단·수정/삭제 가드는 계속 isAccess 를 쓴다 — 의미가 다름)
+            isPrivate: v.access === 0,
             status: v.status?.fine_tuning === 'running' ? 'active' : null,
             userList: v?.users,
+            kind,
+            typeBadge: kind,
           };
         });
         setModels((prevModels) => {
@@ -128,16 +140,11 @@ function Model() {
     async (e, id, isAccess, userList, constructor) => {
       e.stopPropagation();
 
+      // 진입/수정 모두 BE is_access 단일 판정 사용 (관리자 OR 소유자 OR 모델 멤버).
+      // 이전엔 여기서 userName/userList 로 규칙을 재구현해 BE 게이트와 어긋났다.
       if (isAccess === 0) {
-        if (userName !== constructor) {
-          const isEditAccess = userList.find(
-            ({ user_name }) => user_name === userName,
-          );
-          if (!isEditAccess) {
-            toast.error('접근 권한이 없습니다.');
-            return;
-          }
-        }
+        toast.error('접근 권한이 없습니다.');
+        return;
       }
 
       const prevModelData = await getModels().then((res) =>
@@ -159,7 +166,10 @@ function Model() {
             userList: transformUserList,
             prevModelData,
             isAccess,
-            handleRefresh: async () => await getModels(),
+            // prop 이름은 EditModel 이 구조분해하는 `refresh` 와 반드시 같아야 한다.
+            // handleRefresh 로 넘기면 저장 성공 후 refresh() 가 TypeError 로 죽어
+            // 목록이 재조회되지 않고 "수정이 반영 안 됨"으로 보인다(ADD_MODEL 과 동일 규약).
+            refresh: async () => await getModels(),
           },
         }),
       );
@@ -170,8 +180,17 @@ function Model() {
   /**
    * 모델 삭제
    */
-  const modelDelete = (e, id, title) => {
+  const modelDelete = (e, id, title, isAccess) => {
     e.stopPropagation();
+
+    // 진입/수정과 같은 BE is_access 단일 판정을 삭제에도 적용한다. Card 는 접근 불가 카드의
+    // 버튼을 pointer-events 로만 막아 키보드(Tab+Enter)로는 여전히 도달하므로, 핸들러에서
+    // 막지 않으면 접근 권한 없는 모델을 지울 수 있다. (BE DELETE /models 의 authZ 부재는
+    // 플랫폼 posture 차원 과제 — 이 가드는 UI 오조작 차단이며 보안 경계가 아니다.)
+    if (isAccess === 0) {
+      toast.error('접근 권한이 없습니다.');
+      return;
+    }
 
     dispatch(
       openConfirm({
@@ -218,7 +237,13 @@ function Model() {
 
   const moveToModelDetail = (e, id, constructor, isAccess) => {
     e.stopPropagation();
-    // if (isAccess === 0 && userName !== constructor) return;
+    // 목록 카드는 계속 노출하되 상세 진입만 차단(제품 규칙 2026-07-27).
+    // 판정은 BE 가 내려준 is_access 하나만 신뢰 — 규칙(관리자 OR 소유자 OR 모델 멤버)은
+    // BE user_can_access_model / get_models 의 is_access 에 단일 정의돼 있다.
+    if (isAccess === 0) {
+      toast.error('접근 권한이 없습니다.');
+      return;
+    }
 
     history.push(`/user/workspace/${workspaceId}/model/${id}/info`);
     // if (!e.target.closest('button') && !e.target.closest('.event-block')) {
@@ -251,6 +276,9 @@ function Model() {
         handleEdit={handleEdit}
         handleOnClickCard={moveToModelDetail}
         handleDelete={modelDelete}
+        // 접근 불가 모델(관리자·소유자·멤버 아님)은 카드는 보이되 회색+클릭불가.
+        // is_access 는 BE 가 정본 규칙으로 계산해 내려준다(user_can_access_model 과 동일).
+        disableNoAccess
       />
     </div>
   );

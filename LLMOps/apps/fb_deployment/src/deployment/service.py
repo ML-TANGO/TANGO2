@@ -28,6 +28,14 @@ from utils.msa_db import db_user, db_deployment, db_workspace, db_instance, db_p
 
 from deployment import dto
 from utils import topic_key
+from utils import kong_helper  # SP-Deployment(D6) §12 클러스터 API 게시
+from utils import deployment_api  # 게시(D6) 공용 teardown core (llm_playground lifecycle 과 공유)
+from utils.llm_db.db_base import get_db as get_llm_db
+from utils.deployment_api import (
+    external_route_path as _external_route_path,
+    api_consumer_name as _api_consumer_name,
+    teardown_deployment_api,
+)
 
 from confluent_kafka import Producer
 from confluent_kafka.admin import AdminClient, NewTopic
@@ -683,7 +691,13 @@ def delete_deployment(deployment_ids, headers_user):
             except Exception as e:
                 traceback.print_exc()
                 pass
-            
+
+            # SP-D6 §12: 외부 API 게시 상태(Kong consumer/key/plugin) 정리 — 실패해도 삭제 진행
+            try:
+                unpublish_deployment_api(deployment_id)
+            except Exception:
+                traceback.print_exc()
+
             # 내부 메모리 call_count_chart 삭제
             try:
                 del DEPLOYMENT_CALL_CHART[deployment_id]
@@ -1277,6 +1291,14 @@ def stop_deployment(deployment_id):
             res, message = uninstall_all_deployment(workspace_id=deployment_info["workspace_id"], deployment_id=deployment_id)
         except:
             print(message)
+
+        # SP-D6 §12: 중지 시 외부 API 게시 비활성(enabled=0). consumer/key 유지 → 재시작 후 재게시 시 키 안정.
+        # (중지된 route 는 helm uninstall 로 제거되며 key-auth plugin 도 함께 사라짐)
+        try:
+            if db_deployment.get_deployment_api(deployment_id):
+                db_deployment.set_deployment_api_enabled(deployment_id, 0)
+        except Exception:
+            traceback.print_exc()
 
         for item in db_deployment.get_deployment_worker_list(deployment_id=deployment_id, running=True):
             # ==========DB 업데이트===========================
@@ -3050,3 +3072,260 @@ def uninstall_all_deployment(workspace_id, deployment_id):
 #         if per_hour_info_list:
 #             worker_num_of_log_per_hour_info_list += per_hour_info_list
 #     return worker_num_of_log_per_hour_info_list
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# SP-Deployment(D6) §12 — 클러스터 배포 API 게시
+#   배포 서빙은 이미 Kong route(/deployment/{api_path})로 노출됨.
+#   게시 = 그 route 에 key-auth plugin 부착 + consumer/key 발급(외부 소비자=키 필수).
+#   내부 추론(Inference)은 ClusterIP 직접 호출이라 키 불필요(§12.6).
+# ════════════════════════════════════════════════════════════════════════════
+# 게시(D6) prefix/route-path/consumer 식별자 + teardown 은 utils.deployment_api 로 이동
+# (llm_playground stop/delete lifecycle 과 공유·분기 방지). _external_route_path /
+# _api_consumer_name 은 상단 import 의 alias, EXTERNAL_API_PREFIX 는 그 모듈 상수.
+
+
+def _ingress_base_url():
+    """게시 URL 의 {protocol}://{host}[:port]. get_deployment_full_api_address 와 동일한
+    settings(EXTERNAL_HOST/PORT/REDIRECT)를 사용 — 단 그 함수는 현재 상대경로만 반환하므로
+    이 절대 URL 조립 로직의 첫 실사용처다."""
+    if EXTERNAL_HOST_REDIRECT:
+        return "{}://{}".format(INGRESS_PROTOCOL, EXTERNAL_HOST)
+    return "{}://{}:{}".format(INGRESS_PROTOCOL, EXTERNAL_HOST, EXTERNAL_HOST_PORT)
+
+
+def _public_api_endpoint(api_path):
+    if not api_path:
+        return None
+    return "{}{}".format(_ingress_base_url(), _external_route_path(api_path))
+
+
+def _get_deployment_or_404(deployment_id):
+    """배포 조회 + 존재 확인.
+
+    게시 authZ = **플랫폼의 열린 posture 정합**(2026-07-15 사용자 결정 B): 이전엔 소유자
+    전용(owner != 요청자 → Forbidden)이었으나, 이 플랫폼은 workspace/deployment access
+    check 가 전반적으로 비활성(공개 playground·워크스페이스 공유)이라 게시만 owner-gate 인 게
+    불일치였다(비소유자·admin의 타 워크스페이스 미접근으로 게시 불가). 이제 라우트의 get_auth
+    (미인증 400) 인증만 요구하고 소유권은 보지 않는다. 존재하지 않는 배포는 404.
+    """
+    dep = db_deployment.get_deployment(deployment_id=deployment_id)
+    if not dep:
+        raise ItemNotExistError("Deployment not found")
+    return dep
+
+
+def _resolve_dual_session_for_deployment(deployment_id):
+    """playground primary deployment이면 저장 링크에서 dual 부모 id를 찾고, 단일이면 None."""
+    with get_llm_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT p.id, p.model
+              FROM jonathan_llm.playground p
+             WHERE CAST(JSON_UNQUOTE(JSON_EXTRACT(
+                       p.deployment, '$.deployment_playground_id')) AS UNSIGNED)=%s
+             LIMIT 1
+            """,
+            (deployment_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        model = json.loads(row.get("model") or "{}") or {}
+        dual = model.get("dual") or {}
+        if dual.get("mode") == "dual":
+            return row.get("id")
+        if dual.get("role") != "prompt_child" or not dual.get("parent_playground_id"):
+            return None
+        parent_id = dual.get("parent_playground_id")
+        cur.execute(
+            "SELECT model FROM jonathan_llm.playground WHERE id=%s",
+            (parent_id,),
+        )
+        parent = cur.fetchone()
+        parent_dual = (json.loads((parent or {}).get("model") or "{}") or {}).get("dual") or {}
+        return parent_id if parent_dual.get("mode") == "dual" else None
+
+
+def _resolve_external_session_for_deployment(deployment_id):
+    """외부(SDS) 배포의 앵커 행이면 그 playground id, 아니면 None.
+    표시 키 external_anchor 는 llm_playground 가 외부 배포 시작 때 기록한다(EXTERNAL_ANCHOR_KEY)."""
+    with get_llm_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT p.id, p.deployment
+              FROM jonathan_llm.playground p
+             WHERE CAST(JSON_UNQUOTE(JSON_EXTRACT(
+                       p.deployment, '$.deployment_playground_id')) AS UNSIGNED)=%s
+             LIMIT 1
+            """,
+            (deployment_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        deployment = json.loads(row.get("deployment") or "{}") or {}
+        return row.get("id") if deployment.get("external_anchor") else None
+
+
+def publish_deployment_api(deployment_id, headers_user=None):
+    dep = _get_deployment_or_404(deployment_id)  # authZ=인증만(route get_auth), 소유권 무관
+    api_path = dep.get("api_path")
+    if not api_path:
+        raise Exception("Deployment has no api_path (not running or not exposed)")
+    is_playground = dep.get("llm") == TYPE.LLM_DEPLOYMENT_TYPE_TO_INT.get(TYPE.PLAYGROUND_MODEL)
+    dual_playground_id = (
+        _resolve_dual_session_for_deployment(deployment_id)
+        if is_playground
+        else None
+    )
+    # 이중이 우선 — LLM2 가 외부(SDS)여도 이중 합성 경로로 게시해야 LLM1 체인을 지난다.
+    external_playground_id = (
+        _resolve_external_session_for_deployment(deployment_id)
+        if is_playground and not dual_playground_id
+        else None
+    )
+    if dual_playground_id:
+        composite_uri = "/api/playgrounds/dual-session/{}/invoke".format(dual_playground_id)
+    elif external_playground_id:
+        composite_uri = "/api/playgrounds/external-session/{}/invoke".format(external_playground_id)
+    else:
+        composite_uri = None
+    composite_service_created = False
+    if composite_uri:
+        # raw LLM2 service를 게시하면 LLM1 체인을 우회하므로 playground 오케스트레이터를
+        # 배포별 service로 둔다. 배포별 이름이어야 unpublish/delete가 결정적으로 역연산 가능하다.
+        # 외부(SDS)는 앵커 행이라 내부 서빙 route 자체가 없어 같은 방식으로 playground 를 거친다.
+        service_id, composite_service_created = kong_helper.get_or_create_service(
+            deployment_api.composite_service_name(deployment_id),
+            "http://{}".format(LLM_PLAYGROUND_DNS),
+        )
+    else:
+        # 단일은 기존과 동일하게 내부 서빙 route의 service를 그대로 재사용한다.
+        internal_route_id = kong_helper.find_route_id_by_path("/deployment/{}".format(api_path))
+        if not internal_route_id:
+            raise Exception("Kong route not found for /deployment/{} (deployment running?)".format(api_path))
+        service_id = kong_helper.get_route_service_id(internal_route_id)
+        if not service_id:
+            raise Exception("Kong service not found for internal route {}".format(internal_route_id))
+    ext_path = _external_route_path(api_path)
+    consumer = _api_consumer_name(deployment_id)
+    # 이 호출이 새로 만든 것만 롤백하기 위한 사전 상태(N2 동시성 안전)
+    pre_key = kong_helper.get_key_auth(consumer)
+    ext_created = False
+    try:
+        # consumer + ACL group(배포별 1:1) 먼저 — key-auth 는 '유효 키'만 검증하므로
+        # acl(allow=[consumer]) 로 소유 consumer 로 제한해야 교차테넌트 우회를 막는다.
+        kong_helper.get_or_create_consumer(consumer)
+        kong_helper.add_consumer_to_acl_group(consumer, consumer)
+        api_key = kong_helper.get_or_create_key_auth(consumer)
+        # 전용 게시 route(같은 service) 생성 + 인증(key-auth) + 인가(acl=소유 consumer 만).
+        ext_route_id, ext_created = kong_helper.create_route_on_service(
+            service_id, ext_path, name=deployment_api.external_route_name(deployment_id))
+        if composite_uri:
+            kong_helper.attach_plugin(
+                ext_route_id,
+                "request-transformer",
+                {"replace": {"uri": composite_uri}},
+            )
+        kong_helper.attach_key_auth_plugin(ext_route_id)       # 인증: 유효 키 필수(anonymous 없음)
+        kong_helper.attach_acl_plugin(ext_route_id, consumer)  # 인가: 이 consumer 만(교차테넌트 차단)
+        # 남용가드(3b-2): 게시 route 는 외부 노출 → rate/size limiting(config=deployment_api 상수).
+        # best-effort — 인증(key-auth)/인가(acl)는 위에서 이미 부착됐으므로, 가드 부착이 Kong blip 으로
+        # 실패해도 게시(및 롤백)를 깨지 않는다(가드는 보조·멱등 → 다음 publish/rotate 에 자가치유).
+        # route 삭제 시 cascade 제거되므로 별도 teardown 불요.
+        try:
+            kong_helper.attach_plugin(ext_route_id, "rate-limiting", deployment_api.EXTERNAL_RATE_LIMIT_CONFIG)
+            kong_helper.attach_plugin(ext_route_id, "request-size-limiting", deployment_api.EXTERNAL_REQUEST_SIZE_CONFIG)
+        except Exception:
+            traceback.print_exc()  # 가드 부착 실패는 게시를 깨지 않음(auth 는 이미 hard-required)
+        db_res = db_deployment.upsert_deployment_api(deployment_id, consumer, ext_route_id, enabled=1)
+        if not db_res.get("result"):  # N1: Kong 성공 + DB 실패 partial-commit 방지
+            raise Exception("deployment_api persist failed: {}".format(db_res.get("message")))
+    except Exception:
+        # 같은 deployment 를 동시에 게시한 다른 요청이 이미 성공했으면(=행이 enabled 로 존재)
+        # Kong 리소스는 그 요청이 쓰는 중이므로 건드리지 않는다. created_now 플래그는 "내가
+        # 만들었다"만 보장하고 "아직 아무도 안 쓴다"는 보장하지 않아, 그대로 지우면 이미 성공
+        # 응답을 받은 쪽의 엔드포인트가 사라지고(502) 행만 enabled 로 남아 불일치가 된다.
+        try:
+            _peer_published = db_deployment.get_deployment_api(deployment_id)
+        except Exception:
+            traceback.print_exc()
+            _peer_published = None
+        if _peer_published and _peer_published.get("enabled"):
+            raise
+        # 이 호출이 만든 것만 정리(동시 publish 시 타 요청 자원 보존)
+        try:
+            if ext_created:  # route 삭제 시 부착 plugin(key-auth/acl) 도 함께 제거
+                cur = kong_helper.find_route_id_by_path(ext_path)
+                if cur:
+                    kong_helper.delete_route(cur)
+        except Exception:
+            pass
+        try:
+            if not pre_key:
+                kong_helper.delete_key_auths(consumer)
+                kong_helper.delete_consumer(consumer)
+        except Exception:
+            pass
+        if composite_service_created:
+            try:
+                kong_helper.delete_service(
+                    deployment_api.composite_service_name(deployment_id))
+            except Exception:
+                pass
+        raise
+    return {
+        "deployment_id": deployment_id,
+        "endpoint": _public_api_endpoint(api_path),
+        "consumer": consumer,
+        "api_key": api_key,
+        "key_name": kong_helper.KEY_NAMES[0],
+        "enabled": True,
+    }
+
+
+def get_deployment_api_info(deployment_id, headers_user=None):
+    dep = _get_deployment_or_404(deployment_id)  # 존재 확인. 키 반환은 인증 사용자면 허용(공유 게시)
+    row = db_deployment.get_deployment_api(deployment_id)
+    if not row or not row.get("enabled"):
+        return None
+    return {
+        "deployment_id": deployment_id,
+        "endpoint": _public_api_endpoint(dep.get("api_path")),
+        "consumer": row.get("api_consumer"),
+        "api_key": kong_helper.get_key_auth(row.get("api_consumer")),  # Kong fetch(미저장)
+        "key_name": kong_helper.KEY_NAMES[0],
+        "enabled": True,
+        "published_at": row.get("published_at"),
+    }
+
+
+def rotate_deployment_api_key(deployment_id, headers_user=None):
+    _get_deployment_or_404(deployment_id)  # 존재 확인(authZ=인증만)
+    row = db_deployment.get_deployment_api(deployment_id)
+    if not row or not row.get("enabled"):  # M-1: 미게시/해제 상태 회전 금지
+        raise ItemNotExistError("Deployment API not published")
+    api_key = kong_helper.rotate_key_auth(row.get("api_consumer"))
+    db_deployment.set_deployment_api_enabled(deployment_id, 1)  # update_datetime 갱신(회전 이력)
+    return {"deployment_id": deployment_id, "api_key": api_key}
+
+
+def unpublish_deployment_api(deployment_id, headers_user=None):
+    # authZ = 인증만(route get_auth) — 소유자 전용 차단 제거(플랫폼 posture 정합, 결정 B).
+    # headers_user 는 route 호환용(외부 호출 시 전달)이나 소유권엔 미사용. 실제 Kong 리소스 +
+    # deployment_api row 정리는 공용 teardown core 에 위임 — llm_playground stop/delete lifecycle
+    # (headers_user=None)도 같은 core 를 호출한다(분기 방지, 3b-2). teardown 은 멱등이라 존재 확인 불요.
+    errors = []
+    try:
+        teardown_deployment_api(deployment_id)
+    except Exception as e:
+        errors.append(str(e))
+    try:
+        deployment_api.teardown_composite_service(deployment_id)
+    except Exception as e:
+        errors.append("composite service: {}".format(e))
+    if errors:
+        raise Exception("; ".join(errors))

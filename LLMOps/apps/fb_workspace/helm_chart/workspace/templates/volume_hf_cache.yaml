@@ -1,0 +1,44 @@
+{{- /*
+  외부 컨테이너 잡(fb_scheduler helm_chart/external_container pod.yaml)이 무조건 마운트하는 공유 HuggingFace 캐시.
+  값(type·path)이 없으면 만들지 않는다. 같은 이름의 PVC 가 이미 있고 이 릴리스 소유가 아니면(운영자 수동 생성)
+  건드리지 않는다.
+*/ -}}
+{{- $hf := .Values.volume.hfModelCache | default dict }}
+{{- if and $hf.type $hf.path }}
+{{- $existing := lookup "v1" "PersistentVolumeClaim" (include "namespace" .) "hf-model-cache-pvc" }}
+{{- $owner := "" }}
+{{- if $existing }}
+{{- $owner = index ($existing.metadata.annotations | default dict) "meta.helm.sh/release-name" | default "" }}
+{{- end }}
+{{- if or (not $existing) (eq $owner .Release.Name) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hf-model-cache-pvc
+  namespace: {{ include "namespace" . }}
+spec:
+  accessModes:
+    - {{ .Values.system.storage.accessMode }}
+  resources:
+    requests:
+      storage: 500G
+  storageClassName: ""
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: "{{ include "name" . }}-hf-cache-pv"
+spec:
+  accessModes:
+    - {{ .Values.system.storage.accessMode }}
+  capacity:
+    storage: 500G
+  storageClassName: ""
+  persistentVolumeReclaimPolicy: Retain
+  claimRef:
+    name: hf-model-cache-pvc
+    namespace: {{ include "namespace" . }}
+  {{- include "volume.type" $hf | nindent 2 }}
+{{- end }}
+{{- end }}

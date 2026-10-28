@@ -20,9 +20,17 @@
     padding-top: 10px;
     padding-right: 20px;
     .close-btn {
+      // UA 기본 패딩이 아이콘 주위에 남아 있어 제거한다.
+      padding: 0;
       border: none;
       background: none;
       cursor: pointer;
+
+      // 전역 `*:focus { outline: none }` 이 링을 지우므로 :focus-visible 로 되살린다.
+      &:focus-visible {
+        outline: 2px solid $primary-color;
+        outline-offset: 2px;
+      }
     }
   }
   .panel-open-btn {

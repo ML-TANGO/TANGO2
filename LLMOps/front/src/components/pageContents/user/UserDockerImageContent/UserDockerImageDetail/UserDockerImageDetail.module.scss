@@ -10,7 +10,8 @@
       height: 31px;
       font-family: SpoqaR;
       font-size: 24px;
-      color: $mono207;
+      // 24px 상세 제목 색 — 동일 패턴 다수(7곳 중 4곳)와 통일
+      color: $blue107;
     }
     .desc {
       font-family: SpoqaM;

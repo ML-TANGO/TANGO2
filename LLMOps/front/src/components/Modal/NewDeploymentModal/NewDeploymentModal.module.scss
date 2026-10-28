@@ -1,0 +1,129 @@
+/* 모달 콘텐츠 세로 간격 — 섹션 간 넉넉히 */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 4px 2px;
+}
+
+/* 단일/이중 모드 탭 */
+.mode-tabs {
+  display: flex;
+  gap: 10px;
+}
+
+.mode-tab {
+  flex: 1;
+  padding: 10px 0;
+  border: 1px solid #d9dee5;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  color: #6b7280;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    border-color: #7aa7ff;
+  }
+
+  &.active {
+    border-color: #3b82f6;
+    background: #f0f6ff;
+    color: #1d4ed8;
+  }
+}
+
+/* 이중 모드 — 인스턴스 그리드 */
+.res-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.res-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid #d9dee5;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease, background 0.15s ease;
+
+  &:hover {
+    border-color: #7aa7ff;
+  }
+
+  &.selected {
+    border-color: #3b82f6;
+    background: #f0f6ff;
+  }
+}
+
+.res-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.res-meta {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+/* 이중 모드 — 모델별 GPU 수 */
+.gpu-cols {
+  display: flex;
+  gap: 24px;
+}
+
+.chip-row {
+  display: flex;
+  gap: 8px;
+}
+
+.chip {
+  min-width: 40px;
+  padding: 8px 14px;
+  border: 1px solid #d9dee5;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 14px;
+  color: #374151;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+
+  &:hover {
+    border-color: #7aa7ff;
+  }
+
+  &.selected {
+    border-color: #3b82f6;
+    background: #f0f6ff;
+    color: #1d4ed8;
+    font-weight: 600;
+  }
+}
+
+.note {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+.warn {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #dc2626;
+}
+
+.empty {
+  font-size: 13px;
+  color: #9ca3af;
+  padding: 8px 0;
+}

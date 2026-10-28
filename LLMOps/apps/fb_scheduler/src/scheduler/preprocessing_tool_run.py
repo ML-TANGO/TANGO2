@@ -12,6 +12,30 @@ from datetime import datetime
 import re, sys, subprocess, os
 
 
+# 데이터 파이프라인 노드 스크립트 접두어. /built_in/dp_prep.py 처럼 실행되며,
+# 이 접두어를 가진 잡만 /datasets(워크스페이스 data PVC 루트) RO 마운트를 받는다.
+DATA_PIPELINE_SCRIPT_PREFIX = "dp_"
+# 데이터 파이프라인 노드 빌트인 종류. TYPE_BUILT_IN 에 등록하는 것만으로는 부족하고
+# 여기 분기에 걸려야 실행 명령이 만들어진다(안 걸리면 command="" 로 파드만 뜨고 끝).
+DATA_PIPELINE_TFS = {
+    TYPE_BUILT_IN.DP_PREP,
+    TYPE_BUILT_IN.DP_SDS_VIDEO,
+    TYPE_BUILT_IN.DP_SDS_AIS,
+    TYPE_BUILT_IN.DP_SDS_AIS_CLEAN,
+    TYPE_BUILT_IN.DP_SDS_AIS_SCENE,
+    TYPE_BUILT_IN.DP_SDS_JOIN,
+    TYPE_BUILT_IN.DP_FILTER,
+    TYPE_BUILT_IN.DP_SDS_COLREG,
+    TYPE_BUILT_IN.DP_GENERATE,
+    TYPE_BUILT_IN.DP_JUDGE,
+    TYPE_BUILT_IN.DP_ASSEMBLE,
+}
+# 잡의 run_code 로 실행할 수 있는 노드 스크립트. 파이프라인은 노드가 늘어도 전처리
+# 프로젝트가 하나라, 무엇을 실행할지는 엔티티가 아니라 잡이 정한다. 등록된 것만
+# 허용해 /built_in 안의 임의 파일이 실행되지 않게 한다.
+DATA_PIPELINE_SCRIPTS = {TYPE_BUILT_IN.PREPROCESSING_TFS_SCRIPT[tf] for tf in DATA_PIPELINE_TFS}
+
+
 def get_job_parameter(run_parameter, unified_memory):
     parameter = run_parameter
     if unified_memory == 1:
@@ -33,42 +57,48 @@ def job_run_command(run_code_type: str, run_code: str, parameter: str):
 def create_preprocessing_job_pod(preprocessing_job_info : PreprocessingJobPodInfo):
     try:
         os.chdir("/app/helm_chart/") # TODO 나중에 변수화 해야할 듯
-        job_command = f' --set spec.containers.command="{preprocessing_job_info.command}"'
+        job_command = f" --set spec.containers.command={common.helm_set_value(preprocessing_job_info.command)}"
         
         labels_command=""
         for key, val in preprocessing_job_info.labels.model_dump().items():
             if val:
-                labels_command += f" --set labels.{key}={val}"
+                labels_command += f" --set labels.{key}={common.helm_set_value(val)}"
         
         env_command=""
         for key, val in preprocessing_job_info.env.model_dump().items():
             if val:
-                env_command += f" --set spec.containers.env.{key}={val}"
+                env_command += f" --set spec.containers.env.{key}={common.helm_set_value(val)}"
             
         resource_limit_command=""
         for key, val in preprocessing_job_info.resource.model_dump().items():
-            resource_limit_command += f" --set spec.containers.resource.limits.{key}={val}"
+            resource_limit_command += f" --set spec.containers.resource.limits.{key}={common.helm_set_value(val)}"
         nodes_command = ""
         for index, node in enumerate(preprocessing_job_info.cluster):
-            nodes_command += f" --set cluster[{index}].node_name={node.node_name}"
-            nodes_command += f' --set cluster[{index}].device.type="{node.device.device_type}"'
-            nodes_command += f' --set cluster[{index}].device.model="{node.device.model}"'
-            nodes_command += f" --set cluster[{index}].device.count={node.device.count}"
-            nodes_command += f' --set cluster[{index}].device.uuids="{node.device.uuids}"'
-            nodes_command += f' --set cluster[{index}].device.ids="{node.device.ids}"'        
+            nodes_command += f" --set cluster[{index}].node_name={common.helm_set_value(node.node_name)}"
+            nodes_command += f" --set cluster[{index}].device.type={common.helm_set_value(node.device.device_type)}"
+            nodes_command += f" --set cluster[{index}].device.model={common.helm_set_value(node.device.model)}"
+            nodes_command += f" --set cluster[{index}].device.count={common.helm_set_value(node.device.count)}"
+            nodes_command += f" --set cluster[{index}].device.uuids={common.helm_set_value(node.device.uuids)}"
+            nodes_command += f" --set cluster[{index}].device.ids={common.helm_set_value(node.device.ids)}"        
         namespace = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=preprocessing_job_info.labels.workspace_id)
-        command=f"""helm install {preprocessing_job_info.labels.helm_name} prepro_job/ \
-            -n {namespace} \
+        # 데이터 파이프라인 노드(dp_*.py)만 소스 데이터셋이 여러 개일 수 있어 워크스페이스
+        # data PVC 루트를 /datasets 에 RO 로 추가 마운트한다. 기존 빌트인은 /dataset 단일
+        # 마운트만 쓰므로 기본 off — 스크립트 이름으로 가른다(불리언 하나를 run_job 3계층에
+        # 관통시키지 않기 위해. 판정을 바꾸려면 여기 한 곳만 보면 된다).
+        datasets_root = f"/{DATA_PIPELINE_SCRIPT_PREFIX}" in str(preprocessing_job_info.command or "")
+        command=f"""helm install {common.shell_arg(preprocessing_job_info.labels.helm_name)} prepro_job/ \
+            --set datasetsRoot={str(bool(datasets_root)).lower()} \
+            -n {common.shell_arg(namespace)} \
             --set system.namespace={settings.JF_SYSTEM_NAMESPACE} \
-            --set namespace={namespace} \
-            --set owner_name={preprocessing_job_info.owner_name} \
-            --set pod_name={preprocessing_job_info.pod_name} \
+            --set namespace={common.shell_arg(namespace)} \
+            --set owner_name={common.helm_set_value(preprocessing_job_info.owner_name)} \
+            --set pod_name={common.helm_set_value(preprocessing_job_info.pod_name)} \
             --set spec.restartPolicy={preprocessing_job_info.restartPolicy} \
-            --set spec.containers.image={preprocessing_job_info.image} \
+            --set spec.containers.image={common.helm_set_value(preprocessing_job_info.image)} \
             --set total_device_count={preprocessing_job_info.total_device_count} \
-            --set spec.hostname={preprocessing_job_info.hostname} \
-            --set dataset.access={preprocessing_job_info.dataset_access} \
-            --set dataset.name={preprocessing_job_info.dataset_name} \
+            --set spec.hostname={common.helm_set_value(preprocessing_job_info.hostname)} \
+            --set dataset.access={common.helm_set_value(preprocessing_job_info.dataset_access)} \
+            --set dataset.name={common.helm_set_value(preprocessing_job_info.dataset_name)} \
             --set privateRepo={settings.JONATHAN_PRIVATE_REPO_ENABLED} \
             --set privatePip={settings.JONATHAN_PRIVATE_PIP_ENABLED} \
             --set nexusPrefix={settings.JONATHAN_NEXUS_PREFIX} \
@@ -80,7 +110,7 @@ def create_preprocessing_job_pod(preprocessing_job_info : PreprocessingJobPodInf
             
             
         if preprocessing_job_info.cpu_instance_name:
-            command += f"  --set spec.cpu_instance_name={preprocessing_job_info.cpu_instance_name}"
+            command += f"  --set spec.cpu_instance_name={common.helm_set_value(preprocessing_job_info.cpu_instance_name)}"
             
         print(command, file=sys.stderr)
         result = subprocess.run(
@@ -110,25 +140,25 @@ def create_preprocessing_tool_pod(preprocessing_tool_pod : PreprocessingToolPodI
         labels_command=""
         for key, val in preprocessing_tool_pod.labels.model_dump().items():
             if val:
-                labels_command += f" --set labels.{key}={val}"
+                labels_command += f" --set labels.{key}={common.helm_set_value(val)}"
         
         env_command=""
         for key, val in preprocessing_tool_pod.env.model_dump().items():
             if val:
-                env_command += f" --set spec.containers.env.{key}={val}"
+                env_command += f" --set spec.containers.env.{key}={common.helm_set_value(val)}"
             
         resource_limit_command=""
         for key, val in preprocessing_tool_pod.resource.model_dump().items():
-            resource_limit_command += f" --set spec.containers.resource.limits.{key}={val}"
+            resource_limit_command += f" --set spec.containers.resource.limits.{key}={common.helm_set_value(val)}"
         
         nodes_command = ""
         for index, node in enumerate(preprocessing_tool_pod.cluster):
-            nodes_command += f" --set cluster[{index}].node_name={node.node_name}"
-            nodes_command += f' --set cluster[{index}].device.type="{node.device.device_type}"'
-            nodes_command += f' --set cluster[{index}].device.model="{node.device.model}"'
-            nodes_command += f" --set cluster[{index}].device.count={node.device.count}"
-            nodes_command += f' --set cluster[{index}].device.uuids="{node.device.uuids}"'
-            nodes_command += f' --set cluster[{index}].device.ids="{node.device.ids}"'
+            nodes_command += f" --set cluster[{index}].node_name={common.helm_set_value(node.node_name)}"
+            nodes_command += f" --set cluster[{index}].device.type={common.helm_set_value(node.device.device_type)}"
+            nodes_command += f" --set cluster[{index}].device.model={common.helm_set_value(node.device.model)}"
+            nodes_command += f" --set cluster[{index}].device.count={common.helm_set_value(node.device.count)}"
+            nodes_command += f" --set cluster[{index}].device.uuids={common.helm_set_value(node.device.uuids)}"
+            nodes_command += f" --set cluster[{index}].device.ids={common.helm_set_value(node.device.ids)}"
         namespace = TYPE.WORKSPACE_NAMESPACE.format(WORKSPACE_ID=preprocessing_tool_pod.labels.workspace_id)
         
         if settings.EXTERNAL_HOST_REDIRECT:
@@ -137,22 +167,22 @@ def create_preprocessing_tool_pod(preprocessing_tool_pod : PreprocessingToolPodI
             domain = f"{settings.EXTERNAL_HOST}:{settings.EXTERNAL_HOST_PORT}"
         
         
-        command=f"""helm install {preprocessing_tool_pod.labels.helm_name} tools/ \
-            -n {namespace} \
-            --set namespace={namespace} \
+        command=f"""helm install {common.shell_arg(preprocessing_tool_pod.labels.helm_name)} tools/ \
+            -n {common.shell_arg(namespace)} \
+            --set namespace={common.shell_arg(namespace)} \
             --set ingress_class_name={settings.INGRESS_CLASS_NAME} \
-            --set owner_name={preprocessing_tool_pod.owner_name} \
-            --set pod_name={preprocessing_tool_pod.pod_name} \
-            --set service.svc_name={preprocessing_tool_pod.svc_name} \
+            --set owner_name={common.helm_set_value(preprocessing_tool_pod.owner_name)} \
+            --set pod_name={common.helm_set_value(preprocessing_tool_pod.pod_name)} \
+            --set service.svc_name={common.helm_set_value(preprocessing_tool_pod.svc_name)} \
             --set service.port={preprocessing_tool_pod.port} \
-            --set spec.containers.image="{preprocessing_tool_pod.image}" \
+            --set spec.containers.image={common.helm_set_value(preprocessing_tool_pod.image)} \
             --set domain="{domain}" \
-            --set tool_password="{preprocessing_tool_pod.tool_password}" \
+            --set tool_password={common.helm_set_value(preprocessing_tool_pod.tool_password)} \
             --set spec.restartPolicy={preprocessing_tool_pod.restartPolicy}\
             --set total_device_count={preprocessing_tool_pod.total_device_count} \
-            --set spec.hostname={preprocessing_tool_pod.hostname} \
-            --set dataset.access={preprocessing_tool_pod.dataset_access} \
-            --set dataset.name={preprocessing_tool_pod.dataset_name} \
+            --set spec.hostname={common.helm_set_value(preprocessing_tool_pod.hostname)} \
+            --set dataset.access={common.helm_set_value(preprocessing_tool_pod.dataset_access)} \
+            --set dataset.name={common.helm_set_value(preprocessing_tool_pod.dataset_name)} \
             --set privateRepo={settings.JONATHAN_PRIVATE_REPO_ENABLED} \
             --set privatePip={settings.JONATHAN_PRIVATE_PIP_ENABLED} \
             --set nexusPrefix={settings.JONATHAN_NEXUS_PREFIX} \
@@ -165,7 +195,7 @@ def create_preprocessing_tool_pod(preprocessing_tool_pod : PreprocessingToolPodI
             
         
         if preprocessing_tool_pod.cpu_instance_name:
-            command += f"  --set spec.cpu_instance_name={preprocessing_tool_pod.cpu_instance_name}"
+            command += f"  --set spec.cpu_instance_name={common.helm_set_value(preprocessing_tool_pod.cpu_instance_name)}"
         
         print(command, file=sys.stderr)
         
@@ -228,7 +258,7 @@ def create_preprocessing_job(pod_info: dict):
                 device=Accelerator(
                     device_type=resource_type,
                     model=model,
-                    uuids = common.escape_special_chars(",".join(gpu_uuids)),
+                    uuids = ",".join(gpu_uuids),
                     ids = ".".join(map(str, gpu_ids)),
                     count = len(gpu_uuids)
                 )
@@ -301,12 +331,36 @@ def create_preprocessing_job(pod_info: dict):
             parameter += f"--input_data={dataset_data_path}"
             run_command = job_run_command(run_code_type=run_code_type[1:], run_code=run_code, parameter=parameter)
         elif pod_info["built_in_data_tf"] == TYPE_BUILT_IN.IMAGE_AUGMENT:
-            data_path = PATH.JF_PREPROCESSING_DATA_PATH.format(DATA_PATH=pod_info["dataset_data_path"])  
+            data_path = PATH.JF_PREPROCESSING_DATA_PATH.format(DATA_PATH=pod_info["dataset_data_path"])
             parameter += f" --data_path={data_path}"
-            run_code = PATH.JF_PREPROCESSING_BUILT_IN_CODE_PATH.format(RUN_CODE=TYPE_BUILT_IN.PREPROCESSING_TFS_SCRIPT[pod_info["built_in_data_tf"]]) 
+            run_code = PATH.JF_PREPROCESSING_BUILT_IN_CODE_PATH.format(RUN_CODE=TYPE_BUILT_IN.PREPROCESSING_TFS_SCRIPT[pod_info["built_in_data_tf"]])
             _, run_code_type = os.path.splitext(run_code)
             run_command = job_run_command(run_code_type=run_code_type[1:], run_code=run_code, parameter=parameter)
-            
+        elif pod_info["built_in_data_tf"] in (TYPE_BUILT_IN.FORMAT_CONVERT, getattr(TYPE_BUILT_IN, "SDS_LLAVA_CONVERT", None)):
+            # 포맷 변환(FORMAT_CONVERT) + SDS→LLaVA(SDS_LLAVA_CONVERT, Domain) — 둘 다
+            # 입력 데이터셋 경로를 --input_data 로 주입(marker 동형). 출력은 원본 옆 파일(sidecar).
+            dataset_data_path = PATH.JF_PREPROCESSING_DATA_PATH.format(DATA_PATH=pod_info["dataset_data_path"])
+            parameter += f" --input_data={dataset_data_path}"
+            run_code = PATH.JF_PREPROCESSING_BUILT_IN_CODE_PATH.format(RUN_CODE=TYPE_BUILT_IN.PREPROCESSING_TFS_SCRIPT[pod_info["built_in_data_tf"]])
+            _, run_code_type = os.path.splitext(run_code)
+            run_command = job_run_command(run_code_type=run_code_type[1:], run_code=run_code, parameter=parameter)
+        elif pod_info["built_in_data_tf"] in DATA_PIPELINE_TFS:
+            # 데이터 파이프라인 노드(dp_*.py). 다른 빌트인과 달리 스케줄러가 입력 경로를
+            # 덧붙이지 않는다 — 노드 설정은 기능 목록·순서·파라미터가 중첩된 구조라
+            # BE 가 작업 데이터셋에 params.json 을 써 두고 --params_path 하나만 보낸다.
+            #
+            # 실행할 스크립트는 **잡의 run_code** 로 정한다. 전처리 프로젝트는 파이프라인당
+            # 하나라 엔티티의 built_in_data_tf 는 대표값(DP_PREP)일 뿐이고, 그것으로 스크립트를
+            # 고르면 어느 노드를 눌러도 전처리 노드가 돌아 버린다.
+            # 다만 run_code 는 DB 를 거쳐 오므로 등록된 노드 스크립트로 한정한다 —
+            # 그대로 쓰면 /built_in 안의 임의 파일을 실행 경로로 삼을 수 있다.
+            script = os.path.basename(pod_info.get("run_code") or "")
+            if script not in DATA_PIPELINE_SCRIPTS:
+                script = TYPE_BUILT_IN.PREPROCESSING_TFS_SCRIPT[pod_info["built_in_data_tf"]]
+            run_code = PATH.JF_PREPROCESSING_BUILT_IN_CODE_PATH.format(RUN_CODE=script)
+            _, run_code_type = os.path.splitext(run_code)
+            run_command = job_run_command(run_code_type=run_code_type[1:], run_code=run_code, parameter=parameter)
+
     # 생성되는 pod 개수
     labels.pod_count = len(nodes)
     training_pod_info = PreprocessingJobPodInfo(
@@ -376,7 +430,7 @@ def create_preprocessing_tool(pod_info : dict):
                 device=Accelerator(
                     device_type=resource_type,
                     model=model,
-                    uuids = common.escape_special_chars(",".join(gpu_uuids)),
+                    uuids = ",".join(gpu_uuids),
                     ids = ".".join(map(str, gpu_ids)),
                     count = len(gpu_uuids)
                 )
@@ -435,7 +489,7 @@ def create_preprocessing_tool(pod_info : dict):
         env=env,
         port=TYPE.TOOL_PORT[pod_info["tool_type"]],
         svc_name=svc_name,
-        tool_password=common.escape_special_chars(tool_password),
+        tool_password=tool_password,
         resource=resource,
         image=pod_info["image_name"],
         pod_name=unique_pod_name,

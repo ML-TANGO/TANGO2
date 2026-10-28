@@ -54,6 +54,9 @@ def create_workspace_namespace_volume(workspace_id : int , workspace_name: str, 
             --set volume.jfBin.type={settings.JF_VOLUME_BIN_TYPE} \
             --set volume.jfBin.path={settings.JF_VOLUME_BIN_PATH} \
             --set volume.jfBin.server={settings.JF_VOLUME_BIN_SERVER} \
+            --set volume.hfModelCache.type={settings.JF_VOLUME_HF_CACHE_TYPE} \
+            --set volume.hfModelCache.path={settings.JF_VOLUME_HF_CACHE_PATH} \
+            --set volume.hfModelCache.server={settings.JF_VOLUME_HF_CACHE_SERVER} \
             ./workspace"
             #             --set volume.jfData.type={settings.JF_VOLUME_DATA_TYPE} \
             # --set volume.jfData.path={settings.JF_VOLUME_DATA_PATH } \

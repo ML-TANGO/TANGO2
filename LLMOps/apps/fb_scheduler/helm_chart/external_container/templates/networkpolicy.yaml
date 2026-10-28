@@ -1,0 +1,44 @@
+{{- /*
+  external-container/templates/networkpolicy.yaml — 잡 파드 네트워크 격리(opt-in).
+
+  manifest spec.network.isolate=true 일 때만 렌더한다. 모델이 생성한 코드를 실행하는
+  채점기(evaluate-lmeval-code)처럼 밖으로 나갈 이유가 없는 파드를 가둔다.
+    - egress: 전면 차단(DNS 포함). 클러스터 서비스·kube-apiserver·노드 NodePort·인터넷 모두.
+    - ingress: 이 잡을 폴링하는 BFF(jfb-app-external-container, ingress_namespace)에서
+      .Values.port 로만. kubelet 프로브는 호스트 트래픽이라 이 정책과 무관하게 통과한다
+      (Calico 기본 동작 — P0 실측: 2026-09-28, tango-dev-2).
+  podSelector 는 helm_release 로 이 잡의 파드 하나만 고른다(service.yaml 과 같은 키).
+*/ -}}
+{{- if .Values.network.isolate }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Values.pod_name }}-isolate
+  namespace: {{ .Values.namespace }}
+  labels:
+    role: jfb-external-container
+    manifest_name: {{ .Values.manifest.name | quote }}
+    helm_release: {{ .Values.helm_release | quote }}
+spec:
+  podSelector:
+    matchLabels:
+      role: jfb-external-container
+      helm_release: {{ .Values.helm_release | quote }}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  {{- if .Values.network.ingress_namespace }}
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: {{ .Values.network.ingress_namespace | quote }}
+      podSelector:
+        matchLabels:
+          app: jfb-app-external-container
+    ports:
+    - port: {{ .Values.port }}
+      protocol: TCP
+  {{- end }}
+  egress: []
+{{- end }}

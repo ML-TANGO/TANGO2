@@ -1,0 +1,54 @@
+@import '@src/styles/color.scss';
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+/* 배포 상태 연동 메시지 — 색은 상태별로 인라인 style 지정(단일 Message 와 같은 규약).
+   버튼 옆에 놓이므로 줄바꿈을 막아 액션 영역 높이가 흔들리지 않게 한다. */
+.status-message {
+  font-size: 13px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.tab-bar {
+  margin-bottom: 24px;
+}
+
+.section-frame {
+  min-width: 0;
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.section-title {
+  margin: 0;
+  color: $mono207;
+  font-family: SpoqaB;
+  font-size: 18px;
+  line-height: 18px;
+}
+
+.state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 240px;
+}

@@ -1,0 +1,127 @@
+@import '@src/styles/color.scss';
+@import '@src/styles/focus.scss';
+
+.cont {
+  padding: 32px 40px;
+}
+
+.back-to-list {
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  width: max-content;
+
+  padding: 0;
+  border: 0;
+  background: none;
+  appearance: none;
+  cursor: pointer;
+
+  @include focus-ring;
+
+  .back-btn-image {
+    width: 16px;
+    height: 16px;
+  }
+  .back-btn-label {
+    font-size: 16px;
+    font-style: normal;
+    font-weight: 700;
+    line-height: 16px;
+    color: $mono208;
+    font-family: SpoqaB;
+    margin-left: 4px;
+  }
+}
+
+.title {
+  font-size: 22px;
+  font-weight: 700;
+  color: $blue107;
+}
+
+.desc {
+  margin: 8px 0 20px;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.mock {
+  color: #f59e0b;
+  font-weight: 600;
+}
+
+.meta-box {
+  background: #f9fafb;
+  border-radius: 10px;
+  padding: 16px 20px;
+  font-size: 14px;
+  color: #374151;
+  margin-bottom: 16px;
+
+  b {
+    color: #1a1a1a;
+    display: block;
+    margin-bottom: 4px;
+  }
+}
+
+.adopted {
+  margin-top: 8px;
+  color: #00c775;
+  font-weight: 600;
+}
+
+.run-row {
+  margin-bottom: 24px;
+}
+
+.sub {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin-bottom: 12px;
+}
+
+.candidates {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.empty {
+  padding: 32px;
+  text-align: center;
+  color: #9ca3af;
+  border: 1px dashed #d1d5db;
+  border-radius: 10px;
+}
+
+.cand {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px 20px;
+  background: #fff;
+}
+
+.score {
+  font-size: 20px;
+  font-weight: 700;
+  color: #8b5cf6;
+  min-width: 48px;
+}
+
+.prompt {
+  flex: 1;
+  font-size: 14px;
+  color: #1a1a1a;
+}
+
+.cand-actions {
+  display: flex;
+  gap: 8px;
+}

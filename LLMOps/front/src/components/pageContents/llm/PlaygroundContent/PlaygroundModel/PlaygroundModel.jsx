@@ -44,12 +44,46 @@ const TValue = {
   model_max_new_tokens: 512,
 };
 
-const PlaygroundModel = React.memo(({ workspaceId }) => {
+// 서빙 엔진 옵션(멀티엔진 로드맵). vLLM + llama.cpp(GGUF 직접/HF 온더플라이 변환)
+//   + Phase 3 Tier B(외부 HTTP 서버 어댑터 serving_adapter): TGI/Ollama/Triton/TensorRT 활성.
+const ENGINES = [
+  { id: 'vllm', label: 'vLLM', disabled: false },
+  { id: 'llama_cpp', label: 'llama.cpp', disabled: false },
+  { id: 'tgi', label: 'TGI', disabled: false },
+  { id: 'ollama', label: 'Ollama', disabled: false },
+  { id: 'triton', label: 'Triton', disabled: false },
+  // TensorRT: Phase 3 Tier B, trtllm-serve(OpenAI 호환, PyTorch 백엔드로 HF 직접) 어댑터로 배선.
+  { id: 'tensorrt', label: 'TensorRT', disabled: false },
+];
+
+const PlaygroundModel = React.memo(function PlaygroundModel({
+  workspaceId,
+  value,
+  onChange,
+  disabled,
+  title,
+  allmOnly = false,
+  allowExternal = true,
+  // 이중 배포는 vLLM 고정이라 엔진 선택 UI 를 숨긴다(기본 true = 단일 화면 그대로 노출).
+  showServingEngine = true,
+}) {
   const { t } = useTranslation();
   const dispatch = useDispatch();
 
+  const reduxModel = useSelector(
+    (state) => state.llmPlayground.model,
+    shallowEqual,
+  );
+  // value가 있을 때만 역할별 controlled mode를 사용한다.
+  // 기존 단일 화면은 value를 넘기지 않으므로 Redux 계약과 렌더링이 그대로 유지된다.
+  const isControlled = value !== undefined;
+  const currentModel = isControlled
+    ? value || initialLLMPlaygroundState.model
+    : reduxModel;
+
   const {
     model_type,
+    serving_system,
     model_huggingface_id,
     model_allm_name,
     model_allm_commit_name,
@@ -63,7 +97,7 @@ const PlaygroundModel = React.memo(({ workspaceId }) => {
     access,
     create_datetime,
     update_datetime,
-  } = useSelector((state) => state.llmPlayground.model, shallowEqual);
+  } = currentModel;
 
   const { id } = useSelector((state) => state.llmPlayground.info, shallowEqual);
 
@@ -71,24 +105,48 @@ const PlaygroundModel = React.memo(({ workspaceId }) => {
     (state) => state.llmPlayground.status,
     shallowEqual,
   );
-  const isDisabled = calIsDeployLoading(statusType);
+  const isDisabled = disabled ?? calIsDeployLoading(statusType);
 
   const handleRangeBar = useCallback(
     (e, label) => {
       const changeType = Tlabel[label];
+      const modelValue = +e.target.value;
+
+      if (isControlled) {
+        onChange?.({ ...currentModel, [changeType]: modelValue });
+        return;
+      }
 
       dispatch(
         handleSetModelValue({
           type: changeType,
-          modelValue: +e.target.value,
+          modelValue,
         }),
       );
     },
-    [dispatch],
+    [currentModel, dispatch, isControlled, onChange],
+  );
+
+  const handleSelectEngine = useCallback(
+    (engineId) => {
+      // 활성(비-disabled) 엔진만 반영. disabled 는 버튼단에서도 막지만 방어.
+      const eng = ENGINES.find((e) => e.id === engineId);
+      if (!eng || eng.disabled) return;
+      if (isControlled) {
+        onChange?.({ ...currentModel, serving_system: engineId });
+        return;
+      }
+      dispatch(
+        handleSetModelValue({ type: 'serving_system', modelValue: engineId }),
+      );
+    },
+    [currentModel, dispatch, isControlled, onChange],
   );
 
   const handleOpenModelImport = useCallback(() => {
-    if (!id) return toast.error(t('playground.header.connecting.message'));
+    if (isDisabled) return;
+    if (!isControlled && !id)
+      return toast.error(t('playground.header.connecting.message'));
     dispatch(
       openModal({
         modalType: 'IMPORT_MODEL_PLAYGROUND',
@@ -100,16 +158,47 @@ const PlaygroundModel = React.memo(({ workspaceId }) => {
           cancel: {
             text: 'cancel.label',
           },
+          // controlled mode에서는 import modal이 Redux를 갱신하지 않고 역할 소유자에게만 결과를 돌려준다.
+          ...(isControlled && {
+            onSelect: (selectedModel) => {
+              if (
+                !allowExternal &&
+                selectedModel.training_type === 'external'
+              ) {
+                toast.error('LLM1은 내부 텍스트 모델만 선택할 수 있습니다.');
+                return false;
+              }
+              onChange?.({ ...currentModel, ...selectedModel });
+              return true;
+            },
+            allmOnly,
+            allowExternal,
+          }),
         },
       }),
     );
-  }, [dispatch, id, t, workspaceId]);
+  }, [
+    allmOnly,
+    allowExternal,
+    currentModel,
+    dispatch,
+    id,
+    isControlled,
+    isDisabled,
+    onChange,
+    t,
+    workspaceId,
+  ]);
 
   const handleRefreshRangeBar = useCallback(
     (label) => {
       const changeType = Tlabel[label];
       const refreshValue = TValue[changeType];
 
+      if (isControlled) {
+        onChange?.({ ...currentModel, [changeType]: refreshValue });
+        return;
+      }
       dispatch(
         handleSetModelValue({
           type: changeType,
@@ -117,10 +206,14 @@ const PlaygroundModel = React.memo(({ workspaceId }) => {
         }),
       );
     },
-    [dispatch],
+    [currentModel, dispatch, isControlled, onChange],
   );
 
   const handleDeleteModel = useCallback(() => {
+    if (isControlled) {
+      onChange?.({ ...initialLLMPlaygroundState.model });
+      return;
+    }
     dispatch(
       handleSetPlaygroundState({
         type: 'model',
@@ -129,13 +222,53 @@ const PlaygroundModel = React.memo(({ workspaceId }) => {
         },
       }),
     );
-  }, [dispatch]);
+  }, [dispatch, isControlled, onChange]);
+  const engineLabelId = isControlled
+    ? `serving-engine-label-${String(title || 'controlled').replace(
+        /\s+/g,
+        '-',
+      )}`
+    : 'serving-engine-label';
 
   return (
-    <PlaygroundFrame>
+    <PlaygroundFrame disabled={isDisabled}>
       <div className={cx('header')}>
-        <h3 className={cx('title')}>{t('Model')}</h3>
+        <h3 className={cx('title')}>{title ?? t('Model')}</h3>
       </div>
+      {showServingEngine && (
+        <div className={cx('engine-select')}>
+          <span className={cx('engine-label')} id={engineLabelId}>
+            서빙 엔진
+          </span>
+          <div
+            className={cx('engine-options')}
+            role='radiogroup'
+            aria-labelledby={engineLabelId}
+          >
+            {ENGINES.map((eng) => {
+              const selected = (serving_system || 'vllm') === eng.id;
+              return (
+                <button
+                  key={eng.id}
+                  type='button'
+                  role='radio'
+                  aria-checked={selected}
+                  className={cx(
+                    'engine-opt',
+                    selected && 'selected',
+                    eng.disabled && 'disabled',
+                  )}
+                  disabled={eng.disabled || isDisabled}
+                  onClick={() => handleSelectEngine(eng.id)}
+                >
+                  {eng.label}
+                  {eng.disabled && <span className={cx('badge')}>준비중</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
       {!model_type && (
         <ButtonV2
           label={t('model.import.label')}

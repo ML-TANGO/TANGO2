@@ -30,6 +30,13 @@ spec:
         ports:
           - containerPort: 8001
         {{- if .Values.global.jfb.volume.front.enabled }}
+        # NFS 빌드(/front-data/build)를 nginx root(/app/build)에 심링크 후 정상 entrypoint 실행.
+        # 수동 symlink/pod 재시작 의존 제거 (front.enabled=true 개발/통합 환경 전용).
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            rm -rf /app/build && ln -sfn /front-data/build /app/build
+            exec /docker-entrypoint.sh nginx -g 'daemon off;'
         volumeMounts:
         - name: jf-src
           mountPath: /front-data

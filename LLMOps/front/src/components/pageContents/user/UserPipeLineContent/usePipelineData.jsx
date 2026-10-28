@@ -17,9 +17,13 @@ import IconUseTime from '@src/static/images/icon/icon-records-blue.svg';
 
 const initialProjectInfo = {
   tasks: {
+    generation_task: [],
     preprocessing_task: [],
     project_task: [],
     deployment_task: [],
+    finetuning_task: [],
+    quantize_task: [],
+    llm_deploy_task: [],
   },
   pipeline_name: '-',
   create_datetime: '0000-00-00 00:00:00',

@@ -409,13 +409,26 @@ async def get_workspace_instance_used(redis_client, workspace_id):
                 total_cpu += worker_info["resource"]["cpu"]
                 total_ram += worker_info["resource"]["ram"]
                 total_gpu += worker_info["resource"]["gpu"] 
-            instance_status[int(instance_id)][TYPE.DEPLOYMENT_TYPE][deployment_id] = {
-                "cpu" : total_cpu,
-                "ram" : total_ram,
-                "gpu" : total_gpu
-            } 
+            # SP-Ext.4 C2 fix: external infer 는 pod_type=deployment 로 매핑되며
+            # instance_id="" (instance 미해석 시) + deployment_id=job_id(hex) 라
+            # int() 캐스팅이 ValueError → 이 함수 전체가 except 로 [],{} 반환 →
+            # 워크스페이스 대시보드 인스턴스/플랫폼 사용량 전부 빈 화면.
+            # fine_tuning 분기와 동일하게 instance_id 를 guard 후에만 attribute.
+            if instance_id is not None and instance_id != "":
+                instance_status[int(instance_id)][TYPE.DEPLOYMENT_TYPE][deployment_id] = {
+                    "cpu" : total_cpu,
+                    "ram" : total_ram,
+                    "gpu" : total_gpu
+                }
 
-            if int(deployment_id) not in llm_deployment_list:
+            # deployment_id 가 numeric 이면 internal LLM 배포 목록과 대조,
+            # non-numeric (external infer 의 hex job_id) 이면 external A-LLM
+            # serving 으로 분류 (FLIGHTBASE 아님).
+            try:
+                is_internal_llm = int(deployment_id) in llm_deployment_list
+            except (ValueError, TypeError):
+                is_internal_llm = True   # external infer → A-LLM
+            if not is_internal_llm:
                 platform_resource_used_total[TYPE.PLATFORM_FLIGHTBASE]["cpu"] += total_cpu
                 platform_resource_used_total[TYPE.PLATFORM_FLIGHTBASE]["ram"] += total_ram
                 platform_resource_used_total[TYPE.PLATFORM_FLIGHTBASE]["gpu"] += total_gpu
@@ -433,11 +446,18 @@ async def get_workspace_instance_used(redis_client, workspace_id):
             total_gpu = model_train["resource"]["gpu"]
             total_ram = model_train["resource"]["ram"]
             instance_id = model_train["instance_id"]
-            instance_status[int(instance_id)][TYPE.FINE_TUNING_TYPE][model_id] = {
-                "cpu" : total_cpu,
-                "ram" : total_ram,
-                "gpu" : total_gpu
-            }
+            # SP-Ext.4 dashboard fix: external_container 학습은 instance_id 가
+            # None/"" 인 경우 (BFF lifecycle.py 가 labels.instance_id 안 박음 —
+            # external 은 K8s ResourceQuota 의존, internal 의 instance 개념 X).
+            # 이전엔 int(None) → TypeError → 전체 except 분기 → platform_usage
+            # ={} 반환 → 대시보드 ListStack value=0 → 그래프 바 안 보임. instance
+            # graph 만 skip 하고 platform_resource_used_total 합산은 그대로.
+            if instance_id is not None and instance_id != "":
+                instance_status[int(instance_id)][TYPE.FINE_TUNING_TYPE][model_id] = {
+                    "cpu" : total_cpu,
+                    "ram" : total_ram,
+                    "gpu" : total_gpu
+                }
             platform_resource_used_total[TYPE.PLATFORM_A_LLM]["cpu"] += total_cpu
             platform_resource_used_total[TYPE.PLATFORM_A_LLM]["ram"] += total_ram
             platform_resource_used_total[TYPE.PLATFORM_A_LLM]["gpu"] += total_gpu

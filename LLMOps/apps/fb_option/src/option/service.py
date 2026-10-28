@@ -270,10 +270,11 @@ async def get_dataset_data_list(dataset_id, extension_list=[], search=None, hier
         
         if hierarchy:
             # 계층구조 
-            result = await get_data_hierarchy_list(directory=directory, extension_list=extension_list, search=search, base_path=directory)
+            # max_depth 제한 — 이미지 하위트리로 무한 재귀 방지(매니페스트는 보통 최상위/얕은 곳).
+            result = await get_data_hierarchy_list(directory=directory, extension_list=extension_list, search=search, base_path=directory, max_depth=2)
         else:
             # name을 fullPath로 출력하여 리스트로 내려줌 
-            result = await get_data_simple_list(directory=directory, extension_list=extension_list, search=search)
+            result = await get_data_root_files(directory=directory, extension_list=extension_list)
     except Exception as e:
         traceback.print_exc()
     return result
@@ -286,13 +287,21 @@ async def get_data_hierarchy_list(directory, extension_list, search, base_path="
     result = []
     try:
         root = Path(directory)
+        MAX_DIR_ENTRIES = 500  # 디렉터리당 최대 열거 수 — 대용량 이미지셋(수백만 파일) 전체 적재→OOM 방지
 
         def build_tree(path: Path, depth: int):
             items = []
             # 깊이 제한을 넘으면 빈 리스트 반환
             if max_depth is not None and depth > max_depth:
                 return items
-            for entry in sorted(path.iterdir()):
+            # 지연 열거 + cap: sorted(path.iterdir())는 디렉터리 전 항목을 메모리에 적재(정렬)하므로
+            # 수백만 파일 디렉터리에서 OOM. 항목을 cap 까지만 모아 정렬(메모리 bounded).
+            entries = []
+            for _i, _e in enumerate(path.iterdir()):
+                if _i >= MAX_DIR_ENTRIES:
+                    break
+                entries.append(_e)
+            for entry in sorted(entries, key=lambda e: e.name):
                 # 검색어가 있으면 이름에 포함된 항목만
                 if search and search not in entry.name:
                     continue
@@ -328,6 +337,60 @@ async def get_data_hierarchy_list(directory, extension_list, search, base_path="
     except Exception as e:
         traceback.print_exc()
     return result
+
+# 루트에 매칭 파일이 없을 때만, 최상위 디렉터리가 이 수 이하일 때만 한 단계 하강한다.
+# (sds_eval 은 최상위 디렉터리가 1001개 — 하강하면 수 분 걸린다.)
+MAX_SUBDIR_DESCENT = 20
+
+
+async def get_data_root_files(directory, extension_list):
+    """데이터셋 **루트의** 파일만, 확장자로 걸러 평면 목록으로.
+
+    왜 계층(get_data_hierarchy_list)을 안 쓰나: 최상위 항목이 수백 개인 데이터셋
+    (예: sds_eval 은 이미지 디렉터리가 수백 개)에서 depth-2 재귀가 수 분 걸려
+    선택기가 사실상 멈춘다(실측 3분+ 미완). 게다가 디렉터리당 cap 이 정렬 전에
+    걸려 정작 찾는 json 이 목록에서 빠진다(실측 0건).
+
+    왜 get_data_simple_list 를 안 쓰나: 그쪽은 `search` 를 `Path.glob(f"*{search}*")`
+    에 그대로 넣어, 하위 디렉터리 이름을 아는 호출자가 `sub/../../` 로 데이터셋 루트
+    **밖** 파일을 열거할 수 있다(실측 재현). 개수 상한도 없다.
+
+    루트에서 못 찾으면 **한 단계만** 내려간다 — 단, 최상위 디렉터리가 적을 때만.
+    실측: sds/sds_train/sds_eval/cc3m 은 루트에 json 이 있어 하강하지 않고(sds_eval 은
+    최상위 디렉터리가 1001개라 하강하면 느리다), llamarine 은 루트에 없고 디렉터리가
+    1개뿐이라 싸게 `data/train-*.parquet` 를 찾는다. 사용자 입력이 경로/패턴에 들어가지
+    않아 traversal 여지가 없다.
+    """
+
+    def _scan(path, prefix):
+        found, dirs = [], []
+        try:
+            with os.scandir(path) as it:
+                for entry in it:
+                    # scandir 은 dirent 캐시라 항목당 stat 없이 종류를 판별한다(NFS 부하).
+                    if entry.is_dir(follow_symlinks=False):
+                        dirs.append(entry)
+                        continue
+                    if extension_list and os.path.splitext(entry.name)[1] not in extension_list:
+                        continue
+                    try:
+                        uid = entry.stat(follow_symlinks=False).st_uid
+                        owner = common.get_own_user(uuid=uid) if uid != 0 else "admin"
+                    except OSError:
+                        owner = "admin"
+                    rel = f"{prefix}{entry.name}"
+                    found.append({"owner": owner, "name": rel, "full_path": rel})
+        except OSError:
+            traceback.print_exc()
+        return found, dirs
+
+    result, subdirs = _scan(directory, "")
+    if not result and len(subdirs) <= MAX_SUBDIR_DESCENT:
+        for sub in subdirs:
+            nested, _ = _scan(sub.path, f"{sub.name}/")
+            result.extend(nested)
+    return sorted(result, key=lambda r: r["name"])
+
 
 async def get_data_simple_list(directory, extension_list, search = None):
     result = []
@@ -813,7 +876,7 @@ async def preprocessing_option(workspace_id : int = None, preprocessing_id : int
     return result
 
 def get_preprocessing_built_in_data_tfs(data_type : str):
-    return TYPE_BUILT_IN.PREPROCESSING_BUILT_IN_DATA_TYPE_TFS[data_type]
+    return TYPE_BUILT_IN.PREPROCESSING_BUILT_IN_DATA_TYPE_TFS.get(data_type, [])
 
 
 async def get_preprocessing_used_gpu_count(preprocessing_id : int)-> dict:
