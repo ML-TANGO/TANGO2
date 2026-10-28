@@ -1,0 +1,3000 @@
+{
+  "uid": "tango2-agx-llm-stages",
+  "title": "TANGO2 AGX — LLM Stage Performance",
+  "tags": [
+    "tango2",
+    "orin-agx",
+    "llm",
+    "engineering"
+  ],
+  "schemaVersion": 39,
+  "version": 4,
+  "refresh": "5s",
+  "timezone": "browser",
+  "editable": false,
+  "description": "Fixed-shape greedy benchmark. Latency trends, phase/case snapshots, and collapsed diagnostics. Exact 5m sample statistics. Internal AGX observation, not an external serving or official TC5 verdict.",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "case",
+        "label": "Workload",
+        "type": "custom",
+        "query": "i64_o64,i64_o128,i256_o64,i256_o128,i1024_o64,i1024_o128",
+        "current": {
+          "text": "i64_o64",
+          "value": "i64_o64"
+        }
+      }
+    ]
+  },
+  "annotations": {
+    "list": [
+      {
+        "name": "Run boundaries",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "PBFA97CFB590B2093"
+        },
+        "enable": false,
+        "hide": false,
+        "iconColor": "rgba(0,211,255,1)",
+        "useValueForTime": true,
+        "target": {
+          "refId": "A",
+          "expr": "1000 * tango2_llm_run_boundary_timestamp_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\"}"
+        },
+        "titleFormat": "{{run_id}} {{event}}",
+        "textFormat": "{{evidence_path}}"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "Qwen3-1.7B · controlled single-request benchmark",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 4
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "Fixed input lengths / output limits · greedy decoding · one active request. **Trends:** exact last-5-minute statistics, not per-request samples. **Bars:** current phase/case comparisons. Each case receives 10 requests per cycle (~75–80s). See eligible counts below; fewer than 30 samples is exploratory."
+      }
+    },
+    {
+      "id": 2,
+      "title": "TTFT p50",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 6,
+        "h": 4
+      },
+      "description": "Request acceptance to first generated non-EOS token. Includes input preparation and prefill. Internal AGX consumer boundary.",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "1000 * (tango2_llm_window_duration_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"ttft\",statistic=\"p50\"})",
+          "legendFormat": "p50",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix: ms",
+          "decimals": 3,
+          "noValue": "—",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "graphMode": "none",
+        "colorMode": "none",
+        "textMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "E2E p50",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 4,
+        "w": 6,
+        "h": 4
+      },
+      "description": "Request acceptance to completed internal response delivery. Model load and raw-record publication are outside this interval.",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "1000 * (tango2_llm_window_duration_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"e2e\",statistic=\"p50\"})",
+          "legendFormat": "p50",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix: ms",
+          "decimals": 3,
+          "noValue": "—",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "graphMode": "none",
+        "colorMode": "none",
+        "textMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "TPOT p50",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 6,
+        "h": 4
+      },
+      "description": "Per-request (last token − first token)/(N−1). Undefined for N<2. This is not a GPU-only timer.",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "1000 * (tango2_llm_window_duration_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"tpot\",statistic=\"p50\"})",
+          "legendFormat": "p50",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix: ms",
+          "decimals": 3,
+          "noValue": "—",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "graphMode": "none",
+        "colorMode": "none",
+        "textMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Decode tok/s",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 4,
+        "w": 6,
+        "h": 4
+      },
+      "description": "Median per-request (N−1)/(last token − first token). Board-wide output throughput is shown separately.",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "tango2_llm_window_rate{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"decode_tokens_per_second\",statistic=\"p50\"}",
+          "legendFormat": "p50",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix: tok/s",
+          "decimals": 2,
+          "noValue": "—",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "graphMode": "none",
+        "colorMode": "none",
+        "textMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "First-token latency · 5m distribution",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 9
+      },
+      "description": "Exact statistics of completed requests in the last 5m. Shading is the observed min–max range; lines are p50/p95. This is an aggregate trend, not individual requests. Hover shows 0.001ms digits. Empty intervals remain gaps.",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "1000 * (tango2_llm_window_duration_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"ttft\",statistic=\"min\"})",
+          "legendFormat": "min",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        },
+        {
+          "refId": "B",
+          "expr": "1000 * (tango2_llm_window_duration_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"ttft\",statistic=\"max\"})",
+          "legendFormat": "max",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        },
+        {
+          "refId": "C",
+          "expr": "1000 * (tango2_llm_window_duration_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"ttft\",statistic=\"p50\"})",
+          "legendFormat": "p50",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        },
+        {
+          "refId": "D",
+          "expr": "1000 * (tango2_llm_window_duration_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"ttft\",statistic=\"p95\"})",
+          "legendFormat": "p95",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix: ms",
+          "decimals": 3,
+          "noValue": "—",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisCenteredZero": false,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "min"
+            },
+            "properties": [
+              {
+                "id": "custom.lineWidth",
+                "value": 0
+              },
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "legend": true,
+                  "tooltip": false,
+                  "viz": false
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "max"
+            },
+            "properties": [
+              {
+                "id": "custom.lineWidth",
+                "value": 0
+              },
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "legend": true,
+                  "tooltip": false,
+                  "viz": false
+                }
+              },
+              {
+                "id": "custom.fillBelowTo",
+                "value": "min"
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 12
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "Request latency · 5m distribution",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 9
+      },
+      "description": "Exact statistics of completed requests in the last 5m. Shading is the observed min–max range; lines are p50/p95. This is an aggregate trend, not individual requests. Hover shows 0.001ms digits. Empty intervals remain gaps.",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "1000 * (tango2_llm_window_duration_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"e2e\",statistic=\"min\"})",
+          "legendFormat": "min",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        },
+        {
+          "refId": "B",
+          "expr": "1000 * (tango2_llm_window_duration_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"e2e\",statistic=\"max\"})",
+          "legendFormat": "max",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        },
+        {
+          "refId": "C",
+          "expr": "1000 * (tango2_llm_window_duration_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"e2e\",statistic=\"p50\"})",
+          "legendFormat": "p50",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        },
+        {
+          "refId": "D",
+          "expr": "1000 * (tango2_llm_window_duration_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"e2e\",statistic=\"p95\"})",
+          "legendFormat": "p95",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix: ms",
+          "decimals": 3,
+          "noValue": "—",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisCenteredZero": false,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "min"
+            },
+            "properties": [
+              {
+                "id": "custom.lineWidth",
+                "value": 0
+              },
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "legend": true,
+                  "tooltip": false,
+                  "viz": false
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "max"
+            },
+            "properties": [
+              {
+                "id": "custom.lineWidth",
+                "value": 0
+              },
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "legend": true,
+                  "tooltip": false,
+                  "viz": false
+                }
+              },
+              {
+                "id": "custom.fillBelowTo",
+                "value": "min"
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 12
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "Prefill · host and GPU",
+      "type": "bargauge",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 17,
+        "w": 12,
+        "h": 7
+      },
+      "description": "Current last-5-minute phase statistics. The host call includes GPU execution and its existing wait; these bars overlap and must not be added. Prefill processes the prompt and produces the first token.",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "1000 * (tango2_llm_window_duration_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"prefill_host\",statistic=\"p50\"})",
+          "legendFormat": "Host p50",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        },
+        {
+          "refId": "B",
+          "expr": "1000 * (tango2_llm_window_duration_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"gpu_prefill\",statistic=\"p50\"})",
+          "legendFormat": "GPU p50",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        },
+        {
+          "refId": "C",
+          "expr": "1000 * (tango2_llm_window_duration_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"gpu_prefill\",statistic=\"p95\"})",
+          "legendFormat": "GPU p95",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix: ms",
+          "decimals": 3,
+          "noValue": "—",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": false,
+        "valueMode": "color",
+        "namePlacement": "left",
+        "text": {
+          "titleSize": 14,
+          "valueSize": 18
+        },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 9,
+      "title": "Decode · generation and GPU",
+      "type": "bargauge",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 17,
+        "w": 12,
+        "h": 7
+      },
+      "description": "Generation is first-to-last token elapsed time; GPU is the sum of subsequent decode stream intervals. Overlapping measurements, not additive stages. Bars are snapshot comparisons, not a continuous execution trace.",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "1000 * (tango2_llm_window_duration_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"generation\",statistic=\"p50\"})",
+          "legendFormat": "Elapsed p50",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        },
+        {
+          "refId": "B",
+          "expr": "1000 * (tango2_llm_window_duration_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"gpu_decode\",statistic=\"p50\"})",
+          "legendFormat": "GPU p50",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        },
+        {
+          "refId": "C",
+          "expr": "1000 * (tango2_llm_window_duration_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"gpu_decode\",statistic=\"p95\"})",
+          "legendFormat": "GPU p95",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix: ms",
+          "decimals": 3,
+          "noValue": "—",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": false,
+        "valueMode": "color",
+        "namePlacement": "left",
+        "text": {
+          "titleSize": 14,
+          "valueSize": 18
+        },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 10,
+      "title": "GPU prefill · compare all cases",
+      "type": "bargauge",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "description": "All six cases, exact last-5-minute p50. Compare input-length sensitivity for prefill and output-length sensitivity for decode. These panels intentionally ignore the case dropdown.",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "1000 * (tango2_llm_window_duration_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",stage=\"gpu_prefill\",statistic=\"p50\"})",
+          "legendFormat": "{{case}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix: ms",
+          "decimals": 3,
+          "noValue": "—",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": false,
+        "valueMode": "color",
+        "namePlacement": "left",
+        "text": {
+          "titleSize": 14,
+          "valueSize": 18
+        },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 11,
+      "title": "GPU decode · compare all cases",
+      "type": "bargauge",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "description": "All six cases, exact last-5-minute p50. Compare input-length sensitivity for prefill and output-length sensitivity for decode. These panels intentionally ignore the case dropdown.",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "1000 * (tango2_llm_window_duration_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",stage=\"gpu_decode\",statistic=\"p50\"})",
+          "legendFormat": "{{case}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix: ms",
+          "decimals": 3,
+          "noValue": "—",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": false,
+        "valueMode": "color",
+        "namePlacement": "left",
+        "text": {
+          "titleSize": 14,
+          "valueSize": 18
+        },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 12,
+      "title": "Board throughput · all cases",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "description": "Board-wide successful, non-warmup output tokens and requests per elapsed second, including idle/reload gaps. Prometheus rate is extrapolated over 5m. This differs from per-request decode speed.",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(tango2_llm_output_tokens_sum{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\"}[5m]))",
+          "legendFormat": "output tok/s",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(tango2_llm_duration_seconds_count{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",stage=\"e2e\"}[5m]))",
+          "legendFormat": "requests/s",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix: tok/s",
+          "decimals": 2,
+          "noValue": "—",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisCenteredZero": false,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "requests/s"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix: req/s"
+              },
+              {
+                "id": "decimals",
+                "value": 3
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "id": 13,
+      "title": "Eligible samples · last 5m",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "description": "Fewer than 30 samples for a metric means that metric is insufficient. ITL counts individual token intervals; the other rows count eligible requests. Empty metrics have no samples.",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "tango2_llm_window_samples{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"ttft\"}",
+          "legendFormat": "TTFT",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        },
+        {
+          "refId": "B",
+          "expr": "tango2_llm_window_samples{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"e2e\"}",
+          "legendFormat": "Request E2E",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        },
+        {
+          "refId": "C",
+          "expr": "tango2_llm_window_samples{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"tpot\"}",
+          "legendFormat": "TPOT",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        },
+        {
+          "refId": "D",
+          "expr": "tango2_llm_window_samples{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"itl\"}",
+          "legendFormat": "Token intervals (ITL)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        },
+        {
+          "refId": "E",
+          "expr": "tango2_llm_window_samples{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"gpu_prefill\"}",
+          "legendFormat": "GPU prefill",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        },
+        {
+          "refId": "F",
+          "expr": "tango2_llm_window_samples{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"gpu_decode\"}",
+          "legendFormat": "GPU decode",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        },
+        {
+          "refId": "G",
+          "expr": "tango2_llm_window_samples{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"decode_tokens_per_second\"}",
+          "legendFormat": "Decode rate",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        },
+        {
+          "refId": "H",
+          "expr": "tango2_llm_window_samples{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"prefill_input_tokens_per_second\"}",
+          "legendFormat": "Prefill rate",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "noValue": "—",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "orange",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 30
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byType",
+              "options": "number"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "transformations": [
+        {
+          "id": "reduce",
+          "options": {
+            "reducers": [
+              "lastNotNull"
+            ],
+            "mode": "seriesToRows"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "Field": "Metric",
+              "Last *": "Samples",
+              "Last": "Samples",
+              "lastNotNull": "Samples"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 35,
+      "title": "CPU execution · instrumented threads",
+      "type": "bargauge",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 40,
+        "w": 12,
+        "h": 8
+      },
+      "description": "Exact last-5-minute p50 in detail mode. Only the request worker and consumer are measured; runtime helper threads are outside scope. Stage scopes overlap the worker request and are not additive. Decode + finalize runs from prefill end to worker completion, not first-to-last token generation. Runnable wait is scheduler queue delay, not GPU/I/O blocking or runner admission queue. Missing measurements stay absent; see per-counter eligible counts in Collection quality.",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "1000 * (tango2_llm_cpu_window_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",scope=\"worker_request\",kind=\"on_cpu\",statistic=\"p50\"})",
+          "legendFormat": "Worker request",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        },
+        {
+          "refId": "B",
+          "expr": "1000 * (tango2_llm_cpu_window_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",scope=\"consumer_request\",kind=\"on_cpu\",statistic=\"p50\"})",
+          "legendFormat": "Consumer request",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        },
+        {
+          "refId": "C",
+          "expr": "1000 * (tango2_llm_cpu_window_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",scope=\"input\",kind=\"on_cpu\",statistic=\"p50\"})",
+          "legendFormat": "Input",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        },
+        {
+          "refId": "D",
+          "expr": "1000 * (tango2_llm_cpu_window_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",scope=\"prefill_prepare\",kind=\"on_cpu\",statistic=\"p50\"})",
+          "legendFormat": "Prefill preparation",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        },
+        {
+          "refId": "E",
+          "expr": "1000 * (tango2_llm_cpu_window_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",scope=\"prefill_host\",kind=\"on_cpu\",statistic=\"p50\"})",
+          "legendFormat": "Prefill host",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        },
+        {
+          "refId": "F",
+          "expr": "1000 * (tango2_llm_cpu_window_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",scope=\"decode_and_finalize\",kind=\"on_cpu\",statistic=\"p50\"})",
+          "legendFormat": "Decode + finalize",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix: ms",
+          "decimals": 3,
+          "noValue": "—",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": false,
+        "valueMode": "color",
+        "namePlacement": "left",
+        "text": {
+          "titleSize": 14,
+          "valueSize": 18
+        },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 36,
+      "title": "Runnable CPU wait · instrumented threads",
+      "type": "bargauge",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 40,
+        "w": 12,
+        "h": 8
+      },
+      "description": "Exact last-5-minute p50 in detail mode. Only the request worker and consumer are measured; runtime helper threads are outside scope. Stage scopes overlap the worker request and are not additive. Decode + finalize runs from prefill end to worker completion, not first-to-last token generation. Runnable wait is scheduler queue delay, not GPU/I/O blocking or runner admission queue. Missing measurements stay absent; see per-counter eligible counts in Collection quality.",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "1000 * (tango2_llm_cpu_window_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",scope=\"worker_request\",kind=\"runqueue_wait\",statistic=\"p50\"})",
+          "legendFormat": "Worker request",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        },
+        {
+          "refId": "B",
+          "expr": "1000 * (tango2_llm_cpu_window_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",scope=\"consumer_request\",kind=\"runqueue_wait\",statistic=\"p50\"})",
+          "legendFormat": "Consumer request",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        },
+        {
+          "refId": "C",
+          "expr": "1000 * (tango2_llm_cpu_window_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",scope=\"input\",kind=\"runqueue_wait\",statistic=\"p50\"})",
+          "legendFormat": "Input",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        },
+        {
+          "refId": "D",
+          "expr": "1000 * (tango2_llm_cpu_window_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",scope=\"prefill_prepare\",kind=\"runqueue_wait\",statistic=\"p50\"})",
+          "legendFormat": "Prefill preparation",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        },
+        {
+          "refId": "E",
+          "expr": "1000 * (tango2_llm_cpu_window_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",scope=\"prefill_host\",kind=\"runqueue_wait\",statistic=\"p50\"})",
+          "legendFormat": "Prefill host",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        },
+        {
+          "refId": "F",
+          "expr": "1000 * (tango2_llm_cpu_window_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",scope=\"decode_and_finalize\",kind=\"runqueue_wait\",statistic=\"p50\"})",
+          "legendFormat": "Decode + finalize",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix: ms",
+          "decimals": 3,
+          "noValue": "—",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": false,
+        "valueMode": "color",
+        "namePlacement": "left",
+        "text": {
+          "titleSize": 14,
+          "valueSize": 18
+        },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 20,
+      "title": "Runtime diagnostics",
+      "type": "row",
+      "collapsed": true,
+      "panels": [
+        {
+          "id": 14,
+          "title": "Input and prefill preparation",
+          "type": "bargauge",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 49,
+            "w": 12,
+            "h": 8
+          },
+          "description": "CPU-side preparation before the prefill call. Separates text/tokenizer work from runtime context/buffer setup.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "1000000 * (tango2_llm_window_duration_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"input\",statistic=\"p50\"})",
+              "legendFormat": "Template + tokenizer",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": true,
+              "range": false,
+              "format": "time_series"
+            },
+            {
+              "refId": "B",
+              "expr": "1000000 * (tango2_llm_window_duration_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"prefill_prepare\",statistic=\"p50\"})",
+              "legendFormat": "KV/buffer preparation",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": true,
+              "range": false,
+              "format": "time_series"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "suffix: µs",
+              "decimals": 3,
+              "noValue": "—",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "min": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "basic",
+            "showUnfilled": false,
+            "valueMode": "color",
+            "namePlacement": "left",
+            "text": {
+              "titleSize": 14,
+              "valueSize": 18
+            },
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            }
+          }
+        },
+        {
+          "id": 15,
+          "title": "Text conversion and publication",
+          "type": "bargauge",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 49,
+            "w": 12,
+            "h": 8
+          },
+          "description": "Cumulative host costs inside generation. They overlap generation elapsed time and do not measure external network delivery.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "1000000 * (tango2_llm_window_duration_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"detokenize\",statistic=\"p50\"})",
+              "legendFormat": "Incremental detokenization",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": true,
+              "range": false,
+              "format": "time_series"
+            },
+            {
+              "refId": "B",
+              "expr": "1000000 * (tango2_llm_window_duration_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"deliver\",statistic=\"p50\"})",
+              "legendFormat": "Stream publication",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": true,
+              "range": false,
+              "format": "time_series"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "suffix: µs",
+              "decimals": 3,
+              "noValue": "—",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "min": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "basic",
+            "showUnfilled": false,
+            "valueMode": "color",
+            "namePlacement": "left",
+            "text": {
+              "titleSize": 14,
+              "valueSize": 18
+            },
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            }
+          }
+        },
+        {
+          "id": 16,
+          "title": "Token pacing · TPOT and ITL",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 57,
+            "w": 12,
+            "h": 8
+          },
+          "description": "TPOT gives one average per request; ITL gives individual token gaps and weights longer responses more. Both exclude N<2 and are not GPU-only timings.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "1000 * (tango2_llm_window_duration_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"tpot\",statistic=\"p50\"})",
+              "legendFormat": "tpot p50",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": false,
+              "range": true,
+              "format": "time_series"
+            },
+            {
+              "refId": "B",
+              "expr": "1000 * (tango2_llm_window_duration_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"tpot\",statistic=\"p95\"})",
+              "legendFormat": "tpot p95",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": false,
+              "range": true,
+              "format": "time_series"
+            },
+            {
+              "refId": "C",
+              "expr": "1000 * (tango2_llm_window_duration_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"itl\",statistic=\"p50\"})",
+              "legendFormat": "itl p50",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": false,
+              "range": true,
+              "format": "time_series"
+            },
+            {
+              "refId": "D",
+              "expr": "1000 * (tango2_llm_window_duration_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"itl\",statistic=\"p95\"})",
+              "legendFormat": "itl p95",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": false,
+              "range": true,
+              "format": "time_series"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "suffix: ms",
+              "decimals": 3,
+              "noValue": "—",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "fillOpacity": 0,
+                "showPoints": "never",
+                "spanNulls": false,
+                "axisCenteredZero": false,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            },
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          }
+        },
+        {
+          "id": 17,
+          "title": "First token and first nonempty text",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 57,
+            "w": 12,
+            "h": 8
+          },
+          "description": "Generated token availability and the internal consumer's first visible text can differ because a token may yield empty text or wait for publication.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "1000 * (tango2_llm_window_duration_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"ttft\",statistic=\"p50\"})",
+              "legendFormat": "ttft p50",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": false,
+              "range": true,
+              "format": "time_series"
+            },
+            {
+              "refId": "B",
+              "expr": "1000 * (tango2_llm_window_duration_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"ttft\",statistic=\"p95\"})",
+              "legendFormat": "ttft p95",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": false,
+              "range": true,
+              "format": "time_series"
+            },
+            {
+              "refId": "C",
+              "expr": "1000 * (tango2_llm_window_duration_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"first_text\",statistic=\"p50\"})",
+              "legendFormat": "first_text p50",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": false,
+              "range": true,
+              "format": "time_series"
+            },
+            {
+              "refId": "D",
+              "expr": "1000 * (tango2_llm_window_duration_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"first_text\",statistic=\"p95\"})",
+              "legendFormat": "first_text p95",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": false,
+              "range": true,
+              "format": "time_series"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "suffix: ms",
+              "decimals": 3,
+              "noValue": "—",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "fillOpacity": 0,
+                "showPoints": "never",
+                "spanNulls": false,
+                "axisCenteredZero": false,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            },
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          }
+        },
+        {
+          "id": 18,
+          "title": "Unattributed host interval",
+          "type": "bargauge",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 65,
+            "w": 12,
+            "h": 8
+          },
+          "description": "Queue is this serial runner's admission-to-start gap, not a production server queue. Remainder closes E2E accounting and is not an independently attributed runtime stage.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "1000000 * (tango2_llm_window_duration_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"queue\",statistic=\"p50\"})",
+              "legendFormat": "internal queue",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": true,
+              "range": false,
+              "format": "time_series"
+            },
+            {
+              "refId": "B",
+              "expr": "1000000 * (tango2_llm_window_duration_seconds{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"host_remainder\",statistic=\"p50\"})",
+              "legendFormat": "remainder",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": true,
+              "range": false,
+              "format": "time_series"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "suffix: µs",
+              "decimals": 3,
+              "noValue": "—",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "min": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "basic",
+            "showUnfilled": false,
+            "valueMode": "color",
+            "namePlacement": "left",
+            "text": {
+              "titleSize": 14,
+              "valueSize": 18
+            },
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            }
+          }
+        },
+        {
+          "id": 19,
+          "title": "Output length · actual tokens",
+          "type": "bargauge",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 65,
+            "w": 12,
+            "h": 8
+          },
+          "description": "Actual generated tokens expose early EOS; the selected case specifies an output limit.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "tango2_llm_window_output_tokens{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",statistic=\"p50\"}",
+              "legendFormat": "p50",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": true,
+              "range": false,
+              "format": "time_series"
+            },
+            {
+              "refId": "B",
+              "expr": "tango2_llm_window_output_tokens{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",statistic=\"p95\"}",
+              "legendFormat": "p95",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": true,
+              "range": false,
+              "format": "time_series"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "decimals": 0,
+              "noValue": "—",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "min": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "basic",
+            "showUnfilled": false,
+            "valueMode": "color",
+            "namePlacement": "left",
+            "text": {
+              "titleSize": 14,
+              "valueSize": 18
+            },
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            }
+          }
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 48,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 26,
+      "title": "Device telemetry",
+      "type": "row",
+      "collapsed": true,
+      "panels": [
+        {
+          "id": 21,
+          "title": "Utilization",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 50,
+            "w": 12,
+            "h": 8
+          },
+          "description": "Platform context for latency changes; time correlation alone does not establish cause.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "tango2_llm_device_cpu_utilization_ratio{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\"}",
+              "legendFormat": "cpu_utilization_ratio",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": false,
+              "range": true,
+              "format": "time_series"
+            },
+            {
+              "refId": "B",
+              "expr": "tango2_llm_device_gpu_utilization_ratio{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\"}",
+              "legendFormat": "gpu_utilization_ratio",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": false,
+              "range": true,
+              "format": "time_series"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "decimals": 2,
+              "noValue": "—",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "fillOpacity": 0,
+                "showPoints": "never",
+                "spanNulls": false,
+                "axisCenteredZero": false,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            },
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          }
+        },
+        {
+          "id": 22,
+          "title": "Clocks",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 50,
+            "w": 12,
+            "h": 8
+          },
+          "description": "Platform context for latency changes; time correlation alone does not establish cause.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "tango2_llm_device_cpu_clock_hertz{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\"}",
+              "legendFormat": "cpu_clock_hertz",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": false,
+              "range": true,
+              "format": "time_series"
+            },
+            {
+              "refId": "B",
+              "expr": "tango2_llm_device_gpu_clock_hertz{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\"}",
+              "legendFormat": "gpu_clock_hertz",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": false,
+              "range": true,
+              "format": "time_series"
+            },
+            {
+              "refId": "C",
+              "expr": "tango2_llm_device_emc_clock_hertz{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\"}",
+              "legendFormat": "emc_clock_hertz",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": false,
+              "range": true,
+              "format": "time_series"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "hertz",
+              "decimals": 2,
+              "noValue": "—",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "fillOpacity": 0,
+                "showPoints": "never",
+                "spanNulls": false,
+                "axisCenteredZero": false,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            },
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          }
+        },
+        {
+          "id": 23,
+          "title": "Temperature",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 58,
+            "w": 12,
+            "h": 8
+          },
+          "description": "Platform context for latency changes; time correlation alone does not establish cause.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "tango2_llm_device_cpu_temperature_celsius{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\"}",
+              "legendFormat": "cpu_temperature_celsius",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": false,
+              "range": true,
+              "format": "time_series"
+            },
+            {
+              "refId": "B",
+              "expr": "tango2_llm_device_gpu_temperature_celsius{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\"}",
+              "legendFormat": "gpu_temperature_celsius",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": false,
+              "range": true,
+              "format": "time_series"
+            },
+            {
+              "refId": "C",
+              "expr": "tango2_llm_device_soc0_temperature_celsius{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\"}",
+              "legendFormat": "soc0_temperature_celsius",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": false,
+              "range": true,
+              "format": "time_series"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "celsius",
+              "decimals": 2,
+              "noValue": "—",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "fillOpacity": 0,
+                "showPoints": "never",
+                "spanNulls": false,
+                "axisCenteredZero": false,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            },
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          }
+        },
+        {
+          "id": 24,
+          "title": "Power by rail",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 58,
+            "w": 12,
+            "h": 8
+          },
+          "description": "AGX INA3221 rails. DDR/1V8AO is included in system 5V; do not add or stack rails.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "tango2_llm_device_gpu_soc_power_watts{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\"}",
+              "legendFormat": "gpu_soc_power_watts",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": false,
+              "range": true,
+              "format": "time_series"
+            },
+            {
+              "refId": "B",
+              "expr": "tango2_llm_device_cpu_cv_power_watts{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\"}",
+              "legendFormat": "cpu_cv_power_watts",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": false,
+              "range": true,
+              "format": "time_series"
+            },
+            {
+              "refId": "C",
+              "expr": "tango2_llm_device_system_5v_power_watts{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\"}",
+              "legendFormat": "system_5v_power_watts",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": false,
+              "range": true,
+              "format": "time_series"
+            },
+            {
+              "refId": "D",
+              "expr": "tango2_llm_device_ddr_1v8ao_power_watts{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\"}",
+              "legendFormat": "ddr_1v8ao_power_watts",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": false,
+              "range": true,
+              "format": "time_series"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "watt",
+              "decimals": 2,
+              "noValue": "—",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "fillOpacity": 0,
+                "showPoints": "never",
+                "spanNulls": false,
+                "axisCenteredZero": false,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            },
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          }
+        },
+        {
+          "id": 25,
+          "title": "Memory",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 66,
+            "w": 12,
+            "h": 8
+          },
+          "description": "Platform context for latency changes; time correlation alone does not establish cause.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "tango2_llm_device_memory_used_bytes{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\"}",
+              "legendFormat": "memory_used_bytes",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": false,
+              "range": true,
+              "format": "time_series"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "decimals": 2,
+              "noValue": "—",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "fillOpacity": 0,
+                "showPoints": "never",
+                "spanNulls": false,
+                "axisCenteredZero": false,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            },
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          }
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 49,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 34,
+      "title": "Collection quality and evidence",
+      "type": "row",
+      "collapsed": true,
+      "panels": [
+        {
+          "id": 27,
+          "title": "Collection and producer health",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 51,
+            "w": 12,
+            "h": 8
+          },
+          "description": "Endpoint and producer are separate. The runner reloads between cycles; producer heartbeat can be briefly absent. A heartbeat older than 5s means stopped/stale.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "up{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\"}",
+              "legendFormat": "scrape up",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": false,
+              "range": true,
+              "format": "time_series"
+            },
+            {
+              "refId": "B",
+              "expr": "tango2_llm_producer_up{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\"}",
+              "legendFormat": "producer heartbeat",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": false,
+              "range": true,
+              "format": "time_series"
+            },
+            {
+              "refId": "C",
+              "expr": "tango2_llm_pending_records{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\"}",
+              "legendFormat": "pending records",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": false,
+              "range": true,
+              "format": "time_series"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "decimals": 0,
+              "noValue": "—",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "fillOpacity": 0,
+                "showPoints": "never",
+                "spanNulls": false,
+                "axisCenteredZero": false,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            },
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          }
+        },
+        {
+          "id": 28,
+          "title": "Record integrity",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 51,
+            "w": 12,
+            "h": 8
+          },
+          "description": "",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "tango2_llm_records_invalid_total{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\"}",
+              "legendFormat": "invalid",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": false,
+              "range": true,
+              "format": "time_series"
+            },
+            {
+              "refId": "B",
+              "expr": "tango2_llm_records_duplicate_total{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\"}",
+              "legendFormat": "duplicate",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": false,
+              "range": true,
+              "format": "time_series"
+            },
+            {
+              "refId": "C",
+              "expr": "tango2_llm_records_parse_errors_total{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\"}",
+              "legendFormat": "parse_errors",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": false,
+              "range": true,
+              "format": "time_series"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "decimals": 0,
+              "noValue": "—",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "fillOpacity": 0,
+                "showPoints": "never",
+                "spanNulls": false,
+                "axisCenteredZero": false,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            },
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          }
+        },
+        {
+          "id": 29,
+          "title": "Completion reasons",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 59,
+            "w": 12,
+            "h": 8
+          },
+          "description": "Diagnostic counters include warmups. Normal performance statistics exclude warmups, errors and invalid records.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by(status)(increase(tango2_llm_requests_completed_total{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\"}[5m]))",
+              "legendFormat": "{{status}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": false,
+              "range": true,
+              "format": "time_series"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "decimals": 1,
+              "noValue": "—",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "fillOpacity": 0,
+                "showPoints": "never",
+                "spanNulls": false,
+                "axisCenteredZero": false,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            },
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          }
+        },
+        {
+          "id": 30,
+          "title": "Preparation sample counts",
+          "type": "table",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 59,
+            "w": 12,
+            "h": 8
+          },
+          "description": "",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "tango2_llm_window_samples{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"input\"}",
+              "legendFormat": "input",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": true,
+              "range": false,
+              "format": "time_series"
+            },
+            {
+              "refId": "B",
+              "expr": "tango2_llm_window_samples{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"prefill_prepare\"}",
+              "legendFormat": "prefill_prepare",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": true,
+              "range": false,
+              "format": "time_series"
+            },
+            {
+              "refId": "C",
+              "expr": "tango2_llm_window_samples{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"prefill_host\"}",
+              "legendFormat": "prefill_host",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": true,
+              "range": false,
+              "format": "time_series"
+            },
+            {
+              "refId": "D",
+              "expr": "tango2_llm_window_samples{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"generation\"}",
+              "legendFormat": "generation",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": true,
+              "range": false,
+              "format": "time_series"
+            },
+            {
+              "refId": "E",
+              "expr": "tango2_llm_window_samples{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"host_remainder\"}",
+              "legendFormat": "host_remainder",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": true,
+              "range": false,
+              "format": "time_series"
+            },
+            {
+              "refId": "F",
+              "expr": "tango2_llm_window_samples{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"detokenize\"}",
+              "legendFormat": "detokenize",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": true,
+              "range": false,
+              "format": "time_series"
+            },
+            {
+              "refId": "G",
+              "expr": "tango2_llm_window_samples{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"deliver\"}",
+              "legendFormat": "deliver",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": true,
+              "range": false,
+              "format": "time_series"
+            },
+            {
+              "refId": "H",
+              "expr": "tango2_llm_window_samples{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"first_text\"}",
+              "legendFormat": "first_text",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": true,
+              "range": false,
+              "format": "time_series"
+            },
+            {
+              "refId": "I",
+              "expr": "tango2_llm_window_samples{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"queue\"}",
+              "legendFormat": "queue",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": true,
+              "range": false,
+              "format": "time_series"
+            },
+            {
+              "refId": "J",
+              "expr": "tango2_llm_window_samples{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\",stage=\"output_tokens\"}",
+              "legendFormat": "output_tokens",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": true,
+              "range": false,
+              "format": "time_series"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "decimals": 0,
+              "noValue": "—",
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            }
+          },
+          "transformations": [
+            {
+              "id": "reduce",
+              "options": {
+                "reducers": [
+                  "lastNotNull"
+                ],
+                "mode": "seriesToRows"
+              }
+            },
+            {
+              "id": "organize",
+              "options": {
+                "renameByName": {
+                  "Field": "Metric",
+                  "Last *": "Samples",
+                  "Last": "Samples",
+                  "lastNotNull": "Samples"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": 31,
+          "title": "CPU observation availability",
+          "type": "table",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 67,
+            "w": 12,
+            "h": 8
+          },
+          "description": "All cases since the collector restarted. Complete/partial/unavailable/invalid concern CPU observation only; legacy and disabled runs have no CPU measurement. Host/GPU latency remains independently eligible.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "tango2_llm_cpu_observations_total{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\"}",
+              "legendFormat": "{{status}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": true,
+              "range": false,
+              "format": "time_series"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "decimals": 0,
+              "noValue": "—",
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            }
+          },
+          "transformations": [
+            {
+              "id": "reduce",
+              "options": {
+                "reducers": [
+                  "lastNotNull"
+                ],
+                "mode": "seriesToRows"
+              }
+            },
+            {
+              "id": "organize",
+              "options": {
+                "renameByName": {
+                  "Field": "Metric",
+                  "Last *": "Samples",
+                  "Last": "Samples",
+                  "lastNotNull": "Samples"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": 32,
+          "title": "CPU eligible samples · last 5m",
+          "type": "table",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 67,
+            "w": 12,
+            "h": 8
+          },
+          "description": "Each CPU scope and counter has its own eligible request count. Zero samples means unavailable or absent observation, not zero CPU work or zero wait. Fewer than 30 samples is exploratory.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "tango2_llm_cpu_window_samples{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\",mode=\"detail\",case=\"$case\"}",
+              "legendFormat": "{{scope}} / {{kind}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": true,
+              "range": false,
+              "format": "time_series"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "decimals": 0,
+              "noValue": "—",
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            }
+          },
+          "transformations": [
+            {
+              "id": "reduce",
+              "options": {
+                "reducers": [
+                  "lastNotNull"
+                ],
+                "mode": "seriesToRows"
+              }
+            },
+            {
+              "id": "organize",
+              "options": {
+                "renameByName": {
+                  "Field": "Metric",
+                  "Last *": "Samples",
+                  "Last": "Samples",
+                  "lastNotNull": "Samples"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": 33,
+          "title": "Run identity and evidence",
+          "type": "table",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 75,
+            "w": 24,
+            "h": 8
+          },
+          "description": "",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "tango2_llm_run_info{job=\"tango2\",component=\"llm\",host=\"10.2.250.15\"}",
+              "legendFormat": "run",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "instant": true,
+              "range": false,
+              "format": "table"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "decimals": 0,
+              "noValue": "—",
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            }
+          }
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 50,
+        "w": 24,
+        "h": 1
+      }
+    }
+  ]
+}

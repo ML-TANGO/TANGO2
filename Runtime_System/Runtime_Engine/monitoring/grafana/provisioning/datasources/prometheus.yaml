@@ -1,6 +1,7 @@
 apiVersion: 1
 datasources:
   - name: Prometheus
+    uid: PBFA97CFB590B2093
     type: prometheus
     access: proxy
     url: http://prometheus:9090
@@ -14,9 +15,9 @@ datasources:
     jsonData:
       httpMethod: GET
       serviceMap:
-        datasourceUid: Prometheus
+        datasourceUid: PBFA97CFB590B2093
       tracesToMetrics:
-        datasourceUid: Prometheus
+        datasourceUid: PBFA97CFB590B2093
         tags:
           - service.name
           - triton.model_name
