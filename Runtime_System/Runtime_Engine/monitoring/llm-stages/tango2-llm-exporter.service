@@ -1,0 +1,19 @@
+[Unit]
+Description=TANGO2 AGX LLM observation metrics
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=rtst
+ExecStart=/usr/bin/python3 /home/rtst/tango2-llm-stages/source/exporter.py --root /home/rtst/tango2-llm-stages/runs
+Environment=PYTHONDONTWRITEBYTECODE=1
+CPUAffinity=0 1 2 3 5 6 7 8 9 10 11
+Restart=on-failure
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/rtst/tango2-llm-stages/runs
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

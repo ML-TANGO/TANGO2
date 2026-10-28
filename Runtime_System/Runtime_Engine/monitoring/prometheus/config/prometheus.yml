@@ -3,12 +3,21 @@ global:
   evaluation_interval: 1s
 
 scrape_configs:
-  - job_name: 'triton'
+  - job_name: prometheus
+    scrape_interval: 15s
     static_configs:
-      - targets: ['192.168.51.196:8002']   # triton prometheus metrics server address
-        labels:
-          service: 'triton'
+      - targets: [localhost:9090]
 
-  - job_name: 'otel-spanmetrics'
+  - job_name: triton
+    file_sd_configs:
+      - files: [/etc/prometheus/targets/triton/*.json]
+        refresh_interval: 30s
+
+  - job_name: tango2
+    file_sd_configs:
+      - files: [/etc/prometheus/targets/tango2/*.json]
+        refresh_interval: 30s
+
+  - job_name: otel-spanmetrics
     static_configs:
-      - targets: ['otel-collector:8889']
+      - targets: [otel-collector:8889]

@@ -4,37 +4,37 @@ networks:
 
 services:
   prometheus:
-    image: docker.io/bitnami/prometheus:latest
+    image: prom/prometheus@sha256:508729e0e2d18e11fd742a5a5ca70e557b940a93948c3c95fd0123a6fd538b69
     container_name: prometheus
     restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
     ports:
       - "9090:9090"
     volumes:
-      # Prometheus config
       - ./prometheus/config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      # Collected data
-      - prometheus-data:/opt/bitnami/prometheus/data
+      - ./prometheus/targets:/etc/prometheus/targets:ro
+      - prometheus-data:/prometheus
     networks: [obsnet]
 
-
   grafana:
-    image: docker.io/grafana/grafana:latest
+    image: grafana/grafana@sha256:1c1bd67c54c5fcf6e759897852b5a584191bd6796e8d328a5ace457799801261
     container_name: grafana
     restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD}
     volumes:
       - grafana-data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
-    depends_on:
-      - prometheus
+    depends_on: [prometheus]
     networks: [obsnet]
-  
+
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:latest
+    image: otel/opentelemetry-collector-contrib@sha256:f2f01157055a9b2aab9df7118e1f1c9abf345e99b23bc7a2bc791db374a7d0f6
     container_name: otel-collector
     restart: unless-stopped
     ports:
@@ -44,14 +44,14 @@ services:
       - "8889:8889"
     volumes:
       - ./otel/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
-    depends_on:
-      - tempo
+    depends_on: [tempo]
     networks: [obsnet]
 
   tempo:
-    image: grafana/tempo:latest
-    command: [ "-config.file=/etc/tempo.yaml" ]
+    image: grafana/tempo@sha256:3f0825e14397d3459e11e96f99ddd3976ec0cb75e328459e173298d9fb74b407
     container_name: tempo
+    restart: unless-stopped
+    command: ["-config.file=/etc/tempo.yaml"]
     ports:
       - "3200:3200"
     volumes:

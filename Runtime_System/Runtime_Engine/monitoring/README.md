@@ -1,160 +1,76 @@
-# Inference Monitoring Stack (Prometheus + Grafana)
+# 모니터링 서버
 
-**AI Inference 서버의 실시간 모니터링**을 위한 기본 스택 구성 예시를 제공합니다.  
-`Prometheus`가 서버 메트릭을 수집하고, `Grafana`가 이를 시각화하여 인퍼런스 파이프라인의 성능을 한눈에 파악할 수 있습니다.
+Prometheus가 Triton 서버와 Orin LLM exporter의 지표를 수집하고 Grafana가
+표시합니다. OpenTelemetry Collector·Tempo는 기존 추적 수집에 사용합니다.
 
----
+## 최초 설치
 
-## 📦 구성 개요
+Docker Compose v2가 있는 Linux 서버에서 실행합니다. `monitoring/`의
+서버 설정과 기존 `otel/`·`grafana/tempo/` 설정을 함께 배치합니다.
+Grafana 초기 비밀번호는 `GRAFANA_ADMIN_PASSWORD` 환경변수로 지정합니다.
 
-### 1. Prometheus
-- **역할:**  
-  메트릭 수집기.  
-  인퍼런스 서버(Triton Inference Server 등) 또는 관련 Exporter(Node, DCGM 등)에서 데이터를 스크레이프(Scrape)합니다.
-
-- **주요 기능:**  
-  - GPU/CPU 사용률, 전력 사용량
-  - 각 모델별 추론 지연(latency), 큐 대기 시간, I/O 지연 등
-
-- **설정 파일:** `prometheus/prometheus.yml`
-  - `scrape_configs` 항목의 `targets`에서 **호스트 주소 또는 컨테이너 주소**를 수정해야 합니다.
-
-  ```yaml
-  scrape_configs:
-    - job_name: 'triton'
-      static_configs:
-        - targets: ['<YOUR_HOST_IP>:8002']   # Triton metrics endpoint
-  ```
-
-  > 예를 들어 Triton 서버가 호스트에서 8002 포트를 통해 노출된다면  
-  > `targets: ['host.docker.internal:8002']` 또는 실제 IP로 변경하십시오.
-
----
-
-### 2. Grafana
-- **역할:**  
-  Prometheus가 수집한 메트릭을 시각화하는 대시보드 서버입니다.
-
-- **대시보드:**  
-  `/grafana/provisioning/dashboards/boards/triton.json`  
-  이 JSON 파일은 Triton 기반 인퍼런스 환경에 특화된 커스텀 대시보드를 포함합니다.
-
-- **표시되는 주요 항목**
-  | 구분 | 설명 |
-  |------|------|
-  | **Preprocessing Compute Latency** | 전처리 단계 연산 지연 |
-  | **Inference Compute Latency** | 모델 추론 단계 지연 |
-  | **Postprocessing Compute Latency** | 후처리 단계 연산 지연 |
-  | **Input / Output Latency** | 입출력 단계별 지연 |
-  | **Queue Delay** | 요청 대기 시간 |
-  | **E2E Request Latency** | 전체 요청-응답 지연 |
-  | **CPU Usage / GPU Usage** | 시스템 자원 사용량 (DCGM, Node Exporter 등 기반) |
-
----
-
-## ⚙️ 사용 방법
-
-### 1. 의존성
-- Docker (또는 nerdctl)
-- Docker Compose v2 이상
-
-### 2. 실행
 ```bash
+cd monitoring
 docker compose up -d
 ```
-또는 containerd 환경에서는:
+
+Grafana는 `http://서버주소:3000`, Prometheus는 `http://서버주소:9090`입니다.
+Triton 서버와 LLM 계측 실행기·exporter는 각각의 추론 호스트에서 실행합니다.
+
+## Triton 지표 연결
+
+기존 Triton 모니터링도 함께 사용합니다. 서버의
+`prometheus/targets/triton/targets.json`에 Triton metrics 주소를 지정합니다.
+
+```json
+[
+  {
+    "targets": ["TRITON_ADDRESS:8002"],
+    "labels": {"service": "triton"}
+  }
+]
+```
+
+Triton의 `/metrics`를 `triton` job으로 수집합니다. 기존
+`grafana/provisioning/dashboards/boards/triton.json`의 **inference latency**
+dashboard에서 전처리·추론·후처리, 입출력·큐·E2E 지연과 CPU·GPU 지표를 봅니다.
+기본 모델명은 `yx_preproc`·`yx_trt`·`yx_postproc`·`yolox_e2e`입니다.
+지연 summary는 Triton의 `--metrics-config=summary_latencies=true`로 활성화하고,
+dashboard의 모델명·분위수를 서버 설정에 맞춥니다.
+
+![Triton dashboard 예시](dashboard_example/example.png)
+
+## LLM 지표 연결
+
+Orin exporter는 TCP 9464의 `/metrics`를 제공합니다. target JSON의 주소를
+서버에서 접근할 수 있는 Orin 주소로 바꿉니다. 서버의 `monitoring/`에서
+다음과 같이 배치합니다.
+
 ```bash
-nerdctl compose up -d
+sudo install -d prometheus/targets/tango2 grafana/provisioning/dashboards/boards
+sudo install -m 0644 llm-stages/prometheus-target.json \
+  prometheus/targets/tango2/agx-llm-stages.json
+sudo install -m 0644 llm-stages/grafana-dashboard.json \
+  grafana/provisioning/dashboards/boards/tango2-agx-llm-stages.json
 ```
 
-기본 포트:
-- Grafana → [`http://localhost:3000`](http://localhost:3000)
-- Prometheus → [`http://localhost:9090`](http://localhost:9090)
+Prometheus의 `tango2` job과 Grafana provider가 각각 30초 간격으로 파일을
+반영합니다. 이후 target·dashboard 변경에는 컨테이너 재시작이 필요 없습니다.
+제공한 datasource 설정은 LLM dashboard와 같은 Prometheus UID를 사용합니다.
+기존 설치에 다른 UID가 있다면 dashboard의 datasource UID를 맞춥니다.
 
-### 3. Grafana 접속 및 로그인
-초기 ID/PW: admin/admin
-로그인 후 패스워드 변경 권장
+공용 운영 서버의 설치 루트는 `/opt/monitoring`입니다. 이미 운영 중이면
+새 stack을 띄우지 않고 위 파일을 기존 설치 루트에 반영합니다.
+기존 Compose·Prometheus 기본 설정을 처음 교체하는 작업은 별도 반영이 필요합니다.
 
-이후 대시보드를 통해 인퍼런스 서버의 현황 파악 가능
-<p align="center">
-  <img src="dashboard_example/example.png" alt="Inference Dashboard Example" width="800"/>
-</p>
+## 확인
 
----
-
-## 🔧 설정 커스터마이징
-
-### Prometheus
-- `prometheus/prometheus.yml`에서 **스크레이프 대상 수정**
-  (예: Triton, Node exporter, DCGM exporter 등)
-- `scrape_interval`, `evaluation_interval` 조정 가능
-
-### Grafana
-- `grafana/provisioning/datasources/prometheus.yaml`
-  Prometheus 서버 주소 수정:
-  ```yaml
-  url: http://prometheus:9090
-  ```
-  외부 Prometheus를 사용할 경우 실제 주소로 변경하세요.
-
-- 대시보드 자동 로딩은 `grafana/provisioning/dashboards/dashboards.yaml`에 정의되어 있습니다.
-
----
-
-## 📊 예시 아키텍처
-
-```
-                     ┌──────────────────────────────┐
-                     │     Triton Inference Host    │
-                     │ ┌──────────────────────────┐ │
-                     │ │  Exporters (DCGM / Node) │ │
-                     │ └──────────────────────────┘ │
-                     └──────────────┬───────────────┘
-                                    │  (HTTP /metrics)
-                                    │
-                                    ▼
-                     ┌──────────────────────────────┐
-                     │          Prometheus          │
-                     │  ─────────────────────────   │
-                     │  • scrape_targets 설정       │
-                     │  • 메트릭 수집               │
-                     └──────────────┬───────────────┘
-                                    │
-                                    ▼
-                     ┌──────────────────────────────┐
-                     │            Grafana           │
-                     │  ─────────────────────────   │
-                     │  • Prometheus 데이터 시각화  │
-                     │  • triton.json 대시보드 제공 │
-                     └──────────────────────────────┘
+```bash
+docker compose ps
+curl -fsS http://TRITON_ADDRESS:8002/metrics
+curl -fsS http://ORIN_ADDRESS:9464/metrics
 ```
 
----
-
-## 🧩 주요 디렉터리 구조
-
-```
-.
-├── docker-compose.yml
-├── prometheus/
-│   └── prometheus.yml
-└── grafana/
-    └── provisioning/
-        ├── datasources/
-        │   └── prometheus.yaml
-        └── dashboards/
-            ├── dashboards.yaml
-            └── boards/
-                └── triton.json
-```
-
----
-
-## 🛠️ Troubleshooting
-
-| 문제 | 원인 | 해결 방법 |
-|------|------|------------|
-| Grafana 대시보드에 "No data" | Prometheus가 메트릭을 수집하지 못함 | `prometheus.yml`의 `targets` 확인 및 Triton Metrics Endpoint 접근 가능 여부 점검 |
-| 일부 패널에 빨간 경고 표시 | Grafana 데이터소스 UID 불일치 | `datasources/prometheus.yaml`의 UID 수정 또는 JSON에서 변수화 |
-| 포트 충돌 | 기존 컨테이너 실행 중 | `docker ps`로 확인 후 중복 컨테이너 중지 |
-
+Prometheus의 `/targets`에서 각 target이 `UP`인지 확인하고, Grafana에서
+**inference latency** 또는 **TANGO2 AGX — LLM Stage Performance**를 엽니다.
+exporter가 실행 중이어도 계측 실행기의 요청 기록이 있어야 그래프가 표시됩니다.

@@ -1,0 +1,13 @@
+{
+  "source_repository": "sdi/scx",
+  "source_directory": "spike/scx_rtst_orin",
+  "last_source_commit": "7d7029aaed604bdd32b69fac46d5a7db7064891a",
+  "files_sha256": {
+    "scx_rtst_orin.c": "56b188cf16b7fc755bf69835bade7759f1e3fd246db19c1d89c4b34ceff85033",
+    "scx_rtst_orin.bpf.c": "a76b55a57cc9f4117e240a086529f0c56c4b4858989380a9d327ca68cad894e7",
+    "admit-pod.sh": "3bfc9cc789b002209907cf2adffbfb684b73a24c95b3295de4284f1deb7ea1e5",
+    "test-run-config.sh": "9ff029fadf0ad7d7e6a12a7f60ca3f14871c2afd89ea6237eb63d5c125c92f8a",
+    "build.sh": "9b7e0a4ca8ecc289d54b1f0c218a7f5607b53d7bb23330b082670ab0152433f9",
+    "README.md": "6039d0247a4adbfff73a2cb956a93a6e1a67113f0e45260a1f9019e5dc3a46e0"
+  }
+}

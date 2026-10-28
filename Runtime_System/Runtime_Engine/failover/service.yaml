@@ -1,0 +1,163 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tc2-service-active
+  namespace: tango2-tc2-service
+  labels:
+    app: tango2-tc2-service
+    tango2.rtst.co.kr/role: active
+spec:
+  nodeName: mic711-rt
+  restartPolicy: Never
+  terminationGracePeriodSeconds: 1
+  containers:
+    - name: server
+      image: rtst-rttools:orin-k1
+      imagePullPolicy: Never
+      command: ["python3", "/opt/tango2-tc2/service_server.py"]
+      env:
+        - name: INSTANCE_ID
+          value: active
+        - name: PYTHONDONTWRITEBYTECODE
+          value: "1"
+      ports:
+        - name: http
+          containerPort: 8080
+      readinessProbe:
+        httpGet:
+          path: /readyz
+          port: http
+        periodSeconds: 1
+        timeoutSeconds: 1
+        failureThreshold: 1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 32Mi
+        limits:
+          memory: 64Mi
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+        readOnlyRootFilesystem: true
+        runAsNonRoot: true
+        runAsUser: 65534
+      volumeMounts:
+        - name: server
+          mountPath: /opt/tango2-tc2
+          readOnly: true
+  volumes:
+    - name: server
+      configMap:
+        name: tc2-service-server
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tc2-service-backup
+  namespace: tango2-tc2-service
+  labels:
+    app: tango2-tc2-service
+    tango2.rtst.co.kr/role: backup
+spec:
+  nodeName: mic711-rt
+  restartPolicy: Never
+  terminationGracePeriodSeconds: 1
+  containers:
+    - name: server
+      image: rtst-rttools:orin-k1
+      imagePullPolicy: Never
+      command: ["python3", "/opt/tango2-tc2/service_server.py"]
+      env:
+        - name: INSTANCE_ID
+          value: backup
+        - name: PYTHONDONTWRITEBYTECODE
+          value: "1"
+      ports:
+        - name: http
+          containerPort: 8080
+      readinessProbe:
+        httpGet:
+          path: /readyz
+          port: http
+        periodSeconds: 1
+        timeoutSeconds: 1
+        failureThreshold: 1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 32Mi
+        limits:
+          memory: 64Mi
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+        readOnlyRootFilesystem: true
+        runAsNonRoot: true
+        runAsUser: 65534
+      volumeMounts:
+        - name: server
+          mountPath: /opt/tango2-tc2
+          readOnly: true
+  volumes:
+    - name: server
+      configMap:
+        name: tc2-service-server
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tc2-service-client
+  namespace: tango2-tc2-service
+  labels:
+    app: tango2-tc2-service-client
+spec:
+  nodeName: mic711-rt
+  restartPolicy: Never
+  terminationGracePeriodSeconds: 1
+  containers:
+    - name: client
+      image: rtst-rttools:orin-k1
+      imagePullPolicy: Never
+      command: ["python3", "/opt/tango2-tc2/service_client_idle.py"]
+      env:
+        - name: PYTHONDONTWRITEBYTECODE
+          value: "1"
+      resources:
+        requests:
+          cpu: 100m
+          memory: 32Mi
+        limits:
+          memory: 64Mi
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+        readOnlyRootFilesystem: true
+        runAsNonRoot: true
+        runAsUser: 65534
+      volumeMounts:
+        - name: client
+          mountPath: /opt/tango2-tc2
+          readOnly: true
+  volumes:
+    - name: client
+      configMap:
+        name: tc2-service-client
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tc2-service
+  namespace: tango2-tc2-service
+spec:
+  type: NodePort
+  clusterIP: 10.111.255.250
+  ports:
+    - name: http
+      protocol: TCP
+      port: 18080
+      targetPort: 8080
+      nodePort: 30082

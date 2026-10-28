@@ -1,0 +1,6 @@
+[
+  {
+    "targets": ["10.2.250.15:9464"],
+    "labels": {"host": "10.2.250.15", "role": "orin-agx", "component": "llm"}
+  }
+]
