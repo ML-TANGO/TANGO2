@@ -42,10 +42,11 @@ This repository is a collection of individual modules that satisfy the overall w
 TANGO2
    ├── Field_Test
    │   ├── SDF
-   │   │   ├── 원시데이터 수집기
-   │   │   ├── 원천데이터 생성기
-   │   │   ├── 제어기
-   │   │   └── LAM 학습,추론
+   │   │   ├── data_loader
+   │   │   ├── preprocessor
+   │   │   ├── request_generator
+   │   │   ├── action_agent
+   │   │   └── k8s
    │   ├── SDM
    │   └── SDS
    │       ├── Data_Revision
