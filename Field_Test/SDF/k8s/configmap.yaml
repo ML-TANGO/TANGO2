@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sdf-agent-config
+data:
+  SITE_ID: "aaa-001"
+  FACILITY_IDS: "00000000-0000-0000-0000-000000000001"
+  WINDOW_MINUTES: "30"
+  INTERVAL_SECONDS: "30"
+  OLLAMA_URL: "http://localhost:8000/api/chat"
+  OLLAMA_MODEL: "gemma4:e4b"
+  VENT_OVERLAP_MARGIN: "20"
+  MQTT_ENABLED: "true"
+  MQTT_ENABLED_FACILITIES: "00000000-0000-0000-0000-000000000001"
+  MQTT_HOST: "http://localhost:8001/matt"
+  MQTT_PORT: "30000"
+  MQTT_PUBLISH_TOPIC: "aaa/{site_id}/_downstream/{gateway_id}"
+  MQTT_RESPONSE_TOPIC: "aaa/{site_id}/_upstream/{gateway_id}"

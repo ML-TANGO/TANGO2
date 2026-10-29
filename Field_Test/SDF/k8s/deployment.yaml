@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sdf-agent
+  labels:
+    app: sdf-agent
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: sdf-agent
+  template:
+    metadata:
+      labels:
+        app: sdf-agent
+    spec:
+      imagePullSecrets:
+        - name: regcred
+      containers:
+        - name: sdf-agent
+          image: registry.example.com/sdf/sdf-agent:latest
+          imagePullPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: sdf-agent-config
+            - secretRef:
+                name: sdf-agent-secret
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1536Mi"
+          volumeMounts:
+            - name: logs
+              mountPath: /app/logs
+      volumes:
+        - name: logs
+          persistentVolumeClaim:
+            claimName: sdf-agent-logs

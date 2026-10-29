@@ -1,0 +1,15 @@
+# sdf-agent 런타임 의존성
+
+pandas>=3.0.3
+numpy
+requests>=2.34.2
+python-dotenv>=1.2.2
+paho-mqtt>=2.1.0,<3
+psycopg2-binary>=2.9.12
+pytz>=2026.2
+pyyaml>=6.0.3
+cryptography>=48.0.0
+xarray>=2026.4.0
+netcdf4>=1.7.4
+h5netcdf>=1.8.1
+pyproj>=3.7.2
