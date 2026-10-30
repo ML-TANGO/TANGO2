@@ -1,0 +1,41 @@
+# =============================================================================
+# llama.cpp + GGUF — 엣지/ARM 보드에 단일 파일로 탑재하는 경로
+#
+#   가중치 양자화는 quant_info 가 아니라 gguf_outtype 으로 지정한다.
+#   (AWQ/GPTQ 체크포인트는 convert_hf_to_gguf.py 가 읽지 못한다)
+# =============================================================================
+input_model: ./models/qwen2.5-0.5b-instruct
+input_format: safetensors
+
+code_generation:
+  target_engine: llama.cpp
+  service_info:
+    service_type: sdm
+    spec:
+      invoke_time: user
+      service_ip: 0.0.0.0
+      service_port: 8080
+  use_triton: no
+  use_optimization: yes
+  use_prompt_engineering: yes
+  use_RAG: no
+
+image_build:
+  deploy_method: k3s
+  build_info:
+    app_name: qwen-edge
+    image_file: qwen-edge:latest
+    target_arch: arm
+    replicas_num: 1
+    target_port: 8080
+    mount_volume: /data
+    storage_class: local
+
+optimization:
+  gguf_outtype: q8_0          # f32 | f16 | bf16 | q8_0 | auto
+  quant_info:
+    quant_method: none        # llama.cpp 경로에서는 awq/gptq 사용 불가
+
+prompt_engineering:
+  prompt_method: once
+  prompt_file: ./prompts/system.txt
