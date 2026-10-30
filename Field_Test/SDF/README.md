@@ -97,8 +97,8 @@ flowchart TD
         E -. "8. Next iteration" .-> A
     end
 
-    A <-- "1. DB connection and data query/return" --> DB
-    D <-- "5. API request/response" --> Cloud
+    DB <-- "1. DB connection and data query/return" --> A
+    Cloud <-- "5. API request/response" --> D
     E -- "7. Send generated action" --> Ctrl
 ```
 
