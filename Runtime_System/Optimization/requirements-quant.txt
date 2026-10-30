@@ -1,0 +1,21 @@
+# 양자화(model_optimizer/optimizer.py) 추가 의존성 — GPU 환경에서만 설치하면 된다.
+#
+#   RTN 은 이 파일 없이도 동작한다(torch + transformers 만 필요, CPU 가능).
+#   GPTQ / AWQ / FP8 / NVFP4 는 캘리브레이션을 돌려야 해서 사실상 GPU 가 필요하다.
+#
+# 설치:
+#   docker compose build --build-arg INSTALL_QUANT=true
+#   또는  pip install -r requirements-quant.txt
+
+# GPTQ (AutoGPTQ 후속)
+gptqmodel
+
+# AWQ (AutoAWQ 후속)
+llmcompressor
+
+# llm-compressor 가 캘리브레이션 데이터셋을 받을 때 쓴다
+datasets
+
+# FP8 / NVFP4 (TensorRT-LLM 경로)
+#   Hopper(sm89) 이상에서 fp8, Blackwell(sm100) 이상에서 nvfp4 가 가속된다.
+nvidia-modelopt[torch]

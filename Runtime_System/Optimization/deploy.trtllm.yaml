@@ -1,0 +1,44 @@
+# =============================================================================
+# TensorRT-LLM + ModelOpt FP8
+#
+#   TRT 엔진 백엔드가 제거되어 PyTorch 백엔드만 남았다.
+#   엔진 빌드 단계가 없고 HF 체크포인트를 그대로 로드하므로 vllm 과 거의 같다.
+#   다른 점은 양자화 경로뿐 — AWQ/GPTQ 가 아니라 ModelOpt(fp8/nvfp4)를 쓴다.
+#
+#   fp8   : per-tensor scaling,  Hopper(sm89) 이상에서 가속
+#   nvfp4 : 블록 크기 16 고정,   Blackwell(sm100) 이상에서 가속
+#   bits / group_size / zero_point 는 방식이 결정하므로 지정해도 무시된다.
+# =============================================================================
+input_model: ./models/qwen2.5-1.5b-instruct
+input_format: safetensors
+
+code_generation:
+  target_engine: trtllm
+  service_info:
+    service_type: sdm
+    spec:
+      invoke_time: user
+      service_ip: 0.0.0.0
+      service_port: 8000
+  use_triton: no
+  use_optimization: yes
+  use_prompt_engineering: no
+  use_RAG: no
+
+image_build:
+  deploy_method: docker
+  build_info:
+    app_name: qwen-trtllm
+    image_file: qwen-trtllm:latest
+    target_arch: x86
+    replicas_num: 1
+    target_port: 8000
+    storage_class: local
+
+optimization:
+  quant_info:
+    quant_method: fp8            # none | fp8 | nvfp4
+  calibration_info:
+    dataset_path: ./calib/calib.txt
+    sample_sentence_number: 512
+    max_len_tokens_per_sentence: 2048

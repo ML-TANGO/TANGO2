@@ -1,0 +1,39 @@
+# =============================================================================
+# PyTorch 직접 실행 + RTN 양자화 — 주기 호출(sds) 서비스
+#
+#   RTN 은 캘리브레이션이 필요 없어 CPU 에서도 돌아가지만, 저장본이 fake-quant 라
+#   파일 크기는 줄지 않는다(정확도 영향 측정용으로 쓰는 편이 맞다).
+# =============================================================================
+input_model: ./models/smollm2-135m-instruct
+input_format: safetensors
+
+code_generation:
+  target_engine: pytorch
+  service_info:
+    service_type: sds
+    spec:
+      invoke_time: period
+      service_shared_folder: /data/shared
+      period_seconds: 60          # 정의되지 않은 키 → extra 에 보관되고 경고가 뜬다
+  use_triton: no
+  use_optimization: yes
+  use_prompt_engineering: no
+  use_RAG: no
+
+image_build:
+  deploy_method: docker
+  build_info:
+    app_name: smollm-batch
+    image_file: smollm-batch:latest
+    target_arch: x86
+    replicas_num: 1
+    mount_volume: /data
+    storage_class: nfs
+
+optimization:
+  save_precision: f16
+  quant_info:
+    quant_method: rtn
+    bits: 8
+    group_size: 128
+    zero_point: true
