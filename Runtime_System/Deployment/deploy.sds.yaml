@@ -1,0 +1,41 @@
+# =============================================================================
+# SDS 서비스 배포탑재 설정 (파이프라인 연결 시험용)
+#
+#   시험 조건 : 모델 변환 없음 · 모델 경량화 없음 · 이미지 빌드 없음
+#   수행 결과 : Data/SDS-template 의 실행 코드가 Data/Output/sds 로 산출됨
+#
+#   실행 : python pipeline.py deploy.sds.yaml
+# =============================================================================
+
+# 입력 신경망 모델 (변환·경량화를 켤 때만 실제로 사용됨)
+input_model: ./Data/sample_model
+input_format: safetensors            # pytorch | safetensors
+
+code_generation:
+  target_engine: llama.cpp           # vllm | trtllm | llama.cpp | pytorch | tensorrt
+  service_info:
+    service_type: sds                # sds | sdf | sdm  (현재 sds 만 동작)
+    spec:
+      invoke_time: user              # user | period | event
+      service_ip: 0.0.0.0
+      service_port: 8080
+  use_triton: no
+  use_optimization: no               # yes 로 바꾸면 ③ 경량화 단계 수행
+  use_prompt_engineering: no
+  use_RAG: no
+
+image_build:
+  deploy_method: raw                 # raw(이미지 생성 없음) | docker | k3s | k8s
+  build_info:
+    app_name: sds-demo
+    image_file: sds-demo:latest
+    target_arch: arm                 # x86 | arm
+    replicas_num: 1
+    target_port: 8080
+    mount_volume: /data
+    storage_class: local
+
+optimization:
+  gguf_outtype: q8_0                 # llama.cpp 타깃일 때 가중치 양자화 타입
+  quant_info:
+    quant_method: none

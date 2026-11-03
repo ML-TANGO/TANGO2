@@ -1,0 +1,88 @@
+# 배포 파이프라인 컨테이너 실행 정의
+#
+# 상시 서비스가 아니라 CLI 도구이므로 전부 일회성(`run --rm`)으로 실행한다.
+# llama.cpp 는 이미지에 이미 컴파일·설치되어 있으므로(--llama-cpp-dir 불필요),
+# 별도 마운트 없이 gguf 변환까지 바로 된다.
+#
+#   1) 이미지 빌드 (llama.cpp 컴파일 포함 → 최초 빌드는 수 분 소요)
+#        docker compose build
+#        docker compose build --build-arg INSTALL_QUANT=true   # GPTQ/AWQ 까지
+#
+#   2) 파이프라인 전체 실행 (deploy.yaml 기준)
+#        docker compose run --rm pipeline deploy.yaml -w ./work --dry-run
+#        docker compose run --rm pipeline deploy.yaml -w ./work
+#        docker compose run --rm pipeline deploy.yaml -w ./work --from convert
+#
+#   3) 개별 도구만 실행 (entrypoint 를 덮어쓴 보조 서비스)
+#        docker compose run --rm converter -if safetensors -i ./models/qwen -of gguf -o ./res/qwen
+#        docker compose run --rm optimizer ./models/qwen -o ./res/q --method rtn --bits 8
+#        docker compose run --rm pruner    ./models/qwen -o ./res/p --method wanda --sparsity 0.5 --dataset ./calib/calib.txt
+#        docker compose run --rm codegen   deploy.yaml -o ./res/service
+#
+# 출력 파일을 호스트 사용자 소유로 남기려면(권장) UID/GID 를 넘긴다:
+#        UID=$(id -u) GID=$(id -g) docker compose run --rm pipeline deploy.yaml -w ./work
+#
+# 사전 준비(권장): 바인드 마운트 대상 폴더를 미리 만들어 두면 소유권 문제가 없다.
+#        mkdir -p models work res calib .hf-cache
+
+x-common: &common
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: deploy-pipeline:latest
+
+  # 미설정 시 root(0:0). 위 예시처럼 UID/GID 를 넘기면 호스트 사용자 권한으로 실행된다.
+  user: "${UID:-0}:${GID:-0}"
+
+  working_dir: /app
+  volumes:
+    - ./models:/app/models             # 입력 모델(HF 디렉토리)
+    - ./work:/app/work                 # 파이프라인 단계별 산출물
+    - ./res:/app/res                   # 개별 도구 실행 결과
+    - ./calib:/app/calib               # 캘리브레이션 데이터셋
+    - ./deploy.yaml:/app/deploy.yaml:ro
+    - ./.hf-cache:/cache/huggingface   # HF 다운로드 캐시 재사용
+    # llama.cpp 는 이미지에 내장(/app/llama.cpp)되어 더 이상 마운트하지 않는다.
+    # 호스트의 다른 llama.cpp 를 쓰고 싶을 때만 아래를 켜고 --llama-cpp-dir 로 지정:
+    # - ./llama.cpp:/app/llama.cpp
+
+  environment:
+    - HF_HOME=/cache/huggingface
+    # 로컬 모델만 쓰고 네트워크를 막고 싶으면 주석 해제
+    # - HF_HUB_OFFLINE=1
+    # - TRANSFORMERS_OFFLINE=1
+
+  # ── GPU 사용 시 (Dockerfile 의 GPU 주석 참고) ────────────────────
+  # deploy:
+  #   resources:
+  #     reservations:
+  #       devices:
+  #         - driver: nvidia
+  #           count: all
+  #           capabilities: [gpu]
+
+services:
+  # 기본 진입점: deploy.yaml 하나로 전 단계를 돈다
+  pipeline:
+    <<: *common
+
+  # 아래는 이미지의 ENTRYPOINT 를 덮어써서 개별 도구만 돌리는 용도
+  converter:
+    <<: *common
+    entrypoint: ["python", "model_converter/model_converter.py"]
+
+  optimizer:
+    <<: *common
+    entrypoint: ["python", "model_optimizer/optimizer.py"]
+
+  pruner:
+    <<: *common
+    entrypoint: ["python", "model_optimizer/pruner.py"]
+
+  codegen:
+    <<: *common
+    entrypoint: ["python", "code_generator/codegen.py"]
+
+  imagebuild:
+    <<: *common
+    entrypoint: ["python", "image_builder/imagebuild.py"]

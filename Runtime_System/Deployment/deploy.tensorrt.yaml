@@ -1,0 +1,39 @@
+# =============================================================================
+# TensorRT(ONNX) + 이벤트 구동 함수 서비스(sdf)
+#
+#   현재 파이프라인은 ONNX export 까지만 수행한다.
+#   .plan(engine) 빌드는 미구현이라 검증 시 경고가 뜬다.
+# =============================================================================
+input_model: ./models/clip-vit-base-patch32
+input_format: pytorch
+
+code_generation:
+  target_engine: tensorrt
+  service_info:
+    service_type: sdf
+    spec:
+      invoke_time: event
+      service_shared_folder: /data/inbox
+  coding_info:
+    sdf_action:
+      lib_path: ./actions/postprocess.py
+      entry_point: handle_result
+  use_triton: yes
+  use_optimization: no
+  use_prompt_engineering: no
+  use_RAG: no
+
+image_build:
+  deploy_method: k8s
+  build_info:
+    app_name: clip-encoder
+    image_file: clip-encoder:latest
+    target_arch: x86
+    replicas_num: 2
+    target_port: 8001
+    mount_volume: /data
+    storage_class: minio
+
+optimization:
+  quant_info:
+    quant_method: none
