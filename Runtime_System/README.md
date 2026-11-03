@@ -25,11 +25,11 @@ Runtime_System 은 이 전 과정을 세 구성 요소로 나누어 담당합니
 
 | 구성 요소 | 역할 | 주 대상 |
 |---|---|---|
-| **Optimization** | 모델 변환 · 경량화 · 실행 코드 및 배포 이미지 생성 | 공통 (선행 단계) |
+| **Deployment** | 모델 변환 · 경량화 · 실행 코드 및 배포 이미지 생성 | 공통 (선행 단계) |
 | **Runtime_Engine** | 실시간 스케줄링 · 장애복구 · 계측 · 모니터링 | 엣지 단말 (Jetson Orin) |
 | **workload_deploy** | 모델 분할 · 자동 확장 · 원격 노드 관리 | 서버 / Kubernetes 클러스터 |
 
-**Optimization 이 배포 가능한 산출물을 만들고, 대상 환경에 따라 Runtime_Engine 또는 workload_deploy 가 그 산출물을 실제로 실행·운영합니다.**
+**Deployment  배포 가능한 산출물을 만들고, 대상 환경에 따라 Runtime_Engine 또는 workload_deploy 가 그 산출물을 실제로 실행·운영합니다.**
 
 ---
 
@@ -40,7 +40,7 @@ Runtime_System 은 이 전 과정을 세 구성 요소로 나누어 담당합니
                                 │
                                 ▼
                      ┌────────────────────┐
-                     │    Optimization    │   모델 변환 · 경량화
+                     │    Deployment      │   모델 변환 · 경량화
                      │                    │   실행 코드 · 배포 이미지 생성
                      └─────────┬──────────┘
                                │
@@ -65,7 +65,7 @@ Runtime_System 은 이 전 과정을 세 구성 요소로 나누어 담당합니
 
 엣지 단말에 신경망 응용을 올려 실행하는 경우입니다.
 
-1. **Optimization** 이 모델을 단말 실행 엔진이 요구하는 포맷으로 변환하고 경량화합니다. 함께 실행 코드와 설치 구성물을 산출합니다.
+1. **Deployment** 모델을 단말 실행 엔진이 요구하는 포맷으로 변환하고 경량화합니다. 함께 실행 코드와 설치 구성물을 산출합니다.
 2. 산출물을 Orin 으로 옮기고, **Runtime_Engine** 의 결과물을 설치합니다.
 3. Runtime_Engine 이 cgroup 단위 실행 등급으로 실시간성을 확보하고, 추론 구간을 계측·수집하며, active 장애 시 backup 으로 서비스 경로를 전환합니다.
 
@@ -73,7 +73,7 @@ Runtime_System 은 이 전 과정을 세 구성 요소로 나누어 담당합니
 
 서버나 클러스터에서 서비스하는 경우입니다.
 
-1. **Optimization** 이 모델을 변환·경량화하고 컨테이너 이미지와 배포 매니페스트를 산출합니다.
+1. **Deployment** 모델을 변환·경량화하고 컨테이너 이미지와 배포 매니페스트를 산출합니다.
 2. **workload_deploy** 의 `remoteManager` 로 이미지를 빌드·푸시하고 대상 노드에 배포하거나, 생성된 매니페스트를 클러스터에 적용합니다.
 3. `k8s_autoscaling` 이 부하에 따라 Pod 수를 조정하고 우선순위에 따라 자원을 배분하며, 필요 시 `Parallell_Inference` 로 모델을 분할해 분산 추론합니다.
 
@@ -81,7 +81,7 @@ Runtime_System 은 이 전 과정을 세 구성 요소로 나누어 담당합니
 
 ## 3. 구성 요소
 
-### 3.1 Optimization — 모델 변환 · 경량화 · 생성
+### 3.1 Deployment — 모델 변환 · 경량화 · 생성
 
 `deploy.yaml` 한 장으로 경량화부터 배포 이미지 생성까지 전 과정을 자동 수행하는 파이프라인입니다.
 
@@ -95,7 +95,7 @@ Runtime_System 은 이 전 과정을 세 구성 요소로 나누어 담당합니
 
 산출물은 `Data/Output/<service>` 에 쌓이며, 단말 배포와 서버 배포 양쪽의 입력이 됩니다.
 
-→ [`Optimization/README.md`](./Optimization/README.md)
+→ [`Deployment/README.md`](./Deployment/README.md)
 
 ### 3.2 Runtime_Engine — 단말 실시간 실행과 관측
 
@@ -133,7 +133,7 @@ Jetson Orin 의 Linux · Kubernetes 환경을 위한 실시간 스케줄러, 서
 Runtime_System/
 ├── README.md                     이 문서
 │
-├── Optimization/                 모델 변환 · 경량화 · 실행 코드 및 배포 이미지 생성
+├── Deployment/                   모델 변환 · 경량화 · 실행 코드 및 배포 이미지 생성
 │   ├── pipeline.py                 파이프라인 드라이버
 │   ├── yaml_parser.py              설정 파싱 / 검증 / 실행 계획
 │   ├── model_optimizer/            양자화 · 프루닝
@@ -161,14 +161,14 @@ Runtime_System/
 
 | 하려는 일 | 보아야 할 곳 |
 |---|---|
-| 학습된 모델을 배포 가능한 형태로 만들고 싶다 | `Optimization/` |
-| 모델을 더 가볍게 만들고 싶다 (양자화 · 희소화) | `Optimization/model_optimizer/` |
-| 다른 실행 엔진용 포맷으로 바꾸고 싶다 | `Optimization/model_converter/` |
-| **엣지 단말에 올려 실행하고 싶다** | `Optimization/` → `Runtime_Engine/` |
+| 학습된 모델을 배포 가능한 형태로 만들고 싶다 | `Deployment/` |
+| 모델을 더 가볍게 만들고 싶다 (양자화 · 희소화) | `Deployment/model_optimizer/` |
+| 다른 실행 엔진용 포맷으로 바꾸고 싶다 | `Deployment/model_converter/` |
+| **엣지 단말에 올려 실행하고 싶다** | `Deployment/` → `Runtime_Engine/` |
 | 단말에서 실시간성을 확보하고 싶다 | `Runtime_Engine/scheduler/` |
 | 단말 서비스의 장애에 대비하고 싶다 | `Runtime_Engine/failover/` |
 | 추론 지연과 자원 사용을 계측·시각화하고 싶다 | `Runtime_Engine/monitoring/` |
-| **서버·클러스터에 배포해 서비스하고 싶다** | `Optimization/` → `workload_deploy/` |
+| **서버·클러스터에 배포해 서비스하고 싶다** | `Deployment/` → `workload_deploy/` |
 | 이미지를 빌드해 여러 노드에 배포하고 싶다 | `workload_deploy/remoteManager/` |
 | 부하에 따라 자동 확장하고 싶다 | `workload_deploy/k8s_autoscaling/` |
 | 모델을 나누어 분산 추론하고 싶다 | `workload_deploy/Parallell_Inference/` |
@@ -184,7 +184,7 @@ Runtime_System/
 | `Runtime_Engine/monitoring` | Orin 단말 | 별도 Linux 서버의 Prometheus · Grafana | Grafana 3000 / Prometheus 9090 |
 | `workload_deploy/k8s_autoscaling/prometheus` | Kubernetes 클러스터 | kube-prometheus-stack (Helm) | Grafana 30300 / Prometheus 30090 (NodePort) |
 
-**아키텍처가 섞인 환경을 전제합니다.** 단말은 ARM64(Jetson Orin), 클러스터는 amd64 와 arm64 노드가 함께 있습니다. Optimization 의 `target_arch` 설정과 멀티 아키텍처 이미지 빌드가 이 때문에 필요합니다.
+**아키텍처가 섞인 환경을 전제합니다.** 단말은 ARM64(Jetson Orin), 클러스터는 amd64 와 arm64 노드가 함께 있습니다. Deployment 의 `target_arch` 설정과 멀티 아키텍처 이미지 빌드가 이 때문에 필요합니다.
 
 ---
 
