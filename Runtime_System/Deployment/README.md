@@ -1,4 +1,4 @@
-# Optimization — 배포탑재 파이프라인
+# Deployment — 배포탑재 파이프라인
 
 **실행 환경에 최적화되는 신경망 실행 이미지 생성 기술**
 
@@ -156,7 +156,7 @@ PyTorch, safetensors, GGUF, ONNX 간 변환을 수행합니다. 입력은 HF 형
 ### 3.1 저장소 구조
 
 ```
-Optimization/
+Deployment/
 ├── pipeline.py              파이프라인 드라이버 (주 진입점)
 ├── yaml_parser.py           설정 파싱 / 검증 / 실행 계획 산출
 │
