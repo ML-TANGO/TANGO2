@@ -1,0 +1,82 @@
+# =============================================================================
+# deploy.yaml — 모델 배포·탑재 파이프라인 설정 샘플
+#
+#   python pipeline.py deploy.yaml --dry-run
+#   python pipeline.py deploy.yaml -w ./work
+#
+# 엔진별 제약 (yaml_parser.ENGINE_SPECS):
+#   vllm      → safetensors | quant: none/awq/gptq/rtn
+#   llama.cpp → gguf        | quant: none/rtn  (가중치 양자화는 gguf_outtype 으로)
+#   tensorrt  → onnx        | quant: none/rtn  (engine 빌드 단계 미구현)
+#   pytorch   → safetensors | quant: none/rtn
+# =============================================================================
+
+# 입력 모델 (HF 포맷 디렉토리)
+input_model: ./models/qwen2.5-0.5b-instruct
+input_format: safetensors            # pytorch | safetensors
+
+code_generation:
+  target_engine: vllm                # vllm | tensorrt | pytorch | llama.cpp
+  service_info:
+    service_type: sdm                # sds | sdf | sdm
+    spec:
+      invoke_time: user              # period | event | user
+      service_ip: 0.0.0.0
+      service_port: 8000
+      service_shared_folder: /data/shared
+  coding_info:
+    sdf_action:
+      lib_path: null
+      entry_point: null
+  use_triton: no
+  use_optimization: yes
+  use_prompt_engineering: no
+  use_RAG: no
+
+image_build:
+  deploy_method: docker              # k8s | k3s | docker | raw
+  build_info:
+    app_name: qwen-chat
+    image_file: qwen-chat:latest
+    target_arch: x86                 # x86 | arm
+    replicas_num: 1
+    target_ip: 127.0.0.1
+    target_port: 8000
+    mount_volume: /data
+    storage_class: local             # local | minio | nfs | aws
+
+optimization:
+  save_precision: f16                # f16 | bf16 | f32
+  # gguf_outtype: q8_0               # llama.cpp 타겟일 때만 사용 (f16/q8_0/...)
+
+  quant_info:
+    quant_method: gptq               # awq | gptq | rtn | none
+    bits: 4                          # 4 | 8  (16 = 양자화 없음)
+    group_size: 128                  # -1 | 64 | 128
+    zero_point: false                # true=asymmetric, false=symmetric
+    gptq_param:
+      damping_factor: 0.01
+      act_order: true
+
+  calibration_info:                  # awq / gptq 에 필수
+    dataset_path: ./calib/calib.txt
+    sample_sentence_number: 512
+    max_len_tokens_per_sentence: 2048
+    tokenizer_path: null             # null 이면 input_model 의 토크나이저 사용
+
+  # 프루닝은 아직 미구현 — 지정하면 경고와 함께 건너뜁니다.
+  # pruning_info:
+  #   pruning_method: wanda
+  #   sparsity_ratio: "50%"
+  #   target_layers: all
+
+prompt_engineering:
+  prompt_method: null
+  prompt_file: null
+
+RAG:
+  RAG_method: null
+  RAG_info:
+    input_source: null
+    embedding_model: null
+    vector_db_file: null

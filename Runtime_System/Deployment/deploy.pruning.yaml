@@ -1,0 +1,66 @@
+# =============================================================================
+# 프루닝 + 양자화를 함께 적용하는 경로
+#
+#   순서: prune → quantize → convert
+#   프루닝으로 만든 0 은 RTN 양자화를 거쳐도 그대로 유지된다
+#   (asymmetric 이어도 zero-point 가 상쇄되어 정확히 0 으로 복원된다).
+#
+# 프루닝 방식 선택:
+#   unstructural  정확도 손실이 가장 적다. 단 흩어진 0 은 일반 하드웨어에서
+#                 속도 이득이 없다 → 실제 가속을 원하면 nm_pattern 을 쓴다.
+#   nm_pattern    "2:4" = 4개마다 2개만 남긴다. Ampere 이상 sparse tensor
+#                 core 에서 가속된다. 지정하면 sparsity_ratio 는 무시된다.
+#   structural    출력 채널을 통째로 0. 50% 를 넘기면 손실이 급격히 커진다.
+#   wanda         |W| 에 입력 활성 크기를 곱해 판단한다. 캘리브레이션 필수.
+#
+# 공통 주의: 세 방식 모두 '마스킹'이라 텐서 shape 이 그대로다.
+#            파일 크기와 메모리는 줄지 않는다.
+# =============================================================================
+input_model: ./models/qwen2.5-0.5b-instruct
+input_format: safetensors
+
+code_generation:
+  target_engine: vllm
+  service_info:
+    service_type: sdm
+    spec:
+      invoke_time: user
+      service_ip: 0.0.0.0
+      service_port: 8000
+  use_triton: no
+  use_optimization: yes
+  use_prompt_engineering: no
+  use_RAG: no
+
+image_build:
+  deploy_method: docker
+  build_info:
+    app_name: qwen-sparse
+    image_file: qwen-sparse:latest
+    target_arch: x86
+    replicas_num: 1
+    target_port: 8000
+    storage_class: local
+
+optimization:
+  save_precision: f16
+
+  pruning_info:
+    pruning_method: wanda        # structural | unstructural | wanda
+    sparsity_ratio: "50%"
+    target_layers: all           # 또는 ["model.layers.10", "model.layers.11"]
+    # nm_pattern: "2:4"          # unstructural 전용. 지정 시 sparsity_ratio 무시
+
+  quant_info:
+    quant_method: gptq
+    bits: 4
+    group_size: 128
+    zero_point: false
+    gptq_param:
+      damping_factor: 0.01
+      act_order: true
+
+  calibration_info:              # wanda / gptq / awq 가 공유한다
+    dataset_path: ./calib/calib.txt
+    sample_sentence_number: 128
+    max_len_tokens_per_sentence: 2048

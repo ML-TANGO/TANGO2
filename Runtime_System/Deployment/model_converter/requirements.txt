@@ -1,0 +1,18 @@
+# 코어 변환 의존성
+transformers
+safetensors
+
+# ONNX 변환·검증
+#   optimum-onnx[onnxruntime] 가 optimum(~=2.1), onnx, onnxruntime 를 함께 끌어온다.
+#   (optimum 2.x 부터 ONNX export 는 optimum 본체가 아니라 이 패키지가 등록한다)
+optimum-onnx[onnxruntime]
+onnx
+
+# CLIP 비전 인코더 export/검증 (이미지 입력)
+numpy
+pillow
+
+# GGUF 변환(llama.cpp convert_hf_to_gguf.py)용 보조 의존성
+#   gguf 파이썬 모듈은 Dockerfile 에서 클론한 llama.cpp/gguf-py 로 설치한다(버전 일치 목적).
+sentencepiece
+protobuf
