@@ -108,7 +108,8 @@
   background-color: $yellow304;
 }
 
-.star:disabled .star-icon {
+/* 채점 완료·추론 중 잠금이어도 매긴 점수는 노랑으로 보인다 — 빈 별만 비활성 회색. */
+.star:disabled:not(.star--filled) .star-icon {
   background-color: $disable-color;
 }
 
