@@ -417,7 +417,7 @@ class Sensors:
             except OSError:
                 continue
             if kind in ("cpu-thermal", "gpu-thermal", "soc0-thermal"):
-                self.paths[kind.split("-")[0]+"_temperature_celsius"] = (directory/"temp", .001)
+                self.paths[kind.split("-")[0]+"_temperature_celsius"] = (directory/"TEMP(기존SDS경로에있던내용)", .001)
         # AGX exposes separate rails; VDD_IN is the NX/Nano input measurement.
         # DDR/1V8AO is downstream of system 5V, so do not sum all AGX rails.
         power_names = {"VDD_IN": "input_power_watts",

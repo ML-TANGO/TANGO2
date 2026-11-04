@@ -145,14 +145,14 @@ def test_cleanup_aligned_frame_should_drop_transient_columns_and_keep_measuremen
             "site_id_other": ["ags_003"],
             "probe": ["ch1"],
             "wind_speed": [1.2],
-            "temp": [25.0],
+            "TEMP(기존SDS경로에있던내용)": [25.0],
         }
     )
 
     cleaned = _cleanup_aligned_frame(frame)
 
-    assert list(cleaned.columns) == ["temp"]
-    assert cleaned.loc[0, "temp"] == 25.0
+    assert list(cleaned.columns) == ["TEMP(기존SDS경로에있던내용)"]
+    assert cleaned.loc[0, "TEMP(기존SDS경로에있던내용)"] == 25.0
 
 
 
@@ -166,7 +166,7 @@ def test_save_final_results_should_remove_duplicate_columns_and_write_csv(tmp_pa
                 "open_rate_dup": [0],
                 "site_id_extra": ["ags_003"],
                 "facility_id_extra": ["f1"],
-                "temp": [25.0],
+                "TEMP(기존SDS경로에있던내용)": [25.0],
             }
         )
     }
@@ -183,4 +183,4 @@ def test_save_final_results_should_remove_duplicate_columns_and_write_csv(tmp_pa
     assert "site_id_extra" not in saved_df.columns
     assert "facility_id_extra" not in saved_df.columns
     assert saved_df.loc[0, "open_rate_ch1"] == 75
-    assert saved_df.loc[0, "temp"] == 25.0
+    assert saved_df.loc[0, "TEMP(기존SDS경로에있던내용)"] == 25.0

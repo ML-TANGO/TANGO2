@@ -68,12 +68,12 @@ class QueryBuilder:
         #sensor_type에 따른 조회 컬럼들
         sensor_type_columns = {
             'anemometer': ['wind_speed', 'wind_direction'],
-            'thermohygro': ['temp', 'humi'],
+            'thermohygro': ['TEMP(기존SDS경로에있던내용)', 'humi'],
             'agsmotor_green' : ['open_rate'],
             'raindrop': ['rain'],
             'counter' : ['current_count', 'accumulated_count'],
             'amperemeter' : ['amp'],
-            'temperature' : ['probe', 'temp'],
+            'temperature' : ['probe', 'TEMP(기존SDS경로에있던내용)'],
         }
 
         channel_exist_tables = ['agsmotor_green', 'temperature']

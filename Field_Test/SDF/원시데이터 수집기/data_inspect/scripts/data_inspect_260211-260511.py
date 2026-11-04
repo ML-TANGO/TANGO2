@@ -92,7 +92,7 @@ def classify_data_kind(path: Path, columns: List[str]) -> str:
     column_set = set(columns)
     if "open_rate" in column_set:
         return "motor_open_rate"
-    if {"temp", "humi"}.issubset(column_set):
+    if {"TEMP(기존SDS경로에있던내용)", "humi"}.issubset(column_set):
         return "internal_environment" if path.name.startswith("In_") else "external_environment"
     if "rain" in column_set:
         return "external_rain"

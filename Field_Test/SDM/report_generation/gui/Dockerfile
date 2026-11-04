@@ -1,7 +1,7 @@
 # Interactive demo GUI: chest CT (DICOM / NIfTI) in, structured report out.
 #
 #   docker build -t chest-ct-gui:1 .          (from chestct_foundation/gui/)
-#   ../run_gui.sh                             (see README.md)
+#   ../run_gui.sh                             (see README_en.md)
 #
 # Built ON TOP of the verified TC1 image, so the model code, weights and the pinned
 # inference stack are exactly the ones TC1 measured; that image itself is untouched.

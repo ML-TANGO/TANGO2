@@ -164,8 +164,8 @@ deploy:production:
     - !reference [.buildkit, script]
     - !reference [.buildkit, after_script]
   after_script:
-    - awk -v nlines=2 '/build:/ {for (i=0; i<nlines; i++) {getline}; next} 1' docker-compose.yaml > docker-compose.yaml.temp
-    - mv -f docker-compose.yaml.temp docker-compose.yaml
+    - awk -v nlines=2 '/build:/ {for (i=0; i<nlines; i++) {getline}; next} 1' docker-compose.yaml > docker-compose.yaml.TEMP(기존SDS경로에있던내용)
+    - mv -f docker-compose.yaml.TEMP(기존SDS경로에있던내용) docker-compose.yaml
   only:
     - /^v[0-9]+\.[0-9]+\.[0-9]+$/
     - /^v[0-9]+\.[0-9]+-rc[0-9]+$/
@@ -174,7 +174,7 @@ deploy:production:
   artifacts:
     untracked: false
     paths:
-      - README.md
+      - README_en.md
       - envoy-proxy
       - devices.proto
       - docker-compose.yaml

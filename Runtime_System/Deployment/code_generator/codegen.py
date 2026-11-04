@@ -13,7 +13,7 @@ pipeline.py 의 codegen 단계가 호출한다. 변환이 끝난 모델 폴더�
       app.py             invoke_time 에 맞는 구동 방식 (HTTP 서버 / 워커 루프)
       prompt.py          use_prompt_engineering=yes 일 때만
       requirements.txt
-      README.md
+      README_en.md
 
 설계 의도:
     코드 템플릿은 '정적'이고, 달라지는 값은 전부 runtime.json 으로 뺐다.
@@ -778,7 +778,7 @@ def generate_service(plan, cfg, out_dir, model_dir=None):
         if runtime.get("prompt"):
             write("prompt.py", _PROMPT_PY)
         write("requirements.txt", _requirements(engine, invoke_time))
-        write("README.md", _readme(runtime, invoke_time, written + ["README.md"]))
+        write("README_en.md", _readme(runtime, invoke_time, written + ["README_en.md"]))
 
         return (0, f"{engine} / invoke_time={invoke_time} 서비스 생성 "
                    f"({len(written)}개 파일)")

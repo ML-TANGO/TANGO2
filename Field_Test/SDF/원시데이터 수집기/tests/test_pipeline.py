@@ -40,7 +40,7 @@ class DummyQueryBuilder:
     def __init__(self, database_client):
         self.database_client = database_client
         self.ts_join_mode = "nearest"
-        self.columns = ["temp", "humi", "out_temp"]
+        self.columns = ["TEMP(기존SDS경로에있던내용)", "humi", "out_temp"]
         self.build_result = "SELECT * FROM test_table"
         self.build_error = None
         self.build_call_count = 0
@@ -110,11 +110,11 @@ class TestDataPipeline:
         """QueryBuilder가 요청을 수락하면 validate_request()가 True를 반환하는지 검증"""
         pipeline = pipeline_with_mocked_dependencies
 
-        result = pipeline.validate_request(["temp", "humi"])
+        result = pipeline.validate_request(["TEMP(기존SDS경로에있던내용)", "humi"])
 
         assert result is True
         assert pipeline.query_builder.build_call_count == 1
-        assert pipeline.query_builder.build_call_arguments[0][1]["requested_columns"] == ["temp", "humi"]
+        assert pipeline.query_builder.build_call_arguments[0][1]["requested_columns"] == ["TEMP(기존SDS경로에있던내용)", "humi"]
 
     def test_validate_request_should_return_false_when_query_builder_raises_value_error(
         self,
@@ -132,7 +132,7 @@ class TestDataPipeline:
         """사용 가능 컬럼 목록이 QueryBuilder.columns에서 반환되는지 검증"""
         pipeline = pipeline_with_mocked_dependencies
 
-        assert pipeline.get_available_columns() == ["temp", "humi", "out_temp"]
+        assert pipeline.get_available_columns() == ["TEMP(기존SDS경로에있던내용)", "humi", "out_temp"]
 
     def test_get_pipeline_status_should_return_current_state(self, pipeline_with_mocked_dependencies):
         """파이프라인 상태 딕셔너리에 주요 상태 값이 포함되는지 검증"""
@@ -141,23 +141,23 @@ class TestDataPipeline:
         status = pipeline.get_pipeline_status()
 
         assert status["ts_join_mode"] == "nearest"
-        assert status["available_columns"] == ["temp", "humi", "out_temp"]
+        assert status["available_columns"] == ["TEMP(기존SDS경로에있던내용)", "humi", "out_temp"]
         assert status["db_connected"] is False
         assert "timestamp" in status
 
     def test_collect_data_should_execute_built_query_and_return_rows(self, pipeline_with_mocked_dependencies):
         """쿼리 생성 후 DB 실행 결과가 반환되는 정상 흐름을 검증"""
         pipeline = pipeline_with_mocked_dependencies
-        pipeline.db_client.execute_query_result = [{"temp": 25.1}, {"temp": 25.2}]
+        pipeline.db_client.execute_query_result = [{"TEMP(기존SDS경로에있던내용)": 25.1}, {"TEMP(기존SDS경로에있던내용)": 25.2}]
 
         result = pipeline.collect_data(
-            requested_columns=["temp"],
+            requested_columns=["TEMP(기존SDS경로에있던내용)"],
             start_time="2026-03-09 00:00:00",
             end_time="2026-03-09 01:00:00",
             ts_join_mode="exact",
         )
 
-        assert result == [{"temp": 25.1}, {"temp": 25.2}]
+        assert result == [{"TEMP(기존SDS경로에있던내용)": 25.1}, {"TEMP(기존SDS경로에있던내용)": 25.2}]
         assert pipeline.query_builder.ts_join_mode == "exact"
         assert pipeline.query_builder.build_call_count == 1
         assert pipeline.db_client.executed_queries == ["SELECT * FROM test_table"]
@@ -169,7 +169,7 @@ class TestDataPipeline:
 
         with pytest.raises(Exception, match="Database connection failed"):
             pipeline.collect_data(
-                requested_columns=["temp"],
+                requested_columns=["TEMP(기존SDS경로에있던내용)"],
                 start_time="2026-03-09 00:00:00",
                 end_time="2026-03-09 01:00:00",
             )

@@ -190,5 +190,5 @@ Runtime_System/
 
 ## 관련 문서
 
-- 상위 저장소 개요 — [`../README.md`](../README.md)
-- 플랫폼(LLMOps) 구성 — [`../LLMOps/`](../LLMOps/)
+- 상위 저장소 개요 — [`../README_en.md`](../README_en.md)
+- 플랫폼(LLMOps) 구성 — [`README_LLMOps.md`](../README_LLMOps.md)
