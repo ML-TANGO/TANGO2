@@ -235,7 +235,8 @@ TANGO Community 는 누구나 쉽게 AI 의 세계에 들어올 수 있도록 �
 
 ## License
 
-이 프로젝트는 [`LICENSE.md`](LICENSE.md) 의 조건에 따라 공개된다 (한국어 버전: [`LICENSE_ko.md`](LICENSE_ko.md)).
+이 프로젝트는 [`LICENSE.md`](LICENSE.md) 의 조건에 따라 공개된다 (한국어 버전: [`LICENSE_ko.md`](LICENSE_ko.md)).  
+비영리 목적으로는 자유로이 코드 사용이 가능한 GPLv3 라이선스를 따르고 있으며, 사업화를 위해서는 코드 공개 의무가 없는 **기술이전**(기술이전명:  [탱고 인공지능 통합개발 도구](https://itec.etri.re.kr/httx/itec/sub02/sub02_01_1.do?t_id=1520-2026-00820&nowPage=1&nowBlock=0&adminYn=&searchDate1=&searchDate2=&m_code=002&searchKey=b_total&searchWord=))을 통하여 가능하다.
 
 ## Acknowledgement <a name="ack"></a>
 
