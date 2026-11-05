@@ -261,7 +261,7 @@ def main() -> None:
         help=f"적산 기준 온도 °C (기본 {DEFAULT_GROWING_DEGREE_DAYS_BASE_C})",
     )
     parser.add_argument(
-        "--temp-col",
+        "--TEMP(기존SDS경로에있던내용)-col",
         default="In_thermohygro_temp",
         help="growing_degree_days 계산에 사용할 온도 컬럼명",
     )

@@ -190,7 +190,7 @@ def _dockerignore() -> str:
         "*.pyc",
         "*.log",
         ".git/",
-        "README.md",
+        "README_en.md",
         "",
         "# 모델은 볼륨으로 마운트한다(이미지에 굽는 경우에만 이 줄을 지우세요)",
         "model/",
@@ -640,7 +640,7 @@ def build_artifacts(plan, cfg, out_dir, service_dir=None, model_dir=None):
                     if not entry.is_file():
                         continue
                     # 서비스 README 는 배포 README 와 이름이 겹치므로 옮겨 둔다
-                    target = out / ("SERVICE.md" if entry.name == "README.md"
+                    target = out / ("SERVICE.md" if entry.name == "README_en.md"
                                     else entry.name)
                     shutil.copy2(entry, target)
                     copied.append(target.name)
@@ -679,9 +679,9 @@ def build_artifacts(plan, cfg, out_dir, service_dir=None, model_dir=None):
                                  has_pvc="pvc.yaml" in manifests),
                       executable=True)
 
-        write("README.md",
+        write("README_en.md",
               _readme(app_name, deploy_method, engine, arch, image, invoke_time,
-                      port, storage_class, written + ["README.md"]))
+                      port, storage_class, written + ["README_en.md"]))
 
         hint = f", 서비스 코드 {len(copied)}개 동봉" if copied else ""
         return (0, f"{deploy_method} / {engine} / {arch} 아티팩트 생성 "

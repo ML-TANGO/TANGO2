@@ -1,42 +1,131 @@
+# ---------------------------------------------------------------------------
+# OS / editor artifacts
+# ---------------------------------------------------------------------------
 .DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+*.orig
+*.bak
 
-# Log files
-*.out
-*.log
-nohup.out
+# ---------------------------------------------------------------------------
+# IDE / editor
+# ---------------------------------------------------------------------------
+.idea/
+*.iml
+.vscode/
+*.code-workspace
+.project
+.settings/
+.classpath
+
+# ---------------------------------------------------------------------------
+# AI assistant / agent tool files (local working notes, never for the repo)
+# ---------------------------------------------------------------------------
+.claude/
+CLAUDE.md
+AGENTS.md
+.omc/
+.omc-workspace
+.serena/
+*.serena
+.cursor/
+.cursorrules
+.cursorignore
+.aider*
+.agents/
+.gemini/
+.codex/
 .gstack/
+.continue/
+.windsurfrules
+.clinerules
 
-# AI assistant / editor tool directories
-*.omc/
-*.gemini/
-*.idea/
-*.vscode/
-*.cursor/
-*.aider*
-*.agents/
-*.vite
+# ---------------------------------------------------------------------------
+# Logs
+# ---------------------------------------------------------------------------
+*.log
+*.out
+nohup.out
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
-# Python
+# ---------------------------------------------------------------------------
+# Python caches / build
+# ---------------------------------------------------------------------------
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
 .Python
-
-# Jupyter
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+.pyre/
+.hypothesis/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
 .ipynb_checkpoints/
+.venv/
+venv/
+env/
+ENV/
+.pdm-python
+.pixi/
+__pypackages__/
 
+# ---------------------------------------------------------------------------
+# Node / frontend caches and build output
+# ---------------------------------------------------------------------------
+node_modules/
+.yarn/cache/
+.yarn/install-state.gz
+.yarn/unplugged/
+.yarn/build-state.yml
+.pnp.*
+.vite/
+.cache/
+.parcel-cache/
+.turbo/
+.next/
+.eslintcache
+*.tsbuildinfo
+dist/
+dist-ssr/
+build/
+*.local
+
+# ---------------------------------------------------------------------------
 # Env / secrets
+# ---------------------------------------------------------------------------
 .env
 .env.*
+!.env.example
 *.key
+*.pem
 
-# Build / dist
-dist/
-build/
-*.egg-info/
+# Per-server values files for the Helm charts (contain IPs, passwords, tokens)
+/devops/values_*.yaml
+/devops/**/values_*.yaml
+/devops/values.yaml.template.old
+!/devops/gaip_kafka/values_dev_single.yaml
+/devops/gaip_nfs_provisioner/values-*_dev.yaml
+/devops/fb_common_app/helm/file/
+bundles/flightbase/cicd/configuration/dev/kube/cache
+bundles/flightbase/cicd/configuration/dev/kube/config
 
+# ---------------------------------------------------------------------------
 # Model checkpoints & weights
+# ---------------------------------------------------------------------------
 checkpoints/
 *.bin
 *.safetensors
@@ -44,4 +133,3 @@ checkpoints/
 *.pth
 *.ckpt
 *.gguf
-*.serena

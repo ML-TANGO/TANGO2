@@ -22,13 +22,13 @@ class TestUtils:
 
     def test_column_list_should_contain_core_sensor_columns(self):
         """핵심 센서 컬럼들이 COLUMN_LIST에 포함되어 있는지 검증"""
-        expected_columns = {"temp", "humi", "out_temp", "out_humi", "open_rate_ch1", "SS", "SI", "PA"}
+        expected_columns = {"TEMP(기존SDS경로에있던내용)", "humi", "out_temp", "out_humi", "open_rate_ch1", "SS", "SI", "PA"}
 
         assert expected_columns.issubset(set(utils.COLUMN_LIST))
 
     def test_column_condition_should_define_min_max_for_known_columns(self):
         """컬럼별 경계 조건이 min/max 구조로 정의되어 있는지 검증"""
-        for column_name in ["out_temp", "out_humi", "out_wind_speed", "open_rate_ch1", "temp", "default"]:
+        for column_name in ["out_temp", "out_humi", "out_wind_speed", "open_rate_ch1", "TEMP(기존SDS경로에있던내용)", "default"]:
             assert column_name in utils.COLUMN_CONDITION
             assert "min" in utils.COLUMN_CONDITION[column_name]
             assert "max" in utils.COLUMN_CONDITION[column_name]
@@ -40,7 +40,7 @@ class TestUtils:
             ("out_wind_speed", 0, 80),
             ("out_rain", 0, 1.0),
             ("open_rate_ch1", 0, 100),
-            ("temp", -100, 50),
+            ("TEMP(기존SDS경로에있던내용)", -100, 50),
         ],
     )
     def test_column_condition_should_match_expected_ranges(self, column_name, expected_min, expected_max):

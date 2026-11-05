@@ -1,1 +1,0 @@
-export { defualt } from './ModelBase';

@@ -12,7 +12,7 @@
 #   docker run ... ctreportgen-val --npz_dir /data ...  falls through to run_inference.py
 #
 # The fall-through keeps the bundle's own documented invocation working unchanged, so
-# `--npz_dir ... --out ...` behaves exactly as `inference_bundle/README.md` describes.
+# `--npz_dir ... --out ...` behaves exactly as `inference_bundle/README_en.md` describes.
 set -euo pipefail
 
 DATA_ROOT=${DATA_ROOT:-/data}

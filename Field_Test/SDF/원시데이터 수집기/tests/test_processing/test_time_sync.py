@@ -94,7 +94,7 @@ def test_merge_asof_nearest_should_raise_value_error_when_index_is_not_datetime(
         ("out_rain", 1.5, 1.0),
         ("open_rate_ch1", -5, 0),
         ("open_rate_ch1", 105, 100),
-        ("temp", -150, -100),
+        ("TEMP(기존SDS경로에있던내용)", -150, -100),
         ("unknown_column", -999, -999),
     ],
 )
@@ -107,7 +107,7 @@ def test_general_linear_interpolation_should_interpolate_between_sparse_points_a
     series = pd.Series(
         [10.0, 20.0],
         index=pd.to_datetime(["2026-03-09 00:01:00", "2026-03-09 00:03:00"]),
-        name="temp",
+        name="TEMP(기존SDS경로에있던내용)",
     )
     time_index = pd.date_range("2026-03-09 00:00:00", "2026-03-09 00:04:00", freq="1min")
 
@@ -123,7 +123,7 @@ def test_general_linear_interpolation_should_keep_last_value_for_duplicate_index
     series = pd.Series(
         [10.0, 99.0, 20.0],
         index=pd.to_datetime(["2026-03-09 00:00:00", "2026-03-09 00:00:00", "2026-03-09 00:02:00"]),
-        name="temp",
+        name="TEMP(기존SDS경로에있던내용)",
     )
     time_index = pd.date_range("2026-03-09 00:00:00", "2026-03-09 00:02:00", freq="1min")
 
@@ -197,13 +197,13 @@ def test_resample_to_minute_should_support_fill_methods(fill_method):
 
 def test_resample_to_minute_linear_should_preserve_categorical_columns_with_forward_fill():
     df = pd.DataFrame(
-        {"temp": [10.0, 20.0], "status": ["open", "close"]},
+        {"TEMP(기존SDS경로에있던내용)": [10.0, 20.0], "status": ["open", "close"]},
         index=pd.to_datetime(["2026-03-09 00:00:00", "2026-03-09 00:02:00"]),
     )
 
     result = resample_to_minute(df, agg="first", fill_method="linear")
 
-    assert result.loc[pd.Timestamp("2026-03-09 00:01:00"), "temp"] == 15.0
+    assert result.loc[pd.Timestamp("2026-03-09 00:01:00"), "TEMP(기존SDS경로에있던내용)"] == 15.0
     assert result.loc[pd.Timestamp("2026-03-09 00:01:00"), "status"] == "open"
 
 

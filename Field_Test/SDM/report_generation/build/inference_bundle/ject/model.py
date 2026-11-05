@@ -6,7 +6,7 @@ dense latent decoder that sits on top of it, and the config needed to rebuild
 both from a training checkpoint.
 
 Nothing here trains: no EMA, no predictors, no text heads, no losses. See
-README.md for what else lives inside the checkpoint files.
+README_en.md for what else lives inside the checkpoint files.
 
 Encoder layout (224 input, patch 4, `huge` variant)::
 

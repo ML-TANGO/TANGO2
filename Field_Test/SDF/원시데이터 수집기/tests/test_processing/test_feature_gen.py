@@ -18,9 +18,9 @@ def test_add_diff_features_should_create_diff_column():
 
 
 def test_add_diff_features_should_handle_multiple_columns_custom_period_and_suffix():
-    df = pd.DataFrame({"temp": [10.0, 12.0, 15.0, 20.0], "humi": [50.0, 49.0, 47.0, 44.0]})
+    df = pd.DataFrame({"TEMP(기존SDS경로에있던내용)": [10.0, 12.0, 15.0, 20.0], "humi": [50.0, 49.0, 47.0, 44.0]})
 
-    out = add_diff_features(df, ["temp", "humi"], periods=2, suffix="delta_2")
+    out = add_diff_features(df, ["TEMP(기존SDS경로에있던내용)", "humi"], periods=2, suffix="delta_2")
 
     assert out.loc[2, "temp_delta_2"] == 5.0
     assert out.loc[3, "humi_delta_2"] == -5.0
@@ -61,9 +61,9 @@ def test_add_rolling_features_should_create_rolling_mean():
 
 
 def test_add_rolling_features_should_create_all_supported_stats_for_multiple_columns():
-    df = pd.DataFrame({"temp": [10.0, 20.0, 30.0], "humi": [40.0, 45.0, 55.0]})
+    df = pd.DataFrame({"TEMP(기존SDS경로에있던내용)": [10.0, 20.0, 30.0], "humi": [40.0, 45.0, 55.0]})
 
-    out = add_rolling_features(df, ["temp", "humi"], window=2, stats=["mean", "std", "min", "max"], min_periods=1)
+    out = add_rolling_features(df, ["TEMP(기존SDS경로에있던내용)", "humi"], window=2, stats=["mean", "std", "min", "max"], min_periods=1)
 
     assert out.loc[2, "temp_roll2_mean"] == 25.0
     assert out.loc[2, "temp_roll2_min"] == 20.0

@@ -166,8 +166,8 @@ def build_hourly_join() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         high_open_channel_ratio=("open_rate", lambda x: float((x >= 90).mean())),
         channel_count=("open_rate", "count"),
     )
-    internal = temp[temp["scope"] == "internal"].groupby("local_ts", as_index=False).agg(internal_temp=("temp", "mean"))
-    external = temp[temp["scope"] == "external"].groupby("local_ts", as_index=False).agg(external_temp=("temp", "mean"))
+    internal = temp[temp["scope"] == "internal"].groupby("local_ts", as_index=False).agg(internal_temp=("TEMP(기존SDS경로에있던내용)", "mean"))
+    external = temp[temp["scope"] == "external"].groupby("local_ts", as_index=False).agg(external_temp=("TEMP(기존SDS경로에있던내용)", "mean"))
     joined = motor_hourly.merge(internal, on="local_ts", how="inner").merge(external, on="local_ts", how="left")
     joined["month"] = joined["local_ts"].dt.strftime("%Y-%m")
     return joined, open_rate, temp
@@ -206,11 +206,11 @@ def calculate_summary() -> dict:
         monthly["open_temp_corr"] = joined.groupby("month").apply(lambda x: x["mean_open_rate"].corr(x["internal_temp"]), include_groups=False).values
 
     temp_range = {
-        "observed_min": float(internal["temp"].min()) if not internal.empty else np.nan,
-        "observed_max": float(internal["temp"].max()) if not internal.empty else np.nan,
-        "observed_p10": float(internal["temp"].quantile(0.10)) if not internal.empty else np.nan,
-        "observed_p50": float(internal["temp"].quantile(0.50)) if not internal.empty else np.nan,
-        "observed_p90": float(internal["temp"].quantile(0.90)) if not internal.empty else np.nan,
+        "observed_min": float(internal["TEMP(기존SDS경로에있던내용)"].min()) if not internal.empty else np.nan,
+        "observed_max": float(internal["TEMP(기존SDS경로에있던내용)"].max()) if not internal.empty else np.nan,
+        "observed_p10": float(internal["TEMP(기존SDS경로에있던내용)"].quantile(0.10)) if not internal.empty else np.nan,
+        "observed_p50": float(internal["TEMP(기존SDS경로에있던내용)"].quantile(0.50)) if not internal.empty else np.nan,
+        "observed_p90": float(internal["TEMP(기존SDS경로에있던내용)"].quantile(0.90)) if not internal.empty else np.nan,
         "candidate_min": float(candidate["internal_temp"].quantile(0.10)) if not candidate.empty else np.nan,
         "candidate_max": float(candidate["internal_temp"].quantile(0.90)) if not candidate.empty else np.nan,
         "candidate_optimal": float(candidate["internal_temp"].median()) if not candidate.empty else np.nan,
@@ -235,7 +235,7 @@ def calculate_summary() -> dict:
         "humidity_daily": humidity_daily,
         "joined": joined,
         "open_rate": open_rate,
-        "temp": temp,
+        "TEMP(기존SDS경로에있던내용)": temp,
         "monthly": monthly,
         "temp_range": temp_range,
         "april_may_high_ratio": april_may_high_ratio,
@@ -247,7 +247,7 @@ def create_summary_plots(summary: dict) -> dict[str, Path]:
     plots: dict[str, Path] = {}
     joined = summary["joined"]
     monthly = summary["monthly"]
-    temp = summary["temp"]
+    temp = summary["TEMP(기존SDS경로에있던내용)"]
     open_rate = summary["open_rate"]
 
     if not monthly.empty:
@@ -297,7 +297,7 @@ def create_summary_plots(summary: dict) -> dict[str, Path]:
             internal["month"] = pd.to_datetime(internal["local_ts"], errors="coerce").dt.strftime("%Y-%m")
             path = PLOT_ROOT / "internal_temperature_boxplot_by_month.png"
             months = sorted(internal["month"].dropna().unique())
-            data = [internal.loc[internal["month"] == month, "temp"].dropna() for month in months]
+            data = [internal.loc[internal["month"] == month, "TEMP(기존SDS경로에있던내용)"].dropna() for month in months]
             fig, ax = plt.subplots(figsize=(9.8, 5.6))
             ax.boxplot(data, tick_labels=months, showfliers=False)
             ax.set_ylabel("내부온도(°C)")
@@ -406,9 +406,9 @@ def make_deck(summary: dict, plots: dict[str, Path]) -> None:
     else:
         corr_text = "계산 불가"
     add_metric_card(slide, "월별 온도-개폐율 상관", "양의 상관 주의", corr_text[:95], Inches(7.9), Inches(1.45), Inches(4.55), Inches(1.25), RED)
-    # Left: monthly open_rate boxplot (shows distribution per month, no direct temp correlation)
+    # Left: monthly open_rate boxplot (shows distribution per month, no direct TEMP(기존SDS경로에있던내용) correlation)
     add_image(slide, plots.get("open_rate_boxplot"), Inches(0.75), Inches(3.0), Inches(5.95), Inches(3.65))
-    # Right: temp boxplot + text emphasis (replacing scatter)
+    # Right: TEMP(기존SDS경로에있던내용) boxplot + text emphasis (replacing scatter)
     add_image(slide, plots.get("temp_boxplot"), Inches(6.95), Inches(3.0), Inches(5.65), Inches(3.65))
 
     # Slide 6: B notebook (REDUCED graphs, ADDED text)
