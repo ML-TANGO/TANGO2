@@ -229,19 +229,84 @@ def test_custom_rows_are_clipped_while_reading(tmp_path):
     assert big not in md and md.count("생략") == 1
 
 
-def test_expert_section_pairs_samples_with_ratings():
-    samples = {"total": 2, "status": "running", "expert_prompt": "기준", "samples": [
-        {"idx": 0, "input": "입력0", "output": "출력0", "reference": "참고0", "image": "img/a.png"},
-        {"idx": 1, "input": "입력1", "output": "출력1", "reference": None}]}
+def _expert_session(**sample):
+    """전문가 세션 응답 2종(get_expert_samples·get_expert_result) — 샘플 0 은 채점, 1 은 미채점."""
+    samples = {"job_id": "expert-38-abc", "total": 2, "status": "running", "expert_prompt": "기준",
+               "run_name": "홍길동 위원", "samples": [
+                   {"idx": 0, "input": "입력0", "output": "출력0", "reference": "참고0",
+                    "image": "img/a.png", **sample},
+                   {"idx": 1, "input": "입력1", "output": "출력1", "reference": None}]}
     result = {"rated": 1, "avg_score": 3.0, "pass_rate": 0.0,
               "distribution": {"1": 0, "2": 0, "3": 1, "4": 0, "5": 0},
               "ratings": [{"sample_idx": 0, "score": 3, "verdict": "X", "comment": "근거 부족",
-                           "rater_user": "rater1", "create_datetime": "2026-10-01 10:00"}]}
-    md = R.render_expert(samples, result, limit=100)
+                           "rater_user": "rater1", "create_datetime": "2026-10-01 10:00:00"}]}
+    return samples, result
+
+
+def _media_blocks(md):
+    return [json.loads(line) for prev, line in zip(md.split("\n"), md.split("\n")[1:])
+            if prev == "```expert-sample"]
+
+
+def test_expert_section_pairs_samples_with_ratings():
+    md = R.render_expert(*_expert_session(), model_id=38, limit=100)
     assert "1 / 2" in md and "3.0" in md
     assert "근거 부족" in md and "rater1" in md
     assert "a.png" in md and "img/a.png" not in md
     assert "미채점" in md
+
+
+def test_expert_sample_carries_image_and_sensor_data():
+    rows = [["my_ship", "ship_id"], ["1", "0"]]
+    md = R.render_expert(*_expert_session(image_served=True, csv_rows=rows), model_id=38)
+    assert _media_blocks(md) == [{"model_id": 38, "job_id": "expert-38-abc", "idx": 0,
+                                  "image": True, "name": "a.png", "rows": rows}]
+    assert "플랫폼 화면에서" not in md
+
+
+def test_expert_media_block_cannot_be_closed_by_its_content():
+    rows = [["name"], ["a\n```\n# 제목"]]
+    md = R.render_expert(*_expert_session(image_served=True, csv_rows=rows), model_id=38)
+    assert _media_blocks(md)[0]["rows"] == rows
+    assert "\n# 제목" not in md
+
+
+def test_expert_media_block_stays_one_line_for_unicode_separators():
+    # 화면의 정규식은 U+2028·U+2029 도 줄 끝으로 본다 — 원문 그대로 실으면 블록을 놓친다.
+    rows = [["name"], ["a\u2028b\u2029c"]]
+    md = R.render_expert(*_expert_session(image_served=True, csv_rows=rows), model_id=38)
+    assert _media_blocks(md)[0]["rows"] == rows
+    assert "\u2028" not in md and "\u2029" not in md
+
+
+def test_expert_text_sample_has_no_media_block():
+    samples, result = _expert_session()
+    del samples["samples"][0]["image"]
+    assert _media_blocks(R.render_expert(samples, result, model_id=38)) == []
+
+
+def test_expert_output_is_the_text_not_the_inference_flag():
+    md = R.render_expert(*_expert_session(real_output=True), model_id=38)
+    assert "출력0" in md and "True" not in md
+
+
+def test_expert_scores_name_the_reviewer():
+    md = R.render_expert(*_expert_session(), model_id=38)
+    assert "홍길동 위원 · 샘플 1" in md
+    assert "| 홍길동 위원 | rater1 | 3 | X | 2026-10-01 19:00 |" in md
+
+
+def test_expert_missing_comment_and_input_are_explicit():
+    samples, result = _expert_session(input="")
+    result["ratings"][0]["comment"] = None
+    md = R.render_expert(samples, result, model_id=38)
+    assert "코멘트 없음" in md
+    assert md.count("**입력**") == 1   # 빈 입력(VLM 샘플)은 빈 칸을 남기지 않는다
+
+
+def test_expert_samples_start_on_a_new_page():
+    md = R.render_expert(*_expert_session(), model_id=38)
+    assert md.count("\n\n---\n\n### ") == 2
 
 
 # ── 조립 ─────────────────────────────────────────────────────────────────────
@@ -407,6 +472,63 @@ def test_project_report_shows_expert_progress(monkeypatch):
     md = asyncio.run(R.build_project_report(project_id=3))["markdown"]
     assert "세트 1" in md and "100 / 100" in md and "4.2 ★" in md and "80" in md
     assert "세트 2" in md and "30 / 100" in md and "3.5" in md
+
+
+def _patch_expert_project(monkeypatch):
+    """세션 3개짜리 전문가 프로젝트 — 위원 둘은 채점, 하나는 채점 전."""
+    from evaluation import service as S
+
+    names = {"e1": "김위원", "e2": "이위원", "e3": "박위원"}
+    runs = [_run(n, job, metric_set="expert", model_id=38, run_name=name)
+            for n, (job, name) in enumerate(names.items(), 1)]
+    _patch_project(monkeypatch, "expert", runs, {}, [])
+
+    async def samples(model_id, job_id):
+        return {"job_id": job_id, "total": 1, "run_name": names[job_id], "samples": [
+            {"idx": 0, "input": "", "output": f"출력-{job_id}", "image": "a.png",
+             "image_served": True, "csv_rows": [["my_ship"], ["1"]]}]}
+
+    async def result(model_id, job_id):
+        rated = 0 if job_id == "e3" else 1
+        return {"rated": rated, "avg_score": 4.0, "pass_rate": 100.0, "distribution": {},
+                "ratings": [{"sample_idx": 0, "score": 4, "verdict": "O", "rater_user": "acct",
+                             "comment": f"코멘트-{job_id}", "create_datetime": None}] * rated}
+
+    monkeypatch.setattr(S, "get_expert_samples", samples)
+    monkeypatch.setattr(S, "get_expert_result", result)
+
+
+def test_project_report_with_samples_lists_every_reviewer(monkeypatch):
+    _patch_expert_project(monkeypatch)
+    out = asyncio.run(R.build_project_report(project_id=3, samples=True))
+    md = out["markdown"]
+    assert out["has_samples"] is True
+    assert [(b["model_id"], b["job_id"]) for b in _media_blocks(md)] == [(38, "e1"), (38, "e2")]
+    for text in ("## #1 김위원 — 샘플별 상세", "코멘트-e1", "## #2 이위원 — 샘플별 상세", "코멘트-e2"):
+        assert text in md
+    assert "코멘트-e3" not in md and "채점 전" in md and "#3" in md
+    assert "\n\n---\n\n## #2 이위원 — 지표 요약" in md   # 위원마다 새 쪽에서 시작
+
+
+def test_project_report_caps_detailed_sessions_and_says_so(monkeypatch):
+    _patch_expert_project(monkeypatch)
+    monkeypatch.setattr(R, "SESSION_DETAIL_LIMIT", 1)
+    md = asyncio.run(R.build_project_report(project_id=3, samples=True))["markdown"]
+    assert "코멘트-e1" in md and "코멘트-e2" not in md
+    assert "#2, #3" in md and "세션 화면에서" in md
+
+
+def test_project_report_stays_a_summary_by_default(monkeypatch):
+    _patch_expert_project(monkeypatch)
+    out = asyncio.run(R.build_project_report(project_id=3))
+    assert out["has_samples"] is True
+    assert _media_blocks(out["markdown"]) == [] and "코멘트-e1" not in out["markdown"]
+
+
+def test_project_report_samples_are_for_expert_projects_only(monkeypatch):
+    _patch_project(monkeypatch, "reference", [_run(1, "job1", metrics={"arc": 0.5})], {}, ["arc"])
+    out = asyncio.run(R.build_project_report(project_id=3, samples=True))
+    assert out["has_samples"] is False and "샘플별 상세" not in out["markdown"]
 
 
 def test_project_report_unknown_project_raises(monkeypatch):

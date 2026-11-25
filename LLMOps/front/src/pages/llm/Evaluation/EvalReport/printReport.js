@@ -33,6 +33,13 @@ pre {
 }
 code { font-family: D2Coding, Consolas, monospace; }
 blockquote { margin: 8px 0; padding: 4px 10px; border-left: 3px solid #999; color: #444; }
+hr { height: 0; margin: 0; border: 0; page-break-after: always; }
+hr + h3 { margin-top: 0; }
+figure { margin: 0 0 6px; }
+figure p, figure ~ p { margin: 5px 0; }
+figure img { display: block; max-width: 100%; max-height: 74mm; margin: 0 auto; page-break-inside: avoid; }
+figure table { margin: 4px 0; font-size: 7pt; line-height: 1.35; }
+figure th, figure td { padding: 2px 3px; word-break: keep-all; }
 `;
 
 const escapeHtml = (text) =>
@@ -44,9 +51,17 @@ const escapeHtml = (text) =>
       ],
   );
 
+const imageSettled = (image) =>
+  image.complete
+    ? Promise.resolve()
+    : new Promise((resolve) => {
+        image.addEventListener('load', resolve, { once: true });
+        image.addEventListener('error', resolve, { once: true });
+      });
+
 // html 은 react-markdown 이 그린 미리보기 DOM 의 innerHTML 이다(원문 HTML 은 렌더하지 않는다).
 // title 은 인쇄 창이 PDF 파일 이름으로 제안하는 값이다.
-export const printReportHtml = (html, title) => {
+export const printReportHtml = async (html, title) => {
   const frame = document.createElement('iframe');
   frame.setAttribute('aria-hidden', 'true');
   frame.style.cssText =
@@ -57,13 +72,15 @@ export const printReportHtml = (html, title) => {
   const doc = win.document;
   doc.open();
   // CSP 는 방어선을 하나 더 두는 것이다 — 이 iframe 은 앱과 같은 출처라, 만에 하나 스크립트가
-  // 섞여 들어와도 실행되지 않게 한다(인라인 <style> 만 허용).
+  // 섞여 들어와도 실행되지 않게 한다(인라인 <style> 과 미리보기가 만든 blob 이미지만 허용).
   doc.write(
     `<!doctype html><html lang="ko"><head><meta charset="utf-8">` +
-      `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">` +
+      `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src blob:">` +
       `<title>${escapeHtml(title)}</title><style>${PRINT_CSS}</style></head><body>${html}</body></html>`,
   );
   doc.close();
+  // 이미지가 다 실리기 전에 인쇄하면 빈칸으로 나온다.
+  await Promise.all(Array.from(doc.images, imageSettled));
 
   // 인쇄 창이 닫힌 뒤 지운다. Chrome 은 print() 가 창이 닫힐 때까지 멈추지만 Firefox 는 바로
   // 돌아오므로, afterprint 를 못 받는 경우를 위한 시간 상한을 넉넉히 둔다.

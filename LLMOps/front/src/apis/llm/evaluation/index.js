@@ -239,11 +239,12 @@ export const getEvalReport = async (modelId, jobId) => {
   });
 };
 
-// 평가 프로젝트 리포트(Markdown) — 프로젝트의 실행 전체를 한 표로 요약(샘플별 상세 없음).
-// → { markdown, filename }. 실행 1건 리포트와 같은 모달이 쓴다.
-export const getEvalProjectReport = async (projectId) => {
+// 평가 프로젝트 리포트(Markdown) — 프로젝트의 실행 전체를 한 표로 요약. 전문가 프로젝트는
+// withSamples 로 평가위원(세션)별 샘플 상세를 붙일 수 있다(has_samples 로 알려 준다).
+// → { markdown, filename, has_samples }. 실행 1건 리포트와 같은 모달이 쓴다.
+export const getEvalProjectReport = async (projectId, withSamples = false) => {
   return await callApi({
-    url: `evaluations/projects/${projectId}/report`,
+    url: `evaluations/projects/${projectId}/report?samples=${withSamples}`,
     method: 'get',
   });
 };

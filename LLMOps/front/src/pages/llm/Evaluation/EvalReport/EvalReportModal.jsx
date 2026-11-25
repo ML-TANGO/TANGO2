@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
-import { Loading } from '@jonathan/ui-react';
+import { Checkbox, Loading } from '@jonathan/ui-react';
 
 import NewStyleModalFrame from '@src/components/Modal/NewStyleModalFrame';
 
@@ -12,7 +12,10 @@ import { STATUS_SUCCESS } from '@src/network';
 
 import { errorToastMessage } from '@src/utils';
 
+import ExpertSampleBlock from './ExpertSampleBlock';
+import { EXPERT_SAMPLE_LANG, toDownloadMarkdown } from './expertSample';
 import { printReportHtml } from './printReport';
+import { createSampleImages, NO_IMAGES } from './sampleImage';
 
 import classNames from 'classnames/bind';
 import style from './EvalReport.module.scss';
@@ -23,28 +26,45 @@ const cx = classNames.bind(style);
 // 눌리는 외부 링크가 되지 않게 글자로만 그린다.
 const ReportLinkText = ({ children }) => <span>{children}</span>;
 
+// expert-sample 코드 블록이면 그 안의 글(JSON), 아니면 null.
+const expertSampleText = (node) => {
+  const code = node.children?.[0];
+  const lang = code?.properties?.className?.[0];
+  return lang === `language-${EXPERT_SAMPLE_LANG}`
+    ? code.children?.[0]?.value || ''
+    : null;
+};
+
 // 평가 실행 1건 리포트 미리보기 — 서버가 만든 Markdown 을 그대로 보이고, 같은 텍스트를
 // .md 로 내려받거나 인쇄 창(PDF 저장)으로 보낸다.
-// 모델 출력·코멘트가 섞인 문서라 원문 HTML 은 렌더하지 않는다(rehype-raw 미사용). 리포트에는
-// 이미지가 없으므로 img 도 막아 둔다 — 문서 속 링크가 외부로 요청을 보내지 못하게.
-// projectId 를 주면 프로젝트 리포트(실행 전체 요약), 아니면 실행 1건 리포트다.
+// 모델 출력·코멘트가 섞인 문서라 원문 HTML 은 렌더하지 않는다(rehype-raw 미사용). Markdown
+// 이미지 문법도 막아 둔다 — 문서 속 링크가 외부로 요청을 보내지 못하게. 전문가 샘플 이미지는
+// expert-sample 블록(서버만 쓴다)으로 와서 ExpertSampleBlock 이 우리 API 로만 받는다.
+// projectId 를 주면 프로젝트 리포트(실행 전체 요약), 아니면 실행 1건 리포트다. 전문가 프로젝트는
+// 체크하면 평가위원(세션)별 샘플 상세를 뒤에 붙인다.
 const EvalReportModal = ({ modelId, jobId, projectId, onClose }) => {
   const { t } = useTranslation();
   const [report, setReport] = useState(null); // { markdown, filename }
   const [loading, setLoading] = useState(true);
+  const [hasSamples, setHasSamples] = useState(false); // 샘플별 상세를 붙일 수 있는 프로젝트인가
+  const [withSamples, setWithSamples] = useState(false);
+  const [imageCount, setImageCount] = useState(NO_IMAGES); // 샘플 이미지 준비 상황
   const previewRef = useRef(null);
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
+    setReport(null);
+    setImageCount(NO_IMAGES);
     const load =
       projectId != null
-        ? getEvalProjectReport(projectId)
+        ? getEvalProjectReport(projectId, withSamples)
         : getEvalReport(modelId, jobId);
     load.then((res) => {
       if (!alive) return;
       if (res.status === STATUS_SUCCESS && res.result?.markdown) {
         setReport(res.result);
+        setHasSamples(!!res.result.has_samples);
       } else {
         errorToastMessage(res.error, res.message);
       }
@@ -53,7 +73,38 @@ const EvalReportModal = ({ modelId, jobId, projectId, onClose }) => {
     return () => {
       alive = false;
     };
-  }, [modelId, jobId, projectId]);
+  }, [modelId, jobId, projectId, withSamples]);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 리포트마다 새 보관소
+  const images = useMemo(() => createSampleImages(setImageCount), [report]);
+  useEffect(() => images.close, [images]);
+  const imagesReady = imageCount.done >= imageCount.total;
+
+  // 이미지가 한 장 준비될 때마다 이 모달이 다시 그려진다 — 문서(샘플 수백 건)는 한 번만 해석한다.
+  const preview = useMemo(
+    () =>
+      report && (
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          disallowedElements={['img']}
+          components={{
+            a: ReportLinkText,
+            pre: ({ node, children }) => {
+              const text = expertSampleText(node);
+              return text == null ? (
+                <pre>{children}</pre>
+              ) : (
+                <ExpertSampleBlock text={text} images={images} />
+              );
+            },
+          }}
+          unwrapDisallowed
+        >
+          {report.markdown}
+        </ReactMarkdown>
+      ),
+    [report, images],
+  );
 
   // NewStyleModalFrame 은 Redux 모달 스택을 닫는데 이 모달은 로컬 상태로 뜬다 — Esc 를
   // capture 단계에서 가로채 이 모달만 닫는다(ExpertInferenceModal 과 같은 처방).
@@ -78,7 +129,9 @@ const EvalReportModal = ({ modelId, jobId, projectId, onClose }) => {
   const downloadMarkdown = () => {
     if (!report) return;
     const url = URL.createObjectURL(
-      new Blob([report.markdown], { type: 'text/markdown;charset=utf-8' }),
+      new Blob([toDownloadMarkdown(t, report.markdown)], {
+        type: 'text/markdown;charset=utf-8',
+      }),
     );
     const link = document.createElement('a');
     link.href = url;
@@ -91,11 +144,25 @@ const EvalReportModal = ({ modelId, jobId, projectId, onClose }) => {
   };
 
   const savePdf = () => {
-    if (!report || !previewRef.current) return;
-    printReportHtml(
+    if (!report || !previewRef.current) return undefined;
+    return printReportHtml(
       previewRef.current.innerHTML,
       report.filename.replace(/\.md$/, ''),
     );
+  };
+
+  const footerMessage = () => {
+    if (!report) return '';
+    if (!imagesReady) {
+      return t('evaluation.report.imageLoading', {
+        done: imageCount.done,
+        total: imageCount.total,
+      });
+    }
+    if (imageCount.failed > 0) {
+      return t('evaluation.report.imageFailed', { count: imageCount.failed });
+    }
+    return t('evaluation.report.pdfHint');
   };
 
   return (
@@ -116,12 +183,22 @@ const EvalReportModal = ({ modelId, jobId, projectId, onClose }) => {
           : undefined
       }
       submit={{ text: 'evaluation.report.savePdf', func: savePdf }}
-      validate={!!report}
-      footerMessage={report ? t('evaluation.report.pdfHint') : ''}
+      validate={!!report && imagesReady}
+      footerMessage={footerMessage()}
       isResize
       isMinimize
       customStyle={{ width: '880px' }}
     >
+      {hasSamples && (
+        <div className={cx('report-option')}>
+          <Checkbox
+            checked={withSamples}
+            onChange={() => setWithSamples((v) => !v)}
+            disabled={loading}
+            label={t('evaluation.report.includeSamples')}
+          />
+        </div>
+      )}
       {loading && (
         <div className={cx('report-loading')}>
           <Loading />
@@ -129,14 +206,7 @@ const EvalReportModal = ({ modelId, jobId, projectId, onClose }) => {
       )}
       {!loading && report && (
         <div ref={previewRef} className={cx('report')}>
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            disallowedElements={['img']}
-            components={{ a: ReportLinkText }}
-            unwrapDisallowed
-          >
-            {report.markdown}
-          </ReactMarkdown>
+          {preview}
         </div>
       )}
       {!loading && !report && (

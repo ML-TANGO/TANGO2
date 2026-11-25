@@ -72,6 +72,49 @@
     border-left: 3px solid $mono204;
     color: $mono205;
   }
+
+  hr {
+    margin: 28px 0 0;
+    border: 0;
+    border-top: 1px solid $mono203;
+  }
+}
+
+// 전문가 샘플의 이미지 + 센서 표. 열이 12개라 표 글자를 줄이고, 숫자가 중간에서 끊기지 않게 한다.
+.sample {
+  margin: 0 0 12px;
+  overflow-x: auto;
+
+  table {
+    font-size: 11px;
+  }
+
+  th,
+  td {
+    padding: 4px 5px;
+    word-break: keep-all;
+  }
+}
+
+.sample-image {
+  img {
+    display: block;
+    max-width: 100%;
+  }
+}
+
+// 이미지를 받는 동안 문서 높이가 출렁이지 않게 자리를 잡아 둔다.
+.sample-image--pending {
+  display: flex;
+  aspect-ratio: 16 / 9;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid $mono203;
+  color: $mono205;
+}
+
+.report-option {
+  margin-bottom: 12px;
 }
 
 .report-loading,

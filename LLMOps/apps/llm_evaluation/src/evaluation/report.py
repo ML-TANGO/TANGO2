@@ -4,7 +4,8 @@
 문항)는 API 로 노출되지 않고 job 출력 파일(jobs/<job>/output)에만 있다. PDF 는 만들지 않는다 —
 평가 이미지에 한글 폰트·PDF 라이브러리가 없어서, 화면이 이 Markdown 을 렌더해 브라우저
 인쇄로 저장한다. 모델 출력·코멘트는 외부 입력이라 표 셀 이스케이프나 코드 블록으로만 싣는다
-(문서 구조를 바꾸지 못하게).
+(문서 구조를 바꾸지 못하게). 전문가 샘플의 이미지·센서 데이터는 `expert-sample` 블록으로
+싣고 화면이 그린다(render_expert).
 """
 from __future__ import annotations
 
@@ -377,13 +378,32 @@ def render_intent_samples(output_dir: str, limit: int = SAMPLE_LIMIT) -> str:
     return "\n\n".join([head, note, table])
 
 
-def render_expert(samples_res: dict, result_res: dict, limit: int = SAMPLE_LIMIT) -> str:
-    """전문가 검수 — 진행·평균·분포 요약 + 샘플별 입력·출력·점수·코멘트."""
+def _sample_media(model_id: int, job_id: str, sample: dict) -> str:
+    """이미지·센서(AIS) 표 — 화면이 그리는 `expert-sample` 블록(한 줄 JSON). 이미지는 인증 헤더로
+    받아야 하고 장당 2MB 라 파드(256M)가 문서에 넣지 않으며, 열 이름·CPA/TCPA 규약은 화면의
+    sdsAis 한 곳에 둔다. 값은 ASCII JSON 문자열이라 줄바꿈(U+2028 포함)이 없어 블록을 닫지
+    못한다."""
+    name = os.path.basename(str(sample.get("image") or ""))   # 원본 참조는 경로라 파일 이름만
+    if sample.get("image_served") or sample.get("csv_rows"):
+        block = {"model_id": model_id, "job_id": job_id, "idx": sample.get("idx"),
+                 "image": bool(sample.get("image_served")), "name": name,
+                 "rows": sample.get("csv_rows") or []}
+        return f"```expert-sample\n{json.dumps(block)}\n```"
+    return f"**이미지** {md_cell(name)}" if name else ""
+
+
+def render_expert(samples_res: dict, result_res: dict, model_id: int,
+                  limit: int = SAMPLE_LIMIT, label: str = "") -> str:
+    """전문가 검수 — 진행·평균·분포 요약 + 샘플별 이미지·센서 데이터·출력·점수·코멘트.
+    label 은 세션 여러 개를 한 문서에 실을 때(프로젝트 리포트) 제목에 붙이는 세션 이름이다.
+    샘플마다 앞에 구분선(---)을 두고, 인쇄본은 그 자리에서 쪽을 넘긴다."""
+    prefix = f"{label} — " if label else ""
+    reviewer = samples_res.get("run_name")
     samples = [s for s in samples_res.get("samples") or [] if isinstance(s, dict)]
     total = samples_res.get("total") or len(samples)
     rated = result_res.get("rated") or 0
     avg, pass_rate = result_res.get("avg_score"), result_res.get("pass_rate")
-    parts = ["## 지표 요약", _table(("항목", "값"), [
+    parts = [f"## {prefix}지표 요약", _table(("항목", "값"), [
         ("채점 진행", f"{rated} / {total}"),
         ("평균 점수 (1~5)", "-" if avg is None else f"{avg:.2f}"),
         ("통과율 (O 판정)", "-" if pass_rate is None else f"{pass_rate:.2f}%")])]
@@ -397,28 +417,27 @@ def render_expert(samples_res: dict, result_res: dict, limit: int = SAMPLE_LIMIT
 
     ratings = {r.get("sample_idx"): r for r in result_res.get("ratings") or [] if isinstance(r, dict)}
     shown = samples[:limit]
-    parts += ["## 샘플별 상세", _shown_note(len(samples), len(shown), "전체")]
+    parts += [f"## {prefix}샘플별 상세", _shown_note(len(samples), len(shown), "전체")]
     for s in shown:
         idx = s.get("idx")
         r = ratings.get(idx)
         num = idx + 1 if isinstance(idx, int) else idx
-        if r:
-            title = (f"### 샘플 {_num(num)} — {_num(r.get('score'))}점 · 판정 {md_cell(r.get('verdict'))}"
-                     f" · {md_cell(r.get('rater_user'))} ({_kst(r.get('create_datetime'))} KST)")
-        else:
-            title = f"### 샘플 {_num(num)} — 미채점"
-        block = [title, f"**입력**\n\n{md_fence(s.get('input'))}",
-                 f"**모델 출력**\n\n{md_fence(s.get('real_output') or s.get('output'))}"]
+        title = (f"{_heading(reviewer)} · " if reviewer else "") + f"샘플 {_num(num)}"
+        block = ["---", f"### {title} — " + (f"{_num(r.get('score'))}점" if r else "미채점"),
+                 _sample_media(model_id, samples_res.get("job_id"), s)]
+        if s.get("input"):   # VLM 샘플은 입력 글이 없다(이미지·센서 데이터가 입력)
+            block.append(f"**입력**\n\n{md_fence(s['input'])}")
+        block.append(f"**모델 출력**\n\n{md_fence(s.get('output'))}")
         if s.get("reference"):
             block.append(f"**참고 답변**\n\n{md_fence(s.get('reference'))}")
-        if s.get("image"):
-            # 원본 참조는 경로라 파일 이름만 싣는다(이미지는 플랫폼 화면에서 본다).
-            block.append(f"**이미지** {md_cell(os.path.basename(str(s['image'])))}")
-        if s.get("csv_rows"):
-            block.append(f"> AIS 표({len(s['csv_rows'])}행)는 플랫폼 화면에서 확인하세요.")
-        if r and r.get("comment"):
-            block.append(f"**코멘트**\n\n{md_fence(r.get('comment'))}")
-        parts.append("\n\n".join(block))
+        if r:
+            block.append("**평가위원 점수**\n\n" + _table(
+                ("평가위원(세션)", "채점 계정", "점수 (1~5)", "판정", "채점 시각 (KST)"),
+                [(md_cell(reviewer), md_cell(r.get("rater_user")), _num(r.get("score")),
+                  md_cell(r.get("verdict")), _kst(r.get("create_datetime")))]))
+            block.append("**코멘트**\n\n" + (md_fence(r["comment"]) if r.get("comment")
+                                             else "코멘트 없음"))
+        parts.append("\n\n".join(b for b in block if b))
     return "\n\n".join(parts)
 
 
@@ -508,7 +527,7 @@ async def build_run_report(model_id: int, job_id: str) -> dict:
         samples = await svc.get_expert_samples(model_id=model_id, job_id=job_id)
         result = await svc.get_expert_result(model_id=model_id, job_id=job_id)
         info.update(run_name=samples.get("run_name"), status=result.get("status") or info["status"])
-        body = render_expert(samples, result)
+        body = render_expert(samples, result, model_id=model_id)
     else:
         res = await svc.get_eval_result(model_id=model_id, job_id=job_id)
         metrics = res.get("metrics") if res.get("ready") else None
@@ -536,7 +555,9 @@ async def build_run_report(model_id: int, job_id: str) -> dict:
 
 # ── 프로젝트 리포트(실행 전체 요약) ───────────────────────────────────────────
 # 실행 1건 리포트가 한 실행을 깊게 본다면, 이쪽은 프로젝트의 실행들을 한 표로 나란히 놓는다.
-# 샘플별 상세는 싣지 않는다. 화면의 실행 목록·비교와 같은 출처(get_project 의 비교표)를 쓰고,
+# 샘플별 상세는 전문가 프로젝트에서 요청할 때만(samples) 뒤에 붙인다 — 평가위원마다 세션이 따로라
+# 위원 전체의 점수·코멘트를 한 문서로 보려는 것이고, 기본은 요약이다.
+# 화면의 실행 목록·비교와 같은 출처(get_project 의 비교표)를 쓰고,
 # 비교표가 평탄화하며 버린 유형별 세부(LLM 심사 싱글/멀티턴·카테고리, 의도/슬롯 F1, 전문가 채점
 # 진행)는 eval_result.metrics 원본에서 읽는다.
 
@@ -743,8 +764,39 @@ def _project_notes(runs: list, skipped_inference: int, truncated: int,
     return "## 참고\n\n" + "\n".join(f"- {md_cell(n)}" for n in notes)
 
 
-async def build_project_report(project_id: int) -> dict:
-    """평가 프로젝트 → {markdown, filename}. 실행 1건 리포트와 같은 응답 모양(같은 모달이 쓴다)."""
+# 한 문서에 샘플별 상세를 싣는 세션 상한 — 세션 하나가 이미지 100장이라 문서를 여는 브라우저를
+# 지킨다(평가 세트가 데이터셋당 10개라 보통 걸리지 않는다).
+SESSION_DETAIL_LIMIT = 10
+
+
+async def _expert_sessions_section(runs: list) -> str:
+    """세션(평가위원)마다 요약 + 샘플별 상세. 채점 전이거나 상한을 넘은 세션은 빼고 무엇을 뺐는지
+    적는다. 샘플은 세션마다 수백 KB 라 한 세션씩 읽어 글로 바꾼다."""
+    parts, unrated, over = [], [], []
+    for n, run in enumerate(runs, 1):
+        if len(parts) >= SESSION_DETAIL_LIMIT:
+            over.append(f"#{n}")
+            continue
+        ids = {"model_id": run["model_id"], "job_id": run["job_id"]}
+        result = await svc.get_expert_result(**ids)
+        if not result.get("rated"):
+            unrated.append(f"#{n}")
+            continue
+        samples = await svc.get_expert_samples(**ids)
+        label = f"#{n} {_heading(samples.get('run_name') or run['job_id'])}"
+        parts.append("---\n\n" + render_expert(samples, result, model_id=run["model_id"], label=label))
+    notes = []
+    if unrated:
+        notes.append(f"> 채점 전인 세션({', '.join(unrated)})은 샘플별 상세에서 뺐습니다.")
+    if over:
+        notes.append(f"> 세션이 많아 {', '.join(over)} 의 샘플별 상세는 뺐습니다 — 그 세션 화면에서 "
+                     "따로 내보내세요.")
+    return "\n\n".join(notes + parts)
+
+
+async def build_project_report(project_id: int, samples: bool = False) -> dict:
+    """평가 프로젝트 → {markdown, filename, has_samples}. 실행 1건 리포트와 같은 모달이 쓴다.
+    has_samples 는 샘플별 상세를 실을 수 있는 유형인지(전문가) — samples=True 면 실제로 싣는다."""
     data = await svc.get_project(project_id=project_id)
     project = data.get("project") or {}
     comparison = data.get("runs") or {}
@@ -793,6 +845,9 @@ async def build_project_report(project_id: int) -> dict:
     included = {r.get("id") for r in runs}
     dropped = sum(1 for run_id in best.values() if run_id not in included)
     parts.append(_project_notes(runs, skipped_inference, truncated, hidden, dropped))
+    has_samples = eval_type == "expert" and bool(runs)
+    if samples and has_samples:
+        parts.append(await _expert_sessions_section(runs))
     markdown = "\n\n".join(p for p in parts if p) + "\n"
-    return {"markdown": markdown,
+    return {"markdown": markdown, "has_samples": has_samples,
             "filename": f"평가프로젝트리포트_{_safe_stem(project.get('name'))}.md"}
