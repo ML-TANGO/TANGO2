@@ -518,6 +518,14 @@ def test_project_report_caps_detailed_sessions_and_says_so(monkeypatch):
     assert "#2, #3" in md and "세션 화면에서" in md
 
 
+def test_project_report_stops_at_the_size_budget_and_says_so(monkeypatch):
+    _patch_expert_project(monkeypatch)
+    monkeypatch.setattr(R, "DETAIL_CHAR_LIMIT", 1)
+    md = asyncio.run(R.build_project_report(project_id=3, samples=True))["markdown"]
+    assert "코멘트-e1" in md and "코멘트-e2" not in md
+    assert "#2, #3" in md and "세션 화면에서" in md
+
+
 def test_project_report_stays_a_summary_by_default(monkeypatch):
     _patch_expert_project(monkeypatch)
     out = asyncio.run(R.build_project_report(project_id=3))

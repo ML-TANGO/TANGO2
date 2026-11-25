@@ -767,14 +767,17 @@ def _project_notes(runs: list, skipped_inference: int, truncated: int,
 # 한 문서에 샘플별 상세를 싣는 세션 상한 — 세션 하나가 이미지 100장이라 문서를 여는 브라우저를
 # 지킨다(평가 세트가 데이터셋당 10개라 보통 걸리지 않는다).
 SESSION_DETAIL_LIMIT = 10
+# 상세 전체의 글자 상한 — 세션 하나는 DB 패킷(16MB)으로 막히지만 여러 세션을 모으는 동안은 막히지
+# 않는다(파드 메모리 256M). 실측은 세션당 약 17만 자다.
+DETAIL_CHAR_LIMIT = 8 * 1024 * 1024
 
 
 async def _expert_sessions_section(runs: list) -> str:
     """세션(평가위원)마다 요약 + 샘플별 상세. 채점 전이거나 상한을 넘은 세션은 빼고 무엇을 뺐는지
     적는다. 샘플은 세션마다 수백 KB 라 한 세션씩 읽어 글로 바꾼다."""
-    parts, unrated, over = [], [], []
+    parts, unrated, over, size = [], [], [], 0
     for n, run in enumerate(runs, 1):
-        if len(parts) >= SESSION_DETAIL_LIMIT:
+        if len(parts) >= SESSION_DETAIL_LIMIT or size >= DETAIL_CHAR_LIMIT:
             over.append(f"#{n}")
             continue
         ids = {"model_id": run["model_id"], "job_id": run["job_id"]}
@@ -785,6 +788,7 @@ async def _expert_sessions_section(runs: list) -> str:
         samples = await svc.get_expert_samples(**ids)
         label = f"#{n} {_heading(samples.get('run_name') or run['job_id'])}"
         parts.append("---\n\n" + render_expert(samples, result, model_id=run["model_id"], label=label))
+        size += len(parts[-1])
     notes = []
     if unrated:
         notes.append(f"> 채점 전인 세션({', '.join(unrated)})은 샘플별 상세에서 뺐습니다.")
